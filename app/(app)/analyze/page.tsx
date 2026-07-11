@@ -12,7 +12,7 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { DataSourceNote } from "@/components/ui/data-source-note";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatAgo, formatCompact } from "@/lib/format";
-import { analyzeHistory, analyzeSample } from "@/lib/mock/data";
+import { analyzeHistory, analyzeSample } from "@/lib/data";
 import type { AnalyzeResult } from "@/lib/types";
 
 export default function AnalyzePage() {

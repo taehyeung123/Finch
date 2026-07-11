@@ -7,7 +7,7 @@ import { DataSourceNote } from "@/components/ui/data-source-note";
 import { InfoTip } from "@/components/ui/info-tip";
 import { ButtonLink } from "@/components/ui/button";
 import { formatCompact, formatKRW, formatPercent } from "@/lib/format";
-import { campaigns, dashboardSummaries } from "@/lib/mock/data";
+import { campaigns, dashboardSummaries } from "@/lib/data";
 import type { AdCampaign } from "@/lib/types";
 
 const STATUS_BADGE: Record<AdCampaign["status"], { tone: "positive" | "warning" | "neutral"; label: string }> = {
@@ -33,8 +33,8 @@ const AI_ALERTS = [
 export default function AdsPage() {
   const totalSpend = campaigns.reduce((s, c) => s + c.spend, 0);
   const totalImpressions = campaigns.reduce((s, c) => s + c.impressions, 0);
-  const avgCtr = campaigns.reduce((s, c) => s + c.ctr, 0) / campaigns.length;
-  const avgRoas = campaigns.reduce((s, c) => s + c.roas, 0) / campaigns.length;
+  const avgCtr = campaigns.length > 0 ? campaigns.reduce((s, c) => s + c.ctr, 0) / campaigns.length : 0;
+  const avgRoas = campaigns.length > 0 ? campaigns.reduce((s, c) => s + c.roas, 0) / campaigns.length : 0;
   const organicWeeklyViews = dashboardSummaries.all.weeklyViews;
 
   return (

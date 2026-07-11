@@ -18,7 +18,7 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { usageStats } from "@/lib/mock/data";
+import { usageStats } from "@/lib/data";
 import { FinchLogo, FinchMark } from "@/components/logo";
 import { UsageGauge } from "@/components/ui/charts";
 import { ButtonLink } from "@/components/ui/button";

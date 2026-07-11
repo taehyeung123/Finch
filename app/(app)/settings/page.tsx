@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Badge, ChannelBadge } from "@/components/ui/badge";
 import { AppIconTile } from "@/components/icons/brand";
 import { Button } from "@/components/ui/button";
-import { accounts } from "@/lib/mock/data";
+import { accounts } from "@/lib/data";
 import { SettingsNav } from "./_components/settings-nav";
 
 /*

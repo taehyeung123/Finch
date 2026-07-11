@@ -10,7 +10,7 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { DataSourceNote } from "@/components/ui/data-source-note";
 import { cn } from "@/lib/cn";
 import { formatCompact, formatPercent } from "@/lib/format";
-import { competitors, usageStats } from "@/lib/mock/data";
+import { competitors, usageStats } from "@/lib/data";
 import type { Channel, Competitor, SupportLevel } from "@/lib/types";
 import { CompetitorTabs } from "./tabs";
 

@@ -8,7 +8,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { formatKRW } from "@/lib/format";
-import { campaigns } from "@/lib/mock/data";
+import { campaigns } from "@/lib/data";
 import type { AdCampaign } from "@/lib/types";
 
 const STEPS = ["목표 선택", "타겟팅", "예산", "소재 업로드", "게재"];

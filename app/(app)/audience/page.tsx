@@ -9,8 +9,9 @@ import { Badge, ChannelBadge, DataSourceBadge, SupportBadge } from "@/components
 import { MiniBars } from "@/components/ui/charts";
 import { InfoTip } from "@/components/ui/info-tip";
 import { DataSourceNote } from "@/components/ui/data-source-note";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatAgo, formatCompact, formatDeltaCompact, formatPercent } from "@/lib/format";
-import { audienceDaily, topEngagers } from "@/lib/mock/data";
+import { audienceDaily, topEngagers } from "@/lib/data";
 import { cn } from "@/lib/cn";
 
 type Period = 7 | 14;
@@ -22,6 +23,20 @@ type Period = 7 | 14;
  */
 export default function AudiencePage() {
   const [period, setPeriod] = useState<Period>(7);
+
+  // 연동 전(빈 데이터) — 계산·차트를 건너뛰고 안내만 표시
+  if (audienceDaily.length === 0) {
+    return (
+      <div className="mx-auto max-w-6xl space-y-6">
+        <PageHeader title="오디언스" description="내 프로필을 찾아오는 흐름을 공식 지표로 분석합니다." />
+        <EmptyState
+          icon={ShieldAlert}
+          title="채널을 연동하면 오디언스 분석이 시작돼요"
+          description="인스타그램 계정을 연동하면 프로필 조회수, 팔로워 증감, 자주 반응하는 팬 랭킹이 여기에 표시됩니다."
+        />
+      </div>
+    );
+  }
 
   const days = audienceDaily.slice(-period);
   const prevDays = audienceDaily.slice(-period * 2, -period);

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Bell, LogOut, Search, Settings } from "lucide-react";
 import { CHANNEL_FILTERS } from "@/lib/channels";
-import { notifications } from "@/lib/mock/data";
+import { notifications } from "@/lib/data";
 import { ChipFilter } from "@/components/ui/chip-filter";
 import { Badge } from "@/components/ui/badge";
 import { isDemoMode } from "@/lib/supabase/config";

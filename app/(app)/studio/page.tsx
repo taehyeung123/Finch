@@ -19,7 +19,7 @@ import { ChipFilter } from "@/components/ui/chip-filter";
 import { InfoTip } from "@/components/ui/info-tip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DataSourceNote } from "@/components/ui/data-source-note";
-import { ideaSuggestions } from "@/lib/mock/data";
+import { ideaSuggestions } from "@/lib/data";
 import type { IdeaSuggestion } from "@/lib/types";
 
 type StudioTab = "cards" | "video" | "ideas";

@@ -6,7 +6,7 @@ import { Badge, DataSourceBadge } from "@/components/ui/badge";
 import { DataSourceNote } from "@/components/ui/data-source-note";
 import { cn } from "@/lib/cn";
 import { formatAgo, formatDate } from "@/lib/format";
-import { competitorAds } from "@/lib/mock/data";
+import { competitorAds } from "@/lib/data";
 import type { CompetitorAd } from "@/lib/types";
 import { CompetitorTabs } from "../tabs";
 

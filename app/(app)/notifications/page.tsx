@@ -21,7 +21,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { DataSourceNote } from "@/components/ui/data-source-note";
 import { cn } from "@/lib/cn";
 import { formatAgo } from "@/lib/format";
-import { notifications as initialNotifications } from "@/lib/mock/data";
+import { notifications as initialNotifications } from "@/lib/data";
 import type { NotificationType } from "@/lib/types";
 
 type FilterValue = "all" | "competitor_ad" | "trend" | "account" | "system";

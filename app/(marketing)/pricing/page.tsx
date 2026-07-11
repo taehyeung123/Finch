@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { ArrowRight, Check } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { planFeatures } from "@/lib/mock/data";
+import { planFeatures } from "@/lib/data";
 
 export const metadata: Metadata = {
   title: "요금제",

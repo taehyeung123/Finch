@@ -8,7 +8,7 @@ import { Badge, ChannelBadge } from "@/components/ui/badge";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { formatDate } from "@/lib/format";
 import { CHANNEL_LABEL } from "@/lib/channels";
-import { reports as initialReports } from "@/lib/mock/data";
+import { reports as initialReports } from "@/lib/data";
 import type { Channel, ReportItem } from "@/lib/types";
 
 type PeriodValue = "7d" | "30d" | "lastMonth" | "custom";

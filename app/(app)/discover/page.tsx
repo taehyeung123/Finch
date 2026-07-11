@@ -6,7 +6,7 @@ import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/br
 import type { Channel, ChannelFilter, TrendItem } from "@/lib/types";
 import { CHANNEL_FILTERS } from "@/lib/channels";
 import { formatCompact } from "@/lib/format";
-import { trendItems, TREND_CATEGORIES } from "@/lib/mock/data";
+import { trendItems, TREND_CATEGORIES } from "@/lib/data";
 import { cn } from "@/lib/cn";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card } from "@/components/ui/card";

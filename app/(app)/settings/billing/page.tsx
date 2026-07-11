@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { UsageGauge } from "@/components/ui/charts";
 import { cn } from "@/lib/cn";
-import { planFeatures, usageStats } from "@/lib/mock/data";
+import { planFeatures, usageStats } from "@/lib/data";
 import { SettingsNav } from "../_components/settings-nav";
 
 /*

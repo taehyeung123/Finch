@@ -7,6 +7,7 @@ import { AgentPanel } from "@/components/layout/agent-panel";
 import { MobileTabbar } from "@/components/layout/mobile-tabbar";
 import { isDemoMode } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { IS_SAMPLE_DATA } from "@/lib/data";
 
 /* 로그인 후 영역 전체 — 검색 노출 금지 (PART 13.1) */
 export const metadata: Metadata = {
@@ -26,8 +27,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       } = await supabase.auth.getUser();
       if (!user) redirect("/login");
     } catch (error) {
-      // redirect()는 내부적으로 예외를 던지므로 그 신호는 그대로 흘려보낸다
-      if (error && typeof error === "object" && "digest" in error && String((error as { digest?: string }).digest).startsWith("NEXT_REDIRECT")) {
+      // Next 내부 제어 신호는 그대로 흘려보낸다:
+      // - NEXT_REDIRECT: redirect()의 정상 동작
+      // - DYNAMIC_SERVER_USAGE: cookies() 사용 라우트를 빌드가 동적으로 표시하는 신호
+      //   (삼키면 인증 영역이 정적 페이지로 구워져 가드가 무력화된다)
+      const digest =
+        error && typeof error === "object" && "digest" in error
+          ? String((error as { digest?: string }).digest)
+          : "";
+      if (digest.startsWith("NEXT_REDIRECT") || digest.startsWith("DYNAMIC_SERVER_USAGE")) {
         throw error;
       }
       // 그 외(네트워크/프로젝트 다운)는 통과 — 데모 모드로 열람 허용
@@ -41,6 +49,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar />
+          {IS_SAMPLE_DATA ? (
+            <p className="border-b border-line bg-overlay px-4 py-2 text-center text-xs text-fg-sub md:px-6">
+              지금 보이는 수치는 <span className="font-semibold text-warning">예시 데이터</span>입니다 —
+              채널 연동이 완료되면 실제 데이터로 교체됩니다
+            </p>
+          ) : null}
           <main className="flex-1 px-4 py-6 pb-24 md:px-6 md:pb-10">{children}</main>
         </div>
       </div>

@@ -19,7 +19,7 @@ import {
   contentMix,
   dashboardSummaries,
   recentPosts,
-} from "@/lib/mock/data";
+} from "@/lib/data";
 
 const MIX_COLORS = ["var(--color-primary)", "var(--color-tiktok-cyan)", "var(--color-warning)", "var(--color-positive)"];
 
@@ -166,7 +166,9 @@ export default function DashboardPage() {
               <div className="flex items-baseline justify-between">
                 <span className="text-[13px] text-fg-sub">평균 ROAS</span>
                 <span className="tnum font-semibold text-positive">
-                  {(activeCampaigns.reduce((s, c) => s + c.roas, 0) / activeCampaigns.length).toFixed(1)}배
+                  {activeCampaigns.length > 0
+                    ? `${(activeCampaigns.reduce((s, c) => s + c.roas, 0) / activeCampaigns.length).toFixed(1)}배`
+                    : "-"}
                 </span>
               </div>
             </CardBody>
