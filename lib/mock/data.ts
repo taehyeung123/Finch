@@ -298,6 +298,11 @@ export const campaigns: AdCampaign[] = [
     cpc: 98,
     conversions: 342,
     roas: 3.8,
+    creative: {
+      format: "video",
+      imageUrl: "/samples/ad-serum.svg",
+      headline: "여름 한정 세럼 — 첫 구매 30%",
+    },
   },
   {
     id: "cmp2",
@@ -312,6 +317,11 @@ export const campaigns: AdCampaign[] = [
     cpc: 74,
     conversions: 96,
     roas: 1.9,
+    creative: {
+      format: "video",
+      imageUrl: "/samples/ad-moodlight.svg",
+      headline: "무드등 하나로 바뀌는 방 분위기",
+    },
   },
   {
     id: "cmp3",
@@ -326,6 +336,11 @@ export const campaigns: AdCampaign[] = [
     cpc: 109,
     conversions: 1120,
     roas: 4.6,
+    creative: {
+      format: "image",
+      imageUrl: "/samples/ad-snack.svg",
+      headline: "단백질 과자 3종 — 첫 박스 무료",
+    },
   },
 ];
 

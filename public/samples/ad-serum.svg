@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400" role="img" aria-label="세럼 광고 소재 샘플">
+  <rect width="400" height="400" fill="#F5E6DC"/>
+  <circle cx="200" cy="150" r="90" fill="#EDD3C0"/>
+  <!-- 세럼 병 -->
+  <rect x="170" y="105" width="60" height="110" rx="10" fill="#C77E5A"/>
+  <rect x="182" y="80" width="36" height="30" rx="4" fill="#8A4B2D"/>
+  <rect x="190" y="60" width="20" height="24" rx="3" fill="#5C3320"/>
+  <rect x="180" y="130" width="40" height="52" rx="4" fill="#FFF8F2" opacity="0.9"/>
+  <text x="200" y="152" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="700" fill="#8A4B2D">SERUM</text>
+  <text x="200" y="168" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#B08968">SUMMER EDITION</text>
+  <!-- 카피 -->
+  <text x="200" y="280" text-anchor="middle" font-family="sans-serif" font-size="26" font-weight="800" fill="#4A2C1A">여름 한정 세럼</text>
+  <text x="200" y="315" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="600" fill="#C7502F">첫 구매 30% 할인</text>
+  <rect x="130" y="338" width="140" height="34" rx="17" fill="#4A2C1A"/>
+  <text x="200" y="360" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="700" fill="#FFF8F2">구매하기</text>
+</svg>

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400" role="img" aria-label="단백질 과자 광고 소재 샘플">
+  <rect width="400" height="400" fill="#2E4636"/>
+  <!-- 과자 봉지 3개 -->
+  <g transform="rotate(-8 130 170)">
+    <rect x="95" y="110" width="70" height="120" rx="8" fill="#67A87B"/>
+    <rect x="95" y="110" width="70" height="26" rx="8" fill="#4C8A5F"/>
+    <text x="130" y="185" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="800" fill="#F2F7EF">PROTEIN</text>
+  </g>
+  <g>
+    <rect x="165" y="95" width="70" height="126" rx="8" fill="#E8C558"/>
+    <rect x="165" y="95" width="70" height="26" rx="8" fill="#C9A63B"/>
+    <text x="200" y="172" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="800" fill="#4A3B10">PROTEIN</text>
+  </g>
+  <g transform="rotate(8 270 170)">
+    <rect x="235" y="110" width="70" height="120" rx="8" fill="#D97757"/>
+    <rect x="235" y="110" width="70" height="26" rx="8" fill="#B65B3E"/>
+    <text x="270" y="185" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="800" fill="#FBEFE9">PROTEIN</text>
+  </g>
+  <!-- 카피 -->
+  <text x="200" y="292" text-anchor="middle" font-family="sans-serif" font-size="25" font-weight="800" fill="#F2F7EF">야식 대신, 단백질 과자</text>
+  <text x="200" y="322" text-anchor="middle" font-family="sans-serif" font-size="17" font-weight="600" fill="#E8C558">첫 박스 무료체험</text>
+  <rect x="136" y="342" width="128" height="32" rx="16" fill="#E8C558"/>
+  <text x="200" y="363" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="700" fill="#2E4636">무료체험 신청</text>
+</svg>

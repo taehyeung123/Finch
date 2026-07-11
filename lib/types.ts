@@ -99,6 +99,13 @@ export interface AdCampaign {
   cpc: number;
   conversions: number;
   roas: number;
+  /** 대표 소재 — 이름만으로 캠페인을 식별하기 어려워 목록·성과 화면에 함께 표시한다 */
+  creative: {
+    format: "image" | "video";
+    /** 소재 미리보기 (영상이면 썸네일) */
+    imageUrl: string;
+    headline: string;
+  };
 }
 
 export interface TrendItem {

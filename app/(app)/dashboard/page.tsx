@@ -11,6 +11,7 @@ import { AppIconTile } from "@/components/icons/brand";
 import { RatioBar, Sparkline } from "@/components/ui/charts";
 import { InfoTip } from "@/components/ui/info-tip";
 import { ButtonLink } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatAgo, formatCompact, formatDeltaCompact, formatKRW, formatPercent } from "@/lib/format";
 import {
   accounts,
@@ -205,38 +206,112 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 팔로워 증감 상세 */}
-      <section aria-label="채널별 현황" className="grid gap-3 md:grid-cols-3">
-        {accounts.map((a) => (
-          <Card key={a.channel} hover className="p-5">
-            <div className="flex items-center justify-between">
-              <AppIconTile app={a.channel} size={40} />
-              {a.connected ? (
-                <Badge tone="positive">연동됨</Badge>
-              ) : (
-                <Badge tone="neutral">미연동</Badge>
-              )}
-            </div>
-            <p className="mt-3 text-[13px] text-fg-sub">{a.handle}</p>
-            <div className="mt-1 flex items-baseline gap-2">
-              <span className="tnum text-xl font-bold">{formatCompact(a.followers)}</span>
-              <span
-                className={`tnum text-[13px] font-semibold ${
-                  a.followersDelta7d > 0 ? "text-positive" : a.followersDelta7d < 0 ? "text-negative" : "text-fg-faint"
-                }`}
-              >
-                {formatDeltaCompact(a.followersDelta7d)}
-              </span>
-              <span className="text-xs text-fg-faint">7일</span>
-            </div>
-            <p className="mt-2 text-xs text-fg-faint">
-              게시물 {a.posts.toLocaleString("ko-KR")}개 · 참여율 {formatPercent(a.avgEngagementRate)}
-              {a.tokenExpiresInDays !== null && a.tokenExpiresInDays <= 14 ? (
-                <span className="ml-2 text-warning">토큰 {a.tokenExpiresInDays}일 후 만료</span>
-              ) : null}
-            </p>
-          </Card>
-        ))}
+      {/* 내 계정 — 연동 계정 프로필 카드 (PART 4.1) */}
+      <section aria-label="내 계정">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-[19px] font-bold leading-snug">내 계정</h2>
+          <Link
+            href="/settings"
+            className="inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:text-primary-hover"
+          >
+            설정에서 관리 <ArrowRight className="size-3.5" aria-hidden />
+          </Link>
+        </div>
+
+        {accounts.length > 0 ? (
+          <div className="grid gap-3 md:grid-cols-3">
+            {accounts.map((a) => (
+              <Card key={a.channel} hover className="flex flex-col p-5">
+                {/* 프로필 — 이니셜 아바타 + 채널 뱃지 */}
+                <div className="flex items-center gap-3">
+                  <span className="relative shrink-0" aria-hidden>
+                    <span className="flex size-14 items-center justify-center rounded-chip bg-primary-weak text-xl font-bold text-primary">
+                      {(a.displayName || a.handle.replace(/^@/, "") || "?").charAt(0)}
+                    </span>
+                    <AppIconTile app={a.channel} size={22} className="absolute -bottom-1 -right-1" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate text-[15px] font-bold">{a.displayName}</p>
+                      {a.connected ? (
+                        <Badge tone="positive">연동됨</Badge>
+                      ) : (
+                        <Badge tone="neutral">미연동</Badge>
+                      )}
+                    </div>
+                    <p className="mt-0.5 truncate text-[13px] text-fg-faint">{a.handle}</p>
+                  </div>
+                </div>
+
+                {/* 지표 3분할 */}
+                <div className="mt-4 grid grid-cols-3 border-t border-line pt-3 text-center">
+                  <div>
+                    <p className="text-xs text-fg-faint">팔로워</p>
+                    {a.connected ? (
+                      <>
+                        <p className="tnum mt-0.5 font-bold">{formatCompact(a.followers)}</p>
+                        <p
+                          className={`tnum text-xs font-semibold ${
+                            a.followersDelta7d > 0
+                              ? "text-positive"
+                              : a.followersDelta7d < 0
+                                ? "text-negative"
+                                : "text-fg-faint"
+                          }`}
+                        >
+                          {formatDeltaCompact(a.followersDelta7d)} <span className="font-normal text-fg-faint">7일</span>
+                        </p>
+                      </>
+                    ) : (
+                      <p className="mt-0.5 font-bold text-fg-faint">—</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-xs text-fg-faint">참여율</p>
+                    {a.connected ? (
+                      <p className="tnum mt-0.5 font-bold">{formatPercent(a.avgEngagementRate)}</p>
+                    ) : (
+                      <p className="mt-0.5 font-bold text-fg-faint">—</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-xs text-fg-faint">게시물</p>
+                    {a.connected ? (
+                      <p className="tnum mt-0.5 font-bold">{a.posts.toLocaleString("ko-KR")}</p>
+                    ) : (
+                      <p className="mt-0.5 font-bold text-fg-faint">—</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* 하단 — 토큰 만료 경고 / 미연동 CTA */}
+                {a.connected && a.tokenExpiresInDays !== null && a.tokenExpiresInDays <= 14 ? (
+                  <p className="mt-3 text-xs font-medium text-warning">
+                    토큰이 {a.tokenExpiresInDays}일 후 만료돼요. 설정에서 다시 연동해 주세요.
+                  </p>
+                ) : null}
+                {!a.connected ? (
+                  <div className="mt-auto pt-4">
+                    <ButtonLink href="/settings" size="sm" variant="secondary" className="w-full">
+                      연동하기
+                    </ButtonLink>
+                  </div>
+                ) : null}
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            icon={Link2}
+            title="연동된 계정이 없습니다"
+            description="Instagram, TikTok, Threads 계정을 연동하면 채널별 지표를 한눈에 볼 수 있어요."
+            action={
+              <ButtonLink href="/settings" size="sm">
+                계정 연동하기
+              </ButtonLink>
+            }
+          />
+        )}
       </section>
     </div>
   );

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400" role="img" aria-label="무드등 광고 소재 샘플">
+  <rect width="400" height="400" fill="#1C2438"/>
+  <!-- 은은한 조명 광원 -->
+  <circle cx="200" cy="170" r="110" fill="#F5B85C" opacity="0.18"/>
+  <circle cx="200" cy="170" r="70" fill="#F5B85C" opacity="0.25"/>
+  <!-- 무드등 본체 -->
+  <path d="M160 210 Q160 120 200 120 Q240 120 240 210 Z" fill="#F5D9A8"/>
+  <rect x="172" y="210" width="56" height="14" rx="7" fill="#3A4560"/>
+  <rect x="186" y="224" width="28" height="26" rx="4" fill="#2A3350"/>
+  <!-- 카피 -->
+  <text x="200" y="292" text-anchor="middle" font-family="sans-serif" font-size="25" font-weight="800" fill="#F7F2E8">무드등 하나로</text>
+  <text x="200" y="324" text-anchor="middle" font-family="sans-serif" font-size="25" font-weight="800" fill="#F5B85C">방 분위기 완성</text>
+  <rect x="132" y="344" width="136" height="32" rx="16" fill="#F5B85C"/>
+  <text x="200" y="365" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="700" fill="#1C2438">더 알아보기</text>
+</svg>

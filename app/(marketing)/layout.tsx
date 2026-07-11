@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { FinchLogo } from "@/components/logo";
+import { PromoBanner } from "@/components/landing/promo-banner";
 import { ButtonLink } from "@/components/ui/button";
 import { InstagramGlyph, MetaGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 
@@ -7,6 +8,9 @@ import { InstagramGlyph, MetaGlyph, ThreadsGlyph, TiktokGlyph } from "@/componen
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
+      {/* 최상단 프로모션 배너 — sticky 헤더 위, 스크롤 시 배너만 사라짐 */}
+      <PromoBanner />
+
       {/* Sticky Nav (PART 6.1-1) */}
       <header className="sticky top-0 z-40 border-b border-line bg-surface/90 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 md:px-6">

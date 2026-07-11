@@ -4,9 +4,12 @@ import { useState } from "react";
 import {
   CalendarClock,
   Clapperboard,
+  Flame,
   ImageDown,
+  Info,
   LayoutTemplate,
   Lightbulb,
+  Search,
   Sparkles,
   TrendingUp,
   Video,
@@ -19,8 +22,9 @@ import { ChipFilter } from "@/components/ui/chip-filter";
 import { InfoTip } from "@/components/ui/info-tip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DataSourceNote } from "@/components/ui/data-source-note";
-import { ideaSuggestions } from "@/lib/data";
-import type { IdeaSuggestion } from "@/lib/types";
+import { formatCompact } from "@/lib/format";
+import { ideaSuggestions, trendItems, TREND_CATEGORIES } from "@/lib/data";
+import type { Channel, IdeaSuggestion, TrendItem } from "@/lib/types";
 
 type StudioTab = "cards" | "video" | "ideas";
 
@@ -84,11 +88,150 @@ const ENGAGE_META: Record<IdeaSuggestion["expectedEngagement"], { label: string;
   low: { label: "낮음", tone: "neutral" },
 };
 
+/* ---- 아이디어 파인더 (Phase 1 목 처리 — 키워드 문자열 기반 결정적 생성) ---- */
+
+/** 키워드 기반 결정적 해시 — 같은 검색어는 항상 같은 결과를 낸다 (Math.random 대체) */
+function hashString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i += 1) {
+    h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  }
+  return h;
+}
+
+type IdeaFormat = "릴스" | "캐러셀" | "스토리";
+
+interface IdeaTemplate {
+  build: (keyword: string, category: string) => string;
+  /** 이 포맷이 통하는 이유 — 추천 이유 문구 꼬리에 붙는다 */
+  angle: string;
+  format: IdeaFormat;
+  channels: Channel[];
+}
+
+/** 콘텐츠 마케터가 바로 집행할 수 있는 검증된 포맷 템플릿 — 키워드 치환으로 아이디어를 만든다 */
+const IDEA_TEMPLATES: IdeaTemplate[] = [
+  {
+    build: (kw, cat) => `${kw} ${cat} 체크리스트 — 저장 유도형`,
+    angle: "저장을 부르는 체크리스트 포맷과 잘 맞는 주제예요",
+    format: "캐러셀",
+    channels: ["instagram"],
+  },
+  {
+    build: (kw) => `3초 후킹: ${kw}에서 절대 하면 안 되는 것 3가지`,
+    angle: "금지형 후킹은 초반 이탈을 줄이는 검증된 오프닝이에요",
+    format: "릴스",
+    channels: ["instagram", "tiktok"],
+  },
+  {
+    build: (kw) => `${kw} 비포·애프터 — 결과부터 보여주는 역순 편집`,
+    angle: "결과 선공개 구성은 완주율을 끌어올리기 좋아요",
+    format: "릴스",
+    channels: ["tiktok"],
+  },
+  {
+    build: (kw) => `${kw} 초보가 가장 많이 하는 실수 TOP 5`,
+    angle: "실수 모음은 댓글로 경험담을 끌어내기 쉬워요",
+    format: "캐러셀",
+    channels: ["instagram", "threads"],
+  },
+  {
+    build: (kw) => `팔로워에게 묻기 — 요즘 ${kw} 최대 고민은?`,
+    angle: "질문 스티커로 반응을 모으고 후속 콘텐츠 소재까지 확보해요",
+    format: "스토리",
+    channels: ["instagram"],
+  },
+  {
+    build: (kw) => `${kw} 하루 루틴 — 타임스탬프 공개 브이로그`,
+    angle: "루틴 포맷은 숏폼 평균 완주율이 높은 편이에요",
+    format: "릴스",
+    channels: ["tiktok", "instagram"],
+  },
+  {
+    build: (kw, cat) => `${kw} ${cat} 가성비 비교 — 표 한 장 정리`,
+    angle: "비교표는 공유가 잘 되는 정보성 포맷이에요",
+    format: "캐러셀",
+    channels: ["instagram", "threads"],
+  },
+  {
+    build: (kw) => `다들 모르는 ${kw}의 반전 사실 — 후킹 숏폼`,
+    angle: "반전 구조는 시청 지속 시간을 늘리는 데 효과적이에요",
+    format: "릴스",
+    channels: ["tiktok"],
+  },
+];
+
+interface GeneratedIdea {
+  id: string;
+  title: string;
+  reason: string;
+  format: IdeaFormat;
+  channels: Channel[];
+  engagement: "high" | "mid";
+}
+
+interface IdeaSearchResult {
+  keyword: string;
+  category: string;
+  related: TrendItem[];
+  ideas: GeneratedIdea[];
+}
+
+/** 키워드·카테고리로 트렌드 근거 콘텐츠 최대 3개 — 키워드 매칭 우선, 없으면 선택 카테고리 인기순 */
+function findRelatedTrends(keyword: string, category: string): TrendItem[] {
+  const tokens = keyword.toLowerCase().split(/[\s,]+/).filter(Boolean);
+  const inCategory = trendItems.filter((item) => category === "전체" || item.category === category);
+  const keywordHits = inCategory.filter((item) =>
+    tokens.some(
+      (t) => item.title.toLowerCase().includes(t) || item.category.toLowerCase().includes(t),
+    ),
+  );
+  if (keywordHits.length > 0) {
+    return keywordHits.sort((a, b) => b.views - a.views).slice(0, 3);
+  }
+  if (category !== "전체") {
+    return inCategory.sort((a, b) => b.views - a.views).slice(0, 3);
+  }
+  return [];
+}
+
+/** 포맷 템플릿 x 키워드 치환으로 아이디어 4~6개 생성 — 해시 기반이라 같은 입력은 같은 결과 */
+function buildIdeas(keyword: string, category: string, related: TrendItem[]): GeneratedIdea[] {
+  const h = hashString(`${keyword}|${category}`);
+  const count = 4 + (h % 3); // 4~6개
+  const catLabel = category !== "전체" ? category : (related[0]?.category ?? "라이프스타일");
+  return Array.from({ length: count }, (_, i) => {
+    const tpl = IDEA_TEMPLATES[(h + i) % IDEA_TEMPLATES.length];
+    const evidence = related.length > 0 ? related[i % related.length] : null;
+    const reason = evidence
+      ? `지금 뜨는 "${evidence.title}"(조회수 ${formatCompact(evidence.views)})와 같은 수요를 겨냥해요 — ${tpl.angle}`
+      : `'${keyword}' 키워드 조합 추천 — ${tpl.angle}`;
+    const engagement: GeneratedIdea["engagement"] = evidence
+      ? evidence.reachScore >= 10
+        ? "high"
+        : "mid"
+      : (h + i * 31) % 5 < 3
+        ? "high"
+        : "mid";
+    return {
+      id: `gen-${i}`,
+      title: tpl.build(keyword, catLabel),
+      reason,
+      format: tpl.format,
+      channels: tpl.channels,
+      engagement,
+    };
+  });
+}
+
 export default function StudioPage() {
   const [tab, setTab] = useState<StudioTab>("cards");
   const [topic, setTopic] = useState("");
   const [tone, setTone] = useState<BrandTone>("friendly");
   const [slides, setSlides] = useState<Slide[] | null>(null);
+  const [ideaKeyword, setIdeaKeyword] = useState("");
+  const [ideaCategory, setIdeaCategory] = useState<string>("전체");
+  const [ideaResult, setIdeaResult] = useState<IdeaSearchResult | null>(null);
 
   const handleGenerate = () => {
     if (!topic.trim()) return;
@@ -99,6 +242,24 @@ export default function StudioPage() {
     setTopic(ideaTopic);
     setSlides(null);
     setTab("cards");
+  };
+
+  const handleFindIdeas = () => {
+    const kw = ideaKeyword.trim();
+    if (!kw) return;
+    const related = findRelatedTrends(kw, ideaCategory);
+    setIdeaResult({
+      keyword: kw,
+      category: ideaCategory,
+      related,
+      ideas: buildIdeas(kw, ideaCategory, related),
+    });
+  };
+
+  const handleResetIdeas = () => {
+    setIdeaKeyword("");
+    setIdeaCategory("전체");
+    setIdeaResult(null);
   };
 
   return (
@@ -279,59 +440,250 @@ export default function StudioPage() {
       ) : null}
 
       {tab === "ideas" ? (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <DataSourceBadge source="internal" />
-              <span className="text-[13px] text-fg-sub">
-                트렌드·계정 데이터를 바탕으로 핀치 AI가 추천한 콘텐츠 주제입니다.
-              </span>
-            </div>
-            <DataSourceNote source="제휴 데이터 공급사 트렌드 기반" />
-          </div>
+        <div className="space-y-6">
+          {/* 1. 아이디어 파인더 — 키워드 검색 영역 */}
+          <Card>
+            <CardHeader
+              title="아이디어 파인더"
+              description="키워드를 검색하면 최근 트렌드 데이터를 근거로 맞춤 콘텐츠 아이디어를 만들어드립니다."
+            />
+            <CardBody className="space-y-4">
+              <div className="flex flex-col gap-3 md:flex-row">
+                <label htmlFor="idea-keyword" className="relative block flex-1">
+                  <span className="sr-only">키워드</span>
+                  <Search
+                    className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-fg-faint"
+                    aria-hidden
+                  />
+                  <input
+                    id="idea-keyword"
+                    type="search"
+                    value={ideaKeyword}
+                    onChange={(e) => setIdeaKeyword(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleFindIdeas();
+                    }}
+                    placeholder="키워드를 입력하세요 — 예: 여름, 루틴, 수납"
+                    className="h-10 w-full rounded-card border border-line bg-overlay pl-10 pr-3 text-[15px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary"
+                  />
+                </label>
+                <Button
+                  onClick={handleFindIdeas}
+                  disabled={!ideaKeyword.trim()}
+                  className="md:shrink-0"
+                >
+                  <Sparkles className="size-4" aria-hidden />
+                  아이디어 찾기
+                </Button>
+              </div>
+              <ChipFilter
+                options={TREND_CATEGORIES.map((c) => ({ value: c, label: c }))}
+                value={ideaCategory}
+                onChange={setIdeaCategory}
+              />
+            </CardBody>
+          </Card>
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            {ideaSuggestions.map((idea) => {
-              const engage = ENGAGE_META[idea.expectedEngagement];
-              return (
-                <Card key={idea.id} hover className="flex flex-col p-5">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <Badge tone="neutral">{idea.category}</Badge>
-                    {idea.channels.map((ch) => (
-                      <ChannelBadge key={ch} channel={ch} />
+          {ideaResult ? (
+            <>
+              {/* 검색 결과 헤더 */}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[13px] text-fg-sub">
+                  <span className="font-semibold text-fg">
+                    &lsquo;{ideaResult.keyword}&rsquo;
+                  </span>
+                  {ideaResult.category !== "전체" ? ` · ${ideaResult.category}` : ""} 맞춤
+                  아이디어{" "}
+                  <span className="tnum font-semibold text-primary">
+                    {ideaResult.ideas.length}
+                  </span>
+                  건
+                </p>
+                <Button variant="ghost" size="sm" onClick={handleResetIdeas}>
+                  검색 초기화
+                </Button>
+              </div>
+
+              {/* 2-1. 근거 섹션 — 매칭된 트렌드가 없으면 생략 */}
+              {ideaResult.related.length > 0 ? (
+                <section aria-label="지금 뜨는 관련 콘텐츠" className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Flame className="size-4 text-primary" aria-hidden />
+                    <h3 className="text-[15px] font-bold">지금 뜨는 관련 콘텐츠</h3>
+                    <DataSourceBadge source="thirdparty" />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {ideaResult.related.map((item) => (
+                      <Card key={item.id} className="flex flex-col p-4">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <ChannelBadge channel={item.channel} />
+                          <span className="text-xs text-fg-faint">{item.category}</span>
+                        </div>
+                        <p className="mt-2 line-clamp-2 text-[14px] font-semibold leading-snug">
+                          {item.title}
+                        </p>
+                        <p className="mt-1 text-[13px] text-fg-sub">{item.creatorHandle}</p>
+                        <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-3 text-[13px] text-fg-sub">
+                          <span>
+                            조회수{" "}
+                            <span className="tnum font-semibold text-fg">
+                              {formatCompact(item.views)}
+                            </span>
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            도달 스코어{" "}
+                            <span className="tnum font-semibold text-primary">
+                              {item.reachScore}배
+                            </span>
+                            <InfoTip>
+                              조회수 ÷ 팔로워 수. 핀치 자체 추정치이며 플랫폼 공식 지표가
+                              아닙니다.
+                            </InfoTip>
+                          </span>
+                        </div>
+                      </Card>
                     ))}
                   </div>
+                </section>
+              ) : null}
 
-                  <h3 className="mt-3 text-[17px] font-semibold leading-snug">{idea.topic}</h3>
+              {/* 2-2. 생성된 아이디어 카드 */}
+              <section aria-label="생성된 맞춤 아이디어" className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Lightbulb className="size-4 text-primary" aria-hidden />
+                  <h3 className="text-[15px] font-bold">맞춤 아이디어</h3>
+                  <DataSourceBadge source="internal" />
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {ideaResult.ideas.map((idea) => (
+                    <Card key={idea.id} hover className="flex flex-col p-5">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge tone="neutral">{idea.format}</Badge>
+                        {idea.channels.map((ch) => (
+                          <ChannelBadge key={ch} channel={ch} />
+                        ))}
+                      </div>
 
-                  <p className="mt-2 flex items-start gap-1.5 text-[13px] leading-relaxed text-fg-sub">
-                    <TrendingUp className="mt-0.5 size-3.5 shrink-0 text-positive" aria-hidden />
-                    {idea.reason}
-                  </p>
+                      <h4 className="mt-3 text-[16px] font-semibold leading-snug">
+                        {idea.title}
+                      </h4>
 
-                  <div className="mt-3 flex items-center gap-1.5 text-[13px] text-fg-sub">
-                    예상 반응
-                    <Badge tone={engage.tone}>{engage.label}</Badge>
-                    <InfoTip>
-                      최근 트렌드 데이터 기반 핀치 자체 추정치입니다. 플랫폼 공식 데이터가 아니에요.
-                    </InfoTip>
+                      <p className="mt-2 flex items-start gap-1.5 text-[13px] leading-relaxed text-fg-sub">
+                        <TrendingUp
+                          className="mt-0.5 size-3.5 shrink-0 text-positive"
+                          aria-hidden
+                        />
+                        {idea.reason}
+                      </p>
+
+                      <div className="mt-3 flex items-center gap-1.5 text-[13px] text-fg-sub">
+                        예상 반응
+                        <Badge tone={idea.engagement === "high" ? "positive" : "warning"}>
+                          {idea.engagement === "high" ? "높음" : "중간"}
+                        </Badge>
+                        <InfoTip>
+                          트렌드 데이터 기반 핀치 자체 추정치입니다. 플랫폼 공식 데이터가
+                          아니에요.
+                        </InfoTip>
+                      </div>
+
+                      <div className="mt-auto">
+                        <div className="mt-4 border-t border-line pt-4">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="w-full"
+                            onClick={() => handleUseIdea(idea.title)}
+                          >
+                            <Lightbulb className="size-4" aria-hidden />
+                            이 주제로 카드뉴스 만들기
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              </section>
+            </>
+          ) : (
+            <>
+              {/* 3. 검색 전 초기 상태 — 오늘의 추천 아이디어 */}
+              <p className="flex items-center gap-1.5 text-[13px] text-fg-sub">
+                <Lightbulb className="size-4 shrink-0 text-primary" aria-hidden />
+                키워드로 검색하면 맞춤 아이디어를 만들어드려요. 그 전에 오늘의 추천 아이디어를
+                둘러보세요.
+              </p>
+
+              {ideaSuggestions.length > 0 ? (
+                <section aria-label="오늘의 추천 아이디어" className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-[15px] font-bold">오늘의 추천 아이디어</h3>
+                    <DataSourceBadge source="internal" />
                   </div>
+                  <div className="grid gap-4 lg:grid-cols-3">
+                    {ideaSuggestions.map((idea) => {
+                      const engage = ENGAGE_META[idea.expectedEngagement];
+                      return (
+                        <Card key={idea.id} hover className="flex flex-col p-5">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Badge tone="neutral">{idea.category}</Badge>
+                            {idea.channels.map((ch) => (
+                              <ChannelBadge key={ch} channel={ch} />
+                            ))}
+                          </div>
 
-                  <div className="mt-4 border-t border-line pt-4">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => handleUseIdea(idea.topic)}
-                    >
-                      <Lightbulb className="size-4" aria-hidden />
-                      이 주제로 카드뉴스 만들기
-                    </Button>
+                          <h4 className="mt-3 text-[17px] font-semibold leading-snug">
+                            {idea.topic}
+                          </h4>
+
+                          <p className="mt-2 flex items-start gap-1.5 text-[13px] leading-relaxed text-fg-sub">
+                            <TrendingUp
+                              className="mt-0.5 size-3.5 shrink-0 text-positive"
+                              aria-hidden
+                            />
+                            {idea.reason}
+                          </p>
+
+                          <div className="mt-3 flex items-center gap-1.5 text-[13px] text-fg-sub">
+                            예상 반응
+                            <Badge tone={engage.tone}>{engage.label}</Badge>
+                            <InfoTip>
+                              최근 트렌드 데이터 기반 핀치 자체 추정치입니다. 플랫폼 공식
+                              데이터가 아니에요.
+                            </InfoTip>
+                          </div>
+
+                          <div className="mt-auto">
+                            <div className="mt-4 border-t border-line pt-4">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                className="w-full"
+                                onClick={() => handleUseIdea(idea.topic)}
+                              >
+                                <Lightbulb className="size-4" aria-hidden />
+                                이 주제로 카드뉴스 만들기
+                              </Button>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
                   </div>
-                </Card>
-              );
-            })}
-          </div>
+                </section>
+              ) : null}
+            </>
+          )}
+
+          {/* 4. 하단 고지 */}
+          <Card className="flex flex-wrap items-start justify-between gap-3 p-4">
+            <p className="flex items-start gap-1.5 text-[13px] leading-relaxed text-fg-sub">
+              <Info className="mt-0.5 size-4 shrink-0 text-fg-faint" aria-hidden />
+              아이디어 추천은 최근 트렌드 데이터를 기반으로 한 핀치 자체 생성 결과입니다. 실제
+              반응은 계정 상황에 따라 달라질 수 있어요.
+            </p>
+            <DataSourceNote source="제휴 데이터 공급사 트렌드 기반" />
+          </Card>
         </div>
       ) : null}
     </div>
