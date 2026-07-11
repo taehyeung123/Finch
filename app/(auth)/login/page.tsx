@@ -65,18 +65,15 @@ function LoginCard() {
         </p>
       ) : null}
 
-      {!configured ? (
-        <>
-          <div className="my-6 flex items-center gap-3" aria-hidden>
-            <span className="h-px flex-1 bg-line" />
-            <span className="text-xs text-fg-faint">또는</span>
-            <span className="h-px flex-1 bg-line" />
-          </div>
-          <ButtonLink href="/dashboard" variant="secondary" className="w-full">
-            데모 모드로 둘러보기
-          </ButtonLink>
-        </>
-      ) : null}
+      {/* 둘러보기 탈출구는 항상 노출 — 로그인 연동이 죽어 있어도 사이트가 막다른 길이 되지 않도록 */}
+      <div className="my-6 flex items-center gap-3" aria-hidden>
+        <span className="h-px flex-1 bg-line" />
+        <span className="text-xs text-fg-faint">또는</span>
+        <span className="h-px flex-1 bg-line" />
+      </div>
+      <ButtonLink href="/dashboard" variant="secondary" className="w-full">
+        로그인 없이 둘러보기
+      </ButtonLink>
 
       <p className="mt-6 text-center text-[13px] text-fg-sub">
         아직 계정이 없나요?{" "}

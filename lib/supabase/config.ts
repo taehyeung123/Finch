@@ -8,3 +8,13 @@ export function isSupabaseConfigured(): boolean {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   );
 }
+
+/**
+ * 데모 모드 강제 스위치 — NEXT_PUBLIC_DEMO_MODE=true 이면 Supabase 키가 있어도
+ * 인증을 건너뛰고 전체 화면을 열어준다. Supabase 프로젝트가 일시정지/한도초과로
+ * 죽어 있어 로그인이 막힐 때, 배포 환경변수 한 줄로 사이트를 다시 열 수 있는 탈출구.
+ */
+export function isDemoMode(): boolean {
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") return true;
+  return !isSupabaseConfigured();
+}

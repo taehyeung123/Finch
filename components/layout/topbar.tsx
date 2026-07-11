@@ -7,7 +7,7 @@ import { CHANNEL_FILTERS } from "@/lib/channels";
 import { notifications } from "@/lib/mock/data";
 import { ChipFilter } from "@/components/ui/chip-filter";
 import { Badge } from "@/components/ui/badge";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isDemoMode } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/client";
 import { useChannel } from "./channel-context";
 
@@ -23,15 +23,16 @@ export function Topbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // 로그인 사용자 조회 — 미설정(데모 모드)이면 호출하지 않는다
+  // 로그인 사용자 조회 — 데모 모드면 호출하지 않는다. Supabase 다운 시에도 조용히 무시.
   useEffect(() => {
-    if (!isSupabaseConfigured()) return;
+    if (isDemoMode()) return;
     let active = true;
     createClient()
       .auth.getUser()
       .then(({ data }) => {
         if (active) setEmail(data.user?.email ?? null);
-      });
+      })
+      .catch(() => {});
     return () => {
       active = false;
     };
