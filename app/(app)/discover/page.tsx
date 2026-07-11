@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Bookmark, Flame, Info, SearchX } from "lucide-react";
+import { Bookmark, Flame, Info, Search, SearchX } from "lucide-react";
 import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 import type { Channel, ChannelFilter, TrendItem } from "@/lib/types";
 import { CHANNEL_FILTERS } from "@/lib/channels";
@@ -42,23 +42,30 @@ export default function DiscoverPage() {
   const [category, setCategory] = useState<string>("전체");
   const [channel, setChannel] = useState<ChannelFilter>("all");
   const [sort, setSort] = useState<SortKey>("views");
+  const [query, setQuery] = useState("");
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
   const items = useMemo(() => {
-    if (tab === "realtime") {
-      return [...trendItems].sort((a, b) => a.postedAgoHours - b.postedAgoHours);
-    }
-    const filtered = trendItems.filter(
+    const q = query.trim().toLowerCase();
+    // 검색어·채널 필터는 두 탭 공통 적용
+    const base = trendItems.filter(
       (item) =>
-        (category === "전체" || item.category === category) &&
-        (channel === "all" || item.channel === channel),
+        (channel === "all" || item.channel === channel) &&
+        (q === "" ||
+          item.title.toLowerCase().includes(q) ||
+          item.creatorHandle.toLowerCase().includes(q) ||
+          item.category.toLowerCase().includes(q)),
     );
+    if (tab === "realtime") {
+      return base.sort((a, b) => a.postedAgoHours - b.postedAgoHours);
+    }
+    const filtered = base.filter((item) => category === "전체" || item.category === category);
     return filtered.sort((a, b) => {
       if (sort === "reach") return b.reachScore - a.reachScore;
       if (sort === "likes") return b.likes - a.likes;
       return b.views - a.views;
     });
-  }, [tab, category, channel, sort]);
+  }, [tab, category, channel, sort, query]);
 
   const toggleSave = (id: string) => {
     setSavedIds((prev) => {
@@ -102,34 +109,55 @@ export default function DiscoverPage() {
         })}
       </div>
 
+      {/* 검색 — 검색어 관련 게시글 탐색 (두 탭 공통) */}
+      <label className="relative block max-w-xl">
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-fg-faint" aria-hidden />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="검색어를 입력하세요 — 제목, 크리에이터, 카테고리"
+          className="h-11 w-full rounded-card border border-line bg-body pl-10 pr-4 text-[15px] placeholder:text-fg-faint focus:border-primary focus:outline-none"
+        />
+      </label>
+
+      {/* 채널 필터 — 실시간·카테고리 두 탭 모두 적용 */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <ChipFilter options={CHANNEL_FILTERS} value={channel} onChange={setChannel} />
+        {tab === "category" ? (
+          <label className="flex items-center gap-2 text-[13px] text-fg-sub">
+            정렬
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+              className="h-8 rounded-card border border-line bg-overlay px-2.5 text-[13px] font-medium text-fg outline-none transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+      </div>
+
       {tab === "category" ? (
-        <div className="space-y-3">
-          <ChipFilter
-            options={TREND_CATEGORIES.map((c) => ({ value: c, label: c }))}
-            value={category}
-            onChange={setCategory}
-          />
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <ChipFilter options={CHANNEL_FILTERS} value={channel} onChange={setChannel} />
-            <label className="flex items-center gap-2 text-[13px] text-fg-sub">
-              정렬
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value as SortKey)}
-                className="h-8 rounded-card border border-line bg-overlay px-2.5 text-[13px] font-medium text-fg outline-none transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
-              >
-                {SORT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </div>
-      ) : (
+        <ChipFilter
+          options={TREND_CATEGORIES.map((c) => ({ value: c, label: c }))}
+          value={category}
+          onChange={setCategory}
+        />
+      ) : null}
+
+      {query.trim() !== "" ? (
+        <p className="text-[13px] text-fg-sub">
+          <span className="font-semibold text-fg">&lsquo;{query.trim()}&rsquo;</span> 검색 결과{" "}
+          <span className="tnum font-semibold text-primary">{items.length}</span>건
+        </p>
+      ) : tab === "realtime" ? (
         <p className="text-[13px] text-fg-faint">최근 업로드된 순서로 급상승 콘텐츠를 보여드려요.</p>
-      )}
+      ) : null}
 
       {/* 콘텐츠 카드 그리드 */}
       {items.length > 0 ? (
@@ -150,7 +178,7 @@ export default function DiscoverPage() {
         <EmptyState
           icon={SearchX}
           title="조건에 맞는 콘텐츠가 없어요"
-          description="카테고리나 채널 필터를 바꿔서 다시 찾아보세요. 데이터는 갱신 주기에 따라 순차적으로 채워집니다."
+          description="검색어를 바꾸거나 카테고리·채널 필터를 조정해서 다시 찾아보세요. 데이터는 갱신 주기에 따라 순차적으로 채워집니다."
         />
       )}
 
