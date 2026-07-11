@@ -14,6 +14,15 @@ export const metadata: Metadata = {
     type: "website",
     siteName: "핀치 (Finch)",
     locale: "ko_KR",
+    images: [{ url: "/brand/finch-og-1200.png", width: 1200, height: 630, alt: "핀치 (Finch)" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    images: ["/brand/finch-og-1200.png"],
+  },
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/brand/finch-app-icon-180.png", sizes: "180x180" }],
   },
 };
 

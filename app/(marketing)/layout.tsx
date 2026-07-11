@@ -88,6 +88,11 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
                   무료로 시작하기
                 </Link>
               </li>
+              <li>
+                <Link href="/brand" className="hover:text-fg">
+                  브랜드 · 로고
+                </Link>
+              </li>
             </ul>
           </div>
           <div>
