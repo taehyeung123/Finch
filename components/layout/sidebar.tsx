@@ -8,6 +8,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Compass,
+  Eye,
   FileSearch,
   FileText,
   LayoutDashboard,
@@ -26,6 +27,7 @@ import { ButtonLink } from "@/components/ui/button";
 export const NAV_ITEMS = [
   { href: "/dashboard", label: "홈", icon: LayoutDashboard },
   { href: "/analyze", label: "콘텐츠 분석", icon: FileSearch },
+  { href: "/audience", label: "오디언스", icon: Eye },
   { href: "/discover", label: "탐색", icon: Compass },
   { href: "/competitors", label: "경쟁사", icon: Users },
   { href: "/ads", label: "광고 관리", icon: Megaphone },

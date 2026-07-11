@@ -173,6 +173,26 @@ export interface ReportItem {
   scheduled: boolean;
 }
 
+/** 오디언스 분석 — 일별 집계 지표 (공식 Insights 범위) */
+export interface AudienceDaily {
+  date: string; // ISO (일 단위)
+  profileViews: number;
+  reach: number;
+  followerNet: number; // 순증감 (공식 API는 개별 이탈자 식별 불가)
+  linkClicks: number;
+}
+
+/** 자주 반응하는 팬 — 공개 상호작용(댓글·좋아요) 기반. 프로필 "방문자" 식별이 아님 */
+export interface TopEngager {
+  id: string;
+  handle: string;
+  displayName: string;
+  comments30d: number;
+  likes30d: number;
+  isFollower: boolean;
+  lastEngagedAt: string;
+}
+
 export interface IdeaSuggestion {
   id: string;
   topic: string;

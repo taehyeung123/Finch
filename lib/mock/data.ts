@@ -6,6 +6,7 @@ import type {
   AdCampaign,
   AnalyzeResult,
   AppNotification,
+  AudienceDaily,
   ChannelAccount,
   ChannelFilter,
   CompetitorAd,
@@ -16,6 +17,7 @@ import type {
   PlanFeature,
   Post,
   ReportItem,
+  TopEngager,
   TrendItem,
   UsageStat,
 } from "../types";
@@ -519,6 +521,36 @@ export const reports: ReportItem[] = [
     createdAt: "2026-07-08T16:40:00+09:00",
     scheduled: false,
   },
+];
+
+/** 오디언스 분석 — 최근 14일 일별 집계 (인스타그램 공식 Insights 범위의 목데이터) */
+export const audienceDaily: AudienceDaily[] = [
+  { date: "2026-06-28", profileViews: 412, reach: 18200, followerNet: 84, linkClicks: 31 },
+  { date: "2026-06-29", profileViews: 388, reach: 16900, followerNet: 62, linkClicks: 24 },
+  { date: "2026-06-30", profileViews: 431, reach: 19400, followerNet: 91, linkClicks: 37 },
+  { date: "2026-07-01", profileViews: 526, reach: 24100, followerNet: 128, linkClicks: 45 },
+  { date: "2026-07-02", profileViews: 498, reach: 22800, followerNet: 102, linkClicks: 41 },
+  { date: "2026-07-03", profileViews: 455, reach: 20600, followerNet: 76, linkClicks: 33 },
+  { date: "2026-07-04", profileViews: 389, reach: 17800, followerNet: -12, linkClicks: 22 },
+  { date: "2026-07-05", profileViews: 402, reach: 18900, followerNet: 44, linkClicks: 28 },
+  { date: "2026-07-06", profileViews: 517, reach: 23600, followerNet: 118, linkClicks: 49 },
+  { date: "2026-07-07", profileViews: 604, reach: 28400, followerNet: 156, linkClicks: 58 },
+  { date: "2026-07-08", profileViews: 688, reach: 31900, followerNet: 189, linkClicks: 66 },
+  { date: "2026-07-09", profileViews: 731, reach: 34200, followerNet: 204, linkClicks: 74 },
+  { date: "2026-07-10", profileViews: 892, reach: 41800, followerNet: 287, linkClicks: 95 },
+  { date: "2026-07-11", profileViews: 463, reach: 21400, followerNet: 96, linkClicks: 38 },
+];
+
+/** 자주 반응하는 팬 Top — 공개 댓글·좋아요 집계. "프로필 방문자" 식별이 아니다 (그건 어떤 API도 제공 안 함) */
+export const topEngagers: TopEngager[] = [
+  { id: "e1", handle: "@daily.mint", displayName: "민트", comments30d: 24, likes30d: 41, isFollower: true, lastEngagedAt: "2026-07-11T07:20:00+09:00" },
+  { id: "e2", handle: "@jw_note", displayName: "정우", comments30d: 18, likes30d: 38, isFollower: true, lastEngagedAt: "2026-07-10T23:05:00+09:00" },
+  { id: "e3", handle: "@yellow.shop", displayName: "옐로우샵", comments30d: 15, likes30d: 22, isFollower: false, lastEngagedAt: "2026-07-10T18:40:00+09:00" },
+  { id: "e4", handle: "@hana_daily", displayName: "하나", comments30d: 12, likes30d: 35, isFollower: true, lastEngagedAt: "2026-07-11T01:12:00+09:00" },
+  { id: "e5", handle: "@fit.gyu", displayName: "규", comments30d: 11, likes30d: 19, isFollower: true, lastEngagedAt: "2026-07-09T21:33:00+09:00" },
+  { id: "e6", handle: "@cafe.mood", displayName: "카페무드", comments30d: 9, likes30d: 27, isFollower: false, lastEngagedAt: "2026-07-10T11:50:00+09:00" },
+  { id: "e7", handle: "@sso.pick", displayName: "쏘픽", comments30d: 8, likes30d: 16, isFollower: true, lastEngagedAt: "2026-07-08T14:27:00+09:00" },
+  { id: "e8", handle: "@runner.j", displayName: "제이", comments30d: 6, likes30d: 21, isFollower: true, lastEngagedAt: "2026-07-09T08:44:00+09:00" },
 ];
 
 export const ideaSuggestions: IdeaSuggestion[] = [

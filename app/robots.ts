@@ -8,6 +8,7 @@ import type { MetadataRoute } from "next";
 const APP_ROUTES = [
   "/dashboard",
   "/analyze",
+  "/audience",
   "/discover",
   "/competitors",
   "/ads",
