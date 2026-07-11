@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FinchLogo } from "@/components/logo";
 import { ButtonLink } from "@/components/ui/button";
+import { InstagramGlyph, MetaGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 
 /* 공개 마케팅 영역 — SEO/GEO 최우선 적용 (PART 13.1) */
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
@@ -50,22 +51,22 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
               핀치는 인스타그램·틱톡·쓰레드를 한 곳에서 분석하고 메타광고 집행까지 관리하는 SNS 마케팅
               도구입니다.
             </p>
-            {/* 지원 채널 미니 스트립 — 채널 배지 컬러 토큰 사용 (PART 7.5) */}
+            {/* 지원 채널 미니 스트립 — 실제 브랜드 글리프 (PART 7.5) */}
             <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-semibold text-fg-faint">
               <span className="inline-flex items-center gap-1.5">
-                <span className="size-1.5 rounded-full bg-ig" aria-hidden />
+                <InstagramGlyph className="size-3.5 text-ig" />
                 Instagram
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="size-1.5 rounded-full bg-tiktok-cyan" aria-hidden />
+                <TiktokGlyph className="size-3.5 text-fg" />
                 TikTok
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="size-1.5 rounded-full bg-fg" aria-hidden />
+                <ThreadsGlyph className="size-3.5 text-fg" />
                 Threads
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="size-1.5 rounded-full bg-meta" aria-hidden />
+                <MetaGlyph className="size-3.5 text-meta" />
                 Meta 광고
               </span>
             </div>

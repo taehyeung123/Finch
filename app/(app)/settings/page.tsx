@@ -2,6 +2,7 @@ import { Check, ExternalLink, ShieldCheck } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card } from "@/components/ui/card";
 import { Badge, ChannelBadge } from "@/components/ui/badge";
+import { AppIconTile } from "@/components/icons/brand";
 import { Button } from "@/components/ui/button";
 import { accounts } from "@/lib/mock/data";
 import { SettingsNav } from "./_components/settings-nav";
@@ -53,30 +54,33 @@ export default function SettingsPage() {
         {accounts.map((account) => (
           <Card key={account.channel} className="p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <ChannelBadge channel={account.channel} />
-                  {account.connected ? (
-                    <Badge tone="positive">연동됨</Badge>
-                  ) : (
-                    <Badge tone="neutral">미연동</Badge>
-                  )}
+              <div className="flex min-w-0 items-start gap-3.5">
+                <AppIconTile app={account.channel} size={44} className="mt-0.5" />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ChannelBadge channel={account.channel} />
+                    {account.connected ? (
+                      <Badge tone="positive">연동됨</Badge>
+                    ) : (
+                      <Badge tone="neutral">미연동</Badge>
+                    )}
+                  </div>
+                  <p className="mt-2 text-[14px] text-fg-sub">
+                    {account.handle}
+                    <span className="ml-2 text-fg-faint">{account.displayName}</span>
+                  </p>
+                  {account.tokenExpiresInDays !== null ? (
+                    account.tokenExpiresInDays <= 14 ? (
+                      <p className="mt-1 text-[13px] font-semibold text-warning">
+                        토큰 <span className="tnum">{account.tokenExpiresInDays}</span>일 후 만료 — 재연동 필요
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-[13px] text-fg-faint">
+                        토큰 <span className="tnum">{account.tokenExpiresInDays}</span>일 후 만료
+                      </p>
+                    )
+                  ) : null}
                 </div>
-                <p className="mt-2 text-[14px] text-fg-sub">
-                  {account.handle}
-                  <span className="ml-2 text-fg-faint">{account.displayName}</span>
-                </p>
-                {account.tokenExpiresInDays !== null ? (
-                  account.tokenExpiresInDays <= 14 ? (
-                    <p className="mt-1 text-[13px] font-semibold text-warning">
-                      토큰 <span className="tnum">{account.tokenExpiresInDays}</span>일 후 만료 — 재연동 필요
-                    </p>
-                  ) : (
-                    <p className="mt-1 text-[13px] text-fg-faint">
-                      토큰 <span className="tnum">{account.tokenExpiresInDays}</span>일 후 만료
-                    </p>
-                  )
-                ) : null}
               </div>
               <ConnectActions connected={account.connected} />
             </div>
@@ -99,18 +103,21 @@ export default function SettingsPage() {
         {/* Meta 광고 계정 — 채널 계정과 별도 연동 (PART 4.2) */}
         <Card className="p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-chip border border-line bg-overlay px-2.5 py-0.5 text-xs font-semibold leading-5 whitespace-nowrap text-fg-sub">
-                  <span className="size-1.5 rounded-full bg-meta" aria-hidden />
-                  Meta 광고
-                </span>
-                <Badge tone="positive">연동됨</Badge>
+            <div className="flex min-w-0 items-start gap-3.5">
+              <AppIconTile app="meta" size={44} className="mt-0.5" />
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-chip border border-line bg-overlay px-2.5 py-0.5 text-xs font-semibold leading-5 whitespace-nowrap text-fg-sub">
+                    <span className="size-1.5 rounded-full bg-meta" aria-hidden />
+                    Meta 광고
+                  </span>
+                  <Badge tone="positive">연동됨</Badge>
+                </div>
+                <p className="mt-2 text-[14px] text-fg-sub">
+                  핀치 마케팅
+                  <span className="ml-2 text-fg-faint">광고 계정 act-2048</span>
+                </p>
               </div>
-              <p className="mt-2 text-[14px] text-fg-sub">
-                핀치 마케팅
-                <span className="ml-2 text-fg-faint">광고 계정 act-2048</span>
-              </p>
             </div>
             <ConnectActions connected />
           </div>

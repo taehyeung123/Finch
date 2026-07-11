@@ -30,7 +30,7 @@ export function HeroVisual() {
         <AppIconTile app="instagram" size={64} />
       </div>
       <div
-        className="anim-float absolute -left-7 top-16 z-20 hidden md:block"
+        className="anim-float absolute -left-10 top-20 z-20 hidden md:block"
         style={{ animationDelay: "1.1s", animationDuration: "6.2s" }}
       >
         <AppIconTile app="tiktok" size={56} />
@@ -41,8 +41,9 @@ export function HeroVisual() {
       >
         <AppIconTile app="threads" size={50} />
       </div>
+      {/* 메타 — 카드 앞(z-20), 좌하단 모서리에 확실히 보이게 */}
       <div
-        className="anim-float absolute -bottom-8 left-10 z-0 hidden md:block"
+        className="anim-float absolute -bottom-9 left-6 z-20 hidden md:block"
         style={{ animationDelay: "2.4s", animationDuration: "6.8s" }}
       >
         <AppIconTile app="meta" size={48} />

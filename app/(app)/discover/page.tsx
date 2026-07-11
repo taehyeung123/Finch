@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AtSign, Bookmark, Camera, Flame, Info, Music2, SearchX } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { Bookmark, Flame, Info, SearchX } from "lucide-react";
+import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 import type { Channel, ChannelFilter, TrendItem } from "@/lib/types";
 import { CHANNEL_FILTERS } from "@/lib/channels";
 import { formatCompact } from "@/lib/format";
@@ -30,11 +30,11 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "likes", label: "좋아요순" },
 ];
 
-/* 썸네일 자리 표시용 채널 아이콘 — 실제 미디어 연동 전까지 목 처리 (lucide에 브랜드 아이콘이 없어 일반 아이콘 대체) */
-const CHANNEL_ICON: Record<Channel, LucideIcon> = {
-  instagram: Camera,
-  tiktok: Music2,
-  threads: AtSign,
+/* 썸네일 자리 표시용 채널 아이콘 — 실제 미디어 연동 전까지 브랜드 글리프로 목 처리 */
+const CHANNEL_ICON: Record<Channel, (props: { className?: string }) => React.ReactNode> = {
+  instagram: InstagramGlyph,
+  tiktok: TiktokGlyph,
+  threads: ThreadsGlyph,
 };
 
 export default function DiscoverPage() {
@@ -179,8 +179,8 @@ function TrendCard({
   return (
     <Card hover className="flex flex-col overflow-hidden">
       {/* 썸네일 자리 — 실제 미디어 연동 전 목 표시 */}
-      <div className="flex aspect-video items-center justify-center bg-overlay">
-        <ChannelIcon className="size-8 text-fg-faint" aria-hidden />
+      <div className="flex aspect-video items-center justify-center bg-overlay" aria-hidden>
+        <ChannelIcon className="size-9 text-fg-faint" />
       </div>
 
       <div className="flex flex-1 flex-col gap-2.5 p-4">

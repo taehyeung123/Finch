@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/section-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge, ChannelBadge } from "@/components/ui/badge";
+import { AppIconTile } from "@/components/icons/brand";
 import { RatioBar, Sparkline } from "@/components/ui/charts";
 import { InfoTip } from "@/components/ui/info-tip";
 import { ButtonLink } from "@/components/ui/button";
@@ -207,7 +208,7 @@ export default function DashboardPage() {
         {accounts.map((a) => (
           <Card key={a.channel} hover className="p-5">
             <div className="flex items-center justify-between">
-              <ChannelBadge channel={a.channel} />
+              <AppIconTile app={a.channel} size={40} />
               {a.connected ? (
                 <Badge tone="positive">연동됨</Badge>
               ) : (

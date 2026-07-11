@@ -1,6 +1,7 @@
 import { cn } from "@/lib/cn";
 import type { Channel, DataSource, SupportLevel } from "@/lib/types";
 import { CHANNEL_LABEL, SUPPORT_LEVEL_LABEL } from "@/lib/channels";
+import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 
 /* 칩/뱃지 라운드 32px, 12px/600 (PART 7.6) */
 const badgeBase =
@@ -24,17 +25,17 @@ export function Badge({
   return <span className={cn(badgeBase, tones[tone], className)} {...props} />;
 }
 
-/* 채널 배지 (PART 7.5) — 브랜드 컬러와 별도 관리, 점(dot) + 레이블 */
-const channelDot: Record<Channel, string> = {
-  instagram: "bg-ig",
-  tiktok: "bg-tiktok-cyan",
-  threads: "bg-fg",
+/* 채널 배지 (PART 7.5) — 실제 브랜드 글리프 + 레이블 */
+const CHANNEL_GLYPH: Record<Channel, React.ReactNode> = {
+  instagram: <InstagramGlyph className="size-3 text-ig" />,
+  tiktok: <TiktokGlyph className="size-3 text-fg" />,
+  threads: <ThreadsGlyph className="size-3 text-fg" />,
 };
 
 export function ChannelBadge({ channel, className }: { channel: Channel; className?: string }) {
   return (
     <span className={cn(badgeBase, "bg-overlay text-fg-sub border border-line", className)}>
-      <span className={cn("size-1.5 rounded-full", channelDot[channel])} aria-hidden />
+      <span aria-hidden>{CHANNEL_GLYPH[channel]}</span>
       {CHANNEL_LABEL[channel]}
     </span>
   );

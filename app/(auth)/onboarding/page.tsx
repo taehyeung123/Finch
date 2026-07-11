@@ -8,6 +8,7 @@ import type { Channel } from "@/lib/types";
 import { FinchMark } from "@/components/logo";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { ChannelBadge } from "@/components/ui/badge";
+import { AppIconTile } from "@/components/icons/brand";
 
 /** 온보딩 3단계 마법사 — 사용 목적 → 채널 연동 → 완료 (PRD PART 5, 2.2) */
 
@@ -125,7 +126,10 @@ export default function OnboardingPage() {
                   key={channel}
                   className="flex items-center justify-between gap-3 rounded-card border border-line bg-overlay p-4"
                 >
-                  <ChannelBadge channel={channel} />
+                  <div className="flex items-center gap-3">
+                    <AppIconTile app={channel} size={38} />
+                    <ChannelBadge channel={channel} />
+                  </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-fg-faint">앱 심사 후 활성화</span>
                     <Button type="button" variant="secondary" size="sm" disabled>
