@@ -1,0 +1,42 @@
+@AGENTS.md
+
+# 핀치(Finch) 프로젝트 규칙
+
+기능 명세·디자인·로드맵의 단일 출처는 `PRD.md`(기획서 v1.2)다. 작업 전 해당 PART를 반드시 확인한다.
+
+## 기본 정보
+
+- 서비스명: 핀치(Finch) — AI SNS 통합 분석 & 메타광고 관리 플랫폼
+- 채널: Instagram · TikTok · Threads + Meta 광고 계정
+- 프레임워크: Next.js 16 (App Router, Turbopack). **`middleware.ts`가 아니라 `proxy.ts`를 사용한다.**
+- 스타일: Tailwind CSS v4 — 토큰은 `app/globals.css`의 `@theme`에 정의. **코드에 hex 하드코딩 금지, 항상 토큰 사용.**
+- 아이콘: lucide-react. 차트는 `components/ui/charts.tsx`의 경량 SVG 컴포넌트 사용(외부 차트 라이브러리 금지).
+
+## 디자인 규칙 (PRD PART 7)
+
+- 다크모드 전용: surface `#0C0C11` → body `#16161C` → overlay `#212128` (토큰: `bg-surface`/`bg-body`/`bg-overlay`)
+- 그림자(box-shadow) 금지 — 반투명 테두리(`border-line`)로 깊이 표현
+- 라운드 2단계만: 카드/버튼/인풋 `rounded-card`(8px), 칩/뱃지 `rounded-chip`(32px)
+- 브랜드 컬러 시그널 코랄(`bg-primary`) 위 텍스트는 **항상 다크**(`text-on-primary`) — 흰색 금지(WCAG 대비 미달)
+- 상승=초록(`positive`), 하락=빨강(`negative`) — 주식 관행(빨강=상승) 금지
+- 숫자 지표에는 `.tnum`(tabular-nums) 클래스 적용
+- 채널 배지 컬러는 브랜드 컬러와 분리 관리 (`components/ui/badge.tsx`의 ChannelBadge)
+
+## 데이터 규칙 (PRD PART 2·3)
+
+- "내 계정" 기능(공식 API)과 "타계정/트렌드"(3rd party 필요) 기능은 데이터 소스를 처음부터 분리 설계한다.
+- 현재는 전부 `lib/mock/data.ts` 목데이터. 실제 연동 시 같은 타입(`lib/types.ts`)을 유지한 채 교체한다.
+- 3rd party 데이터가 표시되는 화면에는 출처 배지(`DataSourceBadge`)와 갱신 시점 표기를 반드시 넣는다.
+- 자체 산출 지표(도달 스코어 등)에는 계산 근거 설명을 함께 노출한다.
+
+## 라우트 구조 (PRD PART 5)
+
+- `app/(marketing)`: 랜딩·요금제 — 공개, SEO 대상
+- `app/(auth)`: 로그인·회원가입·온보딩 — 목 인증(실제 OAuth 연동은 최후순위로 보류 중)
+- `app/(app)`: 사이드바 레이아웃 전체 — `robots: { index: false }`
+
+## 개발 워크플로
+
+- 작업 완료 후 `npm run build`와 `npm run lint`를 실행하고, 실패하면 다음 작업 전에 반드시 고친다.
+- 커밋은 기능 단위로 나눈다.
+- 실제 API 연동(Meta/TikTok/Threads OAuth, Ad Library, 결제)은 사용자 지시로 **맨 마지막 단계**다. 그 전까지는 인터페이스만 두고 목 처리한다.
