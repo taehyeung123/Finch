@@ -1,14 +1,50 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 /**
- * 전 페이지 공통 보안 헤더 (PRD PART 13.4·13.5).
+ * 전 페이지 공통 보안 헤더 (PRD PART 13.4·13.5) + Supabase 세션 리프레시.
  * Next.js 16부터 middleware.ts가 proxy.ts로 이름이 바뀌었다.
  * 페이지마다 개별 적용하지 않고 이 한 곳에서 일괄 적용한다.
  */
-export function proxy() {
-  const response = NextResponse.next();
+export async function proxy(request: NextRequest) {
+  let response = NextResponse.next({ request });
 
+  // Supabase 설정 시에만 세션 리프레시 (@supabase/ssr 미들웨어 패턴).
+  // getUser()가 만료 토큰을 갱신하고, setAll이 갱신된 쿠키를 요청/응답 양쪽에 반영한다.
+  // 미설정(데모 모드)이면 기존 동작 그대로 통과.
+  if (isSupabaseConfigured()) {
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll: () => request.cookies.getAll(),
+          setAll: (cookiesToSet) => {
+            cookiesToSet.forEach(({ name, value }) =>
+              request.cookies.set(name, value),
+            );
+            response = NextResponse.next({ request });
+            cookiesToSet.forEach(({ name, value, options }) =>
+              response.cookies.set(name, value, options),
+            );
+          },
+        },
+      },
+    );
+    // 인증 판단이 아니라 토큰 갱신 목적 — 판단은 각 레이아웃/라우트에서 getUser()로 수행
+    await supabase.auth.getUser();
+  }
+
+  applySecurityHeaders(response);
+  return response;
+}
+
+function applySecurityHeaders(response: NextResponse) {
   const isDev = process.env.NODE_ENV === "development";
+
+  // Supabase 설정 시 클라이언트 SDK의 auth 요청(fetch)을 위해 해당 오리진만 connect-src에 추가
+  const supabaseOrigin = getSupabaseOrigin();
 
   // CSP — Pretendard 웹폰트(jsdelivr CDN)만 외부 허용. 개발 모드는 HMR 때문에 unsafe-eval 필요
   const csp = [
@@ -17,7 +53,7 @@ export function proxy() {
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
     "font-src 'self' https://cdn.jsdelivr.net",
     "img-src 'self' data: blob:",
-    "connect-src 'self'",
+    `connect-src 'self'${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -30,8 +66,16 @@ export function proxy() {
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   // HSTS — HTTPS 전면 강제 (PART 13.4). localhost HTTP에서는 브라우저가 무시한다
   response.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains");
+}
 
-  return response;
+function getSupabaseOrigin(): string {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url) return "";
+  try {
+    return new URL(url).origin;
+  } catch {
+    return "";
+  }
 }
 
 export const config = {

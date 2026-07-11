@@ -1,21 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { useSearchParams } from "next/navigation";
+import { ButtonLink } from "@/components/ui/button";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { createClient } from "@/lib/supabase/client";
+import { GoogleIcon, KakaoIcon } from "../_components/provider-icons";
 
-/** 로그인 — 목 인증, 실제 OAuth는 최후순위 (PRD PART 5) */
+/* 소셜 버튼 공통 — 브랜드 배경색 위 텍스트는 text-on-kakao(다크) 토큰 사용 */
+const socialButton =
+  "flex h-11 w-full items-center justify-center gap-2.5 rounded-card text-[15px] font-semibold transition-opacity hover:opacity-90 active:opacity-80 focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2";
+
+/** 로그인 — Supabase OAuth(Google·Kakao). 환경변수 미설정 시 데모 모드 폴백 */
 export default function LoginPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [demoNotice, setDemoNotice] = useState(false);
+  return (
+    <Suspense fallback={null}>
+      <LoginCard />
+    </Suspense>
+  );
+}
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email.trim()) return;
-    setDemoNotice(true);
-    router.push("/dashboard");
+function LoginCard() {
+  const configured = isSupabaseConfigured();
+  const authError = useSearchParams().get("error") === "auth";
+  const [configNotice, setConfigNotice] = useState(false);
+
+  function signIn(provider: "google" | "kakao") {
+    if (!configured) {
+      setConfigNotice(true);
+      return;
+    }
+    void createClient().auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: `${location.origin}/auth/callback?next=/dashboard` },
+    });
   }
 
   return (
@@ -23,49 +42,41 @@ export default function LoginPage() {
       <h1 className="text-2xl font-bold leading-tight">로그인</h1>
       <p className="mt-1 text-[15px] text-fg-sub">핀치 계정으로 계속하세요.</p>
 
-      {/* 소셜 로그인 — 앱 심사 전 비활성 (목 UI) */}
-      <div className="mt-6 space-y-2">
-        <Button type="button" variant="secondary" className="w-full">
-          Google로 계속하기
-        </Button>
-        <Button type="button" variant="secondary" className="w-full">
-          Facebook으로 계속하기
-        </Button>
-        <p className="text-center text-xs text-fg-faint">
-          소셜 로그인은 플랫폼 앱 심사 후 활성화됩니다
+      {authError ? (
+        <p role="alert" className="mt-4 rounded-card bg-negative-weak p-3 text-[13px] text-negative">
+          로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.
         </p>
+      ) : null}
+
+      <div className="mt-6 space-y-2">
+        <button type="button" onClick={() => signIn("google")} className={`${socialButton} bg-white text-on-kakao`}>
+          <GoogleIcon className="size-5" />
+          Google로 계속하기
+        </button>
+        <button type="button" onClick={() => signIn("kakao")} className={`${socialButton} bg-kakao text-on-kakao`}>
+          <KakaoIcon className="size-5" />
+          카카오로 계속하기
+        </button>
       </div>
 
-      <div className="my-6 flex items-center gap-3" aria-hidden>
-        <span className="h-px flex-1 bg-line" />
-        <span className="text-xs text-fg-faint">또는</span>
-        <span className="h-px flex-1 bg-line" />
-      </div>
+      {configNotice ? (
+        <p role="status" className="mt-3 rounded-card bg-warning-weak p-3 text-[13px] text-warning">
+          Supabase 키 설정 후 사용 가능 — docs/AUTH_SETUP.md 참고
+        </p>
+      ) : null}
 
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <div>
-          <label htmlFor="login-email" className="mb-1.5 block text-[13px] font-medium text-fg-sub">
-            이메일
-          </label>
-          <input
-            id="login-email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            autoComplete="email"
-            className="h-10 w-full rounded-card border border-line bg-overlay px-3 text-[15px] text-fg placeholder:text-fg-faint transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
-          />
-        </div>
-        <Button type="submit" className="w-full" disabled={!email.trim()}>
-          이메일로 계속하기
-        </Button>
-        {demoNotice ? (
-          <p className="text-center text-xs text-fg-faint" role="status">
-            데모 모드: 대시보드로 이동합니다
-          </p>
-        ) : null}
-      </form>
+      {!configured ? (
+        <>
+          <div className="my-6 flex items-center gap-3" aria-hidden>
+            <span className="h-px flex-1 bg-line" />
+            <span className="text-xs text-fg-faint">또는</span>
+            <span className="h-px flex-1 bg-line" />
+          </div>
+          <ButtonLink href="/dashboard" variant="secondary" className="w-full">
+            데모 모드로 둘러보기
+          </ButtonLink>
+        </>
+      ) : null}
 
       <p className="mt-6 text-center text-[13px] text-fg-sub">
         아직 계정이 없나요?{" "}

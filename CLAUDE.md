@@ -32,8 +32,17 @@
 ## 라우트 구조 (PRD PART 5)
 
 - `app/(marketing)`: 랜딩·요금제 — 공개, SEO 대상
-- `app/(auth)`: 로그인·회원가입·온보딩 — 목 인증(실제 OAuth 연동은 최후순위로 보류 중)
+- `app/(auth)`: 로그인·회원가입·온보딩 — Supabase Auth(Google·Kakao). 환경변수 미설정 시 데모 모드 폴백
 - `app/(app)`: 사이드바 레이아웃 전체 — `robots: { index: false }`
+
+## 인증 규칙 (Supabase Auth)
+
+- 서버에서 인증 판단은 **반드시 `supabase.auth.getUser()`** — `getSession()`은 쿠키를 재검증 없이 신뢰하므로 인증 판단에 절대 쓰지 않는다.
+- 로그인 후 리다이렉트 `next` 파라미터는 same-origin 검증(경로가 `/`로 시작하고 `//`로 시작하지 않으며 `\`를 포함하지 않을 것) 후에만 사용한다 (`app/auth/callback/route.ts` 패턴 유지).
+- `SUPABASE_SERVICE_ROLE_KEY` 등 시크릿은 절대 클라이언트 코드에서 참조하지 않는다. 클라이언트에는 `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`(공개 가능)만 노출한다.
+- **데모 모드 폴백 유지**: 모든 인증 경로는 `isSupabaseConfigured()`(`lib/supabase/config.ts`)를 먼저 확인하고, 환경변수 미설정 시 빌드·런타임이 깨지지 않고 데모 모드로 동작해야 한다. 설정 절차는 `docs/AUTH_SETUP.md`.
+- Supabase 클라이언트는 `lib/supabase/client.ts`(브라우저) / `lib/supabase/server.ts`(서버, `await cookies()`)만 사용한다. `@supabase/auth-helpers-nextjs`는 deprecated — 절대 쓰지 않는다.
+- 세션 리프레시는 `proxy.ts`가 담당한다 (@supabase/ssr 미들웨어 패턴). 기존 보안 헤더 로직을 제거하지 말 것.
 
 ## 개발 워크플로
 

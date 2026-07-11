@@ -30,9 +30,11 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             <ButtonLink href="/login" variant="ghost" size="sm" className="text-[14px]">
               로그인
             </ButtonLink>
-            <ButtonLink href="/signup" size="sm">
-              무료로 시작하기
-            </ButtonLink>
+            <span className="inline-flex transition-transform duration-200 hover:-translate-y-0.5">
+              <ButtonLink href="/signup" size="sm">
+                무료로 시작하기
+              </ButtonLink>
+            </span>
           </div>
         </div>
       </header>
@@ -48,6 +50,25 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
               핀치는 인스타그램·틱톡·쓰레드를 한 곳에서 분석하고 메타광고 집행까지 관리하는 SNS 마케팅
               도구입니다.
             </p>
+            {/* 지원 채널 미니 스트립 — 채널 배지 컬러 토큰 사용 (PART 7.5) */}
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-semibold text-fg-faint">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-1.5 rounded-full bg-ig" aria-hidden />
+                Instagram
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-1.5 rounded-full bg-tiktok-cyan" aria-hidden />
+                TikTok
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-1.5 rounded-full bg-fg" aria-hidden />
+                Threads
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-1.5 rounded-full bg-meta" aria-hidden />
+                Meta 광고
+              </span>
+            </div>
           </div>
           <div>
             <h3 className="text-[13px] font-bold text-fg-faint">제품</h3>
