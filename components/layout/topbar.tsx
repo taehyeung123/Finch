@@ -2,14 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Bell, LogOut, Search, Settings } from "lucide-react";
-import { CHANNEL_FILTERS } from "@/lib/channels";
 import { notifications } from "@/lib/data";
-import { ChipFilter } from "@/components/ui/chip-filter";
 import { Badge } from "@/components/ui/badge";
 import { isDemoMode } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/client";
 import { useChannel } from "./channel-context";
+import { ChannelIndicator, ChannelSwitcher, getChannelScope } from "./channel-switcher";
 
 const menuItem =
   "flex w-full items-center gap-2 rounded-card px-2.5 py-2 text-left text-[14px] text-fg-sub transition-colors hover:bg-body hover:text-fg";
@@ -17,6 +17,8 @@ const menuItem =
 /** 상단바 — 채널 스위처 / 전역 검색 / 알림 벨 / 계정 드롭다운 (PART 6.2) */
 export function Topbar() {
   const { channel, setChannel } = useChannel();
+  const pathname = usePathname();
+  const scope = getChannelScope(pathname);
   const unread = notifications.filter((n) => !n.read).length;
 
   const [email, setEmail] = useState<string | null>(null);
@@ -59,7 +61,14 @@ export function Topbar() {
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line bg-surface/90 px-4 backdrop-blur md:px-6">
-      <ChipFilter options={[...CHANNEL_FILTERS]} value={channel} onChange={setChannel} />
+      {/* 페이지 성격별 채널 영역 — 스위처(필터 동작) / 전용 표시 / 숨김 (channel-switcher.tsx) */}
+      {scope.mode === "switch" ? (
+        <ChannelSwitcher value={channel} onChange={setChannel} />
+      ) : scope.mode === "indicator" ? (
+        <ChannelIndicator scope={scope} />
+      ) : (
+        <div aria-hidden />
+      )}
 
       <div className="ml-auto hidden items-center gap-2 sm:flex">
         <label className="relative">
