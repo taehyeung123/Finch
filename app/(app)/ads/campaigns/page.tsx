@@ -33,6 +33,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { formatCompact, formatDate, formatKRW } from "@/lib/format";
 import { campaigns } from "@/lib/data";
 import type { AdCampaign } from "@/lib/types";
+import { NATIONWIDE, regionWeight, summarizeRegionPicks, type RegionPick } from "@/lib/geo/kr-regions";
+import { RegionPicker } from "./_components/region-picker";
 
 /* ---------------------------------- 상수 ---------------------------------- */
 
@@ -53,18 +55,7 @@ const GENDER_OPTIONS = [
   { value: "여성", label: "여성" },
 ] as const;
 
-/** weight — 예상 도달 목 계산용 지역 인구 비중 (핀치 자체 가정치) */
-const REGION_OPTIONS: { label: string; weight: number }[] = [
-  { label: "전국", weight: 1 },
-  { label: "서울", weight: 0.19 },
-  { label: "경기·인천", weight: 0.31 },
-  { label: "부산·울산·경남", weight: 0.15 },
-  { label: "대구·경북", weight: 0.1 },
-  { label: "대전·세종·충청", weight: 0.11 },
-  { label: "광주·전라", weight: 0.1 },
-  { label: "강원", weight: 0.03 },
-  { label: "제주", weight: 0.01 },
-];
+/* 지역 데이터·가중치는 lib/geo/kr-regions.ts — 시·도 → 시·군·구 2단계 (Meta 지역 타겟팅과 동일 체계) */
 
 const PLACEMENT_OPTIONS = ["Instagram 피드", "스토리", "릴스", "탐색 탭", "Facebook 피드"];
 
@@ -173,7 +164,7 @@ export default function CampaignsPage() {
   /* 2단계 — 타겟팅 */
   const [ages, setAges] = useState<string[]>(["18-24", "25-34"]);
   const [gender, setGender] = useState<(typeof GENDER_OPTIONS)[number]["value"]>("전체");
-  const [regions, setRegions] = useState<string[]>(["전국"]);
+  const [regions, setRegions] = useState<RegionPick[]>([NATIONWIDE]);
   const [interests, setInterests] = useState<string[]>([]);
   const [interestInput, setInterestInput] = useState("");
   const [autoPlacement, setAutoPlacement] = useState(true);
@@ -208,14 +199,6 @@ export default function CampaignsPage() {
   const toggleAge = (g: string) =>
     setAges((prev) => (prev.includes(g) ? prev.filter((v) => v !== g) : [...prev, g]));
 
-  const toggleRegion = (label: string) =>
-    setRegions((prev) => {
-      if (label === "전국") return prev.includes("전국") ? [] : ["전국"];
-      return prev.includes(label)
-        ? prev.filter((r) => r !== label)
-        : [...prev.filter((r) => r !== "전국"), label];
-    });
-
   const togglePlacement = (label: string) =>
     setPlacements((prev) => (prev.includes(label) ? prev.filter((p) => p !== label) : [...prev, label]));
 
@@ -229,21 +212,17 @@ export default function CampaignsPage() {
   const toggleStatus = (id: string) =>
     setStatuses((prev) => ({ ...prev, [id]: prev[id] === "active" ? "paused" : "active" }));
 
-  /* 예상 도달 목 추정치 — 연령대 수 x 지역 비중 기반 간단 계산 */
-  const regionWeight = regions.includes("전국")
-    ? 1
-    : REGION_OPTIONS.filter((r) => regions.includes(r.label)).reduce((sum, r) => sum + r.weight, 0);
+  /* 예상 도달 목 추정치 — 연령대 수 x 지역 인구 비중(시·군·구 반영) 기반 간단 계산 */
+  const selectedRegionWeight = regionWeight(regions);
   const placementFactor = autoPlacement ? 1 : placements.length / PLACEMENT_OPTIONS.length;
   const estimatedReach = Math.round(
-    BASE_AUDIENCE * (ages.length / AGE_GROUPS.length) * regionWeight * (gender === "전체" ? 1 : 0.5) * placementFactor,
+    BASE_AUDIENCE * (ages.length / AGE_GROUPS.length) * selectedRegionWeight * (gender === "전체" ? 1 : 0.5) * placementFactor,
   );
 
   const selectedObjective = OBJECTIVES.find((o) => o.value === objective) ?? OBJECTIVES[0];
   const amountNumber = Number(amount) || 0;
   const agesLabel = AGE_GROUPS.filter((g) => ages.includes(g)).join(" · ");
-  const regionsLabel = REGION_OPTIONS.filter((r) => regions.includes(r.label))
-    .map((r) => r.label)
-    .join(" · ");
+  const regionsLabel = summarizeRegionPicks(regions);
   const placementsLabel = autoPlacement
     ? "자동 배치"
     : placements.length > 0
@@ -263,7 +242,7 @@ export default function CampaignsPage() {
       lines: [
         `연령 ${ages.length > 0 ? agesLabel : "미선택"}`,
         `성별 ${gender}`,
-        `지역 ${regions.length > 0 ? regionsLabel : "미선택"}`,
+        `지역 ${regionsLabel}`,
         `관심사 ${interests.length > 0 ? interests.join(" · ") : "없음"}`,
         `노출 위치 ${placementsLabel}`,
       ],
@@ -408,17 +387,10 @@ export default function CampaignsPage() {
                 </div>
 
                 <div>
-                  <p className={fieldLabel}>지역 (다중 선택)</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {REGION_OPTIONS.map((r) => (
-                      <ToggleChip key={r.label} active={regions.includes(r.label)} onClick={() => toggleRegion(r.label)}>
-                        {r.label}
-                      </ToggleChip>
-                    ))}
+                  <p className={fieldLabel}>지역 (시·군·구까지 다중 선택)</p>
+                  <div className="mt-2">
+                    <RegionPicker value={regions} onChange={setRegions} />
                   </div>
-                  <p className="mt-1.5 text-xs text-fg-faint">
-                    &ldquo;전국&rdquo;을 선택하면 개별 지역 선택이 해제됩니다.
-                  </p>
                 </div>
 
                 <div>
