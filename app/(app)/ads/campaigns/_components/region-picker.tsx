@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import {
   KR_PROVINCES,
   NATIONWIDE,
+  applyRegionPick,
   formatRegionPick,
   isNationwide,
   searchRegions,
@@ -67,25 +68,9 @@ export function RegionPicker({
     value.filter((p) => p.province === provinceName).length;
 
   function add(pick: RegionPick) {
-    if (pick.province === "전국") {
-      onChange([NATIONWIDE]);
-      return;
-    }
-    let next = value.filter((p) => p.province !== "전국");
-    if (pick.district) {
-      // 시·군·구 선택 → 같은 시·도의 "전체" 선택은 해제
-      next = next.filter((p) => !(p.province === pick.province && !p.district));
-    } else {
-      // "시·도 전체" 선택 → 그 시·도의 개별 시·군·구 선택 해제
-      next = next.filter((p) => p.province !== pick.province);
-    }
-    if (!next.some((p) => p.province === pick.province && p.district === pick.district)) {
-      next = [...next, pick];
-    }
-    // Meta 상한 가드 — 교체·중복 제거를 반영한 최종 개수 기준으로 검사
-    // (선택을 줄이는 "시·도 전체" 교체까지 막지 않도록 add 초입이 아닌 여기서)
-    if (next.length > MAX_LOCATIONS) return;
-    onChange(next);
+    // 상호배타·상한 로직은 순수 함수(lib/geo/kr-regions.ts)가 담당 — 테스트로 검증됨
+    const next = applyRegionPick(value, pick, MAX_LOCATIONS);
+    if (next !== value) onChange(next);
   }
 
   function remove(pick: RegionPick) {

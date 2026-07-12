@@ -190,6 +190,30 @@ export function regionWeight(picks: RegionPick[]): number {
   return Math.min(sum, 1);
 }
 
+/**
+ * 지역 선택 적용 — 전국/전체/개별의 상호배타와 상한을 한 곳에서 처리하는 순수 함수.
+ * UI(RegionPicker)와 테스트가 같은 로직을 공유한다.
+ * @param max 위치 상한 (Meta: 광고 세트당 도시 단위 250곳)
+ * @returns 새 선택 배열 — 상한 초과로 거부되면 기존 배열을 그대로 반환
+ */
+export function applyRegionPick(value: RegionPick[], pick: RegionPick, max = 250): RegionPick[] {
+  if (pick.province === "전국") return [NATIONWIDE];
+  let next = value.filter((p) => p.province !== "전국");
+  if (pick.district) {
+    // 시·군·구 선택 → 같은 시·도의 "전체" 선택은 해제
+    next = next.filter((p) => !(p.province === pick.province && !p.district));
+  } else {
+    // "시·도 전체" 선택 → 그 시·도의 개별 시·군·구 선택 해제
+    next = next.filter((p) => p.province !== pick.province);
+  }
+  if (!next.some((p) => p.province === pick.province && p.district === pick.district)) {
+    next = [...next, pick];
+  }
+  // 상한 가드 — 교체·중복 제거를 반영한 최종 개수 기준 (선택을 줄이는 교체는 통과)
+  if (next.length > max) return value;
+  return next;
+}
+
 /** 태그·요약 표기: "서울 전체" / "경기 성남시" */
 export function formatRegionPick(pick: RegionPick): string {
   if (pick.province === "전국") return "전국";
