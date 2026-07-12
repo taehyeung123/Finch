@@ -24,6 +24,9 @@ const chipBase =
 const chipOff = "border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg";
 const chipOn = "border-primary bg-primary text-on-primary";
 
+/** Meta 광고 세트당 위치 상한 — 도시 단위 250곳 (국가 25 / 우편번호 50,000) */
+const MAX_LOCATIONS = 250;
+
 export function RegionPicker({
   value,
   onChange,
@@ -50,6 +53,8 @@ export function RegionPicker({
       onChange([NATIONWIDE]);
       return;
     }
+    // Meta 상한 가드 — 초과분은 추가하지 않는다 (실연동 시 API 오류 예방)
+    if (value.filter((p) => p.province !== "전국").length >= MAX_LOCATIONS) return;
     let next = value.filter((p) => p.province !== "전국");
     if (pick.district) {
       // 시·군·구 선택 → 같은 시·도의 "전체" 선택은 해제
@@ -227,6 +232,12 @@ export function RegionPicker({
 
       <p className="text-xs text-fg-faint">
         전국을 선택하면 개별 지역 선택이 해제됩니다. 시·군·구 단위까지 지정할 수 있어요.
+        {!nationwide && value.length > 0 ? (
+          <span className="tnum ml-1.5">
+            선택 {value.length}/{MAX_LOCATIONS}곳
+          </span>
+        ) : null}
+        <span className="ml-1.5">(Meta 정책: 광고 세트당 도시 단위 최대 {MAX_LOCATIONS}곳)</span>
       </p>
     </div>
   );

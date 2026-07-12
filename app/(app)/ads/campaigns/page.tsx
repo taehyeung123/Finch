@@ -19,7 +19,6 @@ import {
   ShoppingCart,
   Upload,
   Users,
-  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -35,6 +34,7 @@ import { campaigns } from "@/lib/data";
 import type { AdCampaign } from "@/lib/types";
 import { NATIONWIDE, regionWeight, summarizeRegionPicks, type RegionPick } from "@/lib/geo/kr-regions";
 import { RegionPicker } from "./_components/region-picker";
+import { InterestPicker } from "./_components/interest-picker";
 
 /* ---------------------------------- 상수 ---------------------------------- */
 
@@ -166,7 +166,6 @@ export default function CampaignsPage() {
   const [gender, setGender] = useState<(typeof GENDER_OPTIONS)[number]["value"]>("전체");
   const [regions, setRegions] = useState<RegionPick[]>([NATIONWIDE]);
   const [interests, setInterests] = useState<string[]>([]);
-  const [interestInput, setInterestInput] = useState("");
   const [autoPlacement, setAutoPlacement] = useState(true);
   const [placements, setPlacements] = useState<string[]>([]);
 
@@ -201,13 +200,6 @@ export default function CampaignsPage() {
 
   const togglePlacement = (label: string) =>
     setPlacements((prev) => (prev.includes(label) ? prev.filter((p) => p !== label) : [...prev, label]));
-
-  const addInterest = () => {
-    const v = interestInput.trim();
-    setInterestInput("");
-    if (!v || interests.includes(v)) return;
-    setInterests((prev) => [...prev, v]);
-  };
 
   const toggleStatus = (id: string) =>
     setStatuses((prev) => ({ ...prev, [id]: prev[id] === "active" ? "paused" : "active" }));
@@ -394,43 +386,10 @@ export default function CampaignsPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="interest-input" className={fieldLabel}>
-                    상세 타겟팅 (관심사)
-                  </label>
-                  <input
-                    id="interest-input"
-                    type="text"
-                    value={interestInput}
-                    onChange={(e) => setInterestInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key !== "Enter") return;
-                      e.preventDefault();
-                      if (e.nativeEvent.isComposing) return;
-                      addInterest();
-                    }}
-                    placeholder="예: 뷰티, 홈트레이닝 — Enter로 추가"
-                    className={fieldInput}
-                  />
-                  {interests.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {interests.map((tag) => (
-                        <span
-                          key={tag}
-                          className="inline-flex items-center gap-1 rounded-chip bg-primary-weak px-3 py-1 text-[13px] font-semibold text-primary"
-                        >
-                          {tag}
-                          <button
-                            type="button"
-                            aria-label={`${tag} 삭제`}
-                            onClick={() => setInterests((prev) => prev.filter((t) => t !== tag))}
-                            className="transition-colors hover:text-fg"
-                          >
-                            <X className="size-3.5" aria-hidden />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
+                  <p className={fieldLabel}>상세 타겟팅 (관심사)</p>
+                  <div className="mt-2">
+                    <InterestPicker value={interests} onChange={setInterests} />
+                  </div>
                 </div>
 
                 <div>
