@@ -47,7 +47,14 @@ const OBJECTIVES: { value: string; label: string; description: string; icon: Luc
   { value: "engagement", label: "참여", description: "좋아요·댓글·공유를 확대합니다", icon: Heart },
 ];
 
-const AGE_GROUPS = ["13-17", "18-24", "25-34", "35-44", "45-54", "55-64", "65+"];
+/*
+  연령 — Meta와 동일한 연속 범위(최소~최대) 방식.
+  Meta API의 targeting은 age_min/age_max 범위 하나만 받으므로 비연속 다중 선택은 표현 불가.
+  65는 "65세 이상"을 의미한다 (Meta age_max=65 동일).
+*/
+const AGE_MIN_FLOOR = 13;
+const AGE_MAX_CEIL = 65;
+const AGE_OPTIONS = Array.from({ length: AGE_MAX_CEIL - AGE_MIN_FLOOR + 1 }, (_, i) => AGE_MIN_FLOOR + i);
 
 const GENDER_OPTIONS = [
   { value: "전체", label: "전체" },
@@ -166,7 +173,8 @@ export default function CampaignsPage() {
   const [objective, setObjective] = useState("sales");
 
   /* 2단계 — 타겟팅 */
-  const [ages, setAges] = useState<string[]>(["18-24", "25-34"]);
+  const [ageMin, setAgeMin] = useState(18);
+  const [ageMax, setAgeMax] = useState(AGE_MAX_CEIL);
   const [gender, setGender] = useState<(typeof GENDER_OPTIONS)[number]["value"]>("전체");
   const [regions, setRegions] = useState<RegionPick[]>([NATIONWIDE]);
   const [interests, setInterests] = useState<string[]>([]);
@@ -199,20 +207,27 @@ export default function CampaignsPage() {
     setMaxStep((m) => Math.max(m, i));
   };
 
-  const toggleAge = (g: string) =>
-    setAges((prev) => (prev.includes(g) ? prev.filter((v) => v !== g) : [...prev, g]));
-
   const togglePlacement = (label: string) =>
     setPlacements((prev) => (prev.includes(label) ? prev.filter((p) => p !== label) : [...prev, label]));
 
   const toggleStatus = (id: string) =>
     setStatuses((prev) => ({ ...prev, [id]: prev[id] === "active" ? "paused" : "active" }));
 
-  /* 예상 도달 목 추정치 — 연령대 수 x 지역 인구 비중(시·군·구 반영) 기반 간단 계산 */
+  /*
+    18세 미만 포함 시 Meta 정책 제한 — 성별·관심사 타겟팅 불가 (나이+위치만 허용).
+    UI 잠금과 별개로 파생 값으로도 강제해 요약·도달 계산이 항상 정책을 따르게 한다.
+  */
+  const includesMinors = ageMin < 18;
+  const effectiveGender = includesMinors ? "전체" : gender;
+  const effectiveInterests = includesMinors ? [] : interests;
+
+  /* 예상 도달 목 추정치 — 연령 범위 폭 x 지역 인구 비중(시·군·구 반영) 기반 간단 계산 */
+  const ageSpan = (ageMax === AGE_MAX_CEIL ? 70 : ageMax) - ageMin + 1; // 65는 "65세 이상"으로 취급
+  const ageFraction = Math.min(ageSpan / (70 - AGE_MIN_FLOOR + 1), 1);
   const selectedRegionWeight = regionWeight(regions);
   const placementFactor = autoPlacement ? 1 : placements.length / PLACEMENT_OPTIONS.length;
   const estimatedReach = Math.round(
-    BASE_AUDIENCE * (ages.length / AGE_GROUPS.length) * selectedRegionWeight * (gender === "전체" ? 1 : 0.5) * placementFactor,
+    BASE_AUDIENCE * ageFraction * selectedRegionWeight * (effectiveGender === "전체" ? 1 : 0.5) * placementFactor,
   );
 
   const selectedObjective = OBJECTIVES.find((o) => o.value === objective) ?? OBJECTIVES[0];
@@ -226,7 +241,6 @@ export default function CampaignsPage() {
   const stepIssues: string[] = (() => {
     if (step === 1) {
       const issues: string[] = [];
-      if (ages.length === 0) issues.push("연령대를 1개 이상 선택하세요");
       if (regions.length === 0) issues.push("지역을 선택하세요");
       if (!autoPlacement && placements.length === 0) issues.push("노출 위치를 선택하거나 자동 배치를 켜세요");
       return issues;
@@ -255,7 +269,7 @@ export default function CampaignsPage() {
     return [];
   })();
   const canProceed = stepIssues.length === 0;
-  const agesLabel = AGE_GROUPS.filter((g) => ages.includes(g)).join(" · ");
+  const agesLabel = `${ageMin}세 ~ ${ageMax === AGE_MAX_CEIL ? "65세 이상" : `${ageMax}세`}`;
   const regionsLabel = summarizeRegionPicks(regions);
   const placementsLabel = autoPlacement
     ? "자동 배치"
@@ -274,10 +288,10 @@ export default function CampaignsPage() {
       title: "타겟",
       step: 1,
       lines: [
-        `연령 ${ages.length > 0 ? agesLabel : "미선택"}`,
-        `성별 ${gender}`,
+        `연령 ${agesLabel}`,
+        `성별 ${effectiveGender}${includesMinors ? " (18세 미만 포함 — 고정)" : ""}`,
         `지역 ${regionsLabel}`,
-        `관심사 ${interests.length > 0 ? interests.join(" · ") : "없음"}`,
+        `관심사 ${includesMinors ? "사용 불가 (18세 미만 포함)" : effectiveInterests.length > 0 ? effectiveInterests.join(" · ") : "없음"}`,
         `노출 위치 ${placementsLabel}`,
       ],
     },
@@ -400,24 +414,64 @@ export default function CampaignsPage() {
             {step === 1 ? (
               <div className="space-y-5">
                 <div>
-                  <p className={fieldLabel}>연령대 (다중 선택)</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {AGE_GROUPS.map((g) => (
-                      <ToggleChip key={g} active={ages.includes(g)} onClick={() => toggleAge(g)}>
-                        <span className="tnum">{g === "65+" ? "65세 이상" : `${g}세`}</span>
-                      </ToggleChip>
-                    ))}
+                  <p className={fieldLabel}>연령</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <select
+                      aria-label="최소 연령"
+                      value={ageMin}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        setAgeMin(v);
+                        if (v > ageMax) setAgeMax(v);
+                      }}
+                      className="tnum h-10 rounded-card border border-line bg-overlay px-3 text-[14px] font-medium text-fg outline-none transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      {AGE_OPTIONS.map((a) => (
+                        <option key={a} value={a}>
+                          {a}세
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-fg-faint">~</span>
+                    <select
+                      aria-label="최대 연령"
+                      value={ageMax}
+                      onChange={(e) => setAgeMax(Number(e.target.value))}
+                      className="tnum h-10 rounded-card border border-line bg-overlay px-3 text-[14px] font-medium text-fg outline-none transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      {AGE_OPTIONS.filter((a) => a >= ageMin).map((a) => (
+                        <option key={a} value={a}>
+                          {a === AGE_MAX_CEIL ? "65세 이상" : `${a}세`}
+                        </option>
+                      ))}
+                    </select>
                   </div>
+                  <p className="mt-1.5 text-xs text-fg-faint">
+                    Meta와 동일한 연속 범위 방식이에요 — 입력한 그대로 광고세트에 적용됩니다.
+                  </p>
+                  {includesMinors ? (
+                    <p className="mt-2 rounded-card bg-warning-weak p-3 text-[13px] leading-relaxed text-warning">
+                      18세 미만이 포함되면 Meta 정책에 따라 성별·관심사 타겟팅이 잠기고 나이와
+                      위치로만 타겟팅됩니다.
+                    </p>
+                  ) : null}
                 </div>
 
                 <div>
                   <p className={fieldLabel}>성별</p>
-                  <ChipFilter
-                    className="mt-2"
-                    options={GENDER_OPTIONS.map((g) => ({ value: g.value, label: g.label }))}
-                    value={gender}
-                    onChange={setGender}
-                  />
+                  {includesMinors ? (
+                    <p className="mt-2 inline-flex items-center gap-2 rounded-card border border-line bg-overlay px-3.5 py-2 text-[14px] text-fg-faint">
+                      <Lock className="size-3.5" aria-hidden />
+                      전체 — 18세 미만 포함 시 고정 (Meta 정책)
+                    </p>
+                  ) : (
+                    <ChipFilter
+                      className="mt-2"
+                      options={GENDER_OPTIONS.map((g) => ({ value: g.value, label: g.label }))}
+                      value={gender}
+                      onChange={setGender}
+                    />
+                  )}
                 </div>
 
                 <div>
@@ -429,9 +483,16 @@ export default function CampaignsPage() {
 
                 <div>
                   <p className={fieldLabel}>상세 타겟팅 (관심사)</p>
-                  <div className="mt-2">
-                    <InterestPicker value={interests} onChange={setInterests} />
-                  </div>
+                  {includesMinors ? (
+                    <p className="mt-2 inline-flex items-center gap-2 rounded-card border border-line bg-overlay px-3.5 py-2 text-[14px] text-fg-faint">
+                      <Lock className="size-3.5" aria-hidden />
+                      18세 미만 포함 시 사용할 수 없어요 (Meta 정책 — 나이·위치만 허용)
+                    </p>
+                  ) : (
+                    <div className="mt-2">
+                      <InterestPicker value={interests} onChange={setInterests} />
+                    </div>
+                  )}
                 </div>
 
                 <div>
