@@ -205,13 +205,30 @@ export function summarizeRegionPicks(picks: RegionPick[]): string {
   return `${labels.slice(0, 2).join(", ")} 외 ${labels.length - 2}곳`;
 }
 
-/** 검색 자동완성 — 시·도명/시·군·구명 부분 일치 (최대 limit개) */
+/**
+ * 시·도 통칭 별칭 — "서울시"·"강원도"·"전라북도"처럼 일상 표기로 검색해도 매칭되게.
+ * name+"시"/"도" 조합으로 대부분 커버되고, 행정구역 개편 전 명칭만 명시한다.
+ */
+const PROVINCE_ALIASES: Record<string, string[]> = {
+  전북: ["전라북도"],
+  강원: ["강원도"],
+  세종: ["세종시"],
+};
+
+function provinceMatches(province: Province, q: string): boolean {
+  if (province.name.includes(q) || province.fullName.includes(q)) return true;
+  // "서울시" / "경기도" 류 통칭
+  if (`${province.name}시`.includes(q) || `${province.name}도`.includes(q)) return true;
+  return (PROVINCE_ALIASES[province.name] ?? []).some((alias) => alias.includes(q));
+}
+
+/** 검색 자동완성 — 시·도명(통칭 포함)/시·군·구명 부분 일치 (최대 limit개) */
 export function searchRegions(query: string, limit = 8): RegionPick[] {
   const q = query.trim();
   if (!q) return [];
   const out: RegionPick[] = [];
   for (const province of KR_PROVINCES) {
-    if (province.name.includes(q) || province.fullName.includes(q)) {
+    if (provinceMatches(province, q)) {
       out.push({ province: province.name });
     }
     for (const district of province.districts) {

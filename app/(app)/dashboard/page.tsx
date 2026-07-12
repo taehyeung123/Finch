@@ -13,6 +13,7 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatAgo, formatCompact, formatDeltaCompact, formatKRW, formatPercent } from "@/lib/format";
+import { aggregateActive } from "@/lib/ads/metrics";
 import {
   accounts,
   campaigns,
@@ -39,8 +40,8 @@ export default function DashboardPage() {
   const posts = channel === "all" ? recentPosts : recentPosts.filter((p) => p.channel === channel);
   const mix = contentMix[channel];
   const disconnected = accounts.filter((a) => !a.connected);
-  const activeCampaigns = campaigns.filter((c) => c.status === "active");
-  const monthSpend = activeCampaigns.reduce((sum, c) => sum + c.spend, 0);
+  // 진행 중 캠페인 기준 — /ads 페이지와 같은 공통 유틸로 계산 (화면 간 수치 불일치 방지)
+  const activeTotals = aggregateActive(campaigns);
   const newAds = competitorAds.filter((a) => a.isNew);
 
   return (
@@ -147,8 +148,8 @@ export default function DashboardPage() {
           {/* 광고 요약 — 오가닉과 나란히 (PART 4.1) */}
           <Card>
             <CardHeader
-              title="이번 달 광고"
-              description="Meta 광고 계정"
+              title="광고 현황"
+              description="진행 중 캠페인 기준"
               action={
                 <Link href="/ads" className="inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:text-primary-hover">
                   광고 관리 <ArrowRight className="size-3.5" aria-hidden />
@@ -158,18 +159,16 @@ export default function DashboardPage() {
             <CardBody className="space-y-3">
               <div className="flex items-baseline justify-between">
                 <span className="text-[13px] text-fg-sub">집행 금액</span>
-                <span className="tnum text-lg font-bold">{formatKRW(monthSpend)}</span>
+                <span className="tnum text-lg font-bold">{formatKRW(activeTotals.spend)}</span>
               </div>
               <div className="flex items-baseline justify-between">
                 <span className="text-[13px] text-fg-sub">진행 중 캠페인</span>
-                <span className="tnum font-semibold">{activeCampaigns.length}개</span>
+                <span className="tnum font-semibold">{activeTotals.count}개</span>
               </div>
               <div className="flex items-baseline justify-between">
                 <span className="text-[13px] text-fg-sub">평균 ROAS</span>
                 <span className="tnum font-semibold text-positive">
-                  {activeCampaigns.length > 0
-                    ? `${(activeCampaigns.reduce((s, c) => s + c.roas, 0) / activeCampaigns.length).toFixed(1)}배`
-                    : "-"}
+                  {activeTotals.count > 0 ? `${activeTotals.roas.toFixed(1)}배` : "-"}
                 </span>
               </div>
             </CardBody>

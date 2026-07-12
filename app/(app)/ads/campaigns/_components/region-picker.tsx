@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, MapPin, Search, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
@@ -37,9 +37,27 @@ export function RegionPicker({
   const [query, setQuery] = useState("");
   const [openProvince, setOpenProvince] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const nationwide = isNationwide(value);
   const suggestions = useMemo(() => searchRegions(query), [query]);
+
+  // 드롭다운(query 비어있지 않을 때 표시)을 외부 클릭·Escape로 닫는다 — 아래 UI 가림 방지
+  useEffect(() => {
+    if (query.trim() === "") return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setQuery("");
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setQuery("");
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [query]);
 
   const has = (pick: RegionPick) =>
     value.some((p) => p.province === pick.province && p.district === pick.district);
@@ -53,8 +71,6 @@ export function RegionPicker({
       onChange([NATIONWIDE]);
       return;
     }
-    // Meta 상한 가드 — 초과분은 추가하지 않는다 (실연동 시 API 오류 예방)
-    if (value.filter((p) => p.province !== "전국").length >= MAX_LOCATIONS) return;
     let next = value.filter((p) => p.province !== "전국");
     if (pick.district) {
       // 시·군·구 선택 → 같은 시·도의 "전체" 선택은 해제
@@ -66,6 +82,9 @@ export function RegionPicker({
     if (!next.some((p) => p.province === pick.province && p.district === pick.district)) {
       next = [...next, pick];
     }
+    // Meta 상한 가드 — 교체·중복 제거를 반영한 최종 개수 기준으로 검사
+    // (선택을 줄이는 "시·도 전체" 교체까지 막지 않도록 add 초입이 아닌 여기서)
+    if (next.length > MAX_LOCATIONS) return;
     onChange(next);
   }
 
@@ -81,7 +100,7 @@ export function RegionPicker({
   const openedProvince = KR_PROVINCES.find((p) => p.name === openProvince);
 
   return (
-    <div className="space-y-3">
+    <div ref={rootRef} className="space-y-3">
       {/* 검색 + 전국 */}
       <div className="flex flex-wrap items-center gap-2">
         <button

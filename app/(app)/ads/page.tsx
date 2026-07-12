@@ -10,6 +10,7 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { ButtonLink } from "@/components/ui/button";
 import { formatCompact, formatKRW, formatPercent } from "@/lib/format";
 import { campaigns, dashboardSummaries } from "@/lib/data";
+import { aggregateCampaigns } from "@/lib/ads/metrics";
 import type { AdCampaign } from "@/lib/types";
 
 const STATUS_BADGE: Record<AdCampaign["status"], { tone: "positive" | "warning" | "neutral"; label: string }> = {
@@ -33,10 +34,8 @@ const AI_ALERTS = [
 ];
 
 export default function AdsPage() {
-  const totalSpend = campaigns.reduce((s, c) => s + c.spend, 0);
-  const totalImpressions = campaigns.reduce((s, c) => s + c.impressions, 0);
-  const avgCtr = campaigns.length > 0 ? campaigns.reduce((s, c) => s + c.ctr, 0) / campaigns.length : 0;
-  const avgRoas = campaigns.length > 0 ? campaigns.reduce((s, c) => s + c.roas, 0) / campaigns.length : 0;
+  // 전체 캠페인 누적 기준 — 가중 평균(공통 유틸)으로 계산해 대시보드와 기준을 공유한다
+  const totals = aggregateCampaigns(campaigns);
   const organicWeeklyViews = dashboardSummaries.all.weeklyViews;
 
   return (
@@ -52,12 +51,28 @@ export default function AdsPage() {
         }
       />
 
-      {/* 요약 지표 (PART 4.7) */}
+      {/* 요약 지표 (PART 4.7) — 전체 캠페인 누적, 가중 평균 */}
       <section aria-label="광고 요약 지표" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="이번 달 집행 금액" value={formatKRW(totalSpend)} />
-        <StatCard label="노출수" value={formatCompact(totalImpressions)} />
-        <StatCard label="평균 CTR" value={formatPercent(avgCtr)} />
-        <StatCard label="평균 ROAS" value={`${avgRoas.toFixed(1)}배`} />
+        <StatCard label="누적 집행 금액" value={formatKRW(totals.spend)} />
+        <StatCard label="누적 노출수" value={formatCompact(totals.impressions)} />
+        <StatCard
+          label={
+            <>
+              평균 CTR
+              <InfoTip>총 클릭 ÷ 총 노출의 가중 평균입니다. 규모가 다른 캠페인을 동일하게 취급하는 단순 평균과 달리 계정 실제 성과를 반영해요.</InfoTip>
+            </>
+          }
+          value={formatPercent(totals.ctr)}
+        />
+        <StatCard
+          label={
+            <>
+              평균 ROAS
+              <InfoTip>지출 가중 평균(전환가치 합 ÷ 지출 합)입니다.</InfoTip>
+            </>
+          }
+          value={`${totals.roas.toFixed(1)}배`}
+        />
       </section>
 
       {/* 캠페인 성과 테이블 */}
@@ -185,7 +200,7 @@ export default function AdsPage() {
         <Card>
           <CardHeader
             title="오가닉 vs 광고"
-            description="이번 주 오가닉 조회수와 광고 노출수를 나란히 봅니다"
+            description="오가닉(이번 주)과 광고(누적) 규모를 나란히 봅니다 — 집계 기간이 서로 달라요"
           />
           <CardBody>
             <div className="grid grid-cols-2 divide-x divide-line rounded-card border border-line">
@@ -199,7 +214,7 @@ export default function AdsPage() {
               <div className="p-5">
                 <p className="text-[13px] text-fg-sub">광고 노출수</p>
                 <p className="tnum mt-1.5 text-2xl font-bold leading-none">
-                  {formatCompact(totalImpressions)}
+                  {formatCompact(totals.impressions)}
                 </p>
                 <p className="mt-2 text-xs text-fg-faint">캠페인 전체 합산</p>
               </div>

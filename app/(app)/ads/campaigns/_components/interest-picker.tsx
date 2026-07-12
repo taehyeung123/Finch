@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, Tag, X } from "lucide-react";
 import { searchInterests, findInterest } from "@/lib/ads/meta-interests";
 
@@ -19,12 +19,30 @@ export function InterestPicker({
 }) {
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const suggestions = useMemo(
     () => searchInterests(query).filter((s) => !value.includes(s.name)),
     [query, value],
   );
   const noMatch = query.trim() !== "" && suggestions.length === 0;
+
+  // 드롭다운을 외부 클릭·Escape로 닫는다 — 아래 태그·다음 필드 가림 방지
+  useEffect(() => {
+    if (query.trim() === "") return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setQuery("");
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setQuery("");
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [query]);
 
   function add(name: string) {
     // 목록 밖 키워드 방지 — Meta 관심사 체계에 있는 항목만 통과
@@ -35,7 +53,7 @@ export function InterestPicker({
   }
 
   return (
-    <div>
+    <div ref={rootRef}>
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-faint" aria-hidden />
         <input
