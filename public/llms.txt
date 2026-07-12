@@ -21,4 +21,9 @@
 ## 주요 페이지
 
 - [홈](https://finch.kr/): 서비스 소개, 기능 하이라이트, 채널 지원 매트릭스, FAQ
+- [인스타그램 분석](https://finch.kr/instagram): 인스타그램 인사이트·팔로워·콘텐츠·경쟁사 분석 상세
+- [인스타그램 방문자 확인](https://finch.kr/instagram/visitor-check): "누가 내 프로필을 봤는지"는 어떤 공식 API도 제공하지 않는다는 사실과, 실제로 가능한 대안(프로필 조회수 집계, 팔로워 순증감, 팬 반응 랭킹) 설명
+- [틱톡 분석](https://finch.kr/tiktok): 틱톡 계정 분석, 트렌드·해시태그(제휴 데이터) 안내
+- [쓰레드 분석](https://finch.kr/threads): 쓰레드 계정 분석 안내
 - [요금제](https://finch.kr/pricing): Free / Creator / Pro / Agency 4단계 플랜 비교
+- [브랜드](https://finch.kr/brand): 로고·아이콘 다운로드

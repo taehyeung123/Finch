@@ -45,10 +45,10 @@
   --color-kakao: #fee500;
   --color-on-kakao: #191919;
 
-  /* 타이포그래피 (PART 7.6) */
-  --font-sans: "Pretendard Variable", Pretendard, -apple-system,
-    BlinkMacSystemFont, system-ui, Roboto, "Segoe UI", "Apple SD Gothic Neo",
-    "Noto Sans KR", "Malgun Gothic", sans-serif;
+  /* 타이포그래피 (PART 7.6) — next/font/local이 주입하는 --font-pretendard 우선, 폴백 체인 유지 */
+  --font-sans: var(--font-pretendard), "Pretendard Variable", Pretendard,
+    -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Segoe UI",
+    "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
 
   /* 라운드 2단계 (PART 7.2) */
   --radius-card: 8px;

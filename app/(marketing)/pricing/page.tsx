@@ -7,7 +7,7 @@ import { planFeatures } from "@/lib/data";
 export const metadata: Metadata = {
   title: "요금제",
   description:
-    "핀치 요금제 안내 — 무료 플랜부터 개인 크리에이터용 Creator, 광고주용 Pro, 대행사용 Agency까지. 채널 연동·콘텐츠 분석·경쟁사 광고 모니터링·AI 카드뉴스 기능을 플랜별로 비교하세요.",
+    "핀치 요금제 안내 — 무료 플랜부터 개인 크리에이터용 Creator, 광고주용 Pro, 대행사용 Agency까지. 채널 연동·콘텐츠 분석·경쟁사 광고 모니터링·AI 카드뉴스 기능을 플랜별로 비교하세요. 신용카드 없이 Free 플랜으로 인스타그램 분석을 무료로 바로 체험할 수 있습니다.",
   alternates: { canonical: "/pricing" },
 };
 
@@ -57,21 +57,40 @@ const PRICING_FAQ = [
   },
 ];
 
-/* GEO: Product + Offer 구조화 데이터 (PART 13.2·13.3) — 가격 미정으로 price는 표기하지 않음 */
+/* GEO: Product + FAQPage + BreadcrumbList 구조화 데이터 (PART 13.2·13.3) — 가격 미정으로 price는 표기하지 않음 */
 const JSON_LD = {
   "@context": "https://schema.org",
-  "@type": "Product",
-  name: "핀치 (Finch)",
-  description:
-    "핀치는 무료 플랜부터 대행사용 Agency 플랜까지 4단계 요금제를 제공하는 SNS 통합 분석 도구입니다.",
-  brand: { "@type": "Brand", name: "핀치 (Finch)" },
-  offers: PLANS.map((plan) => ({
-    "@type": "Offer",
-    name: `${plan.name} 플랜`,
-    description: `${plan.target} 대상 — ${plan.features.join(", ")}`,
-    priceCurrency: "KRW",
-    availability: "https://schema.org/PreOrder",
-  })),
+  "@graph": [
+    {
+      "@type": "Product",
+      name: "핀치 (Finch)",
+      description:
+        "핀치는 무료 플랜부터 대행사용 Agency 플랜까지 4단계 요금제를 제공하는 SNS 통합 분석 도구입니다.",
+      brand: { "@type": "Brand", name: "핀치 (Finch)" },
+      offers: PLANS.map((plan) => ({
+        "@type": "Offer",
+        name: `${plan.name} 플랜`,
+        description: `${plan.target} 대상 — ${plan.features.join(", ")}`,
+        priceCurrency: "KRW",
+        availability: "https://schema.org/PreOrder",
+      })),
+    },
+    {
+      "@type": "FAQPage",
+      mainEntity: PRICING_FAQ.map((f) => ({
+        "@type": "Question",
+        name: f.q,
+        acceptedAnswer: { "@type": "Answer", text: f.a },
+      })),
+    },
+    {
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "홈", item: "https://finch.kr/" },
+        { "@type": "ListItem", position: 2, name: "요금제", item: "https://finch.kr/pricing" },
+      ],
+    },
+  ],
 };
 
 export default function PricingPage() {
@@ -135,12 +154,22 @@ export default function PricingPage() {
       {/* 상세 비교표 */}
       <section className="border-t border-line bg-body/40">
         <div className="mx-auto max-w-6xl px-4 py-20 md:px-6">
-          <h2 className="text-center text-2xl font-bold md:text-3xl">플랜별 기능 비교</h2>
+          {/* GEO: 질문형 소제목 + 자기완결적 답변 문장 (PART 13.3) */}
+          <h2 className="text-center text-2xl font-bold md:text-3xl">
+            핀치 요금제, 어떤 플랜이 맞을까요?
+          </h2>
+          <p className="mx-auto mt-3 max-w-2xl text-center text-[15px] leading-relaxed text-fg-sub">
+            채널 1개만 가볍게 써본다면 Free, 개인 크리에이터라면 Creator, 광고까지 함께 관리한다면
+            Pro, 여러 클라이언트를 운영하는 대행사라면 Agency가 적합합니다. 아래 비교표에서 플랜별
+            기능을 자세히 확인하세요.
+          </p>
+          <h2 className="mt-14 text-center text-2xl font-bold md:text-3xl">플랜별 기능 비교</h2>
           <p className="mx-auto mt-3 max-w-lg text-center text-[15px] text-fg-sub">
             채널 연동부터 팀 기능까지, 플랜별 제공 범위를 한눈에 확인하세요.
           </p>
           <div className="mt-10 overflow-x-auto rounded-card border border-line bg-body">
             <table className="w-full min-w-[720px] text-[14px]">
+              <caption className="sr-only">Free·Creator·Pro·Agency 플랜별 기능 비교</caption>
               <thead>
                 <tr className="border-b border-line text-left text-[13px] text-fg-faint">
                   <th className="px-5 py-3.5 font-semibold">기능</th>
@@ -167,9 +196,11 @@ export default function PricingPage() {
         </div>
       </section>
 
-      {/* 요금 FAQ — 정적 목록 */}
+      {/* 요금 FAQ — 정적 목록, JSON-LD FAQPage와 1:1 매핑 */}
       <section className="mx-auto max-w-3xl px-4 py-20 md:px-6">
-        <h2 className="text-center text-2xl font-bold md:text-3xl">요금 관련 자주 묻는 질문</h2>
+        <h2 className="text-center text-2xl font-bold md:text-3xl">
+          요금제, 무엇이 궁금하신가요?
+        </h2>
         <dl className="mt-10 space-y-4">
           {PRICING_FAQ.map((item) => (
             <div key={item.q} className="rounded-card border border-line bg-body p-6">

@@ -19,6 +19,15 @@ const APP_ROUTES = [
   "/onboarding",
 ];
 
+const AI_CRAWLERS = [
+  "GPTBot",
+  "ChatGPT-User",
+  "PerplexityBot",
+  "ClaudeBot",
+  "anthropic-ai",
+  "Google-Extended",
+];
+
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
@@ -27,6 +36,11 @@ export default function robots(): MetadataRoute.Robots {
         allow: "/",
         disallow: APP_ROUTES,
       },
+      ...AI_CRAWLERS.map((userAgent) => ({
+        userAgent,
+        allow: "/",
+        disallow: APP_ROUTES,
+      })),
     ],
     sitemap: "https://finch.kr/sitemap.xml",
   };

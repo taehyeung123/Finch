@@ -20,9 +20,9 @@ import { AppIconTile, type BrandApp } from "@/components/icons/brand";
 import { SUPPORT_MATRIX } from "@/lib/channels";
 
 export const metadata: Metadata = {
-  title: "핀치 (Finch) — 인스타그램·틱톡·쓰레드 통합 분석 & 메타광고 관리",
+  title: "핀치 (Finch) — 인스타그램·틱톡·쓰레드 SNS 통합 분석 & 메타광고 관리",
   description:
-    "내 채널 현황부터 경쟁사 광고 모니터링, 트렌드 탐색, AI 콘텐츠 제작까지. SNS 마케팅에 필요한 모든 데이터 작업을 하나의 대시보드에서 해결하세요.",
+    "핀치는 인스타그램·틱톡·쓰레드를 한 곳에서 보는 SNS 통합 분석 사이트입니다. 인스타 틱톡 스레드 분석과 경쟁사 광고 모니터링, 트렌드 탐색, AI 콘텐츠 제작까지 크리에이터를 위한 소셜미디어 분석 도구를 하나의 대시보드에서 제공합니다.",
   alternates: { canonical: "/" },
 };
 
@@ -51,6 +51,14 @@ const FAQ_ITEMS: FaqItem[] = [
     q: "무료로 사용할 수 있나요?",
     a: "네. Free 플랜으로 채널 1개 연동, 월 10회 콘텐츠 분석, 카드뉴스 월 3회 생성을 체험할 수 있습니다. 신용카드 없이 시작할 수 있어요.",
   },
+  {
+    q: "무료 인스타그램 분석 사이트가 있나요?",
+    a: "네, 핀치 Free 플랜에서 인스타그램 1채널 연동과 월 10회 콘텐츠 분석을 무료로 체험할 수 있습니다.",
+  },
+  {
+    q: "인스타그램 팔로워 나이대 분석도 되나요?",
+    a: "인스타그램 공식 API가 제공하는 팔로워 연령대·성별 통계를 대시보드에서 확인할 수 있습니다.",
+  },
 ];
 
 /* GEO: FAQPage + SoftwareApplication + Organization 구조화 데이터 (PART 13.2·13.3) */
@@ -61,7 +69,9 @@ const JSON_LD = {
       "@type": "Organization",
       name: "핀치 (Finch)",
       url: "https://finch.kr",
+      logo: "https://finch.kr/brand/finch-mark-coral.svg",
       description: "인스타그램·틱톡·쓰레드 통합 분석 & 메타광고 관리 플랫폼",
+      // TODO: 공식 SNS 계정 개설 후 sameAs 배열 추가
     },
     {
       "@type": "SoftwareApplication",
@@ -372,7 +382,7 @@ export default function LandingPage() {
       {/* 핵심 기능 하이라이트 — 지그재그 (PART 6.1-4) */}
       <section id="features" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20 md:px-6">
         <Reveal>
-          <h2 className="text-center text-2xl font-bold md:text-3xl">핵심 기능</h2>
+          <h2 className="text-center text-2xl font-bold md:text-3xl">핵심 기능 — 무엇을 분석할 수 있나요?</h2>
           <p className="mx-auto mt-3 max-w-lg text-center text-[15px] text-fg-sub">
             검색하고, 분석하고, 비교하고, 만들어내는 것까지. SNS 마케팅의 반복 작업을 핀치가 대신합니다.
           </p>
@@ -423,6 +433,7 @@ export default function LandingPage() {
           <Reveal delay={0.1}>
             <div className="mt-10 overflow-x-auto rounded-card border border-line bg-body">
               <table className="w-full min-w-[640px] text-[14px]">
+                <caption className="sr-only">채널별 기능 지원 범위 비교표</caption>
                 <thead>
                   <tr className="border-b border-line text-left text-[13px] text-fg-faint">
                     <th className="px-5 py-3.5 font-semibold">기능</th>
@@ -455,6 +466,20 @@ export default function LandingPage() {
             <p className="mt-4 text-center text-[13px] text-fg-faint">
               제휴 데이터는 검증된 데이터 공급사를 통해 제공되며, 화면에 출처와 갱신 시점을 함께 표기합니다.
             </p>
+          </Reveal>
+          <Reveal delay={0.15}>
+            <p className="mt-8 text-center text-[13px] font-semibold text-fg-faint">채널별로 더 자세히 보기</p>
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              <ButtonLink href="/instagram" variant="ghost" size="sm">
+                인스타그램 분석 자세히 보기
+              </ButtonLink>
+              <ButtonLink href="/tiktok" variant="ghost" size="sm">
+                틱톡 분석 자세히 보기
+              </ButtonLink>
+              <ButtonLink href="/threads" variant="ghost" size="sm">
+                쓰레드 분석 자세히 보기
+              </ButtonLink>
+            </div>
           </Reveal>
         </div>
       </section>
