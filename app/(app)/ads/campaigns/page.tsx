@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -10,15 +10,19 @@ import {
   Heart,
   Image as ImageIcon,
   ImagePlus,
+  Images,
+  Layers,
   Lock,
   Megaphone,
   MousePointerClick,
   Pause,
   Play,
+  Plus,
   Radio,
   ShoppingCart,
   Upload,
   Users,
+  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -33,8 +37,16 @@ import { formatCompact, formatDate, formatKRW } from "@/lib/format";
 import { campaigns } from "@/lib/data";
 import type { AdCampaign } from "@/lib/types";
 import { NATIONWIDE, regionWeight, summarizeRegionPicks, type RegionPick } from "@/lib/geo/kr-regions";
+import {
+  defaultPlacement,
+  placementFactor,
+  selectedCount,
+  summarizePlacement,
+  type PlacementState,
+} from "@/lib/ads/meta-placements";
 import { RegionPicker } from "./_components/region-picker";
 import { InterestPicker } from "./_components/interest-picker";
+import { PlacementSelector } from "./_components/placement-selector";
 
 /* ---------------------------------- 상수 ---------------------------------- */
 
@@ -64,8 +76,6 @@ const GENDER_OPTIONS = [
 
 /* 지역 데이터·가중치는 lib/geo/kr-regions.ts — 시·도 → 시·군·구 2단계 (Meta 지역 타겟팅과 동일 체계) */
 
-const PLACEMENT_OPTIONS = ["Instagram 피드", "스토리", "릴스", "탐색 탭", "Facebook 피드"];
-
 const CTA_OPTIONS = ["더 알아보기", "구매하기", "가입하기", "문의하기", "다운로드", "예약하기", "메시지 보내기"];
 
 /* Meta 최소 예산 정책 근사치 (KRW) — 실연동 시 계정 통화·과금 방식 기준 값으로 교체 */
@@ -86,34 +96,6 @@ const fieldInput =
   "mt-1.5 h-10 w-full rounded-card border border-line bg-overlay px-3 text-[14px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:opacity-40";
 
 /* ------------------------------ 로컬 UI 조각 ------------------------------ */
-
-/** 다중 선택 체크 칩 — 선택 시 코랄 배경 + 다크 텍스트 */
-function ToggleChip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-chip border px-3.5 py-1.5 text-[13px] font-semibold transition-colors",
-        active
-          ? "border-transparent bg-primary text-on-primary"
-          : "border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg",
-      )}
-    >
-      {active ? <Check className="size-3.5" aria-hidden /> : null}
-      {children}
-    </button>
-  );
-}
 
 /** 라디오 알약 — 예산 유형·게재 시간대 선택용 */
 function RadioPill({
@@ -162,6 +144,41 @@ function SkeletonBar({ className }: { className?: string }) {
   return <span className={cn("block rounded-chip bg-overlay", className)} aria-hidden />;
 }
 
+/** 소재 형식 선택 카드 (단일·슬라이드·컬렉션) */
+function FormatOption({
+  active,
+  onClick,
+  disabled,
+  icon: Icon,
+  title,
+  desc,
+}: {
+  active: boolean;
+  onClick?: () => void;
+  disabled?: boolean;
+  icon: LucideIcon;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={active}
+      className={cn(
+        "flex flex-col items-start gap-1 rounded-card border p-3 text-left transition-colors",
+        active ? "border-primary bg-primary-weak" : "border-line bg-overlay hover:border-line-strong",
+        disabled && "cursor-not-allowed opacity-50 hover:border-line",
+      )}
+    >
+      <Icon className={cn("size-5", active ? "text-primary" : "text-fg-sub")} aria-hidden />
+      <span className="text-[14px] font-semibold">{title}</span>
+      <span className="text-xs text-fg-faint">{desc}</span>
+    </button>
+  );
+}
+
 /* --------------------------------- 페이지 --------------------------------- */
 
 export default function CampaignsPage() {
@@ -178,8 +195,7 @@ export default function CampaignsPage() {
   const [gender, setGender] = useState<(typeof GENDER_OPTIONS)[number]["value"]>("전체");
   const [regions, setRegions] = useState<RegionPick[]>([NATIONWIDE]);
   const [interests, setInterests] = useState<string[]>([]);
-  const [autoPlacement, setAutoPlacement] = useState(true);
-  const [placements, setPlacements] = useState<string[]>([]);
+  const [placement, setPlacement] = useState<PlacementState>(defaultPlacement());
 
   /* 3단계 — 예산·일정 */
   const [budgetType, setBudgetType] = useState<"daily" | "total">("daily");
@@ -192,10 +208,26 @@ export default function CampaignsPage() {
   const [scheduleEnd, setScheduleEnd] = useState(21);
 
   /* 4단계 — 소재 */
+  const [creativeFormat, setCreativeFormat] = useState<"single" | "carousel">("single");
+  const [carouselCards, setCarouselCards] = useState<{ id: string; headline: string }[]>([
+    { id: "card-1", headline: "" },
+    { id: "card-2", headline: "" },
+  ]);
+  const cardSeq = useRef(2);
   const [headline, setHeadline] = useState("");
   const [description, setDescription] = useState("");
   const [cta, setCta] = useState(CTA_OPTIONS[0]);
   const [landingUrl, setLandingUrl] = useState("");
+
+  const addCard = () => {
+    if (carouselCards.length >= 10) return; // Meta 캐러셀 최대 10장
+    cardSeq.current += 1;
+    setCarouselCards((prev) => [...prev, { id: `card-${cardSeq.current}`, headline: "" }]);
+  };
+  const removeCard = (id: string) =>
+    setCarouselCards((prev) => (prev.length > 2 ? prev.filter((c) => c.id !== id) : prev)); // 최소 2장
+  const updateCard = (id: string, value: string) =>
+    setCarouselCards((prev) => prev.map((c) => (c.id === id ? { ...c, headline: value } : c)));
 
   /* 기존 캠페인 목록 상태 토글 (목) */
   const [statuses, setStatuses] = useState<Record<string, AdCampaign["status"]>>(() =>
@@ -206,9 +238,6 @@ export default function CampaignsPage() {
     setStep(i);
     setMaxStep((m) => Math.max(m, i));
   };
-
-  const togglePlacement = (label: string) =>
-    setPlacements((prev) => (prev.includes(label) ? prev.filter((p) => p !== label) : [...prev, label]));
 
   const toggleStatus = (id: string) =>
     setStatuses((prev) => ({ ...prev, [id]: prev[id] === "active" ? "paused" : "active" }));
@@ -225,9 +254,9 @@ export default function CampaignsPage() {
   const ageSpan = (ageMax === AGE_MAX_CEIL ? 70 : ageMax) - ageMin + 1; // 65는 "65세 이상"으로 취급
   const ageFraction = Math.min(ageSpan / (70 - AGE_MIN_FLOOR + 1), 1);
   const selectedRegionWeight = regionWeight(regions);
-  const placementFactor = autoPlacement ? 1 : placements.length / PLACEMENT_OPTIONS.length;
+  const placementFactorValue = placementFactor(placement);
   const estimatedReach = Math.round(
-    BASE_AUDIENCE * ageFraction * selectedRegionWeight * (effectiveGender === "전체" ? 1 : 0.5) * placementFactor,
+    BASE_AUDIENCE * ageFraction * selectedRegionWeight * (effectiveGender === "전체" ? 1 : 0.5) * placementFactorValue,
   );
 
   const selectedObjective = OBJECTIVES.find((o) => o.value === objective) ?? OBJECTIVES[0];
@@ -242,7 +271,8 @@ export default function CampaignsPage() {
     if (step === 1) {
       const issues: string[] = [];
       if (regions.length === 0) issues.push("지역을 선택하세요");
-      if (!autoPlacement && placements.length === 0) issues.push("노출 위치를 선택하거나 자동 배치를 켜세요");
+      if (placement.mode === "manual" && selectedCount(placement) === 0)
+        issues.push("노출 위치를 선택하거나 어드밴티지+ 노출 위치를 사용하세요");
       return issues;
     }
     if (step === 2) {
@@ -260,7 +290,7 @@ export default function CampaignsPage() {
     }
     if (step === 3) {
       const issues: string[] = [];
-      if (headline.trim() === "") issues.push("광고 제목을 입력하세요");
+      if (creativeFormat === "single" && headline.trim() === "") issues.push("광고 제목을 입력하세요");
       if (landingUrl.trim() !== "" && !/^https?:\/\/.+\..+/.test(landingUrl.trim()))
         issues.push("랜딩 URL 형식이 올바르지 않아요 (https://로 시작)");
       if (landingUrl.trim() === "") issues.push("랜딩 URL을 입력하세요");
@@ -271,11 +301,7 @@ export default function CampaignsPage() {
   const canProceed = stepIssues.length === 0;
   const agesLabel = `${ageMin}세 ~ ${ageMax === AGE_MAX_CEIL ? "65세 이상" : `${ageMax}세`}`;
   const regionsLabel = summarizeRegionPicks(regions);
-  const placementsLabel = autoPlacement
-    ? "자동 배치"
-    : placements.length > 0
-      ? PLACEMENT_OPTIONS.filter((p) => placements.includes(p)).join(" · ")
-      : "미선택";
+  const placementsLabel = summarizePlacement(placement);
   const scheduleLabel =
     budgetType === "daily" || scheduleType === "always"
       ? "항상 게재"
@@ -310,7 +336,8 @@ export default function CampaignsPage() {
       title: "소재",
       step: 3,
       lines: [
-        `제목 ${headline || "미입력"}`,
+        `형식 ${creativeFormat === "single" ? "단일 이미지·동영상" : `슬라이드 ${carouselCards.length}장`}`,
+        creativeFormat === "single" ? `제목 ${headline || "미입력"}` : `카드 ${carouselCards.length}장`,
         `본문 ${description ? (description.length > 40 ? `${description.slice(0, 40)}…` : description) : "미입력"}`,
         `CTA ${cta}`,
         `랜딩 ${landingUrl || "미입력"}`,
@@ -319,6 +346,7 @@ export default function CampaignsPage() {
   ];
 
   const previewBody = description.length > 125 ? description.slice(0, 125) : description;
+  const previewHeadline = creativeFormat === "single" ? headline : (carouselCards[0]?.headline ?? "");
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -496,42 +524,10 @@ export default function CampaignsPage() {
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className={fieldLabel}>노출 위치</p>
-                      <p className="mt-0.5 text-xs text-fg-faint">
-                        자동 배치(권장) — Meta가 성과 좋은 위치에 자동으로 노출합니다
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={autoPlacement}
-                      aria-label="자동 배치"
-                      onClick={() => setAutoPlacement((v) => !v)}
-                      className={cn(
-                        "relative h-6 w-11 shrink-0 rounded-chip border transition-colors",
-                        autoPlacement ? "border-transparent bg-primary" : "border-line bg-overlay",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "absolute top-1/2 size-4 -translate-y-1/2 rounded-chip border border-line bg-body transition-all",
-                          autoPlacement ? "left-6" : "left-1",
-                        )}
-                        aria-hidden
-                      />
-                    </button>
+                  <p className={fieldLabel}>노출 위치</p>
+                  <div className="mt-2">
+                    <PlacementSelector value={placement} onChange={setPlacement} />
                   </div>
-                  {!autoPlacement ? (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {PLACEMENT_OPTIONS.map((p) => (
-                        <ToggleChip key={p} active={placements.includes(p)} onClick={() => togglePlacement(p)}>
-                          {p}
-                        </ToggleChip>
-                      ))}
-                    </div>
-                  ) : null}
                 </div>
 
                 {/* 예상 도달 — 목 추정치 */}
@@ -714,41 +710,118 @@ export default function CampaignsPage() {
             {/* ---------- 4단계 소재 ---------- */}
             {step === 3 ? (
               <div className="space-y-5">
-                <div>
-                  <div className="flex flex-col items-center justify-center gap-2 rounded-card border border-dashed border-line px-6 py-10 text-center">
-                    <Upload className="size-8 text-fg-faint" aria-hidden />
-                    <p className="text-[15px] font-semibold text-fg-sub">이미지 또는 영상을 끌어다 놓으세요</p>
-                    <p className="text-[13px] text-fg-faint">1:1 또는 4:5 비율 · JPG · PNG · MP4 · 최대 30MB</p>
-                    <Button variant="secondary" size="sm" className="mt-2">
-                      파일 선택
+                {/* 소재 형식 (Meta: 단일 이미지/동영상 · 슬라이드 · 컬렉션) */}
+                <fieldset>
+                  <legend className={fieldLabel}>소재 형식</legend>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                    <FormatOption
+                      active={creativeFormat === "single"}
+                      onClick={() => setCreativeFormat("single")}
+                      icon={ImageIcon}
+                      title="단일 이미지·동영상"
+                      desc="이미지나 영상 1개"
+                    />
+                    <FormatOption
+                      active={creativeFormat === "carousel"}
+                      onClick={() => setCreativeFormat("carousel")}
+                      icon={Images}
+                      title="슬라이드"
+                      desc="이미지·영상 2~10장"
+                    />
+                    <FormatOption
+                      active={false}
+                      disabled
+                      icon={Layers}
+                      title="컬렉션"
+                      desc="Phase 3 예정"
+                    />
+                  </div>
+                </fieldset>
+
+                {creativeFormat === "single" ? (
+                  <>
+                    <div>
+                      <div className="flex flex-col items-center justify-center gap-2 rounded-card border border-dashed border-line px-6 py-10 text-center">
+                        <Upload className="size-8 text-fg-faint" aria-hidden />
+                        <p className="text-[15px] font-semibold text-fg-sub">이미지 또는 영상을 끌어다 놓으세요</p>
+                        <p className="text-[13px] text-fg-faint">1:1 또는 4:5 비율 · JPG · PNG · MP4 · 최대 30MB</p>
+                        <Button variant="secondary" size="sm" className="mt-2">
+                          파일 선택
+                        </Button>
+                      </div>
+                      <div className="mt-3 flex items-center gap-3 rounded-card border border-dashed border-line px-4 py-3">
+                        <ImagePlus className="size-5 shrink-0 text-fg-faint" aria-hidden />
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-semibold text-fg-sub">영상 썸네일 업로드</p>
+                          <p className="text-xs text-fg-faint">영상 소재는 썸네일을 함께 올려주세요 (JPG · PNG)</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-baseline justify-between">
+                        <label htmlFor="ad-headline" className={fieldLabel}>
+                          광고 제목
+                        </label>
+                        <span className="tnum text-xs text-fg-faint">{headline.length}/40</span>
+                      </div>
+                      <input
+                        id="ad-headline"
+                        type="text"
+                        maxLength={40}
+                        value={headline}
+                        onChange={(e) => setHeadline(e.target.value)}
+                        placeholder="예: 여름 한정 세럼 — 첫 구매 30%"
+                        className={fieldInput}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  /* 슬라이드(캐러셀) — 카드별 소재·제목 */
+                  <div>
+                    <p className={fieldLabel}>슬라이드 카드 (최소 2장 · 최대 10장)</p>
+                    <div className="mt-2 space-y-2">
+                      {carouselCards.map((card, i) => (
+                        <div key={card.id} className="flex items-center gap-3 rounded-card border border-line p-3">
+                          <span className="tnum flex size-6 shrink-0 items-center justify-center rounded-chip bg-overlay text-xs font-bold text-fg-sub">
+                            {i + 1}
+                          </span>
+                          <span className="flex size-12 shrink-0 items-center justify-center rounded-card border border-dashed border-line text-fg-faint">
+                            <ImagePlus className="size-5" aria-hidden />
+                          </span>
+                          <input
+                            type="text"
+                            maxLength={40}
+                            value={card.headline}
+                            onChange={(e) => updateCard(card.id, e.target.value)}
+                            placeholder={`${i + 1}번째 카드 제목`}
+                            className="h-9 min-w-0 flex-1 rounded-card border border-line bg-overlay px-3 text-[14px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+                          />
+                          {carouselCards.length > 2 ? (
+                            <button
+                              type="button"
+                              aria-label={`${i + 1}번째 카드 삭제`}
+                              onClick={() => removeCard(card.id)}
+                              className="shrink-0 rounded-card p-1.5 text-fg-faint transition-colors hover:bg-overlay hover:text-fg"
+                            >
+                              <X className="size-4" aria-hidden />
+                            </button>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={addCard}
+                      disabled={carouselCards.length >= 10}
+                      className="mt-2"
+                    >
+                      <Plus className="size-4" aria-hidden />
+                      카드 추가
                     </Button>
                   </div>
-                  <div className="mt-3 flex items-center gap-3 rounded-card border border-dashed border-line px-4 py-3">
-                    <ImagePlus className="size-5 shrink-0 text-fg-faint" aria-hidden />
-                    <div className="min-w-0">
-                      <p className="text-[13px] font-semibold text-fg-sub">영상 썸네일 업로드</p>
-                      <p className="text-xs text-fg-faint">영상 소재는 썸네일을 함께 올려주세요 (JPG · PNG)</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-baseline justify-between">
-                    <label htmlFor="ad-headline" className={fieldLabel}>
-                      광고 제목
-                    </label>
-                    <span className="tnum text-xs text-fg-faint">{headline.length}/40</span>
-                  </div>
-                  <input
-                    id="ad-headline"
-                    type="text"
-                    maxLength={40}
-                    value={headline}
-                    onChange={(e) => setHeadline(e.target.value)}
-                    placeholder="예: 여름 한정 세럼 — 첫 구매 30%"
-                    className={fieldInput}
-                  />
-                </div>
+                )}
 
                 <div>
                   <div className="flex items-baseline justify-between">
@@ -895,12 +968,31 @@ export default function CampaignsPage() {
                   </div>
                 </div>
 
-                {/* 소재 영역 */}
-                <div className="flex aspect-square items-center justify-center bg-overlay">
+                {/* 소재 영역 — 캐러셀이면 슬라이드 도트 표시 */}
+                <div className="relative flex aspect-square items-center justify-center bg-overlay">
                   <div className="flex flex-col items-center gap-1.5 text-fg-faint">
-                    <ImageIcon className="size-8" aria-hidden />
-                    <p className="text-xs">소재를 업로드하면 여기에 표시됩니다</p>
+                    {creativeFormat === "carousel" ? (
+                      <>
+                        <Images className="size-8" aria-hidden />
+                        <p className="text-xs">슬라이드 {carouselCards.length}장</p>
+                      </>
+                    ) : (
+                      <>
+                        <ImageIcon className="size-8" aria-hidden />
+                        <p className="text-xs">소재를 업로드하면 여기에 표시됩니다</p>
+                      </>
+                    )}
                   </div>
+                  {creativeFormat === "carousel" ? (
+                    <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1" aria-hidden>
+                      {carouselCards.map((c, i) => (
+                        <span
+                          key={c.id}
+                          className={cn("size-1.5 rounded-chip", i === 0 ? "bg-primary" : "bg-fg-faint/40")}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
 
                 {/* CTA 버튼 — 4단계 선택값 실시간 반영 */}
@@ -911,8 +1003,8 @@ export default function CampaignsPage() {
 
                 {/* 하단 — 제목·본문 실시간 반영, 미입력 시 스켈레톤 */}
                 <div className="space-y-1.5 p-3">
-                  {headline ? (
-                    <p className="break-words text-[14px] font-semibold">{headline}</p>
+                  {previewHeadline ? (
+                    <p className="break-words text-[14px] font-semibold">{previewHeadline}</p>
                   ) : (
                     <SkeletonBar className="h-3.5 w-2/3" />
                   )}
