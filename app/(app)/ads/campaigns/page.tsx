@@ -609,7 +609,7 @@ export default function CampaignsPage() {
                       type="date"
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
-                      className={cn(fieldInput, "tnum [color-scheme:dark]")}
+                      className={cn(fieldInput, "tnum")}
                     />
                   </div>
                   <div>
@@ -623,7 +623,7 @@ export default function CampaignsPage() {
                       min={startDate || undefined}
                       disabled={effectiveNoEndDate}
                       onChange={(e) => setEndDate(e.target.value)}
-                      className={cn(fieldInput, "tnum [color-scheme:dark]")}
+                      className={cn(fieldInput, "tnum")}
                     />
                     <label
                       className={cn(

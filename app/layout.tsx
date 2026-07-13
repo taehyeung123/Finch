@@ -34,6 +34,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" className={`${pretendard.variable} h-full antialiased`}>
+      <head>
+        {/*
+          FOUC 방지 — React 렌더 전에 저장된 테마를 즉시 반영한다.
+          기본은 라이트(화이트가 메인). 저장값이 'dark'일 때만 data-theme=dark.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem('finch-theme')==='dark')document.documentElement.setAttribute('data-theme','dark')}catch(e){}`,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

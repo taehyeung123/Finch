@@ -3,6 +3,7 @@ import { FinchLogo } from "@/components/logo";
 import { PromoBanner } from "@/components/landing/promo-banner";
 import { ButtonLink } from "@/components/ui/button";
 import { InstagramGlyph, MetaGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 /* 공개 마케팅 영역 — SEO/GEO 최우선 적용 (PART 13.1) */
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
@@ -32,6 +33,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             </Link>
           </nav>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <ButtonLink href="/login" variant="ghost" size="sm" className="text-[14px]">
               로그인
             </ButtonLink>

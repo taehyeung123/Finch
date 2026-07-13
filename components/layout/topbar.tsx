@@ -8,6 +8,7 @@ import { notifications } from "@/lib/data";
 import { Badge } from "@/components/ui/badge";
 import { isDemoMode } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/client";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useChannel } from "./channel-context";
 import { ChannelIndicator, ChannelSwitcher, getChannelScope } from "./channel-switcher";
 
@@ -80,6 +81,9 @@ export function Topbar() {
           />
         </label>
       </div>
+
+      {/* 검색이 숨는 모바일에서는 토글이 오른쪽 정렬을 맡는다 */}
+      <ThemeToggle className="ml-auto sm:ml-0" />
 
       <Link
         href="/notifications"

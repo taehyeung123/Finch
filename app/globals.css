@@ -2,48 +2,45 @@
 
 /*
   핀치(Finch) 디자인 토큰 — PRD PART 7 디자인 시스템
-  - 다크모드 전용. 그림자(box-shadow) 대신 레이어드 알파 + 반투명 테두리로 깊이 표현
-  - 라운드 2단계: 카드/버튼/인풋 8px, 칩/필터/뱃지 32px
-  - 코랄 배경 위 텍스트는 항상 다크(#0C0C11) — WCAG 대비 6.9:1 (PART 7.3)
+  - 화이트(라이트) 기본 + 다크 토글. `:root`가 라이트 팔레트, `:root[data-theme="dark"]`가 다크.
+  - 색은 @theme에서 var(--x)로 참조하고 실제 값은 아래 팔레트에서 런타임 결정 → 764곳 유틸이 동시에 전환.
+  - 깊이: 다크는 반투명 밝은 테두리, 라이트는 어두운 테두리 + 떠있는 요소에 미세 그림자.
+  - 코랄 배경 위 텍스트는 라이트/다크 공통 다크(#0C0C11) — 배경이 같으므로 대비도 동일(6.9:1).
+  - 라운드 2단계: 카드/버튼/인풋 8px, 칩/필터/뱃지 32px.
 */
 @theme {
-  /* 서페이스 (PART 7.2) */
-  --color-surface: #0c0c11; /* 페이지 최하단 배경 */
-  --color-body: #16161c; /* 본문 카드·패널 배경 */
-  --color-overlay: #212128; /* 모달·시트·드롭다운 */
-  --color-line: rgba(255, 255, 255, 0.08); /* 패널 테두리 */
-  --color-line-strong: rgba(255, 255, 255, 0.16);
+  /* 색상은 전부 런타임 CSS 변수 참조 (라이트/다크 전환용) */
+  --color-surface: var(--surface);
+  --color-body: var(--body);
+  --color-overlay: var(--overlay);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
 
-  /* 텍스트 */
-  --color-fg: #f7f8fa;
-  --color-fg-sub: rgba(247, 248, 250, 0.64);
-  --color-fg-faint: rgba(247, 248, 250, 0.4);
+  --color-fg: var(--fg);
+  --color-fg-sub: var(--fg-sub);
+  --color-fg-faint: var(--fg-faint);
 
-  /* 브랜드 — 시그널 코랄 (PART 7.3) */
-  --color-primary: #ff6b4a;
-  --color-primary-hover: #e85a3b;
-  --color-primary-pressed: #c4472c;
-  --color-on-primary: #0c0c11;
-  --color-primary-weak: rgba(255, 107, 74, 0.14);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-pressed: var(--primary-pressed);
+  --color-on-primary: var(--on-primary);
+  --color-primary-weak: var(--primary-weak);
 
-  /* 시맨틱 — 상승=초록 / 하락=빨강 (PART 7.4, 마케팅 도메인 관행) */
-  --color-positive: #22c55e;
-  --color-positive-hover: #16a34a;
-  --color-positive-weak: rgba(34, 197, 94, 0.15);
-  --color-negative: #f04452;
-  --color-negative-weak: rgba(240, 68, 82, 0.15);
-  --color-warning: #f5a524;
-  --color-warning-weak: rgba(245, 165, 36, 0.15);
+  --color-positive: var(--positive);
+  --color-positive-hover: var(--positive-hover);
+  --color-positive-weak: var(--positive-weak);
+  --color-negative: var(--negative);
+  --color-negative-weak: var(--negative-weak);
+  --color-warning: var(--warning);
+  --color-warning-weak: var(--warning-weak);
 
-  /* 채널 배지 (PART 7.5) — 브랜드 프라이머리와 별도 관리 */
-  --color-ig: #e1306c;
-  --color-tiktok-cyan: #25f4ee;
-  --color-tiktok-red: #fe2c55;
-  --color-meta: #0866ff;
+  --color-ig: var(--ig);
+  --color-tiktok-cyan: var(--tiktok-cyan);
+  --color-tiktok-red: var(--tiktok-red);
+  --color-meta: var(--meta);
 
-  /* 소셜 로그인 브랜드 컬러 — 카카오 심볼/버튼 규정색 */
-  --color-kakao: #fee500;
-  --color-on-kakao: #191919;
+  --color-kakao: var(--kakao);
+  --color-on-kakao: var(--on-kakao);
 
   /* 타이포그래피 (PART 7.6) — next/font/local이 주입하는 --font-pretendard 우선, 폴백 체인 유지 */
   --font-sans: var(--font-pretendard), "Pretendard Variable", Pretendard,
@@ -55,8 +52,77 @@
   --radius-chip: 32px;
 }
 
-html {
+/* ── 라이트 팔레트 (기본) ─────────────────────────────── */
+:root {
+  color-scheme: light;
+
+  --surface: #f4f5f7; /* 페이지 최하단 배경 — 카드보다 살짝 회색 */
+  --body: #ffffff; /* 본문 카드·패널 */
+  --overlay: #ffffff; /* 모달·시트·드롭다운 (그림자로 띄움) */
+  --line: rgba(17, 20, 26, 0.1); /* 어두운 테두리 */
+  --line-strong: rgba(17, 20, 26, 0.18);
+
+  --fg: #16161c;
+  --fg-sub: rgba(22, 22, 28, 0.64);
+  --fg-faint: rgba(22, 22, 28, 0.44);
+
+  /* 브랜드 코랄 — 라이트/다크 공통 */
+  --primary: #ff6b4a;
+  --primary-hover: #e85a3b;
+  --primary-pressed: #c4472c;
+  --on-primary: #0c0c11;
+  --primary-weak: rgba(255, 107, 74, 0.12);
+
+  /* 시맨틱 — 흰 배경 대비를 위해 라이트에서는 진한 톤 */
+  --positive: #16a34a;
+  --positive-hover: #15803d;
+  --positive-weak: rgba(22, 163, 74, 0.12);
+  --negative: #dc2626;
+  --negative-weak: rgba(220, 38, 38, 0.1);
+  --warning: #b45309;
+  --warning-weak: rgba(180, 83, 9, 0.12);
+
+  /* 채널 배지 — 브랜드 원색 (라이트 공통) */
+  --ig: #e1306c;
+  --tiktok-cyan: #00c4d4; /* 흰 배경 가독 위해 살짝 진하게 */
+  --tiktok-red: #fe2c55;
+  --meta: #0866ff;
+
+  --kakao: #fee500;
+  --on-kakao: #191919;
+
+  /* 떠있는 요소용 그림자 (라이트 전용) — 다크에서는 none */
+  --shadow-pop: 0 6px 20px -4px rgba(17, 20, 26, 0.14), 0 2px 6px -2px rgba(17, 20, 26, 0.08);
+}
+
+/* ── 다크 팔레트 (토글) ─────────────────────────────── */
+:root[data-theme="dark"] {
   color-scheme: dark;
+
+  --surface: #0c0c11;
+  --body: #16161c;
+  --overlay: #212128;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+
+  --fg: #f7f8fa;
+  --fg-sub: rgba(247, 248, 250, 0.64);
+  --fg-faint: rgba(247, 248, 250, 0.4);
+
+  --primary-weak: rgba(255, 107, 74, 0.14);
+
+  --positive: #22c55e;
+  --positive-hover: #16a34a;
+  --positive-weak: rgba(34, 197, 94, 0.15);
+  --negative: #f04452;
+  --negative-weak: rgba(240, 68, 82, 0.15);
+  --warning: #f5a524;
+  --warning-weak: rgba(245, 165, 36, 0.15);
+
+  --tiktok-cyan: #25f4ee;
+
+  /* 다크는 그림자 대신 반투명 테두리로 깊이 (PART 7.2) */
+  --shadow-pop: none;
 }
 
 body {
