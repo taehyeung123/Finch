@@ -16,11 +16,13 @@ import type {
   IdeaSuggestion,
   PlanFeature,
   Post,
+  ProfileGridPost,
   ReportItem,
   TopEngager,
   TrendItem,
   UsageStat,
 } from "../types";
+import type { Channel } from "../types";
 
 /** 목데이터 기준 수집 시각 */
 export const MOCK_SYNCED_AT = "2026-07-11T08:40:00+09:00";
@@ -30,6 +32,7 @@ export const accounts: ChannelAccount[] = [
     channel: "instagram",
     handle: "@finch.official",
     displayName: "핀치 공식",
+    bio: "SNS 통합 분석 & 메타광고 관리 · 데이터로 콘텐츠를 만드는 팀",
     connected: true,
     followers: 48200,
     followersDelta7d: 1240,
@@ -41,6 +44,7 @@ export const accounts: ChannelAccount[] = [
     channel: "tiktok",
     handle: "@finch_kr",
     displayName: "핀치",
+    bio: "숏폼으로 보는 SNS 마케팅 인사이트",
     connected: true,
     followers: 31500,
     followersDelta7d: 2210,
@@ -52,6 +56,7 @@ export const accounts: ChannelAccount[] = [
     channel: "threads",
     handle: "@finch.official",
     displayName: "핀치 공식",
+    bio: "마케터를 위한 데이터 소식 · 스레드로 더 가깝게",
     connected: false,
     followers: 8900,
     followersDelta7d: -60,
@@ -60,6 +65,30 @@ export const accounts: ChannelAccount[] = [
     tokenExpiresInDays: null,
   },
 ];
+
+/** 프로필 미러링 그리드 — 채널 앱 프로필의 최근 게시물 썸네일 재현 (9칸 목데이터) */
+export const profileGrid: Record<Channel, ProfileGridPost[]> = {
+  instagram: [
+    { id: "ig-g1", type: "reels", views: 182000, likes: 12400 },
+    { id: "ig-g2", type: "carousel", views: 96000, likes: 8300 },
+    { id: "ig-g3", type: "feed", views: 54000, likes: 4100 },
+    { id: "ig-g4", type: "reels", views: 210000, likes: 15600 },
+    { id: "ig-g5", type: "feed", views: 38000, likes: 2900 },
+    { id: "ig-g6", type: "carousel", views: 72000, likes: 6200 },
+    { id: "ig-g7", type: "reels", views: 134000, likes: 9800 },
+    { id: "ig-g8", type: "feed", views: 41000, likes: 3300 },
+    { id: "ig-g9", type: "carousel", views: 88000, likes: 7100 },
+  ],
+  tiktok: [
+    { id: "tt-g1", type: "video", views: 240000, likes: 19800 },
+    { id: "tt-g2", type: "video", views: 132000, likes: 10100 },
+    { id: "tt-g3", type: "video", views: 410000, likes: 33200 },
+    { id: "tt-g4", type: "video", views: 88000, likes: 6400 },
+    { id: "tt-g5", type: "video", views: 176000, likes: 14200 },
+    { id: "tt-g6", type: "video", views: 305000, likes: 26900 },
+  ],
+  threads: [],
+};
 
 export const dashboardSummaries: Record<ChannelFilter, DashboardSummary> = {
   all: {

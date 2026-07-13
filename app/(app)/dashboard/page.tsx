@@ -14,12 +14,14 @@ import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatAgo, formatCompact, formatDeltaCompact, formatKRW, formatPercent } from "@/lib/format";
 import { aggregateActive } from "@/lib/ads/metrics";
+import { ChannelProfilePanel } from "@/components/dashboard/channel-profile-panel";
 import {
   accounts,
   campaigns,
   competitorAds,
   contentMix,
   dashboardSummaries,
+  profileGrid,
   recentPosts,
 } from "@/lib/data";
 
@@ -43,6 +45,30 @@ export default function DashboardPage() {
   // 진행 중 캠페인 기준 — /ads 페이지와 같은 공통 유틸로 계산 (화면 간 수치 불일치 방지)
   const activeTotals = aggregateActive(campaigns);
   const newAds = competitorAds.filter((a) => a.isNew);
+  // 개별 채널 선택 시 우측 프로필 미러링 패널에 쓸 계정
+  const selectedAccount = channel === "all" ? null : accounts.find((a) => a.channel === channel);
+
+  const summaryCards = (
+    <>
+      <StatCard label="팔로워" value={formatCompact(summary.followers)} delta={summary.followersDelta} />
+      <StatCard label="이번 주 조회수" value={formatCompact(summary.weeklyViews)} delta={summary.weeklyViewsDelta} />
+      <StatCard label="게시물 수" value={summary.postCount.toLocaleString("ko-KR")} />
+      <StatCard
+        label={
+          <>
+            평균 참여율
+            <InfoTip>
+              (좋아요 + 댓글 + 공유) ÷ 도달 수 기준 자체 계산 지표입니다. 플랫폼 공식 지표가 아닌 핀치
+              자체 산출값이에요.
+            </InfoTip>
+          </>
+        }
+        value={formatPercent(summary.engagementRate)}
+        delta={summary.engagementDelta}
+        deltaUnit="%p"
+      />
+    </>
+  );
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -64,26 +90,23 @@ export default function DashboardPage() {
         </Card>
       ) : null}
 
-      {/* 요약 지표 (PART 4.1) */}
-      <section aria-label="요약 지표" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="팔로워" value={formatCompact(summary.followers)} delta={summary.followersDelta} />
-        <StatCard label="이번 주 조회수" value={formatCompact(summary.weeklyViews)} delta={summary.weeklyViewsDelta} />
-        <StatCard label="게시물 수" value={summary.postCount.toLocaleString("ko-KR")} />
-        <StatCard
-          label={
-            <>
-              평균 참여율
-              <InfoTip>
-                (좋아요 + 댓글 + 공유) ÷ 도달 수 기준 자체 계산 지표입니다. 플랫폼 공식 지표가 아닌 핀치
-                자체 산출값이에요.
-              </InfoTip>
-            </>
-          }
-          value={formatPercent(summary.engagementRate)}
-          delta={summary.engagementDelta}
-          deltaUnit="%p"
-        />
-      </section>
+      {/* 요약 지표 — 개별 채널 선택 시 우측에 모바일 프로필 미러링 패널 (PART 4.1) */}
+      {selectedAccount ? (
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <section aria-label="요약 지표" className="grid grid-cols-2 gap-3 self-start">
+            {summaryCards}
+          </section>
+          <ChannelProfilePanel
+            account={selectedAccount}
+            grid={profileGrid[selectedAccount.channel]}
+            className="self-start lg:sticky lg:top-6"
+          />
+        </div>
+      ) : (
+        <section aria-label="요약 지표" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {summaryCards}
+        </section>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* 최근 게시물 (PART 4.1) */}
@@ -205,7 +228,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 내 계정 — 연동 계정 프로필 카드 (PART 4.1) */}
+      {/* 내 계정 — 전체 보기일 때만 3채널 카드 (개별 선택 시엔 위 프로필 패널이 대체) */}
+      {channel === "all" ? (
       <section aria-label="내 계정">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-[19px] font-bold leading-snug">내 계정</h2>
@@ -312,6 +336,7 @@ export default function DashboardPage() {
           />
         )}
       </section>
+      ) : null}
     </div>
   );
 }

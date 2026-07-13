@@ -6,6 +6,7 @@ import type {
   AnalyzeResult,
   AppNotification,
   AudienceDaily,
+  Channel,
   ChannelAccount,
   ChannelFilter,
   CompetitorAd,
@@ -14,6 +15,7 @@ import type {
   DashboardSummary,
   IdeaSuggestion,
   Post,
+  ProfileGridPost,
   ReportItem,
   TopEngager,
   TrendItem,
@@ -24,6 +26,13 @@ export const MOCK_SYNCED_AT = "";
 
 /** 연동된 채널 없음 — Instagram/TikTok/Threads OAuth 연동 후 채워진다 */
 export const accounts: ChannelAccount[] = [];
+
+/** 프로필 그리드 — 연동 전 빈 값 */
+export const profileGrid: Record<Channel, ProfileGridPost[]> = {
+  instagram: [],
+  tiktok: [],
+  threads: [],
+};
 
 const zeroSummary = (channel: ChannelFilter): DashboardSummary => ({
   channel,

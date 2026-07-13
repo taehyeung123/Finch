@@ -15,12 +15,21 @@ export interface ChannelAccount {
   channel: Channel;
   handle: string;
   displayName: string;
+  bio: string; // 프로필 소개 한 줄
   connected: boolean;
   followers: number;
   followersDelta7d: number; // 최근 7일 증감
   posts: number;
   avgEngagementRate: number; // %
   tokenExpiresInDays: number | null;
+}
+
+/** 프로필 미러링용 게시물 썸네일 — 채널 앱 프로필 그리드 재현 */
+export interface ProfileGridPost {
+  id: string;
+  type: PostType;
+  views: number;
+  likes: number;
 }
 
 export type PostType = "reels" | "feed" | "story" | "video" | "carousel" | "text";
