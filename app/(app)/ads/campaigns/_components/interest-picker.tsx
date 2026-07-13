@@ -75,7 +75,7 @@ export function InterestPicker({
           <ul
             role="listbox"
             aria-label="관심사 검색 결과"
-            className="absolute inset-x-0 top-full z-20 mt-1 overflow-hidden rounded-card border border-line bg-overlay"
+            className="shadow-pop absolute inset-x-0 top-full z-20 mt-1 overflow-hidden rounded-card border border-line bg-overlay"
           >
             {suggestions.length > 0 ? (
               suggestions.map((s) => (

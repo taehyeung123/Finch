@@ -139,6 +139,15 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/*
+  떠있는 요소(드롭다운·모달·팝오버·시트)용 그림자.
+  라이트에서는 --shadow-pop 그림자, 다크에서는 none(반투명 테두리로 깊이 — PART 7.2).
+  카드 등 정적 표면에는 쓰지 않고, surface 위에 떠오르는 요소에만 적용한다.
+*/
+@utility shadow-pop {
+  box-shadow: var(--shadow-pop);
+}
+
 ::selection {
   background: var(--color-primary);
   color: var(--color-on-primary);

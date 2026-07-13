@@ -111,7 +111,7 @@ export function Topbar() {
         {menuOpen ? (
           <div
             role="menu"
-            className="absolute right-0 top-full mt-2 w-56 rounded-card border border-line bg-overlay p-1.5"
+            className="shadow-pop absolute right-0 top-full mt-2 w-56 rounded-card border border-line bg-overlay p-1.5"
           >
             {email ? (
               <>

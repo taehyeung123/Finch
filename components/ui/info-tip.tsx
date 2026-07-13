@@ -28,7 +28,7 @@ export function InfoTip({ children, className }: { children: React.ReactNode; cl
         <span
           id={id}
           role="tooltip"
-          className="absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 rounded-card border border-line bg-overlay p-3 text-left text-xs font-normal leading-relaxed text-fg-sub"
+          className="shadow-pop absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 rounded-card border border-line bg-overlay p-3 text-left text-xs font-normal leading-relaxed text-fg-sub"
         >
           {children}
         </span>

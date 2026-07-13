@@ -97,7 +97,7 @@ export function AgentPanel() {
       </button>
 
       {open ? (
-        <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-line bg-overlay">
+        <div className="shadow-pop fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-line bg-overlay">
           <div className="flex h-16 items-center justify-between border-b border-line px-5">
             <span className="inline-flex items-center gap-2 font-bold">
               <FinchMark className="size-5 text-primary" />
