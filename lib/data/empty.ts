@@ -9,6 +9,7 @@ import type {
   Channel,
   ChannelAccount,
   ChannelFilter,
+  ChannelTrend,
   CompetitorAd,
   Competitor,
   ContentMix,
@@ -32,6 +33,14 @@ export const profileGrid: Record<Channel, ProfileGridPost[]> = {
   instagram: [],
   tiktok: [],
   threads: [],
+};
+
+/** 성과 추이 — 연동 전 빈 값 */
+const emptyTrend: ChannelTrend = { startLabel: "", endLabel: "", followers: [], views: [], engagement: [] };
+export const channelTrends: Record<Channel, ChannelTrend> = {
+  instagram: emptyTrend,
+  tiktok: emptyTrend,
+  threads: emptyTrend,
 };
 
 const zeroSummary = (channel: ChannelFilter): DashboardSummary => ({

@@ -30,6 +30,7 @@ export const analyzeHistory = src.analyzeHistory;
 export const audienceDaily = src.audienceDaily;
 export const topEngagers = src.topEngagers;
 export const profileGrid = src.profileGrid;
+export const channelTrends = src.channelTrends;
 
 /* ---- 경쟁사·광고 (Meta Ad Library / Marketing API로 교체 예정) ---- */
 export const competitors = src.competitors;

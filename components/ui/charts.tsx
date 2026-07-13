@@ -39,6 +39,69 @@ export function Sparkline({
   );
 }
 
+/*
+  라인 차트 — 성과 추이(팔로워·조회수·참여율)용. 영역 채우기 + 끝점 강조 + 가로 그리드.
+  그라디언트 배경 대신 반투명 단색 fill로 깊이 표현 (PART 7.7).
+*/
+export function LineChart({
+  data,
+  className,
+  stroke = "var(--color-primary)",
+  height = 160,
+}: {
+  data: number[];
+  className?: string;
+  stroke?: string;
+  height?: number;
+}) {
+  if (data.length < 2) return null;
+  const W = 600;
+  const H = height;
+  const padX = 6;
+  const padY = 14;
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+  const x = (i: number) => padX + (i / (data.length - 1)) * (W - padX * 2);
+  const y = (v: number) => padY + (1 - (v - min) / range) * (H - padY * 2);
+
+  const line = data.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const area = `M${x(0).toFixed(1)},${y(data[0]).toFixed(1)} ${data
+    .map((v, i) => `L${x(i).toFixed(1)},${y(v).toFixed(1)}`)
+    .join(" ")} L${x(data.length - 1).toFixed(1)},${(H - padY).toFixed(1)} L${x(0).toFixed(1)},${(H - padY).toFixed(1)} Z`;
+  const lastX = x(data.length - 1);
+  const lastY = y(data[data.length - 1]);
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className={cn("w-full", className)} style={{ height }} preserveAspectRatio="none" aria-hidden>
+      {/* 가로 그리드 3줄 */}
+      {[0.25, 0.5, 0.75].map((t) => (
+        <line
+          key={t}
+          x1={padX}
+          x2={W - padX}
+          y1={padY + t * (H - padY * 2)}
+          y2={padY + t * (H - padY * 2)}
+          stroke="var(--color-line)"
+          strokeWidth={1}
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+      <path d={area} fill={stroke} opacity={0.1} />
+      <polyline
+        points={line}
+        fill="none"
+        stroke={stroke}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+      <circle cx={lastX} cy={lastY} r={3.5} fill={stroke} vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
 /* 세로 막대 미니 차트 — 시간대별 증가 추이 등 */
 export function MiniBars({
   data,

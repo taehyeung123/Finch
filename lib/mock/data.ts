@@ -14,6 +14,7 @@ import type {
   ContentMix,
   DashboardSummary,
   IdeaSuggestion,
+  ChannelTrend,
   PlanFeature,
   Post,
   ProfileGridPost,
@@ -88,6 +89,31 @@ export const profileGrid: Record<Channel, ProfileGridPost[]> = {
     { id: "tt-g6", type: "video", views: 305000, likes: 26900 },
   ],
   threads: [],
+};
+
+/** 채널 성과 추이 — 최근 14일 일별 (팔로워·조회수·참여율). 실연동 시 공식 Insights 시계열로 교체 */
+export const channelTrends: Record<Channel, ChannelTrend> = {
+  instagram: {
+    startLabel: "06.30",
+    endLabel: "07.13",
+    followers: [46600, 46780, 46950, 47080, 47210, 47340, 47510, 47620, 47740, 47850, 47980, 48060, 48140, 48200],
+    views: [38, 42, 51, 47, 62, 58, 71, 66, 74, 69, 82, 77, 85, 88].map((v) => v * 1000),
+    engagement: [4.4, 4.5, 4.6, 4.5, 4.7, 4.6, 4.8, 4.7, 4.8, 4.9, 4.7, 4.8, 4.9, 4.8],
+  },
+  tiktok: {
+    startLabel: "06.30",
+    endLabel: "07.13",
+    followers: [27800, 28200, 28700, 29100, 29500, 29800, 30100, 30400, 30700, 30950, 31100, 31280, 31400, 31500],
+    views: [92, 110, 134, 121, 176, 158, 210, 188, 240, 215, 268, 249, 288, 305].map((v) => v * 1000),
+    engagement: [5.8, 5.9, 6.1, 6.0, 6.3, 6.2, 6.4, 6.3, 6.5, 6.4, 6.2, 6.3, 6.1, 6.2],
+  },
+  threads: {
+    startLabel: "06.30",
+    endLabel: "07.13",
+    followers: [9100, 9080, 9050, 9020, 9000, 8980, 8960, 8950, 8940, 8930, 8920, 8915, 8905, 8900],
+    views: [30, 28, 26, 25, 24, 23, 25, 24, 22, 21, 20, 19, 18, 17].map((v) => v * 1000),
+    engagement: [2.4, 2.3, 2.3, 2.2, 2.2, 2.1, 2.2, 2.1, 2.0, 2.1, 2.0, 2.1, 2.0, 2.1],
+  },
 };
 
 export const dashboardSummaries: Record<ChannelFilter, DashboardSummary> = {

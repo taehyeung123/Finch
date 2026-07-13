@@ -15,9 +15,11 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { formatAgo, formatCompact, formatDeltaCompact, formatKRW, formatPercent } from "@/lib/format";
 import { aggregateActive } from "@/lib/ads/metrics";
 import { ChannelProfilePanel } from "@/components/dashboard/channel-profile-panel";
+import { PerformanceTrend } from "@/components/dashboard/performance-trend";
 import {
   accounts,
   campaigns,
+  channelTrends,
   competitorAds,
   contentMix,
   dashboardSummaries,
@@ -93,9 +95,13 @@ export default function DashboardPage() {
       {/* 요약 지표 — 개별 채널 선택 시 우측에 모바일 프로필 미러링 패널 (PART 4.1) */}
       {selectedAccount ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <section aria-label="요약 지표" className="grid grid-cols-2 gap-3 self-start">
-            {summaryCards}
-          </section>
+          <div className="min-w-0 space-y-6">
+            <section aria-label="요약 지표" className="grid grid-cols-2 gap-3">
+              {summaryCards}
+            </section>
+            {/* 프로필(현재 상태) 옆 공백을 성과 추이(변화)로 채운다 */}
+            <PerformanceTrend trend={channelTrends[selectedAccount.channel]} />
+          </div>
           <ChannelProfilePanel
             account={selectedAccount}
             grid={profileGrid[selectedAccount.channel]}

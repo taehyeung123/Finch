@@ -32,6 +32,16 @@ export interface ProfileGridPost {
   likes: number;
 }
 
+/** 채널 성과 추이 — 최근 N일 일별 지표 (대시보드 성과 추이 차트) */
+export interface ChannelTrend {
+  /** 기간 시작·종료 라벨 (예: "06.30", "07.13") */
+  startLabel: string;
+  endLabel: string;
+  followers: number[]; // 일별 누적 팔로워
+  views: number[]; // 일별 조회수
+  engagement: number[]; // 일별 참여율(%)
+}
+
 export type PostType = "reels" | "feed" | "story" | "video" | "carousel" | "text";
 
 export interface Post {
