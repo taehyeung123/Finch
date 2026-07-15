@@ -49,6 +49,13 @@
 7. 광고 리포트는 Standard Access로 본인 광고 계정 조회 가능. 타사(클라이언트) 계정 관리는 Advanced Access(사업자등록증 + 비즈니스 인증) — Phase 3
 8. (Claude Code 작업) OAuth 연동 플로우 + 수집 배치(하루 4회) + `lib/data` 교체
 
+**3-확장) 인스타 댓글 자동 DM** — 이 Meta 앱에 얹는 별도 권한·웹훅:
+- 추가 권한: `instagram_manage_messages`(business_manage_messages) + `instagram_manage_comments` — **별도 앱 심사·사업자 인증 필요(수주~수개월), 조기 병행 신청**
+- 댓글 웹훅 구독 + `app/api/webhooks/instagram` 라우트(서명검증은 이미 스캐폴드 완료) → 매칭 댓글만 큐잉 → Private Reply 발송
+- 하드 제약: 댓글당 비공개 답장 **1회·7일**, 계정당 레이트리밋, 토큰 60일 만료
+- 법률: 정보통신망법(광고성 정보 동의·(광고) 표기·수신거부·야간), 개인정보보호법(수탁자 DPA)
+- **착수 전 반드시 [docs/AUTO_DM_COST_RISK.md](AUTO_DM_COST_RISK.md) 정독** — 비용(Inngest 실행량·Supabase 컴퓨트)·정책·운영 체크리스트
+
 ## 4. Threads API — Meta 앱에 포함
 
 1. 3번 Meta 앱에 **Threads API** 제품 추가, `threads_basic`, `threads_manage_insights` 권한 신청
