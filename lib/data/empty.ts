@@ -6,6 +6,8 @@ import type {
   AnalyzeResult,
   AppNotification,
   AudienceDaily,
+  AutoDmRule,
+  AutoDmSummary,
   Channel,
   ChannelAccount,
   ChannelFilter,
@@ -105,3 +107,13 @@ export const reports: ReportItem[] = [];
 export const ideaSuggestions: IdeaSuggestion[] = [];
 export const audienceDaily: AudienceDaily[] = [];
 export const topEngagers: TopEngager[] = [];
+
+/** 자동 DM 규칙 — 인스타그램 연동 후 사용자가 게시물별로 생성한다 */
+export const autoDmRules: AutoDmRule[] = [];
+export const autoDmSummary: AutoDmSummary = {
+  activeRules: 0,
+  sentToday: 0,
+  sent30d: 0,
+  deliveryRate: 0,
+  replyRate: 0,
+};

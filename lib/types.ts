@@ -227,3 +227,60 @@ export interface IdeaSuggestion {
   channels: Channel[];
   expectedEngagement: "high" | "mid" | "low";
 }
+
+/* ────────────────────────────────────────────────────────────
+   인스타 댓글 자동 DM (PART 4 확장 — 게시물별 자동 응답)
+   인스타그램 전용: Threads·TikTok은 서드파티 DM 발송 API가 없다.
+   백엔드는 Instagram Messaging(Private Replies) + 댓글 웹훅으로 연동 예정(API-last).
+   Meta 정책상 댓글 1건당 Private Reply는 1회·7일 이내, 이후는 24시간 메시징 창 적용.
+──────────────────────────────────────────────────────────── */
+
+/** 발송 트리거 — 모든 댓글 | 특정 키워드 포함 댓글 */
+export type AutoDmTrigger = "all" | "keyword";
+
+/** 규칙 상태 — 활성 / 일시중지 / 검수중(정책·연동 대기) */
+export type AutoDmStatus = "active" | "paused" | "review";
+
+/** 게시물별 자동 DM 규칙 — 하나의 규칙은 계정의 특정 게시물 1개에 연결된다 */
+export interface AutoDmRule {
+  id: string;
+  /** 대상 게시물 식별 */
+  postId: string;
+  postCaption: string; // 목록에서 게시물을 알아보기 위한 짧은 캡션
+  postType: PostType;
+  postViews: number; // 게시물 성과 참고용
+  /** 트리거 방식 */
+  trigger: AutoDmTrigger;
+  keywords: string[]; // trigger="keyword"일 때만 사용
+  /** 댓글 공개 답글(선택) — Private Reply가 1회로 제한되므로 공개 답글로 보완 */
+  publicReply: string | null;
+  /** 발송 DM 본문 */
+  dmMessage: string;
+  /** DM에 붙는 버튼(선택) — 라벨/URL 쌍 */
+  buttonLabel: string | null;
+  buttonUrl: string | null;
+  status: AutoDmStatus;
+  /**
+   * 광고성 정보 여부. true면 정보통신망법에 따라 (광고) 표기와 수신거부 안내를
+   * 본문에 자동 삽입해야 한다 — UI에서 강제한다.
+   */
+  isAdvertising: boolean;
+  /** 하루 발송 상한 — 스팸 정책·레이트리밋 대비 사용자 설정 캡 */
+  dailyCap: number;
+  sentTotal: number; // 누적 발송 성공
+  sentToday: number; // 오늘 발송(캡 대비)
+  failedTotal: number; // 수신 불가·메시징 창 만료 등 발송 실패
+  lastSentAt: string | null; // ISO
+  createdAt: string; // ISO
+}
+
+/** 자동 DM 대시보드 요약 — 발송 성공/응답은 Meta 실제 결과값(자체 추정치 아님) */
+export interface AutoDmSummary {
+  activeRules: number;
+  sentToday: number;
+  sent30d: number;
+  /** 발송 성공률 % = 성공 / 시도 (Meta 발송 결과 기준) */
+  deliveryRate: number;
+  /** DM 이후 상대가 답장한 비율 % (Meta 대화 데이터 기준) */
+  replyRate: number;
+}

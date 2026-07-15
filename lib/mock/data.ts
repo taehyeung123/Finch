@@ -7,6 +7,8 @@ import type {
   AnalyzeResult,
   AppNotification,
   AudienceDaily,
+  AutoDmRule,
+  AutoDmSummary,
   ChannelAccount,
   ChannelFilter,
   CompetitorAd,
@@ -757,6 +759,7 @@ export const planFeatures: PlanFeature[] = [
   { label: "경쟁사 분석", free: "-", creator: "계정 3개", pro: "계정 10개", agency: "무제한" },
   { label: "경쟁사 광고 모니터링", free: "-", creator: "-", pro: "제공", agency: "제공" },
   { label: "메타광고 관리", free: "조회만", creator: "조회만", pro: "생성·관리", agency: "멀티 클라이언트" },
+  { label: "인스타 댓글 자동 DM", free: "-", creator: "월 500건", pro: "월 3,000건", agency: "무제한" },
   { label: "AI 카드뉴스/영상", free: "월 3회(워터마크)", creator: "카드뉴스 무제한", pro: "무제한", agency: "무제한 + 화이트라벨" },
   { label: "팀 기능", free: "-", creator: "-", pro: "최대 3인", agency: "무제한 + 권한 관리" },
 ];
@@ -847,3 +850,84 @@ export const ideaSuggestions: IdeaSuggestion[] = [
     expectedEngagement: "high",
   },
 ];
+
+/**
+ * 인스타 댓글 자동 DM 규칙 — 게시물별 자동 응답 (인스타그램 전용).
+ * 실연동 시 connected IG 계정의 게시물·발송 로그로 교체된다 (docs/API_ROADMAP.md 3번 확장).
+ */
+export const autoDmRules: AutoDmRule[] = [
+  {
+    id: "dm1",
+    postId: "ig-g4",
+    postCaption: "여름 신상 릴스 — 댓글로 '정보' 남기면 링크 보내드려요",
+    postType: "reels",
+    postViews: 210000,
+    trigger: "keyword",
+    keywords: ["정보", "링크", "가격"],
+    publicReply: "DM 보내드렸어요! 확인해 주세요 :)",
+    dmMessage:
+      "안녕하세요! 관심 가져주셔서 감사해요. 아래 링크에서 여름 신상 전체를 확인하실 수 있어요. 궁금한 점은 편하게 답장 주세요.",
+    buttonLabel: "신상품 보러가기",
+    buttonUrl: "https://example.com/summer",
+    status: "active",
+    isAdvertising: true,
+    dailyCap: 300,
+    sentTotal: 1842,
+    sentToday: 64,
+    failedTotal: 37,
+    lastSentAt: "2026-07-14T10:12:00+09:00",
+    createdAt: "2026-06-28T14:00:00+09:00",
+  },
+  {
+    id: "dm2",
+    postId: "ig-g2",
+    postCaption: "브랜드 협업 이벤트 안내 카드뉴스",
+    postType: "carousel",
+    postViews: 96000,
+    trigger: "keyword",
+    keywords: ["참여", "신청"],
+    publicReply: null,
+    dmMessage:
+      "이벤트에 관심 가져주셔서 감사합니다. 참여 방법을 아래에서 안내해 드릴게요. 응모는 이번 주 일요일까지예요.",
+    buttonLabel: "참여 방법 보기",
+    buttonUrl: "https://example.com/event",
+    status: "active",
+    isAdvertising: false,
+    dailyCap: 200,
+    sentTotal: 512,
+    sentToday: 28,
+    failedTotal: 9,
+    lastSentAt: "2026-07-14T09:40:00+09:00",
+    createdAt: "2026-07-05T11:30:00+09:00",
+  },
+  {
+    id: "dm3",
+    postId: "ig-g7",
+    postCaption: "고객 후기 모음 릴스",
+    postType: "reels",
+    postViews: 134000,
+    trigger: "all",
+    keywords: [],
+    publicReply: "댓글 감사해요! 자세한 안내 DM 드릴게요.",
+    dmMessage:
+      "소중한 관심 감사합니다. 후기에서 소개한 제품 상세 정보를 보내드려요. 사이즈나 색상 문의도 언제든 답장 주세요.",
+    buttonLabel: null,
+    buttonUrl: null,
+    status: "paused",
+    isAdvertising: false,
+    dailyCap: 150,
+    sentTotal: 233,
+    sentToday: 0,
+    failedTotal: 4,
+    lastSentAt: "2026-07-11T18:20:00+09:00",
+    createdAt: "2026-07-02T16:10:00+09:00",
+  },
+];
+
+export const autoDmSummary: AutoDmSummary = {
+  activeRules: 2,
+  sentToday: 92,
+  sent30d: 2587,
+  deliveryRate: 97.3,
+  replyRate: 41.6,
+};

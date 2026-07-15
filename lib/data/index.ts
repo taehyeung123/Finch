@@ -46,6 +46,10 @@ export const usageStats = src.usageStats;
 export const reports = src.reports;
 export const ideaSuggestions = src.ideaSuggestions;
 
+/* ---- 인스타 댓글 자동 DM (Instagram Messaging + 댓글 웹훅으로 교체 예정) ---- */
+export const autoDmRules = src.autoDmRules;
+export const autoDmSummary = src.autoDmSummary;
+
 /* ---- 제품 설정 (데이터가 아님 — 모드와 무관하게 동일) ---- */
 export const TREND_CATEGORIES = sample.TREND_CATEGORIES;
 export const planFeatures = sample.planFeatures;
