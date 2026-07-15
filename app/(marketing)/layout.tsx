@@ -50,7 +50,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
 
       {/* Footer (PART 6.1-11) */}
       <footer className="border-t border-line">
-        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 md:grid-cols-4 md:px-6">
+        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 md:grid-cols-5 md:px-6">
           <div className="md:col-span-2">
             <FinchLogo />
             <p className="mt-3 max-w-sm text-[14px] leading-relaxed text-fg-sub">
@@ -76,6 +76,37 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
                 Meta 광고
               </span>
             </div>
+          </div>
+          {/* 기능 페이지 내부 링크 — 브랜드 검색 사이트링크 후보는 이런 명확한 앵커텍스트에서 나온다 (PART 13.2) */}
+          <div>
+            <h3 className="text-[13px] font-bold text-fg-faint">기능</h3>
+            <ul className="mt-3 space-y-2 text-[14px] text-fg-sub">
+              <li>
+                <Link href="/instagram" className="hover:text-fg">
+                  인스타그램 분석
+                </Link>
+              </li>
+              <li>
+                <Link href="/instagram/auto-dm" className="hover:text-fg">
+                  댓글 자동 DM
+                </Link>
+              </li>
+              <li>
+                <Link href="/instagram/visitor-check" className="hover:text-fg">
+                  인스타 방문자 확인
+                </Link>
+              </li>
+              <li>
+                <Link href="/tiktok" className="hover:text-fg">
+                  틱톡 분석
+                </Link>
+              </li>
+              <li>
+                <Link href="/threads" className="hover:text-fg">
+                  쓰레드 분석
+                </Link>
+              </li>
+            </ul>
           </div>
           <div>
             <h3 className="text-[13px] font-bold text-fg-faint">제품</h3>

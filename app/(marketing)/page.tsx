@@ -61,13 +61,21 @@ const FAQ_ITEMS: FaqItem[] = [
   },
 ];
 
-/* GEO: FAQPage + SoftwareApplication + Organization 구조화 데이터 (PART 13.2·13.3) */
+/* GEO: WebSite + FAQPage + SoftwareApplication + Organization 구조화 데이터 (PART 13.2·13.3) */
 const JSON_LD = {
   "@context": "https://schema.org",
   "@graph": [
     {
+      /* 구글 검색결과의 "사이트 이름" 표시는 홈페이지 WebSite 스키마의 name/alternateName을 참조한다 */
+      "@type": "WebSite",
+      name: "핀치",
+      alternateName: ["핀치 (Finch)", "Finch"],
+      url: "https://finch.kr",
+    },
+    {
       "@type": "Organization",
       name: "핀치 (Finch)",
+      alternateName: ["핀치", "Finch"],
       url: "https://finch.kr",
       logo: "https://finch.kr/brand/finch-mark-coral.svg",
       description: "인스타그램·틱톡·쓰레드 통합 분석 & 메타광고 관리 플랫폼",
