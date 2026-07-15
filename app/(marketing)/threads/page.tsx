@@ -31,7 +31,7 @@ const JSON_LD = {
     {
       "@type": "WebPage",
       name: "쓰레드(Threads) 분석 사이트",
-      url: "https://finch.kr/threads",
+      url: "https://finch.ai.kr/threads",
       description:
         "핀치는 내 쓰레드(Threads) 계정의 게시물 성과와 인사이트, 팔로워 통계를 확인하는 스레드 분석 사이트입니다.",
     },
@@ -46,8 +46,8 @@ const JSON_LD = {
     {
       "@type": "BreadcrumbList",
       itemListElement: [
-        { "@type": "ListItem", position: 1, name: "홈", item: "https://finch.kr/" },
-        { "@type": "ListItem", position: 2, name: "쓰레드 분석", item: "https://finch.kr/threads" },
+        { "@type": "ListItem", position: 1, name: "홈", item: "https://finch.ai.kr/" },
+        { "@type": "ListItem", position: 2, name: "쓰레드 분석", item: "https://finch.ai.kr/threads" },
       ],
     },
   ],

@@ -3,8 +3,8 @@ import { pretendard } from "@/lib/fonts";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  // TODO: 도메인 확정 시(PART 8 체크리스트) 실제 도메인으로 교체
-  metadataBase: new URL("https://finch.kr"),
+  // 도메인 확정: finch.ai.kr (2026-07 — finch.kr은 타사 소유라 사용 불가)
+  metadataBase: new URL("https://finch.ai.kr"),
   title: {
     default: "핀치 (Finch) — SNS 통합 분석 & 메타광고 관리",
     template: "%s | 핀치 (Finch)",
@@ -24,6 +24,15 @@ export const metadata: Metadata = {
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
     apple: [{ url: "/brand/finch-app-icon-180.png", sizes: "180x180" }],
+  },
+  // 검색엔진 소유 확인 — 서치어드바이저/서치콘솔 등록 후 발급 코드를 배포 환경변수에 넣으면 자동 반영
+  verification: {
+    ...(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+      ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION }
+      : {}),
+    ...(process.env.NEXT_PUBLIC_NAVER_SITE_VERIFICATION
+      ? { other: { "naver-site-verification": process.env.NEXT_PUBLIC_NAVER_SITE_VERIFICATION } }
+      : {}),
   },
 };
 

@@ -37,13 +37,13 @@ const JSON_LD = {
     {
       "@type": "BreadcrumbList",
       itemListElement: [
-        { "@type": "ListItem", position: 1, name: "홈", item: "https://finch.kr/" },
-        { "@type": "ListItem", position: 2, name: "인스타그램 분석", item: "https://finch.kr/instagram" },
+        { "@type": "ListItem", position: 1, name: "홈", item: "https://finch.ai.kr/" },
+        { "@type": "ListItem", position: 2, name: "인스타그램 분석", item: "https://finch.ai.kr/instagram" },
         {
           "@type": "ListItem",
           position: 3,
           name: "방문자 확인",
-          item: "https://finch.kr/instagram/visitor-check",
+          item: "https://finch.ai.kr/instagram/visitor-check",
         },
       ],
     },

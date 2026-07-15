@@ -43,6 +43,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: APP_ROUTES,
       })),
     ],
-    sitemap: "https://finch.kr/sitemap.xml",
+    sitemap: "https://finch.ai.kr/sitemap.xml",
   };
 }

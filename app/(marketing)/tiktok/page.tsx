@@ -36,16 +36,16 @@ const JSON_LD = {
     {
       "@type": "WebPage",
       name: "틱톡 분석",
-      url: "https://finch.kr/tiktok",
+      url: "https://finch.ai.kr/tiktok",
       description:
         "핀치의 틱톡 분석은 내 틱톡 계정의 팔로워·조회수·참여율 통계를 확인하고 영상별 성과를 진단하는 틱톡 분석 사이트입니다.",
-      isPartOf: { "@type": "WebSite", name: "핀치 (Finch)", url: "https://finch.kr" },
+      isPartOf: { "@type": "WebSite", name: "핀치 (Finch)", url: "https://finch.ai.kr" },
     },
     {
       "@type": "BreadcrumbList",
       itemListElement: [
-        { "@type": "ListItem", position: 1, name: "홈", item: "https://finch.kr/" },
-        { "@type": "ListItem", position: 2, name: "틱톡 분석", item: "https://finch.kr/tiktok" },
+        { "@type": "ListItem", position: 1, name: "홈", item: "https://finch.ai.kr/" },
+        { "@type": "ListItem", position: 2, name: "틱톡 분석", item: "https://finch.ai.kr/tiktok" },
       ],
     },
     {

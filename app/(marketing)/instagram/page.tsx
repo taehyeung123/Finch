@@ -98,17 +98,17 @@ const JSON_LD = {
       "@type": "Service",
       name: "인스타그램 분석",
       serviceType: "인스타그램 분석 도구",
-      provider: { "@type": "Organization", name: "핀치 (Finch)", url: "https://finch.kr" },
+      provider: { "@type": "Organization", name: "핀치 (Finch)", url: "https://finch.ai.kr" },
       areaServed: "KR",
-      url: "https://finch.kr/instagram",
+      url: "https://finch.ai.kr/instagram",
       description:
         "핀치의 인스타그램 분석은 공식 Graph API를 기반으로 팔로워 추이, 참여율, 도달·노출수, 인기 게시물과 릴스 성과, 경쟁사 계정 비교까지 하나의 대시보드에서 확인하는 인스타그램 분석 도구입니다.",
     },
     {
       "@type": "BreadcrumbList",
       itemListElement: [
-        { "@type": "ListItem", position: 1, name: "홈", item: "https://finch.kr/" },
-        { "@type": "ListItem", position: 2, name: "인스타그램 분석", item: "https://finch.kr/instagram" },
+        { "@type": "ListItem", position: 1, name: "홈", item: "https://finch.ai.kr/" },
+        { "@type": "ListItem", position: 2, name: "인스타그램 분석", item: "https://finch.ai.kr/instagram" },
       ],
     },
     {

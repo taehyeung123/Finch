@@ -12,9 +12,9 @@ import { SettingsNav } from "../_components/settings-nav";
 */
 
 const MEMBERS = [
-  { name: "김민지", email: "minji@finch.kr", role: "소유자" },
-  { name: "이재현", email: "jaehyun@finch.kr", role: "에디터" },
-  { name: "박소연", email: "soyeon@finch.kr", role: "뷰어" },
+  { name: "김민지", email: "minji@finch.ai.kr", role: "소유자" },
+  { name: "이재현", email: "jaehyun@finch.ai.kr", role: "에디터" },
+  { name: "박소연", email: "soyeon@finch.ai.kr", role: "뷰어" },
 ] as const;
 
 export default function TeamSettingsPage() {

@@ -70,14 +70,14 @@ const JSON_LD = {
       "@type": "WebSite",
       name: "핀치",
       alternateName: ["핀치 (Finch)", "Finch"],
-      url: "https://finch.kr",
+      url: "https://finch.ai.kr",
     },
     {
       "@type": "Organization",
       name: "핀치 (Finch)",
       alternateName: ["핀치", "Finch"],
-      url: "https://finch.kr",
-      logo: "https://finch.kr/brand/finch-mark-coral.svg",
+      url: "https://finch.ai.kr",
+      logo: "https://finch.ai.kr/brand/finch-mark-coral.svg",
       description: "인스타그램·틱톡·쓰레드 통합 분석 & 메타광고 관리 플랫폼",
       // TODO: 공식 SNS 계정 개설 후 sameAs 배열 추가
     },

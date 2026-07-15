@@ -122,18 +122,18 @@ const JSON_LD = {
       "@type": "Service",
       name: "인스타 댓글 자동 DM",
       serviceType: "인스타그램 댓글 자동 응답 메시지 도구",
-      provider: { "@type": "Organization", name: "핀치 (Finch)", url: "https://finch.kr" },
+      provider: { "@type": "Organization", name: "핀치 (Finch)", url: "https://finch.ai.kr" },
       areaServed: "KR",
-      url: "https://finch.kr/instagram/auto-dm",
+      url: "https://finch.ai.kr/instagram/auto-dm",
       description:
         "인스타그램 게시물에 특정 키워드 댓글이 달리면 공식 메시지 API로 자동 DM을 발송하는 기능입니다. 게시물마다 다른 메시지를 설정할 수 있으며 콘텐츠 마케터·광고대행사·인플루언서·쇼핑몰이 사용합니다.",
     },
     {
       "@type": "BreadcrumbList",
       itemListElement: [
-        { "@type": "ListItem", position: 1, name: "홈", item: "https://finch.kr/" },
-        { "@type": "ListItem", position: 2, name: "인스타그램 분석", item: "https://finch.kr/instagram" },
-        { "@type": "ListItem", position: 3, name: "댓글 자동 DM", item: "https://finch.kr/instagram/auto-dm" },
+        { "@type": "ListItem", position: 1, name: "홈", item: "https://finch.ai.kr/" },
+        { "@type": "ListItem", position: 2, name: "인스타그램 분석", item: "https://finch.ai.kr/instagram" },
+        { "@type": "ListItem", position: 3, name: "댓글 자동 DM", item: "https://finch.ai.kr/instagram/auto-dm" },
       ],
     },
     {
