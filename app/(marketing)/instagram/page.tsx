@@ -189,8 +189,21 @@ export default function InstagramAnalysisPage() {
         </section>
       ))}
 
-      {/* 콜아웃 — 방문자 확인 페이지 연결 */}
-      <section className="mx-auto max-w-4xl px-4 pb-14 md:px-6">
+      {/* 콜아웃 — 자동 DM · 방문자 확인 페이지 연결 */}
+      <section className="mx-auto max-w-4xl space-y-4 px-4 pb-14 md:px-6">
+        <Reveal>
+          <Card className="flex flex-col items-start justify-between gap-4 p-6 sm:flex-row sm:items-center">
+            <div>
+              <h3 className="text-[17px] font-bold">댓글에 자동으로 DM을 보내고 싶으신가요?</h3>
+              <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-fg-sub">
+                게시물에 키워드 댓글이 달리면 인스타그램 공식 API로 자동 DM을 보내는 방법을 정리했습니다.
+              </p>
+            </div>
+            <ButtonLink href="/instagram/auto-dm" variant="secondary" className="shrink-0">
+              자동 DM 알아보기 <ArrowRight className="size-4" aria-hidden />
+            </ButtonLink>
+          </Card>
+        </Reveal>
         <Reveal>
           <Card className="flex flex-col items-start justify-between gap-4 p-6 sm:flex-row sm:items-center">
             <div>
