@@ -72,7 +72,7 @@ export default function CompetitorsPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
-        title="경쟁사"
+        title="경쟁사 비교"
         description="경쟁 계정의 성장 흐름과 콘텐츠 성과를 내 계정과 나란히 확인하세요."
         action={
           <Button size="sm" onClick={() => inputRef.current?.focus()}>

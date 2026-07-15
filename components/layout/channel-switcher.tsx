@@ -27,7 +27,7 @@ const SCOPES: { prefix: string; scope: ChannelScope }[] = [
       mode: "indicator",
       icon: "instagram",
       label: "Instagram 기준",
-      hint: "오디언스 분석은 현재 인스타그램 공식 지표 기준입니다. 틱톡·쓰레드는 부분 지원으로 순차 확장됩니다.",
+      hint: "팔로워 분석은 현재 인스타그램 공식 지표 기준입니다. 틱톡·쓰레드는 부분 지원으로 순차 확장됩니다.",
     },
   },
   {

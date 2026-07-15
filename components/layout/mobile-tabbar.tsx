@@ -9,7 +9,7 @@ import { cn } from "@/lib/cn";
 const TABS = [
   { href: "/dashboard", label: "홈", icon: LayoutDashboard },
   { href: "/analyze", label: "분석", icon: FileSearch },
-  { href: "/discover", label: "탐색", icon: Compass },
+  { href: "/discover", label: "트렌드", icon: Compass },
   { href: "/ads", label: "광고", icon: Megaphone },
   { href: "/settings", label: "더보기", icon: MoreHorizontal },
 ] as const;

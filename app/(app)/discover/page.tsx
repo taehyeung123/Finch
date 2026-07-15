@@ -79,7 +79,7 @@ export default function DiscoverPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
-        title="탐색"
+        title="트렌드 탐색"
         description="지금 뜨는 콘텐츠를 카테고리와 채널별로 살펴보세요."
         action={<DataSourceNote />}
       />

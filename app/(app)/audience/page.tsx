@@ -28,10 +28,10 @@ export default function AudiencePage() {
   if (audienceDaily.length === 0) {
     return (
       <div className="mx-auto max-w-6xl space-y-6">
-        <PageHeader title="오디언스" description="내 프로필을 찾아오는 흐름을 공식 지표로 분석합니다." />
+        <PageHeader title="팔로워 분석" description="내 프로필을 찾아오는 흐름을 공식 지표로 분석합니다." />
         <EmptyState
           icon={ShieldAlert}
-          title="채널을 연동하면 오디언스 분석이 시작돼요"
+          title="채널을 연동하면 팔로워 분석이 시작돼요"
           description="인스타그램 계정을 연동하면 프로필 조회수, 팔로워 증감, 자주 반응하는 팬 랭킹이 여기에 표시됩니다."
         />
       </div>
@@ -54,7 +54,7 @@ export default function AudiencePage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
-        title="오디언스"
+        title="팔로워 분석"
         description="내 프로필을 찾아오는 흐름을 공식 지표로 분석합니다."
         action={
           <div className="flex items-center gap-2">
@@ -92,7 +92,7 @@ export default function AudiencePage() {
       </Card>
 
       {/* 요약 지표 */}
-      <section aria-label="오디언스 요약" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <section aria-label="팔로워 분석 요약" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
           label="프로필 조회수"
           value={formatCompact(profileViews)}
