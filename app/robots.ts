@@ -12,6 +12,7 @@ const APP_ROUTES = [
   "/discover",
   "/competitors",
   "/ads",
+  "/auto-dm",
   "/studio",
   "/reports",
   "/notifications",

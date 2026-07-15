@@ -48,6 +48,15 @@ const SCOPES: { prefix: string; scope: ChannelScope }[] = [
       hint: "광고 관리는 Meta 광고 계정(Facebook·Instagram 게재) 기능입니다.",
     },
   },
+  {
+    prefix: "/auto-dm",
+    scope: {
+      mode: "indicator",
+      icon: "instagram",
+      label: "Instagram 전용",
+      hint: "댓글 자동 DM은 인스타그램 메시지 API 기반 기능입니다. 스레드·틱톡은 서드파티 DM 발송을 지원하지 않아 제외됩니다.",
+    },
+  },
   /* 탐색은 페이지 안에 자체 채널 필터가 있어 상단 중복 제거,
      분석·경쟁사 계정·스튜디오·리포트·알림·설정은 채널 필터 개념이 없음 → hidden */
 ];
