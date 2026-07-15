@@ -22,10 +22,10 @@
 **채우는 것**: Google/카카오 로그인 실동작, `notifications`·`reports`·`usageStats`·경쟁사 등록 목록 등 서비스 내부 데이터 전부.
 
 1. https://supabase.com/dashboard 에서 새 프로젝트 생성 (무료 슬롯이 없으면 기존 프로젝트 하나 일시정지 후 생성)
-2. Google/Kakao 로그인 키 발급·등록 — 상세 절차는 `docs/AUTH_SETUP.md` 체크리스트 그대로
-3. `.env.local`에 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` 입력 → 로그인 즉시 동작 (코드 수정 불필요)
-4. DB 스키마 마이그레이션 작성 (Claude Code 작업): `users_profile`, `connected_accounts`(토큰 암호화), `competitors`, `competitor_ads_snapshot`, `notifications`, `usage_counters`, `reports`
-5. `lib/data/index.ts`의 내부 데이터 export를 Supabase 조회로 교체
+2. **DB 스키마 마이그레이션 적용 — 이미 작성 완료**: `supabase/migrations/0001_core.sql`~`0003_functions.sql` (users_profile·connected_accounts·usage_counters·notifications·reports·auto_dm_*·use_quota 함수, RLS 포함). 적용 순서·방법은 `supabase/README.md`.
+3. Google/Kakao 로그인 키 발급·등록 — 상세 절차는 `docs/AUTH_SETUP.md` 체크리스트 그대로
+4. `.env.local`에 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` 입력 → 로그인 즉시 동작 (코드 수정 불필요)
+5. `lib/data/index.ts`의 내부 데이터 export를 Supabase 조회로 교체 (competitors·competitor_ads_snapshot 등 채널/광고 테이블은 해당 API 연동 시 추가 마이그레이션)
 
 ## 2. Anthropic Claude API — AI 기능 (심사 불필요, 가장 빨리 "진짜"가 되는 기능)
 
