@@ -25,6 +25,7 @@ import { DataSourceNote } from "@/components/ui/data-source-note";
 import { formatCompact } from "@/lib/format";
 import { ideaSuggestions, trendItems, TREND_CATEGORIES } from "@/lib/data";
 import type { Channel, IdeaSuggestion, TrendItem } from "@/lib/types";
+import { generateCardNews, generateIdeas } from "./actions";
 
 type StudioTab = "cards" | "video" | "ideas";
 
@@ -229,31 +230,83 @@ export default function StudioPage() {
   const [topic, setTopic] = useState("");
   const [tone, setTone] = useState<BrandTone>("friendly");
   const [slides, setSlides] = useState<Slide[] | null>(null);
+  const [slidesFromAi, setSlidesFromAi] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
   const [ideaKeyword, setIdeaKeyword] = useState("");
   const [ideaCategory, setIdeaCategory] = useState<string>("전체");
   const [ideaResult, setIdeaResult] = useState<IdeaSearchResult | null>(null);
+  const [ideasFromAi, setIdeasFromAi] = useState(false);
+  const [finding, setFinding] = useState(false);
+  const [ideaError, setIdeaError] = useState<string | null>(null);
 
-  const handleGenerate = () => {
-    if (!topic.trim()) return;
-    setSlides(buildSlides(topic, tone));
+  // Claude API 실호출 — 키 미설정/데모 모드면 서버가 fallback 신호를 주고 템플릿 생성으로 동작
+  const handleGenerate = async () => {
+    if (!topic.trim() || generating) return;
+    setGenerating(true);
+    setGenError(null);
+    try {
+      const result = await generateCardNews(topic, tone);
+      if (result.ok) {
+        setSlides(result.slides.map((s, i) => ({ no: i + 1, head: s.head, sub: s.sub })));
+        setSlidesFromAi(true);
+      } else if (result.fallback) {
+        setSlides(buildSlides(topic, tone));
+        setSlidesFromAi(false);
+      } else {
+        setGenError(result.error);
+      }
+    } catch {
+      // 네트워크 등 예외 — 템플릿으로라도 결과를 보여준다
+      setSlides(buildSlides(topic, tone));
+      setSlidesFromAi(false);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const handleUseIdea = (ideaTopic: string) => {
     setTopic(ideaTopic);
     setSlides(null);
+    setGenError(null);
     setTab("cards");
   };
 
-  const handleFindIdeas = () => {
+  const handleFindIdeas = async () => {
     const kw = ideaKeyword.trim();
-    if (!kw) return;
+    if (!kw || finding) return;
+    setFinding(true);
+    setIdeaError(null);
     const related = findRelatedTrends(kw, ideaCategory);
-    setIdeaResult({
-      keyword: kw,
-      category: ideaCategory,
-      related,
-      ideas: buildIdeas(kw, ideaCategory, related),
-    });
+    try {
+      const result = await generateIdeas(kw, ideaCategory);
+      if (result.ok) {
+        setIdeaResult({
+          keyword: kw,
+          category: ideaCategory,
+          related,
+          ideas: result.ideas.map((i, idx) => ({
+            id: `ai-${idx}`,
+            title: i.title,
+            reason: i.reason,
+            format: i.format,
+            channels: i.channels,
+            engagement: i.engagement,
+          })),
+        });
+        setIdeasFromAi(true);
+      } else if (result.fallback) {
+        setIdeaResult({ keyword: kw, category: ideaCategory, related, ideas: buildIdeas(kw, ideaCategory, related) });
+        setIdeasFromAi(false);
+      } else {
+        setIdeaError(result.error);
+      }
+    } catch {
+      setIdeaResult({ keyword: kw, category: ideaCategory, related, ideas: buildIdeas(kw, ideaCategory, related) });
+      setIdeasFromAi(false);
+    } finally {
+      setFinding(false);
+    }
   };
 
   const handleResetIdeas = () => {
@@ -314,12 +367,17 @@ export default function StudioPage() {
                   </select>
                 </div>
                 <div className="md:self-end">
-                  <Button onClick={handleGenerate} disabled={!topic.trim()} className="w-full md:w-auto">
+                  <Button onClick={handleGenerate} disabled={!topic.trim() || generating} className="w-full md:w-auto">
                     <Sparkles className="size-4" aria-hidden />
-                    생성하기
+                    {generating ? "생성 중..." : "생성하기"}
                   </Button>
                 </div>
               </div>
+              {genError ? (
+                <p role="alert" className="rounded-card bg-negative-weak px-3 py-2 text-[13px] text-negative">
+                  {genError}
+                </p>
+              ) : null}
               <p className="inline-flex items-center gap-1.5 text-xs text-fg-faint">
                 <span className="size-2 rounded-full bg-primary" aria-hidden />
                 템플릿 색상은 브랜드 코랄로 고정되어 있어요. 커스텀 팔레트는 이후 단계에서 제공됩니다.
@@ -331,7 +389,8 @@ export default function StudioPage() {
             <Card>
               <CardHeader
                 title="생성 결과"
-                description={`"${topic.trim()}" · ${TONE_OPTIONS.find((o) => o.value === tone)?.label} 톤 · 5장 구성`}
+                description={`"${topic.trim()}" · ${TONE_OPTIONS.find((o) => o.value === tone)?.label} 톤 · ${slides.length}장 구성`}
+                action={<Badge tone={slidesFromAi ? "primary" : "neutral"}>{slidesFromAi ? "AI 생성" : "템플릿 (연동 전)"}</Badge>}
               />
               <CardBody className="space-y-5">
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -469,13 +528,18 @@ export default function StudioPage() {
                 </label>
                 <Button
                   onClick={handleFindIdeas}
-                  disabled={!ideaKeyword.trim()}
+                  disabled={!ideaKeyword.trim() || finding}
                   className="md:shrink-0"
                 >
                   <Sparkles className="size-4" aria-hidden />
-                  아이디어 찾기
+                  {finding ? "생성 중..." : "아이디어 찾기"}
                 </Button>
               </div>
+              {ideaError ? (
+                <p role="alert" className="rounded-card bg-negative-weak px-3 py-2 text-[13px] text-negative">
+                  {ideaError}
+                </p>
+              ) : null}
               <ChipFilter
                 options={TREND_CATEGORIES.map((c) => ({ value: c, label: c }))}
                 value={ideaCategory}
@@ -553,6 +617,7 @@ export default function StudioPage() {
                   <Lightbulb className="size-4 text-primary" aria-hidden />
                   <h3 className="text-[15px] font-bold">맞춤 아이디어</h3>
                   <DataSourceBadge source="internal" />
+                  <Badge tone={ideasFromAi ? "primary" : "neutral"}>{ideasFromAi ? "AI 생성" : "템플릿 (연동 전)"}</Badge>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {ideaResult.ideas.map((idea) => (
