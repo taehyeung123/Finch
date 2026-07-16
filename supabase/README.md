@@ -6,8 +6,10 @@
 
 1. **프로젝트 생성**: 핀치 전용 조직을 새로 만들고 Pro로 업그레이드한 뒤, 그 조직에 프로젝트 생성 (레드랭크·뷰스코프 무료 조직은 그대로 둠).
 2. **마이그레이션 실행** — 둘 중 하나:
-   - **간단**: 대시보드 > SQL Editor에 `migrations/0001_core.sql` → `0002_auto_dm.sql` → `0003_functions.sql` 순서로 붙여넣고 Run.
-   - **CLI**: `supabase link --project-ref <ref>` 후 `supabase db push` (파일명 순서대로 적용됨).
+   - **가장 간단**: 대시보드 > SQL Editor에 **`apply_all.sql`(0001~0004 통합본) 하나만** 통째로 붙여넣고 Run.
+     주의: 에디터에서 텍스트가 일부 선택돼 있으면 선택 부분만 실행되어 "syntax error at end of input"이 난다 —
+     붙여넣은 직후 아무것도 드래그하지 말고 바로 Run. RLS 경고가 뜨면 "Run without RLS"(스크립트가 직접 RLS를 켠다).
+   - **CLI**: `supabase link --project-ref <ref>` 후 `supabase db push` (migrations/ 파일명 순서대로 적용됨).
 3. **인증 설정**: Google/Kakao 로그인 키 등록 — 절차는 [`../docs/AUTH_SETUP.md`](../docs/AUTH_SETUP.md).
 4. **환경변수**: `.env.local`에 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` 입력 → 로그인·DB 즉시 동작(코드 수정 불필요, 데모 모드 자동 해제).
 
