@@ -151,8 +151,8 @@ export function NotificationsClient({ initial }: { initial: AppNotification[] })
         />
       )}
 
-      {/* 경쟁사 광고·트렌드 알림은 제휴 데이터 기반 (PART 3, 4.4) */}
-      <DataSourceNote source="Meta 광고 라이브러리 · 제휴 데이터 공급사" />
+      {/* 경쟁사 광고·트렌드 알림은 공개·제휴 데이터 기반 (PART 3, 4.4) */}
+      <DataSourceNote source="제휴 데이터 공급사 · 공개 데이터 기반" />
     </div>
   );
 }

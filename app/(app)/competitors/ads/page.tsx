@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
-import { BellRing, Image as ImageIcon, Images, Info, Video } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, BellRing, Image as ImageIcon, Images, Info, Video } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge, DataSourceBadge } from "@/components/ui/badge";
@@ -35,11 +36,30 @@ export default function CompetitorAdsPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title="경쟁사 광고 모니터링"
-        description="Meta 광고 라이브러리 공식 API 기반으로 등록한 페이지의 새 광고를 자동 감지합니다."
-        action={<DataSourceBadge source="official" />}
+        description="Meta 광고 라이브러리에 공개된 경쟁사 광고를 모니터링합니다. 아래 지역 제약 안내를 확인하세요."
+        action={<DataSourceBadge source="thirdparty" />}
       />
 
       <CompetitorTabs current="ads" />
+
+      {/* 지역 제약 고지 — Meta Ad Library API는 KR 상업광고를 제공하지 않는다 (docs/REAL_API_SPEC.md 3절) */}
+      <Card className="flex items-start gap-3 border-warning/40 p-5">
+        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-card bg-warning-weak text-warning">
+          <AlertTriangle className="size-4" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <p className="text-[14px] font-semibold">한국 상업 광고는 Meta 광고 라이브러리 API로 자동 수집되지 않습니다</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-fg-sub">
+            Meta는 2023년 DSA 이후 상업(비정치) 광고를 EU·영국 노출 광고에 한해서만 API로 제공합니다. 한국을 포함한
+            그 외 지역은 정치·사회 이슈 광고만 조회할 수 있어, 한국 브랜드의 광고는 자동 수집 대상이 아닙니다. 아래 피드는
+            기능 예시이며, 한국 경쟁사는{" "}
+            <Link href="/competitors" className="font-semibold text-primary underline underline-offset-2">
+              경쟁사 비교
+            </Link>{" "}
+            탭의 공개 프로필·게시물 지표로 분석하는 것을 권장합니다.
+          </p>
+        </div>
+      </Card>
 
       {/* 모니터링 중인 페이지 요약 (PART 4.6) */}
       <Card>
@@ -51,7 +71,7 @@ export default function CompetitorAdsPage() {
               추적하고 있습니다.
             </>
           }
-          action={<DataSourceNote source="Meta 광고 라이브러리 공식 API" />}
+          action={<DataSourceNote source="Meta 광고 라이브러리 (EU·영국 노출 광고 한정)" />}
         />
         <CardBody className="flex flex-wrap gap-1.5">
           {monitoredPages.map((page) => (
@@ -134,10 +154,10 @@ export default function CompetitorAdsPage() {
             <Info className="size-4" aria-hidden />
           </span>
           <div>
-            <p className="text-[14px] font-semibold">광고비(스펜드)는 표시되지 않습니다</p>
+            <p className="text-[14px] font-semibold">광고비(스펜드)·노출수는 상업 광고에 제공되지 않습니다</p>
             <p className="mt-1 text-[13px] leading-relaxed text-fg-sub">
-              Meta 광고 라이브러리는 한국 지역 광고의 집행 금액을 비공개 정책으로 제공하지 않습니다. 노출수
-              구간, 게재 기간, 노출 플랫폼 등 공개 지표만 표시합니다.
+              Meta 광고 라이브러리 API는 집행 금액·노출수를 정치·사회 이슈 광고에만 범위값으로 제공합니다. 상업
+              광고는 소재·게재 기간·노출 플랫폼 등 공개 항목만 확인할 수 있습니다.
             </p>
           </div>
         </Card>
