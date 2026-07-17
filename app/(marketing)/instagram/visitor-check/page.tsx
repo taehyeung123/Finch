@@ -5,9 +5,19 @@ import { ButtonLink } from "@/components/ui/button";
 import { FaqAccordion, type FaqItem } from "@/components/landing/faq";
 
 export const metadata: Metadata = {
-  title: "인스타 방문자 확인, 정말 가능할까? — 인스타그램 방문자 분석 정직 가이드",
+  title: "인스타 방문자 분석 — 누가 내 인스타 봤는지 확인, 정말 가능할까?",
   description:
-    "인스타그램 방문자 확인, 누가 내 인스타 봤는지 궁금하신가요? 공식 API로는 불가능한 이유와 인스타 언팔로우 확인·가짜 팔로워 확인의 진실을 핀치가 정직하게 설명합니다. 실제로 확인 가능한 대안도 함께 안내해드립니다.",
+    "인스타 방문자 분석, 누가 내 인스타 봤는지 궁금하신가요? 인스타 방문자 확인·몰래보기 앱이 공식 API로는 불가능한 이유와 인스타 언팔로우 확인·가짜 팔로워 확인의 진실을 핀치가 정직하게 설명합니다. 실제로 확인 가능한 대안도 함께 안내해드립니다.",
+  keywords: [
+    "인스타 방문자 분석",
+    "인스타 방문자 확인",
+    "인스타 방문자 보는법",
+    "인스타 몰래보기",
+    "인스타 프로필 방문자",
+    "인스타 언팔로우 확인",
+    "인스타 언팔 확인",
+    "인스타 가짜 팔로워 확인",
+  ],
   alternates: { canonical: "/instagram/visitor-check" },
 };
 
@@ -15,6 +25,10 @@ const FAQ_ITEMS: FaqItem[] = [
   {
     q: "인스타 방문자 확인 앱은 다 가짜인가요?",
     a: "네, 사실상 그렇게 봐야 합니다. 인스타그램 공식 API는 프로필 방문자의 개인 식별 정보를 어떤 외부 서비스에도 제공하지 않기 때문에, 방문자 목록을 보여준다는 앱은 무작위로 생성한 추측성 데이터를 보여주거나 실제로는 다른 목적으로 개인정보를 수집하는 경우가 대부분입니다.",
+  },
+  {
+    q: "인스타 몰래보기 앱은 안전한가요?",
+    a: "안전하지 않습니다. 인스타 몰래보기(비공개 계정 열람, 스토리 몰래보기 등)를 내세우는 앱은 인스타그램 공식 API가 제공하지 않는 기능을 광고하는 것이라, 로그인 정보를 요구하거나 가짜 결과를 보여주는 방식이 대부분입니다. 계정 정지와 개인정보 유출 위험이 있어 사용하지 않는 것이 좋습니다.",
   },
   {
     q: "인스타 언팔로우 확인 앱 써도 되나요?",
@@ -42,7 +56,7 @@ const JSON_LD = {
         {
           "@type": "ListItem",
           position: 3,
-          name: "방문자 확인",
+          name: "방문자 분석",
           item: "https://finch.ai.kr/instagram/visitor-check",
         },
       ],
@@ -89,14 +103,14 @@ export default function VisitorCheckPage() {
           인스타그램 분석
         </Link>
         <span className="mx-1.5">/</span>
-        <span className="text-fg-sub">방문자 확인</span>
+        <span className="text-fg-sub">방문자 분석</span>
       </nav>
 
       {/* 히어로 */}
       <section className="mx-auto max-w-3xl px-4 pb-10 pt-6 md:px-6">
         <p className="text-[13px] font-semibold text-primary">인스타그램 방문자·언팔로우 분석</p>
         <h1 className="mt-3 text-3xl font-bold leading-[1.25] tracking-tight md:text-4xl">
-          인스타그램 방문자 확인, 정말 가능한가요?
+          인스타 방문자 분석, 어디까지 가능한가요?
         </h1>
 
         {/* GEO: 자기완결적 직답 문단 — 경고 톤 카드 */}
@@ -116,8 +130,9 @@ export default function VisitorCheckPage() {
           <div>
             <h2 className="text-xl font-bold md:text-2xl">인스타 방문자 보는법이라는 앱들, 정체가 뭔가요?</h2>
             <p className="mt-4 text-[15px] leading-relaxed text-fg-sub">
-              &ldquo;인스타 방문자 분석&rdquo;, &ldquo;인스타 방문자 보는법&rdquo;, &ldquo;인스타 프로필
-              방문자&rdquo;를 검색하면 방문자 목록을 보여준다는 앱과 웹사이트가 여럿 나옵니다. 하지만
+              &ldquo;인스타 방문자 분석&rdquo;, &ldquo;인스타 방문자 보는법&rdquo;, &ldquo;인스타
+              몰래보기&rdquo;, &ldquo;인스타 프로필 방문자&rdquo;를 검색하면 방문자 목록을 보여준다는 앱과
+              웹사이트가 여럿 나옵니다. 하지만
               인스타그램 공식 API는 프로필 조회 로그 자체를 외부에 공개한 적이 없습니다. 이런 서비스가
               방문자를 &lsquo;보여주는&rsquo; 방식은 크게 두 가지뿐입니다.
             </p>

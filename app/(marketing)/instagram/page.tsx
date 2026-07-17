@@ -200,7 +200,7 @@ export default function InstagramAnalysisPage() {
               </p>
             </div>
             <ButtonLink href="/instagram/auto-dm" variant="secondary" className="shrink-0">
-              자동 DM 알아보기 <ArrowRight className="size-4" aria-hidden />
+              인스타 자동디엠 알아보기 <ArrowRight className="size-4" aria-hidden />
             </ButtonLink>
           </Card>
         </Reveal>

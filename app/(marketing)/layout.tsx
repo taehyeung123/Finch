@@ -88,12 +88,12 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
               </li>
               <li>
                 <Link href="/instagram/auto-dm" className="hover:text-fg">
-                  댓글 자동 DM
+                  인스타 자동디엠
                 </Link>
               </li>
               <li>
                 <Link href="/instagram/visitor-check" className="hover:text-fg">
-                  인스타 방문자 확인
+                  인스타 방문자 분석
                 </Link>
               </li>
               <li>

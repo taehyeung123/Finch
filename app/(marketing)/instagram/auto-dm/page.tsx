@@ -8,10 +8,12 @@ import { Reveal } from "@/components/landing/reveal";
 import { AppIconTile, InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 
 export const metadata: Metadata = {
-  title: "인스타 댓글 자동 DM — 키워드 남기면 자동 응답 메시지 발송 (ManyChat 대안)",
+  title: "인스타 자동디엠 — 댓글 키워드에 자동 DM 발송 (ManyChat 대안)",
   description:
-    "인스타그램 게시물에 특정 키워드 댓글이 달리면 자동으로 DM을 보내는 댓글 자동 DM 기능입니다. 게시물마다 다른 메시지를 설정하고, 공식 인스타그램 메시지 API로 안전하게 발송합니다. 콘텐츠 마케터·광고대행사·인플루언서·쇼핑몰을 위한 인스타 자동 응답 도구, 핀치에서 만나보세요.",
+    "인스타 자동디엠(자동 DM)은 인스타그램 게시물에 특정 키워드 댓글이 달리면 자동으로 DM을 보내주는 기능입니다. 게시물마다 다른 메시지를 설정하고, 공식 인스타그램 메시지 API로 안전하게 발송합니다. 콘텐츠 마케터·광고대행사·인플루언서·쇼핑몰을 위한 인스타 자동 응답 도구, 핀치에서 만나보세요.",
   keywords: [
+    "인스타 자동디엠",
+    "인스타 자동 DM",
     "인스타 댓글 자동 DM",
     "인스타그램 자동 응답 메시지",
     "댓글 DM 자동화",
@@ -27,7 +29,7 @@ export const metadata: Metadata = {
 /* GEO 인용 대비 자기완결형 질문·답변 (PART 13.3) */
 const HOW_SECTIONS: { q: string; body: string[]; points: string[] }[] = [
   {
-    q: "인스타 댓글 자동 DM, 어떻게 작동하나요?",
+    q: "인스타 자동디엠, 어떻게 작동하나요?",
     body: [
       "인스타그램 게시물에 댓글이 달리면, 미리 설정한 조건에 맞을 때 자동으로 다이렉트 메시지(DM)를 보내주는 기능입니다. 예를 들어 게시물에 '정보'나 '구매'라는 단어가 포함된 댓글이 달리면, 상세 페이지 링크가 담긴 DM이 즉시 발송됩니다.",
       "핀치는 인스타그램 공식 메시지 API를 사용합니다. 아이디·비밀번호를 넘겨받는 비공식 매크로 방식이 아니라, 메타가 허용하는 범위 안에서 안전하게 동작합니다.",
@@ -120,20 +122,20 @@ const JSON_LD = {
   "@graph": [
     {
       "@type": "Service",
-      name: "인스타 댓글 자동 DM",
+      name: "인스타 자동디엠",
       serviceType: "인스타그램 댓글 자동 응답 메시지 도구",
       provider: { "@type": "Organization", name: "핀치 (Finch)", url: "https://finch.ai.kr" },
       areaServed: "KR",
       url: "https://finch.ai.kr/instagram/auto-dm",
       description:
-        "인스타그램 게시물에 특정 키워드 댓글이 달리면 공식 메시지 API로 자동 DM을 발송하는 기능입니다. 게시물마다 다른 메시지를 설정할 수 있으며 콘텐츠 마케터·광고대행사·인플루언서·쇼핑몰이 사용합니다.",
+        "인스타 자동디엠은 인스타그램 게시물에 특정 키워드 댓글이 달리면 공식 메시지 API로 자동 DM을 발송하는 기능입니다. 게시물마다 다른 메시지를 설정할 수 있으며 콘텐츠 마케터·광고대행사·인플루언서·쇼핑몰이 사용합니다.",
     },
     {
       "@type": "BreadcrumbList",
       itemListElement: [
         { "@type": "ListItem", position: 1, name: "홈", item: "https://finch.ai.kr/" },
         { "@type": "ListItem", position: 2, name: "인스타그램 분석", item: "https://finch.ai.kr/instagram" },
-        { "@type": "ListItem", position: 3, name: "댓글 자동 DM", item: "https://finch.ai.kr/instagram/auto-dm" },
+        { "@type": "ListItem", position: 3, name: "인스타 자동디엠", item: "https://finch.ai.kr/instagram/auto-dm" },
       ],
     },
     {
@@ -164,7 +166,7 @@ export default function AutoDmPage() {
           인스타그램 분석
         </Link>
         <span className="mx-1.5">/</span>
-        <span className="text-fg-sub">댓글 자동 DM</span>
+        <span className="text-fg-sub">인스타 자동디엠</span>
       </nav>
 
       {/* 히어로 */}
@@ -174,11 +176,11 @@ export default function AutoDmPage() {
           인스타그램 댓글 자동 응답
         </div>
         <h1 className="mt-3 text-3xl font-bold leading-[1.25] tracking-tight md:text-4xl">
-          인스타 댓글 자동 DM, 키워드 하나로 문의를 판매로
+          인스타 자동디엠, 키워드 하나로 문의를 판매로
         </h1>
         {/* GEO: 자기완결적 정의 문단 */}
         <p className="mt-5 text-[17px] leading-relaxed text-fg-sub">
-          인스타 댓글 자동 DM은 게시물에 특정 키워드 댓글이 달리면 인스타그램 공식 메시지 API로 자동
+          인스타 자동디엠(자동 DM)은 게시물에 특정 키워드 댓글이 달리면 인스타그램 공식 메시지 API로 자동
           다이렉트 메시지를 보내주는 기능입니다. 게시물마다 다른 메시지를 설정할 수 있어, 반복되는 문의
           응대를 자동화하고 관심 있는 사람에게 바로 링크와 안내를 전달합니다.
         </p>
