@@ -98,12 +98,18 @@ Facebook Login 경로 값이라 혼용 금지.
 
 ## 4. Toss Payments (테스트 모드, v2 결제위젯)
 
-패키지: `@tosspayments/tosspayments-sdk` (v2, ~2.5.x). v1 `loadPaymentWidget`/`@tosspayments/payment-widget-sdk`와 혼용 금지.
+패키지: `@tosspayments/tosspayments-sdk` (v2, ~2.7.x). v1 `loadPaymentWidget`/`@tosspayments/payment-widget-sdk`와 혼용 금지.
+
+### 키 세트 (중요)
+
+v2 결제위젯은 **'결제위젯 연동 키'** 세트를 쓴다: 클라이언트 `test_gck_...`, 시크릿 `test_gsk_...`.
+(`test_ck_`/`test_sk_`는 '결제창·브랜드페이'용 **API 개별 연동 키**라 위젯에 쓰면 NOT_REGISTERED_PAYMENT_WIDGET/INVALID_API_KEY 오류.)
+클라이언트·시크릿은 반드시 같은 세트로 짝지어 쓴다. 발급: 개발자센터 > 내 개발정보 > API 키.
 
 ### 클라이언트 (결제 요청)
 
 ```
-const tossPayments = await loadTossPayments(clientKey);   // test_ck_...
+const tossPayments = await loadTossPayments(clientKey);   // test_gck_...
 const widgets = tossPayments.widgets({ customerKey });     // 게스트는 ANONYMOUS
 await widgets.setAmount({ currency: "KRW", value });        // v2는 객체 인자
 await widgets.renderPaymentMethods({ selector: "#payment-method", variantKey: "DEFAULT" });
@@ -116,7 +122,7 @@ await widgets.requestPayment({ orderId, orderName, successUrl, failUrl });
 
 `POST https://api.tosspayments.com/v1/payments/confirm`
 - body `{ paymentKey, orderId, amount }`
-- 헤더 `Authorization: Basic base64(secretKey + ":")` — **콜론 필수**(빈 비번). test_sk_...
+- 헤더 `Authorization: Basic base64(secretKey + ":")` — **콜론 필수**(빈 비번). test_gsk_...
 - `Idempotency-Key` 헤더 권장(중복 승인 방지). 리다이렉트 후 **10분 이내** 호출.
 - **금액은 successUrl 쿼리/웹훅을 신뢰하지 말고** 내 DB에서 orderId로 조회한 값을 넘긴다.
 

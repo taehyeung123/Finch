@@ -2,8 +2,10 @@
  * Toss Payments 공통 설정 — 클라이언트 키(공개)·요금제 금액.
  * 실 스펙: docs/REAL_API_SPEC.md 4절.
  *
- * 클라이언트 키(NEXT_PUBLIC_TOSS_CLIENT_KEY, test_ck_...)는 공개 키라 클라이언트 노출 허용.
- * 시크릿 키(TOSS_SECRET_KEY, test_sk_...)는 lib/toss/server에서만 쓰고 절대 노출하지 않는다.
+ * v2 결제위젯을 쓰므로 '결제위젯 연동 키' 세트를 쓴다: 클라이언트 test_gck_..., 시크릿 test_gsk_...
+ * (test_ck_/test_sk_는 '결제창·브랜드페이'용 API 개별 연동 키라 위젯에 쓰면 오류).
+ * 클라이언트 키(NEXT_PUBLIC_TOSS_CLIENT_KEY)는 공개 키라 클라이언트 노출 허용.
+ * 시크릿 키(TOSS_SECRET_KEY)는 lib/toss/server에서만 쓰고 절대 노출하지 않는다. 클라·시크릿은 같은 세트로.
  */
 
 export type PaidPlan = "creator" | "pro" | "agency";
