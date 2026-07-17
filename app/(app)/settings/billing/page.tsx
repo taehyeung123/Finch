@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { UsageGauge } from "@/components/ui/charts";
 import { cn } from "@/lib/cn";
-import { planFeatures, usageStats } from "@/lib/data";
+import { planFeatures } from "@/lib/data";
+import { getUsageStats } from "@/lib/data/internal";
 import { SettingsNav } from "../_components/settings-nav";
 
 /*
@@ -43,7 +44,8 @@ function PlanAction({ plan }: { plan: (typeof PLANS)[number] }) {
   );
 }
 
-export default function BillingSettingsPage() {
+export default async function BillingSettingsPage() {
+  const usageStats = await getUsageStats();
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
