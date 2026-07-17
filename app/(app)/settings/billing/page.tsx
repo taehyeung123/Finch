@@ -2,7 +2,7 @@ import { CreditCard } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { UsageGauge } from "@/components/ui/charts";
 import { cn } from "@/lib/cn";
 import { planFeatures, usageStats } from "@/lib/data";
@@ -37,9 +37,9 @@ function PlanAction({ plan }: { plan: (typeof PLANS)[number] }) {
     );
   }
   return (
-    <Button size="sm" variant="primary">
+    <a href={`/settings/billing/checkout?plan=${plan.key}`} className={buttonClasses("primary", "sm")}>
       업그레이드
-    </Button>
+    </a>
   );
 }
 

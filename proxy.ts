@@ -50,14 +50,18 @@ function applySecurityHeaders(response: NextResponse) {
   // Supabase 설정 시 클라이언트 SDK의 auth 요청(fetch)을 위해 해당 오리진만 connect-src에 추가
   const supabaseOrigin = getSupabaseOrigin();
 
+  // Toss 결제위젯 — SDK 스크립트·위젯 iframe·API 호출이 tosspayments.com 서브도메인에서 이뤄진다
+  const toss = "https://*.tosspayments.com";
+
   // CSP — Pretendard 웹폰트(jsdelivr CDN)만 외부 허용. 개발 모드는 HMR 때문에 unsafe-eval 필요
   const csp = [
     "default-src 'self'",
-    `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+    `script-src 'self' 'unsafe-inline' ${toss}${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
     "font-src 'self' https://cdn.jsdelivr.net",
-    "img-src 'self' data: blob:",
-    `connect-src 'self'${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
+    `img-src 'self' data: blob: ${toss}`,
+    `connect-src 'self' ${toss}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
+    `frame-src ${toss}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",

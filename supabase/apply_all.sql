@@ -466,3 +466,35 @@ revoke all on function public.mark_optout(uuid, text) from public, anon, authent
 grant execute on function public.reserve_dm_send(uuid, uuid, text, text, integer) to service_role;
 grant execute on function public.finalize_dm_send(uuid, text, text, text) to service_role;
 grant execute on function public.mark_optout(uuid, text) to service_role;
+
+-- ═══════════════════════════════════════════════════════════════
+-- 0005_payments.sql — Toss 결제 주문 (테스트)
+-- ═══════════════════════════════════════════════════════════════
+
+create table if not exists public.payment_orders (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references auth.users(id) on delete cascade,
+  order_id      text not null unique,
+  plan          text not null check (plan in ('creator','pro','agency')),
+  amount        integer not null check (amount > 0),
+  order_name    text not null,
+  status        text not null default 'ready'
+                  check (status in ('ready','paid','failed','canceled')),
+  payment_key   text,
+  method        text,
+  approved_at   timestamptz,
+  raw           jsonb,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+alter table public.payment_orders enable row level security;
+
+create policy "own orders select" on public.payment_orders
+  for select using (auth.uid() = user_id);
+create policy "own orders insert" on public.payment_orders
+  for insert with check (auth.uid() = user_id);
+
+create index if not exists payment_orders_user_idx on public.payment_orders (user_id, created_at desc);
+
+create trigger trg_payment_orders_updated before update on public.payment_orders
+  for each row execute function public.set_updated_at();
