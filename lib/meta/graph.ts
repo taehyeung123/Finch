@@ -9,9 +9,15 @@
  * - 서버 전용: 액세스 토큰을 클라이언트로 절대 노출하지 않는다.
  */
 
-/** 그래프 API 버전 고정 — 업그레이드는 변경로그 확인 후 이 상수만 수정 */
-export const GRAPH_VERSION = "v23.0";
-const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+/**
+ * 그래프 API 버전 고정 — 업그레이드는 변경로그 확인 후 이 상수만 수정.
+ * 핀치는 "Instagram API with Instagram Login" 경로를 쓰므로 호스트는 graph.instagram.com이다
+ * (docs/REAL_API_SPEC.md 1절). Instagram Login으로 발급한 토큰은 graph.facebook.com에서 동작하지
+ * 않으므로 읽기·메시징 전부 이 베이스를 공유해야 한다.
+ */
+export const GRAPH_VERSION = "v25.0";
+export const GRAPH_INSTAGRAM_BASE = `https://graph.instagram.com/${GRAPH_VERSION}`;
+const GRAPH_BASE = GRAPH_INSTAGRAM_BASE;
 
 /** 발송 결과 — dm_sends.status 값과 1:1 매핑 */
 export type SendOutcome =

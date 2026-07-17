@@ -1,6 +1,7 @@
 import { NextResponse, after } from "next/server";
 import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { decryptToken } from "@/lib/crypto/tokens";
 import { sendPrivateReply, replyToComment } from "@/lib/meta/graph";
 import { applyAdDisclosure } from "@/lib/ads/ad-disclosure";
 import { isNightInKST, isOptOutMessage, pickRule, type CommentEvent, type MatchableRule } from "@/lib/auto-dm/match";
@@ -67,14 +68,8 @@ function hashRecipient(igUserId: string): string {
   return crypto.createHash("sha256").update(igUserId).digest("hex");
 }
 
-/**
- * 채널 토큰 복호화 — 암호화 방식(pgsodium/Vault vs 앱단 AES)은 OAuth 연동 시 확정.
- * TODO(API-last): 확정 전까지 null을 반환하고, 발송은 IG_TEST_ACCESS_TOKEN(개발자 모드)으로만 가능.
- */
-function decryptToken(cipher: string | null): string | null {
-  void cipher;
-  return null;
-}
+/* 채널 토큰 복호화는 lib/crypto/tokens.decryptToken(AES-256-GCM, 서버 전용) 사용.
+ * TOKEN_ENCRYPTION_KEY 미설정이거나 저장 토큰이 없으면 null → IG_TEST_ACCESS_TOKEN(개발자 모드) 폴백. */
 
 /* ── Meta 웹훅 페이로드 타입 (필요 필드만) ─────────────────────── */
 interface WebhookCommentValue {

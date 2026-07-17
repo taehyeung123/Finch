@@ -21,6 +21,11 @@ const sizes: Record<Size, string> = {
   lg: "h-12 px-6 text-base",
 };
 
+/** 버튼과 동일한 시각을 앵커(<a>) 등에 입힐 때 사용 — 라우트 핸들러로의 전체 이동 링크 등 */
+export function buttonClasses(variant: Variant = "primary", size: Size = "md", className?: string): string {
+  return cn(base, variants[variant], sizes[size], className);
+}
+
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: Size;
