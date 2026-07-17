@@ -136,12 +136,16 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           <div>
             <h3 className="text-[13px] font-bold text-fg-faint">정책</h3>
             <ul className="mt-3 space-y-2 text-[14px] text-fg-sub">
-              {/* TODO: 정식 출시 전 법률 자문 후 실제 문서 연결 (PART 12) */}
+              {/* 초안 게시 — 정식 출시 전 법률 검토 후 확정 (PART 12) */}
               <li>
-                <span className="cursor-not-allowed text-fg-faint">이용약관 (준비 중)</span>
+                <Link href="/terms" className="hover:text-fg">
+                  이용약관
+                </Link>
               </li>
               <li>
-                <span className="cursor-not-allowed text-fg-faint">개인정보처리방침 (준비 중)</span>
+                <Link href="/privacy" className="hover:text-fg">
+                  개인정보처리방침
+                </Link>
               </li>
             </ul>
           </div>
