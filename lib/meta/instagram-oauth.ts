@@ -161,6 +161,29 @@ export async function refreshLongLivedToken(longLivedToken: string): Promise<Lon
   return { accessToken: json.access_token, expiresInSeconds: json.expires_in ?? 60 * 24 * 60 * 60 };
 }
 
+/**
+ * 계정별 웹훅 구독 — 연동 직후 반드시 호출한다.
+ * 앱 대시보드에서 comments/messages 필드를 구독해도, 계정 단위로 subscribed_apps를 켜지 않으면
+ * 그 계정의 웹훅 이벤트는 발송되지 않는다 (docs/REAL_API_SPEC.md 1절, Meta Webhooks 문서).
+ * 실패해도 연동 자체는 유효하므로 호출측은 로그만 남기고 진행한다.
+ */
+export async function subscribeWebhookFields(accessToken: string): Promise<{ ok: boolean; error?: string }> {
+  const q = new URLSearchParams({
+    subscribed_fields: "comments,messages",
+    access_token: accessToken,
+  });
+  try {
+    const res = await fetch(`${GRAPH_INSTAGRAM_BASE}/me/subscribed_apps?${q.toString()}`, { method: "POST" });
+    const json = (await res.json().catch(() => ({}))) as { success?: boolean; error?: { message?: string } };
+    if (!res.ok || json.success !== true) {
+      return { ok: false, error: json.error?.message ?? `http_${res.status}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export interface InstagramAccountInfo {
   id: string;
   username: string;

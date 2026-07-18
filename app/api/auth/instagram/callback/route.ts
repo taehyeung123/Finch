@@ -8,6 +8,7 @@ import {
   fetchAccountInfo,
   getInstagramOAuthConfig,
   resolveCallbackUri,
+  subscribeWebhookFields,
 } from "@/lib/meta/instagram-oauth";
 
 /**
@@ -108,6 +109,13 @@ export async function GET(request: Request) {
       }
       console.error("[ig-oauth] 계정 저장 실패:", write.error.message);
       return settingsRedirect(origin, { connect: "error", reason: "save_failed" });
+    }
+
+    // 계정별 웹훅 구독 — 이게 없으면 이 계정의 댓글/메시지 웹훅이 발송되지 않는다(자동 DM 필수).
+    // 실패해도 연동은 유효 — 로그만 남긴다 (재연동 시 재시도됨).
+    const sub = await subscribeWebhookFields(longLived.accessToken);
+    if (!sub.ok) {
+      console.error("[ig-oauth] 웹훅 구독 실패(연동은 유지):", sub.error);
     }
 
     return settingsRedirect(origin, { connect: "success", handle: row.handle });

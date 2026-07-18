@@ -80,6 +80,64 @@ export async function getUsageStats(): Promise<UsageStat[]> {
   });
 }
 
+/* ── 현재 플랜 · 결제 내역 ────────────────────────────────── */
+
+export type PlanKey = "free" | "creator" | "pro" | "agency";
+
+/** 현재 플랜 — users_profile.plan. 데모는 creator, 비로그인/조회실패는 free. */
+export async function getCurrentPlan(): Promise<PlanKey> {
+  if (isDemoMode()) return "creator";
+  const { supabase, user } = await getUser();
+  if (!user) return "free";
+  const { data, error } = await supabase
+    .from("users_profile")
+    .select("plan")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (error) {
+    console.error("[internal] 플랜 조회 실패:", error.message);
+    return "free";
+  }
+  const plan = data?.plan;
+  return plan === "creator" || plan === "pro" || plan === "agency" ? plan : "free";
+}
+
+export interface PaymentOrderView {
+  id: string;
+  plan: string;
+  orderName: string;
+  amount: number;
+  status: "paid" | "failed" | "canceled";
+  approvedAt: string | null;
+  createdAt: string;
+}
+
+/** 결제 내역 — ready(결제창만 열고 이탈한 주문)는 제외. 최신순 20건. */
+export async function getPaymentOrders(): Promise<PaymentOrderView[]> {
+  if (isDemoMode()) return [];
+  const { supabase, user } = await getUser();
+  if (!user) return [];
+  const { data, error } = await supabase
+    .from("payment_orders")
+    .select("id, plan, order_name, amount, status, approved_at, created_at")
+    .neq("status", "ready")
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error) {
+    console.error("[internal] 결제 내역 조회 실패:", error.message);
+    return [];
+  }
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    plan: r.plan,
+    orderName: r.order_name,
+    amount: r.amount,
+    status: r.status as PaymentOrderView["status"],
+    approvedAt: r.approved_at,
+    createdAt: r.created_at,
+  }));
+}
+
 /* ── 리포트 ───────────────────────────────────────────────── */
 
 export async function getReports(): Promise<ReportItem[]> {
