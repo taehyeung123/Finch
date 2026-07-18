@@ -95,6 +95,81 @@ export async function fetchAccountInsights(igUserId: string, accessToken: string
   };
 }
 
+/* ── 기간 합산 인사이트 + 일별 시계열 ──────────────────────── */
+
+export interface AccountTotals {
+  reach: number;
+  views: number;
+  accountsEngaged: number;
+  totalInteractions: number;
+  profileLinksTaps: number;
+}
+
+/**
+ * 기간 합산 계정 인사이트 — since/until은 unix 초.
+ * total_value + since/until이면 data[].total_value.value가 기간 합계다.
+ * until을 시간 단위로 라운딩해 호출하면 URL이 안정되어 fetch 캐시(300초)가 공유된다.
+ */
+export async function fetchAccountInsightsRange(
+  igUserId: string,
+  accessToken: string,
+  sinceUnix: number,
+  untilUnix: number,
+): Promise<AccountTotals> {
+  const metrics = ["reach", "views", "accounts_engaged", "total_interactions", "profile_links_taps"];
+  const empty: AccountTotals = { reach: 0, views: 0, accountsEngaged: 0, totalInteractions: 0, profileLinksTaps: 0 };
+  try {
+    const res = await graphGet<{ data?: TotalValueRow[] }>(
+      `/${igUserId}/insights?metric=${metrics.join(",")}&metric_type=total_value&period=day&since=${sinceUnix}&until=${untilUnix}`,
+      accessToken,
+    );
+    const map = Object.fromEntries((res.data ?? []).map((r) => [r.name, r.total_value?.value ?? 0]));
+    return {
+      reach: map.reach ?? 0,
+      views: map.views ?? 0,
+      accountsEngaged: map.accounts_engaged ?? 0,
+      totalInteractions: map.total_interactions ?? 0,
+      profileLinksTaps: map.profile_links_taps ?? 0,
+    };
+  } catch (e) {
+    console.error("[ig-insights] 기간 합산 조회 실패:", e instanceof Error ? e.message : String(e));
+    return empty;
+  }
+}
+
+export interface DailyPoint {
+  /** YYYY-MM-DD */
+  date: string;
+  value: number;
+}
+
+/**
+ * 일별 시계열 — time_series를 지원하는 지표(follower_count·reach)만.
+ * follower_count는 일별 '순증감'(신규-이탈), reach는 일별 도달 수다.
+ * 100팔로워 미만 계정은 follower_count가 막혀 빈 배열이 온다 — 호출측은 빈 값 허용.
+ */
+export async function fetchDailySeries(
+  igUserId: string,
+  accessToken: string,
+  metric: "follower_count" | "reach",
+  sinceUnix: number,
+  untilUnix: number,
+): Promise<DailyPoint[]> {
+  try {
+    const res = await graphGet<{ data?: { values?: { value?: number; end_time?: string }[] }[] }>(
+      `/${igUserId}/insights?metric=${metric}&period=day&metric_type=time_series&since=${sinceUnix}&until=${untilUnix}`,
+      accessToken,
+    );
+    return (res.data?.[0]?.values ?? []).map((v) => ({
+      date: (v.end_time ?? "").slice(0, 10),
+      value: v.value ?? 0,
+    }));
+  } catch {
+    // 소액 계정 차단·지표 미지원 — 빈 시계열로 폴백
+    return [];
+  }
+}
+
 /* ── 미디어 목록 + 미디어 인사이트 ─────────────────────────── */
 
 export type MediaProductType = "AD" | "FEED" | "STORY" | "REELS";
