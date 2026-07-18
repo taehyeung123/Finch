@@ -26,6 +26,7 @@ import { formatCompact } from "@/lib/format";
 import { ideaSuggestions, trendItems, TREND_CATEGORIES } from "@/lib/data";
 import type { Channel, IdeaSuggestion, TrendItem } from "@/lib/types";
 import { generateCardNews, generateIdeas } from "./actions";
+import { exportSlidesAsPng } from "@/lib/studio/export-slides";
 
 type StudioTab = "cards" | "video" | "ideas";
 
@@ -414,15 +415,18 @@ export default function StudioPage() {
                 </p>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button variant="secondary">
+                  <Button
+                    variant="secondary"
+                    onClick={() => exportSlidesAsPng(slides, slidesFromAi)}
+                  >
                     <ImageDown className="size-4" aria-hidden />
-                    이미지 내보내기
+                    이미지 내보내기 (PNG 5장)
                   </Button>
-                  <Button variant="secondary">
+                  <Button variant="secondary" disabled title="예약 발행은 준비 중입니다">
                     <CalendarClock className="size-4" aria-hidden />
                     예약 발행으로 보내기
                   </Button>
-                  <Badge tone="primary">예정</Badge>
+                  <Badge tone="neutral">예약 발행 준비중</Badge>
                 </div>
               </CardBody>
             </Card>

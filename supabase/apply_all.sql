@@ -58,7 +58,7 @@ create trigger on_auth_user_created after insert on auth.users
 
 -- ── connected_accounts ── 채널 OAuth 연동 (ChannelAccount 대응) ────
 -- 토큰은 반드시 암호화해서 저장한다(앱단 암호화 또는 Supabase Vault). RLS만으로는 저장 시 평문이 되지 않도록.
--- TODO: 암호화 방식 확정(pgsodium/Vault vs 앱단 AES) — CLAUDE.md 인증/보안 규칙.
+-- 확정(2026-07-17): 앱단 AES-256-GCM (lib/crypto/tokens.ts, TOKEN_ENCRYPTION_KEY).
 create table public.connected_accounts (
   id                    uuid primary key default gen_random_uuid(),
   user_id               uuid not null references auth.users(id) on delete cascade,
@@ -270,7 +270,7 @@ $$;
 revoke all on function public.use_quota(text, integer, integer) from public;
 grant execute on function public.use_quota(text, integer, integer) to authenticated;
 
--- TODO(API-last): 자동 DM 월 한도용 "예약-확정" 함수 세트
+-- 구현됨(0004): reserve_dm_send / finalize_dm_send / mark_optout — 자동 DM 월 한도 예약-확정 세트
 --   reserve_dm_send()  — 발송 직전 한도 예약(성공 가정 차감)
 --   commit_dm_send()   — Meta 200 응답 시 확정
 --   release_dm_send()  — 실패/윈도우 만료 시 롤백(한도 복구)

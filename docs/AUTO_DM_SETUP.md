@@ -44,9 +44,9 @@
 ## 5. 운영 전환 시 남은 코드 작업 (Claude Code 담당)
 
 - [x] 규칙 CRUD 실구현 — 앱에서 만든 규칙이 `auto_dm_rules`에 저장·조회된다 (데모 모드는 샘플 유지)
-- [ ] IG 계정 OAuth 연동 플로우 → `connected_accounts`에 토큰 저장 (+ `platform_user_id` 자동 기록)
-- [ ] 토큰 암호화 방식 확정(pgsodium/Vault vs 앱단 AES) → `decryptToken()` 구현 교체, `IG_TEST_ACCESS_TOKEN` 제거
-- [ ] held_night(야간 보류)·pending(일시 오류) 재처리 크론 — 아침 8시 KST 플러시, 7일 창 만료분 window_expired 처리
+- [x] IG 계정 OAuth 연동 플로우 → `connected_accounts`에 토큰 저장 (+ `platform_user_id` 자동 기록)
+- [x] 토큰 암호화 — 앱단 AES-256-GCM 확정(lib/crypto/tokens), decryptToken 실구현 (IG_TEST_ACCESS_TOKEN은 dev 폴백으로 유지)
+- [x] held_night(야간 보류)·pending(일시 오류) 재처리 크론 (/api/cron/flush-dms) — 아침 8시 KST 플러시, 7일 창 만료분 window_expired 처리
 - [ ] 규칙 상세에 dm_sends 상태별 발송 로그 표 (성공/대기/실패 사유별)
 - [ ] 대량 트래픽 시 Inngest 큐 도입 (계정당 시간당 상한 스로틀 — 비용 문서 1-1)
 

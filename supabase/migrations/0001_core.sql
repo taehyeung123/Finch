@@ -51,7 +51,7 @@ create trigger on_auth_user_created after insert on auth.users
 
 -- ── connected_accounts ── 채널 OAuth 연동 (ChannelAccount 대응) ────
 -- 토큰은 반드시 암호화해서 저장한다(앱단 암호화 또는 Supabase Vault). RLS만으로는 저장 시 평문이 되지 않도록.
--- TODO: 암호화 방식 확정(pgsodium/Vault vs 앱단 AES) — CLAUDE.md 인증/보안 규칙.
+-- 확정(2026-07-17): 앱단 AES-256-GCM (lib/crypto/tokens.ts, TOKEN_ENCRYPTION_KEY).
 create table public.connected_accounts (
   id                    uuid primary key default gen_random_uuid(),
   user_id               uuid not null references auth.users(id) on delete cascade,
