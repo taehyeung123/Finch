@@ -9,7 +9,7 @@ import { DataSourceNote } from "@/components/ui/data-source-note";
 import { InfoTip } from "@/components/ui/info-tip";
 import { ButtonLink } from "@/components/ui/button";
 import { formatCompact, formatKRW, formatPercent } from "@/lib/format";
-import { campaigns, dashboardSummaries } from "@/lib/data";
+import { campaigns, dashboardSummaries, IS_SAMPLE_DATA } from "@/lib/data";
 import { aggregateCampaigns } from "@/lib/ads/metrics";
 import type { AdCampaign } from "@/lib/types";
 
@@ -19,8 +19,8 @@ const STATUS_BADGE: Record<AdCampaign["status"], { tone: "positive" | "warning" 
   ended: { tone: "neutral", label: "종료" },
 };
 
-/* 규칙 기반 AI 추천 예시 (PART 4.7) — 실제 연동 시 캠페인 지표 비교 규칙 엔진으로 대체 */
-const AI_ALERTS = [
+/* 규칙 기반 AI 추천 예시 (PART 4.7) — 데모 모드 전용. 실제 연동 시 캠페인 지표 비교 규칙 엔진으로 대체 */
+const SAMPLE_AI_ALERTS = [
   {
     id: "a1",
     label: "소재 점검",
@@ -182,7 +182,8 @@ export default function AdsPage() {
             description="지표 이상 감지 시 자동으로 제안합니다"
           />
           <CardBody className="space-y-3">
-            {AI_ALERTS.map((alert) => (
+            {/* 실 모드에서는 연동 캠페인이 생기기 전까지 예시 알림을 노출하지 않는다 (가짜 데이터 금지) */}
+            {(IS_SAMPLE_DATA ? SAMPLE_AI_ALERTS : []).map((alert) => (
               <div key={alert.id} className="flex items-start gap-3 rounded-card border border-line p-3">
                 <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-card bg-warning-weak text-warning">
                   <Sparkles className="size-4" aria-hidden />
@@ -193,6 +194,11 @@ export default function AdsPage() {
                 </div>
               </div>
             ))}
+            {!IS_SAMPLE_DATA ? (
+              <p className="text-[13px] text-fg-faint">
+                광고 계정을 연동하고 캠페인 데이터가 쌓이면 지표 이상 감지 알림이 여기에 표시됩니다.
+              </p>
+            ) : null}
           </CardBody>
         </Card>
 

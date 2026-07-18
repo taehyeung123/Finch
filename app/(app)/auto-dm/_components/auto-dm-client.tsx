@@ -11,7 +11,7 @@ import {
 import { cn } from "@/lib/cn";
 import { formatAgo, formatCompact } from "@/lib/format";
 import type { AutoDmRule, AutoDmStatus, Post } from "@/lib/types";
-import { autoDmSummary, recentPosts } from "@/lib/data";
+import { autoDmSummary } from "@/lib/data";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,14 +37,14 @@ const STATUS_META: Record<AutoDmRule["status"], { label: string; tone: "positive
   review: { label: "검수 중", tone: "warning" },
 };
 
-/** 자동 DM 화면 본체 — 서버 페이지(page.tsx)가 초기 규칙(데모: 샘플, 실제: DB)을 주입한다 */
-export function AutoDmClient({ initialRules }: { initialRules: AutoDmRule[] }) {
+/** 자동 DM 화면 본체 — 서버 페이지(page.tsx)가 초기 규칙·게시물(데모: 샘플, 실제: DB+실미디어)을 주입한다 */
+export function AutoDmClient({ initialRules, posts }: { initialRules: AutoDmRule[]; posts: Post[] }) {
   const [rules, setRules] = useState<AutoDmRule[]>(initialRules);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<AutoDmRule | null>(null);
 
   // 규칙이 연결할 수 있는 인스타그램 게시물 (연동 전이면 빈 배열 → 에디터가 안내)
-  const igPosts = useMemo(() => recentPosts.filter((p) => p.channel === "instagram"), []);
+  const igPosts = useMemo(() => posts.filter((p) => p.channel === "instagram"), [posts]);
 
   const derived = useMemo(() => {
     const active = rules.filter((r) => r.status === "active").length;

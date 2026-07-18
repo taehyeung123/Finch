@@ -366,6 +366,31 @@ export async function getLiveDashboard(): Promise<LiveDashboard | null> {
   };
 }
 
+/**
+ * 자동 DM 게시물 피커용 최근 게시물 — 미디어 목록만 경량 조회(개별 인사이트 호출 없음).
+ * 연동/토큰 없으면 빈 배열 (에디터가 연동 안내를 띄운다).
+ */
+export async function getRecentPostsForPicker(): Promise<Post[]> {
+  const row = await loadInstagramRow();
+  if (!row || !row.platform_user_id) return [];
+  const token = await ensureFreshToken(row);
+  if (!token) return [];
+
+  const media = await fetchRecentMedia(row.platform_user_id, token, 25);
+  return media.map((m) => ({
+    id: m.id,
+    channel: "instagram" as const,
+    type: toPostType(m),
+    caption: m.caption?.split("\n")[0]?.slice(0, 80) || "(캡션 없음)",
+    publishedAt: m.timestamp ?? new Date().toISOString(),
+    views: 0, // 피커에선 조회수 미사용 — 개별 인사이트 호출 절제
+    likes: m.likeCount,
+    comments: m.commentsCount,
+    shares: 0,
+    trend: [],
+  }));
+}
+
 export interface LiveAudience {
   /** 최근 14일 일별 — reach·팔로워 순증감 (100팔로워 미만이면 follower 계열 결측 가능) */
   daily: { date: string; reach: number; followerNet: number }[];

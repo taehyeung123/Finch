@@ -22,6 +22,7 @@ import { DataSourceNote } from "@/components/ui/data-source-note";
 import { cn } from "@/lib/cn";
 import { formatAgo } from "@/lib/format";
 import type { AppNotification, NotificationType } from "@/lib/types";
+import { markAllNotificationsRead, markNotificationRead } from "../actions";
 
 type FilterValue = "all" | "competitor_ad" | "trend" | "account" | "system";
 
@@ -64,12 +65,15 @@ export function NotificationsClient({ initial }: { initial: AppNotification[] })
   const unreadCount = items.filter((n) => !n.read).length;
   const visible = filter === "all" ? items : items.filter((n) => TYPE_TO_FILTER[n.type] === filter);
 
+  // 낙관적 로컬 갱신 + 서버 액션으로 영속화 (실패해도 화면은 유지 — 다음 로드에서 서버 상태로 수렴)
   function markAllRead() {
     setItems((prev) => prev.map((n) => ({ ...n, read: true })));
+    void markAllNotificationsRead();
   }
 
   function markRead(id: string) {
     setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    void markNotificationRead(id);
   }
 
   return (

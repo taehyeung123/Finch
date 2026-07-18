@@ -516,3 +516,18 @@ alter table public.users_profile add constraint users_profile_plan_check
 alter table public.payment_orders drop constraint if exists payment_orders_plan_check;
 alter table public.payment_orders add constraint payment_orders_plan_check
   check (plan in ('creator','pro','agency','enterprise'));
+
+-- ═══════════════════════════════════════════════════════════════
+-- 0008_notification_settings.sql — 알림 수신 설정
+-- ═══════════════════════════════════════════════════════════════
+
+create table if not exists public.notification_settings (
+  user_id    uuid primary key references auth.users(id) on delete cascade,
+  settings   jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table public.notification_settings enable row level security;
+create policy "own notification settings" on public.notification_settings
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create trigger trg_notification_settings_updated before update on public.notification_settings
+  for each row execute function public.set_updated_at();
