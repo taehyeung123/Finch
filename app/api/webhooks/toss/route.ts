@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       const mapped = STATUS_MAP[result.payment.status];
       if (!mapped) return; // READY/IN_PROGRESS 등 중간상태는 건너뜀
 
-      const { error } = await admin
+      const { data: order, error } = await admin
         .from("payment_orders")
         .update({
           status: mapped,
@@ -58,8 +58,29 @@ export async function POST(request: Request) {
           approved_at: result.payment.approvedAt ?? null,
           raw: result.payment.raw,
         })
-        .eq("order_id", result.payment.orderId);
-      if (error) console.error("[toss-webhook] 주문 갱신 실패:", error.message);
+        .eq("order_id", result.payment.orderId)
+        .select("user_id, plan")
+        .maybeSingle();
+      if (error) {
+        console.error("[toss-webhook] 주문 갱신 실패:", error.message);
+        return;
+      }
+
+      // 환불/취소된 주문이 현재 플랜의 근거였다면 무료로 강등 — 환불 후 유료 접근 유지 방지
+      if (mapped === "canceled" && order) {
+        const { data: profile } = await admin
+          .from("users_profile")
+          .select("plan")
+          .eq("id", order.user_id)
+          .maybeSingle();
+        if (profile?.plan === order.plan) {
+          const { error: downErr } = await admin
+            .from("users_profile")
+            .update({ plan: "free" })
+            .eq("id", order.user_id);
+          if (downErr) console.error("[toss-webhook] 플랜 강등 실패:", downErr.message);
+        }
+      }
     });
   }
 

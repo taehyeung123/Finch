@@ -78,6 +78,38 @@ export async function confirmPayment(params: {
   }
 }
 
+/** 결제 취소 — 전액 취소(환불). 운영자가 Toss 상점관리자에서 취소해도 웹훅으로 동기화된다. */
+export async function cancelPayment(params: {
+  paymentKey: string;
+  cancelReason: string;
+  idempotencyKey?: string;
+}): Promise<TossResult> {
+  const auth = authHeader();
+  if (!auth) return { ok: false, code: "not_configured", message: "TOSS_SECRET_KEY 미설정" };
+  try {
+    const res = await fetch(`${TOSS_API_BASE}/payments/${encodeURIComponent(params.paymentKey)}/cancel`, {
+      method: "POST",
+      headers: {
+        Authorization: auth,
+        "Content-Type": "application/json",
+        ...(params.idempotencyKey ? { "Idempotency-Key": params.idempotencyKey } : {}),
+      },
+      body: JSON.stringify({ cancelReason: params.cancelReason }),
+    });
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      return {
+        ok: false,
+        code: String(json.code ?? `http_${res.status}`),
+        message: String(json.message ?? "결제 취소 실패"),
+      };
+    }
+    return { ok: true, payment: toPayment(json) };
+  } catch (e) {
+    return { ok: false, code: "network", message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /** 결제 단건 조회 — 웹훅(미서명) 진위 확인용. 본문 대신 이 조회 결과를 신뢰한다. */
 export async function getPayment(paymentKey: string): Promise<TossResult> {
   const auth = authHeader();
