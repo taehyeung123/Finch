@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { FileSearch, Info, Search } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -12,18 +12,29 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { DataSourceNote } from "@/components/ui/data-source-note";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatAgo, formatCompact } from "@/lib/format";
-import { analyzeHistory, analyzeSample } from "@/lib/data";
+import { analyzeHistory } from "@/lib/data";
 import type { AnalyzeResult } from "@/lib/types";
+import { analyzeUrl } from "./actions";
 
 export default function AnalyzePage() {
   const [url, setUrl] = useState("");
   const [result, setResult] = useState<AnalyzeResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!url.trim()) return;
-    // Phase 1: 목 결과로 상태 전환 (실제 연동 시 API 호출로 교체)
-    setResult(analyzeSample);
+    if (!url.trim() || pending) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await analyzeUrl(url.trim());
+      if (res.ok) {
+        setResult(res.result);
+      } else {
+        setResult(null);
+        setError(res.error);
+      }
+    });
   }
 
   return (
@@ -44,12 +55,18 @@ export default function AnalyzePage() {
             aria-label="분석할 게시물 URL"
             className="h-10 flex-1 rounded-card border border-line bg-overlay px-3 text-[15px] text-fg placeholder:text-fg-faint transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
           />
-          <Button type="submit" disabled={!url.trim()}>
+          <Button type="submit" disabled={!url.trim() || pending}>
             <Search className="size-4" aria-hidden />
-            분석하기
+            {pending ? "분석 중…" : "분석하기"}
           </Button>
         </form>
       </Card>
+
+      {error ? (
+        <div className="rounded-card border border-warning/40 bg-warning-weak p-4 text-[14px] text-fg-sub" role="alert">
+          {error}
+        </div>
+      ) : null}
 
       {result ? (
         <>
@@ -94,14 +111,24 @@ export default function AnalyzePage() {
                 description="게시 직후부터 시간 단위 누적 추이"
               />
               <CardBody>
-                <MiniBars data={result.hourlyGrowth} height={140} />
-                <div className="mt-2 flex items-baseline justify-between text-xs text-fg-faint">
-                  <span>업로드 직후</span>
-                  <span className="tnum">
-                    +{result.hourlyGrowth.length}시간 · 누적{" "}
-                    {formatCompact(result.hourlyGrowth[result.hourlyGrowth.length - 1])}회
-                  </span>
-                </div>
+                {result.hourlyGrowth.length > 0 ? (
+                  <>
+                    <MiniBars data={result.hourlyGrowth} height={140} />
+                    <div className="mt-2 flex items-baseline justify-between text-xs text-fg-faint">
+                      <span>업로드 직후</span>
+                      <span className="tnum">
+                        +{result.hourlyGrowth.length}시간 · 누적{" "}
+                        {formatCompact(result.hourlyGrowth[result.hourlyGrowth.length - 1])}회
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <p className="py-8 text-center text-[13px] leading-relaxed text-fg-faint">
+                    시간대별 누적 조회는 인스타그램 공식 API가 제공하지 않는 데이터예요.
+                    <br />
+                    현재 누적 지표(조회·좋아요·댓글·공유)는 위 카드에서 확인할 수 있습니다.
+                  </p>
+                )}
               </CardBody>
             </Card>
 
@@ -110,14 +137,18 @@ export default function AnalyzePage() {
               <Card>
                 <CardHeader title="해시태그" description="게시물에 사용된 태그" />
                 <CardBody className="flex flex-wrap gap-1.5">
-                  {result.hashtags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="inline-flex items-center rounded-chip border border-line bg-overlay px-2.5 py-0.5 text-xs font-semibold leading-5 text-fg-sub"
-                    >
-                      {tag}
-                    </span>
-                  ))}
+                  {result.hashtags.length > 0 ? (
+                    result.hashtags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center rounded-chip border border-line bg-overlay px-2.5 py-0.5 text-xs font-semibold leading-5 text-fg-sub"
+                      >
+                        {tag}
+                      </span>
+                    ))
+                  ) : (
+                    <p className="text-[13px] text-fg-faint">게시물에 해시태그가 없어요.</p>
+                  )}
                 </CardBody>
               </Card>
 
@@ -188,18 +219,26 @@ export default function AnalyzePage() {
               </tr>
             </thead>
             <tbody>
-              {analyzeHistory.map((h) => (
-                <tr key={h.id} className="border-b border-line last:border-0">
-                  <td className="max-w-[280px] py-3 pr-3">
-                    <p className="truncate font-medium">{h.url}</p>
+              {analyzeHistory.length > 0 ? (
+                analyzeHistory.map((h) => (
+                  <tr key={h.id} className="border-b border-line last:border-0">
+                    <td className="max-w-[280px] py-3 pr-3">
+                      <p className="truncate font-medium">{h.url}</p>
+                    </td>
+                    <td className="py-3 pr-3">
+                      <ChannelBadge channel={h.channel} />
+                    </td>
+                    <td className="py-3 pr-3 text-[13px] text-fg-sub">{formatAgo(h.analyzedAt)}</td>
+                    <td className="tnum py-3 text-right">{formatCompact(h.views)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="py-6 text-center text-[13px] text-fg-faint">
+                    아직 분석 기록이 없어요. 위에서 첫 게시물을 분석해 보세요.
                   </td>
-                  <td className="py-3 pr-3">
-                    <ChannelBadge channel={h.channel} />
-                  </td>
-                  <td className="py-3 pr-3 text-[13px] text-fg-sub">{formatAgo(h.analyzedAt)}</td>
-                  <td className="tnum py-3 text-right">{formatCompact(h.views)}</td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </CardBody>

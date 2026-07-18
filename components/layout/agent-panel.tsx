@@ -5,12 +5,13 @@ import { useRef, useState } from "react";
 import { ArrowRight, Send, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { FinchMark } from "@/components/logo";
+import { agentChat } from "@/lib/actions/agent-chat";
 
 /**
  * 플로팅 AI 에이전트 챗 패널 (PART 4.9, 6.2) — 전 페이지 공통.
- * 응답은 위젯형(관련 화면으로 이동하는 카드 첨부)으로 설계한다.
- * TODO(최후순위): 목 응답을 Claude API Function Calling으로 교체
- * (get_dashboard_summary, search_trending, analyze_account, generate_card_news 등).
+ * 실 모드: Claude 실호출(연동 계정 실지표 컨텍스트) — lib/actions/agent-chat.
+ * 데모·키 미설정·오류: 목 응답 폴백. 응답은 위젯형(관련 화면 이동 카드 첨부).
+ * v2(후속): function calling으로 트렌드 검색·카드뉴스 생성 직접 실행.
  */
 
 interface AgentMessage {
@@ -70,16 +71,33 @@ export function AgentPanel() {
     },
   ]);
   const [input, setInput] = useState("");
+  const [thinking, setThinking] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
-  function send(text: string) {
-    const q = text.trim();
-    if (!q) return;
-    setMessages((prev) => [...prev, { role: "user", text: q }, mockReply(q)]);
-    setInput("");
+  function scrollToEnd() {
     requestAnimationFrame(() => {
       listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
     });
+  }
+
+  async function send(text: string) {
+    const q = text.trim();
+    if (!q || thinking) return;
+    const nextHistory = [...messages, { role: "user" as const, text: q }];
+    setMessages(nextHistory);
+    setInput("");
+    setThinking(true);
+    scrollToEnd();
+    try {
+      // 실호출 — 실패/데모/키 미설정이면 null → 목 응답 폴백
+      const reply = await agentChat(nextHistory.map((m) => ({ role: m.role, text: m.text })));
+      setMessages((prev) => [...prev, reply ? { role: "agent", ...reply } : mockReply(q)]);
+    } catch {
+      setMessages((prev) => [...prev, mockReply(q)]);
+    } finally {
+      setThinking(false);
+      scrollToEnd();
+    }
   }
 
   return (
@@ -137,6 +155,13 @@ export function AgentPanel() {
                 </div>
               </div>
             ))}
+            {thinking ? (
+              <div className="flex justify-start">
+                <div className="max-w-[85%] rounded-card border border-line bg-body px-3.5 py-2.5 text-[14px] text-fg-faint">
+                  생각 중…
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="border-t border-line p-4">

@@ -223,6 +223,19 @@ export async function fetchRecentMedia(igUserId: string, accessToken: string, li
   }
 }
 
+/** 게시물 댓글 텍스트 — 감성 분석용(최대 limit개). 실패·권한 없음은 빈 배열. */
+export async function fetchMediaComments(mediaId: string, accessToken: string, limit = 50): Promise<string[]> {
+  try {
+    const res = await graphGet<{ data?: { text?: string }[] }>(
+      `/${mediaId}/comments?fields=text&limit=${limit}`,
+      accessToken,
+    );
+    return (res.data ?? []).map((c) => c.text ?? "").filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 export interface MediaInsights {
   views: number;
   reach: number;

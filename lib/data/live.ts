@@ -366,6 +366,15 @@ export async function getLiveDashboard(): Promise<LiveDashboard | null> {
   };
 }
 
+/** 연동 계정의 API 접근 컨텍스트 — 콘텐츠 분석 등 개별 기능이 재사용한다. 연동/토큰 없으면 null. */
+export async function getInstagramAccessContext(): Promise<{ igUserId: string; token: string } | null> {
+  const row = await loadInstagramRow();
+  if (!row || !row.platform_user_id) return null;
+  const token = await ensureFreshToken(row);
+  if (!token) return null;
+  return { igUserId: row.platform_user_id, token };
+}
+
 /**
  * 자동 DM 게시물 피커용 최근 게시물 — 미디어 목록만 경량 조회(개별 인사이트 호출 없음).
  * 연동/토큰 없으면 빈 배열 (에디터가 연동 안내를 띄운다).

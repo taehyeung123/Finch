@@ -1,14 +1,16 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useTransition } from "react";
 import { Download, FileSpreadsheet, FileText, Plus } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge, ChannelBadge } from "@/components/ui/badge";
-import { Button, ButtonLink } from "@/components/ui/button";
+import { Button, ButtonLink, buttonClasses } from "@/components/ui/button";
 import { formatDate } from "@/lib/format";
 import { CHANNEL_LABEL } from "@/lib/channels";
 import type { Channel, ReportItem } from "@/lib/types";
+import { IS_SAMPLE_DATA } from "@/lib/data";
+import { createReport } from "../actions";
 
 type PeriodValue = "7d" | "30d" | "lastMonth" | "custom";
 
@@ -41,8 +43,10 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
   const [period, setPeriod] = useState<PeriodValue>("30d");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
-  const [channels, setChannels] = useState<Channel[]>(["instagram", "tiktok"]);
-  const [format, setFormat] = useState<ReportItem["format"]>("pdf");
+  const [channels, setChannels] = useState<Channel[]>(["instagram"]);
+  const [format, setFormat] = useState<ReportItem["format"]>("excel");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
   const idRef = useRef(0);
 
   function toggleChannel(ch: Channel) {
@@ -50,7 +54,7 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
   }
 
   function handleGenerate() {
-    if (channels.length === 0) return;
+    if (channels.length === 0 || pending) return;
     const now = new Date();
     let start: Date;
     let end: Date;
@@ -69,16 +73,28 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
     }
     const label =
       period === "custom" ? "맞춤 기간" : PERIOD_OPTIONS.find((o) => o.value === period)?.label ?? "";
-    const item: ReportItem = {
-      id: `local-${idRef.current++}`,
+    const input = {
       title: `${label} 성과 리포트`,
       period: `${formatDate(start.toISOString())} ~ ${formatDate(end.toISOString())}`,
       channels: CHANNEL_ORDER.filter((ch) => channels.includes(ch)),
       format,
-      createdAt: now.toISOString(),
-      scheduled: false,
     };
-    setItems((prev) => [item, ...prev]);
+
+    setError(null);
+    startTransition(async () => {
+      const res = await createReport(input);
+      if (res.ok) {
+        setItems((prev) => [res.report, ...prev]);
+      } else if (res.demo) {
+        // 데모 모드 — 로컬 미리보기 행 (저장·다운로드 없음)
+        setItems((prev) => [
+          { id: `local-${idRef.current++}`, ...input, createdAt: new Date().toISOString(), scheduled: false },
+          ...prev,
+        ]);
+      } else {
+        setError(res.error ?? "리포트 생성에 실패했어요.");
+      }
+    });
   }
 
   return (
@@ -159,30 +175,34 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
               <fieldset>
                 <legend className="text-[13px] font-medium text-fg-sub">형식</legend>
                 <div className="mt-1.5 space-y-2">
-                  {(["pdf", "excel"] as const).map((f) => (
-                    <label key={f} className="flex items-center gap-2 text-[14px] text-fg">
-                      <input
-                        type="radio"
-                        name="report-format"
-                        checked={format === f}
-                        onChange={() => setFormat(f)}
-                        className="size-4 accent-primary"
-                      />
-                      {FORMAT_LABEL[f]}
-                    </label>
-                  ))}
+                  <label className="flex items-center gap-2 text-[14px] text-fg">
+                    <input
+                      type="radio"
+                      name="report-format"
+                      checked={format === "excel"}
+                      onChange={() => setFormat("excel")}
+                      className="size-4 accent-primary"
+                    />
+                    {FORMAT_LABEL.excel} (CSV)
+                  </label>
+                  <label className="flex items-center gap-2 text-[14px] text-fg-faint" title="PDF 내보내기는 준비 중입니다">
+                    <input type="radio" name="report-format" disabled className="size-4 accent-primary" />
+                    {FORMAT_LABEL.pdf}
+                    <Badge tone="neutral">준비중</Badge>
+                  </label>
                 </div>
               </fieldset>
 
               <div className="flex items-end">
-                <Button onClick={handleGenerate} disabled={channels.length === 0} className="w-full">
-                  생성하기
+                <Button onClick={handleGenerate} disabled={channels.length === 0 || pending} className="w-full">
+                  {pending ? "생성 중…" : "생성하기"}
                 </Button>
               </div>
             </div>
             {channels.length === 0 ? (
               <p className="mt-3 text-[13px] text-warning">채널을 1개 이상 선택해주세요.</p>
             ) : null}
+            {error ? <p className="mt-3 text-[13px] text-negative">{error}</p> : null}
           </CardBody>
         </Card>
       ) : null}
@@ -217,10 +237,17 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
                     ))}
                   </div>
                   <Badge tone="neutral">{r.format === "pdf" ? "PDF" : "EXCEL"}</Badge>
-                  <Button variant="secondary" size="sm">
-                    <Download className="size-3.5" aria-hidden />
-                    다운로드
-                  </Button>
+                  {r.id.startsWith("local-") || IS_SAMPLE_DATA ? (
+                    <Button variant="secondary" size="sm" disabled title="데모 미리보기 행은 다운로드할 수 없어요">
+                      <Download className="size-3.5" aria-hidden />
+                      다운로드
+                    </Button>
+                  ) : (
+                    <a href={`/api/reports/${r.id}/download`} className={buttonClasses("secondary", "sm")}>
+                      <Download className="size-3.5" aria-hidden />
+                      다운로드
+                    </a>
+                  )}
                 </div>
               ))}
             </div>
