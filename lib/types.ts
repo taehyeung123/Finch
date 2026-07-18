@@ -16,6 +16,8 @@ export interface ChannelAccount {
   handle: string;
   displayName: string;
   bio: string; // 프로필 소개 한 줄
+  /** 프로필 사진 URL (실 연동 시 공식 API 값) — 없으면 이니셜 배지 폴백 */
+  avatarUrl?: string | null;
   connected: boolean;
   followers: number;
   followersDelta7d: number; // 최근 7일 증감
@@ -30,6 +32,8 @@ export interface ProfileGridPost {
   type: PostType;
   views: number;
   likes: number;
+  /** 게시물 썸네일 URL (실 연동 시 공식 API 값) — 없으면 유형 아이콘 폴백 */
+  thumbnailUrl?: string | null;
 }
 
 /** 채널 성과 추이 — 최근 N일 일별 지표 (대시보드 성과 추이 차트) */

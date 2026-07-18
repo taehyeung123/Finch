@@ -30,6 +30,7 @@ interface AccountCard {
   channel: Channel;
   handle: string;
   displayName: string | null;
+  avatarUrl: string | null;
   connected: boolean;
   tokenExpiresInDays: number | null;
 }
@@ -50,6 +51,7 @@ async function loadAccountCards(): Promise<AccountCard[]> {
         channel,
         handle: m?.handle ?? "",
         displayName: m?.displayName ?? null,
+        avatarUrl: null,
         connected: m?.connected ?? false,
         tokenExpiresInDays: m?.tokenExpiresInDays ?? null,
       };
@@ -60,10 +62,11 @@ async function loadAccountCards(): Promise<AccountCard[]> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  // select("*"): 마이그레이션 시점 차이로 특정 컬럼(avatar_url 등)이 없어도 조회가 깨지지 않게
   const { data: rows } = user
     ? await supabase
         .from("connected_accounts")
-        .select("id, channel, handle, display_name, connected, token_expires_at")
+        .select("*")
         .order("created_at", { ascending: true })
     : { data: [] };
 
@@ -74,6 +77,7 @@ async function loadAccountCards(): Promise<AccountCard[]> {
       channel,
       handle: row?.handle ?? "",
       displayName: row?.display_name ?? null,
+      avatarUrl: (row?.avatar_url as string | null | undefined) ?? null,
       connected: Boolean(row?.connected),
       tokenExpiresInDays: daysUntil(row?.token_expires_at ?? null),
     };
@@ -179,7 +183,20 @@ export default async function SettingsPage({
           <Card key={card.channel} className="p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex min-w-0 items-start gap-3.5">
-                <AppIconTile app={card.channel} size={44} className="mt-0.5" />
+                {card.avatarUrl ? (
+                  <span className="relative mt-0.5 shrink-0" aria-hidden>
+                    {/* eslint-disable-next-line @next/next/no-img-element -- 서명 만료되는 IG CDN URL이라 이미지 최적화 프록시를 거치지 않는다 */}
+                    <img
+                      src={card.avatarUrl}
+                      alt=""
+                      referrerPolicy="no-referrer"
+                      className="size-11 rounded-chip object-cover"
+                    />
+                    <AppIconTile app={card.channel} size={18} className="absolute -bottom-1 -right-1" />
+                  </span>
+                ) : (
+                  <AppIconTile app={card.channel} size={44} className="mt-0.5" />
+                )}
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <ChannelBadge channel={card.channel} />

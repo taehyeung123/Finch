@@ -53,13 +53,16 @@ function applySecurityHeaders(response: NextResponse) {
   // Toss 결제위젯 — SDK 스크립트·위젯 iframe·API 호출이 tosspayments.com 서브도메인에서 이뤄진다
   const toss = "https://*.tosspayments.com";
 
+  // 인스타그램 프로필 사진·게시물 썸네일 CDN (연동 계정 실데이터 표시용)
+  const igCdn = "https://*.cdninstagram.com https://*.fbcdn.net";
+
   // CSP — Pretendard 웹폰트(jsdelivr CDN)만 외부 허용. 개발 모드는 HMR 때문에 unsafe-eval 필요
   const csp = [
     "default-src 'self'",
     `script-src 'self' 'unsafe-inline' ${toss}${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
     "font-src 'self' https://cdn.jsdelivr.net",
-    `img-src 'self' data: blob: ${toss}`,
+    `img-src 'self' data: blob: ${toss} ${igCdn}`,
     `connect-src 'self' ${toss}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
     `frame-src ${toss}`,
     "frame-ancestors 'none'",

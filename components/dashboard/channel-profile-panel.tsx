@@ -51,17 +51,31 @@ export function ChannelProfilePanel({
       </div>
 
       <div className="p-4">
-        {/* 아바타 + 통계 3분할 (앱 프로필 상단 레이아웃) */}
+        {/* 아바타 + 통계 3분할 (앱 프로필 상단 레이아웃) — 실 연동 시 프로필 사진 */}
         <div className="flex items-center gap-4">
-          <span
-            className={cn(
-              "flex size-16 shrink-0 items-center justify-center rounded-chip bg-primary-weak text-2xl font-bold text-primary ring-2 ring-offset-2 ring-offset-body",
-              RING[account.channel],
-            )}
-            aria-hidden
-          >
-            {initial}
-          </span>
+          {account.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- 서명 만료되는 IG CDN URL이라 이미지 최적화 프록시를 거치지 않는다
+            <img
+              src={account.avatarUrl}
+              alt=""
+              referrerPolicy="no-referrer"
+              className={cn(
+                "size-16 shrink-0 rounded-chip object-cover ring-2 ring-offset-2 ring-offset-body",
+                RING[account.channel],
+              )}
+              aria-hidden
+            />
+          ) : (
+            <span
+              className={cn(
+                "flex size-16 shrink-0 items-center justify-center rounded-chip bg-primary-weak text-2xl font-bold text-primary ring-2 ring-offset-2 ring-offset-body",
+                RING[account.channel],
+              )}
+              aria-hidden
+            >
+              {initial}
+            </span>
+          )}
           <div className="grid flex-1 grid-cols-3 text-center">
             <ProfileStat label="게시물" value={connected ? account.posts.toLocaleString("ko-KR") : "—"} />
             <ProfileStat label="팔로워" value={connected ? formatCompact(account.followers) : "—"} />
@@ -108,9 +122,20 @@ export function ChannelProfilePanel({
             return (
               <div
                 key={post.id}
-                className="group relative flex aspect-square items-center justify-center bg-overlay transition-colors hover:bg-surface"
+                className="group relative flex aspect-square items-center justify-center overflow-hidden bg-overlay transition-colors hover:bg-surface"
               >
-                <Icon className="size-5 text-fg-faint" />
+                {post.thumbnailUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- 서명 만료되는 IG CDN URL이라 이미지 최적화 프록시를 거치지 않는다
+                  <img
+                    src={post.thumbnailUrl}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    loading="lazy"
+                    className="absolute inset-0 size-full object-cover"
+                  />
+                ) : (
+                  <Icon className="size-5 text-fg-faint" />
+                )}
                 <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-surface/80 py-1 text-[11px] font-semibold text-fg opacity-0 transition-opacity group-hover:opacity-100">
                   <Play className="size-3" aria-hidden />
                   <span className="tnum">{formatCompact(post.views)}</span>

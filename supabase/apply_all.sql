@@ -498,3 +498,9 @@ create index if not exists payment_orders_user_idx on public.payment_orders (use
 
 create trigger trg_payment_orders_updated before update on public.payment_orders
   for each row execute function public.set_updated_at();
+
+-- ═══════════════════════════════════════════════════════════════
+-- 0006_avatar.sql — 연동 계정 프로필 사진
+-- ═══════════════════════════════════════════════════════════════
+
+alter table public.connected_accounts add column if not exists avatar_url text;

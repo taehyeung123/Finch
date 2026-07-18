@@ -293,12 +293,22 @@ export function DashboardClient({
           <div className="grid gap-3 md:grid-cols-3">
             {accounts.map((a) => (
               <Card key={a.channel} hover className="flex flex-col p-5">
-                {/* 프로필 — 이니셜 아바타 + 채널 뱃지 */}
+                {/* 프로필 — 실 연동 시 프로필 사진, 없으면 이니셜 아바타 + 채널 뱃지 */}
                 <div className="flex items-center gap-3">
                   <span className="relative shrink-0" aria-hidden>
-                    <span className="flex size-14 items-center justify-center rounded-chip bg-primary-weak text-xl font-bold text-primary">
-                      {(a.displayName || a.handle.replace(/^@/, "") || "?").charAt(0)}
-                    </span>
+                    {a.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- 서명 만료되는 IG CDN URL이라 이미지 최적화 프록시를 거치지 않는다
+                      <img
+                        src={a.avatarUrl}
+                        alt=""
+                        referrerPolicy="no-referrer"
+                        className="size-14 rounded-chip object-cover"
+                      />
+                    ) : (
+                      <span className="flex size-14 items-center justify-center rounded-chip bg-primary-weak text-xl font-bold text-primary">
+                        {(a.displayName || a.handle.replace(/^@/, "") || "?").charAt(0)}
+                      </span>
+                    )}
                     <AppIconTile app={a.channel} size={22} className="absolute -bottom-1 -right-1" />
                   </span>
                   <div className="min-w-0 flex-1">

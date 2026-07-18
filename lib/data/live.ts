@@ -61,6 +61,8 @@ interface AccountRow {
   handle: string;
   display_name: string | null;
   bio: string | null;
+  /** 0006 마이그레이션 이전 DB에는 없을 수 있다 */
+  avatar_url?: string | null;
   connected: boolean;
   followers: number;
   posts: number;
@@ -68,7 +70,9 @@ interface AccountRow {
   token_expires_at: string | null;
 }
 
-/** 연동된 인스타 계정 행 조회 (토큰 포함, 서버 전용). 없으면 null. */
+/** 연동된 인스타 계정 행 조회 (토큰 포함, 서버 전용). 없으면 null.
+ *  select("*")를 쓰는 이유: 마이그레이션 시점 차이로 선택 컬럼이 없으면 조회 전체가
+ *  실패해 대시보드가 통째로 폴백되는 것을 막기 위해 — 결측 컬럼은 undefined로 흡수한다. */
 async function loadInstagramRow(): Promise<AccountRow | null> {
   if (isDemoMode()) return null;
   const supabase = await createClient();
@@ -79,7 +83,7 @@ async function loadInstagramRow(): Promise<AccountRow | null> {
 
   const { data, error } = await supabase
     .from("connected_accounts")
-    .select("id, platform_user_id, handle, display_name, bio, connected, followers, posts, access_token_cipher, token_expires_at")
+    .select("*")
     .eq("channel", "instagram")
     .eq("connected", true)
     .limit(1)
@@ -228,21 +232,25 @@ export async function getLiveDashboard(): Promise<LiveDashboard | null> {
     fetchRecentMedia(ig, token, 12),
   ]);
 
-  // 팔로워/게시물 수 최신화 — 실패는 무시 (다음 로드에서 재시도)
+  // 팔로워/게시물 수·프로필 사진 최신화 — 실패는 무시 (다음 로드에서 재시도)
   if (info) {
     const supabase = await createClient();
-    await supabase
+    const patch = {
+      followers: info.followersCount,
+      posts: info.mediaCount,
+      display_name: info.name ?? info.username ?? null,
+      bio: info.biography,
+    };
+    // avatar_url은 0006 미적용 DB에 없을 수 있어 실패 시 컬럼 제외 재시도
+    const { error: patchErr } = await supabase
       .from("connected_accounts")
-      .update({
-        followers: info.followersCount,
-        posts: info.mediaCount,
-        display_name: info.name ?? info.username ?? null,
-        bio: info.biography,
-      })
-      .eq("id", row.id)
-      .then(({ error }) => {
-        if (error) console.error("[live] 계정 정보 갱신 실패:", error.message);
-      });
+      .update({ ...patch, avatar_url: info.profilePictureUrl })
+      .eq("id", row.id);
+    if (patchErr && /avatar_url/i.test(patchErr.message)) {
+      await supabase.from("connected_accounts").update(patch).eq("id", row.id);
+    } else if (patchErr) {
+      console.error("[live] 계정 정보 갱신 실패:", patchErr.message);
+    }
   }
 
   const followers = info?.followersCount ?? row.followers;
@@ -290,6 +298,8 @@ export async function getLiveDashboard(): Promise<LiveDashboard | null> {
     type: toPostType(m),
     views: mediaInsights[i]?.views ?? 0,
     likes: m.likeCount,
+    // VIDEO/REELS만 thumbnail_url 제공 — 이미지는 media_url 폴백 (docs/REAL_API_SPEC.md 2절)
+    thumbnailUrl: m.thumbnailUrl ?? m.mediaUrl,
   }));
 
   // 콘텐츠 유형 비중 — 최근 미디어 기준
@@ -332,6 +342,7 @@ export async function getLiveDashboard(): Promise<LiveDashboard | null> {
     handle: row.handle,
     displayName: info?.name ?? row.display_name ?? row.handle,
     bio: info?.biography ?? row.bio ?? "",
+    avatarUrl: info?.profilePictureUrl ?? row.avatar_url ?? null,
     connected: true,
     followers,
     followersDelta7d,

@@ -89,6 +89,8 @@ export async function GET(request: Request) {
       token_expires_at: expiresAt,
       platform_user_id: info.id,
     };
+    // 프로필 사진 — 0006 마이그레이션 미적용이면 컬럼이 없어 실패하므로 폴백으로 재시도
+    const rowWithAvatar = { ...row, avatar_url: info.profilePictureUrl };
 
     // 이 사용자의 기존 인스타 연동이 있으면 갱신, 없으면 신규 (앱 모델상 사용자당 IG 1계정)
     const { data: existing } = await supabase
@@ -98,9 +100,14 @@ export async function GET(request: Request) {
       .limit(1)
       .maybeSingle();
 
-    const write = existing
-      ? await supabase.from("connected_accounts").update(row).eq("id", existing.id)
-      : await supabase.from("connected_accounts").insert(row);
+    let write = existing
+      ? await supabase.from("connected_accounts").update(rowWithAvatar).eq("id", existing.id)
+      : await supabase.from("connected_accounts").insert(rowWithAvatar);
+    if (write.error && /avatar_url/i.test(write.error.message)) {
+      write = existing
+        ? await supabase.from("connected_accounts").update(row).eq("id", existing.id)
+        : await supabase.from("connected_accounts").insert(row);
+    }
 
     if (write.error) {
       // (channel, platform_user_id) 전역 유니크 — 다른 핀치 사용자가 이미 연동한 IG 계정
