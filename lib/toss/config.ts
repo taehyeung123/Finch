@@ -8,7 +8,8 @@
  * 시크릿 키(TOSS_SECRET_KEY)는 lib/toss/server에서만 쓰고 절대 노출하지 않는다. 클라·시크릿은 같은 세트로.
  */
 
-export type PaidPlan = "creator" | "pro" | "agency";
+/** 유료 4단계 — Creator(개인) / Pro(광고주) / Agency(대행사) / Enterprise(대형 대행사·브랜드) */
+export type PaidPlan = "creator" | "pro" | "agency" | "enterprise";
 
 /**
  * 요금제별 금액(KRW). TODO(비즈니스): 정식 가격 미정 — 아래는 테스트용 잠정값이다.
@@ -18,16 +19,18 @@ export const PLAN_PRICES: Record<PaidPlan, number> = {
   creator: 9_900,
   pro: 29_000,
   agency: 99_000,
+  enterprise: 249_000,
 };
 
 export const PLAN_NAMES: Record<PaidPlan, string> = {
   creator: "Creator",
   pro: "Pro",
   agency: "Agency",
+  enterprise: "Enterprise",
 };
 
 export function isPaidPlan(v: string): v is PaidPlan {
-  return v === "creator" || v === "pro" || v === "agency";
+  return v === "creator" || v === "pro" || v === "agency" || v === "enterprise";
 }
 
 /** 결제위젯 클라이언트 키 (공개). 미설정이면 결제 UI를 비활성 안내로 폴백. */

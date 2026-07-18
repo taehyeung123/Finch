@@ -184,6 +184,7 @@ export interface PlanFeature {
   creator: string;
   pro: string;
   agency: string;
+  enterprise: string;
 }
 
 export interface UsageStat {

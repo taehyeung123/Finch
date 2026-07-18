@@ -21,6 +21,7 @@ const PLAN_DEFS = [
   { key: "creator", name: "Creator" },
   { key: "pro", name: "Pro" },
   { key: "agency", name: "Agency" },
+  { key: "enterprise", name: "Enterprise" },
 ] as const;
 
 const ORDER_STATUS: Record<PaymentOrderView["status"], { label: string; tone: "positive" | "negative" | "neutral" }> = {
@@ -115,7 +116,7 @@ export default async function BillingSettingsPage() {
       <Card>
         <CardHeader title="플랜 비교" description="워크플로에 맞는 플랜을 선택하세요" />
         <CardBody className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-[14px]">
+          <table className="w-full min-w-[760px] text-[14px]">
             <thead>
               <tr className="border-b border-line text-left text-xs text-fg-faint">
                 <th className="pb-3 pr-3 font-medium">기능</th>

@@ -82,7 +82,7 @@ export async function getUsageStats(): Promise<UsageStat[]> {
 
 /* ── 현재 플랜 · 결제 내역 ────────────────────────────────── */
 
-export type PlanKey = "free" | "creator" | "pro" | "agency";
+export type PlanKey = "free" | "creator" | "pro" | "agency" | "enterprise";
 
 /** 현재 플랜 — users_profile.plan. 데모는 creator, 비로그인/조회실패는 free. */
 export async function getCurrentPlan(): Promise<PlanKey> {
@@ -99,7 +99,7 @@ export async function getCurrentPlan(): Promise<PlanKey> {
     return "free";
   }
   const plan = data?.plan;
-  return plan === "creator" || plan === "pro" || plan === "agency" ? plan : "free";
+  return plan === "creator" || plan === "pro" || plan === "agency" || plan === "enterprise" ? plan : "free";
 }
 
 export interface PaymentOrderView {

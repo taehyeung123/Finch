@@ -7,7 +7,7 @@ import { planFeatures } from "@/lib/data";
 export const metadata: Metadata = {
   title: "요금제",
   description:
-    "핀치 요금제 안내 — 무료 플랜부터 개인 크리에이터용 Creator, 광고주용 Pro, 대행사용 Agency까지. 채널 연동·콘텐츠 분석·경쟁사 광고 모니터링·AI 카드뉴스 기능을 플랜별로 비교하세요. 신용카드 없이 Free 플랜으로 인스타그램 분석을 무료로 바로 체험할 수 있습니다.",
+    "핀치 요금제 안내 — 무료 플랜부터 개인 크리에이터용 Creator, 광고주용 Pro, 대행사용 Agency, 대형 대행사·브랜드용 Enterprise까지. 채널 연동·콘텐츠 분석·경쟁사 광고 모니터링·AI 카드뉴스 기능을 플랜별로 비교하세요. 신용카드 없이 Free 플랜으로 인스타그램 분석을 무료로 바로 체험할 수 있습니다.",
   alternates: { canonical: "/pricing" },
 };
 
@@ -38,7 +38,14 @@ const PLANS = [
     target: "대행사",
     description: "여러 클라이언트를 한 계정에서 운영하는 팀을 위한 플랜.",
     highlight: false,
-    features: ["다중 클라이언트 채널 연동", "경쟁사·콘텐츠 분석 무제한", "멀티 클라이언트 광고 관리", "화이트라벨 + 무제한 팀 권한"],
+    features: ["클라이언트 10팀 채널 연동", "경쟁사·콘텐츠 분석 무제한", "멀티 클라이언트 광고 관리", "화이트라벨 + 팀 10인 권한 관리"],
+  },
+  {
+    name: "Enterprise",
+    target: "대형 대행사·브랜드",
+    description: "클라이언트 수 제한 없이 운영하는 조직을 위한 최상위 플랜.",
+    highlight: false,
+    features: ["클라이언트 무제한 연동", "자동 DM·분석 전 기능 무제한", "무제한 팀 시트 + 권한 관리", "전담 매니저 지원"],
   },
 ];
 
@@ -55,6 +62,10 @@ const PRICING_FAQ = [
     q: "어떤 결제 수단을 지원하나요?",
     a: "국내 PG 연동을 준비 중입니다. 정식 출시 시 신용카드·체크카드 등 주요 결제 수단을 지원할 예정입니다.",
   },
+  {
+    q: "Agency와 Enterprise의 차이는 무엇인가요?",
+    a: "Agency는 클라이언트 10팀·팀원 10인까지 운영하는 대행사용 플랜이고, Enterprise는 클라이언트·팀 시트 제한이 없고 전담 매니저 지원이 포함되는 대형 대행사·브랜드용 최상위 플랜입니다.",
+  },
 ];
 
 /* GEO: Product + FAQPage + BreadcrumbList 구조화 데이터 (PART 13.2·13.3) — 가격 미정으로 price는 표기하지 않음 */
@@ -65,7 +76,7 @@ const JSON_LD = {
       "@type": "Product",
       name: "핀치 (Finch)",
       description:
-        "핀치는 무료 플랜부터 대행사용 Agency 플랜까지 4단계 요금제를 제공하는 SNS 통합 분석 도구입니다.",
+        "핀치는 무료 플랜과 유료 4단계(Creator·Pro·Agency·Enterprise) 요금제를 제공하는 SNS 통합 분석 도구입니다.",
       brand: { "@type": "Brand", name: "핀치 (Finch)" },
       offers: PLANS.map((plan) => ({
         "@type": "Offer",
@@ -103,14 +114,14 @@ export default function PricingPage() {
         <h1 className="text-4xl font-bold tracking-tight md:text-5xl">요금제</h1>
         {/* GEO: 자기완결적 정의 문장 (PART 13.3) */}
         <p className="mx-auto mt-5 max-w-2xl text-[17px] leading-relaxed text-fg-sub">
-          핀치는 무료 플랜부터 대행사용 Agency 플랜까지 4단계 요금제를 제공하는 SNS 통합 분석
-          도구입니다. 무료로 시작하고, 팀과 채널이 커질 때 올리세요.
+          핀치는 무료 플랜과 유료 4단계(Creator·Pro·Agency·Enterprise) 요금제를 제공하는 SNS 통합
+          분석 도구입니다. 무료로 시작하고, 팀과 채널이 커질 때 올리세요.
         </p>
       </section>
 
       {/* 플랜 카드 그리드 */}
       <section className="mx-auto max-w-6xl px-4 pb-20 md:px-6">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {PLANS.map((plan) => (
             <div
               key={plan.name}
@@ -160,16 +171,16 @@ export default function PricingPage() {
           </h2>
           <p className="mx-auto mt-3 max-w-2xl text-center text-[15px] leading-relaxed text-fg-sub">
             채널 1개만 가볍게 써본다면 Free, 개인 크리에이터라면 Creator, 광고까지 함께 관리한다면
-            Pro, 여러 클라이언트를 운영하는 대행사라면 Agency가 적합합니다. 아래 비교표에서 플랜별
-            기능을 자세히 확인하세요.
+            Pro, 여러 클라이언트를 운영하는 대행사라면 Agency, 클라이언트 수 제한 없이 운영하는 대형
+            대행사·브랜드라면 Enterprise가 적합합니다. 아래 비교표에서 플랜별 기능을 자세히 확인하세요.
           </p>
           <h2 className="mt-14 text-center text-2xl font-bold md:text-3xl">플랜별 기능 비교</h2>
           <p className="mx-auto mt-3 max-w-lg text-center text-[15px] text-fg-sub">
             채널 연동부터 팀 기능까지, 플랜별 제공 범위를 한눈에 확인하세요.
           </p>
           <div className="mt-10 overflow-x-auto rounded-card border border-line bg-body">
-            <table className="w-full min-w-[720px] text-[14px]">
-              <caption className="sr-only">Free·Creator·Pro·Agency 플랜별 기능 비교</caption>
+            <table className="w-full min-w-[860px] text-[14px]">
+              <caption className="sr-only">Free·Creator·Pro·Agency·Enterprise 플랜별 기능 비교</caption>
               <thead>
                 <tr className="border-b border-line text-left text-[13px] text-fg-faint">
                   <th className="px-5 py-3.5 font-semibold">기능</th>
@@ -177,13 +188,14 @@ export default function PricingPage() {
                   <th className="px-4 py-3.5 font-semibold">Creator</th>
                   <th className="px-4 py-3.5 font-semibold text-primary">Pro</th>
                   <th className="px-4 py-3.5 font-semibold">Agency</th>
+                  <th className="px-4 py-3.5 font-semibold">Enterprise</th>
                 </tr>
               </thead>
               <tbody>
                 {planFeatures.map((row) => (
                   <tr key={row.label} className="border-b border-line last:border-0">
                     <td className="px-5 py-3.5 font-medium">{row.label}</td>
-                    {[row.free, row.creator, row.pro, row.agency].map((value, i) => (
+                    {[row.free, row.creator, row.pro, row.agency, row.enterprise].map((value, i) => (
                       <td key={i} className={`tnum px-4 py-3.5 ${value === "-" ? "text-fg-faint" : "text-fg-sub"}`}>
                         {value}
                       </td>

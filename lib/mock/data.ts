@@ -753,15 +753,16 @@ export const usageStats: UsageStat[] = [
 ];
 
 export const planFeatures: PlanFeature[] = [
-  { label: "채널 연동", free: "1채널", creator: "3채널", pro: "3채널", agency: "다중 클라이언트" },
-  { label: "콘텐츠 분석", free: "월 10회", creator: "월 100회", pro: "무제한", agency: "무제한" },
-  { label: "탐색/트렌드", free: "요약만", creator: "전체 열람", pro: "전체 열람", agency: "전체 열람" },
-  { label: "경쟁사 분석", free: "-", creator: "계정 3개", pro: "계정 10개", agency: "무제한" },
-  { label: "경쟁사 광고 모니터링", free: "-", creator: "-", pro: "제공", agency: "제공" },
-  { label: "메타광고 관리", free: "조회만", creator: "조회만", pro: "생성·관리", agency: "멀티 클라이언트" },
-  { label: "인스타 댓글 자동 DM", free: "-", creator: "월 500건", pro: "월 3,000건", agency: "무제한" },
-  { label: "AI 카드뉴스/영상", free: "월 3회(워터마크)", creator: "카드뉴스 무제한", pro: "무제한", agency: "무제한 + 화이트라벨" },
-  { label: "팀 기능", free: "-", creator: "-", pro: "최대 3인", agency: "무제한 + 권한 관리" },
+  { label: "채널 연동", free: "1채널", creator: "3채널", pro: "3채널", agency: "클라이언트 10팀", enterprise: "클라이언트 무제한" },
+  { label: "콘텐츠 분석", free: "월 10회", creator: "월 100회", pro: "무제한", agency: "무제한", enterprise: "무제한" },
+  { label: "탐색/트렌드", free: "요약만", creator: "전체 열람", pro: "전체 열람", agency: "전체 열람", enterprise: "전체 열람" },
+  { label: "경쟁사 분석", free: "-", creator: "계정 3개", pro: "계정 10개", agency: "무제한", enterprise: "무제한" },
+  { label: "경쟁사 광고 모니터링", free: "-", creator: "-", pro: "제공", agency: "제공", enterprise: "제공" },
+  { label: "메타광고 관리", free: "조회만", creator: "조회만", pro: "생성·관리", agency: "멀티 클라이언트", enterprise: "멀티 클라이언트" },
+  { label: "인스타 댓글 자동 DM", free: "-", creator: "월 500건", pro: "월 3,000건", agency: "월 10,000건", enterprise: "무제한" },
+  { label: "AI 카드뉴스/영상", free: "월 3회(워터마크)", creator: "카드뉴스 무제한", pro: "무제한", agency: "무제한 + 화이트라벨", enterprise: "무제한 + 화이트라벨" },
+  { label: "팀 기능", free: "-", creator: "-", pro: "최대 3인", agency: "최대 10인 + 권한 관리", enterprise: "무제한 + 권한 관리" },
+  { label: "지원", free: "커뮤니티", creator: "이메일", pro: "이메일", agency: "이메일 우선 지원", enterprise: "전담 매니저" },
 ];
 
 export const reports: ReportItem[] = [

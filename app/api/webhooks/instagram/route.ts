@@ -29,7 +29,8 @@ const PLAN_DM_LIMITS: Record<string, number> = {
   free: 0,
   creator: 500,
   pro: 3000,
-  agency: 1000000, // 무제한(실질) — 플랫폼 안전 상한이 별도로 걸린다
+  agency: 10000,
+  enterprise: 1000000, // 무제한(실질) — 플랫폼 안전 상한이 별도로 걸린다
 };
 
 export async function GET(request: Request) {

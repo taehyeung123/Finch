@@ -37,6 +37,7 @@ const CARDNEWS_LIMITS: Record<string, number> = {
   creator: 1000000,
   pro: 1000000,
   agency: 1000000,
+  enterprise: 1000000,
 };
 
 const TONE_LABEL: Record<string, string> = {

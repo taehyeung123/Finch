@@ -504,3 +504,15 @@ create trigger trg_payment_orders_updated before update on public.payment_orders
 -- ═══════════════════════════════════════════════════════════════
 
 alter table public.connected_accounts add column if not exists avatar_url text;
+
+-- ═══════════════════════════════════════════════════════════════
+-- 0007_plan_enterprise.sql — 요금제 개편 (유료 4단계, Enterprise 추가)
+-- ═══════════════════════════════════════════════════════════════
+
+alter table public.users_profile drop constraint if exists users_profile_plan_check;
+alter table public.users_profile add constraint users_profile_plan_check
+  check (plan in ('free','creator','pro','agency','enterprise'));
+
+alter table public.payment_orders drop constraint if exists payment_orders_plan_check;
+alter table public.payment_orders add constraint payment_orders_plan_check
+  check (plan in ('creator','pro','agency','enterprise'));
