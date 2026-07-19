@@ -102,6 +102,41 @@ export async function getCurrentPlan(): Promise<PlanKey> {
   return plan === "creator" || plan === "pro" || plan === "agency" || plan === "enterprise" ? plan : "free";
 }
 
+export interface SubscriptionView {
+  id: string;
+  plan: string;
+  status: "active" | "past_due" | "canceled";
+  nextBillingAt: string | null;
+  cardSummary: string | null;
+}
+
+/** 현재 구독(정기결제) — 만료·초안 제외 최신 1건. 데모/비로그인/없음은 null. */
+export async function getSubscription(): Promise<SubscriptionView | null> {
+  if (isDemoMode()) return null;
+  const { supabase, user } = await getUser();
+  if (!user) return null;
+  const { data, error } = await supabase
+    .from("subscriptions")
+    .select("id, plan, status, next_billing_at, card_summary")
+    .in("status", ["active", "past_due", "canceled"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    // 0009 미적용 등 — 구독 없음으로 폴백
+    console.warn("[internal] 구독 조회 실패:", error.message);
+    return null;
+  }
+  if (!data) return null;
+  return {
+    id: data.id,
+    plan: data.plan,
+    status: data.status as SubscriptionView["status"],
+    nextBillingAt: data.next_billing_at,
+    cardSummary: data.card_summary,
+  };
+}
+
 export interface PaymentOrderView {
   id: string;
   plan: string;

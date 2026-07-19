@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptToken, encryptToken } from "@/lib/crypto/tokens";
 import { fetchAccountInfo, refreshLongLivedToken } from "@/lib/meta/instagram-oauth";
+import { chargeBilling } from "@/lib/toss/billing";
+import { PLAN_NAMES, PLAN_PRICES, isPaidPlan } from "@/lib/toss/config";
 import { isAuthorizedCron } from "@/lib/cron";
 
 /**
@@ -82,6 +84,151 @@ async function notifyTokenExpiry(admin: Admin, userId: string, body: string) {
     title: "인스타그램 연동 토큰 만료 임박",
     body,
   });
+}
+
+/**
+ * 정기결제 청구 처리 (뷰스코프 검증 패턴 이식 — Toss는 스케줄링 미제공이라 직접 구현).
+ * - 결제 예정일 도래(active/past_due) 구독을 청구. orderId는 주기+재시도 결정적 생성 →
+ *   Toss Idempotency-Key로 이중 청구 방지 (재시도 카운트는 '청구 실패'에만 증가하므로,
+ *   청구 성공 후 DB 반영 실패 시 같은 키로 안전 재실행된다).
+ * - 3회 연속 실패 → 해지 + free 강등 + 알림. 해지 구독은 기간 종료일에 만료 처리.
+ * - 갱신 3일 전 인앱 사전 고지 (전자상거래법 갱신 고지 — 이메일 인프라 도입 전 인앱 대체).
+ */
+async function processSubscriptions(admin: Admin) {
+  const nowIso = new Date().toISOString();
+  let chargedCount = 0;
+  let failedCount = 0;
+  let expiredCount = 0;
+
+  // 1) 결제 예정일 도래 청구
+  const { data: due } = await admin
+    .from("subscriptions")
+    .select("id, user_id, plan, toss_customer_key, billing_key_cipher, next_billing_at, billing_retry_count")
+    .in("status", ["active", "past_due"])
+    .lte("next_billing_at", nowIso)
+    .limit(100);
+
+  for (const sub of due ?? []) {
+    if (!isPaidPlan(sub.plan)) continue;
+    const amount = PLAN_PRICES[sub.plan];
+    const planName = PLAN_NAMES[sub.plan];
+    const billingKey = decryptToken(sub.billing_key_cipher);
+
+    const failCharge = async (reason: string) => {
+      const nextRetry = (sub.billing_retry_count ?? 0) + 1;
+      if (nextRetry >= 3) {
+        // 3회 실패 — 해지 + 강등 + 알림
+        await admin.from("subscriptions").update({ status: "canceled", canceled_at: nowIso, billing_retry_count: nextRetry }).eq("id", sub.id);
+        await admin.from("users_profile").update({ plan: "free" }).eq("id", sub.user_id);
+        await admin.from("notifications").insert({
+          user_id: sub.user_id,
+          type: "billing",
+          title: "정기결제 실패로 구독이 해지되었어요",
+          body: `${planName} 플랜 결제가 3회 실패해 구독이 해지되고 무료 플랜으로 전환되었어요. 요금제에서 다시 구독할 수 있습니다.`,
+        });
+      } else {
+        await admin.from("subscriptions").update({ status: "past_due", billing_retry_count: nextRetry }).eq("id", sub.id);
+        await admin.from("notifications").insert({
+          user_id: sub.user_id,
+          type: "billing",
+          title: "정기결제에 실패했어요",
+          body: `${planName} 플랜 결제가 실패했어요(${reason}). 내일 다시 시도합니다. 카드 한도·유효기간을 확인해 주세요.`,
+        });
+      }
+      failedCount++;
+    };
+
+    if (!billingKey) {
+      await failCharge("결제 수단 확인 불가");
+      continue;
+    }
+
+    const cycle = String(sub.next_billing_at ?? nowIso).slice(0, 10).replaceAll("-", "");
+    const orderId = `sub-${sub.id.replaceAll("-", "").slice(0, 12)}-${cycle}-r${sub.billing_retry_count ?? 0}`;
+    const charged = await chargeBilling(billingKey, {
+      customerKey: sub.toss_customer_key,
+      amount,
+      orderId,
+      orderName: `핀치 ${planName} 플랜 (정기결제)`,
+    });
+
+    if (!charged.ok) {
+      console.error("[cron:billing] 청구 실패:", sub.id, charged.code, charged.message);
+      await failCharge(charged.message);
+      continue;
+    }
+
+    const next = new Date(sub.next_billing_at ?? nowIso);
+    next.setMonth(next.getMonth() + 1);
+    const { error: upErr } = await admin
+      .from("subscriptions")
+      .update({ status: "active", billing_retry_count: 0, next_billing_at: next.toISOString() })
+      .eq("id", sub.id);
+    if (upErr) {
+      // 청구는 성공 — 반영 실패 시 다음 실행에서 같은 orderId(Idempotency)로 안전 재실행
+      console.error("[cron:billing] 구독 갱신 반영 실패:", sub.id, upErr.message);
+      continue;
+    }
+    const { error: orderErr } = await admin.from("payment_orders").insert({
+      user_id: sub.user_id,
+      order_id: orderId,
+      plan: sub.plan,
+      amount,
+      order_name: `핀치 ${planName} 플랜 (정기결제)`,
+      status: "paid",
+      payment_key: charged.data.paymentKey,
+      method: charged.data.method ?? "billing",
+      approved_at: charged.data.approvedAt ?? nowIso,
+      raw: charged.data as unknown as Record<string, unknown>,
+    });
+    if (orderErr) console.error("[cron:billing] 주문 기록 실패:", sub.id, orderErr.message);
+    // past_due에서 복구된 경우 대비 플랜 재적용
+    await admin.from("users_profile").update({ plan: sub.plan }).eq("id", sub.user_id);
+    chargedCount++;
+  }
+
+  // 2) 해지 구독의 기간 종료 — 만료 처리 + free 강등
+  const { data: ended } = await admin
+    .from("subscriptions")
+    .select("id, user_id, plan")
+    .eq("status", "canceled")
+    .lte("next_billing_at", nowIso)
+    .limit(100);
+  for (const sub of ended ?? []) {
+    await admin.from("subscriptions").update({ status: "expired" }).eq("id", sub.id);
+    await admin.from("users_profile").update({ plan: "free" }).eq("id", sub.user_id);
+    await admin.from("notifications").insert({
+      user_id: sub.user_id,
+      type: "billing",
+      title: "구독 기간이 끝났어요",
+      body: "해지한 구독의 이용 기간이 종료되어 무료 플랜으로 전환되었어요.",
+    });
+    expiredCount++;
+  }
+
+  // 3) 갱신 3일 전 사전 고지 (인앱) — 5일 중복 방지로 주기당 1회
+  const from = new Date(Date.now() + 2 * 86_400_000).toISOString();
+  const to = new Date(Date.now() + 4 * 86_400_000).toISOString();
+  const { data: upcoming } = await admin
+    .from("subscriptions")
+    .select("id, user_id, plan, next_billing_at")
+    .eq("status", "active")
+    .gte("next_billing_at", from)
+    .lte("next_billing_at", to)
+    .limit(200);
+  for (const sub of upcoming ?? []) {
+    if (!isPaidPlan(sub.plan)) continue;
+    await notifyOnce(admin, {
+      userId: sub.user_id,
+      type: "billing",
+      settingKey: "budget",
+      dedupeMs: 5 * 86_400_000,
+      title: "곧 정기결제가 예정되어 있어요",
+      body: `${PLAN_NAMES[sub.plan]} 플랜이 ${String(sub.next_billing_at).slice(0, 10)}에 ${PLAN_PRICES[sub.plan].toLocaleString("ko-KR")}원 자동 결제될 예정이에요. 해지는 설정 > 요금제에서 가능합니다.`,
+    });
+  }
+
+  return { charged: chargedCount, chargeFailed: failedCount, expired: expiredCount };
 }
 
 export async function GET(request: Request) {
@@ -185,5 +332,8 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, total: accounts?.length ?? 0, refreshed, failed, notified, spikes });
+  // 정기결제 청구·만료·사전고지 (같은 일일 크론에서 처리 — Hobby 크론 2개 제한)
+  const billing = await processSubscriptions(admin);
+
+  return NextResponse.json({ ok: true, total: accounts?.length ?? 0, refreshed, failed, notified, spikes, billing });
 }

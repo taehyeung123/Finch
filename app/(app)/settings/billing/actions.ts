@@ -1,7 +1,9 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { PLAN_NAMES, PLAN_PRICES, isPaidPlan } from "@/lib/toss/config";
 
 /**
@@ -41,4 +43,46 @@ export async function createCheckout(plan: string): Promise<CreateCheckoutResult
   }
 
   return { ok: true, orderId, orderName, amount };
+}
+
+/**
+ * 구독 해지 — 자동갱신을 끈다. 이미 결제한 기간(next_billing_at까지)은 계속 이용 가능하고,
+ * 기간 종료 시 크론이 무료 플랜으로 전환한다. 쓰기는 admin 전용(RLS에 update 정책 없음).
+ */
+export async function cancelSubscription(): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  const admin = createAdminClient();
+  if (!admin) return;
+
+  const { error } = await admin
+    .from("subscriptions")
+    .update({ status: "canceled", canceled_at: new Date().toISOString() })
+    .eq("user_id", user.id)
+    .in("status", ["active", "past_due"]);
+  if (error) console.error("[billing] 구독 해지 실패:", error.message);
+  revalidatePath("/settings/billing");
+}
+
+/** 해지 취소(재개) — 기간 종료 전이면 자동갱신을 다시 켠다 */
+export async function resumeSubscription(): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  const admin = createAdminClient();
+  if (!admin) return;
+
+  const { error } = await admin
+    .from("subscriptions")
+    .update({ status: "active", canceled_at: null })
+    .eq("user_id", user.id)
+    .eq("status", "canceled")
+    .gt("next_billing_at", new Date().toISOString());
+  if (error) console.error("[billing] 구독 재개 실패:", error.message);
+  revalidatePath("/settings/billing");
 }

@@ -7,8 +7,15 @@ import { UsageGauge } from "@/components/ui/charts";
 import { cn } from "@/lib/cn";
 import { formatDate, formatKRW } from "@/lib/format";
 import { planFeatures } from "@/lib/data";
-import { getCurrentPlan, getPaymentOrders, getUsageStats, type PaymentOrderView } from "@/lib/data/internal";
+import {
+  getCurrentPlan,
+  getPaymentOrders,
+  getSubscription,
+  getUsageStats,
+  type PaymentOrderView,
+} from "@/lib/data/internal";
 import { SettingsNav } from "../_components/settings-nav";
+import { cancelSubscription, resumeSubscription } from "./actions";
 
 /*
   요금제·사용량 (PRD PART 4.13 + PART 9 요금제 설계)
@@ -30,7 +37,15 @@ const ORDER_STATUS: Record<PaymentOrderView["status"], { label: string; tone: "p
   canceled: { label: "취소됨", tone: "neutral" },
 };
 
-function PlanAction({ planKey, current }: { planKey: (typeof PLAN_DEFS)[number]["key"]; current: boolean }) {
+function PlanAction({
+  planKey,
+  current,
+  hasActiveSub,
+}: {
+  planKey: (typeof PLAN_DEFS)[number]["key"];
+  current: boolean;
+  hasActiveSub: boolean;
+}) {
   if (current) {
     return (
       <Button size="sm" variant="secondary" disabled>
@@ -40,27 +55,36 @@ function PlanAction({ planKey, current }: { planKey: (typeof PLAN_DEFS)[number][
   }
   if (planKey === "free") {
     return (
-      <Button size="sm" variant="ghost">
+      <Button size="sm" variant="ghost" disabled title="유료 구독을 해지하면 기간 종료 후 자동으로 무료 플랜이 됩니다">
         다운그레이드
       </Button>
     );
   }
+  if (hasActiveSub) {
+    return (
+      <Button size="sm" variant="secondary" disabled title="플랜 변경은 현재 구독을 해지한 뒤 가능합니다 (남은 기간 이용 후 재구독)">
+        구독하기
+      </Button>
+    );
+  }
   return (
-    <a href={`/settings/billing/checkout?plan=${planKey}`} className={buttonClasses("primary", "sm")}>
-      업그레이드
+    <a href={`/settings/billing/subscribe?plan=${planKey}`} className={buttonClasses("primary", "sm")}>
+      구독하기
     </a>
   );
 }
 
 export default async function BillingSettingsPage() {
-  const [usageStats, currentPlan, orders] = await Promise.all([
+  const [usageStats, currentPlan, orders, subscription] = await Promise.all([
     getUsageStats(),
     getCurrentPlan(),
     getPaymentOrders(),
+    getSubscription(),
   ]);
   const plans = PLAN_DEFS.map((p) => ({ ...p, current: p.key === currentPlan }));
   const currentName = PLAN_DEFS.find((p) => p.key === currentPlan)?.name ?? "Free";
   const lastPaid = orders.find((o) => o.status === "paid");
+  const hasActiveSub = subscription != null && subscription.status !== "canceled";
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -71,15 +95,41 @@ export default async function BillingSettingsPage() {
       <SettingsNav />
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* 현재 플랜 — users_profile.plan 실조회 (결제 승인 시 갱신됨) */}
+        {/* 현재 플랜 + 구독 상태 — users_profile.plan·subscriptions 실조회 */}
         <Card>
           <CardHeader title="현재 플랜" description="구독 중인 요금제" />
           <CardBody className="space-y-3">
             <div className="flex items-center gap-2">
               <span className="text-xl font-bold">{currentName}</span>
               <Badge tone="primary">사용 중</Badge>
+              {subscription?.status === "active" ? <Badge tone="positive">자동갱신 중</Badge> : null}
+              {subscription?.status === "past_due" ? <Badge tone="warning">결제 재시도 중</Badge> : null}
+              {subscription?.status === "canceled" ? <Badge tone="neutral">해지 예약됨</Badge> : null}
             </div>
-            {lastPaid ? (
+
+            {subscription ? (
+              <div className="space-y-1.5 text-[14px] text-fg-sub">
+                {subscription.nextBillingAt ? (
+                  <p>
+                    {subscription.status === "canceled" ? "이용 종료일" : "다음 결제일"}{" "}
+                    <span className="tnum font-semibold text-fg">{subscription.nextBillingAt.slice(0, 10)}</span>
+                  </p>
+                ) : null}
+                {subscription.cardSummary ? (
+                  <p className="text-[13px] text-fg-faint">결제 카드 {subscription.cardSummary}</p>
+                ) : null}
+                {subscription.status === "past_due" ? (
+                  <p className="text-[13px] font-medium text-warning">
+                    최근 정기결제가 실패했어요. 카드 상태를 확인해 주세요 — 자동으로 재시도합니다.
+                  </p>
+                ) : null}
+                {subscription.status === "canceled" ? (
+                  <p className="text-[13px] text-fg-faint">
+                    자동갱신이 꺼져 있어요. 종료일까지는 그대로 이용할 수 있습니다.
+                  </p>
+                ) : null}
+              </div>
+            ) : lastPaid ? (
               <p className="text-[14px] text-fg-sub">
                 최근 결제{" "}
                 <span className="tnum font-semibold text-fg">
@@ -92,6 +142,21 @@ export default async function BillingSettingsPage() {
                 {currentPlan === "free" ? "무료 플랜을 이용 중입니다." : "결제 내역이 없습니다."}
               </p>
             )}
+
+            {subscription && subscription.status !== "canceled" ? (
+              <form action={cancelSubscription}>
+                <Button size="sm" variant="danger" type="submit">
+                  구독 해지
+                </Button>
+              </form>
+            ) : null}
+            {subscription?.status === "canceled" ? (
+              <form action={resumeSubscription}>
+                <Button size="sm" variant="secondary" type="submit">
+                  해지 취소 (자동갱신 다시 켜기)
+                </Button>
+              </form>
+            ) : null}
           </CardBody>
         </Card>
 
@@ -156,7 +221,7 @@ export default async function BillingSettingsPage() {
                     key={plan.key}
                     className={cn("px-3 pb-3 pt-4", plan.current && "rounded-b-card bg-primary-weak")}
                   >
-                    <PlanAction planKey={plan.key} current={plan.current} />
+                    <PlanAction planKey={plan.key} current={plan.current} hasActiveSub={hasActiveSub} />
                   </td>
                 ))}
               </tr>
@@ -194,19 +259,22 @@ export default async function BillingSettingsPage() {
         </Card>
       ) : null}
 
-      {/* 결제 수단 — 정기결제(자동 갱신)는 자동결제 별도 계약 후 제공 */}
+      {/* 결제 수단 — 정기결제(빌링) 카드 */}
       <Card>
         <CardHeader
           title="결제 수단"
-          action={<Badge tone="neutral">단건 결제</Badge>}
+          action={hasActiveSub ? <Badge tone="positive">자동결제 등록됨</Badge> : <Badge tone="neutral">미등록</Badge>}
         />
         <CardBody className="space-y-1.5">
           <p className="flex items-center gap-2 text-[14px] text-fg-sub">
             <CreditCard className="size-4 text-fg-faint" aria-hidden />
-            결제는 업그레이드 시 Toss 결제창에서 진행됩니다
+            {subscription?.cardSummary
+              ? `등록된 카드 ${subscription.cardSummary}`
+              : "구독 시작 시 카드를 한 번 등록하면 매월 자동으로 결제됩니다"}
           </p>
           <p className="text-[13px] text-fg-faint">
-            자동 갱신(정기결제)은 결제사 계약 완료 후 제공될 예정입니다. 현재는 단건 결제로 플랜이 적용됩니다.
+            매월 결제 예정일 3일 전에 알림으로 미리 알려드리며, 언제든 이 화면에서 해지할 수 있어요.
+            {" "}(현재 테스트 모드 — 실제 청구 없음)
           </p>
         </CardBody>
       </Card>

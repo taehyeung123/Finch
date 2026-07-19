@@ -531,3 +531,33 @@ create policy "own notification settings" on public.notification_settings
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create trigger trg_notification_settings_updated before update on public.notification_settings
   for each row execute function public.set_updated_at();
+
+-- ═══════════════════════════════════════════════════════════════
+-- 0009_subscriptions.sql — 정기결제(빌링) 구독
+-- ═══════════════════════════════════════════════════════════════
+
+create table if not exists public.subscriptions (
+  id                  uuid primary key default gen_random_uuid(),
+  user_id             uuid not null references auth.users(id) on delete cascade,
+  plan                text not null check (plan in ('creator','pro','agency','enterprise')),
+  toss_customer_key   text not null unique,
+  billing_key_cipher  text,
+  card_summary        text,
+  status              text not null default 'pending'
+                        check (status in ('pending','active','past_due','canceled','expired')),
+  billing_retry_count integer not null default 0,
+  next_billing_at     timestamptz,
+  canceled_at         timestamptz,
+  created_at          timestamptz not null default now(),
+  updated_at          timestamptz not null default now()
+);
+alter table public.subscriptions enable row level security;
+create policy "own subscriptions select" on public.subscriptions
+  for select using (auth.uid() = user_id);
+create index if not exists subscriptions_due_idx on public.subscriptions (status, next_billing_at);
+create trigger trg_subscriptions_updated before update on public.subscriptions
+  for each row execute function public.set_updated_at();
+
+alter table public.notifications drop constraint if exists notifications_type_check;
+alter table public.notifications add constraint notifications_type_check
+  check (type in ('competitor_ad','trend','account_spike','account_drop','token_expiry','budget','billing'));
