@@ -6,9 +6,11 @@ import {
   ArrowUpRight,
   BellOff,
   CheckCheck,
+  CreditCard,
   KeyRound,
   Megaphone,
   Settings,
+  Sparkles,
   TrendingUp,
   Wallet,
 } from "lucide-react";
@@ -41,6 +43,8 @@ const TYPE_TO_FILTER: Record<NotificationType, FilterValue> = {
   account_drop: "account",
   token_expiry: "system",
   budget: "system",
+  billing: "system",
+  studio: "system",
 };
 
 const TYPE_ICON: Record<NotificationType, LucideIcon> = {
@@ -50,6 +54,8 @@ const TYPE_ICON: Record<NotificationType, LucideIcon> = {
   account_drop: ArrowDownRight,
   token_expiry: KeyRound,
   budget: Wallet,
+  billing: CreditCard,
+  studio: Sparkles,
 };
 
 /* 상승=초록/하락=빨강 (PART 7.4), 나머지는 중립 */

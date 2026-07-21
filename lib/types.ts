@@ -152,7 +152,9 @@ export type NotificationType =
   | "account_spike"
   | "account_drop"
   | "token_expiry"
-  | "budget";
+  | "budget"
+  | "billing"
+  | "studio";
 
 export interface AppNotification {
   id: string;

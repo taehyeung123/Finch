@@ -19,6 +19,8 @@ export const NOTIFICATION_ROWS = [
   { key: "account", label: "내 계정 급성장·하락", description: "팔로워·조회수가 평소 대비 크게 변하면 알림" },
   { key: "token_expiry", label: "연동 토큰 만료", description: "채널 연동 토큰 만료가 임박하면 알림" },
   { key: "budget", label: "광고 예산 소진", description: "캠페인 일 예산이 임계치에 도달하면 알림" },
+  { key: "billing", label: "정기결제 안내", description: "결제 예정·실패·구독 만료 등 결제 관련 알림" },
+  { key: "studio", label: "예약 발행 결과", description: "예약한 카드뉴스가 발행되거나 실패하면 알림" },
 ] as const;
 
 export type RowKey = (typeof NOTIFICATION_ROWS)[number]["key"];
@@ -31,6 +33,8 @@ export const DEFAULT_STATE: NotificationSettingsState = {
   account: { inapp: true, email: false },
   token_expiry: { inapp: true, email: true },
   budget: { inapp: true, email: false },
+  billing: { inapp: true, email: true },
+  studio: { inapp: true, email: false },
 };
 
 function Toggle({

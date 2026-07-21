@@ -5,6 +5,7 @@ import { fetchAccountInfo, refreshLongLivedToken } from "@/lib/meta/instagram-oa
 import { chargeBilling } from "@/lib/toss/billing";
 import { PLAN_NAMES, PLAN_PRICES, isPaidPlan } from "@/lib/toss/config";
 import { isAuthorizedCron } from "@/lib/cron";
+import { notifyUser } from "@/lib/notify";
 
 /**
  * 토큰 자동 갱신 + 계정 스냅샷 크론 (매일 03:00 KST, vercel.json).
@@ -14,6 +15,8 @@ import { isAuthorizedCron } from "@/lib/cron";
  *    갱신 실패·만료 임박(7일 이내)이면 token_expiry 알림을 넣는다(3일 중복 방지, 설정 존중).
  * 2) 팔로워 급변 감지: 매일 계정 정보를 새로 받아 전일 저장값과 비교, 급증/급감이면
  *    account_spike/account_drop 알림을 넣는다(24시간 중복 방지, 설정 'account' 키 존중).
+ * 3) 정기결제 청구·해지·사전고지 — processSubscriptions().
+ * 알림은 전부 lib/notify.notifyUser로 생성해 인앱 설정·이메일 발송을 일관되게 처리한다.
  */
 export const runtime = "nodejs";
 
@@ -30,56 +33,10 @@ function daysUntil(iso: string | null): number | null {
 
 type Admin = NonNullable<ReturnType<typeof createAdminClient>>;
 
-/**
- * 알림 생성 공통 — 설정에서 해당 유형을 끈 사용자·중복 창 내 재발송은 건너뛴다.
- * settingKey: notification_settings.settings의 키 (token_expiry / account 등)
- */
-async function notifyOnce(
-  admin: Admin,
-  params: {
-    userId: string;
-    type: string;
-    settingKey: string;
-    dedupeMs: number;
-    title: string;
-    body: string;
-  },
-) {
-  const { data: setting } = await admin
-    .from("notification_settings")
-    .select("settings")
-    .eq("user_id", params.userId)
-    .maybeSingle();
-  const pref = (setting?.settings as Record<string, { inapp?: boolean }> | null)?.[params.settingKey];
-  if (pref && pref.inapp === false) return false;
-
-  const { data: recent } = await admin
-    .from("notifications")
-    .select("id")
-    .eq("user_id", params.userId)
-    .eq("type", params.type)
-    .gte("created_at", new Date(Date.now() - params.dedupeMs).toISOString())
-    .limit(1);
-  if (recent && recent.length > 0) return false;
-
-  const { error } = await admin.from("notifications").insert({
-    user_id: params.userId,
-    type: params.type,
-    title: params.title,
-    body: params.body,
-  });
-  if (error) {
-    console.error("[cron:refresh] 알림 생성 실패:", params.userId, error.message);
-    return false;
-  }
-  return true;
-}
-
 async function notifyTokenExpiry(admin: Admin, userId: string, body: string) {
-  await notifyOnce(admin, {
+  await notifyUser(admin, {
     userId,
     type: "token_expiry",
-    settingKey: "token_expiry",
     dedupeMs: 3 * 86_400_000,
     title: "인스타그램 연동 토큰 만료 임박",
     body,
@@ -92,7 +49,7 @@ async function notifyTokenExpiry(admin: Admin, userId: string, body: string) {
  *   Toss Idempotency-Key로 이중 청구 방지 (재시도 카운트는 '청구 실패'에만 증가하므로,
  *   청구 성공 후 DB 반영 실패 시 같은 키로 안전 재실행된다).
  * - 3회 연속 실패 → 해지 + free 강등 + 알림. 해지 구독은 기간 종료일에 만료 처리.
- * - 갱신 3일 전 인앱 사전 고지 (전자상거래법 갱신 고지 — 이메일 인프라 도입 전 인앱 대체).
+ * - 갱신 3일 전 사전 고지 (전자상거래법 갱신 고지 — 인앱 + 설정 시 이메일).
  */
 async function processSubscriptions(admin: Admin) {
   const nowIso = new Date().toISOString();
@@ -117,19 +74,19 @@ async function processSubscriptions(admin: Admin) {
     const failCharge = async (reason: string) => {
       const nextRetry = (sub.billing_retry_count ?? 0) + 1;
       if (nextRetry >= 3) {
-        // 3회 실패 — 해지 + 강등 + 알림
+        // 3회 실패 — 해지 + 강등 + 알림 (billing 알림은 중요도가 높아 dedupe 없이 즉시 발송)
         await admin.from("subscriptions").update({ status: "canceled", canceled_at: nowIso, billing_retry_count: nextRetry }).eq("id", sub.id);
         await admin.from("users_profile").update({ plan: "free" }).eq("id", sub.user_id);
-        await admin.from("notifications").insert({
-          user_id: sub.user_id,
+        await notifyUser(admin, {
+          userId: sub.user_id,
           type: "billing",
           title: "정기결제 실패로 구독이 해지되었어요",
           body: `${planName} 플랜 결제가 3회 실패해 구독이 해지되고 무료 플랜으로 전환되었어요. 요금제에서 다시 구독할 수 있습니다.`,
         });
       } else {
         await admin.from("subscriptions").update({ status: "past_due", billing_retry_count: nextRetry }).eq("id", sub.id);
-        await admin.from("notifications").insert({
-          user_id: sub.user_id,
+        await notifyUser(admin, {
+          userId: sub.user_id,
           type: "billing",
           title: "정기결제에 실패했어요",
           body: `${planName} 플랜 결제가 실패했어요(${reason}). 내일 다시 시도합니다. 카드 한도·유효기간을 확인해 주세요.`,
@@ -197,8 +154,8 @@ async function processSubscriptions(admin: Admin) {
   for (const sub of ended ?? []) {
     await admin.from("subscriptions").update({ status: "expired" }).eq("id", sub.id);
     await admin.from("users_profile").update({ plan: "free" }).eq("id", sub.user_id);
-    await admin.from("notifications").insert({
-      user_id: sub.user_id,
+    await notifyUser(admin, {
+      userId: sub.user_id,
       type: "billing",
       title: "구독 기간이 끝났어요",
       body: "해지한 구독의 이용 기간이 종료되어 무료 플랜으로 전환되었어요.",
@@ -206,7 +163,7 @@ async function processSubscriptions(admin: Admin) {
     expiredCount++;
   }
 
-  // 3) 갱신 3일 전 사전 고지 (인앱) — 5일 중복 방지로 주기당 1회
+  // 3) 갱신 3일 전 사전 고지 — 5일 중복 방지로 주기당 1회
   const from = new Date(Date.now() + 2 * 86_400_000).toISOString();
   const to = new Date(Date.now() + 4 * 86_400_000).toISOString();
   const { data: upcoming } = await admin
@@ -218,10 +175,9 @@ async function processSubscriptions(admin: Admin) {
     .limit(200);
   for (const sub of upcoming ?? []) {
     if (!isPaidPlan(sub.plan)) continue;
-    await notifyOnce(admin, {
+    await notifyUser(admin, {
       userId: sub.user_id,
       type: "billing",
-      settingKey: "budget",
       dedupeMs: 5 * 86_400_000,
       title: "곧 정기결제가 예정되어 있어요",
       body: `${PLAN_NAMES[sub.plan]} 플랜이 ${String(sub.next_billing_at).slice(0, 10)}에 ${PLAN_PRICES[sub.plan].toLocaleString("ko-KR")}원 자동 결제될 예정이에요. 해지는 설정 > 요금제에서 가능합니다.`,
@@ -312,7 +268,7 @@ export async function GET(request: Request) {
       const delta = info.followersCount - prev;
       if (prev > 0 && Math.abs(delta) >= Math.max(SPIKE_MIN_ABS, Math.round(prev * SPIKE_MIN_PCT))) {
         const up = delta > 0;
-        const sent = await notifyOnce(admin, {
+        const sent = await notifyUser(admin, {
           userId: acc.user_id,
           type: up ? "account_spike" : "account_drop",
           settingKey: "account",
@@ -332,7 +288,7 @@ export async function GET(request: Request) {
     }
   }
 
-  // 정기결제 청구·만료·사전고지 (같은 일일 크론에서 처리 — Hobby 크론 2개 제한)
+  // 정기결제 청구·만료·사전고지 (같은 일일 크론에 통합 — 크론 개수는 별도 제한 없지만 관련 로직 응집)
   const billing = await processSubscriptions(admin);
 
   return NextResponse.json({ ok: true, total: accounts?.length ?? 0, refreshed, failed, notified, spikes, billing });

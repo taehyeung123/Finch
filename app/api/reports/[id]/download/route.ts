@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getLiveAudience, getLiveDashboard } from "@/lib/data/live";
+import { renderReportPdf } from "@/lib/reports/pdf";
 
 /**
- * 리포트 다운로드 — 생성 시점이 아니라 다운로드 시점에 라이브 데이터로 CSV를 만든다.
- * (저장소 비용 0, 항상 최신. PDF 렌더링은 후속 — UI는 Excel(CSV)만 활성.)
+ * 리포트 다운로드 — 생성 시점이 아니라 다운로드 시점에 라이브 데이터로 파일을 만든다
+ * (저장소 비용 0, 항상 최신). report.format에 따라 CSV(엑셀) 또는 PDF로 분기한다.
  * CSV는 UTF-8 BOM을 붙여 한글 엑셀 호환을 보장한다.
  */
 export const runtime = "nodejs";
@@ -35,7 +36,7 @@ export async function GET(
   // RLS로 내 리포트만 조회된다 — 타인 id를 넣어도 not_found
   const { data: report } = await supabase
     .from("reports")
-    .select("id, title, period, channels, created_at")
+    .select("id, title, period, channels, format, created_at")
     .eq("id", id)
     .maybeSingle();
   if (!report) {
@@ -48,6 +49,42 @@ export async function GET(
   }
 
   const s = dashboard.summaries.instagram;
+
+  if (report.format === "pdf") {
+    const pdfBytes = await renderReportPdf({
+      title: report.title,
+      period: report.period,
+      generatedAt: new Date().toLocaleString("ko-KR"),
+      summaryRows: [
+        ["팔로워", s.followers.toLocaleString("ko-KR")],
+        ["팔로워 증감(7일)", `${s.followersDelta >= 0 ? "+" : ""}${s.followersDelta}`],
+        ["조회수(7일)", s.weeklyViews.toLocaleString("ko-KR")],
+        ["게시물 수", String(s.postCount)],
+        ["평균 좋아요", String(s.avgLikes)],
+        ["평균 댓글", String(s.avgComments)],
+        ["참여율 (자체 산출: 상호작용/도달)", `${s.engagementRate}%`],
+      ],
+      dailyRows: audience?.daily,
+      postRows: dashboard.posts.map((p) => ({
+        date: p.publishedAt.slice(0, 10),
+        type: p.type,
+        caption: p.caption,
+        views: p.views,
+        likes: p.likes,
+        comments: p.comments,
+      })),
+    });
+    const filename = `finch-report-${report.created_at?.slice(0, 10) ?? "export"}.pdf`;
+    return new NextResponse(Buffer.from(pdfBytes), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
   const sections: string[] = [];
 
   sections.push(

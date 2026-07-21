@@ -185,10 +185,15 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
                     />
                     {FORMAT_LABEL.excel} (CSV)
                   </label>
-                  <label className="flex items-center gap-2 text-[14px] text-fg-faint" title="PDF 내보내기는 준비 중입니다">
-                    <input type="radio" name="report-format" disabled className="size-4 accent-primary" />
+                  <label className="flex items-center gap-2 text-[14px] text-fg">
+                    <input
+                      type="radio"
+                      name="report-format"
+                      checked={format === "pdf"}
+                      onChange={() => setFormat("pdf")}
+                      className="size-4 accent-primary"
+                    />
                     {FORMAT_LABEL.pdf}
-                    <Badge tone="neutral">준비중</Badge>
                   </label>
                 </div>
               </fieldset>

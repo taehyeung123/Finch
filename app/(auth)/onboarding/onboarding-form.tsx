@@ -6,8 +6,8 @@ import { Briefcase, Info, Megaphone, User } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Channel } from "@/lib/types";
 import { FinchMark } from "@/components/logo";
-import { Button, ButtonLink } from "@/components/ui/button";
-import { ChannelBadge } from "@/components/ui/badge";
+import { Button, ButtonLink, buttonClasses } from "@/components/ui/button";
+import { Badge, ChannelBadge } from "@/components/ui/badge";
 import { AppIconTile } from "@/components/icons/brand";
 
 /** 온보딩 3단계 마법사 — 사용 목적 → 채널 연동 → 완료 (PRD PART 5, 2.2) */
@@ -130,12 +130,18 @@ export function OnboardingForm() {
                     <AppIconTile app={channel} size={38} />
                     <ChannelBadge channel={channel} />
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-fg-faint">앱 심사 후 활성화</span>
-                    <Button type="button" variant="secondary" size="sm" disabled>
+                  {channel === "instagram" ? (
+                    <a href="/api/auth/instagram/start" className={buttonClasses("secondary", "sm")}>
                       연동하기
-                    </Button>
-                  </div>
+                    </a>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <Badge tone="neutral">연동 준비중</Badge>
+                      <Button type="button" variant="secondary" size="sm" disabled>
+                        연동하기
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -161,7 +167,8 @@ export function OnboardingForm() {
             <FinchMark className="size-16 text-primary" />
             <h1 className="mt-5 text-2xl font-bold leading-tight">준비 완료!</h1>
             <p className="mt-2 max-w-sm text-[15px] text-fg-sub">
-              핀치가 준비됐어요. 지금은 데모 데이터로 대시보드를 둘러볼 수 있어요.
+              인스타그램을 연동하셨다면 실제 데이터로 바로 시작할 수 있어요. 아직 연동 전이라면
+              설정에서 언제든 연동할 수 있습니다.
             </p>
             <ButtonLink href="/dashboard" size="lg" className="mt-8">
               대시보드로 가기
