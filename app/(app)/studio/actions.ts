@@ -236,3 +236,23 @@ export async function generateIdeas(keyword: string, category: string): Promise<
     return { ok: false, error: "AI 생성 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요." };
   }
 }
+
+/** 예약 발행 취소 — RLS(auth.uid()=user_id)로 본인 행만, scheduled 상태일 때만 취소 가능 */
+export async function cancelScheduledPost(id: string): Promise<{ ok: boolean }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false };
+
+  const { error } = await supabase
+    .from("scheduled_posts")
+    .update({ status: "canceled" })
+    .eq("id", id)
+    .eq("status", "scheduled");
+  if (error) {
+    console.error("[studio] 예약 취소 실패:", error.message);
+    return { ok: false };
+  }
+  return { ok: true };
+}

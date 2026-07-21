@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
-  CalendarClock,
   Clapperboard,
   Flame,
   ImageDown,
@@ -27,6 +26,8 @@ import { ideaSuggestions, trendItems, TREND_CATEGORIES } from "@/lib/data";
 import type { Channel, IdeaSuggestion, TrendItem } from "@/lib/types";
 import { generateCardNews, generateIdeas } from "./actions";
 import { exportSlidesAsPng } from "@/lib/studio/export-slides";
+import { SchedulePublish } from "./_components/schedule-publish";
+import { ScheduledPostsPanel, type ScheduledPostsPanelHandle } from "./_components/scheduled-posts-panel";
 
 type StudioTab = "cards" | "video" | "ideas";
 
@@ -227,6 +228,7 @@ function buildIdeas(keyword: string, category: string, related: TrendItem[]): Ge
 }
 
 export default function StudioPage() {
+  const scheduledPanelRef = useRef<ScheduledPostsPanelHandle>(null);
   const [tab, setTab] = useState<StudioTab>("cards");
   const [topic, setTopic] = useState("");
   const [tone, setTone] = useState<BrandTone>("friendly");
@@ -420,13 +422,13 @@ export default function StudioPage() {
                     onClick={() => exportSlidesAsPng(slides, slidesFromAi)}
                   >
                     <ImageDown className="size-4" aria-hidden />
-                    이미지 내보내기 (PNG 5장)
+                    이미지 내보내기 (PNG {slides.length}장)
                   </Button>
-                  <Button variant="secondary" disabled title="예약 발행은 준비 중입니다">
-                    <CalendarClock className="size-4" aria-hidden />
-                    예약 발행으로 보내기
-                  </Button>
-                  <Badge tone="neutral">예약 발행 준비중</Badge>
+                  <SchedulePublish
+                    slides={slides}
+                    aiGenerated={slidesFromAi}
+                    onScheduled={() => scheduledPanelRef.current?.refresh()}
+                  />
                 </div>
               </CardBody>
             </Card>
@@ -437,6 +439,8 @@ export default function StudioPage() {
               description="주제를 입력하고 생성하기를 누르면 5장 구성의 카드뉴스 카피가 만들어집니다."
             />
           )}
+
+          <ScheduledPostsPanel ref={scheduledPanelRef} />
         </div>
       ) : null}
 

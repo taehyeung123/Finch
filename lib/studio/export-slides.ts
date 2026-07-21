@@ -97,6 +97,22 @@ function drawSlide(slide: ExportSlide, total: number, aiGenerated: boolean): HTM
   return canvas;
 }
 
+function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("blob_failed"))), "image/png");
+  });
+}
+
+/** 예약 발행 업로드용 — 다운로드 대신 PNG Blob 배열을 반환한다 */
+export async function renderSlidesToBlobs(slides: ExportSlide[], aiGenerated: boolean): Promise<Blob[]> {
+  const blobs: Blob[] = [];
+  for (const slide of slides) {
+    const canvas = drawSlide(slide, slides.length, aiGenerated);
+    blobs.push(await canvasToBlob(canvas));
+  }
+  return blobs;
+}
+
 function downloadCanvas(canvas: HTMLCanvasElement, filename: string): Promise<void> {
   return new Promise((resolve) => {
     canvas.toBlob((blob) => {

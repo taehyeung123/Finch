@@ -62,7 +62,7 @@ function applySecurityHeaders(response: NextResponse) {
     `script-src 'self' 'unsafe-inline' ${toss}${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
     "font-src 'self' https://cdn.jsdelivr.net",
-    `img-src 'self' data: blob: ${toss} ${igCdn}`,
+    `img-src 'self' data: blob: ${toss} ${igCdn}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
     `connect-src 'self' ${toss}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
     `frame-src ${toss}`,
     "frame-ancestors 'none'",
