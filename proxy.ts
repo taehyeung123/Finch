@@ -56,14 +56,21 @@ function applySecurityHeaders(response: NextResponse) {
   // 인스타그램 프로필 사진·게시물 썸네일 CDN (연동 계정 실데이터 표시용)
   const igCdn = "https://*.cdninstagram.com https://*.fbcdn.net";
 
+  // GA4 트래픽 계측 — 측정 ID 설정 시에만 구글 태그매니저/애널리틱스 오리진 허용
+  const gaConfigured = Boolean(process.env.NEXT_PUBLIC_GA_ID);
+  const gaScript = gaConfigured ? " https://www.googletagmanager.com" : "";
+  const gaConnect = gaConfigured
+    ? " https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com"
+    : "";
+
   // CSP — Pretendard 웹폰트(jsdelivr CDN)만 외부 허용. 개발 모드는 HMR 때문에 unsafe-eval 필요
   const csp = [
     "default-src 'self'",
-    `script-src 'self' 'unsafe-inline' ${toss}${isDev ? " 'unsafe-eval'" : ""}`,
+    `script-src 'self' 'unsafe-inline' ${toss}${gaScript}${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
     "font-src 'self' https://cdn.jsdelivr.net",
     `img-src 'self' data: blob: ${toss} ${igCdn}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
-    `connect-src 'self' ${toss}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
+    `connect-src 'self' ${toss}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}${gaConnect}`,
     `frame-src ${toss}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
