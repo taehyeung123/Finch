@@ -108,6 +108,8 @@ export interface SubscriptionView {
   status: "active" | "past_due" | "canceled";
   nextBillingAt: string | null;
   cardSummary: string | null;
+  /** 다운그레이드 예약된 목표 플랜 — 다음 결제일부터 적용된다(0013_plan_change.sql). 예약 없으면 null. */
+  pendingPlan: string | null;
 }
 
 /** 현재 구독(정기결제) — 만료·초안 제외 최신 1건. 데모/비로그인/없음은 null. */
@@ -115,13 +117,25 @@ export async function getSubscription(): Promise<SubscriptionView | null> {
   if (isDemoMode()) return null;
   const { supabase, user } = await getUser();
   if (!user) return null;
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("subscriptions")
-    .select("id, plan, status, next_billing_at, card_summary")
+    .select("id, plan, status, next_billing_at, card_summary, pending_plan")
     .in("status", ["active", "past_due", "canceled"])
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (error && /pending_plan/i.test(error.message)) {
+    // 0013_plan_change.sql 미적용 DB 폴백 — pending_plan 없이 재조회
+    const fallback = await supabase
+      .from("subscriptions")
+      .select("id, plan, status, next_billing_at, card_summary")
+      .in("status", ["active", "past_due", "canceled"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    data = fallback.data ? { ...fallback.data, pending_plan: null } : null;
+    error = fallback.error;
+  }
   if (error) {
     // 0009 미적용 등 — 구독 없음으로 폴백
     console.warn("[internal] 구독 조회 실패:", error.message);
@@ -134,6 +148,7 @@ export async function getSubscription(): Promise<SubscriptionView | null> {
     status: data.status as SubscriptionView["status"],
     nextBillingAt: data.next_billing_at,
     cardSummary: data.card_summary,
+    pendingPlan: data.pending_plan ?? null,
   };
 }
 

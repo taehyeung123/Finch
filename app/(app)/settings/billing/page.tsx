@@ -7,15 +7,17 @@ import { UsageGauge } from "@/components/ui/charts";
 import { cn } from "@/lib/cn";
 import { formatDate, formatKRW } from "@/lib/format";
 import { planFeatures } from "@/lib/data";
+import { PLAN_NAMES, PLAN_PRICES, isPaidPlan } from "@/lib/toss/config";
 import {
   getCurrentPlan,
   getPaymentOrders,
   getSubscription,
   getUsageStats,
   type PaymentOrderView,
+  type PlanKey,
 } from "@/lib/data/internal";
 import { SettingsNav } from "../_components/settings-nav";
-import { cancelSubscription, resumeSubscription } from "./actions";
+import { cancelPlanChange, cancelSubscription, changePlan, resumeSubscription } from "./actions";
 
 /*
   요금제·사용량 (PRD PART 4.13 + PART 9 요금제 설계)
@@ -41,10 +43,12 @@ function PlanAction({
   planKey,
   current,
   hasActiveSub,
+  currentPlanKey,
 }: {
   planKey: (typeof PLAN_DEFS)[number]["key"];
   current: boolean;
   hasActiveSub: boolean;
+  currentPlanKey: PlanKey;
 }) {
   if (current) {
     return (
@@ -61,10 +65,25 @@ function PlanAction({
     );
   }
   if (hasActiveSub) {
+    // 현재 유료 구독 중 다른 유료 플랜으로 전환 — 금액은 서버(changePlan)가 PLAN_PRICES에서만 가져온다.
+    const currentAmount = isPaidPlan(currentPlanKey) ? PLAN_PRICES[currentPlanKey] : 0;
+    const isUpgrade = PLAN_PRICES[planKey] > currentAmount;
     return (
-      <Button size="sm" variant="secondary" disabled title="플랜 변경은 현재 구독을 해지한 뒤 가능합니다 (남은 기간 이용 후 재구독)">
-        구독하기
-      </Button>
+      <form action={changePlan}>
+        <input type="hidden" name="plan" value={planKey} />
+        <Button
+          size="sm"
+          variant={isUpgrade ? "primary" : "secondary"}
+          type="submit"
+          title={
+            isUpgrade
+              ? "지금 새 플랜 요금이 즉시 청구되고 바로 전환됩니다"
+              : "지금은 청구되지 않고, 다음 결제일부터 새 플랜 요금으로 전환됩니다"
+          }
+        >
+          {isUpgrade ? "업그레이드" : "다운그레이드 예약"}
+        </Button>
+      </form>
     );
   }
   return (
@@ -74,7 +93,16 @@ function PlanAction({
   );
 }
 
-export default async function BillingSettingsPage() {
+export default async function BillingSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const sp = await searchParams;
+  const planError = typeof sp.planError === "string" ? sp.planError : null;
+  const planChanged = sp.planChanged === "1";
+  const planScheduled = sp.planScheduled === "1";
+
   const [usageStats, currentPlan, orders, subscription] = await Promise.all([
     getUsageStats(),
     getCurrentPlan(),
@@ -85,6 +113,8 @@ export default async function BillingSettingsPage() {
   const currentName = PLAN_DEFS.find((p) => p.key === currentPlan)?.name ?? "Free";
   const lastPaid = orders.find((o) => o.status === "paid");
   const hasActiveSub = subscription != null && subscription.status !== "canceled";
+  const pendingPlan = subscription?.pendingPlan;
+  const pendingPlanName = isPaidPlan(pendingPlan ?? "") ? PLAN_NAMES[pendingPlan as keyof typeof PLAN_NAMES] : null;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -93,6 +123,22 @@ export default async function BillingSettingsPage() {
         description="현재 플랜과 사용량을 확인하고 요금제를 관리하세요."
       />
       <SettingsNav />
+
+      {planError ? (
+        <div className="rounded-card border border-negative/40 bg-negative-weak p-4 text-[14px] text-negative" role="alert">
+          {planError}
+        </div>
+      ) : null}
+      {planChanged ? (
+        <div className="rounded-card border border-positive/40 bg-positive-weak p-4 text-[14px] text-positive" role="status">
+          플랜이 변경되었어요.
+        </div>
+      ) : null}
+      {planScheduled ? (
+        <div className="rounded-card border border-positive/40 bg-positive-weak p-4 text-[14px] text-positive" role="status">
+          다음 결제일부터 적용되도록 플랜 변경을 예약했어요.
+        </div>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* 현재 플랜 + 구독 상태 — users_profile.plan·subscriptions 실조회 */}
@@ -128,6 +174,11 @@ export default async function BillingSettingsPage() {
                     자동갱신이 꺼져 있어요. 종료일까지는 그대로 이용할 수 있습니다.
                   </p>
                 ) : null}
+                {pendingPlanName ? (
+                  <p className="text-[13px] font-medium text-primary">
+                    다음 결제일부터 {pendingPlanName} 플랜으로 변경 예정
+                  </p>
+                ) : null}
               </div>
             ) : lastPaid ? (
               <p className="text-[14px] text-fg-sub">
@@ -143,20 +194,29 @@ export default async function BillingSettingsPage() {
               </p>
             )}
 
-            {subscription && subscription.status !== "canceled" ? (
-              <form action={cancelSubscription}>
-                <Button size="sm" variant="danger" type="submit">
-                  구독 해지
-                </Button>
-              </form>
-            ) : null}
-            {subscription?.status === "canceled" ? (
-              <form action={resumeSubscription}>
-                <Button size="sm" variant="secondary" type="submit">
-                  해지 취소 (자동갱신 다시 켜기)
-                </Button>
-              </form>
-            ) : null}
+            <div className="flex flex-wrap gap-2">
+              {subscription && subscription.status !== "canceled" ? (
+                <form action={cancelSubscription}>
+                  <Button size="sm" variant="danger" type="submit">
+                    구독 해지
+                  </Button>
+                </form>
+              ) : null}
+              {subscription?.status === "canceled" ? (
+                <form action={resumeSubscription}>
+                  <Button size="sm" variant="secondary" type="submit">
+                    해지 취소 (자동갱신 다시 켜기)
+                  </Button>
+                </form>
+              ) : null}
+              {pendingPlanName ? (
+                <form action={cancelPlanChange}>
+                  <Button size="sm" variant="secondary" type="submit">
+                    예약 취소
+                  </Button>
+                </form>
+              ) : null}
+            </div>
           </CardBody>
         </Card>
 
@@ -221,7 +281,12 @@ export default async function BillingSettingsPage() {
                     key={plan.key}
                     className={cn("px-3 pb-3 pt-4", plan.current && "rounded-b-card bg-primary-weak")}
                   >
-                    <PlanAction planKey={plan.key} current={plan.current} hasActiveSub={hasActiveSub} />
+                    <PlanAction
+                      planKey={plan.key}
+                      current={plan.current}
+                      hasActiveSub={hasActiveSub}
+                      currentPlanKey={currentPlan}
+                    />
                   </td>
                 ))}
               </tr>
