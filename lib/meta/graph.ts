@@ -19,6 +19,14 @@ export const GRAPH_VERSION = "v25.0";
 export const GRAPH_INSTAGRAM_BASE = `https://graph.instagram.com/${GRAPH_VERSION}`;
 const GRAPH_BASE = GRAPH_INSTAGRAM_BASE;
 
+/**
+ * Threads Graph API 베이스 (별도 호스트: graph.threads.net, IG와 버전 체계가 다르다).
+ * TODO: v1.0은 Threads API 공개 시점부터 쓰인 기본 버전 — 최신 변경로그 확인 후 필요시 갱신.
+ * oauth 토큰 교환·리프레시 엔드포인트(threads-oauth.ts)는 스펙상 버전 세그먼트가 없어 이 상수를 쓰지 않는다.
+ */
+export const GRAPH_THREADS_VERSION = "v1.0";
+export const GRAPH_THREADS_BASE = `https://graph.threads.net/${GRAPH_THREADS_VERSION}`;
+
 /** 발송 결과 — dm_sends.status 값과 1:1 매핑 */
 export type SendOutcome =
   | { ok: true; igMessageId: string | null }

@@ -10,20 +10,25 @@ import { accounts as mockAccounts } from "@/lib/data";
 import { isDemoMode } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { INSTAGRAM_SCOPE_LABELS, isInstagramOAuthConfigured } from "@/lib/meta/instagram-oauth";
+import { THREADS_SCOPE_LABELS, isThreadsOAuthConfigured } from "@/lib/meta/threads-oauth";
+import { TIKTOK_SCOPE_LABELS, isTiktokOAuthConfigured } from "@/lib/tiktok/oauth";
 import { SettingsNav } from "./_components/settings-nav";
 import { disconnectAccount } from "./actions";
 
 /*
   계정 연동 관리 (PRD PART 4.2)
-  - 실 모드: Supabase connected_accounts에서 연동 상태를 읽고, 인스타그램은 실제 OAuth로 연동/해제
+  - 실 모드: Supabase connected_accounts에서 연동 상태를 읽고, 인스타그램·Threads·TikTok은 실제 OAuth로 연동/해제
   - 데모 모드: 목데이터로 화면 미리보기
-  - 인스타그램 외 채널(틱톡·쓰레드)은 공식 연동 준비중 — 연동 버튼 비활성
-  - 실 스펙: docs/REAL_API_SPEC.md 1절
+  - TikTok은 심사 없이 확인된 범위가 기본 프로필(팔로워·좋아요·영상 수)뿐이라 카드에 별도 고지한다
+  - 실 스펙: docs/REAL_API_SPEC.md 1절(인스타그램)·5절(Threads)·6절(TikTok)
 */
 
 const CHANNELS: Channel[] = ["instagram", "tiktok", "threads"];
-// 현재 공식 OAuth가 준비된 채널 (틱톡·쓰레드는 후속)
-const OAUTH_READY: Record<Channel, boolean> = { instagram: true, tiktok: false, threads: false };
+const CONNECT_START_PATH: Partial<Record<Channel, string>> = {
+  instagram: "/api/auth/instagram/start",
+  threads: "/api/auth/threads/start",
+  tiktok: "/api/auth/tiktok/start",
+};
 
 interface AccountCard {
   id: string | null;
@@ -63,10 +68,15 @@ async function loadAccountCards(): Promise<AccountCard[]> {
     data: { user },
   } = await supabase.auth.getUser();
   // select("*"): 마이그레이션 시점 차이로 특정 컬럼(avatar_url 등)이 없어도 조회가 깨지지 않게
+  // user_id를 명시 필터링하는 이유: 0012_team.sql이 팀 멤버에게 소유자의 connected_accounts
+  // select를 RLS로 열어줬다 — 여기(계정 연동/해제 화면)는 팀 대시보드가 아니라 "내 연동"
+  // 관리 화면이므로, RLS만 믿지 않고 본인 행으로 명시 제한해 소유자의 연동 카드(재연동·해제
+  // 버튼 포함)가 멤버에게 노출되지 않게 한다.
   const { data: rows } = user
     ? await supabase
         .from("connected_accounts")
         .select("*")
+        .eq("user_id", user.id)
         .order("created_at", { ascending: true })
     : { data: [] };
 
@@ -79,24 +89,28 @@ async function loadAccountCards(): Promise<AccountCard[]> {
       displayName: row?.display_name ?? null,
       avatarUrl: (row?.avatar_url as string | null | undefined) ?? null,
       connected: Boolean(row?.connected),
-      tokenExpiresInDays: daysUntil(row?.token_expires_at ?? null),
+      // TikTok은 액세스 토큰이 24시간짜리라 매일 자동 갱신된다 — "N일 후 만료" 카운트다운을
+      // 그대로 보여주면 정상 상태에서도 매번 "만료 임박"처럼 보여 오해를 유발하므로 숨긴다
+      // (lib/data/live.ts의 getConnectedTiktokAccount 주석과 동일 근거).
+      tokenExpiresInDays: channel === "tiktok" ? null : daysUntil(row?.token_expires_at ?? null),
     };
   });
 }
 
+// 채널명을 박지 않은 범용 메시지 — 인스타그램·Threads가 같은 콜백 파라미터 규약을 쓴다.
+// 연동 성공은 handle 쿼리파라미터로 구체적인 계정을 보여준다(아래 SettingsPage에서 조합).
 const CONNECT_MESSAGES: Record<string, { tone: "positive" | "warning" | "negative"; text: string }> = {
-  success: { tone: "positive", text: "인스타그램 연동이 완료되었어요." },
   denied: { tone: "warning", text: "연동이 취소되었습니다." },
   state: { tone: "negative", text: "보안 검증에 실패했어요. 다시 시도해 주세요." },
   unconfigured: {
     tone: "warning",
-    text: "인스타그램 앱 자격증명이 아직 설정되지 않았습니다. (앱 심사·키 발급 대기 단계)",
+    text: "채널 앱 자격증명이 아직 설정되지 않았습니다. (앱 심사·키 발급 대기 단계)",
   },
   no_encryption_key: {
     tone: "negative",
     text: "토큰 암호화 키가 설정되지 않아 연동을 중단했어요. 관리자 설정이 필요합니다.",
   },
-  already_linked: { tone: "warning", text: "이미 다른 핀치 계정에 연동된 인스타그램 계정이에요." },
+  already_linked: { tone: "warning", text: "이미 다른 핀치 계정에 연동된 계정이에요." },
   save_failed: { tone: "negative", text: "연동 정보 저장 중 오류가 발생했어요. 다시 시도해 주세요." },
   exchange: { tone: "negative", text: "토큰 교환 중 오류가 발생했어요. 다시 시도해 주세요." },
   encrypt_failed: { tone: "negative", text: "토큰 암호화 중 오류가 발생했어요. 다시 시도해 주세요." },
@@ -106,10 +120,14 @@ function ConnectActions({ card, oauthReady }: { card: AccountCard; oauthReady: b
   if (!oauthReady) {
     return <Badge tone="neutral">연동 준비중</Badge>;
   }
+  const startHref = CONNECT_START_PATH[card.channel];
+  if (!startHref) {
+    return <Badge tone="neutral">연동 준비중</Badge>;
+  }
   if (card.connected && card.id) {
     return (
       <div className="flex items-center gap-2">
-        <a href="/api/auth/instagram/start" className={buttonClasses("secondary", "sm")}>
+        <a href={startHref} className={buttonClasses("secondary", "sm")}>
           재연동
         </a>
         <form action={disconnectAccount}>
@@ -122,7 +140,7 @@ function ConnectActions({ card, oauthReady }: { card: AccountCard; oauthReady: b
     );
   }
   return (
-    <a href="/api/auth/instagram/start" className={buttonClasses("primary", "sm")}>
+    <a href={startHref} className={buttonClasses("primary", "sm")}>
       연동하기
     </a>
   );
@@ -137,14 +155,23 @@ export default async function SettingsPage({
   const sp = await searchParams;
   const connectParam = typeof sp.connect === "string" ? sp.connect : null;
   const reasonParam = typeof sp.reason === "string" ? sp.reason : null;
+  const handleParam = typeof sp.handle === "string" ? sp.handle : null;
   const banner =
     connectParam === "success"
-      ? CONNECT_MESSAGES.success
+      ? { tone: "positive" as const, text: `${handleParam ?? "채널"} 연동이 완료되었어요.` }
       : connectParam === "error" && reasonParam
         ? (CONNECT_MESSAGES[reasonParam] ?? CONNECT_MESSAGES.exchange)
         : null;
 
-  const oauthConfigured = isInstagramOAuthConfigured();
+  const instagramOAuthConfigured = isInstagramOAuthConfigured();
+  const threadsOAuthConfigured = isThreadsOAuthConfigured();
+  const tiktokOAuthConfigured = isTiktokOAuthConfigured();
+  // 인스타그램은 항상 노출(자격증명 미설정 시 별도 배너로 안내), Threads·TikTok은 자격증명 존재 여부로 버튼 자체를 켠다.
+  const OAUTH_READY: Record<Channel, boolean> = {
+    instagram: true,
+    tiktok: tiktokOAuthConfigured,
+    threads: threadsOAuthConfigured,
+  };
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -167,12 +194,34 @@ export default async function SettingsPage({
       ) : null}
 
       {/* 인스타 OAuth 자격증명 미설정 안내 (실 모드에서만) */}
-      {!isDemoMode() && !oauthConfigured ? (
+      {!isDemoMode() && !instagramOAuthConfigured ? (
         <div className="flex items-start gap-2.5 rounded-card border border-warning/40 bg-warning-weak p-4 text-[13px] leading-relaxed text-fg-sub">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
           <p>
             인스타그램 연동에 필요한 앱 자격증명(INSTAGRAM_APP_ID / INSTAGRAM_APP_SECRET)이 아직
             설정되지 않았습니다. Meta 앱 심사·비즈니스 인증 완료 후 활성화됩니다.
+          </p>
+        </div>
+      ) : null}
+
+      {/* Threads OAuth 자격증명 미설정 안내 (실 모드에서만) */}
+      {!isDemoMode() && !threadsOAuthConfigured ? (
+        <div className="flex items-start gap-2.5 rounded-card border border-warning/40 bg-warning-weak p-4 text-[13px] leading-relaxed text-fg-sub">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
+          <p>
+            Threads 연동에 필요한 앱 자격증명(THREADS_APP_ID / THREADS_APP_SECRET)이 아직
+            설정되지 않았습니다. 개발자 모드 테스터 계정으로 등록하면 심사 없이 바로 연동할 수 있어요.
+          </p>
+        </div>
+      ) : null}
+
+      {/* TikTok OAuth 자격증명 미설정 안내 (실 모드에서만) */}
+      {!isDemoMode() && !tiktokOAuthConfigured ? (
+        <div className="flex items-start gap-2.5 rounded-card border border-warning/40 bg-warning-weak p-4 text-[13px] leading-relaxed text-fg-sub">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
+          <p>
+            TikTok 연동에 필요한 앱 자격증명(TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET)이 아직
+            설정되지 않았습니다. Sandbox에 테스터 계정(target user)으로 등록하면 심사 없이 바로 연동할 수 있어요.
           </p>
         </div>
       ) : null}
@@ -242,6 +291,13 @@ export default async function SettingsPage({
                 </a>
               </div>
             ) : null}
+
+            {card.channel === "tiktok" ? (
+              <div className="mt-4 rounded-card bg-warning-weak p-3 text-[13px] leading-relaxed text-warning">
+                팔로워·좋아요·영상 수 등 기본 정보만 표시돼요 — 조회수·참여율 등 상세 분석은
+                TikTok 앱 심사 완료 후 제공됩니다.
+              </div>
+            ) : null}
           </Card>
         ))}
 
@@ -274,14 +330,45 @@ export default async function SettingsPage({
           <ShieldCheck className="size-5 text-fg-sub" aria-hidden />
           핀치가 접근하는 권한
         </h3>
-        <ul className="mt-3 space-y-2">
-          {INSTAGRAM_SCOPE_LABELS.map((scope) => (
-            <li key={scope} className="flex items-center gap-2 text-[14px] text-fg-sub">
-              <Check className="size-4 text-positive" aria-hidden />
-              {scope}
-            </li>
-          ))}
-        </ul>
+        <div className="mt-3 space-y-4">
+          <div>
+            <p className="text-[13px] font-semibold text-fg-faint">인스타그램</p>
+            <ul className="mt-1.5 space-y-2">
+              {INSTAGRAM_SCOPE_LABELS.map((scope) => (
+                <li key={scope} className="flex items-center gap-2 text-[14px] text-fg-sub">
+                  <Check className="size-4 text-positive" aria-hidden />
+                  {scope}
+                </li>
+              ))}
+            </ul>
+          </div>
+          {threadsOAuthConfigured ? (
+            <div>
+              <p className="text-[13px] font-semibold text-fg-faint">Threads</p>
+              <ul className="mt-1.5 space-y-2">
+                {THREADS_SCOPE_LABELS.map((scope) => (
+                  <li key={scope} className="flex items-center gap-2 text-[14px] text-fg-sub">
+                    <Check className="size-4 text-positive" aria-hidden />
+                    {scope}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {tiktokOAuthConfigured ? (
+            <div>
+              <p className="text-[13px] font-semibold text-fg-faint">TikTok</p>
+              <ul className="mt-1.5 space-y-2">
+                {TIKTOK_SCOPE_LABELS.map((scope) => (
+                  <li key={scope} className="flex items-center gap-2 text-[14px] text-fg-sub">
+                    <Check className="size-4 text-positive" aria-hidden />
+                    {scope}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
         <p className="mt-3 text-[13px] text-fg-faint">핀치는 기능에 필요한 최소 권한만 요청합니다.</p>
       </Card>
 

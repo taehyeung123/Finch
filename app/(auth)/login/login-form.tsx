@@ -23,8 +23,17 @@ export function LoginForm() {
 
 function LoginCard() {
   const configured = isSupabaseConfigured();
-  const authError = useSearchParams().get("error") === "auth";
+  const searchParams = useSearchParams();
+  const authError = searchParams.get("error") === "auth";
   const [configNotice, setConfigNotice] = useState(false);
+
+  // next 파라미터(예: 팀 초대 수락 후 복귀용 /team/accept?token=...)는 same-origin 검증
+  // ("/"로 시작 + "//" 금지 + "\" 금지) 통과 시에만 사용 — app/auth/callback/route.ts와 동일 규칙.
+  const nextParam = searchParams.get("next");
+  const next =
+    nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") && !nextParam.includes("\\")
+      ? nextParam
+      : "/dashboard";
 
   function signIn(provider: "google" | "kakao") {
     if (!configured) {
@@ -33,7 +42,7 @@ function LoginCard() {
     }
     void createClient().auth.signInWithOAuth({
       provider,
-      options: { redirectTo: `${location.origin}/auth/callback?next=/dashboard` },
+      options: { redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
     });
   }
 

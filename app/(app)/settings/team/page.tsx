@@ -1,49 +1,68 @@
-import { FolderKanban, Link2, UserPlus } from "lucide-react";
+import { FolderKanban, Link2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { isDemoMode } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { getWorkspaceOwnerId } from "@/lib/team";
 import { SettingsNav } from "../_components/settings-nav";
+import { TeamClient, type TeamRowVM } from "./_components/team-client";
 
 /*
   팀 워크스페이스 (PRD PART 4.10)
-  - 실 모드: 현재 로그인 사용자 1명(소유자)만 표시 — 멀티멤버는 팀 스키마 도입 후
-  - 데모 모드: 샘플 멤버로 화면 미리보기
-  - 프로젝트 분리·뷰어 링크는 Pro·Agency 플랜 예정 기능으로 소개만 노출
+  - team_members 테이블(0012_team.sql)에서 실제 초대중·활성 멤버를 조회한다.
+  - 소유자(로그인 유저 == getWorkspaceOwnerId 결과)만 초대 폼·역할변경·제거 버튼을 본다.
+  - 멤버로 보는 경우 RLS("member reads own membership")가 자기 자신의 멤버십 행만 돌려주므로,
+    다른 팀원 명단은 보이지 않는다(v1 단순화) — 소유자 개인정보(이름 등)도 별도로 조회하지 않는다.
+  - 데모 모드: 샘플 멤버로 화면 미리보기, 모든 액션은 비활성.
 */
 
-const SAMPLE_MEMBERS = [
-  { name: "김민지", email: "minji@finch.ai.kr", role: "소유자" },
-  { name: "이재현", email: "jaehyun@finch.ai.kr", role: "에디터" },
-  { name: "박소연", email: "soyeon@finch.ai.kr", role: "뷰어" },
-] as const;
+const SAMPLE_MEMBERS: TeamRowVM[] = [
+  { id: "sample-owner", email: "minji@finch.ai.kr", role: "owner", status: "active", isSelf: true },
+  { id: "sample-editor", email: "jaehyun@finch.ai.kr", role: "editor", status: "active", isSelf: false },
+  { id: "sample-viewer", email: "soyeon@finch.ai.kr", role: "viewer", status: "invited", isSelf: false },
+];
 
-interface Member {
-  name: string;
-  email: string;
-  role: string;
-}
+async function loadTeamData(): Promise<{ isOwner: boolean; rows: TeamRowVM[] }> {
+  if (isDemoMode()) return { isOwner: true, rows: SAMPLE_MEMBERS };
 
-async function loadMembers(): Promise<Member[]> {
-  if (isDemoMode()) return [...SAMPLE_MEMBERS];
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return [];
-  const email = user.email ?? "";
-  const name =
-    (typeof user.user_metadata?.full_name === "string" && user.user_metadata.full_name) ||
-    (typeof user.user_metadata?.name === "string" && user.user_metadata.name) ||
-    email.split("@")[0] ||
-    "나";
-  return [{ name, email, role: "소유자" }];
+  if (!user) return { isOwner: false, rows: [] };
+
+  const ownerId = await getWorkspaceOwnerId(supabase, user.id);
+  const isOwner = ownerId === user.id;
+
+  const { data, error } = await supabase
+    .from("team_members")
+    .select("id, email, role, status, member_user_id")
+    .eq("owner_user_id", ownerId)
+    .in("status", ["invited", "active"])
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error("[team] 팀 멤버 조회 실패:", error.message);
+  }
+
+  const rows: TeamRowVM[] = (data ?? []).map((r) => ({
+    id: r.id,
+    email: r.email,
+    role: r.role === "editor" ? "editor" : "viewer",
+    status: r.status === "active" ? "active" : "invited",
+    isSelf: r.member_user_id === user.id,
+  }));
+
+  // 소유자 본인은 team_members에 행이 없으므로(초대받은 게 아니라 그냥 본인) 목록 맨 앞에 합성해 넣는다.
+  if (isOwner) {
+    rows.unshift({ id: "self-owner", email: user.email ?? "", role: "owner", status: "active", isSelf: true });
+  }
+
+  return { isOwner, rows };
 }
 
 export default async function TeamSettingsPage() {
-  const members = await loadMembers();
+  const { isOwner, rows } = await loadTeamData();
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -53,41 +72,20 @@ export default async function TeamSettingsPage() {
       />
       <SettingsNav />
 
-      {/* 멤버 목록 — 실 모드는 본인(소유자)만, 초대는 팀 기능 오픈 시 활성화 */}
       <Card>
         <CardHeader
           title="팀 멤버"
-          description={`${members.length}명이 이 워크스페이스에 참여 중`}
-          action={
-            <Button size="sm" variant="primary" disabled title="팀 멤버 초대는 Pro·Agency 플랜 기능 오픈 시 제공됩니다">
-              <UserPlus className="size-4" aria-hidden />
-              멤버 초대
-            </Button>
+          description={
+            rows.length > 0
+              ? `${rows.length}명이 이 워크스페이스에 참여 중`
+              : "이 워크스페이스에 소속된 멤버가 없어요"
           }
         />
         <CardBody>
-          <ul className="divide-y divide-line">
-            {members.map((member) => (
-              <li key={member.email} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                <div className="flex min-w-0 items-center gap-3">
-                  <span
-                    className="flex size-9 shrink-0 items-center justify-center rounded-chip bg-primary-weak text-[13px] font-bold text-primary"
-                    aria-hidden
-                  >
-                    {member.name.slice(0, 1).toUpperCase()}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate text-[14px] font-semibold">{member.name}</p>
-                    <p className="truncate text-[13px] text-fg-faint">{member.email}</p>
-                  </div>
-                </div>
-                <Badge tone={member.role === "소유자" ? "primary" : "neutral"}>{member.role}</Badge>
-              </li>
-            ))}
-          </ul>
-          {!isDemoMode() ? (
+          <TeamClient initialRows={rows} isOwner={isOwner} demoMode={isDemoMode()} />
+          {!isOwner && !isDemoMode() ? (
             <p className="mt-4 text-[13px] text-fg-faint">
-              멤버 초대·역할 관리는 팀 기능 오픈과 함께 제공될 예정입니다.
+              멤버 초대·역할 관리는 워크스페이스 소유자만 할 수 있어요.
             </p>
           ) : null}
         </CardBody>

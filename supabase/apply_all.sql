@@ -603,3 +603,55 @@ drop policy if exists "own cardnews delete" on storage.objects;
 create policy "own cardnews delete" on storage.objects
   for delete to authenticated
   using (bucket_id = 'cardnews' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ═══════════════════════════════════════════════════════════════
+-- 0011_tiktok.sql — TikTok 연동 refresh_token 별도 저장 컬럼
+-- ═══════════════════════════════════════════════════════════════
+
+alter table public.connected_accounts add column if not exists refresh_token_cipher text;
+
+-- ═══════════════════════════════════════════════════════════════
+-- 0012_team.sql — 팀 워크스페이스(멤버 초대·역할·연동 계정 공유 열람)
+-- ═══════════════════════════════════════════════════════════════
+
+create table public.team_members (
+  id              uuid primary key default gen_random_uuid(),
+  owner_user_id   uuid not null references auth.users(id) on delete cascade,
+  member_user_id  uuid references auth.users(id) on delete cascade,
+  email           text not null,
+  role            text not null default 'viewer' check (role in ('editor','viewer')),
+  status          text not null default 'invited' check (status in ('invited','active','revoked')),
+  invite_token    text unique,
+  invited_at      timestamptz not null default now(),
+  joined_at       timestamptz,
+  created_at      timestamptz not null default now(),
+  unique (owner_user_id, email)
+);
+alter table public.team_members enable row level security;
+
+create policy "owner manage members" on public.team_members
+  for all using (auth.uid() = owner_user_id) with check (auth.uid() = owner_user_id);
+
+create policy "member reads own membership" on public.team_members
+  for select using (auth.uid() = member_user_id);
+
+create index team_members_owner_idx on public.team_members (owner_user_id);
+create index team_members_member_idx on public.team_members (member_user_id) where status = 'active';
+
+create policy "team members read" on public.connected_accounts
+  for select using (
+    exists (
+      select 1 from public.team_members tm
+      where tm.owner_user_id = connected_accounts.user_id
+        and tm.member_user_id = auth.uid()
+        and tm.status = 'active'
+    )
+  );
+
+-- ═══════════════════════════════════════════════════════════════
+-- 0013_plan_change.sql — 유료 플랜 간 전환(업그레이드 즉시 청구/다운그레이드 예약)
+-- ═══════════════════════════════════════════════════════════════
+
+alter table public.subscriptions
+  add column if not exists pending_plan text
+    check (pending_plan in ('creator','pro','agency','enterprise') or pending_plan is null);

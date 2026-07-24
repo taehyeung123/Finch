@@ -53,8 +53,15 @@ function applySecurityHeaders(response: NextResponse) {
   // Toss 결제위젯 — SDK 스크립트·위젯 iframe·API 호출이 tosspayments.com 서브도메인에서 이뤄진다
   const toss = "https://*.tosspayments.com";
 
-  // 인스타그램 프로필 사진·게시물 썸네일 CDN (연동 계정 실데이터 표시용)
+  // 인스타그램·Threads 프로필 사진·게시물 썸네일 CDN (연동 계정 실데이터 표시용).
+  // Threads는 인스타그램과 같은 Meta 미디어 인프라(cdninstagram.com/fbcdn.net)를 공유해 별도 도메인 추가가 불필요하다.
   const igCdn = "https://*.cdninstagram.com https://*.fbcdn.net";
+
+  // TikTok 프로필 사진 CDN. 공식 문서에 정확한 CDN 호스트명이 명시돼 있지 않다(avatar_url이
+  // user.info API 응답마다 서명된 전체 URL로 내려오는 방식) — TikTok이 실제로 쓰는 것으로 널리
+  // 확인되는 도메인 패턴만 최소 허용한다. TODO: 첫 테스터 계정 연동 후 실제 avatar_url 호스트를
+  // 로그로 확인해 필요시 이 목록을 좁히거나 보정할 것 (docs/REAL_API_SPEC.md 6절).
+  const tiktokCdn = "https://*.tiktokcdn.com https://*.tiktokcdn-us.com";
 
   // GA4 트래픽 계측 — 측정 ID 설정 시에만 구글 태그매니저/애널리틱스 오리진 허용
   const gaConfigured = Boolean(process.env.NEXT_PUBLIC_GA_ID);
@@ -69,7 +76,7 @@ function applySecurityHeaders(response: NextResponse) {
     `script-src 'self' 'unsafe-inline' ${toss}${gaScript}${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
     "font-src 'self' https://cdn.jsdelivr.net",
-    `img-src 'self' data: blob: ${toss} ${igCdn}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
+    `img-src 'self' data: blob: ${toss} ${igCdn} ${tiktokCdn}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
     `connect-src 'self' ${toss}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}${gaConnect}`,
     `frame-src ${toss}`,
     "frame-ancestors 'none'",

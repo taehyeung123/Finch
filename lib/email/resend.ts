@@ -18,7 +18,11 @@ function getClient(): Resend | null {
 
 const BRAND_CORAL = "#FF6B4A"; // app/globals.css --primary — 이메일은 인라인 스타일만 허용돼 CSS 토큰을 못 쓴다
 
-function wrapHtml(title: string, body: string): string {
+function wrapHtml(
+  title: string,
+  body: string,
+  cta: { label: string; url: string } = { label: "핀치에서 확인하기", url: "https://finch.ai.kr" },
+): string {
   return `<!DOCTYPE html>
 <html lang="ko"><body style="margin:0;padding:0;background:#F7F6F4;font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;">
   <div style="max-width:480px;margin:0 auto;padding:32px 24px;">
@@ -26,8 +30,8 @@ function wrapHtml(title: string, body: string): string {
     <div style="background:#fff;border:1px solid #E5E1DB;border-radius:16px;padding:28px;">
       <h1 style="font-size:17px;font-weight:700;margin:0 0 10px;color:#1A1A1A;">${title}</h1>
       <p style="font-size:14px;line-height:1.6;color:#4A4640;margin:0;">${body}</p>
-      <a href="https://finch.ai.kr" style="display:inline-block;margin-top:20px;padding:10px 18px;background:${BRAND_CORAL};color:#1A1A1A;font-weight:700;font-size:13px;border-radius:10px;text-decoration:none;">
-        핀치에서 확인하기
+      <a href="${cta.url}" style="display:inline-block;margin-top:20px;padding:10px 18px;background:${BRAND_CORAL};color:#1A1A1A;font-weight:700;font-size:13px;border-radius:10px;text-decoration:none;">
+        ${cta.label}
       </a>
     </div>
     <p style="font-size:12px;color:#9A948A;margin-top:20px;">
@@ -55,6 +59,37 @@ export async function sendNotificationEmail(to: string, title: string, body: str
     return true;
   } catch (e) {
     console.error("[email] 발송 예외:", e instanceof Error ? e.message : String(e));
+    return false;
+  }
+}
+
+/** 팀 멤버 초대 이메일 발송 — 실패는 false로 흡수(team_members 초대 행 자체는 이미 저장돼 있어
+ *  이메일이 안 가도 링크를 직접 공유하면 수락은 가능하다). */
+export async function sendTeamInviteEmail(
+  to: string,
+  inviterName: string,
+  role: "editor" | "viewer",
+  acceptUrl: string,
+): Promise<boolean> {
+  const resend = getClient();
+  if (!resend) return false;
+  const roleLabel = role === "editor" ? "에디터" : "뷰어";
+  const title = `${inviterName}님이 핀치 팀에 초대했어요`;
+  const body = `${roleLabel} 권한으로 워크스페이스에 참여해 채널 분석을 함께 볼 수 있어요. 아래 버튼을 눌러 초대를 수락하세요.`;
+  try {
+    const { error } = await resend.emails.send({
+      from: process.env.RESEND_EMAIL_FROM || "핀치 <onboarding@resend.dev>",
+      to,
+      subject: `[핀치] ${inviterName}님의 팀 초대`,
+      html: wrapHtml(title, body, { label: "초대 수락하기", url: acceptUrl }),
+    });
+    if (error) {
+      console.error("[email] 팀 초대 발송 실패:", error.message ?? error);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error("[email] 팀 초대 발송 예외:", e instanceof Error ? e.message : String(e));
     return false;
   }
 }

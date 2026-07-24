@@ -136,3 +136,145 @@ await widgets.requestPayment({ orderId, orderName, successUrl, failUrl });
 ### 정기결제
 
 `자동결제`(billing)는 **별도 계약** 후 `POST /v1/billing/authorizations/issue` 등 사용 가능. 테스트 자가활성 불가.
+
+## 5. Threads OAuth·인사이트·발행 (2026 조사본)
+
+구현 파일: `lib/meta/threads-oauth.ts`, `lib/meta/threads.ts`, `app/api/auth/threads/*`. 출처는 전부
+developers.facebook.com/docs/threads 하위 페이지(get-started, posts, insights, reference/user).
+Instagram Login(1·2절)과 달리 인가만 별도 호스트(threads.net)고 토큰 교환·리프레시는 전부
+graph.threads.net에 모여 있다.
+
+### 접근 수준 — 사업자등록·앱심사 불요로 바로 개발 가능
+
+Instagram과 동일하게 **Standard Access(개발자 모드, 앱 역할에 등록된 테스터 계정만)** 로 심사 없이
+바로 연동·테스트할 수 있다. 제3자 계정 서비스(Advanced Access)는 App Review + 비즈니스 인증이 필요.
+
+### OAuth 플로우
+
+1. 인가(리다이렉트): `GET https://threads.net/oauth/authorize`
+   - params: `client_id`(Threads App ID), `redirect_uri`, `scope`(콤마구분), `response_type=code`, `state`(CSRF)
+2. code → 단기토큰: `POST https://graph.threads.net/oauth/access_token`
+   - form: `client_id`, `client_secret`, `grant_type=authorization_code`, `redirect_uri`(일치必), `code`
+   - 반환: `{ access_token, user_id }` (permissions 필드는 문서상 미확인 — 코드는 방어적으로 파싱)
+3. 단기 → 장기토큰(60일): `GET https://graph.threads.net/access_token?grant_type=th_exchange_token&client_secret=...&access_token=...`
+4. 리프레시(+60일): `GET https://graph.threads.net/refresh_access_token?grant_type=th_refresh_token&access_token=...`
+   - 24시간 이상 경과 & 미만료여야 갱신 가능. client_secret 불필요(인스타그램과 동일 제약).
+
+### 스코프
+
+`threads_basic`(필수) · `threads_content_publish`(발행) · `threads_manage_replies`(답글 작성) ·
+`threads_read_replies`(답글 조회) · `threads_manage_insights`(인사이트). `threads_delete` 등은 문서에서 미확인.
+
+### 프로필 조회 (GET /{threads-user-id} 또는 /me)
+
+`fields=id,username,name,threads_profile_picture_url,threads_biography,is_verified,recently_searched_keywords`
+
+**중요:** 이 필드 목록엔 `followers_count`/`media_count`가 없다(IG와 다름). 팔로워 수는
+`threads_insights(metric=followers_count)`로, 게시물 총수는 공식 필드가 없어 최근 목록 조회 결과 길이로
+근사한다(`lib/data/live.ts` computeThreadsPiece 주석 참고 — 정확한 총계가 필요하면 전체 페이지네이션 필요).
+
+### 게시물 발행 (2단계 — Instagram 캐러셀 패턴과 동일 골격)
+
+1. 컨테이너 생성: `POST /{threads-user-id}/threads` — `media_type`(`TEXT`|`IMAGE`|`VIDEO`|`CAROUSEL`),
+   `text`(최대 500자), `image_url`/`video_url`, `is_carousel_item`, `children`(캐러셀 2~20개),
+   `link_attachment`, `gif_attachment`, `topic_tag`
+2. 발행: `POST /{threads-user-id}/threads_publish` — `creation_id` 필수. 처리 대기 권장(평균 30초).
+   (현재 코드베이스엔 미구현 — Instagram의 `lib/meta/instagram-publish.ts` 2단계 폴링 패턴을 그대로
+   이식하면 된다. TODO로 남겨둔 후속 작업.)
+
+### 인사이트
+
+- 계정: `GET /{threads-user-id}/threads_insights?metric=<csv>` — `views`, `likes`, `replies`, `reposts`,
+  `quotes`, `clicks`, `followers_count`, `follower_demographics`. `since`/`until`는 2024-04-13 이전 미지원.
+- 게시물: `GET /{threads-media-id}/insights?metric=<csv>` — `views`, `likes`, `replies`, `reposts`, `quotes`, `shares`.
+- **불확실성(TODO):** 응답이 IG처럼 `total_value`(합계) vs `time_series`(일별 배열) 두 형태로 나뉘는지
+  공식 문서로 확정하지 못했다. `lib/meta/threads.ts`의 `extractTotal()`이 두 형태를 모두 방어적으로
+  파싱하도록 구현했으니, 실 테스터 계정 연동 후 로그를 보고 필드별 실제 포맷을 재검증할 것.
+  `followers_count`는 일별 시계열이 아닌 `period=lifetime` 스냅샷값으로 가정했다(팔로워 순증감·일별
+  추이 차트는 이 가정이 맞을 때까지 항상 0/빈 배열로 폴백).
+
+### 게시물 목록
+
+`GET /{threads-user-id}/threads?fields=id,media_type,media_url,permalink,text,timestamp,is_quote_post` —
+페이지네이션 목록. 답글은 `/replies`, 멘션은 `/mentions`, 발행 한도는 `/threads_publishing_limit`
+(참고용 — 핀치가 아직 쓰지 않음).
+
+### 프로필/미디어 CDN
+
+Threads는 인스타그램과 같은 Meta 인프라(`*.cdninstagram.com`, `*.fbcdn.net`)를 쓴다 — `proxy.ts`의
+기존 CSP `img-src` 허용목록이 그대로 커버하므로 추가 도메인이 필요 없다.
+
+## 6. TikTok Login Kit + Display API (2026 조사본)
+
+구현 파일: `lib/tiktok/oauth.ts`, `lib/tiktok/api.ts`, `app/api/auth/tiktok/*`. 출처는 전부
+developers.tiktok.com/doc 하위 페이지(login-kit-web, login-kit-desktop, oauth-user-access-token-management,
+tiktok-api-v2-get-user-info, add-a-sandbox) + bulletin(user-info-scope-migration).
+
+**현재 구현 범위(정직 고지):** 심사 없이 확인된 범위는 `GET /v2/user/info/`의 기본 프로필
+(팔로워·좋아요·영상 수·아바타·닉네임)뿐이다. 영상 목록(`video.list`)·조회수/참여율 등 인사이트 계열은
+아래 5항 사유로 미구현이며, 설정 화면에도 "상세 분석은 앱 심사 후 제공"으로 고지한다.
+
+### 접근 수준 — 사업자등록·앱심사 불요로 바로 개발 가능
+
+Sandbox 모드 + target user(테스터 계정, 최대 10개까지 등록) 조합으로 심사 없이 바로 연동·테스트할 수
+있다. Sandbox 설정 > "Add account"에서 해당 계정으로 로그인 + TikTok Developer ToS 동의, 반영까지
+최대 1시간 소요. 제3자 계정 서비스로 정식 출시하려면 App Review + 비즈니스 인증이 필요(추후 작업).
+
+### OAuth 플로우 및 PKCE 결정
+
+1. 인가(리다이렉트): `GET https://www.tiktok.com/v2/auth/authorize/`
+   - params: `client_key`(필수), `response_type=code`(필수), `scope`(필수, 콤마구분), `redirect_uri`(필수),
+     `state`(필수, CSRF), `disable_auto_auth`(선택, 미사용)
+   - **PKCE 미사용**: 파라미터 목록에 `code_challenge`가 없고, `code_verifier`는 Desktop/Mobile(공개
+     클라이언트) 전용으로 문서에 명시돼 있다. 핀치는 client_secret을 서버에 보관하는 confidential
+     client(웹 서버사이드)이므로 PKCE를 적용하지 않는다. TODO: 실무에서 문서와 실제 동작이 다르다는
+     보고가 있어 완전히 배제하긴 어렵다 — 인가 요청이 `invalid_request`류로 거부되면 가장 먼저 의심할 것
+     (Desktop 규격 참고: `code_verifier`는 `[A-Za-z0-9\-._~]` 43~128자, `code_challenge`는 SHA256의
+     **hex 인코딩**(표준 base64url이 아님), `code_challenge_method=S256`).
+2. code → 토큰: `POST https://open.tiktokapis.com/v2/oauth/token/` (`Content-Type: application/x-www-form-urlencoded`)
+   - form: `client_key`, `client_secret`, `code`, `grant_type=authorization_code`, `redirect_uri`(일치必)
+   - 반환: `{ access_token, expires_in(24시간), open_id, refresh_token, refresh_expires_in(365일), scope, token_type=Bearer }`
+3. 리프레시: 동일 엔드포인트, form: `client_key`, `client_secret`, `grant_type=refresh_token`, `refresh_token`
+   - 응답의 `refresh_token`이 기존 값과 다를 수 있어(회전) 매번 재저장 필요.
+
+**IG/Threads와의 근본적 차이:** IG/Threads는 "장기토큰이 자기 자신을 갱신"하는 모델이라
+`access_token_cipher` 컬럼 하나로 충분했지만, TikTok은 access_token(24시간)·refresh_token(365일)이
+분리된 표준 OAuth2 모델이라 `refresh_token_cipher` 컬럼을 별도로 추가했다(0011 마이그레이션).
+액세스 토큰 수명이 24시간뿐이라 크론(`app/api/cron/refresh-tokens`)이 매일 돌지 않으면 대시보드를
+방문하지 않는 사용자의 연동이 조용히 끊긴다 — `daysUntil`(하루 단위 올림)로는 갱신 시점을 안정적으로
+판별할 수 없어 `lib/data/live.ts`의 `ensureFreshTiktokToken`은 시간 단위(`hoursUntil`)로 판단한다.
+
+### 프로필 조회 — `GET /v2/user/info/?fields=<csv>` (스코프별 필드)
+
+Authorization 헤더에 `Bearer <access_token>`. 최근 스코프 마이그레이션으로 필드 범위가 스코프별로
+쪼개졌다(출처: bulletin/user-info-scope-migration):
+
+- `user.info.basic`: `open_id`, `union_id`, `avatar_url`, `avatar_url_100`, `avatar_large_url`, `display_name`
+- `user.info.profile`: `bio_description`, `profile_deep_link`, `is_verified`, `username`
+- `user.info.stats`: `follower_count`, `following_count`, `likes_count`, `video_count`
+
+핀치는 세 스코프를 모두 요청해 `open_id, avatar_url, display_name, username, follower_count,
+following_count, likes_count, video_count`를 조회한다(`bio_description`은 최소 권한 원칙상 미요청 —
+설정 화면 권한 목록과 1:1). 응답 봉투는 `{ data: { user: {...} }, error: { code, message, log_id } }`이고
+`error.code`가 `"ok"`가 아니면 실패로 처리한다.
+
+### 영상 목록·인사이트 — 미구현(TODO, 심사 필요 여부 미확정)
+
+공식 문서엔 "Sandbox는 앱 심사 없이 통합을 시연하는 용도"라고만 돼 있고, `video.list`가 Sandbox에서
+심사 없이 완전히 동작한다는 명시적 확답은 확보하지 못했다. Content Posting API(공개 영상 게시)·Data
+Portability API는 Sandbox 미지원이 문서에 명확히 명시돼 있다. 따라서 이 구현은 영상 목록/인사이트를
+호출하지 않고, 대시보드의 TikTok 채널은 `posts: []`/`contentMix: []`/`EMPTY_TREND`/참여율 0으로
+정직하게 비워둔다(`lib/data/live.ts`의 `computeTiktokPiece`). TODO: 실제 테스터 계정으로 `video.list`를
+시험 호출해 Sandbox 동작 여부를 확인한 뒤 인사이트 어댑터를 추가할 것.
+
+### 프로필 사진 CDN
+
+TikTok avatar_url은 매 응답마다 서명된 전체 URL로 내려오는 방식이라 공식 문서에 고정 CDN 호스트명이
+명시돼 있지 않다. `proxy.ts`의 CSP `img-src`에는 널리 확인되는 도메인 패턴(`*.tiktokcdn.com`,
+`*.tiktokcdn-us.com`)만 최소 허용해 뒀다. TODO: 첫 테스터 계정 연동 후 실제 `avatar_url` 호스트를
+로그로 확인해 필요시 좁히거나 보정할 것.
+
+### client_key/client_secret 발급 위치
+
+https://developers.tiktok.com → "Manage apps" → 앱 생성("Connect an app") 후 App details 상단에
+Client Key(=App ID), Client Secret이 표시된다.
