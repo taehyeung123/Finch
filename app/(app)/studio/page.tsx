@@ -23,6 +23,7 @@ import { ChipFilter } from "@/components/ui/chip-filter";
 import { InfoTip } from "@/components/ui/info-tip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DataSourceNote } from "@/components/ui/data-source-note";
+import { cn } from "@/lib/cn";
 import { formatCompact } from "@/lib/format";
 import { ideaSuggestions, trendItems, TREND_CATEGORIES } from "@/lib/data";
 import type { Channel, IdeaSuggestion, TrendItem } from "@/lib/types";
@@ -259,6 +260,9 @@ export default function StudioPage() {
   const [edits, setEdits] = useState<Record<number, { png: string; scene: EditorScene }>>({});
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [restored, setRestored] = useState(false);
+  // 다안 생성 — 한 번에 받은 여러 안 중 현재 보고 있는 안
+  const [variants, setVariants] = useState<{ angle: string; slides: Slide[] }[]>([]);
+  const [activeVariant, setActiveVariant] = useState(0);
 
   // 다운로드·예약발행이 쓰는 png만 뽑은 맵
   const editPngs = useMemo<Record<number, string>>(
@@ -282,22 +286,42 @@ export default function StudioPage() {
     try {
       const result = await generateCardNews(topic, tone);
       if (result.ok) {
-        setSlides(result.slides.map((s, i) => ({ ...s, no: i + 1 })));
+        const vs = result.variants.map((v) => ({
+          angle: v.angle,
+          slides: v.slides.map((s, i) => ({ ...s, no: i + 1 })),
+        }));
+        setVariants(vs);
+        setActiveVariant(0);
+        setSlides(vs[0].slides);
         setSlidesFromAi(true);
       } else if (result.fallback) {
-        setSlides(buildSlides(topic, tone));
+        const fb = buildSlides(topic, tone);
+        setVariants([{ angle: "템플릿", slides: fb }]);
+        setActiveVariant(0);
+        setSlides(fb);
         setSlidesFromAi(false);
       } else {
         setGenError(result.error);
       }
     } catch {
       // 네트워크 등 예외 — 템플릿으로라도 결과를 보여준다
-      setSlides(buildSlides(topic, tone));
+      const fb = buildSlides(topic, tone);
+      setVariants([{ angle: "템플릿", slides: fb }]);
+      setActiveVariant(0);
+      setSlides(fb);
       setSlidesFromAi(false);
     } finally {
       setGenerating(false);
     }
   };
+
+  // 안 전환 — 선택한 안의 슬라이드로 교체하고 편집은 안별로 초기화한다
+  function selectVariant(i: number) {
+    if (i === activeVariant || !variants[i]) return;
+    setActiveVariant(i);
+    setSlides(variants[i].slides);
+    setEdits({});
+  }
 
   // 실제 카드 이미지를 캔버스로 렌더한 미리보기 (WYSIWYG) — 다운로드 결과물과 100% 동일.
   // useMemo라 slides가 바뀔 때만 재계산되고, slides가 null(초기·SSR)이면 캔버스를 건드리지 않는다.
@@ -373,6 +397,8 @@ export default function StudioPage() {
     }
     setSlides(null);
     setEdits({});
+    setVariants([]);
+    setActiveVariant(0);
     setRestored(false);
     setTopic("");
   }
@@ -557,6 +583,27 @@ export default function StudioPage() {
                 action={<Badge tone={slidesFromAi ? "primary" : "neutral"}>{slidesFromAi ? "AI 생성" : "템플릿 (연동 전)"}</Badge>}
               />
               <CardBody className="space-y-5">
+                {/* 다안 선택 — 서로 다른 각도의 안을 탭으로 전환 */}
+                {variants.length > 1 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {variants.map((v, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => selectVariant(i)}
+                        className={cn(
+                          "rounded-card border px-3 py-1.5 text-[13px] font-semibold transition-colors",
+                          i === activeVariant
+                            ? "border-primary bg-primary-weak text-primary"
+                            : "border-line text-fg-sub hover:border-line-strong hover:text-fg",
+                        )}
+                      >
+                        {i + 1}안 · {v.angle}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
                 {/* WYSIWYG 미리보기 — 다운로드 결과물과 동일한 실제 카드 이미지. 편집본이 있으면 그걸 표시. */}
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                   {slides.map((s, i) => {

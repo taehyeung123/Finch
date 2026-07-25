@@ -22,8 +22,10 @@ export type SlideOut = {
   body?: string;
   cta?: { action: "save" | "follow" | "share"; text: string };
 };
+/** 하나의 안 — 접근 각도 라벨 + 5장 */
+export type CardVariant = { angle: string; slides: SlideOut[] };
 export type CardNewsResult =
-  | { ok: true; slides: SlideOut[] }
+  | { ok: true; variants: CardVariant[] }
   | { ok: false; fallback: true }
   | { ok: false; fallback?: false; error: string };
 
@@ -124,12 +126,20 @@ export async function generateCardNews(topic: string, tone: string): Promise<Car
           schema: {
             type: "object",
             additionalProperties: false,
-            required: ["slides"],
+            required: ["variants"],
             properties: {
-              slides: {
+              variants: {
                 type: "array",
                 items: {
-                  anyOf: [
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["angle", "slides"],
+                  properties: {
+                    angle: { type: "string", description: "이 안의 접근 각도 라벨 (예: 정보형, 공감·스토리형, 후킹형)" },
+                    slides: {
+                      type: "array",
+                      items: {
+                        anyOf: [
                     {
                       type: "object",
                       additionalProperties: false,
@@ -176,7 +186,10 @@ export async function generateCardNews(topic: string, tone: string): Promise<Car
                         },
                       },
                     },
-                  ],
+                        ],
+                      },
+                    },
+                  },
                 },
               },
             },
@@ -204,11 +217,13 @@ export async function generateCardNews(topic: string, tone: string): Promise<Car
         "- 모든 조언은 구체적으로(숫자·구간·행동). '제목 잘 쓰기'(X) → '제목 앞 15자에 검색 키워드'(O).",
         "- 점수·검색량 지수 등 추정 지표를 사실처럼 단정하지 마라. 이모지 금지. 과장·허위 금지.",
         "톤: 표지=긴장·강한 동사·물음표 허용, 본문=단정형 '~다', 마무리=짧고 감정적.",
+        "",
+        "[다안 생성] variants는 정확히 2안. 각 안은 서로 다른 접근 각도(예: 1안 정보·근거형 / 2안 공감·후킹형)로, 같은 주제를 다르게 풀어라. 두 안이 비슷하면 실패다. 각 안은 정확히 5장(cover 1 / content 3 / closing 1).",
       ].join("\n"),
       messages: [
         {
           role: "user",
-          content: `주제: ${t}\n브랜드 톤: ${TONE_LABEL[tone] ?? TONE_LABEL.friendly}\n\n이 주제로 카드뉴스 5장(cover 1 / content 3 / closing 1)을 만들어줘.`,
+          content: `주제: ${t}\n브랜드 톤: ${TONE_LABEL[tone] ?? TONE_LABEL.friendly}\n\n이 주제로 서로 다른 접근의 카드뉴스 2안을 만들어줘. 각 안은 5장(cover 1 / content 3 / closing 1).`,
         },
       ],
     });
@@ -217,13 +232,16 @@ export async function generateCardNews(topic: string, tone: string): Promise<Car
       return { ok: false, error: "이 주제로는 생성할 수 없어요. 다른 주제로 시도해 주세요." };
     }
     const parsed = parseJsonText(response.content as { type: string; text?: string }[]) as {
-      slides?: SlideOut[];
+      variants?: CardVariant[];
     } | null;
-    const slides = parsed?.slides?.filter((s) => s.role && s.headline).slice(0, 5);
-    if (!slides || slides.length === 0) {
+    const variants = (parsed?.variants ?? [])
+      .map((v) => ({ angle: v.angle || "안", slides: (v.slides ?? []).filter((s) => s.role && s.headline).slice(0, 5) }))
+      .filter((v) => v.slides.length > 0)
+      .slice(0, 3);
+    if (variants.length === 0) {
       return { ok: false, error: "생성 결과 처리에 실패했어요. 다시 시도해 주세요." };
     }
-    return { ok: true, slides };
+    return { ok: true, variants };
   } catch (e) {
     console.error("[studio] 카드뉴스 생성 실패:", e);
     return { ok: false, error: "AI 생성 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요." };
