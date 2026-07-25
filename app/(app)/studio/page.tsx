@@ -339,6 +339,22 @@ export default function StudioPage() {
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
+  // 성장 진단에서 넘어온 주제 픽업 — 대기열에 주제가 있으면 카드뉴스 탭에 채운다
+  useEffect(() => {
+    let pending: string | null = null;
+    try {
+      pending = localStorage.getItem("finch:studio:pending-topic");
+      if (pending) localStorage.removeItem("finch:studio:pending-topic");
+    } catch {
+      pending = null;
+    }
+    if (!pending) return;
+    /* eslint-disable react-hooks/set-state-in-effect -- 마운트 1회 외부저장소(성장 진단 핸드오프) 픽업 */
+    setTopic(pending);
+    setTab("cards");
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
+
   // 작업이 바뀔 때마다 임시저장 (생성 중에는 저장하지 않음)
   useEffect(() => {
     if (!slides || generating) return;
