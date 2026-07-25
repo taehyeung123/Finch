@@ -13,7 +13,15 @@ import { createClaudeClient, STUDIO_MODEL } from "@/lib/ai/claude";
   - 출력은 output_config.format(json_schema)로 구조를 강제해 파싱 실패를 방지한다.
 */
 
-export type SlideOut = { head: string; sub: string };
+export type SlideOut = {
+  role: "cover" | "content" | "closing";
+  kicker?: string;
+  headline: string;
+  points?: string[];
+  footnote?: string;
+  body?: string;
+  cta?: { action: "save" | "follow" | "share"; text: string };
+};
 export type CardNewsResult =
   | { ok: true; slides: SlideOut[] }
   | { ok: false; fallback: true }
@@ -111,35 +119,96 @@ export async function generateCardNews(topic: string, tone: string): Promise<Car
       output_config: {
         format: {
           type: "json_schema",
+          // 역할별 필드가 다르므로 anyOf 판별 유니온으로 강제한다(role을 const로 고정).
+          // Anthropic structured output은 oneOf·maxItems·maxLength 미지원 → 글자수/개수/장수 분포는 프롬프트로 강제.
           schema: {
             type: "object",
+            additionalProperties: false,
+            required: ["slides"],
             properties: {
               slides: {
                 type: "array",
                 items: {
-                  type: "object",
-                  properties: {
-                    head: { type: "string", description: "슬라이드 헤드카피 (한 줄, 25자 이내)" },
-                    sub: { type: "string", description: "서브카피 (1~2문장, 60자 이내)" },
-                  },
-                  required: ["head", "sub"],
-                  additionalProperties: false,
+                  anyOf: [
+                    {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["role", "headline"],
+                      properties: {
+                        role: { const: "cover" },
+                        kicker: { type: "string", description: "상단 카테고리 라벨 6~12자" },
+                        headline: { type: "string", description: "표지 후킹 헤드라인 20~26자" },
+                        footnote: { type: "string", description: "신뢰·구체화 부연 한 줄 40자 이내" },
+                      },
+                    },
+                    {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["role", "kicker", "headline", "points"],
+                      properties: {
+                        role: { const: "content" },
+                        kicker: { type: "string", description: "진행 라벨 6~12자 (예: 흔한 실수, 핵심 지표, STEP 2)" },
+                        headline: { type: "string", description: "그 장의 주장 한 문장 25자 이내" },
+                        points: {
+                          type: "array",
+                          description: "핵심 포인트 명사구 2~3개, 각 24자 이내",
+                          items: { type: "string" },
+                        },
+                        footnote: { type: "string", description: "근거·예시 한 줄 40자 이내 (선택)" },
+                      },
+                    },
+                    {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["role", "headline", "cta"],
+                      properties: {
+                        role: { const: "closing" },
+                        headline: { type: "string", description: "마무리 요약 헤드라인 20자 내외" },
+                        body: { type: "string", description: "요약 한 줄 40자 이내 (선택)" },
+                        cta: {
+                          type: "object",
+                          additionalProperties: false,
+                          required: ["action", "text"],
+                          properties: {
+                            action: { enum: ["save", "follow", "share"] },
+                            text: { type: "string", description: "행동 유도 버튼 문구 22자 이내" },
+                          },
+                        },
+                      },
+                    },
+                  ],
                 },
               },
             },
-            required: ["slides"],
-            additionalProperties: false,
           },
         },
       },
-      system:
-        "당신은 한국 SNS 콘텐츠 마케팅 전문 카피라이터다. 인스타그램 카드뉴스(정사각형 5장) 카피를 작성한다. " +
-        "구성: 1장=스크롤을 멈추게 하는 표지 후킹, 2~4장=핵심 내용(왜/실수/실전 팁 등 자연스러운 전개), 5장=저장·팔로우를 부르는 마무리. " +
-        "규칙: 정확히 5장. 헤드카피는 25자 이내로 강렬하게, 서브카피는 60자 이내로 구체적으로. 이모지 금지. 과장·허위 표현 금지.",
+      system: [
+        "너는 한국 인스타그램 정보성 카드뉴스 전문 카피라이터다. 정확히 5장을 생성한다: 1장 cover, 2~4장 content(3장), 5장 closing.",
+        "",
+        "[표지 cover] 후킹 공식 6개 중 반드시 하나를 채택: 숫자리스트 / 손실회피 / 통념깨기 / 질문호명 / 결과수치 / 시의성.",
+        "headline은 20~26자 한 방. footnote는 신뢰·구체화(수치·근거) 한 줄. 표지에 '저장하세요' 같은 CTA는 넣지 마라(마무리 담당).",
+        "",
+        "[본문 content] 한 장 = 한 아이디어. 필드 계층을 반드시 지켜라:",
+        "- kicker: 6~12자 진행 라벨(예: '흔한 실수', '핵심 지표', 'STEP 2')",
+        "- headline: 그 장의 주장 한 문장, 25자 이내",
+        "- points: 2~3개, 각 24자 이내 '명사구·체언 종결'(예: '업로드 후 30분 도달 속도'). 완결문·서술문 금지. points만 훑어도 정보가 남게 하라.",
+        "- footnote: 근거·예시 한 줄(선택)",
+        "",
+        "[마무리 closing] 요약 headline 1줄 + 단일 행동 하나(save/follow/share 중 택1). 행동 2개 이상 나열 금지. cta.text는 '이득 리마인드 + 행동' 패턴.",
+        "",
+        "[전 슬라이드 금지 규칙]",
+        "- 동어반복 금지: headline과 하위 필드가 같은 말이면 실패. 하위 필드는 headline에 없던 새 정보(수치·방법·이유·예시)만 담아라.",
+        "- 추상어 금지: '잘', '제대로', '중요합니다', '도움이 됩니다' 같은 정보 0인 표현 금지.",
+        "- 상투구 금지: '요즘 대세', '꼭 알아야 할'.",
+        "- 모든 조언은 구체적으로(숫자·구간·행동). '제목 잘 쓰기'(X) → '제목 앞 15자에 검색 키워드'(O).",
+        "- 점수·검색량 지수 등 추정 지표를 사실처럼 단정하지 마라. 이모지 금지. 과장·허위 금지.",
+        "톤: 표지=긴장·강한 동사·물음표 허용, 본문=단정형 '~다', 마무리=짧고 감정적.",
+      ].join("\n"),
       messages: [
         {
           role: "user",
-          content: `주제: ${t}\n브랜드 톤: ${TONE_LABEL[tone] ?? TONE_LABEL.friendly}\n\n이 주제로 카드뉴스 5장 카피를 만들어줘.`,
+          content: `주제: ${t}\n브랜드 톤: ${TONE_LABEL[tone] ?? TONE_LABEL.friendly}\n\n이 주제로 카드뉴스 5장(cover 1 / content 3 / closing 1)을 만들어줘.`,
         },
       ],
     });
@@ -150,7 +219,7 @@ export async function generateCardNews(topic: string, tone: string): Promise<Car
     const parsed = parseJsonText(response.content as { type: string; text?: string }[]) as {
       slides?: SlideOut[];
     } | null;
-    const slides = parsed?.slides?.filter((s) => s.head && s.sub).slice(0, 5);
+    const slides = parsed?.slides?.filter((s) => s.role && s.headline).slice(0, 5);
     if (!slides || slides.length === 0) {
       return { ok: false, error: "생성 결과 처리에 실패했어요. 다시 시도해 주세요." };
     }

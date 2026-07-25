@@ -19,7 +19,10 @@ export function SchedulePublish({
   onScheduled: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [caption, setCaption] = useState(() => `${slides[0]?.head ?? ""}\n${slides[0]?.sub ?? ""}`.trim());
+  // 캡션 기본값 — 표지 헤드라인 + 부연으로 초안을 만든다 (사용자가 수정 가능)
+  const [caption, setCaption] = useState(() =>
+    [slides[0]?.headline, slides[0]?.footnote].filter(Boolean).join("\n").trim(),
+  );
   const [date, setDate] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

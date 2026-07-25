@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Clapperboard,
   Flame,
@@ -25,7 +25,7 @@ import { formatCompact } from "@/lib/format";
 import { ideaSuggestions, trendItems, TREND_CATEGORIES } from "@/lib/data";
 import type { Channel, IdeaSuggestion, TrendItem } from "@/lib/types";
 import { generateCardNews, generateIdeas } from "./actions";
-import { exportSlidesAsPng } from "@/lib/studio/export-slides";
+import { exportSlidesAsPng, renderSlidesToDataUrls, type ExportSlide } from "@/lib/studio/export-slides";
 import { SchedulePublish } from "./_components/schedule-publish";
 import { ScheduledPostsPanel, type ScheduledPostsPanelHandle } from "./_components/scheduled-posts-panel";
 
@@ -45,44 +45,57 @@ const TONE_OPTIONS: { value: BrandTone; label: string }[] = [
   { value: "witty", label: "위트있는" },
 ];
 
-interface Slide {
-  no: number;
-  head: string;
-  sub: string;
-}
+type Slide = ExportSlide;
 
-/** 주제 문자열을 섞어 그럴듯한 목 카피 5장을 생성한다 (Phase 1 목 처리) */
+/**
+ * AI 미연동/키 미설정 시 폴백 템플릿 5장 (cover/content×3/closing).
+ * 실제 AI 결과와 같은 role 구조를 만들어 렌더러가 동일하게 그린다.
+ */
 function buildSlides(topic: string, tone: BrandTone): Slide[] {
   const t = topic.trim();
-  const cover: Record<BrandTone, { head: string; sub: string }> = {
-    friendly: { head: `${t}, 요즘 고민이셨죠?`, sub: `저장해두고 하나씩 따라 하기 좋은 ${t} 가이드예요` },
-    professional: { head: `${t} 핵심 정리`, sub: `실무에 바로 적용할 수 있도록 ${t}의 요점만 담았습니다` },
-    witty: { head: `${t}? 3초만 멈춰보세요`, sub: `이 카드 넘기다 보면 ${t}이(가) 만만해집니다` },
-  };
-  const closing: Record<BrandTone, { head: string; sub: string }> = {
-    friendly: { head: "도움이 됐다면 저장해주세요", sub: `다음 편에서 ${t} 심화 버전으로 다시 만나요` },
-    professional: { head: "요약 및 다음 단계", sub: `${t} 체크리스트를 저장하고 팀과 공유해보세요` },
-    witty: { head: "여기까지 온 당신, 이미 절반 성공", sub: `${t} 실전 편이 궁금하다면 팔로우가 국룰` },
+  const coverHead: Record<BrandTone, string> = {
+    friendly: `${t}, 이렇게 시작해보세요`,
+    professional: `${t} 핵심만 5장으로 정리`,
+    witty: `${t}? 3초만 멈춰보세요`,
   };
   return [
-    { no: 1, ...cover[tone] },
+    { role: "cover", no: 1, kicker: "가이드", headline: coverHead[tone], footnote: `${t}를 처음 시작하는 사람을 위한 요약` },
     {
+      role: "content",
       no: 2,
-      head: `왜 지금 ${t}인가`,
-      sub: `최근 관심도가 빠르게 오르는 주제라, 지금 다루면 초반 도달에 유리해요`,
+      kicker: "왜 지금",
+      headline: `지금 ${t}를 시작해야 하는 이유`,
+      points: ["관심도가 빠르게 오르는 시점", "초반 진입자가 유리한 구조", "지금 만든 기록이 자산이 됨"],
     },
     {
+      role: "content",
       no: 3,
-      head: `${t}에서 가장 많이 하는 실수 3가지`,
-      sub: "순서를 건너뛰거나, 대상 없이 시작하거나, 결과를 기록하지 않는 것",
+      kicker: "흔한 실수",
+      headline: `${t}에서 자주 하는 실수`,
+      points: ["순서를 건너뛰고 시작", "대상 없이 막연하게 진행", "결과를 기록하지 않음"],
     },
     {
+      role: "content",
       no: 4,
-      head: `바로 써먹는 ${t} 실전 팁`,
-      sub: "오늘 10분만 투자해서 첫 단계를 끝내는 것부터 시작해보세요",
+      kicker: "실전 팁",
+      headline: "오늘 바로 할 수 있는 첫 단계",
+      points: ["10분만 투자해 시작 지점 정하기", "작게 나눠 한 단계씩", "한 것과 결과를 기록"],
+      footnote: "완벽하게보다 일단 시작하는 게 먼저다",
     },
-    { no: 5, ...closing[tone] },
+    {
+      role: "closing",
+      no: 5,
+      headline: "이 카드, 필요할 때 못 찾습니다",
+      body: `${t} 다음 편도 이어서 준비했어요.`,
+      cta: { action: "save", text: "저장하고 다음 편 받기" },
+    },
   ];
+}
+
+/** 미리보기 문구 요약 — 결과 카드 아래 보조 텍스트 (실제 이미지는 캔버스 렌더로 보여준다) */
+function slideCaption(s: Slide): string {
+  if (s.role === "content" && s.points?.length) return s.points.join(" · ");
+  return s.footnote ?? s.body ?? s.cta?.text ?? "";
 }
 
 const ENGAGE_META: Record<IdeaSuggestion["expectedEngagement"], { label: string; tone: "positive" | "warning" | "neutral" }> = {
@@ -251,7 +264,7 @@ export default function StudioPage() {
     try {
       const result = await generateCardNews(topic, tone);
       if (result.ok) {
-        setSlides(result.slides.map((s, i) => ({ no: i + 1, head: s.head, sub: s.sub })));
+        setSlides(result.slides.map((s, i) => ({ ...s, no: i + 1 })));
         setSlidesFromAi(true);
       } else if (result.fallback) {
         setSlides(buildSlides(topic, tone));
@@ -267,6 +280,17 @@ export default function StudioPage() {
       setGenerating(false);
     }
   };
+
+  // 실제 카드 이미지를 캔버스로 렌더한 미리보기 (WYSIWYG) — 다운로드 결과물과 100% 동일.
+  // useMemo라 slides가 바뀔 때만 재계산되고, slides가 null(초기·SSR)이면 캔버스를 건드리지 않는다.
+  const previews = useMemo<string[]>(() => {
+    if (!slides) return [];
+    try {
+      return renderSlidesToDataUrls(slides, slidesFromAi);
+    } catch {
+      return [];
+    }
+  }, [slides, slidesFromAi]);
 
   const handleUseIdea = (ideaTopic: string) => {
     setTopic(ideaTopic);
@@ -388,7 +412,27 @@ export default function StudioPage() {
             </CardBody>
           </Card>
 
-          {slides ? (
+          {generating ? (
+            <Card>
+              <CardHeader title="생성 결과" description="AI가 카드뉴스를 만들고 있어요…" />
+              <CardBody className="space-y-5">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="flex aspect-square animate-pulse items-center justify-center rounded-card bg-overlay"
+                    >
+                      <Sparkles className="size-6 text-fg-faint/50" aria-hidden />
+                    </div>
+                  ))}
+                </div>
+                <p className="flex items-center gap-2 text-[13px] text-fg-sub">
+                  <span className="size-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden />
+                  보통 10~20초 걸려요. 주제에 맞는 5장을 구성하는 중입니다.
+                </p>
+              </CardBody>
+            </Card>
+          ) : slides ? (
             <Card>
               <CardHeader
                 title="생성 결과"
@@ -396,19 +440,30 @@ export default function StudioPage() {
                 action={<Badge tone={slidesFromAi ? "primary" : "neutral"}>{slidesFromAi ? "AI 생성" : "템플릿 (연동 전)"}</Badge>}
               />
               <CardBody className="space-y-5">
+                {/* WYSIWYG 미리보기 — 다운로드 결과물과 동일한 실제 카드 이미지 */}
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                  {slides.map((s) => (
-                    <div
-                      key={s.no}
-                      className="flex aspect-square flex-col rounded-card border border-line bg-overlay p-4"
-                    >
-                      <span className="tnum text-xs font-semibold text-fg-faint">
-                        {String(s.no).padStart(2, "0")} / 05
-                      </span>
-                      <p className="mt-2 text-[15px] font-bold leading-snug">{s.head}</p>
-                      <p className="mt-auto pt-2 text-xs leading-relaxed text-fg-sub">{s.sub}</p>
-                    </div>
-                  ))}
+                  {slides.map((s, i) =>
+                    previews[i] ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- 캔버스로 만든 data URL이라 next/image 대상이 아니다
+                      <img
+                        key={s.no}
+                        src={previews[i]}
+                        alt={`슬라이드 ${s.no} — ${s.headline}`}
+                        className="w-full rounded-card border border-line"
+                      />
+                    ) : (
+                      <div
+                        key={s.no}
+                        className="flex aspect-square flex-col justify-between rounded-card border border-line bg-overlay p-3"
+                      >
+                        <span className="tnum text-xs font-semibold text-fg-faint">
+                          {String(s.no).padStart(2, "0")} / {String(slides.length).padStart(2, "0")}
+                        </span>
+                        <p className="text-[13px] font-bold leading-snug">{s.headline}</p>
+                        <p className="line-clamp-2 text-[11px] text-fg-sub">{slideCaption(s)}</p>
+                      </div>
+                    ),
+                  )}
                 </div>
 
                 <p className="flex items-center gap-1.5 rounded-card border border-line bg-overlay px-3 py-2.5 text-[13px] text-fg-sub">
@@ -436,7 +491,7 @@ export default function StudioPage() {
             <EmptyState
               icon={LayoutTemplate}
               title="아직 생성한 카드뉴스가 없어요"
-              description="주제를 입력하고 생성하기를 누르면 5장 구성의 카드뉴스 카피가 만들어집니다."
+              description="주제를 입력하고 생성하기를 누르면 5장 구성의 카드뉴스가 만들어집니다."
             />
           )}
 
