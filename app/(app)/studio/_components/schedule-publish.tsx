@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CalendarClock, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buildFinalBlobs, type ExportSlide } from "@/lib/studio/export-slides";
+import type { CardTemplate } from "@/lib/studio/templates";
 
 /**
  * 예약 발행 패널 — 캡션·날짜 입력 후 슬라이드를 PNG로 렌더해 서버에 업로드하고 예약을 등록한다.
@@ -14,11 +15,13 @@ export function SchedulePublish({
   slides,
   aiGenerated,
   edits,
+  template,
   onScheduled,
 }: {
   slides: ExportSlide[];
   aiGenerated: boolean;
   edits: Record<number, string>;
+  template?: CardTemplate;
   onScheduled: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -38,7 +41,7 @@ export function SchedulePublish({
     setBusy(true);
     setError(null);
     try {
-      const blobs = await buildFinalBlobs(slides, aiGenerated, edits);
+      const blobs = await buildFinalBlobs(slides, aiGenerated, edits, template);
       const form = new FormData();
       form.set("caption", caption.trim());
       form.set("scheduledAt", date);

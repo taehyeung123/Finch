@@ -30,6 +30,7 @@ import type { Channel, IdeaSuggestion, TrendItem } from "@/lib/types";
 import { generateCardNews, generateIdeas } from "./actions";
 import { exportSlidesAsPng, renderSlidesToDataUrls, type ExportSlide } from "@/lib/studio/export-slides";
 import type { EditorScene } from "@/lib/studio/editor-model";
+import { TEMPLATES, DEFAULT_TEMPLATE, getTemplate } from "@/lib/studio/templates";
 import { SchedulePublish } from "./_components/schedule-publish";
 import { ScheduledPostsPanel, type ScheduledPostsPanelHandle } from "./_components/scheduled-posts-panel";
 import { BrandTone } from "./_components/brand-tone";
@@ -98,6 +99,19 @@ function buildSlides(topic: string, tone: BrandTone): Slide[] {
       cta: { action: "save", text: "저장하고 다음 편 받기" },
     },
   ];
+}
+
+/** 템플릿 미리보기 목업 — 순수 CSS(잉크 배경 + 강조 바 + 페이퍼 헤드라인 바). 캔버스 없이 테마 전달 */
+function TemplateMock({ t }: { t: (typeof TEMPLATES)[number] }) {
+  return (
+    <div className="flex size-16 flex-col justify-between rounded-[6px] p-2" style={{ backgroundColor: t.ink }}>
+      <div className="h-1.5 w-4 rounded-full" style={{ backgroundColor: t.accent }} />
+      <div className="space-y-1">
+        <div className="h-1.5 w-full rounded-full" style={{ backgroundColor: t.paper }} />
+        <div className="h-1.5 w-3/5 rounded-full" style={{ backgroundColor: t.paper }} />
+      </div>
+    </div>
+  );
 }
 
 /** 미리보기 문구 요약 — 결과 카드 아래 보조 텍스트 (실제 이미지는 캔버스 렌더로 보여준다) */
@@ -264,6 +278,16 @@ export default function StudioPage() {
   // 다안 생성 — 한 번에 받은 여러 안 중 현재 보고 있는 안
   const [variants, setVariants] = useState<{ angle: string; slides: Slide[] }[]>([]);
   const [activeVariant, setActiveVariant] = useState(0);
+  // 카드 콘텐츠 템플릿(색 테마)
+  const [templateId, setTemplateId] = useState<string>(DEFAULT_TEMPLATE.id);
+  const template = getTemplate(templateId);
+
+  // 템플릿 변경 — 편집본은 이전 테마로 구워져 있어 초기화한다(안내 문구로 고지)
+  function chooseTemplate(id: string) {
+    if (id === templateId) return;
+    setTemplateId(id);
+    setEdits({});
+  }
 
   // 다운로드·예약발행이 쓰는 png만 뽑은 맵
   const editPngs = useMemo<Record<number, string>>(
@@ -329,11 +353,11 @@ export default function StudioPage() {
   const previews = useMemo<string[]>(() => {
     if (!slides) return [];
     try {
-      return renderSlidesToDataUrls(slides, slidesFromAi);
+      return renderSlidesToDataUrls(slides, slidesFromAi, template);
     } catch {
       return [];
     }
-  }, [slides, slidesFromAi]);
+  }, [slides, slidesFromAi, template]);
 
   // localStorage 임시저장 — 서버를 쓰지 않아 비용·부담이 없다. 이 브라우저에서만 유지된다.
   const DRAFT_KEY = "finch:studio:cardnews-draft";
@@ -343,6 +367,7 @@ export default function StudioPage() {
     let draft: {
       topic?: string;
       tone?: BrandTone;
+      templateId?: string;
       slides?: Slide[];
       slidesFromAi?: boolean;
       edits?: Record<number, { png: string; scene: EditorScene }>;
@@ -357,6 +382,7 @@ export default function StudioPage() {
     /* eslint-disable react-hooks/set-state-in-effect -- 마운트 1회 외부저장소 복원(정석 패턴) */
     setTopic(draft.topic ?? "");
     if (draft.tone) setTone(draft.tone);
+    if (draft.templateId) setTemplateId(draft.templateId);
     setSlides(draft.slides);
     setSlidesFromAi(Boolean(draft.slidesFromAi));
     setEdits(draft.edits ?? {});
@@ -384,11 +410,11 @@ export default function StudioPage() {
   useEffect(() => {
     if (!slides || generating) return;
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ topic, tone, slides, slidesFromAi, edits }));
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ topic, tone, templateId, slides, slidesFromAi, edits }));
     } catch {
       /* 용량 초과 시 조용히 스킵 — 임시저장은 부가 기능 */
     }
-  }, [topic, tone, slides, slidesFromAi, edits, generating]);
+  }, [topic, tone, templateId, slides, slidesFromAi, edits, generating]);
 
   function clearDraft() {
     try {
@@ -400,6 +426,7 @@ export default function StudioPage() {
     setEdits({});
     setVariants([]);
     setActiveVariant(0);
+    setTemplateId(DEFAULT_TEMPLATE.id);
     setRestored(false);
     setTopic("");
   }
@@ -466,6 +493,36 @@ export default function StudioPage() {
       {tab === "cards" ? (
         <div className="space-y-6">
           <BrandTone />
+
+          {/* 템플릿 갤러리 — 색 테마 선택(미리보기 목업) */}
+          <Card>
+            <CardBody className="space-y-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[15px] font-bold">템플릿</p>
+                <p className="text-[12px] text-fg-sub">색 테마를 고르면 카드 전체에 바로 적용돼요.</p>
+              </div>
+              <div className="flex flex-wrap gap-2.5">
+                {TEMPLATES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => chooseTemplate(t.id)}
+                    aria-pressed={t.id === templateId}
+                    className={cn(
+                      "flex flex-col items-center gap-1.5 rounded-card border p-2 transition-colors",
+                      t.id === templateId ? "border-primary ring-1 ring-primary" : "border-line hover:border-line-strong",
+                    )}
+                  >
+                    <TemplateMock t={t} />
+                    <span className={cn("text-[11px] font-medium", t.id === templateId ? "text-primary" : "text-fg-sub")}>
+                      {t.name}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </CardBody>
+          </Card>
+
           <Card>
             <CardHeader
               title="카드뉴스 생성기"
@@ -655,7 +712,7 @@ export default function StudioPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     variant="secondary"
-                    onClick={() => exportSlidesAsPng(slides, slidesFromAi, editPngs)}
+                    onClick={() => exportSlidesAsPng(slides, slidesFromAi, editPngs, template)}
                   >
                     <ImageDown className="size-4" aria-hidden />
                     이미지 내보내기 (PNG {slides.length}장)
@@ -664,6 +721,7 @@ export default function StudioPage() {
                     slides={slides}
                     aiGenerated={slidesFromAi}
                     edits={editPngs}
+                    template={template}
                     onScheduled={() => scheduledPanelRef.current?.refresh()}
                   />
                 </div>
@@ -685,6 +743,7 @@ export default function StudioPage() {
               total={slides.length}
               aiGenerated={slidesFromAi}
               initialScene={edits[editingIndex]?.scene}
+              template={template}
               onClose={() => setEditingIndex(null)}
               onSave={(png, scene) => {
                 setEdits((prev) => ({ ...prev, [editingIndex]: { png, scene } }));
