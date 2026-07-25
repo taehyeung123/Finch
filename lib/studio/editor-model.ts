@@ -18,7 +18,38 @@ export const PAPER = "#FAF8F4";
 export const CORAL = "#FF6B4A";
 export const EDITOR_FONT = "Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
 
-export type ElementType = "text" | "rect" | "circle" | "image";
+/**
+ * 편집기에서 고를 수 있는 폰트 — 전부 cdn.jsdelivr.net 호스팅(눈누 공개 폰트)이라
+ * proxy.ts CSP(font-src 'self' jsdelivr)를 바꾸지 않고 쓸 수 있다.
+ * 단일 웨이트 폰트(도현·주아·리디바탕)는 굵기 조절 시 캔버스가 합성 볼드로 그린다.
+ */
+export const FONT_OPTIONS: { label: string; family: string }[] = [
+  { label: "프리텐다드", family: EDITOR_FONT },
+  { label: "지마켓 산스", family: "GmarketSans" },
+  { label: "배민 도현", family: "BMDOHYEON" },
+  { label: "배민 주아", family: "BMJUA" },
+  { label: "리디바탕", family: "RIDIBatang" },
+];
+
+/** 편집기 마운트 시 <style>로 주입하는 @font-face 정의 (jsdelivr — CSP 허용 오리진) */
+export const FONT_FACE_CSS = `
+@font-face { font-family: 'GmarketSans'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansMedium.woff') format('woff'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'GmarketSans'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansBold.woff') format('woff'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'BMDOHYEON'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_one@1.0/BMDOHYEON.woff') format('woff'); font-display: swap; }
+@font-face { font-family: 'BMJUA'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_one@1.0/BMJUA.woff') format('woff'); font-display: swap; }
+@font-face { font-family: 'RIDIBatang'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_twelve@1.0/RIDIBatang.woff') format('woff'); font-display: swap; }
+`;
+
+/** 글씨 굵기 단계 — Konva fontStyle에 숫자 웨이트 문자열로 전달된다 */
+export const WEIGHT_OPTIONS: { label: string; value: string }[] = [
+  { label: "가늘게", value: "300" },
+  { label: "보통", value: "400" },
+  { label: "중간", value: "500" },
+  { label: "굵게", value: "700" },
+  { label: "아주 굵게", value: "900" },
+];
+
+export type ElementType = "text" | "rect" | "circle" | "image" | "line" | "arrow" | "star" | "polygon";
 
 interface BaseEl {
   id: string;
@@ -26,6 +57,7 @@ interface BaseEl {
   x: number;
   y: number;
   rotation: number;
+  opacity: number;
   /** false면 선택·이동 불가 (배경 장식 등). 기본 true */
   draggable: boolean;
 }
@@ -35,11 +67,12 @@ export interface TextEl extends BaseEl {
   text: string;
   width: number;
   fontSize: number;
-  fontStyle: "normal" | "bold";
+  fontFamily: string;
+  /** Konva fontStyle — "300"~"900" 숫자 웨이트 문자열 */
+  fontStyle: string;
   fill: string;
   align: "left" | "center" | "right";
   lineHeight: number;
-  opacity: number;
 }
 
 export interface RectEl extends BaseEl {
@@ -48,14 +81,12 @@ export interface RectEl extends BaseEl {
   height: number;
   fill: string;
   cornerRadius: number;
-  opacity: number;
 }
 
 export interface CircleEl extends BaseEl {
   type: "circle";
   radius: number;
   fill: string;
-  opacity: number;
 }
 
 export interface ImageEl extends BaseEl {
@@ -65,7 +96,39 @@ export interface ImageEl extends BaseEl {
   src: string;
 }
 
-export type EditorElement = TextEl | RectEl | CircleEl | ImageEl;
+export interface LineEl extends BaseEl {
+  type: "line";
+  /** x,y 기준 상대 좌표 [x1,y1,x2,y2] */
+  points: number[];
+  stroke: string;
+  strokeWidth: number;
+}
+
+export interface ArrowEl extends BaseEl {
+  type: "arrow";
+  points: number[];
+  stroke: string;
+  /** 화살촉 채움 — stroke와 같은 색으로 유지한다 */
+  fill: string;
+  strokeWidth: number;
+}
+
+export interface StarEl extends BaseEl {
+  type: "star";
+  numPoints: number;
+  innerRadius: number;
+  outerRadius: number;
+  fill: string;
+}
+
+export interface PolygonEl extends BaseEl {
+  type: "polygon";
+  sides: number;
+  radius: number;
+  fill: string;
+}
+
+export type EditorElement = TextEl | RectEl | CircleEl | ImageEl | LineEl | ArrowEl | StarEl | PolygonEl;
 
 export interface EditorScene {
   background: string;
@@ -75,16 +138,19 @@ export interface EditorScene {
 let idCounter = 0;
 export function nextId(prefix = "el"): string {
   idCounter += 1;
-  return `${prefix}-${idCounter}-${idCounter * 2654435761 % 100000}`;
+  return `${prefix}-${idCounter}-${(idCounter * 2654435761) % 100000}`;
 }
 
-function text(partial: Partial<TextEl> & { text: string; x: number; y: number; width: number; fontSize: number }): TextEl {
+function text(
+  partial: Partial<TextEl> & { text: string; x: number; y: number; width: number; fontSize: number },
+): TextEl {
   return {
     id: nextId("t"),
     type: "text",
     rotation: 0,
     draggable: true,
-    fontStyle: "bold",
+    fontFamily: EDITOR_FONT,
+    fontStyle: "700",
     fill: INK,
     align: "left",
     lineHeight: 1.2,
@@ -123,11 +189,11 @@ function coverScene(s: ExportSlide): EditorScene {
     els.push(text({ text: s.kicker, x: CARD_PAD + 24, y: 148, width: CW, fontSize: 28, fill: CORAL }));
   }
   els.push(rect({ x: CARD_PAD, y: 452, width: 96, height: 9, fill: CORAL }));
-  els.push(text({ text: s.headline, x: CARD_PAD, y: 470, width: CW, fontSize: 98, fill: PAPER, lineHeight: 1.18 }));
+  els.push(text({ text: s.headline, x: CARD_PAD, y: 470, width: CW, fontSize: 98, fill: PAPER, lineHeight: 1.18, fontStyle: "900" }));
   if (s.footnote) {
-    els.push(text({ text: s.footnote, x: CARD_PAD, y: 800, width: CW, fontSize: 38, fill: PAPER, fontStyle: "normal", opacity: 0.72 }));
+    els.push(text({ text: s.footnote, x: CARD_PAD, y: 800, width: CW, fontSize: 38, fill: PAPER, fontStyle: "400", opacity: 0.72 }));
   }
-  els.push(text({ text: "밀어서 보기 →", x: CARD_PAD, y: 952, width: CW, fontSize: 28, fill: PAPER, fontStyle: "normal", opacity: 0.55 }));
+  els.push(text({ text: "밀어서 보기 →", x: CARD_PAD, y: 952, width: CW, fontSize: 28, fill: PAPER, fontStyle: "400", opacity: 0.55 }));
   return { background: INK, elements: els };
 }
 
@@ -137,43 +203,43 @@ function contentScene(s: ExportSlide, total: number): EditorScene {
   const by = 150;
   const br = 38;
   els.push(circle({ x: bx, y: by, radius: br, fill: CORAL }));
-  els.push(text({ text: String(s.no).padStart(2, "0"), x: bx - br, y: by - 20, width: br * 2, fontSize: 34, fill: PAPER, align: "center" }));
+  els.push(text({ text: String(s.no).padStart(2, "0"), x: bx - br, y: by - 20, width: br * 2, fontSize: 34, fill: PAPER, align: "center", fontStyle: "800" }));
   if (s.kicker) {
     els.push(text({ text: s.kicker, x: bx + br + 26, y: by - 18, width: CW, fontSize: 28, fill: CORAL }));
   }
-  els.push(text({ text: s.headline, x: CARD_PAD, y: 232, width: CW, fontSize: 62, fill: INK, lineHeight: 1.26 }));
+  els.push(text({ text: s.headline, x: CARD_PAD, y: 232, width: CW, fontSize: 62, fill: INK, lineHeight: 1.26, fontStyle: "800" }));
 
   const points = (s.points ?? []).slice(0, 4);
   let py = 460;
   const pr = 26;
   points.forEach((p, i) => {
     els.push(circle({ x: CARD_PAD + pr, y: py + 22, radius: pr, fill: CORAL }));
-    els.push(text({ text: String(i + 1), x: CARD_PAD, y: py + 6, width: pr * 2, fontSize: 26, fill: PAPER, align: "center" }));
+    els.push(text({ text: String(i + 1), x: CARD_PAD, y: py + 6, width: pr * 2, fontSize: 26, fill: PAPER, align: "center", fontStyle: "800" }));
     els.push(text({ text: p, x: CARD_PAD + pr * 2 + 22, y: py, width: CW - pr * 2 - 22, fontSize: 38, fill: INK }));
     py += 92;
   });
 
   if (s.footnote) {
-    els.push(text({ text: `— ${s.footnote}`, x: CARD_PAD, y: py + 10, width: CW, fontSize: 32, fill: INK, fontStyle: "normal", opacity: 0.6 }));
+    els.push(text({ text: `— ${s.footnote}`, x: CARD_PAD, y: py + 10, width: CW, fontSize: 32, fill: INK, fontStyle: "400", opacity: 0.6 }));
   }
   els.push(rect({ x: CARD_PAD, y: 908, width: 72, height: 6, fill: CORAL }));
-  els.push(text({ text: `${String(s.no).padStart(2, "0")} / ${String(total).padStart(2, "0")}`, x: CARD_SIZE - CARD_PAD - 200, y: 958, width: 200, fontSize: 28, fill: INK, fontStyle: "normal", align: "right", opacity: 0.5 }));
+  els.push(text({ text: `${String(s.no).padStart(2, "0")} / ${String(total).padStart(2, "0")}`, x: CARD_SIZE - CARD_PAD - 200, y: 958, width: 200, fontSize: 28, fill: INK, fontStyle: "400", align: "right", opacity: 0.5 }));
   return { background: PAPER, elements: els };
 }
 
 function closingScene(s: ExportSlide, aiGenerated: boolean): EditorScene {
   const els: EditorElement[] = [];
   els.push(rect({ x: CARD_PAD, y: 300, width: 96, height: 9, fill: CORAL }));
-  els.push(text({ text: s.headline, x: CARD_PAD, y: 340, width: CW, fontSize: 76, fill: PAPER, lineHeight: 1.2 }));
+  els.push(text({ text: s.headline, x: CARD_PAD, y: 340, width: CW, fontSize: 76, fill: PAPER, lineHeight: 1.2, fontStyle: "900" }));
   if (s.body) {
-    els.push(text({ text: s.body, x: CARD_PAD, y: 520, width: CW, fontSize: 38, fill: PAPER, fontStyle: "normal", opacity: 0.72 }));
+    els.push(text({ text: s.body, x: CARD_PAD, y: 520, width: CW, fontSize: 38, fill: PAPER, fontStyle: "400", opacity: 0.72 }));
   }
   const btnY = 680;
   const btnH = 104;
   els.push(rect({ x: CARD_PAD, y: btnY, width: CW, height: btnH, fill: CORAL, cornerRadius: btnH / 2 }));
-  els.push(text({ text: s.cta?.text ?? "저장하기", x: CARD_PAD, y: btnY + btnH / 2 - 26, width: CW, fontSize: 40, fill: PAPER, align: "center" }));
+  els.push(text({ text: s.cta?.text ?? "저장하기", x: CARD_PAD, y: btnY + btnH / 2 - 26, width: CW, fontSize: 40, fill: PAPER, align: "center", fontStyle: "800" }));
   if (aiGenerated) {
-    els.push(text({ text: "AI 생성", x: CARD_PAD, y: 952, width: CW, fontSize: 26, fill: PAPER, fontStyle: "normal", align: "center", opacity: 0.5 }));
+    els.push(text({ text: "AI 생성", x: CARD_PAD, y: 952, width: CW, fontSize: 26, fill: PAPER, fontStyle: "400", align: "center", opacity: 0.5 }));
   }
   return { background: INK, elements: els };
 }
