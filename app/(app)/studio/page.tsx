@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import {
   Clapperboard,
   Flame,
@@ -8,6 +9,7 @@ import {
   Info,
   LayoutTemplate,
   Lightbulb,
+  Pencil,
   Search,
   Sparkles,
   TrendingUp,
@@ -28,6 +30,9 @@ import { generateCardNews, generateIdeas } from "./actions";
 import { exportSlidesAsPng, renderSlidesToDataUrls, type ExportSlide } from "@/lib/studio/export-slides";
 import { SchedulePublish } from "./_components/schedule-publish";
 import { ScheduledPostsPanel, type ScheduledPostsPanelHandle } from "./_components/scheduled-posts-panel";
+
+// Konva 편집기는 canvas/window에 의존해 서버 렌더 불가 — 클라이언트에서만 마운트
+const CardEditor = dynamic(() => import("./_components/card-editor"), { ssr: false });
 
 type StudioTab = "cards" | "video" | "ideas";
 
@@ -249,6 +254,9 @@ export default function StudioPage() {
   const [slidesFromAi, setSlidesFromAi] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  // 편집기로 수정한 슬라이드 이미지 (슬라이드 인덱스 → PNG data URL)
+  const [edits, setEdits] = useState<Record<number, string>>({});
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [ideaKeyword, setIdeaKeyword] = useState("");
   const [ideaCategory, setIdeaCategory] = useState<string>("전체");
   const [ideaResult, setIdeaResult] = useState<IdeaSearchResult | null>(null);
@@ -261,6 +269,7 @@ export default function StudioPage() {
     if (!topic.trim() || generating) return;
     setGenerating(true);
     setGenError(null);
+    setEdits({}); // 새로 생성하면 이전 편집 결과 초기화
     try {
       const result = await generateCardNews(topic, tone);
       if (result.ok) {
@@ -463,31 +472,46 @@ export default function StudioPage() {
                 action={<Badge tone={slidesFromAi ? "primary" : "neutral"}>{slidesFromAi ? "AI 생성" : "템플릿 (연동 전)"}</Badge>}
               />
               <CardBody className="space-y-5">
-                {/* WYSIWYG 미리보기 — 다운로드 결과물과 동일한 실제 카드 이미지 */}
+                {/* WYSIWYG 미리보기 — 다운로드 결과물과 동일한 실제 카드 이미지. 편집본이 있으면 그걸 표시. */}
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                  {slides.map((s, i) =>
-                    previews[i] ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- 캔버스로 만든 data URL이라 next/image 대상이 아니다
-                      <img
-                        key={s.no}
-                        src={previews[i]}
-                        alt={`슬라이드 ${s.no} — ${s.headline}`}
-                        className="w-full rounded-card border border-line"
-                      />
-                    ) : (
-                      <div
-                        key={s.no}
-                        className="flex aspect-square flex-col justify-between rounded-card border border-line bg-overlay p-3"
-                      >
-                        <span className="tnum text-xs font-semibold text-fg-faint">
-                          {String(s.no).padStart(2, "0")} / {String(slides.length).padStart(2, "0")}
-                        </span>
-                        <p className="text-[13px] font-bold leading-snug">{s.headline}</p>
-                        <p className="line-clamp-2 text-[11px] text-fg-sub">{slideCaption(s)}</p>
+                  {slides.map((s, i) => {
+                    const img = edits[i] ?? previews[i];
+                    return (
+                      <div key={s.no} className="group relative">
+                        {img ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- 캔버스로 만든 data URL이라 next/image 대상이 아니다
+                          <img
+                            src={img}
+                            alt={`슬라이드 ${s.no} — ${s.headline}`}
+                            className="w-full rounded-card border border-line"
+                          />
+                        ) : (
+                          <div className="flex aspect-square flex-col justify-between rounded-card border border-line bg-overlay p-3">
+                            <span className="tnum text-xs font-semibold text-fg-faint">
+                              {String(s.no).padStart(2, "0")} / {String(slides.length).padStart(2, "0")}
+                            </span>
+                            <p className="text-[13px] font-bold leading-snug">{s.headline}</p>
+                            <p className="line-clamp-2 text-[11px] text-fg-sub">{slideCaption(s)}</p>
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setEditingIndex(i)}
+                          className="absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded-card bg-black/65 px-2 py-1 text-[11px] font-semibold text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                        >
+                          <Pencil className="size-3" aria-hidden />
+                          편집
+                        </button>
+                        {edits[i] ? (
+                          <span className="absolute left-1.5 top-1.5 rounded-chip bg-primary px-1.5 py-0.5 text-[10px] font-bold text-white">
+                            편집됨
+                          </span>
+                        ) : null}
                       </div>
-                    ),
-                  )}
+                    );
+                  })}
                 </div>
+                <p className="text-[12px] text-fg-faint">카드에 마우스를 올리면 나타나는 &lsquo;편집&rsquo;으로 문구·색·이미지를 직접 고칠 수 있어요.</p>
 
                 <p className="flex items-center gap-1.5 rounded-card border border-line bg-overlay px-3 py-2.5 text-[13px] text-fg-sub">
                   <Sparkles className="size-4 shrink-0 text-primary" aria-hidden />
@@ -497,7 +521,7 @@ export default function StudioPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     variant="secondary"
-                    onClick={() => exportSlidesAsPng(slides, slidesFromAi)}
+                    onClick={() => exportSlidesAsPng(slides, slidesFromAi, edits)}
                   >
                     <ImageDown className="size-4" aria-hidden />
                     이미지 내보내기 (PNG {slides.length}장)
@@ -505,6 +529,7 @@ export default function StudioPage() {
                   <SchedulePublish
                     slides={slides}
                     aiGenerated={slidesFromAi}
+                    edits={edits}
                     onScheduled={() => scheduledPanelRef.current?.refresh()}
                   />
                 </div>
@@ -519,6 +544,19 @@ export default function StudioPage() {
           )}
 
           <ScheduledPostsPanel ref={scheduledPanelRef} />
+
+          {slides && editingIndex !== null && slides[editingIndex] ? (
+            <CardEditor
+              slide={slides[editingIndex]}
+              total={slides.length}
+              aiGenerated={slidesFromAi}
+              onClose={() => setEditingIndex(null)}
+              onSave={(dataUrl) => {
+                setEdits((prev) => ({ ...prev, [editingIndex]: dataUrl }));
+                setEditingIndex(null);
+              }}
+            />
+          ) : null}
         </div>
       ) : null}
 

@@ -3,19 +3,22 @@
 import { useState } from "react";
 import { CalendarClock, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { renderSlidesToBlobs, type ExportSlide } from "@/lib/studio/export-slides";
+import { buildFinalBlobs, type ExportSlide } from "@/lib/studio/export-slides";
 
 /**
  * 예약 발행 패널 — 캡션·날짜 입력 후 슬라이드를 PNG로 렌더해 서버에 업로드하고 예약을 등록한다.
+ * 편집기로 수정한 슬라이드(edits)는 그 이미지를 그대로 업로드한다.
  * Vercel 크론은 하루 1회 빈도라 '예약일 아침 배치'로 발행됨을 명시한다(정시 발행 아님).
  */
 export function SchedulePublish({
   slides,
   aiGenerated,
+  edits,
   onScheduled,
 }: {
   slides: ExportSlide[];
   aiGenerated: boolean;
+  edits: Record<number, string>;
   onScheduled: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -35,7 +38,7 @@ export function SchedulePublish({
     setBusy(true);
     setError(null);
     try {
-      const blobs = await renderSlidesToBlobs(slides, aiGenerated);
+      const blobs = await buildFinalBlobs(slides, aiGenerated, edits);
       const form = new FormData();
       form.set("caption", caption.trim());
       form.set("scheduledAt", date);

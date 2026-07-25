@@ -317,6 +317,27 @@ export async function renderSlidesToBlobs(slides: ExportSlide[], aiGenerated: bo
   return blobs;
 }
 
+async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
+  return (await fetch(dataUrl)).blob();
+}
+
+/**
+ * 최종 이미지 Blob 배열 — 편집기로 수정한 슬라이드(edits[index]=dataUrl)는 그 이미지를,
+ * 아닌 슬라이드는 자동 렌더 결과를 쓴다. (다운로드·예약 발행 공용)
+ */
+export async function buildFinalBlobs(
+  slides: ExportSlide[],
+  aiGenerated: boolean,
+  edits: Record<number, string>,
+): Promise<Blob[]> {
+  const out: Blob[] = [];
+  for (let i = 0; i < slides.length; i += 1) {
+    const edited = edits[i];
+    out.push(edited ? await dataUrlToBlob(edited) : await canvasToBlob(drawSlide(slides[i], slides.length, aiGenerated)));
+  }
+  return out;
+}
+
 function downloadCanvas(canvas: HTMLCanvasElement, filename: string): Promise<void> {
   return new Promise((resolve) => {
     canvas.toBlob((blob) => {
@@ -333,11 +354,26 @@ function downloadCanvas(canvas: HTMLCanvasElement, filename: string): Promise<vo
   });
 }
 
-/** 슬라이드 전체를 PNG 파일로 순차 다운로드 */
-export async function exportSlidesAsPng(slides: ExportSlide[], aiGenerated: boolean): Promise<void> {
-  for (const slide of slides) {
-    const canvas = drawSlide(slide, slides.length, aiGenerated);
-    await downloadCanvas(canvas, `finch-cardnews-${String(slide.no).padStart(2, "0")}.png`);
+function downloadUrl(url: string, filename: string) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+}
+
+/** 슬라이드 전체를 PNG 파일로 순차 다운로드. 편집된 슬라이드는 그 이미지를 저장한다. */
+export async function exportSlidesAsPng(
+  slides: ExportSlide[],
+  aiGenerated: boolean,
+  edits: Record<number, string> = {},
+): Promise<void> {
+  for (let i = 0; i < slides.length; i += 1) {
+    const name = `finch-cardnews-${String(slides[i].no).padStart(2, "0")}.png`;
+    if (edits[i]) {
+      downloadUrl(edits[i], name);
+    } else {
+      await downloadCanvas(drawSlide(slides[i], slides.length, aiGenerated), name);
+    }
     // 브라우저 다운로드 스로틀 회피
     await new Promise((r) => setTimeout(r, 250));
   }
