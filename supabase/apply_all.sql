@@ -671,3 +671,42 @@ create policy "own brand profile" on public.brand_profiles
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create trigger trg_brand_profiles_updated before update on public.brand_profiles
   for each row execute function public.set_updated_at();
+
+-- ═══════════════════════════════════════════════════════════════
+-- 0015_brand_kits.sql — 나만의 디자인(브랜드 킷): 커스텀 팔레트 + 로고
+-- ═══════════════════════════════════════════════════════════════
+
+create table if not exists public.brand_kits (
+  id             uuid primary key default gen_random_uuid(),
+  user_id        uuid not null references auth.users(id) on delete cascade,
+  name           text not null default '내 브랜드',
+  ink            text not null default '#0C0C11',
+  paper          text not null default '#FAF8F4',
+  accent         text not null default '#FF6B4A',
+  on_accent      text not null default '#FAF8F4',
+  logo_path      text,
+  logo_placement text not null default 'closing' check (logo_placement in ('cover','closing','all','none')),
+  is_default     boolean not null default false,
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
+);
+alter table public.brand_kits enable row level security;
+create policy "own brand kits" on public.brand_kits
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create unique index if not exists one_default_kit_per_user on public.brand_kits (user_id) where is_default;
+create trigger trg_brand_kits_updated before update on public.brand_kits
+  for each row execute function public.set_updated_at();
+
+insert into storage.buckets (id, name, public)
+values ('brand-logos', 'brand-logos', true)
+on conflict (id) do nothing;
+
+drop policy if exists "own brand logo upload" on storage.objects;
+create policy "own brand logo upload" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'brand-logos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "own brand logo delete" on storage.objects;
+create policy "own brand logo delete" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'brand-logos' and (storage.foldername(name))[1] = auth.uid()::text);

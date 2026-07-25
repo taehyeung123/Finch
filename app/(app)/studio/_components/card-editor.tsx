@@ -67,6 +67,7 @@ import {
   type TextEl,
 } from "@/lib/studio/editor-model";
 import type { CardTemplate } from "@/lib/studio/templates";
+import type { LogoPlacement } from "@/lib/studio/export-slides";
 
 const DISPLAY = 520; // 화면 표시 크기 (내부 좌표는 항상 1080)
 const SCALE = DISPLAY / CARD_SIZE;
@@ -188,6 +189,7 @@ export default function CardEditor({
   aiGenerated,
   initialScene,
   template,
+  logo,
   onClose,
   onSave,
 }: {
@@ -196,12 +198,13 @@ export default function CardEditor({
   aiGenerated: boolean;
   initialScene?: EditorScene;
   template?: CardTemplate;
+  logo?: { url: string; placement: LogoPlacement };
   onClose: () => void;
   onSave: (png: string, scene: EditorScene) => void;
 }) {
   const initial = useMemo(
-    () => initialScene ?? buildEditorScene(slide, total, aiGenerated, template),
-    [initialScene, slide, total, aiGenerated, template],
+    () => initialScene ?? buildEditorScene(slide, total, aiGenerated, template, logo),
+    [initialScene, slide, total, aiGenerated, template, logo],
   );
   const [background, setBackground] = useState(initial.background);
   const [elements, setElements] = useState<EditorElement[]>(initial.elements);

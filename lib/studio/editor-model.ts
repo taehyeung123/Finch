@@ -7,7 +7,7 @@
  * 이동·수정·추가·삭제한다. 내보내기는 Konva Stage.toDataURL로 1080px PNG를 만든다.
  */
 
-import type { ExportSlide } from "./export-slides";
+import type { ExportSlide, LogoPlacement } from "./export-slides";
 import { type CardTemplate, DEFAULT_TEMPLATE } from "./templates";
 
 export const CARD_SIZE = 1080;
@@ -182,10 +182,34 @@ export function buildEditorScene(
   total: number,
   aiGenerated: boolean,
   tpl: CardTemplate = DEFAULT_TEMPLATE,
+  logo?: { url: string; placement: LogoPlacement },
 ): EditorScene {
-  if (slide.role === "cover") return coverScene(slide, tpl);
-  if (slide.role === "closing") return closingScene(slide, aiGenerated, tpl);
-  return contentScene(slide, total, tpl);
+  const scene =
+    slide.role === "cover"
+      ? coverScene(slide, tpl)
+      : slide.role === "closing"
+        ? closingScene(slide, aiGenerated, tpl)
+        : contentScene(slide, total, tpl);
+
+  // 로고 — placement/role이 맞으면 우상단에 편집 가능한 이미지 요소로 추가
+  if (logo?.url) {
+    const show = logo.placement === "all" || logo.placement === slide.role;
+    if (show) {
+      scene.elements.push({
+        id: nextId("logo"),
+        type: "image",
+        src: logo.url,
+        x: CARD_SIZE - CARD_PAD - 200,
+        y: 76,
+        width: 200,
+        height: 80,
+        opacity: 1,
+        rotation: 0,
+        draggable: true,
+      });
+    }
+  }
+  return scene;
 }
 
 function coverScene(s: ExportSlide, tpl: CardTemplate): EditorScene {

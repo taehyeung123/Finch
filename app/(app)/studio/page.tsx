@@ -28,12 +28,14 @@ import { formatCompact } from "@/lib/format";
 import { ideaSuggestions, trendItems, TREND_CATEGORIES } from "@/lib/data";
 import type { Channel, IdeaSuggestion, TrendItem } from "@/lib/types";
 import { generateCardNews, generateIdeas } from "./actions";
-import { exportSlidesAsPng, renderSlidesToDataUrls, type ExportSlide } from "@/lib/studio/export-slides";
+import { exportSlidesAsPng, renderSlidesToDataUrls, type ExportSlide, type LoadedLogo } from "@/lib/studio/export-slides";
 import type { EditorScene } from "@/lib/studio/editor-model";
-import { TEMPLATES, DEFAULT_TEMPLATE, getTemplate } from "@/lib/studio/templates";
+import { TEMPLATES, DEFAULT_TEMPLATE, getTemplate, customTemplate } from "@/lib/studio/templates";
+import { getBrandKit, type BrandKit } from "./brand-kit-actions";
 import { SchedulePublish } from "./_components/schedule-publish";
 import { ScheduledPostsPanel, type ScheduledPostsPanelHandle } from "./_components/scheduled-posts-panel";
 import { BrandTone } from "./_components/brand-tone";
+import { BrandKitPanel } from "./_components/brand-kit";
 
 // Konva 편집기는 canvas/window에 의존해 서버 렌더 불가 — 클라이언트에서만 마운트
 const CardEditor = dynamic(() => import("./_components/card-editor"), { ssr: false });
@@ -280,7 +282,23 @@ export default function StudioPage() {
   const [activeVariant, setActiveVariant] = useState(0);
   // 카드 콘텐츠 템플릿(색 테마)
   const [templateId, setTemplateId] = useState<string>(DEFAULT_TEMPLATE.id);
-  const template = getTemplate(templateId);
+  // 나만의 디자인(브랜드 킷) + 미리 로드한 로고 이미지
+  const [brandKit, setBrandKit] = useState<BrandKit | null>(null);
+  const [logoImg, setLogoImg] = useState<HTMLImageElement | null>(null);
+
+  // 실제 적용 템플릿 — '내 브랜드' 선택 시 브랜드 킷 색을, 아니면 프리셋
+  const template = templateId === "brand" && brandKit ? customTemplate(brandKit) : getTemplate(templateId);
+  // 로고는 '내 브랜드' 템플릿을 쓰고, 로고가 실제로 있고 로드까지 끝났을 때만 적용.
+  // useMemo로 안정화 — 안 하면 매 렌더 새 객체라 미리보기 memo가 매번 재계산된다.
+  const logo = useMemo<LoadedLogo | undefined>(
+    () =>
+      templateId === "brand" && brandKit?.logoUrl && logoImg
+        ? { img: logoImg, placement: brandKit.logoPlacement }
+        : undefined,
+    [templateId, brandKit, logoImg],
+  );
+  const editorLogo =
+    templateId === "brand" && brandKit?.logoUrl ? { url: brandKit.logoUrl, placement: brandKit.logoPlacement } : undefined;
 
   // 템플릿 변경 — 편집본은 이전 테마로 구워져 있어 초기화한다(안내 문구로 고지)
   function chooseTemplate(id: string) {
@@ -288,6 +306,26 @@ export default function StudioPage() {
     setTemplateId(id);
     setEdits({});
   }
+
+  // 브랜드 킷 로드(마운트 1회) + 저장 후 갱신 시 로고 이미지 미리 로드
+  useEffect(() => {
+    getBrandKit()
+      .then((k) => setBrandKit(k))
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    const url = brandKit?.logoUrl;
+    if (!url) return; // 로고 없음 — 파생 logo가 logoUrl로 게이팅되므로 여기서 상태를 건드리지 않는다
+    let alive = true;
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => alive && setLogoImg(img);
+    img.onerror = () => alive && setLogoImg(null);
+    img.src = url;
+    return () => {
+      alive = false;
+    };
+  }, [brandKit?.logoUrl]);
 
   // 다운로드·예약발행이 쓰는 png만 뽑은 맵
   const editPngs = useMemo<Record<number, string>>(
@@ -353,11 +391,11 @@ export default function StudioPage() {
   const previews = useMemo<string[]>(() => {
     if (!slides) return [];
     try {
-      return renderSlidesToDataUrls(slides, slidesFromAi, template);
+      return renderSlidesToDataUrls(slides, slidesFromAi, template, logo);
     } catch {
       return [];
     }
-  }, [slides, slidesFromAi, template]);
+  }, [slides, slidesFromAi, template, logo]);
 
   // localStorage 임시저장 — 서버를 쓰지 않아 비용·부담이 없다. 이 브라우저에서만 유지된다.
   const DRAFT_KEY = "finch:studio:cardnews-draft";
@@ -493,6 +531,7 @@ export default function StudioPage() {
       {tab === "cards" ? (
         <div className="space-y-6">
           <BrandTone />
+          <BrandKitPanel kit={brandKit} onChange={setBrandKit} />
 
           {/* 템플릿 갤러리 — 색 테마 선택(미리보기 목업) */}
           <Card>
@@ -519,6 +558,22 @@ export default function StudioPage() {
                     </span>
                   </button>
                 ))}
+                {brandKit ? (
+                  <button
+                    type="button"
+                    onClick={() => chooseTemplate("brand")}
+                    aria-pressed={templateId === "brand"}
+                    className={cn(
+                      "flex flex-col items-center gap-1.5 rounded-card border p-2 transition-colors",
+                      templateId === "brand" ? "border-primary ring-1 ring-primary" : "border-line hover:border-line-strong",
+                    )}
+                  >
+                    <TemplateMock t={customTemplate(brandKit)} />
+                    <span className={cn("text-[11px] font-medium", templateId === "brand" ? "text-primary" : "text-fg-sub")}>
+                      내 브랜드
+                    </span>
+                  </button>
+                ) : null}
               </div>
             </CardBody>
           </Card>
@@ -712,7 +767,7 @@ export default function StudioPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     variant="secondary"
-                    onClick={() => exportSlidesAsPng(slides, slidesFromAi, editPngs, template)}
+                    onClick={() => exportSlidesAsPng(slides, slidesFromAi, editPngs, template, logo)}
                   >
                     <ImageDown className="size-4" aria-hidden />
                     이미지 내보내기 (PNG {slides.length}장)
@@ -722,6 +777,7 @@ export default function StudioPage() {
                     aiGenerated={slidesFromAi}
                     edits={editPngs}
                     template={template}
+                    logo={logo}
                     onScheduled={() => scheduledPanelRef.current?.refresh()}
                   />
                 </div>
@@ -744,6 +800,7 @@ export default function StudioPage() {
               aiGenerated={slidesFromAi}
               initialScene={edits[editingIndex]?.scene}
               template={template}
+              logo={editorLogo}
               onClose={() => setEditingIndex(null)}
               onSave={(png, scene) => {
                 setEdits((prev) => ({ ...prev, [editingIndex]: { png, scene } }));

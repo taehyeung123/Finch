@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { CalendarClock, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { buildFinalBlobs, type ExportSlide } from "@/lib/studio/export-slides";
+import { buildFinalBlobs, type ExportSlide, type LoadedLogo } from "@/lib/studio/export-slides";
 import type { CardTemplate } from "@/lib/studio/templates";
 
 /**
@@ -16,12 +16,14 @@ export function SchedulePublish({
   aiGenerated,
   edits,
   template,
+  logo,
   onScheduled,
 }: {
   slides: ExportSlide[];
   aiGenerated: boolean;
   edits: Record<number, string>;
   template?: CardTemplate;
+  logo?: LoadedLogo;
   onScheduled: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -41,7 +43,7 @@ export function SchedulePublish({
     setBusy(true);
     setError(null);
     try {
-      const blobs = await buildFinalBlobs(slides, aiGenerated, edits, template);
+      const blobs = await buildFinalBlobs(slides, aiGenerated, edits, template, logo);
       const form = new FormData();
       form.set("caption", caption.trim());
       form.set("scheduledAt", date);

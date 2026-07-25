@@ -38,6 +38,14 @@ export function getTemplate(id: string | undefined | null): CardTemplate {
   return TEMPLATES.find((t) => t.id === id) ?? DEFAULT_TEMPLATE;
 }
 
+/** 브랜드 킷 색을 템플릿으로 (id는 항상 "brand") */
+export function customTemplate(
+  colors: { ink: string; paper: string; accent: string; onAccent: string },
+  name = "내 브랜드",
+): CardTemplate {
+  return { id: "brand", name, ink: colors.ink, paper: colors.paper, accent: colors.accent, onAccent: colors.onAccent };
+}
+
 /** #RRGGBB → rgba(r,g,b,a). 잘못된 형식이면 원본 반환(불투명 취급) */
 export function withAlpha(hex: string, alpha: number): string {
   const m = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim());

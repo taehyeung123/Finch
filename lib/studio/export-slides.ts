@@ -39,6 +39,27 @@ const PAD = 96;
 const CW = SIZE - PAD * 2;
 const FONT = "Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
 
+export type LogoPlacement = "cover" | "closing" | "all" | "none";
+/** 렌더 시 이미 로드된 로고 이미지 + 어느 슬라이드에 넣을지 */
+export interface LoadedLogo {
+  img: CanvasImageSource & { width: number; height: number };
+  placement: LogoPlacement;
+}
+
+/** 로고를 우상단에 그린다(높이 60, 최대폭 260). placement/role이 맞을 때만. */
+function drawLogo(ctx: CanvasRenderingContext2D, logo: LoadedLogo, role: SlideRole) {
+  const p = logo.placement;
+  const show = p === "all" || (p === "cover" && role === "cover") || (p === "closing" && role === "closing");
+  if (!show || !logo.img.width || !logo.img.height) return;
+  let h = 60;
+  let w = h * (logo.img.width / logo.img.height);
+  if (w > 260) {
+    h = h * (260 / w);
+    w = 260;
+  }
+  ctx.drawImage(logo.img, SIZE - PAD - w, 84, w, h);
+}
+
 function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   const lines: string[] = [];
   for (const paragraph of String(text).split("\n")) {
@@ -259,7 +280,13 @@ function drawClosing(ctx: CanvasRenderingContext2D, s: ExportSlide, aiGenerated:
   }
 }
 
-function drawSlide(slide: ExportSlide, total: number, aiGenerated: boolean, tpl: CardTemplate): HTMLCanvasElement {
+function drawSlide(
+  slide: ExportSlide,
+  total: number,
+  aiGenerated: boolean,
+  tpl: CardTemplate,
+  logo?: LoadedLogo,
+): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = SIZE;
   canvas.height = SIZE;
@@ -269,6 +296,8 @@ function drawSlide(slide: ExportSlide, total: number, aiGenerated: boolean, tpl:
   if (slide.role === "cover") drawCover(ctx, slide, tpl);
   else if (slide.role === "closing") drawClosing(ctx, slide, aiGenerated, tpl);
   else drawContent(ctx, slide, total, tpl);
+
+  if (logo) drawLogo(ctx, logo, slide.role);
 
   return canvas;
 }
@@ -284,8 +313,9 @@ export function renderSlidesToDataUrls(
   slides: ExportSlide[],
   aiGenerated: boolean,
   tpl: CardTemplate = DEFAULT_TEMPLATE,
+  logo?: LoadedLogo,
 ): string[] {
-  return slides.map((slide) => drawSlide(slide, slides.length, aiGenerated, tpl).toDataURL("image/png"));
+  return slides.map((slide) => drawSlide(slide, slides.length, aiGenerated, tpl, logo).toDataURL("image/png"));
 }
 
 /** 예약 발행 업로드용 — 다운로드 대신 PNG Blob 배열을 반환한다 */
@@ -293,10 +323,11 @@ export async function renderSlidesToBlobs(
   slides: ExportSlide[],
   aiGenerated: boolean,
   tpl: CardTemplate = DEFAULT_TEMPLATE,
+  logo?: LoadedLogo,
 ): Promise<Blob[]> {
   const blobs: Blob[] = [];
   for (const slide of slides) {
-    blobs.push(await canvasToBlob(drawSlide(slide, slides.length, aiGenerated, tpl)));
+    blobs.push(await canvasToBlob(drawSlide(slide, slides.length, aiGenerated, tpl, logo)));
   }
   return blobs;
 }
@@ -314,11 +345,12 @@ export async function buildFinalBlobs(
   aiGenerated: boolean,
   edits: Record<number, string>,
   tpl: CardTemplate = DEFAULT_TEMPLATE,
+  logo?: LoadedLogo,
 ): Promise<Blob[]> {
   const out: Blob[] = [];
   for (let i = 0; i < slides.length; i += 1) {
     const edited = edits[i];
-    out.push(edited ? await dataUrlToBlob(edited) : await canvasToBlob(drawSlide(slides[i], slides.length, aiGenerated, tpl)));
+    out.push(edited ? await dataUrlToBlob(edited) : await canvasToBlob(drawSlide(slides[i], slides.length, aiGenerated, tpl, logo)));
   }
   return out;
 }
@@ -352,13 +384,14 @@ export async function exportSlidesAsPng(
   aiGenerated: boolean,
   edits: Record<number, string> = {},
   tpl: CardTemplate = DEFAULT_TEMPLATE,
+  logo?: LoadedLogo,
 ): Promise<void> {
   for (let i = 0; i < slides.length; i += 1) {
     const name = `finch-cardnews-${String(slides[i].no).padStart(2, "0")}.png`;
     if (edits[i]) {
       downloadUrl(edits[i], name);
     } else {
-      await downloadCanvas(drawSlide(slides[i], slides.length, aiGenerated, tpl), name);
+      await downloadCanvas(drawSlide(slides[i], slides.length, aiGenerated, tpl, logo), name);
     }
     await new Promise((r) => setTimeout(r, 250));
   }
