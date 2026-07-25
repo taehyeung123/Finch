@@ -21,26 +21,69 @@ function cssToken(name: string, fallback: string): string {
   return v || fallback;
 }
 
-/** 한글 포함 텍스트 줄바꿈 — measureText 기준 글자 단위 래핑 */
+/**
+ * 단어(공백) 경계 우선 줄바꿈 — 글자 단위로 자르면 "이제" 같은 단어가 "이/제"로 끊기는
+ * 문제가 있었다. 한 단어가 그 자체로 maxWidth를 넘을 때만 글자 단위로 쪼갠다.
+ */
 function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   const lines: string[] = [];
-  let line = "";
-  for (const ch of text) {
-    if (ch === "\n") {
-      lines.push(line);
-      line = "";
-      continue;
+  for (const paragraph of text.split("\n")) {
+    const words = paragraph.split(" ");
+    let line = "";
+    for (const word of words) {
+      const next = line ? `${line} ${word}` : word;
+      if (ctx.measureText(next).width <= maxWidth) {
+        line = next;
+        continue;
+      }
+      if (line) lines.push(line);
+      if (ctx.measureText(word).width <= maxWidth) {
+        line = word;
+      } else {
+        let chunk = "";
+        for (const ch of word) {
+          const t = chunk + ch;
+          if (ctx.measureText(t).width > maxWidth && chunk) {
+            lines.push(chunk);
+            chunk = ch;
+          } else {
+            chunk = t;
+          }
+        }
+        line = chunk;
+      }
     }
-    const next = line + ch;
-    if (ctx.measureText(next).width > maxWidth && line.length > 0) {
-      lines.push(line);
-      line = ch === " " ? "" : ch;
-    } else {
-      line = next;
-    }
+    if (line) lines.push(line);
   }
-  if (line) lines.push(line);
   return lines;
+}
+
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// 핀치 심볼 마크(components/logo.tsx FinchMark와 동일 path) — 배경 브랜드 워터마크용.
+// 32x32 viewBox 전체가 캔버스 안에 다 들어오게 그려야 부리·꼬리 실루엣이 잘리지 않는다.
+const MARK_PATH = new Path2D(
+  "M6 18.5c0-5.8 4.7-10.5 10.5-10.5 3.4 0 6.5 1.7 8.4 4.2l4.1-1.2-2.4 4.4c.2.8.4 1.7.4 2.6 0 5.8-4.7 10.5-10.5 10.5-2.3 0-4.5-.8-6.2-2L4 28l2.7-5.2c-.5-1.3-.7-2.8-.7-4.3z",
+);
+
+function drawWatermark(ctx: CanvasRenderingContext2D, fg: string) {
+  ctx.save();
+  ctx.globalAlpha = 0.15;
+  ctx.fillStyle = fg;
+  const boxSize = 400;
+  const scale = boxSize / 32;
+  ctx.translate(SIZE - boxSize - 56, SIZE - boxSize - 150);
+  ctx.scale(scale, scale);
+  ctx.fill(MARK_PATH);
+  ctx.restore();
 }
 
 function drawSlide(slide: ExportSlide, total: number, aiGenerated: boolean): HTMLCanvasElement {
@@ -57,40 +100,69 @@ function drawSlide(slide: ExportSlide, total: number, aiGenerated: boolean): HTM
   // 배경 — 브랜드 코랄 고정 (템플릿 v1)
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, SIZE, SIZE);
+
+  // 배경 브랜드 워터마크 — 텍스트 사이 빈 공간을 채우는 장식 요소 (헤드/서브 그리기 전에 깔아둔다)
+  drawWatermark(ctx, fg);
+
   ctx.fillStyle = fg;
 
-  // 슬라이드 번호
-  ctx.font = `600 34px ${font}`;
-  ctx.globalAlpha = 0.65;
-  ctx.fillText(`${String(slide.no).padStart(2, "0")} / ${String(total).padStart(2, "0")}`, PAD, PAD + 20);
+  // 슬라이드 번호 — 옅은 배경의 pill
+  ctx.font = `700 30px ${font}`;
+  const noText = `${String(slide.no).padStart(2, "0")} / ${String(total).padStart(2, "0")}`;
+  const noWidth = ctx.measureText(noText).width;
+  const pillPadX = 22;
+  const pillH = 56;
+  ctx.globalAlpha = 0.14;
+  roundRect(ctx, PAD, PAD, noWidth + pillPadX * 2, pillH, pillH / 2);
+  ctx.fill();
+  ctx.globalAlpha = 0.85;
+  ctx.textBaseline = "middle";
+  ctx.fillText(noText, PAD + pillPadX, PAD + pillH / 2 + 2);
+  ctx.textBaseline = "alphabetic";
   ctx.globalAlpha = 1;
 
-  // 헤드카피 — 세로 중앙부
-  ctx.font = `800 76px ${font}`;
-  const headLines = wrapText(ctx, slide.head, SIZE - PAD * 2).slice(0, 4);
-  const headLineHeight = 100;
-  let y = SIZE * 0.42 - ((headLines.length - 1) * headLineHeight) / 2;
+  // 콘텐츠 블록 — 헤드카피는 항상 같은 기준선(SIZE*0.4)에서 시작한다.
+  // 세로 중앙정렬 방식은 카피가 짧을 때(1줄) 위쪽에 큰 여백이 남는 문제가 있어 고정 앵커로 바꿨다.
+  const contentMaxWidth = SIZE - PAD * 2;
+  ctx.font = `800 74px ${font}`;
+  const headLines = wrapText(ctx, slide.head, contentMaxWidth).slice(0, 4);
+  const headLH = 92;
+
+  ctx.font = `500 38px ${font}`;
+  const subLines = wrapText(ctx, slide.sub, contentMaxWidth).slice(0, 3);
+  const subLH = 54;
+
+  const headStartY = SIZE * 0.4;
+  ctx.font = `800 74px ${font}`;
+  ctx.globalAlpha = 1;
+  let y = headStartY;
   for (const line of headLines) {
     ctx.fillText(line, PAD, y);
-    y += headLineHeight;
+    y += headLH;
   }
-
-  // 서브카피 — 하단부
-  ctx.font = `500 40px ${font}`;
-  ctx.globalAlpha = 0.85;
-  const subLines = wrapText(ctx, slide.sub, SIZE - PAD * 2).slice(0, 4);
-  let sy = SIZE - PAD - 40 - (subLines.length - 1) * 58 - (aiGenerated ? 64 : 0);
+  const lastHeadBaseline = headStartY + (headLines.length - 1) * headLH;
+  y = lastHeadBaseline + 62;
+  ctx.font = `500 38px ${font}`;
+  ctx.globalAlpha = 0.82;
   for (const line of subLines) {
-    ctx.fillText(line, PAD, sy);
-    sy += 58;
+    ctx.fillText(line, PAD, y);
+    y += subLH;
   }
   ctx.globalAlpha = 1;
 
-  // AI 생성 표기 (정책 준수) + 워터마크
+  // 하단 구분선 + AI 생성 표기 (정책 준수)
   if (aiGenerated) {
-    ctx.font = `600 28px ${font}`;
+    ctx.globalAlpha = 0.25;
+    ctx.strokeStyle = fg;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(PAD, SIZE - PAD - 6);
+    ctx.lineTo(SIZE - PAD, SIZE - PAD - 6);
+    ctx.stroke();
+
     ctx.globalAlpha = 0.6;
-    ctx.fillText("AI 생성 · finch.ai.kr", PAD, SIZE - PAD + 24);
+    ctx.font = `600 26px ${font}`;
+    ctx.fillText("AI 생성 · finch.ai.kr", PAD, SIZE - PAD + 30);
     ctx.globalAlpha = 1;
   }
 
