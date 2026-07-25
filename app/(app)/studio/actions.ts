@@ -29,6 +29,52 @@ export type CardNewsResult =
   | { ok: false; fallback: true }
   | { ok: false; fallback?: false; error: string };
 
+/** 브랜드 톤 프로필 — "학습"의 실체는 이 요약 + 예시를 프롬프트에 주입하는 것이다(모델 학습 아님) */
+export interface BrandProfile {
+  tone: string; // 말투 요약 (예: "친근하고 단정한, 군더더기 없는")
+  phrases: string[]; // 자주 쓰는 표현
+  banned: string[]; // 피해야 할 표현
+  target: string; // 타깃 독자
+  industry: string; // 업종
+}
+
+export type BrandProfileState = { profile: BrandProfile; samples: string[] } | null;
+
+/** 현재 사용자의 브랜드 프로필 로드 (없으면 null). 서버 컴포넌트/액션 공용. */
+export async function getBrandProfile(): Promise<BrandProfileState> {
+  if (isDemoMode()) return null;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase.from("brand_profiles").select("profile, samples").eq("user_id", user.id).maybeSingle();
+  if (!data?.profile || Object.keys(data.profile as object).length === 0) return null;
+  return {
+    profile: data.profile as BrandProfile,
+    samples: Array.isArray(data.samples) ? (data.samples as string[]) : [],
+  };
+}
+
+/** 생성 프롬프트에 주입할 브랜드 컨텍스트 문자열 (프로필 없으면 빈 문자열) */
+function brandContextString(state: BrandProfileState): string {
+  if (!state) return "";
+  const { profile: p, samples } = state;
+  const lines = [
+    "",
+    "[브랜드 톤 프로필] 아래는 이 사용자의 브랜드 톤이다. 이 톤·표현을 반영하되, 위 카피 규칙(구체성·금지어)은 그대로 지켜라.",
+    p.tone ? `- 말투: ${p.tone}` : "",
+    p.phrases?.length ? `- 자주 쓰는 표현: ${p.phrases.join(", ")}` : "",
+    p.banned?.length ? `- 피해야 할 표현: ${p.banned.join(", ")}` : "",
+    p.target ? `- 타깃 독자: ${p.target}` : "",
+    p.industry ? `- 업종: ${p.industry}` : "",
+  ].filter(Boolean);
+  if (samples.length > 0) {
+    lines.push("[이 브랜드의 잘 된 예시 캡션]", samples.slice(0, 3).join("\n---\n"));
+  }
+  return lines.join("\n");
+}
+
 export type IdeaOut = {
   title: string;
   reason: string;
@@ -112,6 +158,9 @@ export async function generateCardNews(topic: string, tone: string): Promise<Car
 
   const claude = createClaudeClient();
   if (!claude) return { ok: false, fallback: true };
+
+  // 학습된 브랜드 톤 프로필이 있으면 생성 프롬프트에 주입한다(없으면 빈 문자열)
+  const brandState = await getBrandProfile();
 
   try {
     const response = await claude.messages.create({
@@ -219,7 +268,7 @@ export async function generateCardNews(topic: string, tone: string): Promise<Car
         "톤: 표지=긴장·강한 동사·물음표 허용, 본문=단정형 '~다', 마무리=짧고 감정적.",
         "",
         "[다안 생성] variants는 정확히 2안. 각 안은 서로 다른 접근 각도(예: 1안 정보·근거형 / 2안 공감·후킹형)로, 같은 주제를 다르게 풀어라. 두 안이 비슷하면 실패다. 각 안은 정확히 5장(cover 1 / content 3 / closing 1).",
-      ].join("\n"),
+      ].join("\n") + brandContextString(brandState),
       messages: [
         {
           role: "user",
@@ -246,6 +295,96 @@ export async function generateCardNews(topic: string, tone: string): Promise<Car
     console.error("[studio] 카드뉴스 생성 실패:", e);
     return { ok: false, error: "AI 생성 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요." };
   }
+}
+
+export type LearnResult =
+  | { ok: true; profile: BrandProfile }
+  | { ok: false; fallback?: true; error?: string };
+
+/** 브랜드 톤 학습 — 예시 캡션/설명에서 톤 프로필을 추출해 저장한다(Claude 1회 호출). */
+export async function learnBrandProfile(input: string): Promise<LearnResult> {
+  const text = input.trim();
+  if (text.length < 20) return { ok: false, error: "브랜드 톤을 파악할 수 있게 예시 캡션이나 설명을 조금 더 입력해 주세요." };
+  if (text.length > 4000) return { ok: false, error: "입력이 너무 길어요. 4000자 이내로 줄여 주세요." };
+  if (isDemoMode() || !process.env.ANTHROPIC_API_KEY) return { ok: false, fallback: true };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "로그인이 필요합니다." };
+
+  const claude = createClaudeClient();
+  if (!claude) return { ok: false, fallback: true };
+
+  try {
+    const response = await claude.messages.create({
+      model: STUDIO_MODEL,
+      max_tokens: 4000,
+      output_config: {
+        format: {
+          type: "json_schema",
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["tone", "phrases", "banned", "target", "industry"],
+            properties: {
+              tone: { type: "string", description: "말투·문체 요약 한 문장" },
+              phrases: { type: "array", items: { type: "string" }, description: "자주 쓰거나 어울리는 표현 3~6개" },
+              banned: { type: "array", items: { type: "string" }, description: "이 브랜드에 안 어울리는 표현 2~4개" },
+              target: { type: "string", description: "주 타깃 독자" },
+              industry: { type: "string", description: "업종·분야" },
+            },
+          },
+        },
+      },
+      system:
+        "너는 브랜드 보이스 분석가다. 사용자가 준 예시 캡션이나 설명에서 브랜드의 말투·자주 쓰는 표현·피해야 할 표현·타깃·업종을 추출한다. 지어내지 말고 주어진 텍스트에서 근거를 찾아 요약해라. 이모지 금지.",
+      messages: [
+        { role: "user", content: `아래는 내 브랜드의 예시 캡션 또는 톤 설명이야. 여기서 브랜드 톤 프로필을 추출해줘.\n\n${text}` },
+      ],
+    });
+
+    if (response.stop_reason === "refusal") return { ok: false, error: "이 입력으로는 분석할 수 없어요." };
+    const parsed = parseJsonText(response.content as { type: string; text?: string }[]) as BrandProfile | null;
+    if (!parsed?.tone) return { ok: false, error: "톤 분석에 실패했어요. 다시 시도해 주세요." };
+
+    const profile: BrandProfile = {
+      tone: parsed.tone,
+      phrases: (parsed.phrases ?? []).slice(0, 6),
+      banned: (parsed.banned ?? []).slice(0, 4),
+      target: parsed.target ?? "",
+      industry: parsed.industry ?? "",
+    };
+    // 예시 캡션은 줄 단위로 최대 5개 보관(few-shot 주입용)
+    const samples = text
+      .split("\n")
+      .map((s) => s.trim())
+      .filter((s) => s.length >= 8)
+      .slice(0, 5);
+
+    const { error } = await supabase
+      .from("brand_profiles")
+      .upsert({ user_id: user.id, profile, samples, updated_at: new Date().toISOString() });
+    if (error) {
+      console.error("[studio] 브랜드 프로필 저장 실패:", error.message);
+      return { ok: false, error: "저장에 실패했어요. 다시 시도해 주세요." };
+    }
+    return { ok: true, profile };
+  } catch (e) {
+    console.error("[studio] 브랜드 톤 학습 실패:", e);
+    return { ok: false, error: "분석 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요." };
+  }
+}
+
+/** 저장된 브랜드 톤 프로필 삭제 (초기화) */
+export async function clearBrandProfile(): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  await supabase.from("brand_profiles").delete().eq("user_id", user.id);
 }
 
 export async function generateIdeas(keyword: string, category: string): Promise<IdeasResult> {

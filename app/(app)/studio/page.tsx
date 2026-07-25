@@ -32,6 +32,7 @@ import { exportSlidesAsPng, renderSlidesToDataUrls, type ExportSlide } from "@/l
 import type { EditorScene } from "@/lib/studio/editor-model";
 import { SchedulePublish } from "./_components/schedule-publish";
 import { ScheduledPostsPanel, type ScheduledPostsPanelHandle } from "./_components/scheduled-posts-panel";
+import { BrandTone } from "./_components/brand-tone";
 
 // Konva 편집기는 canvas/window에 의존해 서버 렌더 불가 — 클라이언트에서만 마운트
 const CardEditor = dynamic(() => import("./_components/card-editor"), { ssr: false });
@@ -464,6 +465,7 @@ export default function StudioPage() {
 
       {tab === "cards" ? (
         <div className="space-y-6">
+          <BrandTone />
           <Card>
             <CardHeader
               title="카드뉴스 생성기"

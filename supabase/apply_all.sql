@@ -655,3 +655,19 @@ create policy "team members read" on public.connected_accounts
 alter table public.subscriptions
   add column if not exists pending_plan text
     check (pending_plan in ('creator','pro','agency','enterprise') or pending_plan is null);
+
+-- ═══════════════════════════════════════════════════════════════
+-- 0014_brand_profiles.sql — 브랜드 톤 학습(사용자별 톤 프로필 + 예시 캡션)
+-- ═══════════════════════════════════════════════════════════════
+
+create table if not exists public.brand_profiles (
+  user_id    uuid primary key references auth.users(id) on delete cascade,
+  profile    jsonb not null default '{}'::jsonb,
+  samples    jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table public.brand_profiles enable row level security;
+create policy "own brand profile" on public.brand_profiles
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create trigger trg_brand_profiles_updated before update on public.brand_profiles
+  for each row execute function public.set_updated_at();
