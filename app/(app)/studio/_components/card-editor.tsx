@@ -1,17 +1,16 @@
 "use client";
 
 /**
- * 카드뉴스 자유 편집기 (v2) — Konva 기반. next/dynamic ssr:false로만 마운트한다
+ * 카드뉴스 자유 편집기 (v3) — Konva 기반. next/dynamic ssr:false로만 마운트한다
  * (Konva가 canvas/window를 참조해 서버 렌더 불가).
  *
- * v2: 한글 폰트 5종 선택(jsdelivr 눈누 CDN — CSP 허용 오리진), 굵기 5단계, 도형 추가
- *     (사각형/둥근사각형/원/삼각형/별/선/화살표/하이라이트 바), 투명도, 레이어 앞뒤 순서, 복제.
- * v1: 요소 선택·이동·크기조절·회전, 텍스트 내용·색·크기·정렬 편집, 이미지 삽입, 삭제,
- *     배경색, 1080px PNG 내보내기.
- * v3 예정: 실행취소/재실행, 정렬 가이드선, 다중 선택.
+ * v3: 실행취소/재실행(Ctrl+Z / Ctrl+Shift+Z, 버스트 합치기), 중앙 스냅 가이드선,
+ *     이어 편집(initialScene 복원 — 적용한 편집을 다시 열면 그대로 이어서 수정).
+ * v2: 한글 폰트 5종, 굵기 5단계, 도형 8종, 투명도, 레이어 순서, 복제.
+ * v1: 선택·이동·크기조절·회전, 텍스트/색/정렬 편집, 이미지 삽입, 삭제, 배경색, 1080px PNG 내보내기.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Stage,
   Layer,
@@ -46,6 +45,8 @@ import {
   Copy,
   ChevronsUp,
   ChevronsDown,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ExportSlide } from "@/lib/studio/export-slides";
@@ -62,11 +63,14 @@ import {
   FONT_FACE_CSS,
   WEIGHT_OPTIONS,
   type EditorElement,
+  type EditorScene,
   type TextEl,
 } from "@/lib/studio/editor-model";
 
 const DISPLAY = 520; // 화면 표시 크기 (내부 좌표는 항상 1080)
 const SCALE = DISPLAY / CARD_SIZE;
+const CENTER = CARD_SIZE / 2;
+const SNAP = 12; // 중앙 스냅 임계 (카드 좌표 px)
 
 const SWATCHES = [
   { label: "잉크", value: INK },
@@ -76,14 +80,26 @@ const SWATCHES = [
   { label: "검정", value: "#000000" },
 ];
 
-/** 요소의 대표 색 — 선/화살표는 stroke, 나머지는 fill */
+type Snapshot = { elements: EditorElement[]; background: string };
+type Guide = { o: "v" | "h"; p: number };
+
 function elementColor(el: EditorElement): string | null {
   if (el.type === "line" || el.type === "arrow") return el.stroke;
   if ("fill" in el) return el.fill;
   return null;
 }
 
-/** 편집기 전용 웹폰트 로드 — 한 번만 <style> 주입 후 document.fonts로 로드 완료를 기다린다 */
+/** 요소 중심(카드 좌표) — 중앙 스냅 계산용. 원/별/다각형은 x,y가 이미 중심. */
+function centerOf(el: EditorElement, node: Konva.Node): { x: number; y: number } {
+  if (el.type === "circle" || el.type === "star" || el.type === "polygon") {
+    return { x: node.x(), y: node.y() };
+  }
+  if (el.type === "line" || el.type === "arrow") {
+    return { x: node.x(), y: node.y() };
+  }
+  return { x: node.x() + node.width() / 2, y: node.y() + node.height() / 2 };
+}
+
 function useEditorFonts(): boolean {
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -109,16 +125,19 @@ function useEditorFonts(): boolean {
   return ready;
 }
 
-/** 이미지 요소 — HTMLImageElement를 로드해 KonvaImage로 렌더 */
 function ImageNode({
   el,
   isSelected,
   onSelect,
+  onDragMove,
+  onDragEndEl,
   onChange,
 }: {
   el: Extract<EditorElement, { type: "image" }>;
   isSelected: boolean;
   onSelect: () => void;
+  onDragMove: (e: Konva.KonvaEventObject<DragEvent>) => void;
+  onDragEndEl: (e: Konva.KonvaEventObject<DragEvent>) => void;
   onChange: (patch: Partial<EditorElement>) => void;
 }) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
@@ -142,7 +161,8 @@ function ImageNode({
       draggable
       onClick={onSelect}
       onTap={onSelect}
-      onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
+      onDragMove={onDragMove}
+      onDragEnd={onDragEndEl}
       onTransformEnd={(e) => {
         const node = e.target;
         onChange({
@@ -165,28 +185,39 @@ export default function CardEditor({
   slide,
   total,
   aiGenerated,
+  initialScene,
   onClose,
   onSave,
 }: {
   slide: ExportSlide;
   total: number;
   aiGenerated: boolean;
+  initialScene?: EditorScene;
   onClose: () => void;
-  onSave: (dataUrl: string) => void;
+  onSave: (png: string, scene: EditorScene) => void;
 }) {
-  const initial = useMemo(() => buildEditorScene(slide, total, aiGenerated), [slide, total, aiGenerated]);
+  const initial = useMemo(
+    () => initialScene ?? buildEditorScene(slide, total, aiGenerated),
+    [initialScene, slide, total, aiGenerated],
+  );
   const [background, setBackground] = useState(initial.background);
   const [elements, setElements] = useState<EditorElement[]>(initial.elements);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [guides, setGuides] = useState<Guide[]>([]);
   const fontsReady = useEditorFonts();
 
   const stageRef = useRef<Konva.Stage>(null);
   const trRef = useRef<Konva.Transformer>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // 실행취소/재실행 히스토리 — 같은 라벨이 700ms 내 연속이면 하나로 합쳐 기록(드래그·타이핑·슬라이더)
+  const [past, setPast] = useState<Snapshot[]>([]);
+  const [future, setFuture] = useState<Snapshot[]>([]);
+  const lastLabel = useRef("");
+  const lastTime = useRef(0);
+
   const selected = elements.find((e) => e.id === selectedId) ?? null;
 
-  // 선택 변경 시 Transformer를 해당 노드에 부착
   useEffect(() => {
     const tr = trRef.current;
     const stage = stageRef.current;
@@ -196,21 +227,62 @@ export default function CardEditor({
     tr.getLayer()?.batchDraw();
   }, [selectedId, elements]);
 
-  // 웹폰트 로드 완료 후 텍스트 메트릭 재계산 (로드 전에 그려진 폰트가 남지 않도록)
   useEffect(() => {
     if (fontsReady) stageRef.current?.batchDraw();
   }, [fontsReady]);
 
-  function patch(id: string, p: Partial<EditorElement>) {
+  const record = useCallback(
+    (label: string) => {
+      const now = Date.now();
+      const coalesce = label === lastLabel.current && now - lastTime.current < 700;
+      lastLabel.current = label;
+      lastTime.current = now;
+      if (coalesce) return;
+      setPast((p) => [...p.slice(-49), { elements, background }]);
+      setFuture([]);
+    },
+    [elements, background],
+  );
+
+  const undo = useCallback(() => {
+    if (!past.length) return;
+    const prev = past[past.length - 1];
+    setPast((p) => p.slice(0, -1));
+    setFuture((f) => [{ elements, background }, ...f]);
+    setElements(prev.elements);
+    setBackground(prev.background);
+    setSelectedId(null);
+    lastLabel.current = "";
+  }, [past, elements, background]);
+
+  const redo = useCallback(() => {
+    if (!future.length) return;
+    const next = future[0];
+    setFuture((f) => f.slice(1));
+    setPast((p) => [...p, { elements, background }]);
+    setElements(next.elements);
+    setBackground(next.background);
+    setSelectedId(null);
+    lastLabel.current = "";
+  }, [future, elements, background]);
+
+  function patch(id: string, p: Partial<EditorElement>, label: string) {
+    record(label);
     setElements((prev) => prev.map((e) => (e.id === id ? ({ ...e, ...p } as EditorElement) : e)));
   }
-  function patchSelected(p: Partial<EditorElement>) {
-    if (selectedId) patch(selectedId, p);
+  function patchSelected(p: Partial<EditorElement>, label: string) {
+    if (selectedId) patch(selectedId, p, label);
   }
 
   function addElement(el: EditorElement) {
+    record("add");
     setElements((prev) => [...prev, el]);
     setSelectedId(el.id);
+  }
+
+  function changeBackground(v: string) {
+    record("bg");
+    setBackground(v);
   }
 
   const contrastFg = background === INK || background === "#000000" ? PAPER : INK;
@@ -235,57 +307,15 @@ export default function CardEditor({
     });
   }
 
-  const CX = CARD_SIZE / 2;
-  const CY = CARD_SIZE / 2;
   const SHAPES: { key: string; label: string; icon: React.ReactNode; make: () => EditorElement }[] = [
-    {
-      key: "rect",
-      label: "사각형",
-      icon: <Square className="size-4" />,
-      make: () => ({ id: nextId("r"), type: "rect", x: CX - 140, y: CY - 90, width: 280, height: 180, fill: CORAL, cornerRadius: 0, opacity: 1, rotation: 0, draggable: true }),
-    },
-    {
-      key: "rounded",
-      label: "둥근 사각형",
-      icon: <SquareRoundCorner className="size-4" />,
-      make: () => ({ id: nextId("r"), type: "rect", x: CX - 140, y: CY - 90, width: 280, height: 180, fill: CORAL, cornerRadius: 28, opacity: 1, rotation: 0, draggable: true }),
-    },
-    {
-      key: "circle",
-      label: "원",
-      icon: <CircleIcon className="size-4" />,
-      make: () => ({ id: nextId("c"), type: "circle", x: CX, y: CY, radius: 110, fill: CORAL, opacity: 1, rotation: 0, draggable: true }),
-    },
-    {
-      key: "triangle",
-      label: "삼각형",
-      icon: <Triangle className="size-4" />,
-      make: () => ({ id: nextId("p"), type: "polygon", sides: 3, x: CX, y: CY, radius: 120, fill: CORAL, opacity: 1, rotation: 0, draggable: true }),
-    },
-    {
-      key: "star",
-      label: "별",
-      icon: <StarIcon className="size-4" />,
-      make: () => ({ id: nextId("s"), type: "star", x: CX, y: CY, numPoints: 5, innerRadius: 55, outerRadius: 120, fill: CORAL, opacity: 1, rotation: 0, draggable: true }),
-    },
-    {
-      key: "line",
-      label: "선",
-      icon: <Minus className="size-4" />,
-      make: () => ({ id: nextId("l"), type: "line", x: CX - 160, y: CY, points: [0, 0, 320, 0], stroke: CORAL, strokeWidth: 10, opacity: 1, rotation: 0, draggable: true }),
-    },
-    {
-      key: "arrow",
-      label: "화살표",
-      icon: <MoveRight className="size-4" />,
-      make: () => ({ id: nextId("a"), type: "arrow", x: CX - 150, y: CY, points: [0, 0, 300, 0], stroke: CORAL, fill: CORAL, strokeWidth: 10, opacity: 1, rotation: 0, draggable: true }),
-    },
-    {
-      key: "highlight",
-      label: "하이라이트 바",
-      icon: <Highlighter className="size-4" />,
-      make: () => ({ id: nextId("h"), type: "rect", x: CARD_PAD, y: CY - 30, width: 420, height: 60, fill: CORAL, cornerRadius: 8, opacity: 0.45, rotation: 0, draggable: true }),
-    },
+    { key: "rect", label: "사각형", icon: <Square className="size-4" />, make: () => ({ id: nextId("r"), type: "rect", x: CENTER - 140, y: CENTER - 90, width: 280, height: 180, fill: CORAL, cornerRadius: 0, opacity: 1, rotation: 0, draggable: true }) },
+    { key: "rounded", label: "둥근 사각형", icon: <SquareRoundCorner className="size-4" />, make: () => ({ id: nextId("r"), type: "rect", x: CENTER - 140, y: CENTER - 90, width: 280, height: 180, fill: CORAL, cornerRadius: 28, opacity: 1, rotation: 0, draggable: true }) },
+    { key: "circle", label: "원", icon: <CircleIcon className="size-4" />, make: () => ({ id: nextId("c"), type: "circle", x: CENTER, y: CENTER, radius: 110, fill: CORAL, opacity: 1, rotation: 0, draggable: true }) },
+    { key: "triangle", label: "삼각형", icon: <Triangle className="size-4" />, make: () => ({ id: nextId("p"), type: "polygon", sides: 3, x: CENTER, y: CENTER, radius: 120, fill: CORAL, opacity: 1, rotation: 0, draggable: true }) },
+    { key: "star", label: "별", icon: <StarIcon className="size-4" />, make: () => ({ id: nextId("s"), type: "star", x: CENTER, y: CENTER, numPoints: 5, innerRadius: 55, outerRadius: 120, fill: CORAL, opacity: 1, rotation: 0, draggable: true }) },
+    { key: "line", label: "선", icon: <Minus className="size-4" />, make: () => ({ id: nextId("l"), type: "line", x: CENTER - 160, y: CENTER, points: [0, 0, 320, 0], stroke: CORAL, strokeWidth: 10, opacity: 1, rotation: 0, draggable: true }) },
+    { key: "arrow", label: "화살표", icon: <MoveRight className="size-4" />, make: () => ({ id: nextId("a"), type: "arrow", x: CENTER - 150, y: CENTER, points: [0, 0, 300, 0], stroke: CORAL, fill: CORAL, strokeWidth: 10, opacity: 1, rotation: 0, draggable: true }) },
+    { key: "highlight", label: "하이라이트 바", icon: <Highlighter className="size-4" />, make: () => ({ id: nextId("h"), type: "rect", x: CARD_PAD, y: CENTER - 30, width: 420, height: 60, fill: CORAL, cornerRadius: 8, opacity: 0.45, rotation: 0, draggable: true }) },
   ];
 
   function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {
@@ -320,6 +350,7 @@ export default function CardEditor({
 
   function deleteSelected() {
     if (!selectedId) return;
+    record("delete");
     setElements((prev) => prev.filter((e) => e.id !== selectedId));
     setSelectedId(null);
   }
@@ -330,9 +361,9 @@ export default function CardEditor({
     addElement(copy);
   }
 
-  /** 배열 뒤쪽이 앞(위)에 그려진다 — 맨앞/맨뒤로 이동 */
   function moveSelected(toFront: boolean) {
     if (!selectedId) return;
+    record("order");
     setElements((prev) => {
       const idx = prev.findIndex((e) => e.id === selectedId);
       if (idx < 0) return prev;
@@ -346,30 +377,88 @@ export default function CardEditor({
 
   function applyColor(v: string) {
     if (!selected) return;
-    if (selected.type === "line") patchSelected({ stroke: v });
-    else if (selected.type === "arrow") patchSelected({ stroke: v, fill: v });
-    else patchSelected({ fill: v });
+    if (selected.type === "line") patchSelected({ stroke: v }, "color");
+    else if (selected.type === "arrow") patchSelected({ stroke: v, fill: v }, "color");
+    else patchSelected({ fill: v }, "color");
+  }
+
+  // 드래그 중 중앙 스냅 + 가이드선
+  function handleDragMove(el: EditorElement, e: Konva.KonvaEventObject<DragEvent>) {
+    const node = e.target;
+    const c = centerOf(el, node);
+    const g: Guide[] = [];
+    if (Math.abs(c.x - CENTER) < SNAP) {
+      node.x(node.x() + (CENTER - c.x));
+      g.push({ o: "v", p: CENTER });
+    }
+    if (Math.abs(c.y - CENTER) < SNAP) {
+      node.y(node.y() + (CENTER - c.y));
+      g.push({ o: "h", p: CENTER });
+    }
+    setGuides(g);
+  }
+  function handleDragEnd(el: EditorElement, e: Konva.KonvaEventObject<DragEvent>) {
+    setGuides([]);
+    patch(el.id, { x: e.target.x(), y: e.target.y() }, `drag:${el.id}`);
   }
 
   function handleSave() {
     setSelectedId(null);
-    // 선택 해제(Transformer 제거)가 반영된 다음 프레임에 내보낸다
+    setGuides([]);
     requestAnimationFrame(() => {
       const stage = stageRef.current;
       if (!stage) return;
-      const dataUrl = stage.toDataURL({ pixelRatio: CARD_SIZE / DISPLAY, mimeType: "image/png" });
-      onSave(dataUrl);
+      const png = stage.toDataURL({ pixelRatio: CARD_SIZE / DISPLAY, mimeType: "image/png" });
+      onSave(png, { background, elements });
     });
   }
 
+  // 키보드 단축키
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (t && ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) return;
+      const meta = e.ctrlKey || e.metaKey;
+      if (meta && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+      } else if (meta && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        redo();
+      } else if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
+        e.preventDefault();
+        deleteSelected();
+      } else if (e.key === "Escape") {
+        setSelectedId(null);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, elements, background, undo, redo]);
+
   const isText = selected?.type === "text";
   const selColor = selected ? elementColor(selected) : null;
+  const canUndo = past.length > 0;
+  const canRedo = future.length > 0;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black/70 p-4 backdrop-blur-sm sm:items-center sm:justify-center">
       <div className="flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-card border border-line bg-body sm:flex-row">
         {/* 캔버스 */}
-        <div className="flex flex-1 items-center justify-center bg-overlay p-4">
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-overlay p-4">
+          <div className="flex w-full items-center justify-between px-1" style={{ maxWidth: DISPLAY }}>
+            <p className="text-[13px] font-semibold text-fg-sub">카드 편집</p>
+            <div className="flex gap-1">
+              <button type="button" onClick={undo} disabled={!canUndo} aria-label="실행취소" className="flex size-8 items-center justify-center rounded-card border border-line text-fg-sub disabled:opacity-40 enabled:hover:border-primary enabled:hover:text-primary">
+                <Undo2 className="size-4" />
+              </button>
+              <button type="button" onClick={redo} disabled={!canRedo} aria-label="재실행" className="flex size-8 items-center justify-center rounded-card border border-line text-fg-sub disabled:opacity-40 enabled:hover:border-primary enabled:hover:text-primary">
+                <Redo2 className="size-4" />
+              </button>
+            </div>
+          </div>
           <div style={{ width: DISPLAY, height: DISPLAY }} className="shrink-0 rounded-card shadow-lg">
             <Stage
               ref={stageRef}
@@ -388,16 +477,15 @@ export default function CardEditor({
                 <KRect x={0} y={0} width={CARD_SIZE} height={CARD_SIZE} fill={background} listening={false} />
                 {elements.map((el) => {
                   const onSelect = () => setSelectedId(el.id);
-                  const onChangeEl = (p: Partial<EditorElement>) => patch(el.id, p);
-                  const common = {
-                    id: el.id,
-                    rotation: el.rotation,
-                    opacity: el.opacity,
+                  const onChangeEl = (p: Partial<EditorElement>) => patch(el.id, p, `transform:${el.id}`);
+                  const dragProps = {
                     draggable: true,
                     onClick: onSelect,
                     onTap: onSelect,
-                    onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => onChangeEl({ x: e.target.x(), y: e.target.y() }),
+                    onDragMove: (e: Konva.KonvaEventObject<DragEvent>) => handleDragMove(el, e),
+                    onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => handleDragEnd(el, e),
                   };
+                  const common = { id: el.id, rotation: el.rotation, opacity: el.opacity, ...dragProps };
                   if (el.type === "text") {
                     return (
                       <KText
@@ -415,12 +503,7 @@ export default function CardEditor({
                         lineHeight={el.lineHeight}
                         onTransformEnd={(e) => {
                           const node = e.target as Konva.Text;
-                          onChangeEl({
-                            x: node.x(),
-                            y: node.y(),
-                            rotation: node.rotation(),
-                            width: Math.max(40, node.width() * node.scaleX()),
-                          });
+                          onChangeEl({ x: node.x(), y: node.y(), rotation: node.rotation(), width: Math.max(40, node.width() * node.scaleX()) });
                           node.scaleX(1);
                           node.scaleY(1);
                         }}
@@ -440,13 +523,7 @@ export default function CardEditor({
                         cornerRadius={el.cornerRadius}
                         onTransformEnd={(e) => {
                           const node = e.target;
-                          onChangeEl({
-                            x: node.x(),
-                            y: node.y(),
-                            rotation: node.rotation(),
-                            width: Math.max(8, node.width() * node.scaleX()),
-                            height: Math.max(4, node.height() * node.scaleY()),
-                          });
+                          onChangeEl({ x: node.x(), y: node.y(), rotation: node.rotation(), width: Math.max(8, node.width() * node.scaleX()), height: Math.max(4, node.height() * node.scaleY()) });
                           node.scaleX(1);
                           node.scaleY(1);
                         }}
@@ -487,12 +564,7 @@ export default function CardEditor({
                           const node = e.target;
                           const sx = node.scaleX();
                           const sy = node.scaleY();
-                          onChangeEl({
-                            x: node.x(),
-                            y: node.y(),
-                            rotation: node.rotation(),
-                            points: el.points.map((v, i) => (i % 2 === 0 ? v * sx : v * sy)),
-                          });
+                          onChangeEl({ x: node.x(), y: node.y(), rotation: node.rotation(), points: el.points.map((v, i) => (i % 2 === 0 ? v * sx : v * sy)) });
                           node.scaleX(1);
                           node.scaleY(1);
                         }}
@@ -518,12 +590,7 @@ export default function CardEditor({
                           const node = e.target;
                           const sx = node.scaleX();
                           const sy = node.scaleY();
-                          onChangeEl({
-                            x: node.x(),
-                            y: node.y(),
-                            rotation: node.rotation(),
-                            points: el.points.map((v, i) => (i % 2 === 0 ? v * sx : v * sy)),
-                          });
+                          onChangeEl({ x: node.x(), y: node.y(), rotation: node.rotation(), points: el.points.map((v, i) => (i % 2 === 0 ? v * sx : v * sy)) });
                           node.scaleX(1);
                           node.scaleY(1);
                         }}
@@ -544,13 +611,7 @@ export default function CardEditor({
                         onTransformEnd={(e) => {
                           const node = e.target;
                           const s = node.scaleX();
-                          onChangeEl({
-                            x: node.x(),
-                            y: node.y(),
-                            rotation: node.rotation(),
-                            innerRadius: Math.max(6, el.innerRadius * s),
-                            outerRadius: Math.max(10, el.outerRadius * s),
-                          });
+                          onChangeEl({ x: node.x(), y: node.y(), rotation: node.rotation(), innerRadius: Math.max(6, el.innerRadius * s), outerRadius: Math.max(10, el.outerRadius * s) });
                           node.scaleX(1);
                           node.scaleY(1);
                         }}
@@ -582,36 +643,41 @@ export default function CardEditor({
                       el={el}
                       isSelected={selectedId === el.id}
                       onSelect={onSelect}
+                      onDragMove={(e) => handleDragMove(el, e)}
+                      onDragEndEl={(e) => handleDragEnd(el, e)}
                       onChange={onChangeEl}
                     />
                   );
                 })}
+                {guides.map((g, i) =>
+                  g.o === "v" ? (
+                    <KLine key={`g${i}`} points={[g.p, 0, g.p, CARD_SIZE]} stroke="#FF3B7F" strokeWidth={1 / SCALE} dash={[10 / SCALE, 10 / SCALE]} listening={false} />
+                  ) : (
+                    <KLine key={`g${i}`} points={[0, g.p, CARD_SIZE, g.p]} stroke="#FF3B7F" strokeWidth={1 / SCALE} dash={[10 / SCALE, 10 / SCALE]} listening={false} />
+                  ),
+                )}
                 <Transformer
                   ref={trRef}
                   rotateEnabled
                   keepRatio={false}
-                  enabledAnchors={
-                    isText
-                      ? ["middle-left", "middle-right"]
-                      : ["top-left", "top-right", "bottom-left", "bottom-right"]
-                  }
+                  enabledAnchors={isText ? ["middle-left", "middle-right"] : ["top-left", "top-right", "bottom-left", "bottom-right"]}
                   boundBoxFunc={(oldBox, newBox) => (newBox.width < 16 ? oldBox : newBox)}
                 />
               </Layer>
             </Stage>
           </div>
+          <p className="text-[11px] text-fg-faint">드래그로 이동 · 가운데 근처에서 자동 정렬(분홍 선) · Ctrl+Z 실행취소</p>
         </div>
 
         {/* 속성 패널 */}
         <div className="flex w-full flex-col gap-4 overflow-y-auto border-t border-line p-4 sm:w-80 sm:border-l sm:border-t-0">
           <div className="flex items-center justify-between">
-            <p className="text-[15px] font-bold">카드 편집</p>
+            <p className="text-[15px] font-bold">편집 도구</p>
             <button type="button" onClick={onClose} aria-label="닫기" className="rounded-card p-1 text-fg-faint hover:bg-overlay hover:text-fg">
               <X className="size-5" />
             </button>
           </div>
 
-          {/* 추가 도구 */}
           <div className="space-y-2">
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="secondary" onClick={addText}>
@@ -628,14 +694,7 @@ export default function CardEditor({
               <p className="mb-1.5 text-[13px] font-medium text-fg-sub">도형·요소</p>
               <div className="grid grid-cols-4 gap-1.5">
                 {SHAPES.map((s) => (
-                  <button
-                    key={s.key}
-                    type="button"
-                    title={s.label}
-                    aria-label={s.label}
-                    onClick={() => addElement(s.make())}
-                    className="flex h-9 items-center justify-center rounded-card border border-line text-fg-sub transition-colors hover:border-primary hover:text-primary"
-                  >
+                  <button key={s.key} type="button" title={s.label} aria-label={s.label} onClick={() => addElement(s.make())} className="flex h-9 items-center justify-center rounded-card border border-line text-fg-sub transition-colors hover:border-primary hover:text-primary">
                     {s.icon}
                   </button>
                 ))}
@@ -643,51 +702,27 @@ export default function CardEditor({
             </div>
           </div>
 
-          {/* 배경색 */}
           <div>
             <p className="mb-1.5 text-[13px] font-medium text-fg-sub">배경색</p>
             <div className="flex flex-wrap items-center gap-2">
               {SWATCHES.map((sw) => (
-                <button
-                  key={sw.value}
-                  type="button"
-                  aria-label={`배경 ${sw.label}`}
-                  onClick={() => setBackground(sw.value)}
-                  className={`size-7 rounded-full border ${background === sw.value ? "ring-2 ring-primary ring-offset-1" : "border-line"}`}
-                  style={{ backgroundColor: sw.value }}
-                />
+                <button key={sw.value} type="button" aria-label={`배경 ${sw.label}`} onClick={() => changeBackground(sw.value)} className={`size-7 rounded-full border ${background === sw.value ? "ring-2 ring-primary ring-offset-1" : "border-line"}`} style={{ backgroundColor: sw.value }} />
               ))}
-              <input
-                type="color"
-                aria-label="배경 커스텀 색"
-                value={background.startsWith("#") ? background : "#0C0C11"}
-                onChange={(e) => setBackground(e.target.value)}
-                className="size-7 cursor-pointer rounded-full border border-line bg-transparent p-0"
-              />
+              <input type="color" aria-label="배경 커스텀 색" value={background.startsWith("#") ? background : "#0C0C11"} onChange={(e) => changeBackground(e.target.value)} className="size-7 cursor-pointer rounded-full border border-line bg-transparent p-0" />
             </div>
           </div>
 
-          {/* 선택 요소 속성 */}
           {selected ? (
             <div className="space-y-3 rounded-card border border-line bg-overlay p-3">
               {isText ? (
                 <>
                   <div>
                     <p className="mb-1.5 text-[13px] font-medium text-fg-sub">텍스트</p>
-                    <textarea
-                      value={(selected as TextEl).text}
-                      onChange={(e) => patchSelected({ text: e.target.value })}
-                      rows={3}
-                      className="w-full rounded-card border border-line bg-body px-2.5 py-2 text-[13px] focus:border-primary focus:outline-none"
-                    />
+                    <textarea value={(selected as TextEl).text} onChange={(e) => patchSelected({ text: e.target.value }, `text:${selected.id}`)} rows={3} className="w-full rounded-card border border-line bg-body px-2.5 py-2 text-[13px] focus:border-primary focus:outline-none" />
                   </div>
                   <div>
                     <p className="mb-1.5 text-[13px] font-medium text-fg-sub">폰트</p>
-                    <select
-                      value={(selected as TextEl).fontFamily}
-                      onChange={(e) => patchSelected({ fontFamily: e.target.value })}
-                      className="h-9 w-full rounded-card border border-line bg-body px-2 text-[13px] focus:border-primary focus:outline-none"
-                    >
+                    <select value={(selected as TextEl).fontFamily} onChange={(e) => patchSelected({ fontFamily: e.target.value }, `font:${selected.id}`)} className="h-9 w-full rounded-card border border-line bg-body px-2 text-[13px] focus:border-primary focus:outline-none">
                       {FONT_OPTIONS.map((f) => (
                         <option key={f.label} value={f.family}>
                           {f.label}
@@ -700,13 +735,7 @@ export default function CardEditor({
                     <p className="mb-1.5 text-[13px] font-medium text-fg-sub">굵기</p>
                     <div className="grid grid-cols-5 gap-1">
                       {WEIGHT_OPTIONS.map((w) => (
-                        <button
-                          key={w.value}
-                          type="button"
-                          onClick={() => patchSelected({ fontStyle: w.value })}
-                          className={`rounded-card border px-1 py-1.5 text-[11px] ${(selected as TextEl).fontStyle === w.value ? "border-primary bg-primary-weak font-bold text-primary" : "border-line text-fg-sub"}`}
-                          style={{ fontWeight: Number(w.value) }}
-                        >
+                        <button key={w.value} type="button" onClick={() => patchSelected({ fontStyle: w.value }, `weight:${selected.id}`)} className={`rounded-card border px-1 py-1.5 text-[11px] ${(selected as TextEl).fontStyle === w.value ? "border-primary bg-primary-weak font-bold text-primary" : "border-line text-fg-sub"}`} style={{ fontWeight: Number(w.value) }}>
                           {w.label}
                         </button>
                       ))}
@@ -714,25 +743,12 @@ export default function CardEditor({
                   </div>
                   <div className="flex items-center gap-2">
                     <label className="text-[13px] text-fg-sub">크기</label>
-                    <input
-                      type="range"
-                      min={18}
-                      max={160}
-                      value={(selected as TextEl).fontSize}
-                      onChange={(e) => patchSelected({ fontSize: Number(e.target.value) })}
-                      className="flex-1 accent-primary"
-                    />
+                    <input type="range" min={18} max={160} value={(selected as TextEl).fontSize} onChange={(e) => patchSelected({ fontSize: Number(e.target.value) }, `size:${selected.id}`)} className="flex-1 accent-primary" />
                     <span className="tnum w-8 text-right text-[12px] text-fg-faint">{(selected as TextEl).fontSize}</span>
                   </div>
                   <div className="flex gap-1.5">
                     {([["left", AlignLeft], ["center", AlignCenter], ["right", AlignRight]] as const).map(([a, Icon]) => (
-                      <button
-                        key={a}
-                        type="button"
-                        aria-label={`정렬 ${a}`}
-                        onClick={() => patchSelected({ align: a })}
-                        className={`flex size-8 items-center justify-center rounded-card border ${(selected as TextEl).align === a ? "border-primary bg-primary-weak text-primary" : "border-line text-fg-sub"}`}
-                      >
+                      <button key={a} type="button" aria-label={`정렬 ${a}`} onClick={() => patchSelected({ align: a }, `align:${selected.id}`)} className={`flex size-8 items-center justify-center rounded-card border ${(selected as TextEl).align === a ? "border-primary bg-primary-weak text-primary" : "border-line text-fg-sub"}`}>
                         <Icon className="size-4" />
                       </button>
                     ))}
@@ -740,47 +756,24 @@ export default function CardEditor({
                 </>
               ) : null}
 
-              {/* 색상 (텍스트·도형·선 공통) */}
               {selColor !== null ? (
                 <div>
                   <p className="mb-1.5 text-[13px] font-medium text-fg-sub">색상</p>
                   <div className="flex flex-wrap items-center gap-2">
                     {SWATCHES.map((sw) => (
-                      <button
-                        key={sw.value}
-                        type="button"
-                        aria-label={`색 ${sw.label}`}
-                        onClick={() => applyColor(sw.value)}
-                        className={`size-7 rounded-full border ${selColor === sw.value ? "ring-2 ring-primary ring-offset-1" : "border-line"}`}
-                        style={{ backgroundColor: sw.value }}
-                      />
+                      <button key={sw.value} type="button" aria-label={`색 ${sw.label}`} onClick={() => applyColor(sw.value)} className={`size-7 rounded-full border ${selColor === sw.value ? "ring-2 ring-primary ring-offset-1" : "border-line"}`} style={{ backgroundColor: sw.value }} />
                     ))}
-                    <input
-                      type="color"
-                      aria-label="커스텀 색"
-                      value={selColor.startsWith("#") ? selColor : "#000000"}
-                      onChange={(e) => applyColor(e.target.value)}
-                      className="size-7 cursor-pointer rounded-full border border-line bg-transparent p-0"
-                    />
+                    <input type="color" aria-label="커스텀 색" value={selColor.startsWith("#") ? selColor : "#000000"} onChange={(e) => applyColor(e.target.value)} className="size-7 cursor-pointer rounded-full border border-line bg-transparent p-0" />
                   </div>
                 </div>
               ) : null}
 
-              {/* 투명도 */}
               <div className="flex items-center gap-2">
                 <label className="text-[13px] text-fg-sub">투명도</label>
-                <input
-                  type="range"
-                  min={10}
-                  max={100}
-                  value={Math.round(selected.opacity * 100)}
-                  onChange={(e) => patchSelected({ opacity: Number(e.target.value) / 100 })}
-                  className="flex-1 accent-primary"
-                />
+                <input type="range" min={10} max={100} value={Math.round(selected.opacity * 100)} onChange={(e) => patchSelected({ opacity: Number(e.target.value) / 100 }, `opacity:${selected.id}`)} className="flex-1 accent-primary" />
                 <span className="tnum w-9 text-right text-[12px] text-fg-faint">{Math.round(selected.opacity * 100)}%</span>
               </div>
 
-              {/* 순서·복제·삭제 */}
               <div className="grid grid-cols-2 gap-1.5">
                 <Button size="sm" variant="secondary" onClick={() => moveSelected(true)}>
                   <ChevronsUp className="size-4" aria-hidden />

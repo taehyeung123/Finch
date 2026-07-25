@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   Clapperboard,
@@ -28,6 +28,7 @@ import { ideaSuggestions, trendItems, TREND_CATEGORIES } from "@/lib/data";
 import type { Channel, IdeaSuggestion, TrendItem } from "@/lib/types";
 import { generateCardNews, generateIdeas } from "./actions";
 import { exportSlidesAsPng, renderSlidesToDataUrls, type ExportSlide } from "@/lib/studio/export-slides";
+import type { EditorScene } from "@/lib/studio/editor-model";
 import { SchedulePublish } from "./_components/schedule-publish";
 import { ScheduledPostsPanel, type ScheduledPostsPanelHandle } from "./_components/scheduled-posts-panel";
 
@@ -254,9 +255,16 @@ export default function StudioPage() {
   const [slidesFromAi, setSlidesFromAi] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
-  // 편집기로 수정한 슬라이드 이미지 (슬라이드 인덱스 → PNG data URL)
-  const [edits, setEdits] = useState<Record<number, string>>({});
+  // 편집기로 수정한 슬라이드 (인덱스 → { 미리보기/업로드용 png, 이어편집용 scene })
+  const [edits, setEdits] = useState<Record<number, { png: string; scene: EditorScene }>>({});
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [restored, setRestored] = useState(false);
+
+  // 다운로드·예약발행이 쓰는 png만 뽑은 맵
+  const editPngs = useMemo<Record<number, string>>(
+    () => Object.fromEntries(Object.entries(edits).map(([k, v]) => [Number(k), v.png])),
+    [edits],
+  );
   const [ideaKeyword, setIdeaKeyword] = useState("");
   const [ideaCategory, setIdeaCategory] = useState<string>("전체");
   const [ideaResult, setIdeaResult] = useState<IdeaSearchResult | null>(null);
@@ -270,6 +278,7 @@ export default function StudioPage() {
     setGenerating(true);
     setGenError(null);
     setEdits({}); // 새로 생성하면 이전 편집 결과 초기화
+    setRestored(false);
     try {
       const result = await generateCardNews(topic, tone);
       if (result.ok) {
@@ -300,6 +309,57 @@ export default function StudioPage() {
       return [];
     }
   }, [slides, slidesFromAi]);
+
+  // localStorage 임시저장 — 서버를 쓰지 않아 비용·부담이 없다. 이 브라우저에서만 유지된다.
+  const DRAFT_KEY = "finch:studio:cardnews-draft";
+  // 마운트 시 1회 복원. 외부 저장소(localStorage)→React 동기화라 effect가 정석이며,
+  // SSR HTML은 빈 상태여야 하이드레이션 불일치가 없으므로 lazy init 대신 effect를 쓴다.
+  useEffect(() => {
+    let draft: {
+      topic?: string;
+      tone?: BrandTone;
+      slides?: Slide[];
+      slidesFromAi?: boolean;
+      edits?: Record<number, { png: string; scene: EditorScene }>;
+    } | null = null;
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      draft = raw ? JSON.parse(raw) : null;
+    } catch {
+      draft = null;
+    }
+    if (!draft?.slides?.length) return;
+    /* eslint-disable react-hooks/set-state-in-effect -- 마운트 1회 외부저장소 복원(정석 패턴) */
+    setTopic(draft.topic ?? "");
+    if (draft.tone) setTone(draft.tone);
+    setSlides(draft.slides);
+    setSlidesFromAi(Boolean(draft.slidesFromAi));
+    setEdits(draft.edits ?? {});
+    setRestored(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
+
+  // 작업이 바뀔 때마다 임시저장 (생성 중에는 저장하지 않음)
+  useEffect(() => {
+    if (!slides || generating) return;
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ topic, tone, slides, slidesFromAi, edits }));
+    } catch {
+      /* 용량 초과 시 조용히 스킵 — 임시저장은 부가 기능 */
+    }
+  }, [topic, tone, slides, slidesFromAi, edits, generating]);
+
+  function clearDraft() {
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      /* noop */
+    }
+    setSlides(null);
+    setEdits({});
+    setRestored(false);
+    setTopic("");
+  }
 
   const handleUseIdea = (ideaTopic: string) => {
     setTopic(ideaTopic);
@@ -414,10 +474,19 @@ export default function StudioPage() {
                   {genError}
                 </p>
               ) : null}
-              <p className="inline-flex items-center gap-1.5 text-xs text-fg-faint">
-                <span className="size-2 rounded-full bg-primary" aria-hidden />
-                템플릿 색상은 브랜드 코랄로 고정되어 있어요. 커스텀 팔레트는 이후 단계에서 제공됩니다.
-              </p>
+              {restored ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-line bg-overlay px-3 py-2.5 text-[13px] text-fg-sub">
+                  <span>이전에 작업하던 카드뉴스를 불러왔어요. (이 브라우저에 임시저장됨)</span>
+                  <button type="button" onClick={clearDraft} className="font-semibold text-primary underline underline-offset-2">
+                    새로 시작
+                  </button>
+                </div>
+              ) : (
+                <p className="inline-flex items-center gap-1.5 text-xs text-fg-faint">
+                  <span className="size-2 rounded-full bg-primary" aria-hidden />
+                  작업 내용은 이 브라우저에 자동 임시저장돼요. 페이지를 나갔다 와도 이어서 편집할 수 있습니다.
+                </p>
+              )}
             </CardBody>
           </Card>
 
@@ -475,7 +544,7 @@ export default function StudioPage() {
                 {/* WYSIWYG 미리보기 — 다운로드 결과물과 동일한 실제 카드 이미지. 편집본이 있으면 그걸 표시. */}
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                   {slides.map((s, i) => {
-                    const img = edits[i] ?? previews[i];
+                    const img = edits[i]?.png ?? previews[i];
                     return (
                       <div key={s.no} className="group relative">
                         {img ? (
@@ -521,7 +590,7 @@ export default function StudioPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     variant="secondary"
-                    onClick={() => exportSlidesAsPng(slides, slidesFromAi, edits)}
+                    onClick={() => exportSlidesAsPng(slides, slidesFromAi, editPngs)}
                   >
                     <ImageDown className="size-4" aria-hidden />
                     이미지 내보내기 (PNG {slides.length}장)
@@ -529,7 +598,7 @@ export default function StudioPage() {
                   <SchedulePublish
                     slides={slides}
                     aiGenerated={slidesFromAi}
-                    edits={edits}
+                    edits={editPngs}
                     onScheduled={() => scheduledPanelRef.current?.refresh()}
                   />
                 </div>
@@ -550,9 +619,10 @@ export default function StudioPage() {
               slide={slides[editingIndex]}
               total={slides.length}
               aiGenerated={slidesFromAi}
+              initialScene={edits[editingIndex]?.scene}
               onClose={() => setEditingIndex(null)}
-              onSave={(dataUrl) => {
-                setEdits((prev) => ({ ...prev, [editingIndex]: dataUrl }));
+              onSave={(png, scene) => {
+                setEdits((prev) => ({ ...prev, [editingIndex]: { png, scene } }));
                 setEditingIndex(null);
               }}
             />
