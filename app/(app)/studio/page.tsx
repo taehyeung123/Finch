@@ -414,21 +414,44 @@ export default function StudioPage() {
 
           {generating ? (
             <Card>
-              <CardHeader title="생성 결과" description="AI가 카드뉴스를 만들고 있어요…" />
+              <CardHeader
+                title="생성 결과"
+                description="AI가 카드뉴스를 만들고 있어요"
+                action={
+                  <span className="inline-flex items-center gap-2 text-[13px] font-medium text-primary">
+                    <span
+                      className="size-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent"
+                      aria-hidden
+                    />
+                    생성 중
+                  </span>
+                }
+              />
               <CardBody className="space-y-5">
+                {/* 실제 카드 구조를 흉내 낸 스켈레톤 5장 (번호배지 + 헤드라인 + 포인트 행) + shimmer */}
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                   {Array.from({ length: 5 }).map((_, i) => (
                     <div
                       key={i}
-                      className="flex aspect-square animate-pulse items-center justify-center rounded-card bg-overlay"
+                      className="shimmer flex aspect-square flex-col gap-3 rounded-card border border-line bg-overlay p-4"
+                      style={{ animationDelay: `${i * 120}ms` }}
                     >
-                      <Sparkles className="size-6 text-fg-faint/50" aria-hidden />
+                      <div className="size-8 rounded-full bg-line" />
+                      <div className="mt-1 h-3 w-4/5 rounded-full bg-line" />
+                      <div className="h-3 w-3/5 rounded-full bg-line" />
+                      <div className="mt-auto space-y-2">
+                        <div className="h-2 w-full rounded-full bg-line" />
+                        <div className="h-2 w-5/6 rounded-full bg-line" />
+                        <div className="h-2 w-2/3 rounded-full bg-line" />
+                      </div>
                     </div>
                   ))}
                 </div>
-                <p className="flex items-center gap-2 text-[13px] text-fg-sub">
-                  <span className="size-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden />
-                  보통 10~20초 걸려요. 주제에 맞는 5장을 구성하는 중입니다.
+                <div className="h-1 w-full overflow-hidden rounded-full bg-overlay">
+                  <div className="shimmer h-full w-1/3 rounded-full bg-primary/30" />
+                </div>
+                <p className="text-center text-[13px] text-fg-sub">
+                  보통 <span className="font-semibold text-fg">10~20초</span> 걸려요 · 표지 · 본문 3장 · 마무리를 구성하는 중입니다
                 </p>
               </CardBody>
             </Card>

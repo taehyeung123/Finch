@@ -43,11 +43,6 @@ const FONT = "Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
 const inkA = (a: number) => `rgba(12,12,17,${a})`;
 const paperA = (a: number) => `rgba(250,248,244,${a})`;
 
-// 핀치 심볼 마크 (components/logo.tsx FinchMark와 동일 path) — 하단 브랜드 로고용
-const MARK_PATH = new Path2D(
-  "M6 18.5c0-5.8 4.7-10.5 10.5-10.5 3.4 0 6.5 1.7 8.4 4.2l4.1-1.2-2.4 4.4c.2.8.4 1.7.4 2.6 0 5.8-4.7 10.5-10.5 10.5-2.3 0-4.5-.8-6.2-2L4 28l2.7-5.2c-.5-1.3-.7-2.8-.7-4.3z",
-);
-
 /**
  * 단어(공백) 경계 우선 줄바꿈. 한 단어가 그 자체로 maxWidth를 넘을 때만 글자 단위로 쪼갠다
  * (글자 단위로 자르면 "이제"가 "이/제"로 끊기던 문제 방지).
@@ -83,26 +78,6 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
     if (line) lines.push(line);
   }
   return lines;
-}
-
-function markLogo(ctx: CanvasRenderingContext2D, x: number, yTop: number, size: number, color: string) {
-  ctx.save();
-  const s = size / 32;
-  ctx.translate(x, yTop);
-  ctx.scale(s, s);
-  ctx.fillStyle = color;
-  ctx.fill(MARK_PATH);
-  ctx.restore();
-}
-
-/** 좌하단 브랜드 (마크 + "핀치") */
-function brandLeft(ctx: CanvasRenderingContext2D, baselineY: number, textColor: string, size: number) {
-  markLogo(ctx, PAD, baselineY - size * 0.82, size, CORAL);
-  ctx.fillStyle = textColor;
-  ctx.font = `700 ${size}px ${FONT}`;
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillText("핀치", PAD + size * 1.18, baselineY);
 }
 
 function drawCover(ctx: CanvasRenderingContext2D, s: ExportSlide) {
@@ -147,13 +122,11 @@ function drawCover(ctx: CanvasRenderingContext2D, s: ExportSlide) {
     }
   }
 
-  // 하단 브랜드 + 스와이프 힌트
-  brandLeft(ctx, 980, PAPER, 34);
+  // 스와이프 힌트 (브랜드 없음)
   ctx.font = `600 28px ${FONT}`;
-  ctx.fillStyle = paperA(0.6);
-  ctx.textAlign = "right";
-  ctx.fillText("밀어서 보기 →", SIZE - PAD, 980);
+  ctx.fillStyle = paperA(0.55);
   ctx.textAlign = "left";
+  ctx.fillText("밀어서 보기 →", PAD, 980);
 }
 
 function drawContent(ctx: CanvasRenderingContext2D, s: ExportSlide, total: number) {
@@ -236,7 +209,7 @@ function drawContent(ctx: CanvasRenderingContext2D, s: ExportSlide, total: numbe
     }
   }
 
-  // 구분선 + 페이지 인디케이터 + 브랜드
+  // 구분선 + 페이지 인디케이터 (브랜드 없음)
   ctx.fillStyle = CORAL;
   ctx.fillRect(PAD, 908, 72, 6);
   ctx.font = `600 28px ${FONT}`;
@@ -244,7 +217,6 @@ function drawContent(ctx: CanvasRenderingContext2D, s: ExportSlide, total: numbe
   ctx.textAlign = "right";
   ctx.fillText(`${String(s.no).padStart(2, "0")} / ${String(total).padStart(2, "0")}`, SIZE - PAD, 984);
   ctx.textAlign = "left";
-  brandLeft(ctx, 984, inkA(0.72), 30);
 }
 
 function drawClosing(ctx: CanvasRenderingContext2D, s: ExportSlide, aiGenerated: boolean) {
@@ -298,20 +270,16 @@ function drawClosing(ctx: CanvasRenderingContext2D, s: ExportSlide, aiGenerated:
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(ctaText, SIZE / 2, btnY + btnH / 2 + 2);
-
-  // 브랜드 중앙 하단 (마크 + 텍스트를 그룹으로 중앙 정렬)
-  const brandText = aiGenerated ? "AI 생성 · finch.ai.kr" : "finch.ai.kr";
-  ctx.font = `700 30px ${FONT}`;
-  const tw = ctx.measureText(brandText).width;
-  const markSize = 32;
-  const groupW = markSize + 12 + tw;
-  const startX = SIZE / 2 - groupW / 2;
-  markLogo(ctx, startX, 952, markSize, CORAL);
-  ctx.fillStyle = PAPER;
-  ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText(brandText, startX + markSize + 12, 978);
-  ctx.textAlign = "left";
+
+  // AI 생성 고지 — 정책상 유지(브랜드 로고·도메인은 제거). 템플릿 폴백에는 표기 안 함.
+  if (aiGenerated) {
+    ctx.font = `600 26px ${FONT}`;
+    ctx.fillStyle = paperA(0.5);
+    ctx.textAlign = "center";
+    ctx.fillText("AI 생성", SIZE / 2, 978);
+    ctx.textAlign = "left";
+  }
 }
 
 function drawSlide(slide: ExportSlide, total: number, aiGenerated: boolean): HTMLCanvasElement {
