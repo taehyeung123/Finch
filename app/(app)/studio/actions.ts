@@ -3,13 +3,15 @@
 import { isDemoMode } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { createClaudeClient, STUDIO_MODEL } from "@/lib/ai/claude";
+import { chargeGeneration, refundGenerationCredits, CREDIT_COSTS } from "@/lib/actions/credits";
 
 /*
   AI 스튜디오 서버 액션 — Claude API 실호출.
 
   - ANTHROPIC_API_KEY 미설정 또는 데모 모드: { fallback: true } 반환 → 클라이언트가
     기존 템플릿 생성으로 동작한다 (연동 전에도 화면이 깨지지 않는 프로젝트 원칙).
-  - 실제 모드: getUser() 재인증 + 카드뉴스는 use_quota()로 플랜별 월 한도 차감(무료 3회).
+  - 실제 모드: getUser() 재인증 + 카드뉴스는 "무료 월 한도(플랜별) → 크레딧 소비"
+    2단계 과금(lib/actions/credits.ts). 무료 3회는 기존 그대로, 그 이후 2크레딧/회.
   - 출력은 output_config.format(json_schema)로 구조를 강제해 파싱 실패를 방지한다.
 */
 
@@ -25,7 +27,12 @@ export type SlideOut = {
 /** 하나의 안 — 접근 각도 라벨 + 5장 */
 export type CardVariant = { angle: string; slides: SlideOut[] };
 export type CardNewsResult =
-  | { ok: true; variants: CardVariant[] }
+  | {
+      ok: true;
+      variants: CardVariant[];
+      /** 크레딧으로 소비된 경우에만 채워짐(무료 월 한도 구간은 null) — 표시용 근사 잔액 */
+      credits: { spent: number; remaining: number } | null;
+    }
   | { ok: false; fallback: true }
   | { ok: false; fallback?: false; error: string };
 
@@ -87,23 +94,14 @@ export type IdeasResult =
   | { ok: false; fallback: true }
   | { ok: false; fallback?: false; error: string };
 
-/** 플랜별 AI 카드뉴스 월 한도 — planFeatures 표와 일치 유지 (무료 3회, 유료 무제한) */
-const CARDNEWS_LIMITS: Record<string, number> = {
-  free: 3,
-  creator: 1000000,
-  pro: 1000000,
-  agency: 1000000,
-  enterprise: 1000000,
-};
-
 const TONE_LABEL: Record<string, string> = {
   friendly: "친근하고 다정한",
   professional: "전문적이고 신뢰감 있는",
   witty: "위트있고 재치있는",
 };
 
-/** 인증 + (선택) 월 한도 차감. 데모/키 미설정이면 fallback 신호. */
-async function guard(quota?: { metric: string; limit: number }): Promise<
+/** 인증만 확인(과금 없음 — 가벼운 호출용). 데모/키 미설정이면 fallback 신호. */
+async function guard(): Promise<
   { ok: true } | { ok: false; fallback: true } | { ok: false; fallback?: false; error: string }
 > {
   if (isDemoMode() || !process.env.ANTHROPIC_API_KEY) return { ok: false, fallback: true };
@@ -114,23 +112,6 @@ async function guard(quota?: { metric: string; limit: number }): Promise<
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return { ok: false, error: "로그인이 필요합니다." };
-
-    if (quota) {
-      const { data: profile } = await supabase.from("users_profile").select("plan").eq("id", user.id).maybeSingle();
-      const limit = quota.limit || CARDNEWS_LIMITS[profile?.plan ?? "free"] || 3;
-      const { data: allowed, error: quotaErr } = await supabase.rpc("use_quota", {
-        p_metric: quota.metric,
-        p_limit: limit,
-        p_amount: 1,
-      });
-      if (quotaErr) {
-        console.error("[studio] 쿼터 확인 실패:", quotaErr.message);
-        return { ok: false, error: "사용량 확인에 실패했습니다. 잠시 후 다시 시도해 주세요." };
-      }
-      if (!allowed) {
-        return { ok: false, error: "이번 달 AI 생성 한도를 모두 사용했어요. 플랜을 업그레이드하면 계속 쓸 수 있습니다." };
-      }
-    }
     return { ok: true };
   } catch {
     return { ok: false, error: "인증 확인에 실패했습니다." };
@@ -154,11 +135,23 @@ export async function generateCardNews(topic: string, tone: string, extra?: stri
   if (t.length > 200) return { ok: false, error: "주제는 200자 이내로 입력해 주세요." };
   const extraNote = (extra ?? "").trim().slice(0, 500);
 
-  const guarded = await guard({ metric: "ai_cardnews", limit: 0 });
-  if (!guarded.ok) return guarded;
-
+  if (isDemoMode() || !process.env.ANTHROPIC_API_KEY) return { ok: false, fallback: true };
   const claude = createClaudeClient();
   if (!claude) return { ok: false, fallback: true };
+
+  // 과금은 실제 호출이 가능한 상태에서만 — 무료 월 한도(3회) 우선, 소진 시 2크레딧
+  const charge = await chargeGeneration({
+    metric: "ai_cardnews",
+    creditCost: CREDIT_COSTS.cardnews,
+    reason: "cardnews_generate",
+  });
+  if (!charge.ok) return { ok: false, error: charge.error };
+  // 크레딧이 차감됐는데 이후 처리가 실패하면 반드시 환불한다
+  const refundIfCharged = async () => {
+    if (charge.via === "credits") {
+      await refundGenerationCredits(charge.userId, CREDIT_COSTS.cardnews, "generate_fail_refund: cardnews");
+    }
+  };
 
   // 학습된 브랜드 톤 프로필이 있으면 생성 프롬프트에 주입한다(없으면 빈 문자열)
   const brandState = await getBrandProfile();
@@ -279,6 +272,7 @@ export async function generateCardNews(topic: string, tone: string, extra?: stri
     });
 
     if (response.stop_reason === "refusal") {
+      await refundIfCharged();
       return { ok: false, error: "이 주제로는 생성할 수 없어요. 다른 주제로 시도해 주세요." };
     }
     const parsed = parseJsonText(response.content as { type: string; text?: string }[]) as {
@@ -289,11 +283,20 @@ export async function generateCardNews(topic: string, tone: string, extra?: stri
       .filter((v) => v.slides.length > 0)
       .slice(0, 3);
     if (variants.length === 0) {
+      await refundIfCharged();
       return { ok: false, error: "생성 결과 처리에 실패했어요. 다시 시도해 주세요." };
     }
-    return { ok: true, variants };
+    return {
+      ok: true,
+      variants,
+      credits:
+        charge.via === "credits"
+          ? { spent: CREDIT_COSTS.cardnews, remaining: charge.remainingCredits ?? 0 }
+          : null,
+    };
   } catch (e) {
     console.error("[studio] 카드뉴스 생성 실패:", e);
+    await refundIfCharged();
     return { ok: false, error: "AI 생성 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요." };
   }
 }

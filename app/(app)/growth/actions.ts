@@ -4,6 +4,7 @@ import { isDemoMode } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { createClaudeClient, STUDIO_MODEL } from "@/lib/ai/claude";
 import { getPostPerformance, type GrowthPerformance } from "@/lib/data/growth";
+import { chargeGeneration, refundGenerationCredits, CREDIT_COSTS } from "@/lib/actions/credits";
 
 /*
   성장 진단 AI 분석 — 연동 계정의 실제 게시물 성과(저장률·참여율·도달)를 근거로
@@ -12,6 +13,9 @@ import { getPostPerformance, type GrowthPerformance } from "@/lib/data/growth";
   정직 원칙: 모든 판단은 프롬프트에 넣은 "실제 집계 수치" 위에서의 추론이다.
   Claude가 임의로 지어낸 지표가 아니라, 사용자의 진짜 데이터를 해석한 결과다.
   키 미설정/데모/크레딧 부족이면 fallback 신호를 준다(화면은 실데이터 표만 보여줌).
+
+  과금(2026-07-26): 무료 월 3회(use_quota: growth_diagnosis) → 이후 3크레딧/회.
+  크레딧 차감 후 AI 호출이 실패하면 반드시 환불한다(lib/actions/credits.ts).
 */
 
 export interface DiagnosisIdea {
@@ -65,6 +69,19 @@ export async function diagnoseAccount(): Promise<DiagnosisResult> {
   const claude = createClaudeClient();
   if (!claude) return { ok: false, reason: "fallback" };
 
+  // 과금 — 무료 월 3회(use_quota) 우선, 소진 시 3크레딧. 실호출 가능 상태에서만.
+  const charge = await chargeGeneration({
+    metric: "growth_diagnosis",
+    creditCost: CREDIT_COSTS.diagnosis,
+    reason: "growth_diagnosis",
+  });
+  if (!charge.ok) return { ok: false, reason: "error", message: charge.error };
+  const refundIfCharged = async () => {
+    if (charge.via === "credits") {
+      await refundGenerationCredits(charge.userId, CREDIT_COSTS.diagnosis, "generate_fail_refund: diagnosis");
+    }
+  };
+
   try {
     const response = await claude.messages.create({
       model: STUDIO_MODEL,
@@ -113,11 +130,13 @@ export async function diagnoseAccount(): Promise<DiagnosisResult> {
     });
 
     if (response.stop_reason === "refusal") {
+      await refundIfCharged();
       return { ok: false, reason: "error", message: "진단을 생성할 수 없어요. 잠시 후 다시 시도해 주세요." };
     }
     const text = (response.content as { type: string; text?: string }[]).find((b) => b.type === "text")?.text;
     const parsed = text ? (JSON.parse(text) as { strengths?: string[]; weaknesses?: string[]; ideas?: DiagnosisIdea[] }) : null;
     if (!parsed?.strengths || !parsed?.weaknesses || !parsed?.ideas) {
+      await refundIfCharged();
       return { ok: false, reason: "error", message: "진단 결과 처리에 실패했어요. 다시 시도해 주세요." };
     }
     return {
@@ -128,6 +147,7 @@ export async function diagnoseAccount(): Promise<DiagnosisResult> {
     };
   } catch (e) {
     console.error("[growth] 진단 실패:", e);
+    await refundIfCharged();
     return { ok: false, reason: "error", message: "AI 진단 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요." };
   }
 }
