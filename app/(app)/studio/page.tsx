@@ -29,8 +29,9 @@ import { ideaSuggestions, trendItems, TREND_CATEGORIES } from "@/lib/data";
 import type { Channel, IdeaSuggestion, TrendItem } from "@/lib/types";
 import { generateCardNews, generateIdeas } from "./actions";
 import { exportSlidesAsPng, renderSlidesToDataUrls, type ExportSlide, type LoadedLogo } from "@/lib/studio/export-slides";
+import { renderImagesToVideo, downloadVideo, isVideoSupported } from "@/lib/studio/video";
 import type { EditorScene } from "@/lib/studio/editor-model";
-import { TEMPLATES, DEFAULT_TEMPLATE, getTemplate, customTemplate } from "@/lib/studio/templates";
+import { TEMPLATES, DEFAULT_TEMPLATE, getTemplate, customTemplate, type CardTemplate } from "@/lib/studio/templates";
 import { getBrandKit, type BrandKit } from "./brand-kit-actions";
 import { SchedulePublish } from "./_components/schedule-publish";
 import { ScheduledPostsPanel, type ScheduledPostsPanelHandle } from "./_components/scheduled-posts-panel";
@@ -114,6 +115,21 @@ function TemplateMock({ t }: { t: (typeof TEMPLATES)[number] }) {
       </div>
     </div>
   );
+}
+
+/** 미리보기 렌더 — try/catch를 컴포넌트 밖으로 빼 React 컴파일러가 자동 메모하게 한다(SSR에선 slides null→[]) */
+function safeRenderPreviews(
+  slides: Slide[] | null,
+  aiGenerated: boolean,
+  tpl: CardTemplate,
+  logo: LoadedLogo | undefined,
+): string[] {
+  if (!slides) return [];
+  try {
+    return renderSlidesToDataUrls(slides, aiGenerated, tpl, logo);
+  } catch {
+    return [];
+  }
 }
 
 /** 미리보기 문구 요약 — 결과 카드 아래 보조 텍스트 (실제 이미지는 캔버스 렌더로 보여준다) */
@@ -279,6 +295,8 @@ export default function StudioPage() {
   const [edits, setEdits] = useState<Record<number, { png: string; scene: EditorScene }>>({});
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [restored, setRestored] = useState(false);
+  const [videoBusy, setVideoBusy] = useState(false);
+  const [videoSupported, setVideoSupported] = useState(false); // 클라이언트 마운트 후 감지
   // 다안 생성 — 한 번에 받은 여러 안 중 현재 보고 있는 안
   const [variants, setVariants] = useState<{ angle: string; slides: Slide[] }[]>([]);
   const [activeVariant, setActiveVariant] = useState(0);
@@ -288,8 +306,12 @@ export default function StudioPage() {
   const [brandKit, setBrandKit] = useState<BrandKit | null>(null);
   const [logoImg, setLogoImg] = useState<HTMLImageElement | null>(null);
 
-  // 실제 적용 템플릿 — '내 브랜드' 선택 시 브랜드 킷 색을, 아니면 프리셋
-  const template = templateId === "brand" && brandKit ? customTemplate(brandKit) : getTemplate(templateId);
+  // 실제 적용 템플릿 — '내 브랜드' 선택 시 브랜드 킷 색을, 아니면 프리셋.
+  // useMemo로 안정화(안 하면 매 렌더 새 객체라 previews memo가 매번 재계산).
+  const template = useMemo(
+    () => (templateId === "brand" && brandKit ? customTemplate(brandKit) : getTemplate(templateId)),
+    [templateId, brandKit],
+  );
   // 로고는 '내 브랜드' 템플릿을 쓰고, 로고가 실제로 있고 로드까지 끝났을 때만 적용.
   // useMemo로 안정화 — 안 하면 매 렌더 새 객체라 미리보기 memo가 매번 재계산된다.
   const logo = useMemo<LoadedLogo | undefined>(
@@ -314,6 +336,11 @@ export default function StudioPage() {
     getBrandKit()
       .then((k) => setBrandKit(k))
       .catch(() => {});
+  }, []);
+  // 영상 지원 여부는 클라이언트에서만 판정(SSR과 다르면 하이드레이션 불일치라 마운트 후 세팅)
+  useEffect(() => {
+    /* eslint-disable-next-line react-hooks/set-state-in-effect -- 클라이언트 전용 기능 감지 */
+    setVideoSupported(isVideoSupported());
   }, []);
   useEffect(() => {
     const url = brandKit?.logoUrl;
@@ -389,16 +416,26 @@ export default function StudioPage() {
     setEdits({});
   }
 
+  // 모션 카드뉴스 영상(webm) — 화면의 카드 이미지를 슬라이드쇼로. 실시간 녹화라 장수×2.4초 소요.
+  async function handleMakeVideo() {
+    if (!slides || videoBusy) return;
+    const urls = slides.map((s, i) => edits[i]?.png ?? previews[i]).filter(Boolean);
+    if (urls.length === 0) return;
+    setVideoBusy(true);
+    try {
+      const blob = await renderImagesToVideo(urls);
+      downloadVideo(blob, "finch-cardnews.webm");
+    } catch {
+      // 브라우저 미지원 등 — 버튼 자체를 지원 브라우저에서만 노출하므로 드물다
+    } finally {
+      setVideoBusy(false);
+    }
+  }
+
   // 실제 카드 이미지를 캔버스로 렌더한 미리보기 (WYSIWYG) — 다운로드 결과물과 100% 동일.
   // useMemo라 slides가 바뀔 때만 재계산되고, slides가 null(초기·SSR)이면 캔버스를 건드리지 않는다.
-  const previews = useMemo<string[]>(() => {
-    if (!slides) return [];
-    try {
-      return renderSlidesToDataUrls(slides, slidesFromAi, template, logo);
-    } catch {
-      return [];
-    }
-  }, [slides, slidesFromAi, template, logo]);
+  // 컴파일러가 인자 기준으로 자동 메모 — 수동 useMemo(try/catch)로는 preserve가 안 돼 헬퍼로 분리
+  const previews = safeRenderPreviews(slides, slidesFromAi, template, logo);
 
   // localStorage 임시저장 — 서버를 쓰지 않아 비용·부담이 없다. 이 브라우저에서만 유지된다.
   const DRAFT_KEY = "finch:studio:cardnews-draft";
@@ -778,7 +815,10 @@ export default function StudioPage() {
                     );
                   })}
                 </div>
-                <p className="text-[12px] text-fg-faint">카드에 마우스를 올리면 나타나는 &lsquo;편집&rsquo;으로 문구·색·이미지를 직접 고칠 수 있어요.</p>
+                <p className="text-[12px] text-fg-faint">
+                  카드에 마우스를 올리면 나타나는 &lsquo;편집&rsquo;으로 문구·색·이미지를 직접 고칠 수 있어요.
+                  {videoSupported ? " · ‘영상으로 저장’은 카드가 넘어가는 릴스형 영상(webm)으로 내려받아요." : ""}
+                </p>
 
                 <p className="flex items-center gap-1.5 rounded-card border border-line bg-overlay px-3 py-2.5 text-[13px] text-fg-sub">
                   <Sparkles className="size-4 shrink-0 text-primary" aria-hidden />
@@ -793,6 +833,12 @@ export default function StudioPage() {
                     <ImageDown className="size-4" aria-hidden />
                     이미지 내보내기 (PNG {slides.length}장)
                   </Button>
+                  {videoSupported ? (
+                    <Button variant="secondary" onClick={handleMakeVideo} disabled={videoBusy}>
+                      <Video className="size-4" aria-hidden />
+                      {videoBusy ? "영상 만드는 중…" : "영상으로 저장"}
+                    </Button>
+                  ) : null}
                   <SchedulePublish
                     slides={slides}
                     aiGenerated={slidesFromAi}
