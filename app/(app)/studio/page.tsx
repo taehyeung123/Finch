@@ -541,60 +541,57 @@ export default function StudioPage() {
 
       {tab === "cards" ? (
         <div className="space-y-6">
-          <BrandTone />
-          <BrandKitPanel kit={brandKit} onChange={setBrandKit} />
+          {/* 준비 도구 — 톤·브랜드킷은 접이식이라 평소엔 한 줄 (화면 정리) */}
+          <div className="grid gap-3 md:grid-cols-2">
+            <BrandTone />
+            <BrandKitPanel kit={brandKit} onChange={setBrandKit} />
+          </div>
 
-          {/* 템플릿 갤러리 — 색 테마 선택(미리보기 목업) */}
-          <Card>
-            <CardBody className="space-y-2.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-[15px] font-bold">템플릿</p>
-                <p className="text-[12px] text-fg-sub">색 테마를 고르면 카드 전체에 바로 적용돼요.</p>
-              </div>
-              <div className="flex flex-wrap gap-2.5">
-                {TEMPLATES.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => chooseTemplate(t.id)}
-                    aria-pressed={t.id === templateId}
-                    className={cn(
-                      "flex flex-col items-center gap-1.5 rounded-card border p-2 transition-colors",
-                      t.id === templateId ? "border-primary ring-1 ring-primary" : "border-line hover:border-line-strong",
-                    )}
-                  >
-                    <TemplateMock t={t} />
-                    <span className={cn("text-[11px] font-medium", t.id === templateId ? "text-primary" : "text-fg-sub")}>
-                      {t.name}
-                    </span>
-                  </button>
-                ))}
-                {brandKit ? (
-                  <button
-                    type="button"
-                    onClick={() => chooseTemplate("brand")}
-                    aria-pressed={templateId === "brand"}
-                    className={cn(
-                      "flex flex-col items-center gap-1.5 rounded-card border p-2 transition-colors",
-                      templateId === "brand" ? "border-primary ring-1 ring-primary" : "border-line hover:border-line-strong",
-                    )}
-                  >
-                    <TemplateMock t={customTemplate(brandKit)} />
-                    <span className={cn("text-[11px] font-medium", templateId === "brand" ? "text-primary" : "text-fg-sub")}>
-                      내 브랜드
-                    </span>
-                  </button>
-                ) : null}
-              </div>
-            </CardBody>
-          </Card>
-
-          <Card>
+          <Card className="border-primary/20 ring-1 ring-primary/10">
             <CardHeader
-              title="카드뉴스 생성기"
-              description="주제와 브랜드 톤을 고르면 5장 구성의 카드뉴스 카피를 생성합니다."
+              title="카드뉴스 만들기"
+              description="템플릿과 주제를 고르면 내 톤으로 5장 카드뉴스 2안을 만들어드려요."
             />
             <CardBody className="space-y-4">
+              {/* 템플릿 선택 (생성기 안으로 통합) */}
+              <div className="space-y-2">
+                <p className="text-[13px] font-medium text-fg-sub">템플릿</p>
+                <div className="flex flex-wrap gap-2.5">
+                  {TEMPLATES.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => chooseTemplate(t.id)}
+                      aria-pressed={t.id === templateId}
+                      className={cn(
+                        "flex flex-col items-center gap-1.5 rounded-card border p-2 transition-all",
+                        t.id === templateId ? "border-primary ring-1 ring-primary" : "border-line hover:-translate-y-0.5 hover:border-line-strong",
+                      )}
+                    >
+                      <TemplateMock t={t} />
+                      <span className={cn("text-[11px] font-medium", t.id === templateId ? "text-primary" : "text-fg-sub")}>
+                        {t.name}
+                      </span>
+                    </button>
+                  ))}
+                  {brandKit ? (
+                    <button
+                      type="button"
+                      onClick={() => chooseTemplate("brand")}
+                      aria-pressed={templateId === "brand"}
+                      className={cn(
+                        "flex flex-col items-center gap-1.5 rounded-card border p-2 transition-all",
+                        templateId === "brand" ? "border-primary ring-1 ring-primary" : "border-line hover:-translate-y-0.5 hover:border-line-strong",
+                      )}
+                    >
+                      <TemplateMock t={customTemplate(brandKit)} />
+                      <span className={cn("text-[11px] font-medium", templateId === "brand" ? "text-primary" : "text-fg-sub")}>
+                        내 브랜드
+                      </span>
+                    </button>
+                  ) : null}
+                </div>
+              </div>
               <div className="flex flex-col gap-3 md:flex-row">
                 <div className="flex-1">
                   <label htmlFor="studio-topic" className="mb-1.5 flex items-center gap-2 text-[13px] font-medium text-fg-sub">
@@ -742,13 +739,13 @@ export default function StudioPage() {
                   {slides.map((s, i) => {
                     const img = edits[i]?.png ?? previews[i];
                     return (
-                      <div key={s.no} className="group relative">
+                      <div key={s.no} className="anim-fade-up group relative" style={{ animationDelay: `${i * 70}ms` }}>
                         {img ? (
                           // eslint-disable-next-line @next/next/no-img-element -- 캔버스로 만든 data URL이라 next/image 대상이 아니다
                           <img
                             src={img}
                             alt={`슬라이드 ${s.no} — ${s.headline}`}
-                            className="w-full rounded-card border border-line"
+                            className="w-full rounded-card border border-line transition-shadow duration-200 group-hover:border-primary/40 group-hover:shadow-lg"
                           />
                         ) : (
                           <div className="flex aspect-square flex-col justify-between rounded-card border border-line bg-overlay p-3">
