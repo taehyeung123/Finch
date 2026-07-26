@@ -635,9 +635,14 @@ export default function StudioPage() {
                   </select>
                 </div>
                 <div className="md:self-end">
-                  <Button onClick={handleGenerate} disabled={!topic.trim() || generating} className="w-full md:w-auto">
+                  <Button
+                    size="lg"
+                    onClick={handleGenerate}
+                    disabled={!topic.trim() || generating}
+                    className="w-full shadow-sm transition-transform hover:-translate-y-0.5 disabled:hover:translate-y-0 md:w-auto"
+                  >
                     <Sparkles className="size-4" aria-hidden />
-                    {generating ? "생성 중..." : "생성하기"}
+                    {generating ? "생성 중..." : "카드뉴스 생성"}
                   </Button>
                 </div>
               </div>
@@ -800,11 +805,16 @@ export default function StudioPage() {
               </CardBody>
             </Card>
           ) : (
-            <EmptyState
-              icon={LayoutTemplate}
-              title="아직 생성한 카드뉴스가 없어요"
-              description="주제를 입력하고 생성하기를 누르면 5장 구성의 카드뉴스가 만들어집니다."
-            />
+            <div className="anim-fade-up rounded-card border border-dashed border-line bg-overlay/40 px-6 py-12 text-center">
+              <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-primary-weak text-primary">
+                <LayoutTemplate className="size-7" aria-hidden />
+              </span>
+              <p className="mt-4 text-[16px] font-bold">주제 한 줄이면 카드뉴스가 완성돼요</p>
+              <p className="mx-auto mt-1.5 max-w-md text-[13px] leading-relaxed text-fg-sub">
+                템플릿을 고르고 주제를 입력해 생성하면, 내 톤으로 서로 다른 각도의 5장 카드뉴스 2안이 만들어집니다.
+                마음에 드는 안을 골라 바로 편집·발행하세요.
+              </p>
+            </div>
           )}
 
           <ScheduledPostsPanel ref={scheduledPanelRef} />
