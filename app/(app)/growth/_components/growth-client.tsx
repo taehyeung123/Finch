@@ -44,15 +44,18 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
     }
   }
 
-  /** 아이디어 주제를 스튜디오로 넘긴다 — localStorage 대기열에 넣고 이동(Suspense/쿼리 이슈 회피) */
-  function sendToStudio(topic: string) {
+  /** 주제(+선택 지침)를 스튜디오로 넘긴다 — localStorage 대기열에 넣고 이동(Suspense/쿼리 이슈 회피) */
+  function sendToStudio(topic: string, note?: string) {
     try {
-      localStorage.setItem("finch:studio:pending-topic", topic);
+      localStorage.setItem("finch:studio:pending", JSON.stringify({ topic, note }));
     } catch {
       /* noop */
     }
     router.push("/studio");
   }
+
+  const REPURPOSE_NOTE =
+    "이 주제는 내 계정에서 성과(특히 저장률)가 좋았던 게시물이야. 핵심 메시지와 각도는 유지하되, 새로운 카드뉴스 5장 형식으로 다시 구성해줘.";
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -183,6 +186,7 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
                     <th className="px-3 pb-2 text-right font-medium">참여율</th>
                     <th className="px-3 pb-2 text-right font-medium">도달</th>
                     <th className="px-3 pb-2 text-right font-medium">저장</th>
+                    <th className="pb-2 pl-3 text-right font-medium" />
                   </tr>
                 </thead>
                 <tbody>
@@ -206,6 +210,18 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
                         <td className="tnum px-3 py-2.5 text-right text-fg-sub">{p.engagementRate}%</td>
                         <td className="tnum px-3 py-2.5 text-right text-fg-sub">{formatCompact(p.reach)}</td>
                         <td className="tnum px-3 py-2.5 text-right text-fg-sub">{formatCompact(p.saved)}</td>
+                        <td className="py-2.5 pl-3 text-right">
+                          {p.caption && p.caption !== "(캡션 없음)" ? (
+                            <button
+                              type="button"
+                              onClick={() => sendToStudio(p.caption, REPURPOSE_NOTE)}
+                              className="inline-flex items-center gap-1 whitespace-nowrap rounded-card border border-line px-2 py-1 text-[12px] font-semibold text-fg-sub transition-colors hover:border-primary hover:text-primary"
+                            >
+                              <Sparkles className="size-3" aria-hidden />
+                              재가공
+                            </button>
+                          ) : null}
+                        </td>
                       </tr>
                     );
                   })}

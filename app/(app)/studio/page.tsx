@@ -269,6 +269,8 @@ export default function StudioPage() {
   const [tab, setTab] = useState<StudioTab>("cards");
   const [topic, setTopic] = useState("");
   const [tone, setTone] = useState<BrandTone>("friendly");
+  // 성장 진단에서 넘어온 '재가공 지침'(있으면 다음 생성에 1회 주입)
+  const [pendingNote, setPendingNote] = useState<string | null>(null);
   const [slides, setSlides] = useState<Slide[] | null>(null);
   const [slidesFromAi, setSlidesFromAi] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -347,7 +349,8 @@ export default function StudioPage() {
     setEdits({}); // 새로 생성하면 이전 편집 결과 초기화
     setRestored(false);
     try {
-      const result = await generateCardNews(topic, tone);
+      const result = await generateCardNews(topic, tone, pendingNote ?? undefined);
+      setPendingNote(null); // 재가공 지침은 1회만 적용
       if (result.ok) {
         const vs = result.variants.map((v) => ({
           angle: v.angle,
@@ -428,18 +431,26 @@ export default function StudioPage() {
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
-  // 성장 진단에서 넘어온 주제 픽업 — 대기열에 주제가 있으면 카드뉴스 탭에 채운다
+  // 성장 진단에서 넘어온 픽업 — { topic, note? } JSON. note가 있으면 재가공 지침으로 1회 주입.
   useEffect(() => {
-    let pending: string | null = null;
+    let raw: string | null = null;
     try {
-      pending = localStorage.getItem("finch:studio:pending-topic");
-      if (pending) localStorage.removeItem("finch:studio:pending-topic");
+      raw = localStorage.getItem("finch:studio:pending");
+      if (raw) localStorage.removeItem("finch:studio:pending");
     } catch {
-      pending = null;
+      raw = null;
     }
-    if (!pending) return;
+    if (!raw) return;
+    let payload: { topic?: string; note?: string } = {};
+    try {
+      payload = JSON.parse(raw) as { topic?: string; note?: string };
+    } catch {
+      payload = { topic: raw };
+    }
+    if (!payload.topic) return;
     /* eslint-disable react-hooks/set-state-in-effect -- 마운트 1회 외부저장소(성장 진단 핸드오프) 픽업 */
-    setTopic(pending);
+    setTopic(payload.topic);
+    if (payload.note) setPendingNote(payload.note);
     setTab("cards");
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
@@ -586,14 +597,22 @@ export default function StudioPage() {
             <CardBody className="space-y-4">
               <div className="flex flex-col gap-3 md:flex-row">
                 <div className="flex-1">
-                  <label htmlFor="studio-topic" className="mb-1.5 block text-[13px] font-medium text-fg-sub">
+                  <label htmlFor="studio-topic" className="mb-1.5 flex items-center gap-2 text-[13px] font-medium text-fg-sub">
                     주제
+                    {pendingNote ? (
+                      <span className="inline-flex items-center gap-1 rounded-chip bg-primary-weak px-2 py-0.5 text-[11px] font-semibold text-primary">
+                        성과 게시물 재가공
+                      </span>
+                    ) : null}
                   </label>
                   <input
                     id="studio-topic"
                     type="text"
                     value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
+                    onChange={(e) => {
+                      setTopic(e.target.value);
+                      if (pendingNote) setPendingNote(null); // 주제를 직접 고치면 재가공 지침 해제
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") handleGenerate();
                     }}

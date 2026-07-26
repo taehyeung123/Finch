@@ -148,10 +148,11 @@ function parseJsonText(content: { type: string; text?: string }[]): unknown {
   }
 }
 
-export async function generateCardNews(topic: string, tone: string): Promise<CardNewsResult> {
+export async function generateCardNews(topic: string, tone: string, extra?: string): Promise<CardNewsResult> {
   const t = topic.trim();
   if (!t) return { ok: false, error: "주제를 입력해 주세요." };
   if (t.length > 200) return { ok: false, error: "주제는 200자 이내로 입력해 주세요." };
+  const extraNote = (extra ?? "").trim().slice(0, 500);
 
   const guarded = await guard({ metric: "ai_cardnews", limit: 0 });
   if (!guarded.ok) return guarded;
@@ -272,7 +273,7 @@ export async function generateCardNews(topic: string, tone: string): Promise<Car
       messages: [
         {
           role: "user",
-          content: `주제: ${t}\n브랜드 톤: ${TONE_LABEL[tone] ?? TONE_LABEL.friendly}\n\n이 주제로 서로 다른 접근의 카드뉴스 2안을 만들어줘. 각 안은 5장(cover 1 / content 3 / closing 1).`,
+          content: `주제: ${t}\n브랜드 톤: ${TONE_LABEL[tone] ?? TONE_LABEL.friendly}${extraNote ? `\n\n[추가 지침] ${extraNote}` : ""}\n\n이 주제로 서로 다른 접근의 카드뉴스 2안을 만들어줘. 각 안은 5장(cover 1 / content 3 / closing 1).`,
         },
       ],
     });
