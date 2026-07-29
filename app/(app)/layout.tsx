@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { AgentPanel } from "@/components/layout/agent-panel";
 import { MobileTabbar } from "@/components/layout/mobile-tabbar";
+import { OpeningNotice } from "@/components/layout/opening-notice";
 import { isDemoMode } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { IS_SAMPLE_DATA } from "@/lib/data";
@@ -60,6 +61,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </div>
       <AgentPanel />
       <MobileTabbar />
+      <OpeningNotice />
     </ChannelProvider>
   );
 }
