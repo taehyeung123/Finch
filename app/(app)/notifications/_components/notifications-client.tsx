@@ -20,7 +20,6 @@ import { Card } from "@/components/ui/card";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { ChipFilter } from "@/components/ui/chip-filter";
 import { EmptyState } from "@/components/ui/empty-state";
-import { DataSourceNote } from "@/components/ui/data-source-note";
 import { cn } from "@/lib/cn";
 import { formatAgo } from "@/lib/format";
 import type { AppNotification, NotificationType } from "@/lib/types";
@@ -160,9 +159,6 @@ export function NotificationsClient({ initial }: { initial: AppNotification[] })
           description="새로운 경쟁사 광고·트렌드·계정 변화가 감지되면 여기에 표시됩니다."
         />
       )}
-
-      {/* 경쟁사 광고·트렌드 알림은 공개·제휴 데이터 기반 (PART 3, 4.4) */}
-      <DataSourceNote source="제휴 데이터 공급사 · 공개 데이터 기반" />
     </div>
   );
 }

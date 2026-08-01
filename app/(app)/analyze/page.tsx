@@ -1,15 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { FileSearch, Info, Search } from "lucide-react";
+import { FileSearch, Search } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Badge, ChannelBadge, DataSourceBadge } from "@/components/ui/badge";
+import { Badge, ChannelBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/ui/stat-card";
 import { MiniBars, RatioBar } from "@/components/ui/charts";
 import { InfoTip } from "@/components/ui/info-tip";
-import { DataSourceNote } from "@/components/ui/data-source-note";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatAgo, formatCompact } from "@/lib/format";
 import { analyzeHistory } from "@/lib/data";
@@ -80,7 +79,6 @@ export default function AnalyzePage() {
                   <Badge tone="neutral">타 계정 게시물</Badge>
                 )}
                 <ChannelBadge channel={result.channel} />
-                <DataSourceBadge source={result.isOwnPost ? "official" : "thirdparty"} />
               </div>
               <div className="min-w-0">
                 <p className="text-[17px] font-bold leading-snug">{result.caption}</p>
@@ -89,9 +87,6 @@ export default function AnalyzePage() {
                   <span className="break-all text-fg-faint">{result.url}</span>
                 </p>
               </div>
-              <DataSourceNote
-                source={result.isOwnPost ? "플랫폼 공식 API" : "제휴 데이터 공급사"}
-              />
             </CardBody>
           </Card>
 
@@ -185,17 +180,6 @@ export default function AnalyzePage() {
             </div>
           </div>
 
-          {/* 타 계정 게시물 지표 제한 안내 */}
-          <Card className="flex items-start gap-3 p-4">
-            <Info className="mt-0.5 size-4 shrink-0 text-fg-faint" aria-hidden />
-            <div className="text-[13px] leading-relaxed text-fg-sub">
-              <p className="font-semibold text-fg">타 계정 게시물은 조회 가능한 지표가 제한됩니다.</p>
-              <p className="mt-1">
-                Instagram은 공식 Business Discovery API의 기초 지표만 제공되며, TikTok·Threads의 타
-                계정 분석에는 제휴 데이터 공급사 연동이 필요합니다.
-              </p>
-            </div>
-          </Card>
         </>
       ) : (
         <EmptyState

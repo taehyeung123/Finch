@@ -10,10 +10,9 @@ import { trendItems, TREND_CATEGORIES } from "@/lib/data";
 import { cn } from "@/lib/cn";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card } from "@/components/ui/card";
-import { ChannelBadge, DataSourceBadge } from "@/components/ui/badge";
+import { ChannelBadge } from "@/components/ui/badge";
 import { ChipFilter } from "@/components/ui/chip-filter";
 import { InfoTip } from "@/components/ui/info-tip";
-import { DataSourceNote } from "@/components/ui/data-source-note";
 import { EmptyState } from "@/components/ui/empty-state";
 
 type Tab = "realtime" | "category";
@@ -81,7 +80,6 @@ export default function DiscoverPage() {
       <PageHeader
         title="트렌드 탐색"
         description="지금 뜨는 콘텐츠를 카테고리와 채널별로 살펴보세요."
-        action={<DataSourceNote />}
       />
 
       {/* 탭: 실시간 급상승 / 카테고리별 */}
@@ -186,8 +184,7 @@ export default function DiscoverPage() {
       <Card className="flex items-start gap-3 p-4">
         <Info className="mt-0.5 size-4 shrink-0 text-fg-faint" aria-hidden />
         <p className="text-[13px] leading-relaxed text-fg-sub">
-          카테고리 탐색과 실시간 트렌드는 제휴 데이터 공급사 데이터로 제공되며 갱신 주기에 따라
-          지연될 수 있습니다. 저장한 콘텐츠는 경쟁사 분석 목록과 연결해 함께 추적할 수 있어요.
+          저장한 콘텐츠는 경쟁사 분석 목록과 연결해 함께 추적할 수 있어요.
         </p>
       </Card>
     </div>
@@ -215,7 +212,6 @@ function TrendCard({
         <div className="flex items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5">
             <ChannelBadge channel={item.channel} />
-            <DataSourceBadge source={item.dataSource} />
           </div>
           <button
             type="button"

@@ -3,9 +3,8 @@ import { Megaphone, SlidersHorizontal, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Badge, DataSourceBadge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { DataSourceNote } from "@/components/ui/data-source-note";
 import { InfoTip } from "@/components/ui/info-tip";
 import { ButtonLink } from "@/components/ui/button";
 import { formatCompact, formatKRW, formatPercent } from "@/lib/format";
@@ -80,7 +79,6 @@ export default function AdsPage() {
         <CardHeader
           title="캠페인 성과"
           description="캠페인별 집행 현황과 핵심 지표"
-          action={<DataSourceBadge source="official" />}
         />
         <CardBody className="overflow-x-auto">
           {campaigns.length === 0 ? (
@@ -158,9 +156,6 @@ export default function AdsPage() {
                   })}
                 </tbody>
               </table>
-              <div className="mt-4">
-                <DataSourceNote source="Meta Marketing API" />
-              </div>
             </>
           )}
         </CardBody>

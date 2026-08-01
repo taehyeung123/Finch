@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import {
-  Info,
   MessageSquareReply,
   Pencil,
   Plus,
@@ -18,7 +17,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { InfoTip } from "@/components/ui/info-tip";
 import { EmptyState } from "@/components/ui/empty-state";
-import { InstagramGlyph } from "@/components/icons/brand";
 import { RuleEditor, type RuleDraft } from "./rule-editor";
 import { createRule, deleteRule, toggleRule, updateRule } from "../actions";
 
@@ -133,20 +131,6 @@ export function AutoDmClient({ initialRules, posts }: { initialRules: AutoDmRule
           </Button>
         }
       />
-
-      {/* 인스타 전용 · 연동 상태 고지 (정직) */}
-      <div className="flex items-start gap-2.5 rounded-card border border-line bg-overlay p-3.5 text-[13px] leading-relaxed text-fg-sub">
-        <Info className="mt-0.5 size-4 shrink-0 text-fg-faint" aria-hidden />
-        <p>
-          <span className="inline-flex items-center gap-1 font-semibold text-fg">
-            <InstagramGlyph className="size-3.5 text-ig" aria-hidden />
-            인스타그램 전용
-          </span>{" "}
-          기능입니다. 스레드·틱톡은 다이렉트 메시지 발송 API가 없어 지원되지 않습니다. 실제 발송은 인스타그램
-          메시지 연동과 메타 앱 심사(instagram_manage_messages)가 완료되면 활성화되며, 지금은 규칙 설정과
-          미리보기를 준비할 수 있습니다.
-        </p>
-      </div>
 
       {/* 요약 지표 */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

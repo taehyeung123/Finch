@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Check, ExternalLink, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Check, ExternalLink, ShieldCheck } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card } from "@/components/ui/card";
 import { Badge, ChannelBadge } from "@/components/ui/badge";
@@ -104,7 +104,7 @@ const CONNECT_MESSAGES: Record<string, { tone: "positive" | "warning" | "negativ
   state: { tone: "negative", text: "보안 검증에 실패했어요. 다시 시도해 주세요." },
   unconfigured: {
     tone: "warning",
-    text: "채널 앱 자격증명이 아직 설정되지 않았습니다. (앱 심사·키 발급 대기 단계)",
+    text: "지금은 이 채널을 연동할 수 없어요. 곧 열릴 예정이니 조금만 기다려 주세요.",
   },
   no_encryption_key: {
     tone: "negative",
@@ -166,9 +166,9 @@ export default async function SettingsPage({
   const instagramOAuthConfigured = isInstagramOAuthConfigured();
   const threadsOAuthConfigured = isThreadsOAuthConfigured();
   const tiktokOAuthConfigured = isTiktokOAuthConfigured();
-  // 인스타그램은 항상 노출(자격증명 미설정 시 별도 배너로 안내), Threads·TikTok은 자격증명 존재 여부로 버튼 자체를 켠다.
+  // 자격증명 존재 여부로 버튼 자체를 켠다 — 미설정이면 사유를 노출하지 않고 "연동 준비중" 배지만 보여준다.
   const OAUTH_READY: Record<Channel, boolean> = {
-    instagram: true,
+    instagram: instagramOAuthConfigured,
     tiktok: tiktokOAuthConfigured,
     threads: threadsOAuthConfigured,
   };
@@ -190,39 +190,6 @@ export default async function SettingsPage({
           role="status"
         >
           {banner.text}
-        </div>
-      ) : null}
-
-      {/* 인스타 OAuth 자격증명 미설정 안내 (실 모드에서만) */}
-      {!isDemoMode() && !instagramOAuthConfigured ? (
-        <div className="flex items-start gap-2.5 rounded-card border border-warning/40 bg-warning-weak p-4 text-[13px] leading-relaxed text-fg-sub">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
-          <p>
-            인스타그램 연동에 필요한 앱 자격증명(INSTAGRAM_APP_ID / INSTAGRAM_APP_SECRET)이 아직
-            설정되지 않았습니다. Meta 앱 심사·비즈니스 인증 완료 후 활성화됩니다.
-          </p>
-        </div>
-      ) : null}
-
-      {/* Threads OAuth 자격증명 미설정 안내 (실 모드에서만) */}
-      {!isDemoMode() && !threadsOAuthConfigured ? (
-        <div className="flex items-start gap-2.5 rounded-card border border-warning/40 bg-warning-weak p-4 text-[13px] leading-relaxed text-fg-sub">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
-          <p>
-            Threads 연동에 필요한 앱 자격증명(THREADS_APP_ID / THREADS_APP_SECRET)이 아직
-            설정되지 않았습니다. 개발자 모드 테스터 계정으로 등록하면 심사 없이 바로 연동할 수 있어요.
-          </p>
-        </div>
-      ) : null}
-
-      {/* TikTok OAuth 자격증명 미설정 안내 (실 모드에서만) */}
-      {!isDemoMode() && !tiktokOAuthConfigured ? (
-        <div className="flex items-start gap-2.5 rounded-card border border-warning/40 bg-warning-weak p-4 text-[13px] leading-relaxed text-fg-sub">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
-          <p>
-            TikTok 연동에 필요한 앱 자격증명(TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET)이 아직
-            설정되지 않았습니다. Sandbox에 테스터 계정(target user)으로 등록하면 심사 없이 바로 연동할 수 있어요.
-          </p>
         </div>
       ) : null}
 

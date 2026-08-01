@@ -5,10 +5,9 @@ import { Heart, MessageCircle, ShieldAlert } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Badge, ChannelBadge, DataSourceBadge, SupportBadge } from "@/components/ui/badge";
+import { Badge, ChannelBadge } from "@/components/ui/badge";
 import { MiniBars } from "@/components/ui/charts";
 import { InfoTip } from "@/components/ui/info-tip";
-import { DataSourceNote } from "@/components/ui/data-source-note";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatAgo, formatCompact, formatDeltaCompact } from "@/lib/format";
 import { cn } from "@/lib/cn";
@@ -156,7 +155,6 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
           <CardHeader
             title="일별 도달"
             description={`최근 ${period}일`}
-            action={<DataSourceBadge source="official" />}
           />
           <CardBody>
             <MiniBars data={days.map((d) => d.reach)} height={120} />
@@ -176,7 +174,6 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
           <CardHeader
             title="일별 팔로워 순증감"
             description={`최근 ${period}일`}
-            action={<DataSourceBadge source="official" />}
           />
           <CardBody>
             <div className="flex items-end gap-1" style={{ height: 120 }} aria-hidden>
@@ -228,7 +225,6 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
               </InfoTip>
             </>
           }
-          action={<DataSourceBadge source="internal" />}
         />
         <CardBody className="overflow-x-auto">
           {view.topEngagers.length > 0 ? (
@@ -279,12 +275,9 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
                   ))}
                 </tbody>
               </table>
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-                <DataSourceNote source="공개 상호작용 집계 · 핀치 자체 분석" />
-                <p className="text-xs text-fg-faint">
-                  미팔로우인데 반응이 잦은 계정은 잠재 팬 또는 경쟁사일 수 있어요.
-                </p>
-              </div>
+              <p className="mt-4 text-xs text-fg-faint">
+                미팔로우인데 반응이 잦은 계정은 잠재 팬 또는 경쟁사일 수 있어요.
+              </p>
             </>
           ) : (
             <p className="py-6 text-center text-[14px] text-fg-faint">
@@ -293,28 +286,6 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
             </p>
           )}
         </CardBody>
-      </Card>
-
-      {/* 채널별 지원 범위 */}
-      <Card className="p-5">
-        <p className="text-[13px] font-semibold text-fg-sub">채널별 지원 범위</p>
-        <div className="mt-3 grid gap-2 text-[13px] text-fg-sub md:grid-cols-3">
-          <div className="flex items-center justify-between gap-2 rounded-card border border-line p-3">
-            <ChannelBadge channel="instagram" />
-            <SupportBadge level="full" />
-          </div>
-          <div className="flex items-center justify-between gap-2 rounded-card border border-line p-3">
-            <ChannelBadge channel="tiktok" />
-            <SupportBadge level="partial" />
-          </div>
-          <div className="flex items-center justify-between gap-2 rounded-card border border-line p-3">
-            <ChannelBadge channel="threads" />
-            <SupportBadge level="partial" />
-          </div>
-        </div>
-        <p className="mt-3 text-xs text-fg-faint">
-          틱톡·쓰레드는 일부 지표만 공식 API로 제공됩니다. 지금은 인스타그램 기준 화면이에요.
-        </p>
       </Card>
     </div>
   );

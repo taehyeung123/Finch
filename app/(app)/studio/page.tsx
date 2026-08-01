@@ -17,12 +17,11 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Badge, ChannelBadge, DataSourceBadge } from "@/components/ui/badge";
+import { Badge, ChannelBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChipFilter } from "@/components/ui/chip-filter";
 import { InfoTip } from "@/components/ui/info-tip";
 import { EmptyState } from "@/components/ui/empty-state";
-import { DataSourceNote } from "@/components/ui/data-source-note";
 import { cn } from "@/lib/cn";
 import { formatCompact } from "@/lib/format";
 import { ideaSuggestions, trendItems, TREND_CATEGORIES } from "@/lib/data";
@@ -1021,7 +1020,6 @@ export default function StudioPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <Flame className="size-4 text-primary" aria-hidden />
                     <h3 className="text-[15px] font-bold">지금 뜨는 관련 콘텐츠</h3>
-                    <DataSourceBadge source="thirdparty" />
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {ideaResult.related.map((item) => (
@@ -1063,7 +1061,6 @@ export default function StudioPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Lightbulb className="size-4 text-primary" aria-hidden />
                   <h3 className="text-[15px] font-bold">맞춤 아이디어</h3>
-                  <DataSourceBadge source="internal" />
                   <Badge tone={ideasFromAi ? "primary" : "neutral"}>{ideasFromAi ? "AI 생성" : "템플릿 (연동 전)"}</Badge>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -1130,7 +1127,6 @@ export default function StudioPage() {
                 <section aria-label="오늘의 추천 아이디어" className="space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-[15px] font-bold">오늘의 추천 아이디어</h3>
-                    <DataSourceBadge source="internal" />
                   </div>
                   <div className="grid gap-4 lg:grid-cols-3">
                     {ideaSuggestions.map((idea) => {
@@ -1194,7 +1190,6 @@ export default function StudioPage() {
               아이디어 추천은 최근 트렌드 데이터를 기반으로 한 핀치 자체 생성 결과입니다. 실제
               반응은 계정 상황에 따라 달라질 수 있어요.
             </p>
-            <DataSourceNote source="제휴 데이터 공급사 트렌드 기반" />
           </Card>
         </div>
       ) : null}

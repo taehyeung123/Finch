@@ -6,7 +6,7 @@ import { useChannel } from "@/components/layout/channel-context";
 import { PageHeader } from "@/components/ui/section-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Badge, ChannelBadge, DataSourceBadge } from "@/components/ui/badge";
+import { Badge, ChannelBadge } from "@/components/ui/badge";
 import { AppIconTile } from "@/components/icons/brand";
 import { RatioBar, Sparkline } from "@/components/ui/charts";
 import { InfoTip } from "@/components/ui/info-tip";
@@ -101,7 +101,6 @@ export function DashboardClient({
       <PageHeader
         title="대시보드"
         description="연동한 채널의 핵심 지표를 한눈에 확인하세요."
-        action={isLive ? <DataSourceBadge source="official" /> : undefined}
       />
 
       {disconnected.length > 0 ? (

@@ -4,38 +4,18 @@ import { useRef, useState } from "react";
 import { Plus, Search } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Badge, ChannelBadge, DataSourceBadge, SupportBadge } from "@/components/ui/badge";
+import { Badge, ChannelBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/ui/info-tip";
-import { DataSourceNote } from "@/components/ui/data-source-note";
 import { cn } from "@/lib/cn";
 import { formatCompact, formatPercent } from "@/lib/format";
 import { competitors, usageStats } from "@/lib/data";
-import type { Channel, Competitor, SupportLevel } from "@/lib/types";
+import type { Competitor } from "@/lib/types";
 import { CompetitorTabs } from "./tabs";
 
 /* 자체 산출 지표 고지 문구 (PRD 4.4) */
 const ENGAGEMENT_TIP =
   "공개된 좋아요·댓글·공유 수를 게시물 조회수로 나눠 핀치가 계산한 값입니다. 플랫폼 공식 데이터가 아닌 핀치 자체 추정치입니다.";
-
-/* 채널별 타 계정 분석 가능 범위 (PART 3 매트릭스의 '타 계정 분석' 행 기준) */
-const ANALYSIS_SCOPE: { channel: Channel; level: SupportLevel; desc: string }[] = [
-  {
-    channel: "instagram",
-    level: "partial",
-    desc: "Meta 공식 Business Discovery API로 공개 비즈니스·크리에이터 계정의 기초 지표(팔로워·게시물 수, 게시물별 좋아요·댓글)를 제공합니다.",
-  },
-  {
-    channel: "tiktok",
-    level: "thirdparty",
-    desc: "제휴 데이터 공급사가 수집한 공개 프로필·게시물 데이터 기반이며, 갱신 주기에 따라 실제 값과 차이가 있을 수 있습니다.",
-  },
-  {
-    channel: "threads",
-    level: "thirdparty",
-    desc: "제휴 데이터 공급사 데이터로 제공되며, 공개 게시물 기준 지표만 확인할 수 있습니다.",
-  },
-];
 
 /* 비교 테이블 행 정의 — 각 행의 최고값을 강조 표시 */
 const COMPARE_ROWS: {
@@ -128,18 +108,14 @@ export default function CompetitorsPage() {
               </p>
             ) : null}
           </div>
-          <DataSourceNote source="Instagram 공식 API · TikTok 제휴 데이터 공급사" />
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {competitors.map((c) => (
             <Card key={c.id} hover className="p-5">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate text-[15px] font-bold">{c.displayName}</p>
-                  <p className="mt-0.5 truncate text-[13px] text-fg-sub">{c.handle}</p>
-                </div>
-                <DataSourceBadge source={c.dataSource} />
+              <div className="min-w-0">
+                <p className="truncate text-[15px] font-bold">{c.displayName}</p>
+                <p className="mt-0.5 truncate text-[13px] text-fg-sub">{c.handle}</p>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-1.5">
                 <ChannelBadge channel={c.channel} />
@@ -246,25 +222,6 @@ export default function CompetitorsPage() {
               </tbody>
             </table>
           </div>
-        </CardBody>
-      </Card>
-
-      {/* 채널별 분석 가능 범위 안내 (PART 3) */}
-      <Card>
-        <CardHeader
-          title="채널별 분석 가능 범위"
-          description="타 계정 분석은 채널마다 사용할 수 있는 데이터 소스가 다릅니다."
-        />
-        <CardBody className="space-y-3">
-          {ANALYSIS_SCOPE.map((s) => (
-            <div key={s.channel} className="rounded-card border border-line p-4">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <ChannelBadge channel={s.channel} />
-                <SupportBadge level={s.level} />
-              </div>
-              <p className="mt-2 text-[13px] leading-relaxed text-fg-sub">{s.desc}</p>
-            </div>
-          ))}
         </CardBody>
       </Card>
     </div>

@@ -3,8 +3,7 @@ import Link from "next/link";
 import { AlertTriangle, BellRing, Image as ImageIcon, Images, Info, Video } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Badge, DataSourceBadge } from "@/components/ui/badge";
-import { DataSourceNote } from "@/components/ui/data-source-note";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/cn";
 import { formatAgo, formatDate } from "@/lib/format";
 import { competitorAds } from "@/lib/data";
@@ -37,7 +36,6 @@ export default function CompetitorAdsPage() {
       <PageHeader
         title="경쟁사 광고 모니터링"
         description="Meta 광고 라이브러리에 공개된 경쟁사 광고를 모니터링합니다. 아래 지역 제약 안내를 확인하세요."
-        action={<DataSourceBadge source="thirdparty" />}
       />
 
       <CompetitorTabs current="ads" />
@@ -71,7 +69,6 @@ export default function CompetitorAdsPage() {
               추적하고 있습니다.
             </>
           }
-          action={<DataSourceNote source="Meta 광고 라이브러리 (EU·영국 노출 광고 한정)" />}
         />
         <CardBody className="flex flex-wrap gap-1.5">
           {monitoredPages.map((page) => (
