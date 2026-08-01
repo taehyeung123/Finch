@@ -3,6 +3,7 @@
 
 import type {
   AdCampaign,
+  AdCampaignDetail,
   AnalyzeResult,
   AppNotification,
   AudienceDaily,
@@ -77,6 +78,7 @@ export const contentMix: Record<ChannelFilter, ContentMix[]> = {
 export const competitors: Competitor[] = [];
 export const competitorAds: CompetitorAd[] = [];
 export const campaigns: AdCampaign[] = [];
+export const campaignDetails: Record<string, AdCampaignDetail> = {};
 export const trendItems: TrendItem[] = [];
 export const notifications: AppNotification[] = [];
 

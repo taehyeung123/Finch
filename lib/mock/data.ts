@@ -4,6 +4,7 @@
 
 import type {
   AdCampaign,
+  AdCampaignDetail,
   AnalyzeResult,
   AppNotification,
   AudienceDaily,
@@ -400,6 +401,158 @@ export const campaigns: AdCampaign[] = [
     },
   },
 ];
+
+/*
+  캠페인 상세 — 목록의 top-line 수치(campaigns)와 정합 유지:
+  퍼널 첫 단계=노출수, 마지막 단계=전환수, CPA=집행액/전환, 추이 평균≈해당 지표.
+  실제 연동 시 Marketing API insights(action_breakdowns, publisher_platform 등)로 교체.
+*/
+export const campaignDetails: Record<string, AdCampaignDetail> = {
+  cmp1: {
+    adId: "120215073862104",
+    createdAt: "2026-07-01T10:00:00+09:00",
+    updatedAt: "2026-07-10T14:32:00+09:00",
+    periodLabel: "최근 30일",
+    deltas: {
+      roas: 22.1,
+      cpa: -18.3,
+      ctr: 0.6,
+      cpc: -12.2,
+      spend: 22.1,
+      impressions: 18.2,
+      reach: 15.3,
+      frequency: 2.5,
+      linkClicks: 21.6,
+      purchases: 15.2,
+    },
+    roasTrend: [2.6, 2.8, 2.7, 3.0, 2.9, 3.1, 3.3, 3.0, 3.2, 3.4, 3.1, 3.5, 3.6, 3.3, 3.7, 3.5, 3.8, 3.6, 3.9, 4.1, 3.8, 4.0, 4.2, 3.9, 4.1, 4.3, 4.0, 4.2, 4.4, 4.1],
+    cpaTrend: [4820, 4650, 4700, 4380, 4460, 4210, 4050, 4230, 4010, 3880, 3990, 3760, 3640, 3820, 3580, 3690, 3470, 3560, 3380, 3240, 3410, 3290, 3150, 3310, 3180, 3060, 3200, 3080, 2960, 3120],
+    funnel: [
+      { label: "노출", value: 842000 },
+      { label: "도달", value: 512300 },
+      { label: "링크 클릭", value: 12600 },
+      { label: "장바구니", value: 2150 },
+      { label: "구매", value: 342 },
+    ],
+    placements: [
+      { label: "Instagram 피드", pct: 45 },
+      { label: "Facebook 피드", pct: 27 },
+      { label: "Instagram 스토리", pct: 13 },
+      { label: "Facebook 스토리", pct: 8 },
+      { label: "기타", pct: 7 },
+    ],
+    gender: { male: 41, female: 59 },
+    ageBands: [
+      { range: "18-24", male: 8, female: 14 },
+      { range: "25-34", male: 14, female: 22 },
+      { range: "35-44", male: 10, female: 13 },
+      { range: "45-54", male: 6, female: 6 },
+      { range: "55+", male: 3, female: 4 },
+    ],
+    adCopy: {
+      brandName: "글로우랩",
+      body: "올여름, 당신의 스킨케어 루틴을 완성할 여름 한정 세럼을 만나보세요. 지금 첫 구매 30% 혜택.",
+      linkLabel: "glowlab.kr",
+      cta: "지금 구매하기",
+    },
+  },
+  cmp2: {
+    adId: "120215073862217",
+    createdAt: "2026-06-18T09:30:00+09:00",
+    updatedAt: "2026-07-09T11:05:00+09:00",
+    periodLabel: "최근 30일",
+    deltas: {
+      roas: -8.4,
+      cpa: 11.2,
+      ctr: -0.3,
+      cpc: 6.1,
+      spend: 4.0,
+      impressions: 9.8,
+      reach: 8.1,
+      frequency: 1.2,
+      linkClicks: -4.6,
+      purchases: -7.9,
+    },
+    roasTrend: [2.4, 2.3, 2.5, 2.2, 2.3, 2.1, 2.2, 2.0, 2.1, 1.9, 2.0, 1.8, 1.9, 2.0, 1.8, 1.7, 1.9, 1.8, 1.6, 1.8, 1.7, 1.9, 1.8, 1.7, 1.9, 2.0, 1.8, 1.9, 2.0, 1.9],
+    cpaTrend: [5400, 5600, 5300, 5800, 5700, 6100, 5900, 6300, 6200, 6600, 6400, 6800, 6600, 6300, 6700, 7000, 6500, 6700, 7100, 6800, 7000, 6600, 6800, 7100, 6700, 6400, 6900, 6600, 6300, 6500],
+    funnel: [
+      { label: "노출", value: 1520000 },
+      { label: "도달", value: 986000 },
+      { label: "링크 클릭", value: 8400 },
+      { label: "장바구니", value: 590 },
+      { label: "구매", value: 96 },
+    ],
+    placements: [
+      { label: "Instagram 릴스", pct: 38 },
+      { label: "Instagram 피드", pct: 24 },
+      { label: "Facebook 피드", pct: 18 },
+      { label: "Instagram 스토리", pct: 12 },
+      { label: "기타", pct: 8 },
+    ],
+    gender: { male: 36, female: 64 },
+    ageBands: [
+      { range: "18-24", male: 9, female: 16 },
+      { range: "25-34", male: 13, female: 24 },
+      { range: "35-44", male: 8, female: 14 },
+      { range: "45-54", male: 4, female: 7 },
+      { range: "55+", male: 2, female: 3 },
+    ],
+    adCopy: {
+      brandName: "루미룸",
+      body: "무드등 하나로 방 분위기가 바뀝니다. 릴스에서 화제가 된 그 조명, 지금 확인해 보세요.",
+      linkLabel: "lumiroom.kr",
+      cta: "더 알아보기",
+    },
+  },
+  cmp3: {
+    adId: "120215073862390",
+    createdAt: "2026-06-01T08:00:00+09:00",
+    updatedAt: "2026-06-30T23:59:00+09:00",
+    periodLabel: "캠페인 전체 (6월)",
+    deltas: {
+      roas: 31.0,
+      cpa: -22.4,
+      ctr: 3.4,
+      cpc: -9.7,
+      spend: 18.0,
+      impressions: 24.0,
+      reach: 19.9,
+      frequency: 3.1,
+      linkClicks: 28.2,
+      purchases: 33.5,
+    },
+    roasTrend: [3.2, 3.4, 3.6, 3.5, 3.8, 3.7, 4.0, 3.9, 4.2, 4.1, 4.4, 4.3, 4.6, 4.5, 4.8, 4.6, 4.9, 4.7, 5.0, 4.8, 5.1, 4.9, 4.7, 5.0, 4.8, 4.6, 4.9, 4.7, 4.5, 4.8],
+    cpaTrend: [4600, 4450, 4300, 4380, 4150, 4220, 4000, 4080, 3900, 3960, 3800, 3860, 3700, 3760, 3620, 3690, 3560, 3610, 3480, 3540, 3420, 3480, 3560, 3400, 3470, 3550, 3390, 3460, 3540, 3410],
+    funnel: [
+      { label: "노출", value: 2410000 },
+      { label: "도달", value: 1430000 },
+      { label: "링크 클릭", value: 38200 },
+      { label: "장바구니", value: 6900 },
+      { label: "구매", value: 1120 },
+    ],
+    placements: [
+      { label: "Facebook 피드", pct: 34 },
+      { label: "Instagram 피드", pct: 33 },
+      { label: "Instagram 스토리", pct: 14 },
+      { label: "Facebook 마켓플레이스", pct: 10 },
+      { label: "기타", pct: 9 },
+    ],
+    gender: { male: 49, female: 51 },
+    ageBands: [
+      { range: "18-24", male: 11, female: 12 },
+      { range: "25-34", male: 17, female: 18 },
+      { range: "35-44", male: 12, female: 12 },
+      { range: "45-54", male: 6, female: 6 },
+      { range: "55+", male: 3, female: 3 },
+    ],
+    adCopy: {
+      brandName: "핏스낵",
+      body: "운동 후 단백질, 과자로 채우세요. 단백질 과자 3종 세트 — 첫 박스는 무료입니다.",
+      linkLabel: "fitsnack.kr",
+      cta: "무료로 받기",
+    },
+  },
+};
 
 export const trendItems: TrendItem[] = [
   {

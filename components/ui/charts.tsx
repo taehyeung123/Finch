@@ -102,6 +102,116 @@ export function LineChart({
   );
 }
 
+/*
+  2계열 라인 차트 — 단위가 다른 두 지표(ROAS·CPA 등)를 겹쳐 본다.
+  각 계열을 자체 min/max로 정규화해 그리므로 "추세 비교"용이다 — 절대값 비교용 아님
+  (호출부에서 이 점을 캡션으로 고지할 것).
+*/
+export function DualLineChart({
+  series,
+  className,
+  height = 180,
+}: {
+  series: { data: number[]; stroke: string }[];
+  className?: string;
+  height?: number;
+}) {
+  const drawable = series.filter((s) => s.data.length >= 2);
+  if (drawable.length === 0) return null;
+  const W = 600;
+  const H = height;
+  const padX = 6;
+  const padY = 14;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className={cn("w-full", className)} style={{ height }} preserveAspectRatio="none" aria-hidden>
+      {[0.25, 0.5, 0.75].map((t) => (
+        <line
+          key={t}
+          x1={padX}
+          x2={W - padX}
+          y1={padY + t * (H - padY * 2)}
+          y2={padY + t * (H - padY * 2)}
+          stroke="var(--color-line)"
+          strokeWidth={1}
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+      {drawable.map((s, si) => {
+        const max = Math.max(...s.data);
+        const min = Math.min(...s.data);
+        const range = max - min || 1;
+        const x = (i: number) => padX + (i / (s.data.length - 1)) * (W - padX * 2);
+        const y = (v: number) => padY + (1 - (v - min) / range) * (H - padY * 2);
+        const line = s.data.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+        return (
+          <g key={si}>
+            <polyline
+              points={line}
+              fill="none"
+              stroke={s.stroke}
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+            />
+            <circle
+              cx={x(s.data.length - 1)}
+              cy={y(s.data[s.data.length - 1])}
+              r={3.5}
+              fill={s.stroke}
+              vectorEffect="non-scaling-stroke"
+            />
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/* 도넛 차트 — 게재위치·비중 분포. 중앙 라벨은 감싼 쪽에서 absolute로 올린다 */
+export function DonutChart({
+  segments,
+  className,
+  size = 148,
+  thickness = 20,
+}: {
+  segments: { label: string; pct: number; color: string }[];
+  className?: string;
+  size?: number;
+  thickness?: number;
+}) {
+  const r = (size - thickness) / 2;
+  const circ = 2 * Math.PI * r;
+  return (
+    <svg
+      viewBox={`0 0 ${size} ${size}`}
+      style={{ width: size, height: size }}
+      className={className}
+      aria-hidden
+    >
+      <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
+        {segments.map((s, i) => {
+          const offset = segments.slice(0, i).reduce((sum, seg) => sum + seg.pct, 0);
+          return (
+            <circle
+              key={s.label}
+              cx={size / 2}
+              cy={size / 2}
+              r={r}
+              fill="none"
+              stroke={s.color}
+              strokeWidth={thickness}
+              strokeDasharray={`${(s.pct / 100) * circ} ${circ}`}
+              strokeDashoffset={-(offset / 100) * circ}
+            />
+          );
+        })}
+      </g>
+    </svg>
+  );
+}
+
 /* 세로 막대 미니 차트 — 시간대별 증가 추이 등 */
 export function MiniBars({
   data,

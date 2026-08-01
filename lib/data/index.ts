@@ -36,6 +36,7 @@ export const channelTrends = src.channelTrends;
 export const competitors = src.competitors;
 export const competitorAds = src.competitorAds;
 export const campaigns = src.campaigns;
+export const campaignDetails = src.campaignDetails;
 
 /* ---- 트렌드 (3rd party 데이터 공급사로 교체 예정) ---- */
 export const trendItems = src.trendItems;

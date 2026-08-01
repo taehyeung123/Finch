@@ -131,6 +131,42 @@ export interface AdCampaign {
   };
 }
 
+/** 캠페인 상세 성과 — 목록에서 캠페인 클릭 시 모달로 노출. Marketing API insights 연동 시 교체 지점 */
+export interface AdCampaignDetail {
+  /** Meta 광고 ID (표기용) */
+  adId: string;
+  createdAt: string;
+  updatedAt: string;
+  /** 조회 기간 라벨 (예: "최근 30일") */
+  periodLabel: string;
+  /** 이전 기간 대비 증감률(%) — 지표별 */
+  deltas: {
+    roas: number;
+    cpa: number;
+    ctr: number;
+    cpc: number;
+    spend: number;
+    impressions: number;
+    reach: number;
+    frequency: number;
+    linkClicks: number;
+    purchases: number;
+  };
+  /** 일별 추이 — 두 배열은 같은 길이 */
+  roasTrend: number[];
+  cpaTrend: number[];
+  /** 전환 퍼널 — 노출부터 구매까지 단계 순서대로 */
+  funnel: { label: string; value: number }[];
+  /** 게재위치별 지출 비중(%) — 합계 100 */
+  placements: { label: string; pct: number }[];
+  /** 성별 도달 비중(%) — 합계 100 */
+  gender: { male: number; female: number };
+  /** 연령 구간별 도달 비중(%) — male+female 합이 구간 비중 */
+  ageBands: { range: string; male: number; female: number }[];
+  /** 소재 미리보기 카드용 카피 */
+  adCopy: { brandName: string; body: string; linkLabel: string; cta: string };
+}
+
 export interface TrendItem {
   id: string;
   channel: Channel;
