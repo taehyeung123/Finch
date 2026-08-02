@@ -2,8 +2,10 @@ import "server-only";
 import { Resend } from "resend";
 
 /**
- * 이메일 발송 — Resend. RESEND_EMAIL_FROM 미검증 도메인이면 기본값(onboarding@resend.dev)으로도
- * 테스트 발송은 되지만, 정식 발신은 finch.ai.kr 도메인을 Resend에서 검증(DNS 레코드 추가) 후 사용한다.
+ * 이메일 발송 — Resend. 발신 주소는 RESEND_EMAIL_FROM 또는 EMAIL_FROM(뷰스코프와
+ * 동일한 이름 — 실제 Vercel에 이 이름으로 등록돼 있어 둘 다 읽는다) 순으로 읽고,
+ * 미검증 도메인이면 기본값(onboarding@resend.dev)으로도 테스트 발송은 되지만,
+ * 정식 발신은 finch.ai.kr 도메인을 Resend에서 검증(DNS 레코드 추가) 후 사용한다.
  * RESEND_API_KEY 미설정이면 조용히 no-op — 이메일은 알림의 부가 채널이라 실패해도 인앱 알림은 유지된다.
  */
 
@@ -47,7 +49,7 @@ export async function sendNotificationEmail(to: string, title: string, body: str
   if (!resend) return false;
   try {
     const { error } = await resend.emails.send({
-      from: process.env.RESEND_EMAIL_FROM || "핀치 <onboarding@resend.dev>",
+      from: process.env.RESEND_EMAIL_FROM || process.env.EMAIL_FROM || "핀치 <onboarding@resend.dev>",
       to,
       subject: `[핀치] ${title}`,
       html: wrapHtml(title, body),
@@ -78,7 +80,7 @@ export async function sendTeamInviteEmail(
   const body = `${roleLabel} 권한으로 워크스페이스에 참여해 채널 분석을 함께 볼 수 있어요. 아래 버튼을 눌러 초대를 수락하세요.`;
   try {
     const { error } = await resend.emails.send({
-      from: process.env.RESEND_EMAIL_FROM || "핀치 <onboarding@resend.dev>",
+      from: process.env.RESEND_EMAIL_FROM || process.env.EMAIL_FROM || "핀치 <onboarding@resend.dev>",
       to,
       subject: `[핀치] ${inviterName}님의 팀 초대`,
       html: wrapHtml(title, body, { label: "초대 수락하기", url: acceptUrl }),
