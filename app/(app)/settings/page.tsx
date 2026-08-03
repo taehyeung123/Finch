@@ -339,6 +339,16 @@ export default async function SettingsPage({
         <p className="mt-3 text-[13px] text-fg-faint">핀치는 기능에 필요한 최소 권한만 요청합니다.</p>
       </Card>
 
+      {/* 모바일은 하단 탭바가 5개로 고정돼 사이드바의 문의하기가 안 보인다 — 여기서도 갈 수 있게 둔다 */}
+      <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
+        <p className="text-[14px] text-fg-sub">
+          연동이나 결제에 문제가 있나요? 문의를 남기시면 답변을 화면에서 확인할 수 있어요.
+        </p>
+        <Link href="/support" className="text-[14px] font-semibold text-primary underline underline-offset-2">
+          문의하기
+        </Link>
+      </Card>
+
       {isDemoMode() ? (
         <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
           <p className="text-[14px] text-fg-sub">

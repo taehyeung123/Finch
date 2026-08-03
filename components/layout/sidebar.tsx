@@ -13,6 +13,7 @@ import {
   FileText,
   LayoutDashboard,
   Megaphone,
+  MessageCircleQuestion,
   MessageSquareReply,
   Rocket,
   Settings,
@@ -39,6 +40,7 @@ export const NAV_ITEMS = [
   { href: "/reports", label: "리포트", icon: FileText },
   { href: "/notifications", label: "알림", icon: Bell },
   { href: "/settings", label: "설정", icon: Settings },
+  { href: "/support", label: "문의하기", icon: MessageCircleQuestion },
 ] as const;
 
 /** 좌측 사이드바 — 고정폭 240px, 접으면 72px 아이콘바 (PART 6.2) */
