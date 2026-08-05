@@ -2,10 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bookmark, FolderPlus, Hourglass, Info, SearchX, Sparkles, X, Zap } from "lucide-react";
+import { Bookmark, ExternalLink, FolderPlus, Info, SearchX, Sparkles, X, Zap } from "lucide-react";
 import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 import type { Channel, ChannelFilter, ReferenceItem, ReferenceSource } from "@/lib/types";
-import { addReferenceSource, removeReferenceSource } from "@/lib/actions/reference";
+import {
+  addReferenceSource,
+  removeReferenceSource,
+  runCollection,
+  toggleReferenceFavorite,
+} from "@/lib/actions/reference";
 import { formatCompact } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { PageHeader } from "@/components/ui/section-header";
@@ -68,6 +73,8 @@ export function LibraryClient({
   items: ReferenceItem[];
   isDemo: boolean;
 }) {
+  const router = useRouter();
+
   /* 수집 기준 — 서버 액션 성공/실패에 맞춰 로컬에서 직접 동기화 */
   const [sources, setSources] = useState<ReferenceSource[]>(initialSources);
   const [channel, setChannel] = useState<Channel>("instagram");
@@ -76,14 +83,16 @@ export function LibraryClient({
   const [submitting, setSubmitting] = useState(false);
   const [formMsg, setFormMsg] = useState<FormMessage | null>(null);
 
-  /* 지금 수집 — 데모는 짧은 시뮬레이션, 실 모드는 정직한 준비중 안내 */
+  /* 지금 수집 — 데모는 짧은 시뮬레이션, 실 모드는 runCollection 실행 */
   const [collecting, setCollecting] = useState(false);
-  const [collectNotice, setCollectNotice] = useState<string | null>(null);
+  const [collectNotice, setCollectNotice] = useState<FormMessage | null>(null);
 
-  /* 필터·즐겨찾기 */
+  /* 필터·즐겨찾기 — 즐겨찾기 초기값은 실 모드 DB의 favorite 컬럼에서 온다 */
   const [filter, setFilter] = useState<ChannelFilter>("all");
   const [favOnly, setFavOnly] = useState(false);
-  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(
+    () => new Set(items.filter((i) => i.favorite).map((i) => i.id)),
+  );
 
   const filtered = useMemo(
     () =>
@@ -135,30 +144,61 @@ export function LibraryClient({
     }
   }
 
-  function handleCollect() {
-    if (!isDemo) {
-      setCollectNotice(
-        "수집 엔진은 데이터 공급사 연동 후 열립니다. 지금 기준을 등록해두면 연동 즉시 첫 수집이 시작돼요.",
-      );
-      return;
-    }
+  async function handleCollect() {
     if (collecting) return;
     setCollectNotice(null);
+
+    if (isDemo) {
+      setCollecting(true);
+      // 이벤트 핸들러 안의 타이머 — 데모 수집 시뮬레이션 (약 1.2초)
+      setTimeout(() => {
+        setCollecting(false);
+        setCollectNotice({ tone: "notice", text: "데모 수집 완료 — 실제 계정에서는 등록한 기준으로 실수집이 실행됩니다" });
+      }, 1200);
+      return;
+    }
+
+    // 실 모드 — 서버 액션이 공급사 호출 → AI 요약 → 저장까지 수행 (수십 초 걸릴 수 있음)
     setCollecting(true);
-    // 이벤트 핸들러 안의 타이머 — 데모 수집 시뮬레이션 (약 1.2초)
-    setTimeout(() => {
+    try {
+      const result = await runCollection();
+      if (result.ok) {
+        const parts = [`새 레퍼런스 ${result.added}건 수집 완료`];
+        if (result.duplicates > 0) parts.push(`이미 수집된 ${result.duplicates}건 제외`);
+        if (result.usedSources < result.totalSources) {
+          parts.push(`기준 ${result.totalSources}개 중 ${result.usedSources}개 사용 — 다음 수집에서 나머지 기준이 돌아가요`);
+        }
+        setCollectNotice({ tone: "notice", text: parts.join(" · ") });
+        router.refresh(); // 서버 데이터 다시 로드 — 새 아이템 반영
+      } else {
+        setCollectNotice({ tone: result.reason === "no_sources" ? "notice" : "error", text: result.error });
+      }
+    } catch {
+      setCollectNotice({ tone: "error", text: "수집 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요." });
+    } finally {
       setCollecting(false);
-      setCollectNotice("데모 수집 완료 — 실제 수집은 데이터 연동 후 제공됩니다");
-    }, 1200);
+    }
   }
 
-  function toggleFavorite(id: string) {
+  async function toggleFavorite(id: string) {
+    const wasFavorite = favoriteIds.has(id);
     setFavoriteIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
+      if (wasFavorite) next.delete(id);
       else next.add(id);
       return next;
     });
+    if (isDemo) return; // 데모는 화면 상태로만
+    const result = await toggleReferenceFavorite(id, !wasFavorite);
+    if (!result.ok) {
+      // 실패 시 원복
+      setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        if (wasFavorite) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+    }
   }
 
   return (
@@ -268,25 +308,33 @@ export function LibraryClient({
         <Button
           size="sm"
           onClick={handleCollect}
-          aria-disabled={!isDemo || collecting}
+          disabled={collecting}
           aria-busy={collecting}
-          title={
-            isDemo
-              ? "등록한 기준으로 즉시 수집을 실행해요 (데모 시뮬레이션)"
-              : "수집 엔진은 데이터 공급사 연동 후 열립니다"
-          }
-          className={cn((!isDemo || collecting) && "opacity-40")}
+          title="등록한 기준으로 즉시 수집을 실행해요"
         >
           <Zap className="size-4" aria-hidden />
           {collecting ? "수집 중" : "지금 수집"}
         </Button>
       </div>
 
-      {collectNotice ? (
+      {collecting && !isDemo ? (
         <p role="status" className="flex items-start gap-1.5 text-[13px] text-fg-sub">
           <Info className="mt-0.5 size-3.5 shrink-0 text-fg-faint" aria-hidden />
-          {collectNotice}
+          등록한 기준으로 콘텐츠를 모으고 AI가 요약을 붙이는 중이에요 — 수십 초 걸릴 수 있어요.
         </p>
+      ) : null}
+
+      {collectNotice ? (
+        collectNotice.tone === "error" ? (
+          <p role="alert" className="text-[13px] text-negative">
+            {collectNotice.text}
+          </p>
+        ) : (
+          <p role="status" className="flex items-start gap-1.5 text-[13px] text-fg-sub">
+            <Info className="mt-0.5 size-3.5 shrink-0 text-fg-faint" aria-hidden />
+            {collectNotice.text}
+          </p>
+        )
       ) : null}
 
       {/* 필터 — 수집 결과가 있을 때만 의미가 있다 */}
@@ -320,21 +368,7 @@ export function LibraryClient({
       ) : null}
 
       {/* 수집 결과 — 사유별 정직한 빈 상태 안내 */}
-      {!isDemo ? (
-        sources.length === 0 ? (
-          <EmptyState
-            icon={FolderPlus}
-            title="아직 등록한 수집 기준이 없어요"
-            description="위에서 키워드나 계정을 등록해두면 수집 엔진 연동 즉시 모으기 시작해요."
-          />
-        ) : (
-          <EmptyState
-            icon={Hourglass}
-            title="수집 엔진 연동을 준비하고 있어요"
-            description={`기준 ${sources.length}개 등록됨 — 연동되면 이 기준으로 첫 수집이 자동 실행됩니다.`}
-          />
-        )
-      ) : filtered.length > 0 ? (
+      {filtered.length > 0 ? (
         <section
           aria-label="수집된 레퍼런스 목록"
           className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
@@ -348,11 +382,23 @@ export function LibraryClient({
             />
           ))}
         </section>
-      ) : (
+      ) : items.length > 0 ? (
         <EmptyState
           icon={SearchX}
           title="이 조건에 맞는 레퍼런스가 없어요"
           description="채널 필터를 '전체'로 바꾸거나 즐겨찾기 필터를 해제해보세요."
+        />
+      ) : sources.length === 0 ? (
+        <EmptyState
+          icon={FolderPlus}
+          title="아직 등록한 수집 기준이 없어요"
+          description="위에서 키워드나 계정을 등록하고 '지금 수집'을 누르면 바로 모으기 시작해요."
+        />
+      ) : (
+        <EmptyState
+          icon={Zap}
+          title="이제 수집할 준비가 됐어요"
+          description={`기준 ${sources.length}개 등록됨 — '지금 수집'을 누르면 이 기준으로 첫 수집이 시작됩니다.`}
         />
       )}
 
@@ -442,18 +488,31 @@ function ReferenceCard({
       ) : null}
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-sub">
-        <span>
-          조회수 <span className="tnum font-semibold text-fg">{formatCompact(item.views)}</span>
-        </span>
+        {item.views > 0 ? (
+          <span>
+            조회수 <span className="tnum font-semibold text-fg">{formatCompact(item.views)}</span>
+          </span>
+        ) : null}
         <span>
           좋아요 <span className="tnum font-semibold text-fg">{formatCompact(item.likes)}</span>
         </span>
         <span className="tnum text-fg-faint">{item.collectedAgoHours}시간 전 수집</span>
       </div>
 
-      <p className="text-[12px] text-fg-faint">
-        &lsquo;{item.matchedSource}&rsquo; 기준으로 수집
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-fg-faint">
+        <span>&lsquo;{item.matchedSource}&rsquo; 기준으로 수집</span>
+        {item.url ? (
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 font-semibold text-fg-sub transition-colors hover:text-primary"
+          >
+            원본 보기
+            <ExternalLink className="size-3" aria-hidden />
+          </a>
+        ) : null}
+      </div>
 
       <div className="mt-auto border-t border-line pt-3">
         <Button

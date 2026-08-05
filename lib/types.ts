@@ -224,6 +224,10 @@ export interface ReferenceItem {
   matchedSource: string;
   collectedAgoHours: number;
   dataSource: DataSource;
+  /** 원본 게시물 링크 — 저작권 안전장치(요약+출처 링크). 목데이터는 생략 가능 */
+  url?: string | null;
+  /** 즐겨찾기 — 실 모드는 DB 영속(0019), 데모는 화면 상태로만 */
+  favorite?: boolean;
 }
 
 export type NotificationType =
