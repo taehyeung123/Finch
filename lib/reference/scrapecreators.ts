@@ -90,6 +90,10 @@ async function callApi(path: string, params: Record<string, string>): Promise<Re
 function num(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) ? v : 0;
 }
+/** 반응 지표용 — 인스타는 좋아요 숨김 게시물을 -1로 내려보낸다(실측). 음수는 0으로 */
+function metric(v: unknown): number {
+  return Math.max(0, num(v));
+}
 function str(v: unknown): string {
   return typeof v === "string" ? v : "";
 }
@@ -114,10 +118,10 @@ function normalizeTiktok(raw: Json): CollectedPost | null {
     url: str(raw.share_url) || str(raw.url) || null,
     thumbnailUrl: str(coverUrls[0]) || null,
     mediaFormat: "video", // 틱톡은 전부 영상
-    views: num(stats.play_count),
-    likes: num(stats.digg_count),
-    comments: num(stats.comment_count),
-    followerCount: num(author.follower_count),
+    views: metric(stats.play_count),
+    likes: metric(stats.digg_count),
+    comments: metric(stats.comment_count),
+    followerCount: metric(author.follower_count),
     postedAt: createTime ? new Date(createTime * 1000).toISOString() : null,
     region: str(raw.region) || null,
   };
@@ -145,10 +149,10 @@ function normalizeIgHashtagPost(raw: Json): CollectedPost | null {
     thumbnailUrl: str(raw.thumbnail_src) || str(raw.display_url) || null,
     mediaFormat: igFormat(raw),
     // play_count가 사용자가 아는 "조회수"에 가깝다 (실측: view 245 vs play 956 — view는 3초 이상 시청)
-    views: num(raw.video_play_count) || num(raw.video_view_count),
-    likes: num(raw.like_count),
-    comments: num(raw.comment_count),
-    followerCount: num(owner.follower_count),
+    views: metric(raw.video_play_count) || metric(raw.video_view_count),
+    likes: metric(raw.like_count),
+    comments: metric(raw.comment_count),
+    followerCount: metric(owner.follower_count),
     postedAt: str(raw.taken_at) || null,
     region: null,
   };
@@ -169,10 +173,10 @@ function normalizeIgUserPost(raw: Json, handle: string): CollectedPost | null {
     url: str(raw.url) || (raw.code ? `https://www.instagram.com/p/${str(raw.code)}/` : null),
     thumbnailUrl: str(raw.display_uri) || str(raw.thumbnail_src) || str(raw.display_url) || null,
     mediaFormat: igFormat(raw),
-    views: num(raw.play_count) || num(raw.ig_play_count),
-    likes: num(raw.like_count),
-    comments: num(raw.comment_count),
-    followerCount: num(user.follower_count),
+    views: metric(raw.play_count) || metric(raw.ig_play_count),
+    likes: metric(raw.like_count),
+    comments: metric(raw.comment_count),
+    followerCount: metric(user.follower_count),
     postedAt: takenAt ? new Date(takenAt * 1000).toISOString() : str(raw.taken_at) || null,
     region: null,
   };
@@ -202,8 +206,8 @@ function normalizeThreadsPost(raw: Json, fallbackHandle: string | null): Collect
         ? "photo"
         : "text",
     views: 0, // Threads는 조회수를 공개하지 않는다 — 0이면 UI에서 숨긴다 (지어내지 않음)
-    likes: num(raw.like_count),
-    comments: num(tpInfo.direct_reply_count) || num(raw.direct_reply_count),
+    likes: metric(raw.like_count),
+    comments: metric(tpInfo.direct_reply_count) || metric(raw.direct_reply_count),
     followerCount: 0, // 검색 응답의 user 객체에 팔로워 수 없음 (실측) — 지어내지 않음
     postedAt: takenAt ? new Date(takenAt * 1000).toISOString() : null,
     region: null,
@@ -266,8 +270,24 @@ export async function collectFromSource(
       posts = itemsOf(data, "items")
         .map((x) => normalizeIgUserPost(x, bareHandle))
         .filter((p): p is CollectedPost => p !== null);
+    } else if (source.kind === "keyword" && filters?.mediaFormat !== "photo" && filters?.mediaFormat !== "carousel") {
+      // 키워드는 IG 자체 검색 랭킹을 타는 릴스 검색이 해시태그 피드보다 관련도가 훨씬 높다
+      // (실측: 해시태그 피드는 태그 도배 홍보물 위주). 페이지당 10개라 2페이지 수집.
+      const baseParams: Record<string, string> = { query: value };
+      if (period !== "all") baseParams.date_posted = IG_DATE_POSTED[period];
+      const pages = await Promise.all(
+        ["1", "2"].map((page) =>
+          callApi("/v2/instagram/reels/search", { ...baseParams, page }).catch(() => null),
+        ),
+      );
+      posts = pages
+        .filter((d): d is Json => d !== null)
+        .flatMap((d) => itemsOf(d, "reels"))
+        .map(normalizeIgHashtagPost) // 릴스 검색 응답은 해시태그 검색과 같은 필드 구조 (공식 문서 확인)
+        .filter((p): p is CollectedPost => p !== null);
+      if (posts.length === 0) throw new CollectError("provider_error", "IG 릴스 검색 결과 없음");
     } else {
-      // keyword는 공백 제거해 해시태그 검색으로 수집 (IG는 순수 키워드 게시물 검색이 없다)
+      // 해시태그 소스(또는 사진·캐러셀 형식 필터)는 해시태그 피드 — 커서로 2페이지 수집
       const tag = source.kind === "hashtag" ? bareTag : value.replace(/\s+/g, "");
       const params: Record<string, string> = {
         hashtag: tag,
@@ -275,8 +295,14 @@ export async function collectFromSource(
         media_type: filters?.mediaFormat === "video" ? "reels" : "all",
       };
       if (period !== "all") params.date_posted = IG_DATE_POSTED[period];
-      const data = await callApi("/v1/instagram/search/hashtag", params);
-      posts = itemsOf(data, "posts").map(normalizeIgHashtagPost).filter((p): p is CollectedPost => p !== null);
+      const first = await callApi("/v1/instagram/search/hashtag", params);
+      let all = itemsOf(first, "posts");
+      const cursor = str(first.cursor);
+      if (cursor) {
+        const second = await callApi("/v1/instagram/search/hashtag", { ...params, cursor }).catch(() => null);
+        if (second) all = all.concat(itemsOf(second, "posts"));
+      }
+      posts = all.map(normalizeIgHashtagPost).filter((p): p is CollectedPost => p !== null);
     }
   } else {
     // threads

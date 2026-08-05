@@ -717,10 +717,10 @@ function ReferenceCard({
           src={item.thumbnailUrl}
           alt=""
           loading="lazy"
-          className="aspect-video w-full border-b border-line bg-overlay object-cover"
+          className="aspect-[4/5] w-full border-b border-line bg-overlay object-cover"
         />
       ) : (
-        <div className="flex aspect-video items-center justify-center border-b border-line bg-overlay" aria-hidden>
+        <div className="flex aspect-[4/5] items-center justify-center border-b border-line bg-overlay" aria-hidden>
           <PlaceholderGlyph className="size-9 text-fg-faint" />
         </div>
       )}

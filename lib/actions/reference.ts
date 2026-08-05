@@ -277,6 +277,22 @@ function engagementScore(p: CollectedPost): number {
   return p.views + p.likes * 20 + p.comments * 40;
 }
 
+/**
+ * 관련도 가중치 — 키워드·해시태그 소스에서 "태그 도배 홍보물"이 반응 수치만으로
+ * 상위에 오르는 것을 막는다 (실측: '웨딩' 해시태그 피드가 업체 광고 위주였음).
+ * 키워드 포함 시 가산, 미포함은 감점(동의어 콘텐츠가 있어 완전 배제는 안 함),
+ * 해시태그 12개 초과는 도배로 보고 반감.
+ */
+function relevanceMultiplier(p: CollectedPost, source: { kind: string; value: string }): number {
+  if (source.kind === "account") return 1;
+  const needle = source.value.replace(/^[#@]/, "").replace(/\s+/g, "").toLowerCase();
+  const hay = p.caption.replace(/\s+/g, "").toLowerCase();
+  let m = needle && hay.includes(needle) ? 1.5 : 0.7;
+  const tagCount = (p.caption.match(/#/g) ?? []).length;
+  if (tagCount > 12) m *= 0.5;
+  return m;
+}
+
 const HOOK_VALUES: HookType[] = [
   "숫자리스트", "손실회피", "통념깨기", "질문호명", "결과수치", "시의성", "공감자극", "호기심",
 ];
@@ -330,15 +346,15 @@ function rowToItem(r: DbItemRow): ReferenceItem {
     hooks: (Array.isArray(r.hooks) ? r.hooks : []).filter((h): h is HookType =>
       (HOOK_VALUES as string[]).includes(String(h)),
     ),
-    views: Number(r.views) || 0,
-    likes: Number(r.likes) || 0,
-    followerCount: Number(r.follower_count) || 0,
+    views: Math.max(0, Number(r.views) || 0),
+    likes: Math.max(0, Number(r.likes) || 0),
+    followerCount: Math.max(0, Number(r.follower_count) || 0),
     matchedSource: r.matched_source,
     collectedAgoHours: hours,
     dataSource: "thirdparty",
     url: r.url,
     thumbnailUrl: r.thumbnail_url,
-    comments: Number(r.comments) || 0,
+    comments: Math.max(0, Number(r.comments) || 0),
     hashtags: Array.isArray(r.hashtags) ? (r.hashtags as unknown[]).map(String).slice(0, 6) : [],
     aiComment: r.ai_comment || "",
     favorite: r.favorite,
@@ -589,10 +605,12 @@ export async function runCollection(): Promise<CollectRunResult> {
   for (let i = 0; i < settled.length; i++) {
     const r = settled[i];
     if (r.status === "fulfilled") {
-      // 수집 필터(기간·KR·형식·제외 키워드) → 반응 점수 랭킹 → 죽은 게시물 제외 → 기준당 상위 N개
+      // 수집 필터(기간·KR·형식·제외 키워드) → 관련도 가중 반응 랭킹 → 죽은 게시물 제외 → 기준당 상위 N개
+      const src = r.value.source;
       const filteredPosts = r.value.posts.filter((p) => passesFilters(p, settings));
       excludedByFilter += r.value.posts.length - filteredPosts.length;
-      const ranked = [...filteredPosts].sort((a, b) => engagementScore(b) - engagementScore(a));
+      const weighted = (p: CollectedPost) => engagementScore(p) * relevanceMultiplier(p, src);
+      const ranked = [...filteredPosts].sort((a, b) => weighted(b) - weighted(a));
       const alive = ranked.filter((p) => engagementScore(p) >= MIN_ENGAGEMENT_SCORE);
       excludedLowQuality += ranked.length - alive.length;
       for (const post of alive.slice(0, KEEP_PER_SOURCE)) {
