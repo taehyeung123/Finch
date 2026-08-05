@@ -127,7 +127,8 @@ function normalizeIgHashtagPost(raw: Json): CollectedPost | null {
     caption: typeof raw.caption === "string" ? raw.caption : str((raw.caption as Json | undefined)?.text),
     creatorHandle: owner.username ? `@${str(owner.username)}` : "",
     url: str(raw.url) || (raw.shortcode ? `https://www.instagram.com/p/${str(raw.shortcode)}/` : null),
-    views: num(raw.video_view_count) || num(raw.video_play_count),
+    // play_count가 사용자가 아는 "조회수"에 가깝다 (실측: view 245 vs play 956 — view는 3초 이상 시청)
+    views: num(raw.video_play_count) || num(raw.video_view_count),
     likes: num(raw.like_count),
     comments: num(raw.comment_count),
     followerCount: num(owner.follower_count),
@@ -158,11 +159,12 @@ function normalizeIgUserPost(raw: Json, handle: string): CollectedPost | null {
   };
 }
 
-/** Threads: posts[] (caption.text) */
+/** Threads: posts[] (caption.text, 답글 수는 text_post_app_info 안 — 실측 검증) */
 function normalizeThreadsPost(raw: Json, fallbackHandle: string | null): CollectedPost | null {
   const id = str(raw.pk) || str(raw.id);
   if (!id) return null;
   const user = (raw.user ?? {}) as Json;
+  const tpInfo = (raw.text_post_app_info ?? {}) as Json;
   const caption = raw.caption as Json | undefined;
   const username = str(user.username) || (fallbackHandle ?? "");
   const code = str(raw.code);
@@ -175,8 +177,8 @@ function normalizeThreadsPost(raw: Json, fallbackHandle: string | null): Collect
     url: username && code ? `https://www.threads.net/@${username.replace(/^@/, "")}/post/${code}` : null,
     views: 0, // Threads는 조회수를 공개하지 않는다 — 0이면 UI에서 숨긴다 (지어내지 않음)
     likes: num(raw.like_count),
-    comments: num(raw.direct_reply_count),
-    followerCount: num(user.follower_count),
+    comments: num(tpInfo.direct_reply_count) || num(raw.direct_reply_count),
+    followerCount: 0, // 검색 응답의 user 객체에 팔로워 수 없음 (실측) — 지어내지 않음
     postedAt: takenAt ? new Date(takenAt * 1000).toISOString() : null,
     region: null,
   };
