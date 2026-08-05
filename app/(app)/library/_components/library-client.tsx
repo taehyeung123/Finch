@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bookmark, ExternalLink, FolderPlus, Info, SearchX, Sparkles, X, Zap } from "lucide-react";
+import { Bookmark, ExternalLink, Eye, FolderPlus, Heart, Info, MessageCircle, SearchX, Sparkles, X, Zap } from "lucide-react";
 import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 import { FinchMark } from "@/components/logo";
 import type { Channel, ChannelFilter, CollectSettings, ReferenceItem, ReferenceSource } from "@/lib/types";
@@ -16,6 +16,7 @@ import {
 import { formatCompact } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { PageHeader } from "@/components/ui/section-header";
+import { ReferenceDetailModal } from "./reference-detail";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge, ChannelBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -151,6 +152,8 @@ export function LibraryClient({
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(
     () => new Set(items.filter((i) => i.favorite).map((i) => i.id)),
   );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedItem = items.find((i) => i.id === selectedId) ?? null;
 
   /* 아이템 반응 점수 — 정렬·베이스라인 공용 (조회수 없는 스레드도 좋아요·댓글로 비교) */
   const itemScore = (i: ReferenceItem) => i.views + i.likes * 20 + (i.comments ?? 0) * 40;
@@ -640,6 +643,7 @@ export function LibraryClient({
               favorite={favoriteIds.has(item.id)}
               onToggleFavorite={() => toggleFavorite(item.id)}
               overAvgMultiple={overAvgMultiple.get(item.id)}
+              onOpen={() => setSelectedId(item.id)}
             />
           ))}
         </section>
@@ -671,6 +675,21 @@ export function LibraryClient({
           있어요.
         </p>
       </Card>
+
+      {/* 상세 모달 */}
+      {selectedItem ? (
+        <ReferenceDetailModal
+          item={selectedItem}
+          favorite={favoriteIds.has(selectedItem.id)}
+          isDemo={isDemo}
+          onToggleFavorite={() => toggleFavorite(selectedItem.id)}
+          onClose={() => setSelectedId(null)}
+          onDeleted={() => {
+            setSelectedId(null);
+            router.refresh();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -680,12 +699,14 @@ function ReferenceCard({
   favorite,
   onToggleFavorite,
   overAvgMultiple,
+  onOpen,
 }: {
   item: ReferenceItem;
   favorite: boolean;
   onToggleFavorite: () => void;
   /** 같은 기준 평균 대비 반응 배수 — 1.5배 이상일 때만 전달됨 */
   overAvgMultiple?: number;
+  onOpen: () => void;
 }) {
   const router = useRouter();
 
@@ -710,20 +731,27 @@ function ReferenceCard({
 
   return (
     <Card hover className="flex flex-col overflow-hidden">
-      {/* 썸네일 미리보기 — Storage 캐시본. 없으면(텍스트 글·캐시 실패·과거 수집분) 채널 글리프 */}
-      {item.thumbnailUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element -- Storage 캐시 URL이라 최적화 프록시를 거치지 않는다
-        <img
-          src={item.thumbnailUrl}
-          alt=""
-          loading="lazy"
-          className="aspect-[4/5] w-full border-b border-line bg-overlay object-cover"
-        />
-      ) : (
-        <div className="flex aspect-[4/5] items-center justify-center border-b border-line bg-overlay" aria-hidden>
-          <PlaceholderGlyph className="size-9 text-fg-faint" />
-        </div>
-      )}
+      {/* 썸네일 미리보기 — 클릭 시 상세 모달. 없으면(텍스트 글·캐시 실패·과거 수집분) 채널 글리프 */}
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`${item.title} 상세 보기`}
+        className="block w-full cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+      >
+        {item.thumbnailUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- Storage 캐시 URL이라 최적화 프록시를 거치지 않는다
+          <img
+            src={item.thumbnailUrl}
+            alt=""
+            loading="lazy"
+            className="aspect-[4/5] w-full border-b border-line bg-overlay object-cover"
+          />
+        ) : (
+          <span className="flex aspect-[4/5] items-center justify-center border-b border-line bg-overlay" aria-hidden>
+            <PlaceholderGlyph className="size-9 text-fg-faint" />
+          </span>
+        )}
+      </button>
 
       <div className="flex flex-1 flex-col gap-2.5 p-4">
       <div className="flex items-center justify-between gap-2">
@@ -751,10 +779,12 @@ function ReferenceCard({
         </button>
       </div>
 
-      <div className="min-w-0">
-        <p className="line-clamp-2 text-[15px] font-semibold leading-snug">{item.title}</p>
+      <button type="button" onClick={onOpen} className="min-w-0 cursor-pointer text-left">
+        <p className="line-clamp-2 text-[15px] font-semibold leading-snug transition-colors hover:text-primary">
+          {item.title}
+        </p>
         <p className="mt-1 text-[13px] text-fg-sub">{item.creatorHandle}</p>
-      </div>
+      </button>
 
       {/* AI 요약 — 영상을 재생하지 않아도 내용이 파악되게 */}
       <p className="line-clamp-3 text-[13px] leading-relaxed text-fg-sub">{item.summary}</p>
@@ -787,30 +817,33 @@ function ReferenceCard({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-sub">
+      {/* 지표 — 아이콘형 (조회·좋아요·댓글 + 공감률 칩) */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px]">
         {item.views > 0 ? (
-          <span>
-            조회수 <span className="tnum font-semibold text-fg">{formatCompact(item.views)}</span>
+          <span className="inline-flex items-center gap-1 text-fg-sub" title="조회수">
+            <Eye className="size-3.5 text-fg-faint" aria-hidden />
+            <span className="tnum font-semibold text-fg">{formatCompact(item.views)}</span>
           </span>
         ) : null}
-        <span>
-          좋아요 <span className="tnum font-semibold text-fg">{formatCompact(item.likes)}</span>
+        <span className="inline-flex items-center gap-1 text-fg-sub" title="좋아요">
+          <Heart className="size-3.5 text-fg-faint" aria-hidden />
+          <span className="tnum font-semibold text-fg">{formatCompact(item.likes)}</span>
         </span>
         {(item.comments ?? 0) > 0 ? (
-          <span>
-            댓글 <span className="tnum font-semibold text-fg">{formatCompact(item.comments ?? 0)}</span>
+          <span className="inline-flex items-center gap-1 text-fg-sub" title="댓글">
+            <MessageCircle className="size-3.5 text-fg-faint" aria-hidden />
+            <span className="tnum font-semibold text-fg">{formatCompact(item.comments ?? 0)}</span>
           </span>
         ) : null}
         {item.views > 0 ? (
-          <span className="inline-flex items-center gap-0.5">
+          <span className="inline-flex items-center gap-1 rounded-chip bg-positive-weak px-2 py-0.5 text-[11px] font-semibold text-positive">
             공감률{" "}
-            <span className="tnum font-semibold text-fg">
+            <span className="tnum">
               {(((item.likes + (item.comments ?? 0)) / item.views) * 100).toFixed(2)}%
             </span>
             <InfoTip>(좋아요+댓글) ÷ 조회수. 플랫폼 공식 지표가 아닌 핀치 자체 계산이에요.</InfoTip>
           </span>
         ) : null}
-        <span className="tnum text-fg-faint">{item.collectedAgoHours}시간 전 수집</span>
       </div>
 
       {/* 캡션에서 추출한 해시태그 */}

@@ -256,9 +256,17 @@ export async function collectFromSource(
       });
       posts = itemsOf(data, "aweme_list").map(normalizeTiktok).filter((p): p is CollectedPost => p !== null);
     } else {
-      // keyword·hashtag 모두 키워드 검색으로 — 해시태그는 # 제거한 검색어가 실측상 더 잘 잡힌다
-      const data = await callApi("/v1/tiktok/search/keyword", { query: source.kind === "hashtag" ? bareTag : value });
-      posts = itemsOf(data, "search_item_list")
+      // keyword·hashtag 모두 키워드 검색으로 — 해시태그는 # 제거한 검색어가 실측상 더 잘 잡힌다.
+      // 후보를 넓히기 위해 커서로 2페이지(약 60개) 수집
+      const query = source.kind === "hashtag" ? bareTag : value;
+      const first = await callApi("/v1/tiktok/search/keyword", { query });
+      let items = itemsOf(first, "search_item_list");
+      const cursor = str(first.cursor);
+      if (first.has_more && cursor) {
+        const second = await callApi("/v1/tiktok/search/keyword", { query, cursor }).catch(() => null);
+        if (second) items = items.concat(itemsOf(second, "search_item_list"));
+      }
+      posts = items
         .map((x) => normalizeTiktok((x.aweme_info ?? {}) as Json))
         .filter((p): p is CollectedPost => p !== null);
       // KR 리전 우선 정렬(안정 정렬 — 리전 내 원래 순위 유지)
@@ -272,11 +280,12 @@ export async function collectFromSource(
         .filter((p): p is CollectedPost => p !== null);
     } else if (source.kind === "keyword" && filters?.mediaFormat !== "photo" && filters?.mediaFormat !== "carousel") {
       // 키워드는 IG 자체 검색 랭킹을 타는 릴스 검색이 해시태그 피드보다 관련도가 훨씬 높다
-      // (실측: 해시태그 피드는 태그 도배 홍보물 위주). 페이지당 10개라 2페이지 수집.
+      // (실측: 해시태그 피드는 태그 도배 홍보물 위주). 페이지당 10개라 4페이지(후보 40개) 수집
+      // — 후보군이 커야 조회수 큰 콘텐츠가 상위 선별에 걸린다.
       const baseParams: Record<string, string> = { query: value };
       if (period !== "all") baseParams.date_posted = IG_DATE_POSTED[period];
       const pages = await Promise.all(
-        ["1", "2"].map((page) =>
+        ["1", "2", "3", "4"].map((page) =>
           callApi("/v2/instagram/reels/search", { ...baseParams, page }).catch(() => null),
         ),
       );
@@ -325,4 +334,15 @@ export async function collectFromSource(
   }
 
   return posts.slice(0, limit);
+}
+
+/**
+ * 릴스 대본 추출 (인스타그램 전용) — 음성 받아쓰기. 2분 미만 영상만, 10~30초 소요.
+ * 공급사 캐시(7일)를 쓰므로 같은 게시물 재요청은 크레딧이 들지 않는다.
+ */
+export async function fetchIgTranscript(postUrl: string): Promise<string | null> {
+  const data = await callApi("/v2/instagram/media/transcript", { url: postUrl, cache_max_age: "7d" });
+  const arr = Array.isArray(data.transcripts) ? (data.transcripts as Json[]) : [];
+  const texts = arr.map((t) => str(t.text)).filter((t) => t.length > 0);
+  return texts.length > 0 ? texts.join("\n\n") : null;
 }

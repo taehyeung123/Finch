@@ -265,6 +265,14 @@ export interface ReferenceItem {
   thumbnailUrl?: string | null;
   /** 즐겨찾기 — 실 모드는 DB 영속(0019), 데모는 화면 상태로만 */
   favorite?: boolean;
+  /** 원본 캡션 (앞 500자 저장분) — 상세 모달 전문 표시용 */
+  caption?: string;
+  /** 내 메모 (0023) */
+  note?: string;
+  /** 릴스 대본 — 요청 시 음성 받아쓰기 추출·캐시 (0023, 인스타그램만) */
+  transcript?: string;
+  /** 확인 상태 (0023) */
+  status?: "unseen" | "seen" | "skipped";
 }
 
 export type NotificationType =

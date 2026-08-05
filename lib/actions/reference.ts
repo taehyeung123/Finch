@@ -8,6 +8,7 @@ import { createClaudeClient, STUDIO_MODEL } from "@/lib/ai/claude";
 import { chargeGeneration, refundGenerationCredits, CREDIT_COSTS } from "@/lib/actions/credits";
 import {
   collectFromSource,
+  fetchIgTranscript,
   isCollectionConfigured,
   CollectError,
   type CollectedPost,
@@ -263,12 +264,14 @@ function passesFilters(p: CollectedPost, s: CollectSettings): boolean {
 
 /* ============================ 수집 실행 (실연동) ============================ */
 
-/** 1회 수집에서 공급사 API를 부르는 최대 기준 수 — 기준당 1크레딧 실비 상한 */
+/** 1회 수집에서 공급사 API를 부르는 최대 기준 수 — 기준당 1~4크레딧 실비 상한 */
 const MAX_SOURCES_PER_RUN = 6;
 /** 기준 하나당 공급사에서 받아오는 최대 게시물 수 (랭킹 전 후보군) */
-const FETCH_PER_SOURCE = 30;
-/** 랭킹 후 기준 하나당 저장할 최대 게시물 수 */
-const KEEP_PER_SOURCE = 8;
+const FETCH_PER_SOURCE = 60;
+/** 랭킹 후 기준 하나당 저장할 최대 게시물 수 — 넉넉히 20개(레퍼런스 도구 통상 수준) */
+const KEEP_PER_SOURCE = 20;
+/** 1회 수집의 전체 저장 상한 — AI 요약·썸네일 비용 폭주 방지 */
+const MAX_TOTAL_PER_RUN = 40;
 /** 반응 점수 최소선 — 이 밑은 "죽은 게시물"로 보고 제외한다 (제외 수는 안내에 표기) */
 const MIN_ENGAGEMENT_SCORE = 50;
 
@@ -328,6 +331,10 @@ interface DbItemRow {
   comments: number;
   hashtags: unknown;
   ai_comment: string;
+  caption: string;
+  note: string;
+  transcript: string;
+  status: string;
   follower_count: number;
   matched_source: string;
   favorite: boolean;
@@ -357,6 +364,10 @@ function rowToItem(r: DbItemRow): ReferenceItem {
     comments: Math.max(0, Number(r.comments) || 0),
     hashtags: Array.isArray(r.hashtags) ? (r.hashtags as unknown[]).map(String).slice(0, 6) : [],
     aiComment: r.ai_comment || "",
+    caption: r.caption || "",
+    note: r.note || "",
+    transcript: r.transcript || "",
+    status: r.status === "seen" || r.status === "skipped" ? r.status : "unseen",
     favorite: r.favorite,
   };
 }
@@ -378,13 +389,15 @@ export async function listReferenceItems(): Promise<ReferenceItem[]> {
 
   // 스키마 세대별 컬럼 목록 — 미적용 마이그레이션이 있어도 목록은 항상 살린다
   const SELECT_FULL =
-    "id, channel, title, summary, category, hooks, creator_handle, url, thumbnail_url, views, likes, comments, hashtags, ai_comment, follower_count, matched_source, favorite, collected_at";
+    "id, channel, title, summary, category, hooks, creator_handle, url, thumbnail_url, views, likes, comments, hashtags, ai_comment, caption, note, transcript, status, follower_count, matched_source, favorite, collected_at";
+  const SELECT_0022 =
+    "id, channel, title, summary, category, hooks, creator_handle, url, thumbnail_url, views, likes, comments, hashtags, ai_comment, caption, follower_count, matched_source, favorite, collected_at";
   const SELECT_0020 =
     "id, channel, title, summary, category, hooks, creator_handle, url, thumbnail_url, views, likes, follower_count, matched_source, favorite, collected_at";
   const SELECT_0019 =
     "id, channel, title, summary, category, hooks, creator_handle, url, views, likes, follower_count, matched_source, favorite, collected_at";
 
-  for (const columns of [SELECT_FULL, SELECT_0020, SELECT_0019]) {
+  for (const columns of [SELECT_FULL, SELECT_0022, SELECT_0020, SELECT_0019]) {
     const { data, error } = await supabase
       .from("reference_items")
       .select(columns)
@@ -394,7 +407,17 @@ export async function listReferenceItems(): Promise<ReferenceItem[]> {
       .limit(60);
     if (!error) {
       return ((data ?? []) as unknown as Partial<DbItemRow>[]).map((r) =>
-        rowToItem({ thumbnail_url: null, comments: 0, hashtags: [], ai_comment: "", ...r } as DbItemRow),
+        rowToItem({
+          thumbnail_url: null,
+          comments: 0,
+          hashtags: [],
+          ai_comment: "",
+          caption: "",
+          note: "",
+          transcript: "",
+          status: "unseen",
+          ...r,
+        } as DbItemRow),
       );
     }
     // 컬럼 미존재(마이그레이션 미적용)면 이전 세대 컬럼으로 재시도, 그 외 오류는 종료
@@ -434,6 +457,118 @@ async function cacheThumbnail(userId: string, post: CollectedPost): Promise<stri
     return admin.storage.from("reference-thumbs").getPublicUrl(path).data.publicUrl;
   } catch {
     return null;
+  }
+}
+
+/** 수집 아이템 삭제 — RLS 본인 행만 */
+export async function deleteReferenceItem(id: string): Promise<{ ok: boolean }> {
+  if (isDemoMode()) return { ok: false };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false };
+  const { error } = await supabase.from("reference_items").delete().eq("id", id).eq("user_id", user.id);
+  if (error) {
+    console.error("[reference] 아이템 삭제 실패:", error.message);
+    return { ok: false };
+  }
+  revalidatePath("/library");
+  return { ok: true };
+}
+
+/** 내 메모 저장 (0023) — 최대 2000자 */
+export async function saveReferenceNote(id: string, note: string): Promise<{ ok: boolean; error?: string }> {
+  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 저장되지 않아요." };
+  const trimmed = String(note ?? "").slice(0, 2000);
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "로그인이 필요합니다." };
+  const { error } = await supabase
+    .from("reference_items")
+    .update({ note: trimmed })
+    .eq("id", id)
+    .eq("user_id", user.id);
+  if (error) {
+    console.error("[reference] 메모 저장 실패:", error.message);
+    return {
+      ok: false,
+      error: error.message.includes("note")
+        ? "메모 저장소가 아직 준비되지 않았습니다(마이그레이션 0023 미적용)."
+        : "메모 저장에 실패했습니다.",
+    };
+  }
+  return { ok: true };
+}
+
+/** 확인 상태 변경 (0023) — 안 봄/봤음/건너뜀 */
+export async function setReferenceStatus(
+  id: string,
+  status: "unseen" | "seen" | "skipped",
+): Promise<{ ok: boolean }> {
+  if (isDemoMode()) return { ok: false };
+  if (!["unseen", "seen", "skipped"].includes(status)) return { ok: false };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false };
+  const { error } = await supabase
+    .from("reference_items")
+    .update({ status })
+    .eq("id", id)
+    .eq("user_id", user.id);
+  if (error) {
+    console.error("[reference] 상태 변경 실패:", error.message);
+    return { ok: false };
+  }
+  return { ok: true };
+}
+
+export type TranscriptResult = { ok: true; transcript: string } | { ok: false; error: string };
+
+/** 릴스 대본 추출 (인스타그램만) — 추출 후 DB에 캐시해 재요청 비용을 없앤다 */
+export async function extractTranscript(id: string): Promise<TranscriptResult> {
+  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 추출할 수 없어요." };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "로그인이 필요합니다." };
+  if (!isCollectionConfigured()) return { ok: false, error: "수집 엔진 설정이 완료되지 않았어요." };
+
+  const { data: row } = await supabase
+    .from("reference_items")
+    .select("channel, url, transcript")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!row) return { ok: false, error: "게시물을 찾을 수 없어요." };
+  if (row.transcript) return { ok: true, transcript: row.transcript as string };
+  if (row.channel !== "instagram") {
+    return { ok: false, error: "대본 추출은 현재 인스타그램 릴스만 지원해요." };
+  }
+  if (!row.url) return { ok: false, error: "원본 링크가 없어 추출할 수 없어요." };
+
+  try {
+    const text = await fetchIgTranscript(row.url as string);
+    if (!text) {
+      return { ok: false, error: "음성이 감지되지 않았어요 — 말로 설명하는 릴스만 대본을 만들 수 있어요." };
+    }
+    const transcript = text.slice(0, 8000);
+    await supabase.from("reference_items").update({ transcript }).eq("id", id).eq("user_id", user.id);
+    return { ok: true, transcript };
+  } catch (e) {
+    const isCredits = e instanceof CollectError && e.reason === "out_of_credits";
+    console.error("[reference] 대본 추출 실패:", e);
+    return {
+      ok: false,
+      error: isCredits
+        ? "수집 엔진 사용량이 일시적으로 소진됐어요. 잠시 후 다시 시도해 주세요."
+        : "대본 추출에 실패했어요. 2분 미만의 말로 설명하는 영상만 지원돼요.",
+    };
   }
 }
 
@@ -678,7 +813,9 @@ export async function runCollection(): Promise<CollectRunResult> {
     .eq("user_id", user.id)
     .in("external_id", unique.map((c) => c.post.externalId));
   const existingKeys = new Set((existing ?? []).map((r) => `${r.channel}:${r.external_id}`));
-  const fresh = unique.filter((c) => !existingKeys.has(`${c.post.channel}:${c.post.externalId}`));
+  const fresh = unique
+    .filter((c) => !existingKeys.has(`${c.post.channel}:${c.post.externalId}`))
+    .slice(0, MAX_TOTAL_PER_RUN);
 
   if (fresh.length === 0) {
     await refundIfCharged("all_duplicates");

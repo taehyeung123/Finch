@@ -1,0 +1,384 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Bookmark, Captions, ExternalLink, Eye, Heart, MessageCircle, Sparkles, Trash2, X } from "lucide-react";
+import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
+import type { Channel, ReferenceItem } from "@/lib/types";
+import {
+  deleteReferenceItem,
+  extractTranscript,
+  saveReferenceNote,
+  setReferenceStatus,
+} from "@/lib/actions/reference";
+import { formatCompact } from "@/lib/format";
+import { cn } from "@/lib/cn";
+import { Badge, ChannelBadge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { InfoTip } from "@/components/ui/info-tip";
+
+/*
+  레퍼런스 상세 모달 — 카드 클릭 시. 미리보기 크게 + AI 분석 + 원본 캡션 전문 +
+  릴스 대본 추출(인스타 전용, 음성 받아쓰기) + 내 메모 + 확인 상태 + 삭제.
+*/
+
+const GLYPH: Record<Channel, (props: { className?: string }) => React.ReactNode> = {
+  instagram: InstagramGlyph,
+  tiktok: TiktokGlyph,
+  threads: ThreadsGlyph,
+};
+
+const STATUS_OPTIONS: { value: NonNullable<ReferenceItem["status"]>; label: string }[] = [
+  { value: "unseen", label: "안 봄" },
+  { value: "seen", label: "봤음" },
+  { value: "skipped", label: "건너뜀" },
+];
+
+export function ReferenceDetailModal({
+  item,
+  favorite,
+  isDemo,
+  onToggleFavorite,
+  onClose,
+  onDeleted,
+}: {
+  item: ReferenceItem;
+  favorite: boolean;
+  isDemo: boolean;
+  onToggleFavorite: () => void;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const router = useRouter();
+  const [note, setNote] = useState(item.note ?? "");
+  const [noteMsg, setNoteMsg] = useState<string | null>(null);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [status, setStatus] = useState<NonNullable<ReferenceItem["status"]>>(item.status ?? "unseen");
+  const [transcript, setTranscript] = useState(item.transcript ?? "");
+  const [transcriptMsg, setTranscriptMsg] = useState<string | null>(null);
+  const [extracting, setExtracting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const Glyph = GLYPH[item.channel];
+  const empathy = item.views > 0 ? (((item.likes + (item.comments ?? 0)) / item.views) * 100).toFixed(2) : null;
+
+  function pushToStudio() {
+    try {
+      localStorage.setItem(
+        "finch:studio:pending",
+        JSON.stringify({
+          topic: item.title,
+          note: `이 레퍼런스를 참고해 새로 써줘. 요약: ${item.summary} 후킹 기법 '${item.hooks[0] ?? "호기심"}' 각도를 살리되, 베끼지 말고 구조만 참고할 것.`,
+        }),
+      );
+    } catch {
+      // localStorage 실패해도 이동은 계속
+    }
+    router.push("/studio");
+  }
+
+  async function handleSaveNote() {
+    if (noteSaving) return;
+    setNoteSaving(true);
+    setNoteMsg(null);
+    const result = await saveReferenceNote(item.id, note);
+    setNoteSaving(false);
+    setNoteMsg(result.ok ? "저장했어요" : (result.error ?? "저장에 실패했습니다."));
+  }
+
+  async function handleStatus(next: NonNullable<ReferenceItem["status"]>) {
+    setStatus(next); // 낙관적 — 데모는 화면 상태로만
+    if (!isDemo) await setReferenceStatus(item.id, next);
+  }
+
+  async function handleExtract() {
+    if (extracting) return;
+    setExtracting(true);
+    setTranscriptMsg(null);
+    const result = await extractTranscript(item.id);
+    setExtracting(false);
+    if (result.ok) setTranscript(result.transcript);
+    else setTranscriptMsg(result.error);
+  }
+
+  async function handleDelete() {
+    if (deleting) return;
+    if (isDemo) {
+      setNoteMsg("데모 모드에서는 삭제할 수 없어요.");
+      setConfirmDelete(false);
+      return;
+    }
+    setDeleting(true);
+    const result = await deleteReferenceItem(item.id);
+    setDeleting(false);
+    if (result.ok) onDeleted();
+    else setNoteMsg("삭제에 실패했습니다. 잠시 후 다시 시도해주세요.");
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${item.title} 상세`}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="shadow-pop flex max-h-[94vh] w-full max-w-3xl flex-col rounded-card border border-line bg-overlay">
+        {/* 헤더 */}
+        <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <ChannelBadge channel={item.channel} />
+            <Badge>{item.category}</Badge>
+            <span className="text-[13px] text-fg-faint">
+              &lsquo;{item.matchedSource}&rsquo; 기준 · {item.collectedAgoHours}시간 전 수집
+            </span>
+          </div>
+          <button
+            type="button"
+            aria-label="닫기"
+            onClick={onClose}
+            className="rounded-card p-1.5 text-fg-faint hover:bg-body hover:text-fg"
+          >
+            <X className="size-5" />
+          </button>
+        </div>
+
+        {/* 본문 */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+          <div className="grid gap-5 sm:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
+            {/* 미리보기 */}
+            <div className="space-y-2.5">
+              {item.thumbnailUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- Storage 캐시 URL
+                <img
+                  src={item.thumbnailUrl}
+                  alt=""
+                  className="aspect-[4/5] w-full rounded-card border border-line bg-body object-cover"
+                />
+              ) : (
+                <div
+                  className="flex aspect-[4/5] items-center justify-center rounded-card border border-line bg-body"
+                  aria-hidden
+                >
+                  <Glyph className="size-12 text-fg-faint" />
+                </div>
+              )}
+              {item.url ? (
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex h-9 w-full items-center justify-center gap-1.5 rounded-card border border-line bg-body text-[13px] font-semibold text-fg transition-colors hover:border-primary hover:text-primary"
+                >
+                  원본 새 탭으로 열기
+                  <ExternalLink className="size-3.5" aria-hidden />
+                </a>
+              ) : null}
+            </div>
+
+            {/* 정보 */}
+            <div className="min-w-0 space-y-4">
+              <div>
+                <h2 className="text-[17px] font-bold leading-snug">{item.title}</h2>
+                <p className="mt-1 text-[13px] text-fg-sub">{item.creatorHandle}</p>
+              </div>
+
+              {/* 지표 */}
+              <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[13px]">
+                {item.views > 0 ? (
+                  <span className="inline-flex items-center gap-1 text-fg-sub">
+                    <Eye className="size-3.5 text-fg-faint" aria-hidden />
+                    <span className="tnum font-semibold text-fg">{formatCompact(item.views)}</span>
+                  </span>
+                ) : null}
+                <span className="inline-flex items-center gap-1 text-fg-sub">
+                  <Heart className="size-3.5 text-fg-faint" aria-hidden />
+                  <span className="tnum font-semibold text-fg">{formatCompact(item.likes)}</span>
+                </span>
+                {(item.comments ?? 0) > 0 ? (
+                  <span className="inline-flex items-center gap-1 text-fg-sub">
+                    <MessageCircle className="size-3.5 text-fg-faint" aria-hidden />
+                    <span className="tnum font-semibold text-fg">{formatCompact(item.comments ?? 0)}</span>
+                  </span>
+                ) : null}
+                {empathy ? (
+                  <span className="inline-flex items-center gap-1 rounded-chip bg-positive-weak px-2 py-0.5 text-[11px] font-semibold text-positive">
+                    공감률 <span className="tnum">{empathy}%</span>
+                    <InfoTip>(좋아요+댓글) ÷ 조회수. 핀치 자체 계산이에요.</InfoTip>
+                  </span>
+                ) : null}
+              </div>
+
+              {/* AI 요약·코멘트 */}
+              <div className="space-y-2">
+                <p className="text-[13px] leading-relaxed text-fg-sub">{item.summary}</p>
+                {item.aiComment ? (
+                  <p className="flex items-start gap-1.5 rounded-card bg-body px-3 py-2.5 text-[13px] leading-relaxed text-fg-sub">
+                    <Sparkles className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden />
+                    <span>
+                      {item.aiComment}
+                      <InfoTip>핀치 AI의 반응 요인 분석 — 자체 추정치입니다.</InfoTip>
+                    </span>
+                  </p>
+                ) : null}
+              </div>
+
+              {/* 후킹·해시태그 */}
+              {item.hooks.length > 0 || (item.hashtags?.length ?? 0) > 0 ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {item.hooks.map((h) => (
+                    <span
+                      key={h}
+                      className="inline-flex items-center rounded-chip bg-primary-weak px-2 py-0.5 text-[11px] font-semibold text-primary"
+                    >
+                      {h}
+                    </span>
+                  ))}
+                  {(item.hashtags ?? []).map((t) => (
+                    <span key={t} className="text-[12px] text-fg-faint">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+
+              {/* 원본 캡션 전문 */}
+              {item.caption ? (
+                <div>
+                  <p className="text-[13px] font-semibold">원본 캡션</p>
+                  <div className="mt-1.5 max-h-36 overflow-y-auto whitespace-pre-wrap rounded-card border border-line bg-body px-3 py-2.5 text-[13px] leading-relaxed text-fg-sub">
+                    {item.caption}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* 릴스 대본 — 음성 받아쓰기 (인스타 전용) */}
+              <div>
+                <p className="flex items-center gap-1.5 text-[13px] font-semibold">
+                  <Captions className="size-3.5 text-fg-faint" aria-hidden />
+                  릴스 대본
+                  <InfoTip>
+                    영상 음성을 받아써서 재생 없이 내용을 읽을 수 있게 합니다. 현재 인스타그램 릴스(2분
+                    미만, 말로 설명하는 영상)만 지원돼요.
+                  </InfoTip>
+                </p>
+                {transcript ? (
+                  <div className="mt-1.5 max-h-36 overflow-y-auto whitespace-pre-wrap rounded-card border border-line bg-body px-3 py-2.5 text-[13px] leading-relaxed text-fg-sub">
+                    {transcript}
+                  </div>
+                ) : (
+                  <div className="mt-1.5">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleExtract}
+                      disabled={extracting || item.channel !== "instagram"}
+                      aria-busy={extracting}
+                    >
+                      {extracting ? "추출 중 (10~30초)" : "대본 추출"}
+                    </Button>
+                    {item.channel !== "instagram" ? (
+                      <span className="ml-2 text-[12px] text-fg-faint">인스타그램 릴스만 지원</span>
+                    ) : null}
+                    {transcriptMsg ? (
+                      <p role="alert" className="mt-1.5 text-[13px] text-negative">
+                        {transcriptMsg}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+
+              {/* 내 메모 */}
+              <div>
+                <p className="text-[13px] font-semibold">내 메모</p>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="이 레퍼런스에서 배울 점, 적용 아이디어…"
+                  rows={3}
+                  className="mt-1.5 w-full resize-y rounded-card border border-line bg-body px-3 py-2.5 text-[13px] leading-relaxed placeholder:text-fg-faint focus:border-primary focus:outline-none"
+                />
+                <div className="mt-1.5 flex items-center gap-2">
+                  <Button variant="secondary" size="sm" onClick={handleSaveNote} disabled={noteSaving}>
+                    메모 저장
+                  </Button>
+                  {noteMsg ? <span className="text-[13px] text-fg-sub">{noteMsg}</span> : null}
+                </div>
+              </div>
+
+              {/* 확인 상태 */}
+              <label className="flex items-center gap-2 text-[13px] text-fg-sub">
+                확인 상태
+                <select
+                  value={status}
+                  onChange={(e) => void handleStatus(e.target.value as NonNullable<ReferenceItem["status"]>)}
+                  className="h-8 rounded-card border border-line bg-body px-2.5 text-[13px] font-medium text-fg outline-none transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
+                >
+                  {STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* 푸터 */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-3.5">
+          <div className="flex items-center gap-2">
+            {confirmDelete ? (
+              <>
+                <Button variant="danger" size="sm" onClick={handleDelete} disabled={deleting}>
+                  정말 삭제
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>
+                  취소
+                </Button>
+              </>
+            ) : (
+              <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>
+                <Trash2 className="size-3.5" aria-hidden />
+                삭제
+              </Button>
+            )}
+            <button
+              type="button"
+              aria-pressed={favorite}
+              aria-label={favorite ? "즐겨찾기 해제" : "즐겨찾기"}
+              onClick={onToggleFavorite}
+              className={cn(
+                "rounded-card p-1.5 transition-colors",
+                favorite ? "text-primary" : "text-fg-faint hover:bg-body hover:text-fg-sub",
+              )}
+            >
+              <Bookmark className="size-4" fill={favorite ? "currentColor" : "none"} aria-hidden />
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={onClose}>
+              닫기
+            </Button>
+            <Button size="sm" onClick={pushToStudio}>
+              <Sparkles className="size-3.5" aria-hidden />
+              이 레퍼런스로 카드뉴스
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
