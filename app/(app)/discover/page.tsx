@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Bookmark, Flame, Info, Search, SearchX } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Bookmark, Flame, Info, Search, SearchX, Sparkles } from "lucide-react";
 import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 import type { Channel, ChannelFilter, TrendItem } from "@/lib/types";
 import { CHANNEL_FILTERS } from "@/lib/channels";
@@ -201,6 +202,27 @@ function TrendCard({
   onToggleSave: () => void;
 }) {
   const ChannelIcon = CHANNEL_ICON[item.channel];
+  const router = useRouter();
+
+  /* 후킹 태그 → 스튜디오 원클릭 핸드오프 — 성장 진단 재가공과 같은 localStorage 채널 사용 */
+  function makeWithHook() {
+    const hook = item.hooks[0];
+    try {
+      localStorage.setItem(
+        "finch:studio:pending",
+        JSON.stringify({
+          topic: item.title,
+          note: hook
+            ? `이 주제를 후킹 기법 '${hook}' 각도로 풀어줘. 원본은 ${item.category} 카테고리에서 반응이 좋았던 콘텐츠다 — 베끼지 말고 구조와 후킹 방식만 참고해서 새로 써줘.`
+            : undefined,
+        }),
+      );
+    } catch {
+      // localStorage 실패해도 이동은 계속 — 스튜디오에서 주제만 비어있을 뿐
+    }
+    router.push("/studio");
+  }
+
   return (
     <Card hover className="flex flex-col overflow-hidden">
       {/* 썸네일 자리 — 실제 미디어 연동 전 목 표시 */}
@@ -237,6 +259,24 @@ function TrendCard({
           </p>
         </div>
 
+        {/* 후킹 기법 태그 — AI 자체 분석 (PART 4.4 고지) */}
+        {item.hooks.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {item.hooks.map((h) => (
+              <span
+                key={h}
+                className="inline-flex items-center gap-1 rounded-chip bg-primary-weak px-2 py-0.5 text-[11px] font-semibold text-primary"
+              >
+                {h}
+              </span>
+            ))}
+            <InfoTip>
+              이 콘텐츠가 쓴 후킹 기법을 핀치 AI가 분석한 태그입니다. 플랫폼 공식 데이터가 아닌
+              자체 추정치예요.
+            </InfoTip>
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-sub">
           <span>
             조회수 <span className="tnum font-semibold text-fg">{formatCompact(item.views)}</span>
@@ -248,13 +288,24 @@ function TrendCard({
         </div>
 
         {/* 도달 스코어 — 자체 산출 지표, 계산 근거 고지 필수 (PART 4.4) */}
-        <div className="mt-auto flex items-center gap-1.5 border-t border-line pt-2.5 text-[13px]">
-          <span className="text-fg-sub">도달 스코어</span>
-          <span className="tnum font-bold text-primary">팔로워 대비 {item.reachScore}배</span>
-          <InfoTip>
-            조회수 ÷ 팔로워 수. 작은 채널의 잠재력을 가늠하는 핀치 자체 추정치이며 플랫폼 공식
-            지표가 아닙니다.
-          </InfoTip>
+        <div className="mt-auto flex items-center justify-between gap-2 border-t border-line pt-2.5 text-[13px]">
+          <span className="flex items-center gap-1.5">
+            <span className="text-fg-sub">도달 스코어</span>
+            <span className="tnum font-bold text-primary">팔로워 대비 {item.reachScore}배</span>
+            <InfoTip>
+              조회수 ÷ 팔로워 수. 작은 채널의 잠재력을 가늠하는 핀치 자체 추정치이며 플랫폼 공식
+              지표가 아닙니다.
+            </InfoTip>
+          </span>
+          <button
+            type="button"
+            onClick={makeWithHook}
+            title="이 주제와 후킹 각도를 AI 스튜디오로 가져가 카드뉴스를 만들어요"
+            className="inline-flex shrink-0 items-center gap-1 rounded-card px-2 py-1 text-[12px] font-semibold text-fg-sub transition-colors hover:bg-primary-weak hover:text-primary"
+          >
+            <Sparkles className="size-3.5" aria-hidden />
+            이 후킹으로 만들기
+          </button>
         </div>
       </div>
     </Card>

@@ -20,6 +20,8 @@ import type {
   IdeaSuggestion,
   Post,
   ProfileGridPost,
+  ReferenceItem,
+  ReferenceSource,
   ReportItem,
   TopEngager,
   TrendItem,
@@ -80,6 +82,10 @@ export const competitorAds: CompetitorAd[] = [];
 export const campaigns: AdCampaign[] = [];
 export const campaignDetails: Record<string, AdCampaignDetail> = {};
 export const trendItems: TrendItem[] = [];
+
+/** 레퍼런스 수집함 — 실 모드 소스는 DB(0018)에서 읽고, 수집 아이템은 수집 엔진 연동 전 빈 값 */
+export const referenceSources: ReferenceSource[] = [];
+export const referenceItems: ReferenceItem[] = [];
 export const notifications: AppNotification[] = [];
 
 export const analyzeSample: AnalyzeResult = {

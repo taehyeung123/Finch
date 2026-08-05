@@ -10,6 +10,7 @@ const APP_ROUTES = [
   "/analyze",
   "/audience",
   "/discover",
+  "/library",
   "/competitors",
   "/ads",
   "/auto-dm",

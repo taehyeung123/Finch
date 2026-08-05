@@ -21,6 +21,8 @@ import type {
   PlanFeature,
   Post,
   ProfileGridPost,
+  ReferenceItem,
+  ReferenceSource,
   ReportItem,
   TopEngager,
   TrendItem,
@@ -554,6 +556,154 @@ export const campaignDetails: Record<string, AdCampaignDetail> = {
   },
 };
 
+/* ---- 레퍼런스 수집함 (0018_reference_library) — 수집 엔진 연동 전 목데이터 ---- */
+
+export const referenceSources: ReferenceSource[] = [
+  { id: "rs1", channel: "instagram", kind: "keyword", value: "여름 스킨케어", createdAt: "2026-07-02T10:00:00+09:00" },
+  { id: "rs2", channel: "instagram", kind: "account", value: "@glow.mint", createdAt: "2026-07-02T10:01:00+09:00" },
+  { id: "rs3", channel: "tiktok", kind: "hashtag", value: "#단백질간식", createdAt: "2026-07-04T14:20:00+09:00" },
+  { id: "rs4", channel: "tiktok", kind: "keyword", value: "홈카페", createdAt: "2026-07-06T09:15:00+09:00" },
+  { id: "rs5", channel: "threads", kind: "keyword", value: "마케팅 인사이트", createdAt: "2026-07-08T18:40:00+09:00" },
+];
+
+export const referenceItems: ReferenceItem[] = [
+  {
+    id: "ref1",
+    channel: "instagram",
+    category: "뷰티",
+    title: "수부지가 여름에 무너지는 진짜 이유",
+    summary: "수분 부족형 지성의 여름 루틴 실패 원인을 '과한 유분 제거'로 짚고, 아침 세안 생략·토너 냉장 보관 두 가지만 바꾸라고 제안하는 카드뉴스. 마지막 장에서 저장을 유도한다.",
+    creatorHandle: "@skin.textbook",
+    hooks: ["통념깨기", "공감자극"],
+    views: 412000,
+    likes: 31800,
+    followerCount: 52000,
+    matchedSource: "여름 스킨케어",
+    collectedAgoHours: 3,
+    dataSource: "thirdparty",
+  },
+  {
+    id: "ref2",
+    channel: "instagram",
+    category: "뷰티",
+    title: "선크림 2mg 법칙 — 손가락 두 마디면 끝",
+    summary: "선크림 권장량을 손가락 두 마디 길이로 환산해 보여주는 릴스. 계량 숟가락 비교컷으로 신뢰를 만들고, 얼굴 부위별 바르는 순서를 자막으로만 전달해 무음 시청에도 정보가 남는다.",
+    creatorHandle: "@glow.mint",
+    hooks: ["결과수치"],
+    views: 887000,
+    likes: 64200,
+    followerCount: 84000,
+    matchedSource: "@glow.mint",
+    collectedAgoHours: 5,
+    dataSource: "thirdparty",
+  },
+  {
+    id: "ref3",
+    channel: "instagram",
+    category: "뷰티",
+    title: "쿨톤이 피해야 할 여름 립 3개",
+    summary: "인기 립 제품 3개를 '쿨톤에겐 손해'라는 프레임으로 리뷰하는 캐러셀. 손등 발색 비교컷을 근거로 쓰고, 대안 제품을 마지막 장에 배치해 저장 동기를 만든다.",
+    creatorHandle: "@tone.finder",
+    hooks: ["손실회피", "숫자리스트"],
+    views: 265000,
+    likes: 19400,
+    followerCount: 31000,
+    matchedSource: "여름 스킨케어",
+    collectedAgoHours: 11,
+    dataSource: "thirdparty",
+  },
+  {
+    id: "ref4",
+    channel: "tiktok",
+    category: "푸드",
+    title: "단백질 과자, 성분표에서 이것만 보세요",
+    summary: "단백질 함량이 아니라 '단백질 1g당 가격'과 당류를 보라는 15초 영상. 인기 제품 4개를 한 화면 표로 비교하고, 결론을 첫 3초에 먼저 말한 뒤 근거를 푸는 역순 구성이다.",
+    creatorHandle: "@fit.kitchen",
+    hooks: ["호기심", "결과수치"],
+    views: 1240000,
+    likes: 98000,
+    followerCount: 67000,
+    matchedSource: "#단백질간식",
+    collectedAgoHours: 8,
+    dataSource: "thirdparty",
+  },
+  {
+    id: "ref5",
+    channel: "tiktok",
+    category: "푸드",
+    title: "3분 홈카페 — 얼음틀 하나로 카페 무드",
+    summary: "우유 얼음틀을 이용한 라떼 연출법. 준비물 3개를 첫 컷에 다 보여주고 과정은 배속으로 처리해 이탈을 막는다. 댓글 고정으로 준비물 링크를 안내하는 전환 설계가 붙어 있다.",
+    creatorHandle: "@home.cafe_log",
+    hooks: ["시의성", "숫자리스트"],
+    views: 693000,
+    likes: 51200,
+    followerCount: 45000,
+    matchedSource: "홈카페",
+    collectedAgoHours: 14,
+    dataSource: "thirdparty",
+  },
+  {
+    id: "ref6",
+    channel: "tiktok",
+    category: "운동·헬스",
+    title: "운동 후 30분, 단백질 타이밍의 진실",
+    summary: "'운동 직후 30분 안에 단백질'이라는 통념을 최신 연구 기준으로 교정하는 영상. 하루 총량이 더 중요하다는 결론을 수치와 함께 제시하고, 실천 가능한 세 끼 배분표로 마무리한다.",
+    creatorHandle: "@coach.minute",
+    hooks: ["통념깨기", "결과수치"],
+    views: 542000,
+    likes: 42600,
+    followerCount: 88000,
+    matchedSource: "#단백질간식",
+    collectedAgoHours: 21,
+    dataSource: "thirdparty",
+  },
+  {
+    id: "ref7",
+    channel: "threads",
+    category: "커리어",
+    title: "광고비 늘리기 전에 확인할 3가지",
+    summary: "예산 증액 전에 소재 피로도·빈도·landing 전환율부터 보라는 스레드 글. 각 항목에 기준 수치를 달아 실무 체크리스트로 쓰이게 했고, 인용 답글로 사례를 이어붙여 도달을 늘렸다.",
+    creatorHandle: "@growth.note",
+    hooks: ["숫자리스트", "손실회피"],
+    views: 187000,
+    likes: 8900,
+    followerCount: 23000,
+    matchedSource: "마케팅 인사이트",
+    collectedAgoHours: 6,
+    dataSource: "thirdparty",
+  },
+  {
+    id: "ref8",
+    channel: "threads",
+    category: "커리어",
+    title: "브랜드 계정이 팔로워보다 저장수를 봐야 하는 이유",
+    summary: "팔로워 수 대신 저장률을 핵심 지표로 보라는 주장 글. 저장이 알고리즘 도달에 미치는 영향을 단계별로 설명하고, 저장을 부르는 콘텐츠 형식 3가지를 예시로 제시한다.",
+    creatorHandle: "@brandlab.kr",
+    hooks: ["통념깨기", "호기심"],
+    views: 142000,
+    likes: 7300,
+    followerCount: 41000,
+    matchedSource: "마케팅 인사이트",
+    collectedAgoHours: 18,
+    dataSource: "thirdparty",
+  },
+  {
+    id: "ref9",
+    channel: "instagram",
+    category: "라이프스타일",
+    title: "여름 휴가 전 피부 관리 D-7 캘린더",
+    summary: "휴가 일주일 전부터 하루 단위로 할 일을 캘린더 형식으로 정리한 카드뉴스. 날짜 역산 구조라 저장 후 재방문이 많고, 마지막 장의 체크리스트가 공유를 유도한다.",
+    creatorHandle: "@summer.ready",
+    hooks: ["시의성", "숫자리스트"],
+    views: 328000,
+    likes: 24700,
+    followerCount: 38000,
+    matchedSource: "여름 스킨케어",
+    collectedAgoHours: 26,
+    dataSource: "thirdparty",
+  },
+];
+
 export const trendItems: TrendItem[] = [
   {
     id: "t1",
@@ -567,6 +717,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 28.6,
     postedAgoHours: 14,
     dataSource: "thirdparty",
+    hooks: ["결과수치", "시의성"],
   },
   {
     id: "t2",
@@ -580,6 +731,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 7.8,
     postedAgoHours: 9,
     dataSource: "thirdparty",
+    hooks: ["숫자리스트"],
   },
   {
     id: "t3",
@@ -593,6 +745,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 14.6,
     postedAgoHours: 22,
     dataSource: "thirdparty",
+    hooks: ["시의성", "공감자극"],
   },
   {
     id: "t4",
@@ -606,6 +759,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 35.3,
     postedAgoHours: 6,
     dataSource: "thirdparty",
+    hooks: ["숫자리스트", "공감자극"],
   },
   {
     id: "t5",
@@ -619,6 +773,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 7.8,
     postedAgoHours: 11,
     dataSource: "thirdparty",
+    hooks: ["숫자리스트", "호기심"],
   },
   {
     id: "t6",
@@ -632,6 +787,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 6.5,
     postedAgoHours: 18,
     dataSource: "thirdparty",
+    hooks: ["호기심", "결과수치"],
   },
   {
     id: "t7",
@@ -645,6 +801,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 13.6,
     postedAgoHours: 8,
     dataSource: "thirdparty",
+    hooks: ["통념깨기"],
   },
   {
     id: "t8",
@@ -658,6 +815,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 32.9,
     postedAgoHours: 5,
     dataSource: "thirdparty",
+    hooks: ["통념깨기", "숫자리스트"],
   },
   {
     id: "t9",
@@ -671,6 +829,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 16.2,
     postedAgoHours: 12,
     dataSource: "thirdparty",
+    hooks: ["결과수치", "호기심"],
   },
   {
     id: "t10",
@@ -684,6 +843,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 7.6,
     postedAgoHours: 7,
     dataSource: "thirdparty",
+    hooks: ["숫자리스트", "결과수치"],
   },
   {
     id: "t11",
@@ -697,6 +857,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 13.7,
     postedAgoHours: 15,
     dataSource: "thirdparty",
+    hooks: ["결과수치", "공감자극"],
   },
   {
     id: "t12",
@@ -710,6 +871,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 8.6,
     postedAgoHours: 20,
     dataSource: "thirdparty",
+    hooks: ["공감자극", "질문호명"],
   },
   {
     id: "t13",
@@ -723,6 +885,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 17.5,
     postedAgoHours: 10,
     dataSource: "thirdparty",
+    hooks: ["호기심", "숫자리스트"],
   },
   {
     id: "t14",
@@ -736,6 +899,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 7.2,
     postedAgoHours: 26,
     dataSource: "thirdparty",
+    hooks: ["공감자극", "통념깨기"],
   },
   {
     id: "t15",
@@ -749,6 +913,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 34.8,
     postedAgoHours: 4,
     dataSource: "thirdparty",
+    hooks: ["시의성", "호기심"],
   },
   {
     id: "t16",
@@ -762,6 +927,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 6.9,
     postedAgoHours: 13,
     dataSource: "thirdparty",
+    hooks: ["손실회피", "숫자리스트"],
   },
   {
     id: "t17",
@@ -775,6 +941,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 10.6,
     postedAgoHours: 17,
     dataSource: "thirdparty",
+    hooks: ["질문호명", "공감자극"],
   },
   {
     id: "t18",
@@ -788,6 +955,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 12.4,
     postedAgoHours: 9,
     dataSource: "thirdparty",
+    hooks: ["손실회피", "호기심"],
   },
   {
     id: "t19",
@@ -801,6 +969,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 21.5,
     postedAgoHours: 19,
     dataSource: "thirdparty",
+    hooks: ["결과수치", "통념깨기"],
   },
   {
     id: "t20",
@@ -814,6 +983,7 @@ export const trendItems: TrendItem[] = [
     reachScore: 11.2,
     postedAgoHours: 23,
     dataSource: "thirdparty",
+    hooks: ["공감자극", "결과수치"],
   },
 ];
 

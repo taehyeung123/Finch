@@ -9,6 +9,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${base}/instagram`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
     { url: `${base}/instagram/auto-dm`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${base}/instagram/visitor-check`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
+    { url: `${base}/reference`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
     { url: `${base}/tiktok`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
     { url: `${base}/threads`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
     { url: `${base}/pricing`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },

@@ -41,6 +41,10 @@ export const campaignDetails = src.campaignDetails;
 /* ---- 트렌드 (3rd party 데이터 공급사로 교체 예정) ---- */
 export const trendItems = src.trendItems;
 
+/* ---- 레퍼런스 수집함 (소스: Supabase 0018 / 아이템: 수집 엔진 연동 예정) ---- */
+export const referenceSources = src.referenceSources;
+export const referenceItems = src.referenceItems;
+
 /* ---- 서비스 내부 데이터 (Supabase DB로 교체 예정) ---- */
 export const notifications = src.notifications;
 export const usageStats = src.usageStats;

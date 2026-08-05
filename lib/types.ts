@@ -167,6 +167,20 @@ export interface AdCampaignDetail {
   adCopy: { brandName: string; body: string; linkLabel: string; cta: string };
 }
 
+/**
+ * 후킹 기법 태그 — AI가 콘텐츠에서 감지한 후킹 각도.
+ * 스튜디오 카드뉴스 표지 공식 6종과 어휘를 공유해 "이 후킹으로 만들기" 연결이 자연스럽다.
+ */
+export type HookType =
+  | "숫자리스트"
+  | "손실회피"
+  | "통념깨기"
+  | "질문호명"
+  | "결과수치"
+  | "시의성"
+  | "공감자극"
+  | "호기심";
+
 export interface TrendItem {
   id: string;
   channel: Channel;
@@ -179,6 +193,36 @@ export interface TrendItem {
   /** 팔로워 대비 조회수 비율 — 자체 추정 스코어 (고지 필수, PART 4.4) */
   reachScore: number;
   postedAgoHours: number;
+  dataSource: DataSource;
+  /** AI가 감지한 후킹 기법 — 자체 분석 태그 (고지 필수, PART 4.4) */
+  hooks: HookType[];
+}
+
+/** 레퍼런스 수집 기준 — 사용자가 등록한 키워드·계정·해시태그 (마이그레이션 0018) */
+export interface ReferenceSource {
+  id: string;
+  channel: Channel;
+  kind: "keyword" | "account" | "hashtag";
+  value: string;
+  createdAt: string;
+}
+
+/** 수집된 레퍼런스 콘텐츠 — AI 요약·후킹 태그 포함. 수집 엔진(3rd party) 연동 시 교체 지점 */
+export interface ReferenceItem {
+  id: string;
+  channel: Channel;
+  category: string;
+  title: string;
+  /** AI 한국어 요약 — 영상을 재생하지 않아도 내용 파악이 되게 */
+  summary: string;
+  creatorHandle: string;
+  hooks: HookType[];
+  views: number;
+  likes: number;
+  followerCount: number;
+  /** 어떤 등록 기준(키워드·계정·해시태그)에 걸려 수집됐는지 */
+  matchedSource: string;
+  collectedAgoHours: number;
   dataSource: DataSource;
 }
 
