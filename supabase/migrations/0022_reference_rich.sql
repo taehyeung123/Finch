@@ -12,12 +12,14 @@ alter table public.reference_items
   add column if not exists hashtags   jsonb  not null default '[]'::jsonb,
   add column if not exists ai_comment text   not null default '';
 
--- 기간 값 이관 후 체크 제약 교체
+-- 체크 제약을 먼저 제거해야 값 이관이 가능하다 (제약이 살아있으면 UPDATE가 23514로 실패)
+alter table public.reference_collect_settings
+  drop constraint if exists reference_collect_settings_period_check;
+
+-- 기간 값 이관 (구 1d/30d → 신 7d/1m)
 update public.reference_collect_settings set period = '7d' where period = '1d';
 update public.reference_collect_settings set period = '1m' where period = '30d';
 
-alter table public.reference_collect_settings
-  drop constraint if exists reference_collect_settings_period_check;
 alter table public.reference_collect_settings
   add constraint reference_collect_settings_period_check
   check (period in ('all', '7d', '1m', '3m', '6m', '1y'));
