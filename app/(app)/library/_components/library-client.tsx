@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { Bookmark, ExternalLink, FolderPlus, Info, SearchX, Sparkles, X, Zap } from "lucide-react";
 import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 import { FinchMark } from "@/components/logo";
-import type { Channel, ChannelFilter, ReferenceItem, ReferenceSource } from "@/lib/types";
+import type { Channel, ChannelFilter, CollectSettings, ReferenceItem, ReferenceSource } from "@/lib/types";
 import {
   addReferenceSource,
   removeReferenceSource,
   runCollection,
+  saveCollectSettings,
   toggleReferenceFavorite,
 } from "@/lib/actions/reference";
 import { formatCompact } from "@/lib/format";
@@ -56,6 +57,21 @@ const CHANNEL_FILTER_OPTIONS: { value: ChannelFilter; label: string }[] = [
   { value: "threads", label: "스레드" },
 ];
 
+/* 수집 필터 옵션 — runCollection이 서버·후처리로 적용 */
+const PERIOD_OPTIONS: { value: CollectSettings["period"]; label: string }[] = [
+  { value: "all", label: "전체 기간" },
+  { value: "1d", label: "최근 1일" },
+  { value: "7d", label: "최근 7일" },
+  { value: "30d", label: "최근 30일" },
+];
+
+const FORMAT_OPTIONS: { value: CollectSettings["mediaFormat"]; label: string }[] = [
+  { value: "all", label: "전체 형식" },
+  { value: "video", label: "영상·릴스만" },
+  { value: "photo", label: "사진만" },
+  { value: "carousel", label: "카드뉴스(캐러셀)만" },
+];
+
 /* 칩·카드 장식용 채널 글리프 — 배지와 동일한 색 규칙 (Instagram만 브랜드색) */
 const CHANNEL_GLYPH: Record<Channel, React.ReactNode> = {
   instagram: <InstagramGlyph className="size-3.5 text-ig" />,
@@ -68,13 +84,43 @@ type FormMessage = { tone: "error" | "notice"; text: string };
 export function LibraryClient({
   sources: initialSources,
   items,
+  settings: initialSettings,
   isDemo,
 }: {
   sources: ReferenceSource[];
   items: ReferenceItem[];
+  settings: CollectSettings;
   isDemo: boolean;
 }) {
   const router = useRouter();
+
+  /* 수집 필터 — 변경 즉시 저장(실 모드). 데모는 화면 상태로만 */
+  const [settings, setSettings] = useState<CollectSettings>(initialSettings);
+  const [excludeInput, setExcludeInput] = useState("");
+  const [settingsMsg, setSettingsMsg] = useState<string | null>(null);
+
+  async function updateSettings(next: CollectSettings) {
+    setSettings(next);
+    setSettingsMsg(null);
+    if (isDemo) return;
+    const result = await saveCollectSettings(next);
+    if (!result.ok) setSettingsMsg(result.error ?? "설정 저장에 실패했습니다.");
+  }
+
+  function addExcludeKeyword() {
+    const k = excludeInput.trim();
+    if (!k) return;
+    if (settings.excludeKeywords.includes(k)) {
+      setExcludeInput("");
+      return;
+    }
+    if (settings.excludeKeywords.length >= 10) {
+      setSettingsMsg("제외 키워드는 최대 10개까지예요.");
+      return;
+    }
+    setExcludeInput("");
+    void updateSettings({ ...settings, excludeKeywords: [...settings.excludeKeywords, k] });
+  }
 
   /* 수집 기준 — 서버 액션 성공/실패에 맞춰 로컬에서 직접 동기화 */
   const [sources, setSources] = useState<ReferenceSource[]>(initialSources);
@@ -166,6 +212,7 @@ export function LibraryClient({
       if (result.ok) {
         const parts = [`새 레퍼런스 ${result.added}건 수집 완료`];
         if (result.duplicates > 0) parts.push(`이미 수집된 ${result.duplicates}건 제외`);
+        if (result.excludedByFilter > 0) parts.push(`수집 필터로 ${result.excludedByFilter}건 제외`);
         if (result.excludedLowQuality > 0) parts.push(`반응 낮은 ${result.excludedLowQuality}건 제외`);
         if (result.failedSources.length > 0) {
           parts.push(`기준 ${result.failedSources.map((v) => `'${v}'`).join(", ")}은 수집에 실패했어요`);
@@ -299,6 +346,114 @@ export function LibraryClient({
               아직 등록한 기준이 없어요 — 위에서 첫 기준을 추가해보세요.
             </p>
           )}
+        </CardBody>
+      </Card>
+
+      {/* 수집 필터 — 기간·한국·형식·제외 키워드 (수집 실행에 적용) */}
+      <Card>
+        <CardHeader
+          title="수집 필터"
+          description="다음 수집부터 적용돼요. 이미 수집된 카드에는 영향을 주지 않습니다."
+        />
+        <CardBody className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={settings.period}
+              onChange={(e) => void updateSettings({ ...settings, period: e.target.value as CollectSettings["period"] })}
+              aria-label="발행 기간"
+              className="h-9 rounded-card border border-line bg-overlay px-2.5 text-[13px] font-medium text-fg outline-none transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              {PERIOD_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={settings.mediaFormat}
+              onChange={(e) =>
+                void updateSettings({ ...settings, mediaFormat: e.target.value as CollectSettings["mediaFormat"] })
+              }
+              aria-label="콘텐츠 형식"
+              className="h-9 rounded-card border border-line bg-overlay px-2.5 text-[13px] font-medium text-fg outline-none transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              {FORMAT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              aria-pressed={settings.krOnly}
+              onClick={() => void updateSettings({ ...settings, krOnly: !settings.krOnly })}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-chip px-3.5 py-1.5 text-[13px] font-semibold transition-colors",
+                settings.krOnly
+                  ? "bg-primary text-on-primary"
+                  : "border border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg",
+              )}
+            >
+              한국 콘텐츠만
+            </button>
+            <InfoTip>
+              틱톡은 게시물의 국가 정보로, 인스타그램·스레드는 국가 정보가 제공되지 않아 한글 포함
+              여부로 판단합니다. 형식 필터는 채널 특성상 틱톡은 전부 영상, 카드뉴스(캐러셀)는
+              인스타그램에서만 걸러져요.
+            </InfoTip>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={excludeInput}
+              onChange={(e) => setExcludeInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addExcludeKeyword();
+                }
+              }}
+              placeholder="제외 키워드 (예: 광고, 협찬)"
+              aria-label="제외 키워드"
+              className="h-9 w-56 rounded-card border border-line bg-body px-3 text-[13px] placeholder:text-fg-faint focus:border-primary focus:outline-none"
+            />
+            <Button type="button" variant="secondary" size="sm" onClick={addExcludeKeyword}>
+              추가
+            </Button>
+            {settings.excludeKeywords.map((k) => (
+              <span
+                key={k}
+                className="inline-flex items-center gap-1.5 rounded-chip border border-line bg-overlay px-3 py-1 text-[13px]"
+              >
+                {k}
+                <button
+                  type="button"
+                  aria-label={`제외 키워드 ${k} 삭제`}
+                  onClick={() =>
+                    void updateSettings({
+                      ...settings,
+                      excludeKeywords: settings.excludeKeywords.filter((x) => x !== k),
+                    })
+                  }
+                  className="text-fg-faint transition-colors hover:text-negative"
+                >
+                  <X className="size-3" aria-hidden />
+                </button>
+              </span>
+            ))}
+          </div>
+
+          {settingsMsg ? (
+            <p role="alert" className="text-[13px] text-negative">
+              {settingsMsg}
+            </p>
+          ) : null}
+          {isDemo ? (
+            <p className="text-[12px] text-fg-faint">
+              데모 모드에서는 필터가 저장되지 않아요 — 실제 계정에서는 자동 저장됩니다.
+            </p>
+          ) : null}
         </CardBody>
       </Card>
 

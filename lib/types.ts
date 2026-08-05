@@ -198,6 +198,25 @@ export interface TrendItem {
   hooks: HookType[];
 }
 
+/** 레퍼런스 수집 필터 설정 (마이그레이션 0021) — 기간·한국·형식·제외 키워드 */
+export interface CollectSettings {
+  /** 발행일 필터 — all(전체) / 1d / 7d / 30d */
+  period: "all" | "1d" | "7d" | "30d";
+  /** 한국 콘텐츠만 — 틱톡은 국가 정보, 인스타·스레드는 한글 포함 기준(휴리스틱) */
+  krOnly: boolean;
+  /** 형식 — 틱톡은 전부 영상, 스레드는 텍스트·사진 위주라 채널별 적용 범위가 다름 */
+  mediaFormat: "all" | "video" | "photo" | "carousel";
+  /** 제외 키워드 — 캡션·제목에 포함되면 수집에서 제외 (최대 10개) */
+  excludeKeywords: string[];
+}
+
+export const DEFAULT_COLLECT_SETTINGS: CollectSettings = {
+  period: "all",
+  krOnly: false,
+  mediaFormat: "all",
+  excludeKeywords: [],
+};
+
 /** 레퍼런스 수집 기준 — 사용자가 등록한 키워드·계정·해시태그 (마이그레이션 0018) */
 export interface ReferenceSource {
   id: string;

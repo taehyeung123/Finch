@@ -12,7 +12,8 @@ import {
   CollectError,
   type CollectedPost,
 } from "@/lib/reference/scrapecreators";
-import type { Channel, HookType, ReferenceItem, ReferenceSource } from "@/lib/types";
+import type { Channel, CollectSettings, HookType, ReferenceItem, ReferenceSource } from "@/lib/types";
+import { DEFAULT_COLLECT_SETTINGS } from "@/lib/types";
 
 /*
   레퍼런스 수집 기준 CRUD — 마이그레이션 0018_reference_library.sql 위에서 동작.
@@ -165,6 +166,98 @@ export async function removeReferenceSource(id: string): Promise<{ ok: boolean }
   return { ok: true };
 }
 
+/* ============================ 수집 필터 설정 (0021) ============================ */
+
+const PERIODS: CollectSettings["period"][] = ["all", "1d", "7d", "30d"];
+const FORMATS: CollectSettings["mediaFormat"][] = ["all", "video", "photo", "carousel"];
+const MAX_EXCLUDE_KEYWORDS = 10;
+
+export async function getCollectSettings(): Promise<CollectSettings> {
+  if (isDemoMode()) return DEFAULT_COLLECT_SETTINGS;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return DEFAULT_COLLECT_SETTINGS;
+
+  const { data } = await supabase
+    .from("reference_collect_settings")
+    .select("period, kr_only, media_format, exclude_keywords")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!data) return DEFAULT_COLLECT_SETTINGS;
+  return {
+    period: PERIODS.includes(data.period as CollectSettings["period"]) ? (data.period as CollectSettings["period"]) : "all",
+    krOnly: Boolean(data.kr_only),
+    mediaFormat: FORMATS.includes(data.media_format as CollectSettings["mediaFormat"])
+      ? (data.media_format as CollectSettings["mediaFormat"])
+      : "all",
+    excludeKeywords: Array.isArray(data.exclude_keywords)
+      ? (data.exclude_keywords as unknown[]).map(String).slice(0, MAX_EXCLUDE_KEYWORDS)
+      : [],
+  };
+}
+
+export async function saveCollectSettings(input: CollectSettings): Promise<{ ok: boolean; error?: string }> {
+  if (!PERIODS.includes(input.period) || !FORMATS.includes(input.mediaFormat)) {
+    return { ok: false, error: "잘못된 설정값이에요." };
+  }
+  const excludeKeywords = (input.excludeKeywords ?? [])
+    .map((k) => String(k).trim())
+    .filter((k) => k.length >= 1 && k.length <= 30)
+    .slice(0, MAX_EXCLUDE_KEYWORDS);
+
+  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 저장할 수 없습니다." };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "로그인이 필요합니다." };
+
+  const { error } = await supabase.from("reference_collect_settings").upsert({
+    user_id: user.id,
+    period: input.period,
+    kr_only: input.krOnly,
+    media_format: input.mediaFormat,
+    exclude_keywords: excludeKeywords,
+  });
+  if (error) {
+    const missing =
+      error.message.includes("does not exist") || error.message.includes("Could not find the table");
+    console.error("[reference] 수집 설정 저장 실패:", error.message);
+    return {
+      ok: false,
+      error: missing
+        ? "필터 설정 저장소가 아직 준비되지 않았습니다(마이그레이션 0021 미적용)."
+        : "설정 저장에 실패했습니다. 잠시 후 다시 시도해주세요.",
+    };
+  }
+  revalidatePath("/library");
+  return { ok: true };
+}
+
+/** 후처리 필터 — 공급사 서버 파라미터로 못 거르는 조건을 여기서 거른다 */
+function passesFilters(p: CollectedPost, s: CollectSettings): boolean {
+  if (s.period !== "all") {
+    const days = s.period === "1d" ? 1 : s.period === "7d" ? 7 : 30;
+    if (!p.postedAt || new Date(p.postedAt).getTime() < Date.now() - days * 86_400_000) return false;
+  }
+  if (s.krOnly) {
+    // 틱톡은 국가 정보로, 인스타·스레드는 한글 포함으로 판단(휴리스틱 — UI에 고지)
+    if (p.channel === "tiktok") {
+      if (p.region !== "KR") return false;
+    } else if (!/[가-힣]/.test(p.caption)) {
+      return false;
+    }
+  }
+  if (s.mediaFormat !== "all" && p.mediaFormat !== s.mediaFormat) return false;
+  if (s.excludeKeywords.length > 0) {
+    const haystack = p.caption.toLowerCase();
+    if (s.excludeKeywords.some((k) => haystack.includes(k.toLowerCase()))) return false;
+  }
+  return true;
+}
+
 /* ============================ 수집 실행 (실연동) ============================ */
 
 /** 1회 수집에서 공급사 API를 부르는 최대 기준 수 — 기준당 1크레딧 실비 상한 */
@@ -196,6 +289,8 @@ export type CollectRunResult =
       failedSources: string[];
       /** 반응 점수 미달로 제외한 게시물 수 */
       excludedLowQuality: number;
+      /** 수집 필터(기간·KR·형식·제외 키워드)로 걸러진 게시물 수 */
+      excludedByFilter: number;
     }
   | { ok: false; reason: "demo" | "auth" | "no_sources" | "not_configured" | "charge" | "out_of_credits" | "table_missing" | "provider" | "save"; error: string };
 
@@ -449,10 +544,16 @@ export async function runCollection(): Promise<CollectRunResult> {
   const rotated = [...sources.slice(offset), ...sources.slice(0, offset)];
   const used = rotated.slice(0, MAX_SOURCES_PER_RUN);
 
+  const settings = await getCollectSettings();
+
   const settled = await Promise.allSettled(
     used.map(async (s) => ({
       source: s,
-      posts: await collectFromSource({ channel: s.channel, kind: s.kind as ReferenceSource["kind"], value: s.value }, FETCH_PER_SOURCE),
+      posts: await collectFromSource(
+        { channel: s.channel, kind: s.kind as ReferenceSource["kind"], value: s.value },
+        FETCH_PER_SOURCE,
+        { period: settings.period, mediaFormat: settings.mediaFormat },
+      ),
     })),
   );
 
@@ -461,11 +562,14 @@ export async function runCollection(): Promise<CollectRunResult> {
   const failures: CollectError[] = [];
   const failedSources: string[] = [];
   let excludedLowQuality = 0;
+  let excludedByFilter = 0;
   for (let i = 0; i < settled.length; i++) {
     const r = settled[i];
     if (r.status === "fulfilled") {
-      // 반응 점수로 랭킹 → 죽은 게시물 제외 → 기준당 상위 N개만
-      const ranked = [...r.value.posts].sort((a, b) => engagementScore(b) - engagementScore(a));
+      // 수집 필터(기간·KR·형식·제외 키워드) → 반응 점수 랭킹 → 죽은 게시물 제외 → 기준당 상위 N개
+      const filteredPosts = r.value.posts.filter((p) => passesFilters(p, settings));
+      excludedByFilter += r.value.posts.length - filteredPosts.length;
+      const ranked = [...filteredPosts].sort((a, b) => engagementScore(b) - engagementScore(a));
       const alive = ranked.filter((p) => engagementScore(p) >= MIN_ENGAGEMENT_SCORE);
       excludedLowQuality += ranked.length - alive.length;
       for (const post of alive.slice(0, KEEP_PER_SOURCE)) {
@@ -495,6 +599,13 @@ export async function runCollection(): Promise<CollectRunResult> {
         ok: false,
         reason: "provider",
         error: "수집에 실패했어요. 잠시 후 다시 시도해 주세요 — 사용하신 횟수는 차감되지 않았습니다.",
+      };
+    }
+    if (excludedByFilter > 0) {
+      return {
+        ok: false,
+        reason: "provider",
+        error: `${excludedByFilter}개를 발견했지만 전부 수집 필터(기간·한국·형식·제외 키워드)에 걸렸어요. 필터를 완화해보세요 — 사용하신 횟수는 차감되지 않았습니다.`,
       };
     }
     if (excludedLowQuality > 0) {
@@ -595,5 +706,6 @@ export async function runCollection(): Promise<CollectRunResult> {
     totalSources: sources.length,
     failedSources,
     excludedLowQuality,
+    excludedByFilter,
   };
 }

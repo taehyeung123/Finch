@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Channel, ReferenceSource } from "@/lib/types";
+import type { Channel, CollectSettings, ReferenceSource } from "@/lib/types";
 
 /*
   ScrapeCreators 어댑터 — 레퍼런스 수집 엔진의 공급사 계층.
@@ -24,6 +24,8 @@ export interface CollectedPost {
   url: string | null;
   /** 공급사 CDN 썸네일 URL — 서명 만료가 있어 수집 시점에 Storage로 캐시해서 쓴다 */
   thumbnailUrl: string | null;
+  /** 콘텐츠 형식 — video(영상·릴스)/photo(사진)/carousel(카드뉴스)/text(글). 형식 필터에 사용 */
+  mediaFormat: "video" | "photo" | "carousel" | "text";
   views: number;
   likes: number;
   comments: number;
@@ -110,6 +112,7 @@ function normalizeTiktok(raw: Json): CollectedPost | null {
     creatorHandle: author.unique_id ? `@${str(author.unique_id)}` : "",
     url: str(raw.share_url) || str(raw.url) || null,
     thumbnailUrl: str(coverUrls[0]) || null,
+    mediaFormat: "video", // 틱톡은 전부 영상
     views: num(stats.play_count),
     likes: num(stats.digg_count),
     comments: num(stats.comment_count),
@@ -117,6 +120,14 @@ function normalizeTiktok(raw: Json): CollectedPost | null {
     postedAt: createTime ? new Date(createTime * 1000).toISOString() : null,
     region: str(raw.region) || null,
   };
+}
+
+/** IG 형식 판별 — 실측 필드(is_video·product_type·__typename) 기준 */
+function igFormat(raw: Json): CollectedPost["mediaFormat"] {
+  if (raw.is_video === true || str(raw.product_type) === "clips" || num(raw.media_type) === 2) return "video";
+  if (str(raw.__typename).includes("Sidecar") || num(raw.media_type) === 8 || Array.isArray(raw.carousel_media))
+    return "carousel";
+  return "photo";
 }
 
 /** Instagram 해시태그 검색: posts[] (caption은 문자열) */
@@ -131,6 +142,7 @@ function normalizeIgHashtagPost(raw: Json): CollectedPost | null {
     creatorHandle: owner.username ? `@${str(owner.username)}` : "",
     url: str(raw.url) || (raw.shortcode ? `https://www.instagram.com/p/${str(raw.shortcode)}/` : null),
     thumbnailUrl: str(raw.thumbnail_src) || str(raw.display_url) || null,
+    mediaFormat: igFormat(raw),
     // play_count가 사용자가 아는 "조회수"에 가깝다 (실측: view 245 vs play 956 — view는 3초 이상 시청)
     views: num(raw.video_play_count) || num(raw.video_view_count),
     likes: num(raw.like_count),
@@ -155,6 +167,7 @@ function normalizeIgUserPost(raw: Json, handle: string): CollectedPost | null {
     creatorHandle: user.username ? `@${str(user.username)}` : `@${handle}`,
     url: str(raw.url) || (raw.code ? `https://www.instagram.com/p/${str(raw.code)}/` : null),
     thumbnailUrl: str(raw.display_uri) || str(raw.thumbnail_src) || str(raw.display_url) || null,
+    mediaFormat: igFormat(raw),
     views: num(raw.play_count) || num(raw.ig_play_count),
     likes: num(raw.like_count),
     comments: num(raw.comment_count),
@@ -182,6 +195,11 @@ function normalizeThreadsPost(raw: Json, fallbackHandle: string | null): Collect
     creatorHandle: username ? `@${username.replace(/^@/, "")}` : "",
     url: username && code ? `https://www.threads.net/@${username.replace(/^@/, "")}/post/${code}` : null,
     thumbnailUrl: str(imageCandidates[0]?.url) || null, // 텍스트 글이면 null — 카드에서 글리프 표시
+    mediaFormat: Array.isArray(raw.video_versions) && (raw.video_versions as unknown[]).length > 0
+      ? "video"
+      : imageCandidates.length > 0
+        ? "photo"
+        : "text",
     views: 0, // Threads는 조회수를 공개하지 않는다 — 0이면 UI에서 숨긴다 (지어내지 않음)
     likes: num(raw.like_count),
     comments: num(tpInfo.direct_reply_count) || num(raw.direct_reply_count),
@@ -198,14 +216,24 @@ function itemsOf(data: Json, field: string): Json[] {
   return Array.isArray(arr) ? (arr as Json[]) : [];
 }
 
+const IG_DATE_POSTED: Record<Exclude<CollectSettings["period"], "all">, string> = {
+  "1d": "last-day",
+  "7d": "last-week",
+  "30d": "last-month",
+};
+
 /**
  * 수집 기준 1개당 API 1회 호출 → 정규화된 게시물 목록.
  * TikTok은 한국(KR) 리전 결과를 앞으로 정렬한다(검색 결과에 해외 콘텐츠가 섞이는 실측 특성 보정).
+ * 기간·형식 필터는 공급사가 지원하는 채널(IG 기간·릴스, Threads 기간)만 서버 파라미터로 밀고,
+ * 나머지는 호출부(runCollection)가 후처리로 거른다.
  */
 export async function collectFromSource(
   source: Pick<ReferenceSource, "channel" | "kind" | "value">,
   limit: number,
+  filters?: Pick<CollectSettings, "period" | "mediaFormat">,
 ): Promise<CollectedPost[]> {
+  const period = filters?.period ?? "all";
   const value = source.value.trim();
   const bareHandle = value.replace(/^@/, "");
   const bareTag = value.replace(/^#/, "");
@@ -237,11 +265,13 @@ export async function collectFromSource(
     } else {
       // keyword는 공백 제거해 해시태그 검색으로 수집 (IG는 순수 키워드 게시물 검색이 없다)
       const tag = source.kind === "hashtag" ? bareTag : value.replace(/\s+/g, "");
-      const data = await callApi("/v1/instagram/search/hashtag", {
+      const params: Record<string, string> = {
         hashtag: tag,
-        media_type: "all",
-        date_posted: "last-month",
-      });
+        // 릴스만 필터는 IG가 서버에서 지원 — 사진·캐러셀은 후처리로 거른다
+        media_type: filters?.mediaFormat === "video" ? "reels" : "all",
+      };
+      if (period !== "all") params.date_posted = IG_DATE_POSTED[period];
+      const data = await callApi("/v1/instagram/search/hashtag", params);
       posts = itemsOf(data, "posts").map(normalizeIgHashtagPost).filter((p): p is CollectedPost => p !== null);
     }
   } else {
@@ -252,7 +282,12 @@ export async function collectFromSource(
         .map((x) => normalizeThreadsPost(x, bareHandle))
         .filter((p): p is CollectedPost => p !== null);
     } else {
-      const data = await callApi("/v1/threads/search", { query: source.kind === "hashtag" ? bareTag : value });
+      const params: Record<string, string> = { query: source.kind === "hashtag" ? bareTag : value };
+      if (period !== "all") {
+        const days = period === "1d" ? 1 : period === "7d" ? 7 : 30;
+        params.start_date = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+      }
+      const data = await callApi("/v1/threads/search", params);
       posts = itemsOf(data, "posts")
         .map((x) => normalizeThreadsPost(x, null))
         .filter((p): p is CollectedPost => p !== null);
