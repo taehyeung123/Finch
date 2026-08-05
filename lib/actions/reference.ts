@@ -13,7 +13,7 @@ import {
   type CollectedPost,
 } from "@/lib/reference/scrapecreators";
 import type { Channel, CollectSettings, HookType, ReferenceItem, ReferenceSource } from "@/lib/types";
-import { DEFAULT_COLLECT_SETTINGS } from "@/lib/types";
+import { DEFAULT_COLLECT_SETTINGS, PERIOD_DAYS } from "@/lib/types";
 
 /*
   레퍼런스 수집 기준 CRUD — 마이그레이션 0018_reference_library.sql 위에서 동작.
@@ -168,7 +168,9 @@ export async function removeReferenceSource(id: string): Promise<{ ok: boolean }
 
 /* ============================ 수집 필터 설정 (0021) ============================ */
 
-const PERIODS: CollectSettings["period"][] = ["all", "1d", "7d", "30d"];
+const PERIODS: CollectSettings["period"][] = ["all", "7d", "1m", "3m", "6m", "1y"];
+/** 0022 이전 저장값 이관 매핑 — DB 마이그레이션 전에도 화면이 깨지지 않게 */
+const LEGACY_PERIODS: Record<string, CollectSettings["period"]> = { "1d": "7d", "30d": "1m" };
 const FORMATS: CollectSettings["mediaFormat"][] = ["all", "video", "photo", "carousel"];
 const MAX_EXCLUDE_KEYWORDS = 10;
 
@@ -186,8 +188,9 @@ export async function getCollectSettings(): Promise<CollectSettings> {
     .eq("user_id", user.id)
     .maybeSingle();
   if (!data) return DEFAULT_COLLECT_SETTINGS;
+  const rawPeriod = LEGACY_PERIODS[String(data.period)] ?? data.period;
   return {
-    period: PERIODS.includes(data.period as CollectSettings["period"]) ? (data.period as CollectSettings["period"]) : "all",
+    period: PERIODS.includes(rawPeriod as CollectSettings["period"]) ? (rawPeriod as CollectSettings["period"]) : "all",
     krOnly: Boolean(data.kr_only),
     mediaFormat: FORMATS.includes(data.media_format as CollectSettings["mediaFormat"])
       ? (data.media_format as CollectSettings["mediaFormat"])
@@ -238,9 +241,9 @@ export async function saveCollectSettings(input: CollectSettings): Promise<{ ok:
 
 /** 후처리 필터 — 공급사 서버 파라미터로 못 거르는 조건을 여기서 거른다 */
 function passesFilters(p: CollectedPost, s: CollectSettings): boolean {
-  if (s.period !== "all") {
-    const days = s.period === "1d" ? 1 : s.period === "7d" ? 7 : 30;
-    if (!p.postedAt || new Date(p.postedAt).getTime() < Date.now() - days * 86_400_000) return false;
+  const periodDays = PERIOD_DAYS[s.period];
+  if (periodDays !== null) {
+    if (!p.postedAt || new Date(p.postedAt).getTime() < Date.now() - periodDays * 86_400_000) return false;
   }
   if (s.krOnly) {
     // 틱톡은 국가 정보로, 인스타·스레드는 한글 포함으로 판단(휴리스틱 — UI에 고지)
@@ -306,6 +309,9 @@ interface DbItemRow {
   thumbnail_url: string | null;
   views: number;
   likes: number;
+  comments: number;
+  hashtags: unknown;
+  ai_comment: string;
   follower_count: number;
   matched_source: string;
   favorite: boolean;
@@ -332,8 +338,17 @@ function rowToItem(r: DbItemRow): ReferenceItem {
     dataSource: "thirdparty",
     url: r.url,
     thumbnailUrl: r.thumbnail_url,
+    comments: Number(r.comments) || 0,
+    hashtags: Array.isArray(r.hashtags) ? (r.hashtags as unknown[]).map(String).slice(0, 6) : [],
+    aiComment: r.ai_comment || "",
     favorite: r.favorite,
   };
+}
+
+/** 캡션에서 해시태그 추출 (최대 6개, 중복 제거) */
+function extractHashtags(caption: string): string[] {
+  const matches = caption.match(/#[^\s#@.,!?()[\]{}"']+/g) ?? [];
+  return [...new Set(matches.map((m) => m.slice(0, 30)))].slice(0, 6);
 }
 
 /** 실 모드 수집 아이템 목록 — 페이지 서버 컴포넌트용 */
@@ -345,31 +360,35 @@ export async function listReferenceItems(): Promise<ReferenceItem[]> {
   } = await supabase.auth.getUser();
   if (!user) return [];
 
-  const { data, error } = await supabase
-    .from("reference_items")
-    .select("id, channel, title, summary, category, hooks, creator_handle, url, thumbnail_url, views, likes, follower_count, matched_source, favorite, collected_at")
-    .eq("user_id", user.id)
-    .order("collected_at", { ascending: false })
-    .order("likes", { ascending: false })
-    .limit(60);
-  if (error) {
-    // 0020(thumbnail_url) 미적용이면 구 스키마로 재시도 — 목록 자체는 살린다
-    if (error.message.includes("thumbnail_url")) {
-      const { data: legacy } = await supabase
-        .from("reference_items")
-        .select("id, channel, title, summary, category, hooks, creator_handle, url, views, likes, follower_count, matched_source, favorite, collected_at")
-        .eq("user_id", user.id)
-        .order("collected_at", { ascending: false })
-        .limit(60);
-      return ((legacy ?? []) as Omit<DbItemRow, "thumbnail_url">[]).map((r) =>
-        rowToItem({ ...r, thumbnail_url: null }),
+  // 스키마 세대별 컬럼 목록 — 미적용 마이그레이션이 있어도 목록은 항상 살린다
+  const SELECT_FULL =
+    "id, channel, title, summary, category, hooks, creator_handle, url, thumbnail_url, views, likes, comments, hashtags, ai_comment, follower_count, matched_source, favorite, collected_at";
+  const SELECT_0020 =
+    "id, channel, title, summary, category, hooks, creator_handle, url, thumbnail_url, views, likes, follower_count, matched_source, favorite, collected_at";
+  const SELECT_0019 =
+    "id, channel, title, summary, category, hooks, creator_handle, url, views, likes, follower_count, matched_source, favorite, collected_at";
+
+  for (const columns of [SELECT_FULL, SELECT_0020, SELECT_0019]) {
+    const { data, error } = await supabase
+      .from("reference_items")
+      .select(columns)
+      .eq("user_id", user.id)
+      .order("collected_at", { ascending: false })
+      .order("likes", { ascending: false })
+      .limit(60);
+    if (!error) {
+      return ((data ?? []) as unknown as Partial<DbItemRow>[]).map((r) =>
+        rowToItem({ thumbnail_url: null, comments: 0, hashtags: [], ai_comment: "", ...r } as DbItemRow),
       );
     }
-    // 0019 미적용 등 — 화면은 빈 목록으로 살리고 로그로만
-    console.error("[reference] 아이템 조회 실패:", error.message);
-    return [];
+    // 컬럼 미존재(마이그레이션 미적용)면 이전 세대 컬럼으로 재시도, 그 외 오류는 종료
+    if (!error.message.includes("column") && !error.message.includes("does not exist")) {
+      console.error("[reference] 아이템 조회 실패:", error.message);
+      return [];
+    }
   }
-  return (data as DbItemRow[]).map(rowToItem);
+  console.error("[reference] 아이템 조회 실패: 스키마 미적용(0019)");
+  return [];
 }
 
 /**
@@ -425,15 +444,15 @@ export async function toggleReferenceFavorite(id: string, favorite: boolean): Pr
 /** AI 요약·후킹 태깅 — 실패해도 수집 자체는 살린다(요약 없이 저장) */
 async function enrichWithAi(
   posts: CollectedPost[],
-): Promise<Map<string, { summary: string; hooks: HookType[]; category: string }>> {
-  const out = new Map<string, { summary: string; hooks: HookType[]; category: string }>();
+): Promise<Map<string, { summary: string; hooks: HookType[]; category: string; comment: string }>> {
+  const out = new Map<string, { summary: string; hooks: HookType[]; category: string; comment: string }>();
   const claude = createClaudeClient();
   if (!claude || posts.length === 0) return out;
 
   try {
     const response = await claude.messages.create({
       model: STUDIO_MODEL,
-      max_tokens: 8000,
+      max_tokens: 10000,
       output_config: {
         format: {
           type: "json_schema",
@@ -447,12 +466,13 @@ async function enrichWithAi(
                 items: {
                   type: "object",
                   additionalProperties: false,
-                  required: ["external_id", "summary", "hooks", "category"],
+                  required: ["external_id", "summary", "hooks", "category", "comment"],
                   properties: {
                     external_id: { type: "string" },
                     summary: { type: "string", description: "캡션 내용 기반 2문장 한국어 요약. 캡션에 없는 사실을 지어내지 말 것" },
                     hooks: { type: "array", items: { enum: HOOK_VALUES }, description: "감지된 후킹 기법 0~2개" },
                     category: { type: "string", description: "카테고리 한 단어 (예: 뷰티, 푸드, 커리어)" },
+                    comment: { type: "string", description: "이 콘텐츠가 반응을 얻은 이유 분석 한 문장 (캡션 구조·후킹·반응 수치 근거로, 40자 이내)" },
                   },
                 },
               },
@@ -461,14 +481,14 @@ async function enrichWithAi(
         },
       },
       system:
-        "너는 SNS 콘텐츠 분석가다. 각 게시물 캡션을 보고 (1) 캡션에 실제로 있는 내용만으로 2문장 요약, (2) 사용된 후킹 기법 태그 0~2개, (3) 카테고리 한 단어를 붙인다. 캡션이 짧거나 정보가 없으면 요약도 짧게 — 내용을 지어내지 마라. 이모지 금지.",
+        "너는 SNS 콘텐츠 분석가다. 각 게시물의 캡션과 반응 수치를 보고 (1) 캡션에 실제로 있는 내용만으로 2문장 요약, (2) 사용된 후킹 기법 태그 0~2개, (3) 카테고리 한 단어, (4) 반응을 얻은 이유 한 문장(comment)을 붙인다. comment는 '~해서 반응이 좋다' 식의 구체적 분석 — 캡션 구조, 후킹 방식, 수치 중 근거가 있는 것만 말하라. 캡션이 짧거나 정보가 없으면 요약·코멘트도 짧게 — 내용을 지어내지 마라. 이모지 금지.",
       messages: [
         {
           role: "user",
           content: posts
             .map(
               (p) =>
-                `[${p.externalId}] 채널:${p.channel} 작성자:${p.creatorHandle}\n캡션: ${p.caption.slice(0, 400) || "(캡션 없음)"}`,
+                `[${p.externalId}] 채널:${p.channel} 작성자:${p.creatorHandle} 조회:${p.views} 좋아요:${p.likes} 댓글:${p.comments}\n캡션: ${p.caption.slice(0, 400) || "(캡션 없음)"}`,
             )
             .join("\n---\n"),
         },
@@ -477,13 +497,16 @@ async function enrichWithAi(
     if (response.stop_reason === "refusal") return out;
     const text = (response.content as { type: string; text?: string }[]).find((b) => b.type === "text")?.text;
     const parsed = text
-      ? (JSON.parse(text) as { items?: { external_id: string; summary: string; hooks: string[]; category: string }[] })
+      ? (JSON.parse(text) as {
+          items?: { external_id: string; summary: string; hooks: string[]; category: string; comment: string }[];
+        })
       : null;
     for (const item of parsed?.items ?? []) {
       out.set(item.external_id, {
         summary: item.summary ?? "",
         hooks: (item.hooks ?? []).filter((h): h is HookType => (HOOK_VALUES as string[]).includes(h)).slice(0, 2),
         category: (item.category ?? "").slice(0, 20),
+        comment: (item.comment ?? "").slice(0, 80),
       });
     }
   } catch (e) {
@@ -671,21 +694,32 @@ export async function runCollection(): Promise<CollectRunResult> {
       thumbnail_url: thumbnails[i],
       views: post.views,
       likes: post.likes,
+      comments: post.comments,
+      hashtags: extractHashtags(post.caption),
+      ai_comment: ai?.comment ?? "",
       follower_count: post.followerCount,
       matched_source: matchedSource,
       posted_at: post.postedAt,
     };
   });
 
-  let { error: insertErr } = await supabase.from("reference_items").insert(rows);
-  if (insertErr && insertErr.message.includes("thumbnail_url")) {
-    // 0020 미적용 — 썸네일 없이 구 스키마로 재시도 (수집 자체는 살린다)
-    const legacyRows = rows.map((row) => {
+  // 스키마 세대 폴백 — 0022(댓글·해시태그·코멘트) → 0020(썸네일) 순으로 컬럼을 줄여 재시도
+  const stripColumns = (cols: string[]) =>
+    rows.map((row) => {
       const rest = { ...row } as Record<string, unknown>;
-      delete rest.thumbnail_url;
+      for (const c of cols) delete rest[c];
       return rest;
     });
-    ({ error: insertErr } = await supabase.from("reference_items").insert(legacyRows));
+  let { error: insertErr } = await supabase.from("reference_items").insert(rows);
+  if (insertErr && /comments|hashtags|ai_comment/.test(insertErr.message)) {
+    ({ error: insertErr } = await supabase
+      .from("reference_items")
+      .insert(stripColumns(["comments", "hashtags", "ai_comment"])));
+  }
+  if (insertErr && insertErr.message.includes("thumbnail_url")) {
+    ({ error: insertErr } = await supabase
+      .from("reference_items")
+      .insert(stripColumns(["comments", "hashtags", "ai_comment", "thumbnail_url"])));
   }
   if (insertErr) {
     await refundIfCharged("insert_failed");

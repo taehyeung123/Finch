@@ -581,6 +581,9 @@ export const referenceItems: ReferenceItem[] = [
     matchedSource: "여름 스킨케어",
     collectedAgoHours: 3,
     dataSource: "thirdparty",
+    comments: 1240,
+    hashtags: ["#여름스킨케어", "#수부지", "#스킨케어루틴"],
+    aiComment: "통념을 뒤집는 첫 장과 실행 두 가지만 남긴 단순함이 저장을 부른다",
   },
   {
     id: "ref2",
@@ -596,6 +599,9 @@ export const referenceItems: ReferenceItem[] = [
     matchedSource: "@glow.mint",
     collectedAgoHours: 5,
     dataSource: "thirdparty",
+    comments: 2100,
+    hashtags: ["#선크림", "#선크림추천", "#자외선차단"],
+    aiComment: "권장량을 손가락 길이로 환산한 시각화가 무음 시청에서도 정보를 남긴다",
   },
   {
     id: "ref3",
@@ -611,6 +617,9 @@ export const referenceItems: ReferenceItem[] = [
     matchedSource: "여름 스킨케어",
     collectedAgoHours: 11,
     dataSource: "thirdparty",
+    comments: 890,
+    hashtags: ["#쿨톤", "#립추천", "#퍼스널컬러"],
+    aiComment: "'손해' 프레임의 손실회피 후킹이 쿨톤 독자를 정확히 불러세운다",
   },
   {
     id: "ref4",
@@ -626,6 +635,9 @@ export const referenceItems: ReferenceItem[] = [
     matchedSource: "#단백질간식",
     collectedAgoHours: 8,
     dataSource: "thirdparty",
+    comments: 3400,
+    hashtags: ["#단백질과자", "#단백질간식", "#성분표"],
+    aiComment: "결론을 첫 3초에 먼저 말하는 역순 구성이 이탈을 막았다",
   },
   {
     id: "ref5",
@@ -641,6 +653,9 @@ export const referenceItems: ReferenceItem[] = [
     matchedSource: "홈카페",
     collectedAgoHours: 14,
     dataSource: "thirdparty",
+    comments: 1580,
+    hashtags: ["#홈카페", "#라떼만들기", "#카페말고집"],
+    aiComment: "준비물 3개를 첫 컷에 다 보여줘 따라할 수 있다는 확신을 준다",
   },
   {
     id: "ref6",
@@ -656,6 +671,9 @@ export const referenceItems: ReferenceItem[] = [
     matchedSource: "#단백질간식",
     collectedAgoHours: 21,
     dataSource: "thirdparty",
+    comments: 2750,
+    hashtags: ["#단백질", "#운동루틴", "#헬스상식"],
+    aiComment: "통념 교정에 수치 근거를 붙여 댓글 논쟁과 공유를 유도한다",
   },
   {
     id: "ref7",
@@ -671,6 +689,9 @@ export const referenceItems: ReferenceItem[] = [
     matchedSource: "마케팅 인사이트",
     collectedAgoHours: 6,
     dataSource: "thirdparty",
+    comments: 460,
+    hashtags: ["#마케팅", "#퍼포먼스마케팅", "#광고운영"],
+    aiComment: "항목마다 기준 수치를 달아 실무 체크리스트로 저장되게 만들었다",
   },
   {
     id: "ref8",
@@ -686,6 +707,9 @@ export const referenceItems: ReferenceItem[] = [
     matchedSource: "마케팅 인사이트",
     collectedAgoHours: 18,
     dataSource: "thirdparty",
+    comments: 380,
+    hashtags: ["#브랜딩", "#인스타운영", "#저장률"],
+    aiComment: "팔로워 대신 저장률이라는 반직관 주장이 계정 운영자의 호기심을 찌른다",
   },
   {
     id: "ref9",
@@ -701,6 +725,9 @@ export const referenceItems: ReferenceItem[] = [
     matchedSource: "여름 스킨케어",
     collectedAgoHours: 26,
     dataSource: "thirdparty",
+    comments: 720,
+    hashtags: ["#여름휴가", "#피부관리", "#디데이케어"],
+    aiComment: "날짜 역산 캘린더 구조라 저장 후 재방문이 반복된다",
   },
 ];
 

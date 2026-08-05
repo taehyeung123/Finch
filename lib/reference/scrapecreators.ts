@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { Channel, CollectSettings, ReferenceSource } from "@/lib/types";
+import { PERIOD_DAYS } from "@/lib/types";
 
 /*
   ScrapeCreators 어댑터 — 레퍼런스 수집 엔진의 공급사 계층.
@@ -216,10 +217,13 @@ function itemsOf(data: Json, field: string): Json[] {
   return Array.isArray(arr) ? (arr as Json[]) : [];
 }
 
+/* IG 서버 필터는 주/월/년 단위만 지원 — 3·6개월은 최근 1년으로 넓게 받고 후처리로 정확히 거른다 */
 const IG_DATE_POSTED: Record<Exclude<CollectSettings["period"], "all">, string> = {
-  "1d": "last-day",
   "7d": "last-week",
-  "30d": "last-month",
+  "1m": "last-month",
+  "3m": "last-year",
+  "6m": "last-year",
+  "1y": "last-year",
 };
 
 /**
@@ -283,9 +287,9 @@ export async function collectFromSource(
         .filter((p): p is CollectedPost => p !== null);
     } else {
       const params: Record<string, string> = { query: source.kind === "hashtag" ? bareTag : value };
-      if (period !== "all") {
-        const days = period === "1d" ? 1 : period === "7d" ? 7 : 30;
-        params.start_date = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+      const periodDays = PERIOD_DAYS[period];
+      if (periodDays !== null) {
+        params.start_date = new Date(Date.now() - periodDays * 86_400_000).toISOString().slice(0, 10);
       }
       const data = await callApi("/v1/threads/search", params);
       posts = itemsOf(data, "posts")

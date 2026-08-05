@@ -198,10 +198,10 @@ export interface TrendItem {
   hooks: HookType[];
 }
 
-/** 레퍼런스 수집 필터 설정 (마이그레이션 0021) — 기간·한국·형식·제외 키워드 */
+/** 레퍼런스 수집 필터 설정 (마이그레이션 0021·0022) — 기간·한국·형식·제외 키워드 */
 export interface CollectSettings {
-  /** 발행일 필터 — all(전체) / 1d / 7d / 30d */
-  period: "all" | "1d" | "7d" | "30d";
+  /** 발행일 필터 — all(상관없음) / 1주 / 1·3·6개월 / 1년 */
+  period: "all" | "7d" | "1m" | "3m" | "6m" | "1y";
   /** 한국 콘텐츠만 — 틱톡은 국가 정보, 인스타·스레드는 한글 포함 기준(휴리스틱) */
   krOnly: boolean;
   /** 형식 — 틱톡은 전부 영상, 스레드는 텍스트·사진 위주라 채널별 적용 범위가 다름 */
@@ -211,10 +211,20 @@ export interface CollectSettings {
 }
 
 export const DEFAULT_COLLECT_SETTINGS: CollectSettings = {
-  period: "all",
+  period: "6m",
   krOnly: false,
   mediaFormat: "all",
   excludeKeywords: [],
+};
+
+/** 발행일 필터 → 일수 (all은 null) */
+export const PERIOD_DAYS: Record<CollectSettings["period"], number | null> = {
+  all: null,
+  "7d": 7,
+  "1m": 30,
+  "3m": 91,
+  "6m": 183,
+  "1y": 365,
 };
 
 /** 레퍼런스 수집 기준 — 사용자가 등록한 키워드·계정·해시태그 (마이그레이션 0018) */
@@ -239,6 +249,12 @@ export interface ReferenceItem {
   views: number;
   likes: number;
   followerCount: number;
+  /** 댓글 수 — 0022 이전 수집분은 0 */
+  comments?: number;
+  /** 캡션에서 추출한 해시태그 (최대 6) */
+  hashtags?: string[];
+  /** AI 분석 코멘트 — 이 콘텐츠가 왜 반응을 얻었는지 한 문장 (자체 추정, 고지 필수) */
+  aiComment?: string;
   /** 어떤 등록 기준(키워드·계정·해시태그)에 걸려 수집됐는지 */
   matchedSource: string;
   collectedAgoHours: number;

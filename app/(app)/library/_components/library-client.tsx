@@ -59,10 +59,20 @@ const CHANNEL_FILTER_OPTIONS: { value: ChannelFilter; label: string }[] = [
 
 /* 수집 필터 옵션 — runCollection이 서버·후처리로 적용 */
 const PERIOD_OPTIONS: { value: CollectSettings["period"]; label: string }[] = [
-  { value: "all", label: "전체 기간" },
-  { value: "1d", label: "최근 1일" },
-  { value: "7d", label: "최근 7일" },
-  { value: "30d", label: "최근 30일" },
+  { value: "7d", label: "최근 1주" },
+  { value: "1m", label: "최근 1개월" },
+  { value: "3m", label: "최근 3개월" },
+  { value: "6m", label: "최근 6개월 (추천)" },
+  { value: "1y", label: "최근 1년" },
+  { value: "all", label: "기간 상관없음" },
+];
+
+type ItemSort = "views" | "likes" | "recent";
+
+const ITEM_SORT_OPTIONS: { value: ItemSort; label: string }[] = [
+  { value: "views", label: "반응 높은 순" },
+  { value: "likes", label: "좋아요순" },
+  { value: "recent", label: "최근 수집순" },
 ];
 
 const FORMAT_OPTIONS: { value: CollectSettings["mediaFormat"]; label: string }[] = [
@@ -134,22 +144,60 @@ export function LibraryClient({
   const [collecting, setCollecting] = useState(false);
   const [collectNotice, setCollectNotice] = useState<FormMessage | null>(null);
 
-  /* 필터·즐겨찾기 — 즐겨찾기 초기값은 실 모드 DB의 favorite 컬럼에서 온다 */
+  /* 필터·정렬·즐겨찾기 — 즐겨찾기 초기값은 실 모드 DB의 favorite 컬럼에서 온다 */
   const [filter, setFilter] = useState<ChannelFilter>("all");
   const [favOnly, setFavOnly] = useState(false);
+  const [itemSort, setItemSort] = useState<ItemSort>("views");
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(
     () => new Set(items.filter((i) => i.favorite).map((i) => i.id)),
   );
 
-  const filtered = useMemo(
-    () =>
-      items.filter(
-        (item) =>
-          (filter === "all" || item.channel === filter) &&
-          (!favOnly || favoriteIds.has(item.id)),
-      ),
-    [items, filter, favOnly, favoriteIds],
-  );
+  /* 아이템 반응 점수 — 정렬·베이스라인 공용 (조회수 없는 스레드도 좋아요·댓글로 비교) */
+  const itemScore = (i: ReferenceItem) => i.views + i.likes * 20 + (i.comments ?? 0) * 40;
+
+  const filtered = useMemo(() => {
+    const base = items.filter(
+      (item) =>
+        (filter === "all" || item.channel === filter) && (!favOnly || favoriteIds.has(item.id)),
+    );
+    if (itemSort === "views") return [...base].sort((a, b) => itemScore(b) - itemScore(a));
+    if (itemSort === "likes") return [...base].sort((a, b) => b.likes - a.likes);
+    return [...base].sort((a, b) => a.collectedAgoHours - b.collectedAgoHours);
+  }, [items, filter, favOnly, favoriteIds, itemSort]);
+
+  /* 기준(matchedSource)별 베이스라인 — "이 기준, 지금까지 이렇게 나왔어요" */
+  const sourceBaselines = useMemo(() => {
+    const groups = new Map<string, number[]>();
+    for (const item of items) {
+      const arr = groups.get(item.matchedSource) ?? [];
+      arr.push(itemScore(item));
+      groups.set(item.matchedSource, arr);
+    }
+    return [...groups.entries()]
+      .filter(([, scores]) => scores.length >= 3)
+      .map(([source, scores]) => {
+        const sorted = [...scores].sort((a, b) => a - b);
+        const viewsOf = items.filter((i) => i.matchedSource === source).map((i) => i.views).sort((a, b) => a - b);
+        const median = viewsOf[Math.floor(viewsOf.length / 2)] ?? 0;
+        const max = viewsOf[viewsOf.length - 1] ?? 0;
+        const avgScore = sorted.reduce((a, b) => a + b, 0) / sorted.length;
+        return { source, count: scores.length, medianViews: median, maxViews: max, avgScore };
+      });
+  }, [items]);
+
+  /* 기준 평균 대비 배수 — 1.5배 이상이면 카드에 "기준 대비 N배" 표시 */
+  const overAvgMultiple = useMemo(() => {
+    const map = new Map<string, number>();
+    const avgBySource = new Map(sourceBaselines.map((b) => [b.source, b.avgScore]));
+    for (const item of items) {
+      const avg = avgBySource.get(item.matchedSource);
+      if (avg && avg > 0) {
+        const mult = itemScore(item) / avg;
+        if (mult >= 1.5) map.set(item.id, mult);
+      }
+    }
+    return map;
+  }, [items, sourceBaselines]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -490,24 +538,71 @@ export function LibraryClient({
         )
       ) : null}
 
-      {/* 필터 — 수집 결과가 있을 때만 의미가 있다 */}
+      {/* 기준별 베이스라인 — 이 기준으로 지금까지 어떻게 나왔는지 (수집 3건 이상일 때) */}
+      {sourceBaselines.length > 0 ? (
+        <Card className="p-4">
+          <p className="flex items-center gap-1.5 text-[13px] font-semibold">
+            기준별 수집 성적
+            <InfoTip>
+              지금까지 수집된 콘텐츠 기준의 자체 집계입니다. 보통 조회수는 중앙값, 반응 점수는
+              조회수·좋아요·댓글 가중 합계 — 플랫폼 공식 지표가 아닌 핀치 자체 계산이에요.
+            </InfoTip>
+          </p>
+          <ul className="mt-2.5 space-y-1.5">
+            {sourceBaselines.map((b) => (
+              <li key={b.source} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[13px]">
+                <span className="font-semibold text-fg">&lsquo;{b.source}&rsquo;</span>
+                <span className="tnum text-fg-sub">{b.count}건 수집</span>
+                {b.medianViews > 0 ? (
+                  <span className="tnum text-fg-sub">
+                    보통 조회수 <span className="font-semibold text-fg">{formatCompact(b.medianViews)}</span>
+                  </span>
+                ) : null}
+                {b.maxViews > 0 ? (
+                  <span className="tnum text-fg-sub">
+                    최고 <span className="font-semibold text-primary">{formatCompact(b.maxViews)}</span>
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+
+      {/* 필터·정렬 — 수집 결과가 있을 때만 의미가 있다 */}
       {items.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <ChipFilter options={CHANNEL_FILTER_OPTIONS} value={filter} onChange={setFilter} />
-          <button
-            type="button"
-            aria-pressed={favOnly}
-            onClick={() => setFavOnly((v) => !v)}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-chip px-3.5 py-1.5 text-[13px] font-semibold transition-colors",
-              favOnly
-                ? "bg-primary text-on-primary"
-                : "border border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg",
-            )}
-          >
-            <Bookmark className="size-3.5" fill={favOnly ? "currentColor" : "none"} aria-hidden />
-            즐겨찾기만
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <ChipFilter options={CHANNEL_FILTER_OPTIONS} value={filter} onChange={setFilter} />
+            <button
+              type="button"
+              aria-pressed={favOnly}
+              onClick={() => setFavOnly((v) => !v)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-chip px-3.5 py-1.5 text-[13px] font-semibold transition-colors",
+                favOnly
+                  ? "bg-primary text-on-primary"
+                  : "border border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg",
+              )}
+            >
+              <Bookmark className="size-3.5" fill={favOnly ? "currentColor" : "none"} aria-hidden />
+              즐겨찾기만
+            </button>
+          </div>
+          <label className="flex items-center gap-2 text-[13px] text-fg-sub">
+            정렬
+            <select
+              value={itemSort}
+              onChange={(e) => setItemSort(e.target.value as ItemSort)}
+              className="h-8 rounded-card border border-line bg-overlay px-2.5 text-[13px] font-medium text-fg outline-none transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              {ITEM_SORT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       ) : null}
 
@@ -544,6 +639,7 @@ export function LibraryClient({
               item={item}
               favorite={favoriteIds.has(item.id)}
               onToggleFavorite={() => toggleFavorite(item.id)}
+              overAvgMultiple={overAvgMultiple.get(item.id)}
             />
           ))}
         </section>
@@ -583,10 +679,13 @@ function ReferenceCard({
   item,
   favorite,
   onToggleFavorite,
+  overAvgMultiple,
 }: {
   item: ReferenceItem;
   favorite: boolean;
   onToggleFavorite: () => void;
+  /** 같은 기준 평균 대비 반응 배수 — 1.5배 이상일 때만 전달됨 */
+  overAvgMultiple?: number;
 }) {
   const router = useRouter();
 
@@ -631,6 +730,12 @@ function ReferenceCard({
         <div className="flex flex-wrap items-center gap-1.5">
           <ChannelBadge channel={item.channel} />
           <Badge>{item.category}</Badge>
+          {overAvgMultiple ? (
+            <Badge tone="positive" title="같은 수집 기준의 평균 반응 대비 — 핀치 자체 계산">
+              <span className="size-1.5 rounded-full bg-current" aria-hidden />
+              기준 대비 {overAvgMultiple.toFixed(1)}배
+            </Badge>
+          ) : null}
         </div>
         <button
           type="button"
@@ -653,6 +758,17 @@ function ReferenceCard({
 
       {/* AI 요약 — 영상을 재생하지 않아도 내용이 파악되게 */}
       <p className="line-clamp-3 text-[13px] leading-relaxed text-fg-sub">{item.summary}</p>
+
+      {/* AI 분석 코멘트 — 왜 반응을 얻었는지 (자체 추정) */}
+      {item.aiComment ? (
+        <p className="flex items-start gap-1.5 rounded-card bg-overlay px-2.5 py-2 text-[12px] leading-relaxed text-fg-sub">
+          <Sparkles className="mt-0.5 size-3 shrink-0 text-primary" aria-hidden />
+          <span>
+            {item.aiComment}
+            <InfoTip>핀치 AI의 반응 요인 분석으로, 플랫폼 공식 데이터가 아닌 자체 추정치입니다.</InfoTip>
+          </span>
+        </p>
+      ) : null}
 
       {/* 후킹 기법 태그 — 자체 분석, 고지 필수 */}
       {item.hooks.length > 0 ? (
@@ -680,8 +796,33 @@ function ReferenceCard({
         <span>
           좋아요 <span className="tnum font-semibold text-fg">{formatCompact(item.likes)}</span>
         </span>
+        {(item.comments ?? 0) > 0 ? (
+          <span>
+            댓글 <span className="tnum font-semibold text-fg">{formatCompact(item.comments ?? 0)}</span>
+          </span>
+        ) : null}
+        {item.views > 0 ? (
+          <span className="inline-flex items-center gap-0.5">
+            공감률{" "}
+            <span className="tnum font-semibold text-fg">
+              {(((item.likes + (item.comments ?? 0)) / item.views) * 100).toFixed(2)}%
+            </span>
+            <InfoTip>(좋아요+댓글) ÷ 조회수. 플랫폼 공식 지표가 아닌 핀치 자체 계산이에요.</InfoTip>
+          </span>
+        ) : null}
         <span className="tnum text-fg-faint">{item.collectedAgoHours}시간 전 수집</span>
       </div>
+
+      {/* 캡션에서 추출한 해시태그 */}
+      {item.hashtags && item.hashtags.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {item.hashtags.map((tag) => (
+            <span key={tag} className="text-[12px] text-fg-faint">
+              {tag}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-fg-faint">
         <span>&lsquo;{item.matchedSource}&rsquo; 기준으로 수집</span>
