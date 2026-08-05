@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bookmark, ExternalLink, FolderPlus, Info, SearchX, Sparkles, X, Zap } from "lucide-react";
 import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
+import { FinchMark } from "@/components/logo";
 import type { Channel, ChannelFilter, ReferenceItem, ReferenceSource } from "@/lib/types";
 import {
   addReferenceSource,
@@ -165,6 +166,10 @@ export function LibraryClient({
       if (result.ok) {
         const parts = [`새 레퍼런스 ${result.added}건 수집 완료`];
         if (result.duplicates > 0) parts.push(`이미 수집된 ${result.duplicates}건 제외`);
+        if (result.excludedLowQuality > 0) parts.push(`반응 낮은 ${result.excludedLowQuality}건 제외`);
+        if (result.failedSources.length > 0) {
+          parts.push(`기준 ${result.failedSources.map((v) => `'${v}'`).join(", ")}은 수집에 실패했어요`);
+        }
         if (result.usedSources < result.totalSources) {
           parts.push(`기준 ${result.totalSources}개 중 ${result.usedSources}개 사용 — 다음 수집에서 나머지 기준이 돌아가요`);
         }
@@ -317,13 +322,6 @@ export function LibraryClient({
         </Button>
       </div>
 
-      {collecting && !isDemo ? (
-        <p role="status" className="flex items-start gap-1.5 text-[13px] text-fg-sub">
-          <Info className="mt-0.5 size-3.5 shrink-0 text-fg-faint" aria-hidden />
-          등록한 기준으로 콘텐츠를 모으고 AI가 요약을 붙이는 중이에요 — 수십 초 걸릴 수 있어요.
-        </p>
-      ) : null}
-
       {collectNotice ? (
         collectNotice.tone === "error" ? (
           <p role="alert" className="text-[13px] text-negative">
@@ -358,12 +356,24 @@ export function LibraryClient({
         </div>
       ) : null}
 
-      {/* 데모 수집 시뮬레이션 — 짧은 스켈레톤 행 */}
+      {/* 수집 로딩 오버레이 — 핀치 로고 둘레를 빛이 도는 오빗 링 */}
       {collecting ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-hidden>
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-40 animate-pulse rounded-card border border-line bg-overlay" />
-          ))}
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-surface/85 backdrop-blur-sm"
+        >
+          <div className="collect-orbit">
+            <FinchMark className="size-12 text-primary" />
+          </div>
+          <div className="text-center">
+            <p className="text-[17px] font-bold">레퍼런스를 모으는 중이에요</p>
+            <p className="mt-1.5 text-[14px] text-fg-sub">
+              {isDemo
+                ? "데모 수집을 실행하고 있어요"
+                : "등록한 기준으로 콘텐츠를 수집하고 AI가 요약과 후킹 태그를 붙입니다 — 수십 초 걸릴 수 있어요"}
+            </p>
+          </div>
         </div>
       ) : null}
 
@@ -441,8 +451,27 @@ function ReferenceCard({
     router.push("/studio");
   }
 
+  const PlaceholderGlyph =
+    item.channel === "instagram" ? InstagramGlyph : item.channel === "tiktok" ? TiktokGlyph : ThreadsGlyph;
+
   return (
-    <Card hover className="flex flex-col gap-2.5 p-4">
+    <Card hover className="flex flex-col overflow-hidden">
+      {/* 썸네일 미리보기 — Storage 캐시본. 없으면(텍스트 글·캐시 실패·과거 수집분) 채널 글리프 */}
+      {item.thumbnailUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- Storage 캐시 URL이라 최적화 프록시를 거치지 않는다
+        <img
+          src={item.thumbnailUrl}
+          alt=""
+          loading="lazy"
+          className="aspect-video w-full border-b border-line bg-overlay object-cover"
+        />
+      ) : (
+        <div className="flex aspect-video items-center justify-center border-b border-line bg-overlay" aria-hidden>
+          <PlaceholderGlyph className="size-9 text-fg-faint" />
+        </div>
+      )}
+
+      <div className="flex flex-1 flex-col gap-2.5 p-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
           <ChannelBadge channel={item.channel} />
@@ -525,6 +554,7 @@ function ReferenceCard({
           <Sparkles className="size-3.5" aria-hidden />
           이 레퍼런스로 카드뉴스
         </Button>
+      </div>
       </div>
     </Card>
   );

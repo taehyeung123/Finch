@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
 import { createClaudeClient, STUDIO_MODEL } from "@/lib/ai/claude";
 import { chargeGeneration, refundGenerationCredits, CREDIT_COSTS } from "@/lib/actions/credits";
@@ -168,15 +169,34 @@ export async function removeReferenceSource(id: string): Promise<{ ok: boolean }
 
 /** 1회 수집에서 공급사 API를 부르는 최대 기준 수 — 기준당 1크레딧 실비 상한 */
 const MAX_SOURCES_PER_RUN = 6;
-/** 기준 하나당 저장할 최대 게시물 수 */
-const PER_SOURCE_LIMIT = 8;
+/** 기준 하나당 공급사에서 받아오는 최대 게시물 수 (랭킹 전 후보군) */
+const FETCH_PER_SOURCE = 30;
+/** 랭킹 후 기준 하나당 저장할 최대 게시물 수 */
+const KEEP_PER_SOURCE = 8;
+/** 반응 점수 최소선 — 이 밑은 "죽은 게시물"로 보고 제외한다 (제외 수는 안내에 표기) */
+const MIN_ENGAGEMENT_SCORE = 50;
+
+/** 반응 점수 — 조회수 + 좋아요·댓글 가중. Threads(조회수 미공개)도 좋아요·댓글로 비교 가능 */
+function engagementScore(p: CollectedPost): number {
+  return p.views + p.likes * 20 + p.comments * 40;
+}
 
 const HOOK_VALUES: HookType[] = [
   "숫자리스트", "손실회피", "통념깨기", "질문호명", "결과수치", "시의성", "공감자극", "호기심",
 ];
 
 export type CollectRunResult =
-  | { ok: true; added: number; duplicates: number; usedSources: number; totalSources: number }
+  | {
+      ok: true;
+      added: number;
+      duplicates: number;
+      usedSources: number;
+      totalSources: number;
+      /** 실패한 기준 — 조용히 삼키지 않고 화면에 표기한다 */
+      failedSources: string[];
+      /** 반응 점수 미달로 제외한 게시물 수 */
+      excludedLowQuality: number;
+    }
   | { ok: false; reason: "demo" | "auth" | "no_sources" | "not_configured" | "charge" | "out_of_credits" | "table_missing" | "provider" | "save"; error: string };
 
 interface DbItemRow {
@@ -188,6 +208,7 @@ interface DbItemRow {
   hooks: unknown;
   creator_handle: string;
   url: string | null;
+  thumbnail_url: string | null;
   views: number;
   likes: number;
   follower_count: number;
@@ -215,6 +236,7 @@ function rowToItem(r: DbItemRow): ReferenceItem {
     collectedAgoHours: hours,
     dataSource: "thirdparty",
     url: r.url,
+    thumbnailUrl: r.thumbnail_url,
     favorite: r.favorite,
   };
 }
@@ -230,16 +252,59 @@ export async function listReferenceItems(): Promise<ReferenceItem[]> {
 
   const { data, error } = await supabase
     .from("reference_items")
-    .select("id, channel, title, summary, category, hooks, creator_handle, url, views, likes, follower_count, matched_source, favorite, collected_at")
+    .select("id, channel, title, summary, category, hooks, creator_handle, url, thumbnail_url, views, likes, follower_count, matched_source, favorite, collected_at")
     .eq("user_id", user.id)
     .order("collected_at", { ascending: false })
+    .order("likes", { ascending: false })
     .limit(60);
   if (error) {
+    // 0020(thumbnail_url) 미적용이면 구 스키마로 재시도 — 목록 자체는 살린다
+    if (error.message.includes("thumbnail_url")) {
+      const { data: legacy } = await supabase
+        .from("reference_items")
+        .select("id, channel, title, summary, category, hooks, creator_handle, url, views, likes, follower_count, matched_source, favorite, collected_at")
+        .eq("user_id", user.id)
+        .order("collected_at", { ascending: false })
+        .limit(60);
+      return ((legacy ?? []) as Omit<DbItemRow, "thumbnail_url">[]).map((r) =>
+        rowToItem({ ...r, thumbnail_url: null }),
+      );
+    }
     // 0019 미적용 등 — 화면은 빈 목록으로 살리고 로그로만
     console.error("[reference] 아이템 조회 실패:", error.message);
     return [];
   }
   return (data as DbItemRow[]).map(rowToItem);
+}
+
+/**
+ * 썸네일 캐시 — 공급사 CDN 이미지를 받아 Storage에 저장하고 공개 URL을 돌려준다.
+ * 실패는 null (카드가 글리프 자리표시로 대체) — 수집 자체를 막지 않는다.
+ */
+async function cacheThumbnail(userId: string, post: CollectedPost): Promise<string | null> {
+  if (!post.thumbnailUrl) return null;
+  const admin = createAdminClient();
+  if (!admin) return null;
+  try {
+    const res = await fetch(post.thumbnailUrl, { signal: AbortSignal.timeout(10_000), cache: "no-store" });
+    if (!res.ok) return null;
+    const type = res.headers.get("content-type") ?? "";
+    if (!type.startsWith("image/")) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.byteLength > 2_000_000) return null; // 2MB 초과는 캐시하지 않는다 (커버 이미지 기준 과대)
+    const ext = type.includes("png") ? "png" : type.includes("webp") ? "webp" : "jpg";
+    const path = `${userId}/${post.channel}-${post.externalId}.${ext}`;
+    const { error } = await admin.storage
+      .from("reference-thumbs")
+      .upload(path, buf, { contentType: type, upsert: true });
+    if (error) {
+      console.error("[reference] 썸네일 업로드 실패:", error.message);
+      return null;
+    }
+    return admin.storage.from("reference-thumbs").getPublicUrl(path).data.publicUrl;
+  } catch {
+    return null;
+  }
 }
 
 /** 즐겨찾기 영속 토글 — RLS 본인 행만 */
@@ -387,19 +452,31 @@ export async function runCollection(): Promise<CollectRunResult> {
   const settled = await Promise.allSettled(
     used.map(async (s) => ({
       source: s,
-      posts: await collectFromSource({ channel: s.channel, kind: s.kind as ReferenceSource["kind"], value: s.value }, PER_SOURCE_LIMIT),
+      posts: await collectFromSource({ channel: s.channel, kind: s.kind as ReferenceSource["kind"], value: s.value }, FETCH_PER_SOURCE),
     })),
   );
 
+  // 기준별 결과 — 실패는 조용히 삼키지 않고 기준 이름과 함께 표면화한다
   const collected: { post: CollectedPost; matchedSource: string }[] = [];
   const failures: CollectError[] = [];
-  for (const r of settled) {
+  const failedSources: string[] = [];
+  let excludedLowQuality = 0;
+  for (let i = 0; i < settled.length; i++) {
+    const r = settled[i];
     if (r.status === "fulfilled") {
-      for (const post of r.value.posts) collected.push({ post, matchedSource: r.value.source.value });
+      // 반응 점수로 랭킹 → 죽은 게시물 제외 → 기준당 상위 N개만
+      const ranked = [...r.value.posts].sort((a, b) => engagementScore(b) - engagementScore(a));
+      const alive = ranked.filter((p) => engagementScore(p) >= MIN_ENGAGEMENT_SCORE);
+      excludedLowQuality += ranked.length - alive.length;
+      for (const post of alive.slice(0, KEEP_PER_SOURCE)) {
+        collected.push({ post, matchedSource: r.value.source.value });
+      }
     } else {
-      failures.push(
-        r.reason instanceof CollectError ? r.reason : new CollectError("provider_error", String(r.reason)),
-      );
+      const err =
+        r.reason instanceof CollectError ? r.reason : new CollectError("provider_error", String(r.reason));
+      failures.push(err);
+      failedSources.push(used[i].value);
+      console.error(`[reference] 기준 '${used[i].value}' 수집 실패:`, err.message);
     }
   }
 
@@ -418,6 +495,13 @@ export async function runCollection(): Promise<CollectRunResult> {
         ok: false,
         reason: "provider",
         error: "수집에 실패했어요. 잠시 후 다시 시도해 주세요 — 사용하신 횟수는 차감되지 않았습니다.",
+      };
+    }
+    if (excludedLowQuality > 0) {
+      return {
+        ok: false,
+        reason: "provider",
+        error: `${excludedLowQuality}개를 발견했지만 반응(조회·좋아요)이 기준에 못 미쳐 제외했어요. 키워드를 더 널리 쓰이는 말로 바꿔보세요 — 사용하신 횟수는 차감되지 않았습니다.`,
       };
     }
     return {
@@ -453,9 +537,13 @@ export async function runCollection(): Promise<CollectRunResult> {
     };
   }
 
-  const enriched = await enrichWithAi(fresh.map((c) => c.post));
+  // AI 요약과 썸네일 캐시는 서로 독립 — 병렬 수행
+  const [enriched, thumbnails] = await Promise.all([
+    enrichWithAi(fresh.map((c) => c.post)),
+    Promise.all(fresh.map(({ post }) => cacheThumbnail(user.id, post))),
+  ]);
 
-  const rows = fresh.map(({ post, matchedSource }) => {
+  const rows = fresh.map(({ post, matchedSource }, i) => {
     const ai = enriched.get(post.externalId);
     const firstLine = post.caption.split("\n").map((s) => s.trim()).find((s) => s.length > 0) ?? "";
     return {
@@ -469,6 +557,7 @@ export async function runCollection(): Promise<CollectRunResult> {
       hooks: ai?.hooks ?? [],
       creator_handle: post.creatorHandle,
       url: post.url,
+      thumbnail_url: thumbnails[i],
       views: post.views,
       likes: post.likes,
       follower_count: post.followerCount,
@@ -477,7 +566,16 @@ export async function runCollection(): Promise<CollectRunResult> {
     };
   });
 
-  const { error: insertErr } = await supabase.from("reference_items").insert(rows);
+  let { error: insertErr } = await supabase.from("reference_items").insert(rows);
+  if (insertErr && insertErr.message.includes("thumbnail_url")) {
+    // 0020 미적용 — 썸네일 없이 구 스키마로 재시도 (수집 자체는 살린다)
+    const legacyRows = rows.map((row) => {
+      const rest = { ...row } as Record<string, unknown>;
+      delete rest.thumbnail_url;
+      return rest;
+    });
+    ({ error: insertErr } = await supabase.from("reference_items").insert(legacyRows));
+  }
   if (insertErr) {
     await refundIfCharged("insert_failed");
     const missing =
@@ -489,5 +587,13 @@ export async function runCollection(): Promise<CollectRunResult> {
   }
 
   revalidatePath("/library");
-  return { ok: true, added: fresh.length, duplicates: unique.length - fresh.length, usedSources: used.length, totalSources: sources.length };
+  return {
+    ok: true,
+    added: fresh.length,
+    duplicates: unique.length - fresh.length,
+    usedSources: used.length,
+    totalSources: sources.length,
+    failedSources,
+    excludedLowQuality,
+  };
 }

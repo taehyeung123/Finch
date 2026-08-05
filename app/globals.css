@@ -246,6 +246,66 @@ body {
   }
 }
 
+/* 수집 로딩 오빗 — 핀치 로고 둘레를 빛줄기가 도는 링 (레퍼런스 수집 오버레이) */
+@keyframes orbit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.collect-orbit {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-primary) 7%, transparent);
+}
+.collect-orbit::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  padding: 3px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0%,
+    transparent 62%,
+    color-mix(in srgb, var(--color-primary) 45%, transparent) 80%,
+    var(--color-primary) 96%,
+    transparent 100%
+  );
+  /* 링 모양으로 잘라내기 — 안쪽을 마스크로 뚫는다 */
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: orbit-spin 1.4s linear infinite;
+}
+.collect-orbit::after {
+  /* 빛머리 글로우 — 링 위를 도는 점광 */
+  content: "";
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0%,
+    transparent 88%,
+    color-mix(in srgb, var(--color-primary) 26%, transparent) 96%,
+    transparent 100%
+  );
+  filter: blur(10px);
+  animation: orbit-spin 1.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .collect-orbit::before,
+  .collect-orbit::after {
+    animation: none;
+  }
+}
+
 /* 진입 시 순차 등장 — style={{ animationDelay }}로 스태거 */
 .anim-fade-up {
   opacity: 0;

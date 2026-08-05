@@ -22,6 +22,8 @@ export interface CollectedPost {
   creatorHandle: string;
   /** 원본 게시물 링크 — 저작권 안전장치(요약+출처 링크 구조)의 핵심 */
   url: string | null;
+  /** 공급사 CDN 썸네일 URL — 서명 만료가 있어 수집 시점에 Storage로 캐시해서 쓴다 */
+  thumbnailUrl: string | null;
   views: number;
   likes: number;
   comments: number;
@@ -99,7 +101,7 @@ function normalizeTiktok(raw: Json): CollectedPost | null {
   const stats = (raw.statistics ?? {}) as Json;
   const video = (raw.video ?? {}) as Json;
   const cover = (video.cover ?? {}) as Json;
-  void cover; // 썸네일은 CDN 만료·CSP 문제로 v1에서는 표시하지 않는다
+  const coverUrls = Array.isArray(cover.url_list) ? (cover.url_list as unknown[]) : [];
   const createTime = num(raw.create_time);
   return {
     channel: "tiktok",
@@ -107,6 +109,7 @@ function normalizeTiktok(raw: Json): CollectedPost | null {
     caption: str(raw.desc),
     creatorHandle: author.unique_id ? `@${str(author.unique_id)}` : "",
     url: str(raw.share_url) || str(raw.url) || null,
+    thumbnailUrl: str(coverUrls[0]) || null,
     views: num(stats.play_count),
     likes: num(stats.digg_count),
     comments: num(stats.comment_count),
@@ -127,6 +130,7 @@ function normalizeIgHashtagPost(raw: Json): CollectedPost | null {
     caption: typeof raw.caption === "string" ? raw.caption : str((raw.caption as Json | undefined)?.text),
     creatorHandle: owner.username ? `@${str(owner.username)}` : "",
     url: str(raw.url) || (raw.shortcode ? `https://www.instagram.com/p/${str(raw.shortcode)}/` : null),
+    thumbnailUrl: str(raw.thumbnail_src) || str(raw.display_url) || null,
     // play_count가 사용자가 아는 "조회수"에 가깝다 (실측: view 245 vs play 956 — view는 3초 이상 시청)
     views: num(raw.video_play_count) || num(raw.video_view_count),
     likes: num(raw.like_count),
@@ -150,6 +154,7 @@ function normalizeIgUserPost(raw: Json, handle: string): CollectedPost | null {
     caption: typeof caption === "string" ? caption : str(caption?.text),
     creatorHandle: user.username ? `@${str(user.username)}` : `@${handle}`,
     url: str(raw.url) || (raw.code ? `https://www.instagram.com/p/${str(raw.code)}/` : null),
+    thumbnailUrl: str(raw.display_uri) || str(raw.thumbnail_src) || str(raw.display_url) || null,
     views: num(raw.play_count) || num(raw.ig_play_count),
     likes: num(raw.like_count),
     comments: num(raw.comment_count),
@@ -169,12 +174,14 @@ function normalizeThreadsPost(raw: Json, fallbackHandle: string | null): Collect
   const username = str(user.username) || (fallbackHandle ?? "");
   const code = str(raw.code);
   const takenAt = num(raw.taken_at);
+  const imageCandidates = ((raw.image_versions2 as Json | undefined)?.candidates ?? []) as Json[];
   return {
     channel: "threads",
     externalId: id,
     caption: str(caption?.text),
     creatorHandle: username ? `@${username.replace(/^@/, "")}` : "",
     url: username && code ? `https://www.threads.net/@${username.replace(/^@/, "")}/post/${code}` : null,
+    thumbnailUrl: str(imageCandidates[0]?.url) || null, // 텍스트 글이면 null — 카드에서 글리프 표시
     views: 0, // Threads는 조회수를 공개하지 않는다 — 0이면 UI에서 숨긴다 (지어내지 않음)
     likes: num(raw.like_count),
     comments: num(tpInfo.direct_reply_count) || num(raw.direct_reply_count),
