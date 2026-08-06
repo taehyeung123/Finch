@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
-import { createClaudeClient, STUDIO_MODEL } from "@/lib/ai/claude";
+import { createClaudeClient, FAST_MODEL } from "@/lib/ai/claude";
 import { chargeGeneration, refundGenerationCredits, CREDIT_COSTS } from "@/lib/actions/credits";
 import {
   fetchIgTranscript,
@@ -251,7 +251,7 @@ async function expandKeywords(keywords: string[]): Promise<Map<string, string[]>
   if (!claude || keywords.length === 0) return out;
   try {
     const response = await claude.messages.create({
-      model: STUDIO_MODEL,
+      model: FAST_MODEL,
       max_tokens: 1500,
       output_config: {
         format: {
@@ -369,6 +369,8 @@ export type CollectRunResult =
       excludedLowQuality: number;
       /** 수집 필터(기간·KR·형식·제외 키워드)로 걸러진 게시물 수 */
       excludedByFilter: number;
+      /** AI 단계(확장 검색어·요약·태그) 실패 시 사용자에게 보여줄 경고 — 조용히 삼키지 않는다 */
+      aiWarning: string | null;
     }
   | { ok: false; reason: "demo" | "auth" | "no_sources" | "not_configured" | "charge" | "out_of_credits" | "table_missing" | "provider" | "save"; error: string };
 
@@ -648,18 +650,27 @@ export async function toggleReferenceFavorite(id: string, favorite: boolean): Pr
   return { ok: true };
 }
 
-/** AI 요약·후킹 태깅 — 실패해도 수집 자체는 살린다(요약 없이 저장) */
-async function enrichWithAi(
-  posts: CollectedPost[],
-): Promise<Map<string, { summary: string; hooks: HookType[]; category: string; comment: string }>> {
-  const out = new Map<string, { summary: string; hooks: HookType[]; category: string; comment: string }>();
+type EnrichResult = Map<string, { summary: string; hooks: HookType[]; category: string; comment: string }>;
+
+/** AI 요약·후킹 태깅 — 20개 단위로 나눠 병렬 호출(타임아웃·출력 절단 방지). 실패해도 수집은 살린다 */
+async function enrichWithAi(posts: CollectedPost[]): Promise<EnrichResult> {
+  const merged: EnrichResult = new Map();
+  const chunks: CollectedPost[][] = [];
+  for (let i = 0; i < posts.length; i += 20) chunks.push(posts.slice(i, i + 20));
+  const results = await Promise.all(chunks.map((c) => enrichChunk(c)));
+  for (const r of results) for (const [k, v] of r) merged.set(k, v);
+  return merged;
+}
+
+async function enrichChunk(posts: CollectedPost[]): Promise<EnrichResult> {
+  const out: EnrichResult = new Map();
   const claude = createClaudeClient();
   if (!claude || posts.length === 0) return out;
 
   try {
     const response = await claude.messages.create({
-      model: STUDIO_MODEL,
-      max_tokens: 10000,
+      model: FAST_MODEL,
+      max_tokens: 6000,
       output_config: {
         format: {
           type: "json_schema",
@@ -896,6 +907,16 @@ export async function runCollection(): Promise<CollectRunResult> {
     Promise.all(fresh.map(({ post }) => cacheThumbnail(user.id, post))),
   ]);
 
+  // AI 단계 실패 감지 — 요약이 하나도 안 붙었거나 확장 검색어 생성이 통째로 실패한 경우
+  const expansionFailed = igKeywords.length > 0 && expansions.size === 0;
+  const enrichFailed = fresh.length > 0 && enriched.size === 0;
+  const aiWarning =
+    enrichFailed || expansionFailed
+      ? "AI 분석이 적용되지 않았어요(요약·후킹 태그" +
+        (expansionFailed ? "·확장 검색어" : "") +
+        " 누락). Anthropic API 크레딧 소진이 가장 흔한 원인이에요 — 충전 후 다시 수집하면 정상 적용됩니다. 이번 수집분은 원본 그대로 저장했어요."
+      : null;
+
   const rows = fresh.map(({ post, matchedSource }, i) => {
     const ai = enriched.get(post.externalId);
     const firstLine = post.caption.split("\n").map((s) => s.trim()).find((s) => s.length > 0) ?? "";
@@ -960,5 +981,6 @@ export async function runCollection(): Promise<CollectRunResult> {
     failedSources,
     excludedLowQuality,
     excludedByFilter,
+    aiWarning,
   };
 }

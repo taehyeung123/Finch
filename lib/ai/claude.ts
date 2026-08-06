@@ -12,3 +12,10 @@ export function createClaudeClient(): Anthropic | null {
 
 /** AI 스튜디오 공용 모델 — 카피 품질이 곧 기능 가치라 최상위 모델 사용 */
 export const STUDIO_MODEL = "claude-opus-4-8";
+
+/**
+ * 대량 보조 작업용 모델 — 레퍼런스 요약·태깅, 검색어 확장처럼 항목이 많고
+ * 분류 성격인 작업. Opus 대비 출력단가 약 1/5, 속도 수 배 — 수집 파이프라인의
+ * 비용 누수와 서버 액션 타임아웃 위험을 같이 줄인다.
+ */
+export const FAST_MODEL = "claude-sonnet-5";

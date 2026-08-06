@@ -271,7 +271,11 @@ export function LibraryClient({
         if (result.usedSources < result.totalSources) {
           parts.push(`기준 ${result.totalSources}개 중 ${result.usedSources}개 사용 — 다음 수집에서 나머지 기준이 돌아가요`);
         }
-        setCollectNotice({ tone: "notice", text: parts.join(" · ") });
+        setCollectNotice(
+          result.aiWarning
+            ? { tone: "error", text: `${parts.join(" · ")} — ${result.aiWarning}` }
+            : { tone: "notice", text: parts.join(" · ") },
+        );
         router.refresh(); // 서버 데이터 다시 로드 — 새 아이템 반영
       } else {
         setCollectNotice({ tone: result.reason === "no_sources" ? "notice" : "error", text: result.error });
