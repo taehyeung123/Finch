@@ -349,6 +349,14 @@ const MAX_TOTAL_PER_RUN = 40;
  * 500으로 상향 — 니치 키워드 결과가 0건이 되는지는 실제 배포 후 스팟체크로 재조정한다.
  */
 const MIN_ENGAGEMENT_SCORE = 500;
+/**
+ * 조회수 절대 하한선 — views가 실제로 집계되는 콘텐츠(릴스·영상)에서 views>0인데
+ * 이 밑이면 좋아요·댓글 비율이 아무리 좋아도 제외한다. engagementScore는 좋아요×20·
+ * 댓글×40 가중이라 "조회수 200, 좋아요 30"짜리도 통과시킬 수 있다는 게 실제 배포 후
+ * 확인됨(사장님 실측: 조회수 1000 미만 다수 수집). Threads처럼 views가 원래 0으로만
+ * 오는 채널·형식은 이 하한선을 적용하지 않고(views>0 조건) 기존 참여도 점수로만 판정한다.
+ */
+const MIN_VIEWS_WHEN_TRACKED = 10_000;
 
 /** 반응 점수 — 조회수 + 좋아요·댓글 가중. Threads(조회수 미공개)도 좋아요·댓글로 비교 가능 */
 function engagementScore(p: CollectedPost): number {
@@ -388,6 +396,8 @@ export type CollectRunResult =
       excludedLowQuality: number;
       /** 수집 필터(기간·KR·형식·제외 키워드)로 걸러진 게시물 수 */
       excludedByFilter: number;
+      /** AI가 검색 주제와 무관하다고 판단해 제외한 게시물 수 */
+      excludedIrrelevant: number;
       /** AI 단계(확장 검색어·요약·태그) 실패 시 사용자에게 보여줄 경고 — 조용히 삼키지 않는다 */
       aiWarning: string | null;
     }
@@ -669,19 +679,22 @@ export async function toggleReferenceFavorite(id: string, favorite: boolean): Pr
   return { ok: true };
 }
 
-type EnrichResult = Map<string, { summary: string; hooks: HookType[]; category: string; comment: string }>;
+type EnrichResult = Map<
+  string,
+  { relevant: boolean; summary: string; hooks: HookType[]; category: string; comment: string }
+>;
 
-/** AI 요약·후킹 태깅 — 20개 단위로 나눠 병렬 호출(타임아웃·출력 절단 방지). 실패해도 수집은 살린다 */
-async function enrichWithAi(posts: CollectedPost[]): Promise<EnrichResult> {
+/** AI 요약·후킹 태깅·관련도 판정 — 20개 단위로 나눠 병렬 호출(타임아웃·출력 절단 방지). 실패해도 수집은 살린다 */
+async function enrichWithAi(posts: CollectedPost[], topic: string): Promise<EnrichResult> {
   const merged: EnrichResult = new Map();
   const chunks: CollectedPost[][] = [];
   for (let i = 0; i < posts.length; i += 20) chunks.push(posts.slice(i, i + 20));
-  const results = await Promise.all(chunks.map((c) => enrichChunk(c)));
+  const results = await Promise.all(chunks.map((c) => enrichChunk(c, topic)));
   for (const r of results) for (const [k, v] of r) merged.set(k, v);
   return merged;
 }
 
-async function enrichChunk(posts: CollectedPost[]): Promise<EnrichResult> {
+async function enrichChunk(posts: CollectedPost[], topic: string): Promise<EnrichResult> {
   const out: EnrichResult = new Map();
   const claude = createClaudeClient();
   if (!claude || posts.length === 0) return out;
@@ -703,9 +716,13 @@ async function enrichChunk(posts: CollectedPost[]): Promise<EnrichResult> {
                 items: {
                   type: "object",
                   additionalProperties: false,
-                  required: ["external_id", "summary", "hooks", "category", "comment"],
+                  required: ["external_id", "relevant", "summary", "hooks", "category", "comment"],
                   properties: {
                     external_id: { type: "string" },
+                    relevant: {
+                      type: "boolean",
+                      description: "캡션이 실제로 검색 주제를 다루는 내용이면 true, 검색어가 캡션·해시태그에 우연히 한 번 섞였을 뿐 실제 내용은 무관하면 false",
+                    },
                     summary: { type: "string", description: "캡션 내용 기반 2문장 한국어 요약. 캡션에 없는 사실을 지어내지 말 것" },
                     hooks: { type: "array", items: { enum: HOOK_VALUES }, description: "감지된 후킹 기법 0~2개" },
                     category: { type: "string", description: "카테고리 한 단어 (예: 뷰티, 푸드, 커리어)" },
@@ -718,7 +735,11 @@ async function enrichChunk(posts: CollectedPost[]): Promise<EnrichResult> {
         },
       },
       system:
-        "너는 SNS 콘텐츠 분석가다. 각 게시물의 캡션과 반응 수치를 보고 (1) 캡션에 실제로 있는 내용만으로 2문장 요약, (2) 사용된 후킹 기법 태그 0~2개, (3) 카테고리 한 단어, (4) 반응을 얻은 이유 한 문장(comment)을 붙인다. comment는 '~해서 반응이 좋다' 식의 구체적 분석 — 캡션 구조, 후킹 방식, 수치 중 근거가 있는 것만 말하라. 캡션이 짧거나 정보가 없으면 요약·코멘트도 짧게 — 내용을 지어내지 마라. 이모지 금지.",
+        `너는 SNS 콘텐츠 분석가다. 검색 주제는 "${topic}"다. 각 게시물의 캡션과 반응 수치를 보고 ` +
+        `(1) 이 게시물이 실제로 "${topic}" 주제를 다루는 콘텐츠인지 relevant에 담고(검색어가 캡션·해시태그에 우연히 한 번 섞였을 뿐 내용 자체는 다른 주제면 false), ` +
+        "(2) 캡션에 실제로 있는 내용만으로 2문장 요약, (3) 사용된 후킹 기법 태그 0~2개, (4) 카테고리 한 단어, (5) 반응을 얻은 이유 한 문장(comment)을 붙인다. " +
+        "comment는 '~해서 반응이 좋다' 식의 구체적 분석 — 캡션 구조, 후킹 방식, 수치 중 근거가 있는 것만 말하라. 캡션이 짧거나 정보가 없으면 요약·코멘트도 짧게 — 내용을 지어내지 마라. " +
+        "relevant=false인 항목도 summary 등 나머지 필드는 캡션 그대로 채워라. 이모지 금지.",
       messages: [
         {
           role: "user",
@@ -735,11 +756,19 @@ async function enrichChunk(posts: CollectedPost[]): Promise<EnrichResult> {
     const text = (response.content as { type: string; text?: string }[]).find((b) => b.type === "text")?.text;
     const parsed = text
       ? (JSON.parse(text) as {
-          items?: { external_id: string; summary: string; hooks: string[]; category: string; comment: string }[];
+          items?: {
+            external_id: string;
+            relevant: boolean;
+            summary: string;
+            hooks: string[];
+            category: string;
+            comment: string;
+          }[];
         })
       : null;
     for (const item of parsed?.items ?? []) {
       out.set(item.external_id, {
+        relevant: item.relevant !== false,
         summary: item.summary ?? "",
         hooks: (item.hooks ?? []).filter((h): h is HookType => (HOOK_VALUES as string[]).includes(h)).slice(0, 2),
         category: (item.category ?? "").slice(0, 20),
@@ -870,6 +899,7 @@ export async function runCollection(): Promise<CollectRunResult> {
     const failedSources: string[] = [];
     let excludedLowQuality = 0;
     let excludedByFilter = 0;
+    let excludedIrrelevant = 0;
     let added = 0;
     let duplicates = 0;
     let anyEnrichAttempted = false;
@@ -894,7 +924,9 @@ export async function runCollection(): Promise<CollectRunResult> {
       excludedByFilter += r.value.posts.length - filteredPosts.length;
       const weighted = (p: CollectedPost) => engagementScore(p) * relevanceMultiplier(p, src);
       const ranked = [...filteredPosts].sort((a, b) => weighted(b) - weighted(a));
-      const alive = ranked.filter((p) => engagementScore(p) >= MIN_ENGAGEMENT_SCORE);
+      const alive = ranked.filter(
+        (p) => engagementScore(p) >= MIN_ENGAGEMENT_SCORE && !(p.views > 0 && p.views < MIN_VIEWS_WHEN_TRACKED),
+      );
       excludedLowQuality += ranked.length - alive.length;
 
       // 이번 기준의 실제 신규 저장 대상 — 기존 DB에도, 이번 실행 다른 기준에도 없는 것만
@@ -912,15 +944,22 @@ export async function runCollection(): Promise<CollectRunResult> {
       }
       if (freshThisSource.length === 0) continue;
 
-      // AI 요약과 썸네일 캐시는 서로 독립 — 병렬 수행(이번 기준분만)
+      // AI 요약·후킹태깅과 함께 관련도(이 게시물이 실제로 이 기준 주제를 다루는지)도 같이 판정한다
       anyEnrichAttempted = true;
-      const [enriched, thumbnails] = await Promise.all([
-        enrichWithAi(freshThisSource.map((c) => c.post)),
-        Promise.all(freshThisSource.map(({ post }) => cacheThumbnail(user.id, post))),
-      ]);
+      const enriched = await enrichWithAi(freshThisSource.map((c) => c.post), src.value);
       if (enriched.size > 0) anyEnrichSucceeded = true;
 
-      const rows = freshThisSource.map(({ post, matchedSource }, idx) => {
+      // relevant=false로 명시적으로 판정된 것만 제외 — AI 실패/누락(맵에 없음)은 기존 철학대로 유지(fail-open)
+      const relevantThisSource = freshThisSource.filter(({ post }) => enriched.get(post.externalId)?.relevant !== false);
+      const irrelevantThisSource = freshThisSource.filter(({ post }) => enriched.get(post.externalId)?.relevant === false);
+      excludedIrrelevant += irrelevantThisSource.length;
+      for (const { post } of irrelevantThisSource) insertedThisRunKeys.delete(`${post.channel}:${post.externalId}`);
+      if (relevantThisSource.length === 0) continue;
+
+      // 썸네일 캐시는 실제로 저장할 항목에만 — 관련 없다고 판정된 건 스토리지 비용도 안 씀
+      const thumbnails = await Promise.all(relevantThisSource.map(({ post }) => cacheThumbnail(user.id, post)));
+
+      const rows = relevantThisSource.map(({ post, matchedSource }, idx) => {
         const ai = enriched.get(post.externalId);
         const firstLine = post.caption.split("\n").map((s) => s.trim()).find((s) => s.length > 0) ?? "";
         return {
@@ -979,11 +1018,11 @@ export async function runCollection(): Promise<CollectRunResult> {
         // 이 기준분 저장만 실패 — 이미 저장된 다른 기준분은 그대로 두고 실패로 기록 후 계속
         failures.push(new CollectError("provider_error", insertErr.message));
         failedSources.push(src.value);
-        for (const { post } of freshThisSource) insertedThisRunKeys.delete(`${post.channel}:${post.externalId}`);
+        for (const { post } of relevantThisSource) insertedThisRunKeys.delete(`${post.channel}:${post.externalId}`);
         continue;
       }
 
-      added += freshThisSource.length;
+      added += relevantThisSource.length;
     }
 
     if (added === 0) {
@@ -1024,6 +1063,13 @@ export async function runCollection(): Promise<CollectRunResult> {
           error: `${duplicates}개를 발견했지만 전부 이미 수집된 콘텐츠예요. 새 게시물이 올라오면 다시 수집돼요 — 사용하신 횟수는 차감되지 않았습니다.`,
         };
       }
+      if (excludedIrrelevant > 0) {
+        return {
+          ok: false,
+          reason: "provider",
+          error: `${excludedIrrelevant}개를 발견했지만 AI가 "${used.map((s) => s.value).join(", ")}" 주제와 무관하다고 판단해 제외했어요. 사용하신 횟수는 차감되지 않았습니다.`,
+        };
+      }
       return {
         ok: false,
         reason: "provider",
@@ -1051,6 +1097,7 @@ export async function runCollection(): Promise<CollectRunResult> {
       failedSources,
       excludedLowQuality,
       excludedByFilter,
+      excludedIrrelevant,
       aiWarning,
     };
   } finally {

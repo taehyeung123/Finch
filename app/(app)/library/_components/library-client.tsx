@@ -265,6 +265,7 @@ export function LibraryClient({
         if (result.duplicates > 0) parts.push(`이미 수집된 ${result.duplicates}건 제외`);
         if (result.excludedByFilter > 0) parts.push(`수집 필터로 ${result.excludedByFilter}건 제외`);
         if (result.excludedLowQuality > 0) parts.push(`반응 낮은 ${result.excludedLowQuality}건 제외`);
+        if (result.excludedIrrelevant > 0) parts.push(`주제와 무관해 ${result.excludedIrrelevant}건 제외`);
         if (result.failedSources.length > 0) {
           parts.push(`기준 ${result.failedSources.map((v) => `'${v}'`).join(", ")}은 수집에 실패했어요`);
         }
