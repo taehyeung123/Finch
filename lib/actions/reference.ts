@@ -297,18 +297,18 @@ async function expandKeywords(keywords: string[]): Promise<Map<string, string[]>
 }
 
 /**
- * 한글 캡션 판정 — 해시태그를 뗀 본문 기준으로 한글 음절 최소 개수(8자)와
- * 비율(25%)을 같이 요구한다. 한글 한 글자만 있어도 통과하던 이전 방식은
- * "영어 캡션 + 한글 해시태그 1개"인 외국 계정 게시물과 "본문 없이 해시태그만"인
- * 스팸 게시물을 둘 다 통과시켰다(실측으로 확인됨).
+ * 한글 캡션 판정 — 캡션 전체(해시태그 포함)의 한글 음절 총량이 10자 이상인지로 본다.
+ * 해시태그를 떼고 본문만 보는 1차 시도는 실측(웨딩 라이브 재현)에서 대량 오탈락을
+ * 냈다 — 이 업계(웨딩·뷰티 스튜디오)는 본문은 스타일링용 영어 문구로 짧게 쓰고
+ * 실제 브랜드·업종 정보는 해시태그에 담는 게 표준 관행이라, 해시태그를 버리면
+ * "신라호텔 영빈관 야외웨딩" 같은 명백한 국내 업체 게시물까지 외국으로 오판했다.
+ * 원래 문제였던 "영어 캡션 + 한글 해시태그 1개"(예: #다이어트 하나)는 총량이
+ * 10자를 못 넘어 여전히 걸러진다. 해시태그 스팸(태그 수 12개 초과)은 여기서
+ * 막지 않고 relevanceMultiplier의 기존 감점 로직에 맡긴다.
  */
 function isKoreanCaption(caption: string): boolean {
-  const body = caption.replace(/#\S+/g, "").trim();
-  const hangul = (body.match(/[가-힣]/g) ?? []).length;
-  if (hangul < 8) return false;
-  const nonSpace = body.replace(/\s/g, "").length;
-  if (nonSpace === 0) return false;
-  return hangul / nonSpace >= 0.25;
+  const hangul = (caption.match(/[가-힣]/g) ?? []).length;
+  return hangul >= 10;
 }
 
 /** 후처리 필터 — 공급사 서버 파라미터로 못 거르는 조건을 여기서 거른다 */
