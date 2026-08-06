@@ -344,23 +344,46 @@ const KEEP_PER_SOURCE = 20;
 /** 1회 수집의 전체 저장 상한 — AI 요약·썸네일 비용 폭주 방지 */
 const MAX_TOTAL_PER_RUN = 40;
 /**
- * 반응 점수 최소선 — 이 밑은 "죽은 게시물"로 보고 제외한다 (제외 수는 안내에 표기).
- * 이전 값 50은 실측(웨딩·다이어트 실행 모두 제외 0건)에서 사실상 무필터로 확인돼
- * 500으로 상향 — 니치 키워드 결과가 0건이 되는지는 실제 배포 후 스팟체크로 재조정한다.
+ * 절대 최저 생존선 — views가 실제로 집계되는 콘텐츠(릴스·영상)에서 이 밑이면 반응률이
+ * 아무리 좋아도 그냥 죽은 게시물(또는 매크로성 계정)로 보고 제외한다. 키워드마다 조회수
+ * 스케일이 워낙 달라(예: 웨딩은 보통 조회수 자체가 수만~수십만) 이보다 위 단계는 절대값이
+ * 아니라 아래 상대 기준이 담당한다. Threads처럼 views가 원래 0으로만 오는 채널·형식은
+ * 이 조건을 적용하지 않는다(views>0 조건).
  */
-const MIN_ENGAGEMENT_SCORE = 500;
+const ABSOLUTE_DEAD_VIEWS = 500;
 /**
- * 조회수 절대 하한선 — views가 실제로 집계되는 콘텐츠(릴스·영상)에서 views>0인데
- * 이 밑이면 좋아요·댓글 비율이 아무리 좋아도 제외한다. engagementScore는 좋아요×20·
- * 댓글×40 가중이라 "조회수 200, 좋아요 30"짜리도 통과시킬 수 있다는 게 실제 배포 후
- * 확인됨(사장님 실측: 조회수 1000 미만 다수 수집). Threads처럼 views가 원래 0으로만
- * 오는 채널·형식은 이 하한선을 적용하지 않고(views>0 조건) 기존 참여도 점수로만 판정한다.
+ * 키워드별 상대 참여 기준 — "이 키워드로 지금까지 모인 글 대비 얼마나 잘했는가"로 살아있는
+ * 게시물을 가른다. 고정 절대값(이전 MIN_ENGAGEMENT_SCORE=500→10000 조회수 하한 등)은
+ * 웨딩처럼 원래 조회수 규모가 큰 카테고리에서 "조회수 5천~9천대의 정상 웨딩 스튜디오
+ * 게시물"까지 그냥 절대선 밑이라는 이유로 잘라내는 게 실측(캡처된 실제 후보 40건) 재현
+ * 시뮬레이션에서 확인됐다 — 상대 기준(중앙값의 30%)으로 바꾸면 그 오탈락 8~15건을
+ * 손해 없이 구제했다(같은 표본에서 신규 오탈락 0건). 계수는 시작값이며 실배포 후
+ * 스팟체크로 조정한다.
  */
-const MIN_VIEWS_WHEN_TRACKED = 10_000;
+const RELATIVE_ENGAGEMENT_FACTOR = 0.3;
+/**
+ * 이 개수 미만이면 "이 키워드로 지금까지 모인 글"이 통계적으로 안 미덥다고 보고,
+ * 대신 이번 실행에서 새로 받아온 후보 풀 자체의 분포로 기준을 계산한다(콜드 스타트).
+ * 수집을 반복할수록 저장분이 쌓여 자연스럽게 누적 이력 기준으로 넘어간다.
+ */
+const MIN_HISTORY_FOR_RELATIVE = 5;
 
 /** 반응 점수 — 조회수 + 좋아요·댓글 가중. Threads(조회수 미공개)도 좋아요·댓글로 비교 가능 */
 function engagementScore(p: CollectedPost): number {
   return p.views + p.likes * 20 + p.comments * 40;
+}
+
+function median(nums: number[]): number {
+  if (nums.length === 0) return 0;
+  const sorted = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+/** 키워드별 상대 참여 임계값 — 누적 이력이 충분하면 이력 기준, 아니면 이번 후보 풀 기준 */
+function computeRelativeThreshold(historyScores: number[], poolScores: number[]): number {
+  const basis = historyScores.length >= MIN_HISTORY_FOR_RELATIVE ? historyScores : poolScores;
+  return median(basis) * RELATIVE_ENGAGEMENT_FACTOR;
 }
 
 /**
@@ -895,6 +918,22 @@ export async function runCollection(): Promise<CollectRunResult> {
     const existingKeys = new Set((existingRows ?? []).map((r) => `${r.channel}:${r.external_id}`));
     const insertedThisRunKeys = new Set<string>();
 
+    // 기준별 상대 참여 기준 계산용 — 사용자가 이 채널·키워드로 지금까지 모은 글의 반응 점수 이력
+    const usedMatchedSources = [...new Set(used.map((s) => s.value))];
+    const { data: historyRows } = await supabase
+      .from("reference_items")
+      .select("channel, matched_source, views, likes, comments")
+      .eq("user_id", user.id)
+      .in("matched_source", usedMatchedSources);
+    const historyScoresBySource = new Map<string, number[]>();
+    for (const r of historyRows ?? []) {
+      const key = `${r.channel}:${r.matched_source}`;
+      const score = Math.max(0, Number(r.views) || 0) + Math.max(0, Number(r.likes) || 0) * 20 + Math.max(0, Number(r.comments) || 0) * 40;
+      const arr = historyScoresBySource.get(key);
+      if (arr) arr.push(score);
+      else historyScoresBySource.set(key, [score]);
+    }
+
     const failures: CollectError[] = [];
     const failedSources: string[] = [];
     let excludedLowQuality = 0;
@@ -924,8 +963,11 @@ export async function runCollection(): Promise<CollectRunResult> {
       excludedByFilter += r.value.posts.length - filteredPosts.length;
       const weighted = (p: CollectedPost) => engagementScore(p) * relevanceMultiplier(p, src);
       const ranked = [...filteredPosts].sort((a, b) => weighted(b) - weighted(a));
+      const historyScores = historyScoresBySource.get(`${src.channel}:${src.value}`) ?? [];
+      const poolScores = ranked.map((p) => engagementScore(p));
+      const relativeThreshold = computeRelativeThreshold(historyScores, poolScores);
       const alive = ranked.filter(
-        (p) => engagementScore(p) >= MIN_ENGAGEMENT_SCORE && !(p.views > 0 && p.views < MIN_VIEWS_WHEN_TRACKED),
+        (p) => !(p.views > 0 && p.views < ABSOLUTE_DEAD_VIEWS) && engagementScore(p) >= relativeThreshold,
       );
       excludedLowQuality += ranked.length - alive.length;
 
