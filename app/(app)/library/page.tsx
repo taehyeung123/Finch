@@ -10,6 +10,9 @@ import { LibraryClient } from "./_components/library-client";
   - 실제 모드: reference_sources(0018) + reference_items(0019) + collect_settings(0021).
     수집 실행은 클라이언트의 "지금 수집" → runCollection 서버 액션(ScrapeCreators 어댑터).
 */
+/* 수집(공급사 런 대기 포함)이 60초를 넘을 수 있어 서버 액션 실행 상한을 올린다 — 플랜 상한 내에서 적용 */
+export const maxDuration = 300;
+
 export default async function LibraryPage() {
   const isDemo = isDemoMode();
   const [sources, items, settings] = isDemo

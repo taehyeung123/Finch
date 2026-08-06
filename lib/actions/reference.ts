@@ -7,12 +7,12 @@ import { isDemoMode } from "@/lib/supabase/config";
 import { createClaudeClient, STUDIO_MODEL } from "@/lib/ai/claude";
 import { chargeGeneration, refundGenerationCredits, CREDIT_COSTS } from "@/lib/actions/credits";
 import {
-  collectFromSource,
   fetchIgTranscript,
   isCollectionConfigured,
   CollectError,
   type CollectedPost,
 } from "@/lib/reference/scrapecreators";
+import { collectForSource } from "@/lib/reference/collect";
 import type { Channel, CollectSettings, HookType, ReferenceItem, ReferenceSource } from "@/lib/types";
 import { DEFAULT_COLLECT_SETTINGS, PERIOD_DAYS } from "@/lib/types";
 
@@ -281,18 +281,18 @@ function engagementScore(p: CollectedPost): number {
 }
 
 /**
- * 관련도 가중치 — 키워드·해시태그 소스에서 "태그 도배 홍보물"이 반응 수치만으로
- * 상위에 오르는 것을 막는다 (실측: '웨딩' 해시태그 피드가 업체 광고 위주였음).
- * 키워드 포함 시 가산, 미포함은 감점(동의어 콘텐츠가 있어 완전 배제는 안 함),
- * 해시태그 12개 초과는 도배로 보고 반감.
+ * 품질 가중치 — 공감률(좋아요+댓글÷조회)이 높을수록 가산, 해시태그 12개 초과
+ * 도배(업체 홍보물의 전형)는 크게 감점. 실측('웨딩') 결과 키워드 포함 가산 방식은
+ * 태그 도배 업체물을 오히려 밀어올려 폐기 — 검색 자체가 이미 관련도 랭킹이므로
+ * 반응의 "질"로만 보정한다. 공감률 5%면 +1.0, 상한 +1.5.
  */
 function relevanceMultiplier(p: CollectedPost, source: { kind: string; value: string }): number {
-  if (source.kind === "account") return 1;
-  const needle = source.value.replace(/^[#@]/, "").replace(/\s+/g, "").toLowerCase();
-  const hay = p.caption.replace(/\s+/g, "").toLowerCase();
-  let m = needle && hay.includes(needle) ? 1.5 : 0.7;
-  const tagCount = (p.caption.match(/#/g) ?? []).length;
-  if (tagCount > 12) m *= 0.5;
+  const rate = p.views > 0 ? (p.likes + p.comments) / p.views : 0;
+  let m = 1 + Math.min(rate * 20, 1.5);
+  if (source.kind !== "account") {
+    const tagCount = (p.caption.match(/#/g) ?? []).length;
+    if (tagCount > 12) m *= 0.4;
+  }
   return m;
 }
 
@@ -723,7 +723,7 @@ export async function runCollection(): Promise<CollectRunResult> {
   const settled = await Promise.allSettled(
     used.map(async (s) => ({
       source: s,
-      posts: await collectFromSource(
+      posts: await collectForSource(
         { channel: s.channel, kind: s.kind as ReferenceSource["kind"], value: s.value },
         FETCH_PER_SOURCE,
         { period: settings.period, mediaFormat: settings.mediaFormat },
