@@ -15,7 +15,8 @@ export const STUDIO_MODEL = "claude-opus-4-8";
 
 /**
  * 대량 보조 작업용 모델 — 레퍼런스 요약·태깅, 검색어 확장처럼 항목이 많고
- * 분류 성격인 작업. Opus 대비 출력단가 약 1/5, 속도 수 배 — 수집 파이프라인의
- * 비용 누수와 서버 액션 타임아웃 위험을 같이 줄인다.
+ * 분류 성격인 작업. 최저가 모델로 충분한 품질이 나오는 작업이라 Haiku 고정
+ * (Opus 대비 출력단가 1/5 → Haiku는 그 1/5, 속도도 최상) — 수집 1회 AI 비용을
+ * 수십 원 단위로 내려 크레딧 소진과 타임아웃 위험을 같이 줄인다.
  */
-export const FAST_MODEL = "claude-sonnet-5";
+export const FAST_MODEL = "claude-haiku-4-5-20251001";
