@@ -35,10 +35,15 @@ export interface InstagramOAuthConfig {
   appSecret: string;
 }
 
-/** 앱 설정 로드 — 미설정이면 null (연동 버튼은 비활성 안내) */
+/**
+ * 앱 설정 로드 — 미설정이면 null (연동 버튼은 비활성 안내).
+ * appSecret은 META_APP_SECRET을 쓴다 — Instagram Login과 웹훅(app/api/webhooks/instagram)이
+ * 같은 Meta 앱(Instagram 제품)에 속해 시크릿이 하나뿐이라, 별도 INSTAGRAM_APP_SECRET을 두면
+ * 배포 시 둘 중 하나만 채우고 넘어가 웹훅 서명검증이 조용히 실패하는 사고가 난다.
+ */
 export function getInstagramOAuthConfig(): InstagramOAuthConfig | null {
   const appId = process.env.INSTAGRAM_APP_ID;
-  const appSecret = process.env.INSTAGRAM_APP_SECRET;
+  const appSecret = process.env.META_APP_SECRET;
   if (!appId || !appSecret) return null;
   return { appId, appSecret };
 }

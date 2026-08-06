@@ -46,6 +46,9 @@
 4. 앱 대시보드에 아이콘 업로드 — `public/brand/finch-app-icon-1024.png`
 5. **Ad Library API**는 심사 없이 사용 가능: https://www.facebook.com/ads/library/api 에서 본인 확인 후 액세스 토큰 발급 → 경쟁사 광고 모니터링이 3단계 중 가장 먼저 실데이터로 전환 가능
 6. Instagram 연동 심사(App Review): `instagram_basic`, `instagram_manage_insights`, `pages_read_engagement` 권한 신청 — 데모 영상·사용 사유 제출 (수일~수주)
+   - 앱 대시보드 > 설정 > 기본 설정에 **Data Deletion Instructions URL**(또는 콜백) 등록 필수 —
+     인스타그램용 `https://finch.ai.kr/api/auth/instagram/data-deletion`, Threads용
+     `https://finch.ai.kr/api/auth/threads/data-deletion` (코드는 이미 구현됨, 등록만 하면 됨)
 7. 광고 리포트는 Standard Access로 본인 광고 계정 조회 가능. 타사(클라이언트) 계정 관리는 Advanced Access(사업자등록증 + 비즈니스 인증) — Phase 3
 8. (Claude Code 작업) OAuth 연동 플로우 + 수집 배치(하루 4회) + `lib/data` 교체
 
