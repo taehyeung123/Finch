@@ -296,6 +296,21 @@ async function expandKeywords(keywords: string[]): Promise<Map<string, string[]>
   return out;
 }
 
+/**
+ * 한글 캡션 판정 — 해시태그를 뗀 본문 기준으로 한글 음절 최소 개수(8자)와
+ * 비율(25%)을 같이 요구한다. 한글 한 글자만 있어도 통과하던 이전 방식은
+ * "영어 캡션 + 한글 해시태그 1개"인 외국 계정 게시물과 "본문 없이 해시태그만"인
+ * 스팸 게시물을 둘 다 통과시켰다(실측으로 확인됨).
+ */
+function isKoreanCaption(caption: string): boolean {
+  const body = caption.replace(/#\S+/g, "").trim();
+  const hangul = (body.match(/[가-힣]/g) ?? []).length;
+  if (hangul < 8) return false;
+  const nonSpace = body.replace(/\s/g, "").length;
+  if (nonSpace === 0) return false;
+  return hangul / nonSpace >= 0.25;
+}
+
 /** 후처리 필터 — 공급사 서버 파라미터로 못 거르는 조건을 여기서 거른다 */
 function passesFilters(p: CollectedPost, s: CollectSettings): boolean {
   const periodDays = PERIOD_DAYS[s.period];
@@ -303,10 +318,10 @@ function passesFilters(p: CollectedPost, s: CollectSettings): boolean {
     if (!p.postedAt || new Date(p.postedAt).getTime() < Date.now() - periodDays * 86_400_000) return false;
   }
   if (s.krOnly) {
-    // 틱톡은 국가 정보로, 인스타·스레드는 한글 포함으로 판단(휴리스틱 — UI에 고지)
+    // 틱톡은 국가 정보로, 인스타·스레드는 한글 캡션 판정으로 거른다(휴리스틱 — UI에 고지)
     if (p.channel === "tiktok") {
       if (p.region !== "KR") return false;
-    } else if (!/[가-힣]/.test(p.caption)) {
+    } else if (!isKoreanCaption(p.caption)) {
       return false;
     }
   }
@@ -328,8 +343,12 @@ const FETCH_PER_SOURCE = 120;
 const KEEP_PER_SOURCE = 20;
 /** 1회 수집의 전체 저장 상한 — AI 요약·썸네일 비용 폭주 방지 */
 const MAX_TOTAL_PER_RUN = 40;
-/** 반응 점수 최소선 — 이 밑은 "죽은 게시물"로 보고 제외한다 (제외 수는 안내에 표기) */
-const MIN_ENGAGEMENT_SCORE = 50;
+/**
+ * 반응 점수 최소선 — 이 밑은 "죽은 게시물"로 보고 제외한다 (제외 수는 안내에 표기).
+ * 이전 값 50은 실측(웨딩·다이어트 실행 모두 제외 0건)에서 사실상 무필터로 확인돼
+ * 500으로 상향 — 니치 키워드 결과가 0건이 되는지는 실제 배포 후 스팟체크로 재조정한다.
+ */
+const MIN_ENGAGEMENT_SCORE = 500;
 
 /** 반응 점수 — 조회수 + 좋아요·댓글 가중. Threads(조회수 미공개)도 좋아요·댓글로 비교 가능 */
 function engagementScore(p: CollectedPost): number {
@@ -372,7 +391,7 @@ export type CollectRunResult =
       /** AI 단계(확장 검색어·요약·태그) 실패 시 사용자에게 보여줄 경고 — 조용히 삼키지 않는다 */
       aiWarning: string | null;
     }
-  | { ok: false; reason: "demo" | "auth" | "no_sources" | "not_configured" | "charge" | "out_of_credits" | "table_missing" | "provider" | "save"; error: string };
+  | { ok: false; reason: "demo" | "auth" | "no_sources" | "not_configured" | "charge" | "out_of_credits" | "table_missing" | "provider" | "save" | "already_running"; error: string };
 
 interface DbItemRow {
   id: string;
@@ -754,67 +773,121 @@ export async function runCollection(): Promise<CollectRunResult> {
     };
   }
 
-  const { data: sourceRows, error: srcErr } = await supabase
-    .from("reference_sources")
-    .select("id, channel, kind, value, created_at")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: true });
-  if (srcErr) {
-    console.error("[reference] 수집 기준 조회 실패:", srcErr.message);
-    return { ok: false, reason: "provider", error: "수집 기준을 불러오지 못했어요. 잠시 후 다시 시도해 주세요." };
-  }
-  const sources = (sourceRows ?? []) as { id: string; channel: Channel; kind: string; value: string }[];
-  if (sources.length === 0) {
-    return { ok: false, reason: "no_sources", error: "먼저 수집 기준(키워드·계정·해시태그)을 등록해 주세요." };
-  }
-
-  const charge = await chargeGeneration({
-    metric: "reference_collect",
-    creditCost: CREDIT_COSTS.collect,
-    reason: "reference_collect",
-  });
-  if (!charge.ok) return { ok: false, reason: "charge", error: charge.error };
-  const refundIfCharged = async (why: string) => {
-    if (charge.via === "credits") {
-      await refundGenerationCredits(charge.userId, CREDIT_COSTS.collect, `collect_refund: ${why}`);
+  // 동시 실행 방지 — user_id PK insert로 원자적 락 획득(check-then-insert보다 레이스 안전)
+  const STALE_LOCK_MS = 10 * 60_000;
+  const { error: lockErr } = await supabase.from("reference_collect_locks").insert({ user_id: user.id });
+  if (lockErr) {
+    if (lockErr.code !== "23505") {
+      console.error("[reference] 수집 락 획득 실패:", lockErr.message);
+      return { ok: false, reason: "provider", error: "수집을 시작하지 못했어요. 잠시 후 다시 시도해 주세요." };
     }
-  };
+    const { data: existingLock } = await supabase
+      .from("reference_collect_locks")
+      .select("started_at")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const startedAt = existingLock?.started_at ? new Date(existingLock.started_at).getTime() : 0;
+    if (Date.now() - startedAt < STALE_LOCK_MS) {
+      return { ok: false, reason: "already_running", error: "이미 수집이 진행 중이에요. 잠시 후 다시 시도해 주세요." };
+    }
+    // 죽은 락(서버가 크래시해서 finally를 못 탄 경우) — 강제로 재획득
+    await supabase.from("reference_collect_locks").delete().eq("user_id", user.id);
+    const { error: retryErr } = await supabase.from("reference_collect_locks").insert({ user_id: user.id });
+    if (retryErr) {
+      console.error("[reference] 수집 락 재획득 실패:", retryErr.message);
+      return { ok: false, reason: "provider", error: "수집을 시작하지 못했어요. 잠시 후 다시 시도해 주세요." };
+    }
+  }
 
-  // 기준이 상한보다 많으면 라운드로빈처럼 매번 다른 묶음이 돌게 시간 기반 오프셋으로 자른다
-  const offset = sources.length > MAX_SOURCES_PER_RUN ? Math.floor(Date.now() / 3_600_000) % sources.length : 0;
-  const rotated = [...sources.slice(offset), ...sources.slice(0, offset)];
-  const used = rotated.slice(0, MAX_SOURCES_PER_RUN);
+  try {
+    const { data: sourceRows, error: srcErr } = await supabase
+      .from("reference_sources")
+      .select("id, channel, kind, value, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: true });
+    if (srcErr) {
+      console.error("[reference] 수집 기준 조회 실패:", srcErr.message);
+      return { ok: false, reason: "provider", error: "수집 기준을 불러오지 못했어요. 잠시 후 다시 시도해 주세요." };
+    }
+    const sources = (sourceRows ?? []) as { id: string; channel: Channel; kind: string; value: string }[];
+    if (sources.length === 0) {
+      return { ok: false, reason: "no_sources", error: "먼저 수집 기준(키워드·계정·해시태그)을 등록해 주세요." };
+    }
 
-  const settings = await getCollectSettings();
+    const charge = await chargeGeneration({
+      metric: "reference_collect",
+      creditCost: CREDIT_COSTS.collect,
+      reason: "reference_collect",
+    });
+    if (!charge.ok) return { ok: false, reason: "charge", error: charge.error };
+    const refundIfCharged = async (why: string) => {
+      if (charge.via === "credits") {
+        await refundGenerationCredits(charge.userId, CREDIT_COSTS.collect, `collect_refund: ${why}`);
+      }
+    };
 
-  // IG 키워드 소스는 AI 확장 검색어로 후보 풀을 키운다 (Claude 1회, 실패 시 확장 없이 진행)
-  const igKeywords = used.filter((s) => s.channel === "instagram" && s.kind === "keyword").map((s) => s.value);
-  const expansions = await expandKeywords(igKeywords);
+    // 기준이 상한보다 많으면 라운드로빈처럼 매번 다른 묶음이 돌게 시간 기반 오프셋으로 자른다
+    const offset = sources.length > MAX_SOURCES_PER_RUN ? Math.floor(Date.now() / 3_600_000) % sources.length : 0;
+    const rotated = [...sources.slice(offset), ...sources.slice(0, offset)];
+    const used = rotated.slice(0, MAX_SOURCES_PER_RUN);
 
-  const settled = await Promise.allSettled(
-    used.map(async (s) => ({
-      source: s,
-      posts: await collectForSource(
-        { channel: s.channel, kind: s.kind as ReferenceSource["kind"], value: s.value },
-        FETCH_PER_SOURCE,
-        {
-          period: settings.period,
-          mediaFormat: settings.mediaFormat,
-          queryVariants: expansions.get(s.value) ?? [],
-        },
-      ),
-    })),
-  );
+    const settings = await getCollectSettings();
 
-  // 기준별 결과 — 실패는 조용히 삼키지 않고 기준 이름과 함께 표면화한다
-  const collected: { post: CollectedPost; matchedSource: string }[] = [];
-  const failures: CollectError[] = [];
-  const failedSources: string[] = [];
-  let excludedLowQuality = 0;
-  let excludedByFilter = 0;
-  for (let i = 0; i < settled.length; i++) {
-    const r = settled[i];
-    if (r.status === "fulfilled") {
+    // IG 키워드 소스는 AI 확장 검색어로 후보 풀을 키운다 (Claude 1회, 실패 시 확장 없이 진행)
+    const igKeywords = used.filter((s) => s.channel === "instagram" && s.kind === "keyword").map((s) => s.value);
+    const expansions = await expandKeywords(igKeywords);
+
+    const settled = await Promise.allSettled(
+      used.map(async (s) => ({
+        source: s,
+        posts: await collectForSource(
+          { channel: s.channel, kind: s.kind as ReferenceSource["kind"], value: s.value },
+          FETCH_PER_SOURCE,
+          {
+            period: settings.period,
+            mediaFormat: settings.mediaFormat,
+            queryVariants: expansions.get(s.value) ?? [],
+          },
+        ),
+      })),
+    );
+
+    // 이번 실행 후보 전체의 기존 DB 보유 여부를 한 번에 조회(쿼리 횟수 절약) —
+    // 실제 저장은 기준 단위로 즉시 수행해 타임아웃이 나도 이미 처리된 기준분은 남는다
+    const allCandidateIds = new Set<string>();
+    for (const r of settled) {
+      if (r.status === "fulfilled") for (const p of r.value.posts) allCandidateIds.add(p.externalId);
+    }
+    const { data: existingRows } = await supabase
+      .from("reference_items")
+      .select("channel, external_id")
+      .eq("user_id", user.id)
+      .in("external_id", [...allCandidateIds]);
+    const existingKeys = new Set((existingRows ?? []).map((r) => `${r.channel}:${r.external_id}`));
+    const insertedThisRunKeys = new Set<string>();
+
+    const failures: CollectError[] = [];
+    const failedSources: string[] = [];
+    let excludedLowQuality = 0;
+    let excludedByFilter = 0;
+    let added = 0;
+    let duplicates = 0;
+    let anyEnrichAttempted = false;
+    let anyEnrichSucceeded = false;
+    const anyExpansionAttempted = igKeywords.length > 0;
+
+    for (let i = 0; i < settled.length; i++) {
+      const r = settled[i];
+      if (r.status !== "fulfilled") {
+        const err =
+          r.reason instanceof CollectError ? r.reason : new CollectError("provider_error", String(r.reason));
+        failures.push(err);
+        failedSources.push(used[i].value);
+        console.error(`[reference] 기준 '${used[i].value}' 수집 실패:`, err.message);
+        continue;
+      }
+      if (added >= MAX_TOTAL_PER_RUN) break; // 이번 실행 전체 저장 상한 도달 — 남은 기준은 건너뜀
+
       // 수집 필터(기간·KR·형식·제외 키워드) → 관련도 가중 반응 랭킹 → 죽은 게시물 제외 → 기준당 상위 N개
       const src = r.value.source;
       const filteredPosts = r.value.posts.filter((p) => passesFilters(p, settings));
@@ -823,164 +896,164 @@ export async function runCollection(): Promise<CollectRunResult> {
       const ranked = [...filteredPosts].sort((a, b) => weighted(b) - weighted(a));
       const alive = ranked.filter((p) => engagementScore(p) >= MIN_ENGAGEMENT_SCORE);
       excludedLowQuality += ranked.length - alive.length;
-      for (const post of alive.slice(0, KEEP_PER_SOURCE)) {
-        collected.push({ post, matchedSource: r.value.source.value });
+
+      // 이번 기준의 실제 신규 저장 대상 — 기존 DB에도, 이번 실행 다른 기준에도 없는 것만
+      const room = MAX_TOTAL_PER_RUN - added;
+      const freshThisSource: { post: CollectedPost; matchedSource: string }[] = [];
+      for (const post of alive) {
+        if (freshThisSource.length >= Math.min(KEEP_PER_SOURCE, room)) break;
+        const key = `${post.channel}:${post.externalId}`;
+        if (existingKeys.has(key) || insertedThisRunKeys.has(key)) {
+          duplicates++;
+          continue;
+        }
+        insertedThisRunKeys.add(key);
+        freshThisSource.push({ post, matchedSource: src.value });
       }
-    } else {
-      const err =
-        r.reason instanceof CollectError ? r.reason : new CollectError("provider_error", String(r.reason));
-      failures.push(err);
-      failedSources.push(used[i].value);
-      console.error(`[reference] 기준 '${used[i].value}' 수집 실패:`, err.message);
-    }
-  }
+      if (freshThisSource.length === 0) continue;
 
-  if (collected.length === 0) {
-    await refundIfCharged("all_failed_or_empty");
-    if (failures.some((f) => f.reason === "out_of_credits")) {
-      return {
-        ok: false,
-        reason: "out_of_credits",
-        error: "수집 엔진 사용량이 일시적으로 소진됐어요. 잠시 후 다시 시도해 주세요 — 사용하신 횟수는 차감되지 않았습니다.",
-      };
+      // AI 요약과 썸네일 캐시는 서로 독립 — 병렬 수행(이번 기준분만)
+      anyEnrichAttempted = true;
+      const [enriched, thumbnails] = await Promise.all([
+        enrichWithAi(freshThisSource.map((c) => c.post)),
+        Promise.all(freshThisSource.map(({ post }) => cacheThumbnail(user.id, post))),
+      ]);
+      if (enriched.size > 0) anyEnrichSucceeded = true;
+
+      const rows = freshThisSource.map(({ post, matchedSource }, idx) => {
+        const ai = enriched.get(post.externalId);
+        const firstLine = post.caption.split("\n").map((s) => s.trim()).find((s) => s.length > 0) ?? "";
+        return {
+          user_id: user.id,
+          channel: post.channel,
+          external_id: post.externalId,
+          title: (firstLine || `${post.creatorHandle}의 게시물`).slice(0, 80),
+          caption: post.caption.slice(0, 500),
+          summary: ai?.summary ?? (post.caption ? post.caption.slice(0, 140) : ""),
+          category: ai?.category || "일반",
+          hooks: ai?.hooks ?? [],
+          creator_handle: post.creatorHandle,
+          url: post.url,
+          thumbnail_url: thumbnails[idx],
+          views: post.views,
+          likes: post.likes,
+          comments: post.comments,
+          hashtags: extractHashtags(post.caption),
+          ai_comment: ai?.comment ?? "",
+          follower_count: post.followerCount,
+          matched_source: matchedSource,
+          posted_at: post.postedAt,
+        };
+      });
+
+      // 스키마 세대 폴백 — 0022(댓글·해시태그·코멘트) → 0020(썸네일) 순으로 컬럼을 줄여 재시도
+      const stripColumns = (cols: string[]) =>
+        rows.map((row) => {
+          const rest = { ...row } as Record<string, unknown>;
+          for (const c of cols) delete rest[c];
+          return rest;
+        });
+      let { error: insertErr } = await supabase.from("reference_items").insert(rows);
+      if (insertErr && /comments|hashtags|ai_comment/.test(insertErr.message)) {
+        ({ error: insertErr } = await supabase
+          .from("reference_items")
+          .insert(stripColumns(["comments", "hashtags", "ai_comment"])));
+      }
+      if (insertErr && insertErr.message.includes("thumbnail_url")) {
+        ({ error: insertErr } = await supabase
+          .from("reference_items")
+          .insert(stripColumns(["comments", "hashtags", "ai_comment", "thumbnail_url"])));
+      }
+      if (insertErr) {
+        const missing =
+          insertErr.message.includes("does not exist") || insertErr.message.includes("Could not find the table");
+        console.error(`[reference] 기준 '${src.value}' 저장 실패:`, insertErr.message);
+        if (missing) {
+          await refundIfCharged("table_missing");
+          return {
+            ok: false,
+            reason: "table_missing",
+            error: "수집 저장소가 아직 준비되지 않았습니다(마이그레이션 0019 미적용). 잠시 후 다시 시도해 주세요.",
+          };
+        }
+        // 이 기준분 저장만 실패 — 이미 저장된 다른 기준분은 그대로 두고 실패로 기록 후 계속
+        failures.push(new CollectError("provider_error", insertErr.message));
+        failedSources.push(src.value);
+        for (const { post } of freshThisSource) insertedThisRunKeys.delete(`${post.channel}:${post.externalId}`);
+        continue;
+      }
+
+      added += freshThisSource.length;
     }
-    if (failures.length > 0) {
-      console.error("[reference] 수집 전량 실패:", failures.map((f) => f.message).join(" / "));
+
+    if (added === 0) {
+      await refundIfCharged("all_failed_or_empty");
+      if (failures.some((f) => f.reason === "out_of_credits")) {
+        return {
+          ok: false,
+          reason: "out_of_credits",
+          error: "수집 엔진 사용량이 일시적으로 소진됐어요. 잠시 후 다시 시도해 주세요 — 사용하신 횟수는 차감되지 않았습니다.",
+        };
+      }
+      if (failures.length > 0) {
+        console.error("[reference] 수집 전량 실패:", failures.map((f) => f.message).join(" / "));
+        return {
+          ok: false,
+          reason: "provider",
+          error: "수집에 실패했어요. 잠시 후 다시 시도해 주세요 — 사용하신 횟수는 차감되지 않았습니다.",
+        };
+      }
+      if (excludedByFilter > 0) {
+        return {
+          ok: false,
+          reason: "provider",
+          error: `${excludedByFilter}개를 발견했지만 전부 수집 필터(기간·한국·형식·제외 키워드)에 걸렸어요. 필터를 완화해보세요 — 사용하신 횟수는 차감되지 않았습니다.`,
+        };
+      }
+      if (excludedLowQuality > 0) {
+        return {
+          ok: false,
+          reason: "provider",
+          error: `${excludedLowQuality}개를 발견했지만 반응(조회·좋아요)이 기준에 못 미쳐 제외했어요. 키워드를 더 널리 쓰이는 말로 바꿔보세요 — 사용하신 횟수는 차감되지 않았습니다.`,
+        };
+      }
+      if (duplicates > 0) {
+        return {
+          ok: false,
+          reason: "provider",
+          error: `${duplicates}개를 발견했지만 전부 이미 수집된 콘텐츠예요. 새 게시물이 올라오면 다시 수집돼요 — 사용하신 횟수는 차감되지 않았습니다.`,
+        };
+      }
       return {
         ok: false,
         reason: "provider",
-        error: "수집에 실패했어요. 잠시 후 다시 시도해 주세요 — 사용하신 횟수는 차감되지 않았습니다.",
+        error: "등록된 기준으로 발견된 콘텐츠가 없어요. 키워드를 조금 더 일반적인 말로 바꿔보세요 — 사용하신 횟수는 차감되지 않았습니다.",
       };
     }
-    if (excludedByFilter > 0) {
-      return {
-        ok: false,
-        reason: "provider",
-        error: `${excludedByFilter}개를 발견했지만 전부 수집 필터(기간·한국·형식·제외 키워드)에 걸렸어요. 필터를 완화해보세요 — 사용하신 횟수는 차감되지 않았습니다.`,
-      };
-    }
-    if (excludedLowQuality > 0) {
-      return {
-        ok: false,
-        reason: "provider",
-        error: `${excludedLowQuality}개를 발견했지만 반응(조회·좋아요)이 기준에 못 미쳐 제외했어요. 키워드를 더 널리 쓰이는 말로 바꿔보세요 — 사용하신 횟수는 차감되지 않았습니다.`,
-      };
-    }
+
+    // AI 단계 실패 감지 — 요약이 전 기준에서 하나도 안 붙었거나 확장 검색어 생성이 통째로 실패한 경우
+    const expansionFailed = anyExpansionAttempted && expansions.size === 0;
+    const enrichFailed = anyEnrichAttempted && !anyEnrichSucceeded;
+    const aiWarning =
+      enrichFailed || expansionFailed
+        ? "AI 분석이 적용되지 않았어요(요약·후킹 태그" +
+          (expansionFailed ? "·확장 검색어" : "") +
+          " 누락). Anthropic API 크레딧 소진이 가장 흔한 원인이에요 — 충전 후 다시 수집하면 정상 적용됩니다. 이번 수집분은 원본 그대로 저장했어요."
+        : null;
+
+    revalidatePath("/library");
     return {
-      ok: false,
-      reason: "provider",
-      error: "등록된 기준으로 발견된 콘텐츠가 없어요. 키워드를 조금 더 일반적인 말로 바꿔보세요 — 사용하신 횟수는 차감되지 않았습니다.",
+      ok: true,
+      added,
+      duplicates,
+      usedSources: used.length,
+      totalSources: sources.length,
+      failedSources,
+      excludedLowQuality,
+      excludedByFilter,
+      aiWarning,
     };
+  } finally {
+    await supabase.from("reference_collect_locks").delete().eq("user_id", user.id);
   }
-
-  // 게시물 단위 중복 제거 (같은 게시물이 여러 기준에 걸릴 수 있다)
-  const uniqueMap = new Map<string, { post: CollectedPost; matchedSource: string }>();
-  for (const c of collected) {
-    const key = `${c.post.channel}:${c.post.externalId}`;
-    if (!uniqueMap.has(key)) uniqueMap.set(key, c);
-  }
-  const unique = [...uniqueMap.values()];
-
-  // 기존 수집분과 중복 제거
-  const { data: existing } = await supabase
-    .from("reference_items")
-    .select("channel, external_id")
-    .eq("user_id", user.id)
-    .in("external_id", unique.map((c) => c.post.externalId));
-  const existingKeys = new Set((existing ?? []).map((r) => `${r.channel}:${r.external_id}`));
-  const fresh = unique
-    .filter((c) => !existingKeys.has(`${c.post.channel}:${c.post.externalId}`))
-    .slice(0, MAX_TOTAL_PER_RUN);
-
-  if (fresh.length === 0) {
-    await refundIfCharged("all_duplicates");
-    return {
-      ok: false,
-      reason: "provider",
-      error: `${unique.length}개를 발견했지만 전부 이미 수집된 콘텐츠예요. 새 게시물이 올라오면 다시 수집돼요 — 사용하신 횟수는 차감되지 않았습니다.`,
-    };
-  }
-
-  // AI 요약과 썸네일 캐시는 서로 독립 — 병렬 수행
-  const [enriched, thumbnails] = await Promise.all([
-    enrichWithAi(fresh.map((c) => c.post)),
-    Promise.all(fresh.map(({ post }) => cacheThumbnail(user.id, post))),
-  ]);
-
-  // AI 단계 실패 감지 — 요약이 하나도 안 붙었거나 확장 검색어 생성이 통째로 실패한 경우
-  const expansionFailed = igKeywords.length > 0 && expansions.size === 0;
-  const enrichFailed = fresh.length > 0 && enriched.size === 0;
-  const aiWarning =
-    enrichFailed || expansionFailed
-      ? "AI 분석이 적용되지 않았어요(요약·후킹 태그" +
-        (expansionFailed ? "·확장 검색어" : "") +
-        " 누락). Anthropic API 크레딧 소진이 가장 흔한 원인이에요 — 충전 후 다시 수집하면 정상 적용됩니다. 이번 수집분은 원본 그대로 저장했어요."
-      : null;
-
-  const rows = fresh.map(({ post, matchedSource }, i) => {
-    const ai = enriched.get(post.externalId);
-    const firstLine = post.caption.split("\n").map((s) => s.trim()).find((s) => s.length > 0) ?? "";
-    return {
-      user_id: user.id,
-      channel: post.channel,
-      external_id: post.externalId,
-      title: (firstLine || `${post.creatorHandle}의 게시물`).slice(0, 80),
-      caption: post.caption.slice(0, 500),
-      summary: ai?.summary ?? (post.caption ? post.caption.slice(0, 140) : ""),
-      category: ai?.category || "일반",
-      hooks: ai?.hooks ?? [],
-      creator_handle: post.creatorHandle,
-      url: post.url,
-      thumbnail_url: thumbnails[i],
-      views: post.views,
-      likes: post.likes,
-      comments: post.comments,
-      hashtags: extractHashtags(post.caption),
-      ai_comment: ai?.comment ?? "",
-      follower_count: post.followerCount,
-      matched_source: matchedSource,
-      posted_at: post.postedAt,
-    };
-  });
-
-  // 스키마 세대 폴백 — 0022(댓글·해시태그·코멘트) → 0020(썸네일) 순으로 컬럼을 줄여 재시도
-  const stripColumns = (cols: string[]) =>
-    rows.map((row) => {
-      const rest = { ...row } as Record<string, unknown>;
-      for (const c of cols) delete rest[c];
-      return rest;
-    });
-  let { error: insertErr } = await supabase.from("reference_items").insert(rows);
-  if (insertErr && /comments|hashtags|ai_comment/.test(insertErr.message)) {
-    ({ error: insertErr } = await supabase
-      .from("reference_items")
-      .insert(stripColumns(["comments", "hashtags", "ai_comment"])));
-  }
-  if (insertErr && insertErr.message.includes("thumbnail_url")) {
-    ({ error: insertErr } = await supabase
-      .from("reference_items")
-      .insert(stripColumns(["comments", "hashtags", "ai_comment", "thumbnail_url"])));
-  }
-  if (insertErr) {
-    await refundIfCharged("insert_failed");
-    const missing =
-      insertErr.message.includes("does not exist") || insertErr.message.includes("Could not find the table");
-    console.error("[reference] 수집 저장 실패:", insertErr.message);
-    return missing
-      ? { ok: false, reason: "table_missing", error: "수집 저장소가 아직 준비되지 않았습니다(마이그레이션 0019 미적용). 잠시 후 다시 시도해 주세요." }
-      : { ok: false, reason: "save", error: "수집 결과 저장에 실패했어요. 잠시 후 다시 시도해 주세요." };
-  }
-
-  revalidatePath("/library");
-  return {
-    ok: true,
-    added: fresh.length,
-    duplicates: unique.length - fresh.length,
-    usedSources: used.length,
-    totalSources: sources.length,
-    failedSources,
-    excludedLowQuality,
-    excludedByFilter,
-    aiWarning,
-  };
 }
