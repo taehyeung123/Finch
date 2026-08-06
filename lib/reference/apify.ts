@@ -4,7 +4,10 @@ import type { CollectedPost } from "@/lib/reference/scrapecreators";
 import { CollectError } from "@/lib/reference/scrapecreators";
 
 /*
-  Apify 어댑터 — 인스타그램 키워드 수집 전용.
+  Apify 어댑터 — 현재 미사용(보류). 실측(2026-08-06, '웨딩') 결과 IG 키워드 경로 전부 무효:
+  해시태그 탐색은 구글 경유라 한글이 깨지고, 해시태그 피드는 최신글만(인기 게시물 로그인
+  장벽), popular 검색은 인스타 차단. 향후 계정 모니터링(프로필 게시물 대량 수집) 용도로
+  유지한다. IG 키워드 품질은 확장 검색어(lib/reference/collect.ts 주석)로 해결됨.
 
   실측 결론(2026-08): ScrapeCreators IG 릴스 검색은 후보 풀 상한이 낮아(페이지당 10,
   최고 조회수 ~30만) 대형 바이럴 콘텐츠가 아예 안 잡힌다. 레퍼런스 수집 도구들이

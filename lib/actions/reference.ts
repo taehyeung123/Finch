@@ -240,6 +240,62 @@ export async function saveCollectSettings(input: CollectSettings): Promise<{ ok:
   return { ok: true };
 }
 
+/**
+ * 키워드 확장 — IG 키워드 소스마다 연관 검색어 3개를 만들어 후보 풀을 키운다.
+ * 실측('웨딩'): 원 키워드만으론 최고 ~30만 뷰, '결혼식' 등 확장을 섞으면 100만+ 유입.
+ * Claude 1회 호출, 실패하면 빈 맵(확장 없이 진행 — 수집을 막지 않는다).
+ */
+async function expandKeywords(keywords: string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  const claude = createClaudeClient();
+  if (!claude || keywords.length === 0) return out;
+  try {
+    const response = await claude.messages.create({
+      model: STUDIO_MODEL,
+      max_tokens: 1500,
+      output_config: {
+        format: {
+          type: "json_schema",
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["expansions"],
+            properties: {
+              expansions: {
+                type: "array",
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["keyword", "variants"],
+                  properties: {
+                    keyword: { type: "string" },
+                    variants: { type: "array", items: { type: "string" }, description: "연관 검색어 정확히 3개, 각 20자 이내" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      system:
+        "인스타그램 검색어 확장기다. 각 키워드마다 한국 사용자들이 실제로 검색할 연관 검색어 3개를 만든다. 동의어·인접 개념·구체 상황을 섞어라(예: 웨딩 → 결혼식, 웨딩 준비, 결혼 준비 브이로그). 원 키워드 그대로 반복 금지, 이모지 금지.",
+      messages: [{ role: "user", content: keywords.join("\n") }],
+    });
+    if (response.stop_reason === "refusal") return out;
+    const text = (response.content as { type: string; text?: string }[]).find((b) => b.type === "text")?.text;
+    const parsed = text ? (JSON.parse(text) as { expansions?: { keyword: string; variants: string[] }[] }) : null;
+    for (const e of parsed?.expansions ?? []) {
+      out.set(
+        e.keyword,
+        (e.variants ?? []).map((v) => String(v).trim()).filter((v) => v.length >= 1 && v.length <= 20).slice(0, 3),
+      );
+    }
+  } catch (e) {
+    console.error("[reference] 검색어 확장 실패 (확장 없이 진행):", e);
+  }
+  return out;
+}
+
 /** 후처리 필터 — 공급사 서버 파라미터로 못 거르는 조건을 여기서 거른다 */
 function passesFilters(p: CollectedPost, s: CollectSettings): boolean {
   const periodDays = PERIOD_DAYS[s.period];
@@ -266,8 +322,8 @@ function passesFilters(p: CollectedPost, s: CollectSettings): boolean {
 
 /** 1회 수집에서 공급사 API를 부르는 최대 기준 수 — 기준당 1~4크레딧 실비 상한 */
 const MAX_SOURCES_PER_RUN = 6;
-/** 기준 하나당 공급사에서 받아오는 최대 게시물 수 (랭킹 전 후보군) */
-const FETCH_PER_SOURCE = 60;
+/** 기준 하나당 공급사에서 받아오는 최대 게시물 수 (랭킹 전 후보군 — 확장 검색어 포함 최대 100) */
+const FETCH_PER_SOURCE = 120;
 /** 랭킹 후 기준 하나당 저장할 최대 게시물 수 — 넉넉히 20개(레퍼런스 도구 통상 수준) */
 const KEEP_PER_SOURCE = 20;
 /** 1회 수집의 전체 저장 상한 — AI 요약·썸네일 비용 폭주 방지 */
@@ -720,13 +776,21 @@ export async function runCollection(): Promise<CollectRunResult> {
 
   const settings = await getCollectSettings();
 
+  // IG 키워드 소스는 AI 확장 검색어로 후보 풀을 키운다 (Claude 1회, 실패 시 확장 없이 진행)
+  const igKeywords = used.filter((s) => s.channel === "instagram" && s.kind === "keyword").map((s) => s.value);
+  const expansions = await expandKeywords(igKeywords);
+
   const settled = await Promise.allSettled(
     used.map(async (s) => ({
       source: s,
       posts: await collectForSource(
         { channel: s.channel, kind: s.kind as ReferenceSource["kind"], value: s.value },
         FETCH_PER_SOURCE,
-        { period: settings.period, mediaFormat: settings.mediaFormat },
+        {
+          period: settings.period,
+          mediaFormat: settings.mediaFormat,
+          queryVariants: expansions.get(s.value) ?? [],
+        },
       ),
     })),
   );

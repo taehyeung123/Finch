@@ -239,7 +239,10 @@ const IG_DATE_POSTED: Record<Exclude<CollectSettings["period"], "all">, string> 
 export async function collectFromSource(
   source: Pick<ReferenceSource, "channel" | "kind" | "value">,
   limit: number,
-  filters?: Pick<CollectSettings, "period" | "mediaFormat">,
+  filters?: Pick<CollectSettings, "period" | "mediaFormat"> & {
+    /** AI 확장 검색어 — IG 키워드 수집에서 원 키워드와 병렬 검색해 후보 풀을 키운다 */
+    queryVariants?: string[];
+  },
 ): Promise<CollectedPost[]> {
   const period = filters?.period ?? "all";
   const value = source.value.trim();
@@ -280,14 +283,21 @@ export async function collectFromSource(
         .filter((p): p is CollectedPost => p !== null);
     } else if (source.kind === "keyword" && filters?.mediaFormat !== "photo" && filters?.mediaFormat !== "carousel") {
       // 키워드는 IG 자체 검색 랭킹을 타는 릴스 검색이 해시태그 피드보다 관련도가 훨씬 높다
-      // (실측: 해시태그 피드는 태그 도배 홍보물 위주). 페이지당 10개라 4페이지(후보 40개) 수집
-      // — 후보군이 커야 조회수 큰 콘텐츠가 상위 선별에 걸린다.
-      const baseParams: Record<string, string> = { query: value };
-      if (period !== "all") baseParams.date_posted = IG_DATE_POSTED[period];
+      // (실측: 해시태그 피드는 태그 도배 홍보물 위주). 원 키워드 4페이지 + AI 확장 검색어
+      // 각 2페이지를 병렬 수집 — 실측('웨딩'): 확장 없이는 최고 ~30만 뷰가 한계, 확장 검색어
+      // ('결혼식' 등)를 섞어야 100만+ 바이럴이 후보에 들어온다.
+      const datePosted = period !== "all" ? IG_DATE_POSTED[period] : null;
+      const variants = (filters?.queryVariants ?? []).slice(0, 3);
+      const requests: { query: string; page: string }[] = [
+        ...["1", "2", "3", "4"].map((page) => ({ query: value, page })),
+        ...variants.flatMap((v) => ["1", "2"].map((page) => ({ query: v, page }))),
+      ];
       const pages = await Promise.all(
-        ["1", "2", "3", "4"].map((page) =>
-          callApi("/v2/instagram/reels/search", { ...baseParams, page }).catch(() => null),
-        ),
+        requests.map(({ query, page }) => {
+          const params: Record<string, string> = { query, page };
+          if (datePosted) params.date_posted = datePosted;
+          return callApi("/v2/instagram/reels/search", params).catch(() => null);
+        }),
       );
       posts = pages
         .filter((d): d is Json => d !== null)
