@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bookmark, ExternalLink, Eye, FolderPlus, Heart, Info, MessageCircle, SearchX, Sparkles, X, Zap } from "lucide-react";
+import { Bookmark, ExternalLink, Eye, FolderPlus, Heart, Info, MessageCircle, RotateCcw, Search, SearchX, SlidersHorizontal, Sparkles, X, Zap } from "lucide-react";
 import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 import { FinchMark } from "@/components/logo";
 import type { Channel, ChannelFilter, CollectSettings, ReferenceItem, ReferenceSource } from "@/lib/types";
@@ -20,7 +20,6 @@ import { ReferenceDetailModal } from "./reference-detail";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge, ChannelBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChipFilter } from "@/components/ui/chip-filter";
 import { InfoTip } from "@/components/ui/info-tip";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -75,6 +74,24 @@ const ITEM_SORT_OPTIONS: { value: ItemSort; label: string }[] = [
   { value: "likes", label: "좋아요순" },
   { value: "recent", label: "최근 수집순" },
 ];
+
+/* 상세 필터 패널 — 수집 시기 (collectedAgoHours 기준) */
+const COLLECTED_WITHIN_OPTIONS = [
+  { value: "all", label: "전체" },
+  { value: "24h", label: "오늘 수집" },
+  { value: "7d", label: "최근 1주" },
+  { value: "30d", label: "최근 1개월" },
+] as const;
+type CollectedWithin = (typeof COLLECTED_WITHIN_OPTIONS)[number]["value"];
+const WITHIN_HOURS: Record<CollectedWithin, number | null> = { all: null, "24h": 24, "7d": 168, "30d": 720 };
+
+/** Set 토글 — 있으면 빼고 없으면 넣은 새 Set 반환 */
+function toggleSet(set: Set<string>, v: string): Set<string> {
+  const next = new Set(set);
+  if (next.has(v)) next.delete(v);
+  else next.add(v);
+  return next;
+}
 
 const FORMAT_OPTIONS: { value: CollectSettings["mediaFormat"]; label: string }[] = [
   { value: "all", label: "전체 형식" },
@@ -149,6 +166,12 @@ export function LibraryClient({
   const [filter, setFilter] = useState<ChannelFilter>("all");
   const [favOnly, setFavOnly] = useState(false);
   const [itemSort, setItemSort] = useState<ItemSort>("views");
+  /* 패싯 검색 — 텍스트 검색 + 상세 필터 패널(수집 시기·카테고리·후킹 기법은 다중 선택) */
+  const [query, setQuery] = useState("");
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [collectedWithin, setCollectedWithin] = useState<CollectedWithin>("all");
+  const [categories, setCategories] = useState<Set<string>>(() => new Set());
+  const [hooks, setHooks] = useState<Set<string>>(() => new Set());
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(
     () => new Set(items.filter((i) => i.favorite).map((i) => i.id)),
   );
@@ -158,15 +181,64 @@ export function LibraryClient({
   /* 아이템 반응 점수 — 정렬·베이스라인 공용 (조회수 없는 스레드도 좋아요·댓글로 비교) */
   const itemScore = (i: ReferenceItem) => i.views + i.likes * 20 + (i.comments ?? 0) * 40;
 
+  /* 카테고리·후킹 패싯 — AI가 붙인 분류를 건수 많은 순으로 노출 (수집물에 실재하는 값만) */
+  const categoryFacets = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of items) {
+      const c = item.category || "일반";
+      counts.set(c, (counts.get(c) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 12)
+      .map(([name, count]) => ({ name, count }));
+  }, [items]);
+
+  const hookFacets = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of items) for (const h of item.hooks) counts.set(h, (counts.get(h) ?? 0) + 1);
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count }));
+  }, [items]);
+
+  /* 활성 필터 수 — 필터 버튼 배지·초기화 노출 판단 */
+  const activeFilterCount =
+    (filter !== "all" ? 1 : 0) +
+    (collectedWithin !== "all" ? 1 : 0) +
+    categories.size +
+    hooks.size +
+    (favOnly ? 1 : 0);
+
+  function resetFilters() {
+    setFilter("all");
+    setCollectedWithin("all");
+    setCategories(new Set());
+    setHooks(new Set());
+    setFavOnly(false);
+  }
+
   const filtered = useMemo(() => {
-    const base = items.filter(
-      (item) =>
-        (filter === "all" || item.channel === filter) && (!favOnly || favoriteIds.has(item.id)),
-    );
+    const q = query.trim().toLowerCase();
+    const maxHours = WITHIN_HOURS[collectedWithin];
+    const base = items.filter((item) => {
+      if (filter !== "all" && item.channel !== filter) return false;
+      if (favOnly && !favoriteIds.has(item.id)) return false;
+      if (maxHours !== null && item.collectedAgoHours > maxHours) return false;
+      if (categories.size > 0 && !categories.has(item.category || "일반")) return false;
+      if (hooks.size > 0 && !item.hooks.some((h) => hooks.has(h))) return false;
+      if (q) {
+        const haystack = [item.title, item.caption, item.summary, item.creatorHandle, item.category, ...(item.hashtags ?? [])]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
     if (itemSort === "views") return [...base].sort((a, b) => itemScore(b) - itemScore(a));
     if (itemSort === "likes") return [...base].sort((a, b) => b.likes - a.likes);
     return [...base].sort((a, b) => a.collectedAgoHours - b.collectedAgoHours);
-  }, [items, filter, favOnly, favoriteIds, itemSort]);
+  }, [items, filter, favOnly, favoriteIds, itemSort, query, collectedWithin, categories, hooks]);
 
   /* 기준(matchedSource)별 베이스라인 — "이 기준, 지금까지 이렇게 나왔어요" */
   const sourceBaselines = useMemo(() => {
@@ -577,41 +649,230 @@ export function LibraryClient({
         </Card>
       ) : null}
 
-      {/* 필터·정렬 — 수집 결과가 있을 때만 의미가 있다 */}
+      {/* 탐색 존 — 통합 검색바 + 상세 필터 패널 (수집 결과가 있을 때만 의미가 있다) */}
       {items.length > 0 ? (
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <section aria-label="레퍼런스 탐색" className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <ChipFilter options={CHANNEL_FILTER_OPTIONS} value={filter} onChange={setFilter} />
+            <div className="relative min-w-[240px] flex-1">
+              <Search
+                className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-fg-faint"
+                aria-hidden
+              />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="수집한 레퍼런스에서 캡션·계정·태그로 찾기"
+                aria-label="수집한 레퍼런스 검색"
+                className="h-12 w-full rounded-card border border-line bg-body pl-11 pr-10 text-[15px] text-fg placeholder:text-fg-faint transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+              />
+              {query ? (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  aria-label="검색어 지우기"
+                  className="absolute right-2.5 top-1/2 flex size-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded-chip text-fg-faint transition-colors hover:bg-overlay hover:text-fg"
+                >
+                  <X className="size-4" aria-hidden />
+                </button>
+              ) : null}
+            </div>
             <button
               type="button"
-              aria-pressed={favOnly}
-              onClick={() => setFavOnly((v) => !v)}
+              aria-expanded={panelOpen}
+              onClick={() => setPanelOpen((v) => !v)}
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-chip px-3.5 py-1.5 text-[13px] font-semibold transition-colors",
-                favOnly
-                  ? "bg-primary text-on-primary"
-                  : "border border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg",
+                "inline-flex h-12 cursor-pointer items-center gap-2 rounded-card border px-4 text-[14px] font-semibold transition-colors",
+                panelOpen || activeFilterCount > 0
+                  ? "border-primary bg-primary-weak text-primary"
+                  : "border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg",
               )}
             >
-              <Bookmark className="size-3.5" fill={favOnly ? "currentColor" : "none"} aria-hidden />
-              즐겨찾기만
+              <SlidersHorizontal className="size-4" aria-hidden />
+              필터
+              {activeFilterCount > 0 ? (
+                <span className="tnum flex size-5 items-center justify-center rounded-chip bg-primary text-[11px] font-bold text-on-primary">
+                  {activeFilterCount}
+                </span>
+              ) : null}
             </button>
+            <label className="flex items-center gap-2 text-[13px] text-fg-sub">
+              정렬
+              <select
+                value={itemSort}
+                onChange={(e) => setItemSort(e.target.value as ItemSort)}
+                className="h-12 cursor-pointer rounded-card border border-line bg-body px-3 text-[14px] font-medium text-fg transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+              >
+                {ITEM_SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-          <label className="flex items-center gap-2 text-[13px] text-fg-sub">
-            정렬
-            <select
-              value={itemSort}
-              onChange={(e) => setItemSort(e.target.value as ItemSort)}
-              className="h-8 rounded-card border border-line bg-overlay px-2.5 text-[13px] font-medium text-fg outline-none transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
-            >
-              {ITEM_SORT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+
+          {/* 상세 필터 패널 — 스니핏식 패싯 패널을 핀치 토큰으로 구성 */}
+          {panelOpen ? (
+            <div role="region" aria-label="상세 필터" className="rounded-card border border-line bg-body p-5 shadow-pop">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[13px] font-semibold text-fg-sub">
+                  원하는 조건을 조합해 정확한 레퍼런스를 찾아보세요
+                </p>
+                {activeFilterCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-chip px-3 py-1 text-[12px] font-semibold text-fg-sub transition-colors hover:bg-overlay hover:text-fg"
+                  >
+                    <RotateCcw className="size-3.5" aria-hidden />
+                    초기화
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="mt-4 grid gap-x-8 gap-y-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]">
+                <div className="space-y-5">
+                  <div>
+                    <p className="text-[13px] font-semibold text-fg-sub">수집 시기</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="수집 시기 필터">
+                      {COLLECTED_WITHIN_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          aria-pressed={collectedWithin === opt.value}
+                          onClick={() => setCollectedWithin(opt.value)}
+                          className={cn(
+                            "cursor-pointer rounded-chip border px-3 py-1.5 text-[13px] font-medium transition-colors",
+                            collectedWithin === opt.value
+                              ? "border-primary bg-primary-weak font-semibold text-primary"
+                              : "border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg",
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-[13px] font-semibold text-fg-sub">채널</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="채널 필터">
+                      {CHANNEL_FILTER_OPTIONS.map((opt) => {
+                        const active = filter === opt.value;
+                        const Glyph =
+                          opt.value === "instagram"
+                            ? InstagramGlyph
+                            : opt.value === "tiktok"
+                              ? TiktokGlyph
+                              : opt.value === "threads"
+                                ? ThreadsGlyph
+                                : null;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            aria-pressed={active}
+                            onClick={() => setFilter(opt.value)}
+                            className={cn(
+                              "inline-flex cursor-pointer items-center gap-1.5 rounded-chip border px-3 py-1.5 text-[13px] font-medium transition-colors",
+                              active
+                                ? "border-primary bg-primary-weak font-semibold text-primary"
+                                : "border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg",
+                            )}
+                          >
+                            {Glyph ? <Glyph className="size-3.5" aria-hidden /> : null}
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-[13px] font-semibold text-fg-sub">보기 옵션</p>
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        aria-pressed={favOnly}
+                        onClick={() => setFavOnly((v) => !v)}
+                        className={cn(
+                          "inline-flex cursor-pointer items-center gap-1.5 rounded-chip border px-3 py-1.5 text-[13px] font-medium transition-colors",
+                          favOnly
+                            ? "border-primary bg-primary-weak font-semibold text-primary"
+                            : "border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg",
+                        )}
+                      >
+                        <Bookmark className="size-3.5" fill={favOnly ? "currentColor" : "none"} aria-hidden />
+                        즐겨찾기만
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-5">
+                  {categoryFacets.length > 0 ? (
+                    <div>
+                      <p className="text-[13px] font-semibold text-fg-sub">
+                        카테고리 <span className="font-normal text-fg-faint">— AI 자동 분류, 복수 선택</span>
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="카테고리 필터">
+                        {categoryFacets.map((c) => (
+                          <button
+                            key={c.name}
+                            type="button"
+                            aria-pressed={categories.has(c.name)}
+                            onClick={() => setCategories((prev) => toggleSet(prev, c.name))}
+                            className={cn(
+                              "cursor-pointer rounded-chip border px-3 py-1.5 text-[13px] font-medium transition-colors",
+                              categories.has(c.name)
+                                ? "border-primary bg-primary-weak font-semibold text-primary"
+                                : "border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg",
+                            )}
+                          >
+                            {c.name} <span className="tnum text-[11px] opacity-60">{c.count}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {hookFacets.length > 0 ? (
+                    <div>
+                      <p className="text-[13px] font-semibold text-fg-sub">
+                        후킹 기법 <span className="font-normal text-fg-faint">— AI가 감지한 표현 전략, 복수 선택</span>
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="후킹 기법 필터">
+                        {hookFacets.map((h) => (
+                          <button
+                            key={h.name}
+                            type="button"
+                            aria-pressed={hooks.has(h.name)}
+                            onClick={() => setHooks((prev) => toggleSet(prev, h.name))}
+                            className={cn(
+                              "cursor-pointer rounded-chip border px-3 py-1.5 text-[13px] font-medium transition-colors",
+                              hooks.has(h.name)
+                                ? "border-primary bg-primary-weak font-semibold text-primary"
+                                : "border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg",
+                            )}
+                          >
+                            {h.name} <span className="tnum text-[11px] opacity-60">{h.count}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <p className="tnum text-[13px] text-fg-sub" aria-live="polite">
+            {filtered.length}건 표시 중
+            {query.trim() ? ` · '${query.trim()}' 검색` : ""}
+            {activeFilterCount > 0 ? ` · 필터 ${activeFilterCount}개 적용` : ""}
+          </p>
+        </section>
       ) : null}
 
       {/* 수집 로딩 오버레이 — 핀치 로고 둘레를 빛이 도는 오빗 링 */}
@@ -656,7 +917,7 @@ export function LibraryClient({
         <EmptyState
           icon={SearchX}
           title="이 조건에 맞는 레퍼런스가 없어요"
-          description="채널 필터를 '전체'로 바꾸거나 즐겨찾기 필터를 해제해보세요."
+          description="검색어를 지우거나 채널·카테고리 필터를 '전체'로 바꿔보세요."
         />
       ) : sources.length === 0 ? (
         <EmptyState
