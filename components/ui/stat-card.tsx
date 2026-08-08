@@ -9,7 +9,7 @@ export function DeltaText({ value, unit = "%", className }: { value: number; uni
   return <span className={cn("tnum font-semibold", tone, className)}>{formatDelta(value, unit)}</span>;
 }
 
-/** 대시보드 요약 지표 카드 (PART 4.1) */
+/** 대시보드 요약 지표 카드 (PART 4.1) — hero면 대표 지표용으로 크게 그린다 */
 export function StatCard({
   label,
   value,
@@ -17,6 +17,7 @@ export function StatCard({
   deltaUnit = "%",
   trend,
   hint,
+  hero = false,
   className,
 }: {
   label: React.ReactNode;
@@ -25,17 +26,19 @@ export function StatCard({
   deltaUnit?: string;
   trend?: number[];
   hint?: React.ReactNode;
+  /** 스탯 행의 대표 지표 — 값·여백을 키우고 추이를 강조 */
+  hero?: boolean;
   className?: string;
 }) {
   return (
-    <Card className={cn("p-5", className)}>
+    <Card className={cn(hero ? "p-6" : "p-5", className)}>
       <div className="flex items-center gap-1.5 text-[13px] text-fg-sub">
         {label}
         {hint}
       </div>
       <div className="mt-1.5 flex items-end justify-between gap-2">
         <div>
-          <div className="tnum text-2xl font-bold leading-none">{value}</div>
+          <div className={cn("tnum font-bold leading-none", hero ? "text-3xl" : "text-2xl")}>{value}</div>
           {delta !== undefined ? (
             <div className="mt-1.5 text-[13px]">
               <DeltaText value={delta} unit={deltaUnit} />
@@ -43,7 +46,7 @@ export function StatCard({
             </div>
           ) : null}
         </div>
-        {trend ? <Sparkline data={trend} stroke="var(--color-primary)" /> : null}
+        {trend && trend.length >= 2 ? <Sparkline data={trend} stroke="var(--color-primary)" /> : null}
       </div>
     </Card>
   );

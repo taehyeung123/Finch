@@ -41,6 +41,12 @@ const POST_TYPE_LABEL: Record<string, string> = {
   text: "텍스트",
 };
 
+/** "전체" 뷰용 채널 시계열 합산 — 길이가 다르면 짧은 쪽을 0으로 채운다 */
+function sumSeries(list: number[][]): number[] {
+  const len = Math.max(0, ...list.map((s) => s?.length ?? 0));
+  return Array.from({ length: len }, (_, i) => list.reduce((acc, s) => acc + (s?.[i] ?? 0), 0));
+}
+
 export interface DashboardData {
   accounts: ChannelAccount[];
   summaries: Record<ChannelFilter, DashboardSummary>;
@@ -74,10 +80,32 @@ export function DashboardClient({
   // 개별 채널 선택 시 우측 프로필 미러링 패널에 쓸 계정
   const selectedAccount = channel === "all" ? null : accounts.find((a) => a.channel === channel);
 
+  // 스탯 행에 실제 추이를 얹는다 — "전체"는 3채널 합산, 개별 채널은 해당 시계열
+  const followersTrend =
+    channel === "all"
+      ? sumSeries([trends.instagram?.followers ?? [], trends.tiktok?.followers ?? [], trends.threads?.followers ?? []])
+      : trends[channel]?.followers ?? [];
+  const viewsTrend =
+    channel === "all"
+      ? sumSeries([trends.instagram?.views ?? [], trends.tiktok?.views ?? [], trends.threads?.views ?? []])
+      : trends[channel]?.views ?? [];
+
   const summaryCards = (
     <>
-      <StatCard label="팔로워" value={formatCompact(summary.followers)} delta={summary.followersDelta} />
-      <StatCard label="이번 주 조회수" value={formatCompact(summary.weeklyViews)} delta={summary.weeklyViewsDelta} />
+      <StatCard
+        hero
+        className="col-span-2 lg:col-span-1"
+        label="팔로워"
+        value={formatCompact(summary.followers)}
+        delta={summary.followersDelta}
+        trend={followersTrend}
+      />
+      <StatCard
+        label="이번 주 조회수"
+        value={formatCompact(summary.weeklyViews)}
+        delta={summary.weeklyViewsDelta}
+        trend={viewsTrend}
+      />
       <StatCard label="게시물 수" value={summary.postCount.toLocaleString("ko-KR")} />
       <StatCard
         label={
@@ -136,7 +164,7 @@ export function DashboardClient({
           />
         </div>
       ) : (
-        <section aria-label="요약 지표" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <section aria-label="요약 지표" className="grid grid-cols-2 gap-3 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
           {summaryCards}
         </section>
       )}
