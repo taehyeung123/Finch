@@ -7,7 +7,7 @@ import { AgentPanel } from "@/components/layout/agent-panel";
 import { MobileTabbar } from "@/components/layout/mobile-tabbar";
 import { OpeningNotice } from "@/components/layout/opening-notice";
 import { isDemoMode } from "@/lib/supabase/config";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/supabase/server";
 import { IS_SAMPLE_DATA } from "@/lib/data";
 
 /* 로그인 후 영역 전체 — 검색 노출 금지 (PART 13.1) */
@@ -22,10 +22,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // fail-open으로 통과시킨다 — 백엔드 장애가 사이트 전체를 막다른 길로 만들지 않도록.
   if (!isDemoMode()) {
     try {
-      const supabase = await createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      // getAuthUser는 요청당 1회 메모이즈 — 이 가드가 왕복을 내고 페이지 조회 함수들은 재사용
+      const user = await getAuthUser();
       if (!user) redirect("/login");
     } catch (error) {
       // Next 내부 제어 신호는 그대로 흘려보낸다:

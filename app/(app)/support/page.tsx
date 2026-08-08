@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { InquiryForm } from "./_components/inquiry-form";
 
@@ -49,9 +49,7 @@ async function loadInquiries(): Promise<{ rows: InquiryRow[]; notice: string | n
     return { rows: [], notice: "데모 모드에서는 문의 내역이 표시되지 않습니다." };
   }
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return { rows: [], notice: null };
 
   const { data, error } = await supabase

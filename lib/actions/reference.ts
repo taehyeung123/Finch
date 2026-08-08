@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
 import { createClaudeClient, FAST_MODEL } from "@/lib/ai/claude";
@@ -58,9 +58,7 @@ function normalizeValue(kind: SourceKind, raw: string): string | null {
 export async function listReferenceSources(): Promise<ReferenceSource[] | null> {
   if (isDemoMode()) return null;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return null;
 
   const { data, error } = await supabase
@@ -105,9 +103,7 @@ export async function addReferenceSource(input: {
   if (isDemoMode()) return { ok: false, error: "데모 모드에서는 등록할 수 없습니다." };
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return { ok: false, error: "로그인이 필요합니다." };
 
   const { count } = await supabase
@@ -152,9 +148,7 @@ export async function addReferenceSource(input: {
 export async function removeReferenceSource(id: string): Promise<{ ok: boolean }> {
   if (isDemoMode()) return { ok: false };
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return { ok: false };
 
   // RLS가 본인 행만 허용하지만, 의도를 명시하기 위해 user_id 필터도 건다
@@ -178,9 +172,7 @@ const MAX_EXCLUDE_KEYWORDS = 10;
 export async function getCollectSettings(): Promise<CollectSettings> {
   if (isDemoMode()) return DEFAULT_COLLECT_SETTINGS;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return DEFAULT_COLLECT_SETTINGS;
 
   const { data } = await supabase
@@ -213,9 +205,7 @@ export async function saveCollectSettings(input: CollectSettings): Promise<{ ok:
 
   if (isDemoMode()) return { ok: false, error: "데모 모드에서는 저장할 수 없습니다." };
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return { ok: false, error: "로그인이 필요합니다." };
 
   const { error } = await supabase.from("reference_collect_settings").upsert({
@@ -492,9 +482,7 @@ function extractHashtags(caption: string): string[] {
 export async function listReferenceItems(): Promise<ReferenceItem[]> {
   if (isDemoMode()) return [];
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return [];
 
   // 스키마 세대별 컬럼 목록 — 미적용 마이그레이션이 있어도 목록은 항상 살린다
@@ -574,9 +562,7 @@ async function cacheThumbnail(userId: string, post: CollectedPost): Promise<stri
 export async function deleteReferenceItem(id: string): Promise<{ ok: boolean }> {
   if (isDemoMode()) return { ok: false };
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return { ok: false };
   const { error } = await supabase.from("reference_items").delete().eq("id", id).eq("user_id", user.id);
   if (error) {
@@ -592,9 +578,7 @@ export async function saveReferenceNote(id: string, note: string): Promise<{ ok:
   if (isDemoMode()) return { ok: false, error: "데모 모드에서는 저장되지 않아요." };
   const trimmed = String(note ?? "").slice(0, 2000);
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return { ok: false, error: "로그인이 필요합니다." };
   const { error } = await supabase
     .from("reference_items")
@@ -621,9 +605,7 @@ export async function setReferenceStatus(
   if (isDemoMode()) return { ok: false };
   if (!["unseen", "seen", "skipped"].includes(status)) return { ok: false };
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return { ok: false };
   const { error } = await supabase
     .from("reference_items")
@@ -643,9 +625,7 @@ export type TranscriptResult = { ok: true; transcript: string } | { ok: false; e
 export async function extractTranscript(id: string): Promise<TranscriptResult> {
   if (isDemoMode()) return { ok: false, error: "데모 모드에서는 추출할 수 없어요." };
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return { ok: false, error: "로그인이 필요합니다." };
   if (!isCollectionConfigured()) return { ok: false, error: "수집 엔진 설정이 완료되지 않았어요." };
 
@@ -686,9 +666,7 @@ export async function extractTranscript(id: string): Promise<TranscriptResult> {
 export async function toggleReferenceFavorite(id: string, favorite: boolean): Promise<{ ok: boolean }> {
   if (isDemoMode()) return { ok: false };
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return { ok: false };
   const { error } = await supabase
     .from("reference_items")
@@ -812,9 +790,7 @@ export async function runCollection(): Promise<CollectRunResult> {
   if (isDemoMode()) return { ok: false, reason: "demo", error: "데모 모드에서는 수집할 수 없습니다." };
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return { ok: false, reason: "auth", error: "로그인이 필요합니다." };
 
   if (!isCollectionConfigured()) {

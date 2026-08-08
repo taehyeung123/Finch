@@ -5,7 +5,7 @@
  * next/headers(createClient) 경유라 서버 컨텍스트에서만 동작한다.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import {
   notifications as mockNotifications,
@@ -16,9 +16,7 @@ import type { AppNotification, UsageStat, ReportItem, Channel } from "@/lib/type
 
 async function getUser() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(); // 요청당 1회 메모이즈 — 레이아웃 가드와 왕복 공유
   return { supabase, user };
 }
 

@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import {
   DEFAULT_STATE,
@@ -17,9 +17,7 @@ export default async function NotificationSettingsPage() {
   if (!isDemoMode()) {
     try {
       const supabase = await createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await getAuthUser();
       if (user) {
         const { data } = await supabase
           .from("notification_settings")

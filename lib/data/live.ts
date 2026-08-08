@@ -13,7 +13,7 @@
  * next/headers(createClient) 경유라 서버 컨텍스트에서만 동작한다.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { getWorkspaceOwnerId } from "@/lib/team";
 import { decryptToken, encryptToken } from "@/lib/crypto/tokens";
@@ -99,9 +99,7 @@ interface AccountRow {
 async function loadAccountRow(channel: "instagram" | "threads" | "tiktok"): Promise<AccountRow | null> {
   if (isDemoMode()) return null;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(); // 요청당 1회 메모이즈 — 레이아웃 가드와 왕복 공유
   if (!user) return null;
 
   const ownerId = await getWorkspaceOwnerId(supabase, user.id);

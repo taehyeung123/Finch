@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { isDemoMode } from "@/lib/supabase/config";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { getWorkspaceOwnerId } from "@/lib/team";
 import { SettingsNav } from "../_components/settings-nav";
 import { TeamClient, type TeamRowVM } from "./_components/team-client";
@@ -27,9 +27,7 @@ async function loadTeamData(): Promise<{ isOwner: boolean; rows: TeamRowVM[] }> 
   if (isDemoMode()) return { isOwner: true, rows: SAMPLE_MEMBERS };
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return { isOwner: false, rows: [] };
 
   const ownerId = await getWorkspaceOwnerId(supabase, user.id);

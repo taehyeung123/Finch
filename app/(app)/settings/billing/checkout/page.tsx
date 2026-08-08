@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { PLAN_NAMES, PLAN_PRICES, getTossClientKey, isPaidPlan } from "@/lib/toss/config";
 import { formatKRW } from "@/lib/format";
@@ -29,10 +29,7 @@ export default async function CheckoutPage({
 
   let customerKey: string | null = null;
   if (!isDemoMode()) {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getAuthUser();
     customerKey = user?.id ?? null;
   }
 

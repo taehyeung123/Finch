@@ -3,7 +3,7 @@ import { CheckCircle2, XCircle } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card } from "@/components/ui/card";
 import { buttonClasses } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { confirmPayment } from "@/lib/toss/server";
 import { formatKRW } from "@/lib/format";
@@ -23,9 +23,7 @@ async function processConfirmation(sp: Record<string, string | string[] | undefi
   if (!paymentKey || !orderId) return { ok: false, message: "결제 정보가 올바르지 않습니다." };
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return { ok: false, message: "로그인이 필요합니다." };
 
   // 본인 주문 조회(RLS) — 예정 금액/플랜의 신뢰 원천
