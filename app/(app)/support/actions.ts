@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
+import { INQUIRY_TYPES } from "./inquiry-types";
 
 /**
  * 문의 접수 — 마이그레이션 0017_inquiries.sql 위에서 동작.
@@ -12,9 +13,6 @@ import { isDemoMode } from "@/lib/supabase/config";
  * 채워 넣는 것이 DB 차원에서 막힌다. 답변 작성은 딥레드 HQ(service role)에서만
  * 이뤄지고 이 앱에는 답변을 쓰는 경로 자체가 없다.
  */
-
-export const INQUIRY_TYPES = ["결제", "계정", "기능", "기타"] as const;
-export type InquiryType = (typeof INQUIRY_TYPES)[number];
 
 /** 미답변 문의가 이만큼 쌓이면 접수를 막는다 — 중복 접수로 CS가 묻히는 것 방지 */
 const MAX_PENDING = 5;

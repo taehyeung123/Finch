@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
-import { INQUIRY_TYPES, submitInquiry, type InquiryType } from "../actions";
+import { submitInquiry } from "../actions";
+import { INQUIRY_TYPES, type InquiryType } from "../inquiry-types";
 
 /** 문의 접수 폼 — 성공하면 목록이 갱신되도록 새로고침한다 */
 export function InquiryForm() {
