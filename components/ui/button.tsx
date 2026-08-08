@@ -5,7 +5,7 @@ type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md" | "lg";
 
 const base =
-  "inline-flex items-center justify-center gap-1.5 font-medium rounded-card transition-colors focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:opacity-40 disabled:pointer-events-none whitespace-nowrap";
+  "inline-flex items-center justify-center gap-1.5 font-medium rounded-card transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed whitespace-nowrap";
 
 /* 코랄 배경 위 텍스트는 항상 다크 (PART 7.3 확정) */
 const variants: Record<Variant, string> = {

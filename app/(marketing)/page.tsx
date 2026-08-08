@@ -11,13 +11,12 @@ import {
   Users,
 } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
-import { Badge, ChannelBadge, SupportBadge } from "@/components/ui/badge";
+import { Badge, ChannelBadge } from "@/components/ui/badge";
 import { Sparkline } from "@/components/ui/charts";
 import { FaqAccordion, type FaqItem } from "@/components/landing/faq";
 import { Reveal } from "@/components/landing/reveal";
 import { HeroVisual } from "@/components/landing/hero-visual";
 import { AppIconTile, type BrandApp } from "@/components/icons/brand";
-import { SUPPORT_MATRIX } from "@/lib/channels";
 
 export const metadata: Metadata = {
   title: "핀치 (Finch) — 인스타그램·틱톡·쓰레드 SNS 통합 분석 & 메타광고 관리",
@@ -426,7 +425,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 채널 지원 매트릭스 미리보기 (PART 6.1-5) — 기대치를 정직하게 설정 */}
+      {/* 채널별 자세히 보기 진입 (PART 6.1-5) */}
       <section id="channels" className="border-t border-line bg-body/40">
         <div className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20 md:px-6">
           <Reveal>
@@ -434,45 +433,7 @@ export default function LandingPage() {
               인스타그램·틱톡·쓰레드, 각각 무엇을 볼 수 있나요?
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-center text-[15px] text-fg-sub">
-              채널마다 공식 API가 제공하는 데이터 범위가 다릅니다. 핀치는 이 차이를 감추지 않고 기능별 지원
-              범위를 그대로 보여드려요.
-            </p>
-          </Reveal>
-          <Reveal delay={0.1}>
-            <div className="mt-10 overflow-x-auto rounded-card border border-line bg-body">
-              <table className="w-full min-w-[640px] text-[14px]">
-                <caption className="sr-only">채널별 기능 지원 범위 비교표</caption>
-                <thead>
-                  <tr className="border-b border-line text-left text-[13px] text-fg-faint">
-                    <th className="px-5 py-3.5 font-semibold">기능</th>
-                    <th className="px-4 py-3.5 font-semibold">Instagram</th>
-                    <th className="px-4 py-3.5 font-semibold">TikTok</th>
-                    <th className="px-4 py-3.5 font-semibold">Threads</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {SUPPORT_MATRIX.map((row) => (
-                    <tr key={row.feature} className="border-b border-line transition-colors last:border-0 hover:bg-overlay/60">
-                      <td className="px-5 py-3.5 font-medium">
-                        {row.feature}
-                        {row.note ? <p className="mt-0.5 text-xs font-normal text-fg-faint">{row.note}</p> : null}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <SupportBadge level={row.instagram} />
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <SupportBadge level={row.tiktok} />
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <SupportBadge level={row.threads} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-4 text-center text-[13px] text-fg-faint">
-              제휴 데이터는 검증된 데이터 공급사를 통해 제공되며, 화면에 출처와 갱신 시점을 함께 표기합니다.
+              채널마다 확인할 수 있는 지표와 기능이 조금씩 달라요. 아래에서 채널별로 자세히 살펴보세요.
             </p>
           </Reveal>
           <Reveal delay={0.15}>

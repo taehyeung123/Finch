@@ -14,8 +14,11 @@
 
 ## 디자인 규칙 (PRD PART 7)
 
-- 다크모드 전용: surface `#0C0C11` → body `#16161C` → overlay `#212128` (토큰: `bg-surface`/`bg-body`/`bg-overlay`)
-- 그림자(box-shadow) 금지 — 반투명 테두리(`border-line`)로 깊이 표현
+- **라이트 기본 + 다크 토글, 듀얼 테마 정식 지원** (2026-08 결정 — 과거 "다크모드 전용" 방침 폐기).
+  라이트 surface `#F4F5F7` → body `#FFFFFF` → overlay `#FFFFFF`, 다크 surface `#0C0C11` → body `#16161C` → overlay `#212128`
+  (토큰: `bg-surface`/`bg-body`/`bg-overlay`, 실제 값은 `app/globals.css`의 `:root`/`:root[data-theme="dark"]`가 정한다)
+- 깊이 표현은 테마별로 다르다: **다크는 반투명 테두리(`border-line`)만**, **라이트는 테두리 + 떠있는 요소에 한해 `shadow-pop` 토큰**(미세 그림자) 허용.
+  임의 Tailwind `shadow-*` 유틸(`shadow-sm`/`shadow-lg` 등) 직접 사용 금지 — 항상 `shadow-pop` 토큰으로.
 - 라운드 2단계만: 카드/버튼/인풋 `rounded-card`(8px), 칩/뱃지 `rounded-chip`(32px)
 - 브랜드 컬러 시그널 코랄(`bg-primary`) 위 텍스트는 **항상 다크**(`text-on-primary`) — 흰색 금지(WCAG 대비 미달)
 - 상승=초록(`positive`), 하락=빨강(`negative`) — 주식 관행(빨강=상승) 금지

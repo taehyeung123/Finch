@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { ArrowRight, Check, MessageCircleQuestion } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
-import { SupportBadge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { FaqAccordion, type FaqItem } from "@/components/landing/faq";
 import { Reveal } from "@/components/landing/reveal";
@@ -168,10 +167,7 @@ export default function InstagramAnalysisPage() {
                 ))}
               </div>
               {section.badgeNote ? (
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <SupportBadge level="partial" />
-                  <span className="text-[13px] text-fg-faint">{section.badgeNote}</span>
-                </div>
+                <p className="mt-4 text-[13px] text-fg-faint">{section.badgeNote}</p>
               ) : null}
               <ul className="mt-5 grid gap-2.5 sm:grid-cols-3">
                 {section.points.map((point) => (

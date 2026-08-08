@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, BarChart3, Check, Hash, MessageCircleQuestion, Sparkles } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
-import { SupportBadge, DataSourceBadge } from "@/components/ui/badge";
 import { FaqAccordion, type FaqItem } from "@/components/landing/faq";
 import { Reveal } from "@/components/landing/reveal";
 import { AppIconTile } from "@/components/icons/brand";
@@ -101,12 +100,11 @@ export default function TiktokPage() {
                 <BarChart3 className="size-5" aria-hidden />
               </span>
               <h2 className="text-2xl font-bold md:text-3xl">틱톡 계정 분석, 무엇을 볼 수 있나요?</h2>
-              <SupportBadge level="full" />
             </div>
             <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-fg-sub">
-              내 틱톡 계정은 틱톡 공식 API로 연동되어 팔로워 통계, 조회수 분석, 참여율까지 전 항목의
-              틱톡 통계를 완전 지원합니다. 틱톡 분석기로 계정 전체를 진단하듯, 틱톡 영상 분석까지
-              함께 확인할 수 있어요.
+              내 틱톡 계정을 연동하면 팔로워 통계, 조회수 분석, 참여율까지 전 항목의 틱톡 통계를
+              확인할 수 있어요. 틱톡 분석기로 계정 전체를 진단하듯, 틱톡 영상 분석까지 함께
+              확인할 수 있어요.
             </p>
             <ul className="mt-6 grid gap-2.5 md:grid-cols-2">
               {[
@@ -135,16 +133,11 @@ export default function TiktokPage() {
             <h2 className="text-2xl font-bold md:text-3xl">
               틱톡 트렌드·해시태그·인플루언서 분석도 되나요?
             </h2>
-            <SupportBadge level="thirdparty" />
           </div>
           <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-fg-sub">
-            틱톡은 타 계정과 트렌드에 대한 공식 API 제공 범위가 매우 좁습니다. 핀치는 검증된 제휴
-            데이터 공급사를 통해 이 영역을 보완하며, 화면에는 항상 데이터 출처와 갱신 시점을 함께
-            표기합니다.
+            네, 가능합니다. 카테고리별 트렌드, 해시태그 확산 추이, 인플루언서 순위까지 핀치 화면에서
+            바로 확인할 수 있고, 갱신 시점도 함께 표기됩니다.
           </p>
-          <div className="mt-3">
-            <DataSourceBadge source="thirdparty" />
-          </div>
           <ul className="mt-6 grid gap-2.5 md:grid-cols-2">
             {[
               "카테고리별 실시간 틱톡 트렌드 분석",
@@ -170,7 +163,6 @@ export default function TiktokPage() {
                 <Sparkles className="size-5" aria-hidden />
               </span>
               <h2 className="text-2xl font-bold md:text-3xl">틱톡 콘텐츠 제작에 AI도 활용할 수 있나요?</h2>
-              <SupportBadge level="full" />
             </div>
             <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-fg-sub">
               핀치의 AI 콘텐츠 스튜디오는 틱톡에도 동일하게 적용됩니다. 주제만 입력하면 틱톡 숏폼에
