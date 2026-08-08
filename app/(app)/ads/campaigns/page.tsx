@@ -956,7 +956,22 @@ export default function CampaignsPage() {
           <Card>
             <CardHeader title="광고 미리보기" description="Instagram 피드 기준" />
             <CardBody>
-              <div className="overflow-hidden rounded-card border border-line bg-surface">
+              {/* 폰 목업 — 제네릭 스마트폰 실루엣(특정 기기 브랜드 아님). 프레임 라운드는
+                  chip 토큰(32px), 스크린 24px은 프레임 곡률 추종용 예외. 베젤은 bg-fg라
+                  라이트에선 다크 베젤, 다크 테마에선 라이트 베젤로 자동 반전된다. */}
+              <div className="mx-auto w-full max-w-[300px]">
+                <div className="rounded-chip bg-fg p-2 shadow-pop">
+                  <div className="overflow-hidden rounded-[24px] bg-body">
+                    {/* 상태바 — 시계·펀치홀 카메라·수신/배터리 */}
+                    <div className="flex items-center justify-between px-4 pb-1 pt-2.5" aria-hidden>
+                      <span className="tnum text-[11px] font-semibold">12:30</span>
+                      <span className="size-2 rounded-chip bg-fg" />
+                      <span className="flex items-center gap-1">
+                        <span className="size-1.5 rounded-chip bg-fg/60" />
+                        <span className="size-1.5 rounded-chip bg-fg/40" />
+                        <span className="h-2.5 w-5 rounded-[3px] border border-fg/40 bg-positive/70" />
+                      </span>
+                    </div>
                 {/* 상단 — 프로필 */}
                 <div className="flex items-center gap-2.5 p-3">
                   <span className="flex size-8 shrink-0 items-center justify-center rounded-chip bg-primary-weak text-primary">
@@ -1020,9 +1035,16 @@ export default function CampaignsPage() {
                     </>
                   )}
                 </div>
+
+                    {/* 홈 인디케이터 */}
+                    <div className="flex justify-center pb-2 pt-1" aria-hidden>
+                      <span className="h-1 w-20 rounded-chip bg-fg/30" />
+                    </div>
+                  </div>
+                </div>
               </div>
-              <p className="mt-3 text-xs text-fg-faint">
-                4단계에서 입력한 제목·본문·CTA가 실시간으로 반영됩니다.
+              <p className="mt-3 text-center text-xs text-fg-faint">
+                실제 휴대폰 화면 기준 미리보기 — 4단계 입력값이 실시간으로 반영됩니다.
               </p>
             </CardBody>
           </Card>
