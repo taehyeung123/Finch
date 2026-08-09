@@ -91,8 +91,11 @@ export function Topbar() {
         className="relative rounded-card p-2 text-fg-sub hover:bg-overlay hover:text-fg"
       >
         <Bell className="size-5" aria-hidden />
+        {/* 알림이 사이드바에서 빠져 이 벨이 유일한 상시 진입점 — 점 대신 미읽음 개수를 노출한다 */}
         {unread > 0 ? (
-          <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary" aria-hidden />
+          <span className="absolute right-0.5 top-0.5 min-w-4 rounded-chip bg-primary px-1 text-[10px] font-bold leading-4 text-on-primary tnum">
+            {unread > 99 ? "99+" : unread}
+          </span>
         ) : null}
       </Link>
 
