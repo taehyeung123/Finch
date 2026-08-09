@@ -570,11 +570,20 @@ export async function runCollection(): Promise<CollectRunResult> {
           error: `${excludedLowQuality}개를 발견했지만 반응(조회·좋아요)이 기준에 못 미쳐 제외했어요. 키워드를 더 널리 쓰이는 말로 바꿔보세요 — 사용하신 횟수는 차감되지 않았습니다.`,
         };
       }
+      /* 중복만 나온 건 실패가 아니다 — 이미 최신 상태라는 뜻이다.
+         수집 커버리지가 좋을수록 사용자에게 빨간 실패로 보이던 분기를 정상 응답으로 뒤집는다. */
       if (duplicates > 0) {
         return {
-          ok: false,
-          reason: "provider",
-          error: `${duplicates}개를 발견했지만 전부 이미 수집된 콘텐츠예요. 새 게시물이 올라오면 다시 수집돼요 — 사용하신 횟수는 차감되지 않았습니다.`,
+          ok: true,
+          added: 0,
+          duplicates,
+          usedSources: result.usedSources,
+          totalSources: sources.length,
+          failedSources,
+          excludedLowQuality,
+          excludedByFilter,
+          excludedIrrelevant,
+          aiWarning,
         };
       }
       if (excludedIrrelevant > 0) {

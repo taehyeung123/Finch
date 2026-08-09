@@ -422,8 +422,13 @@ export function LibraryClient({
       let tone: "notice" | "error" = "notice";
 
       if (result.ok) {
-        parts.push(`레퍼런스 ${result.added}건 수집`);
-        if (result.duplicates > 0) parts.push(`중복 ${result.duplicates}건 제외`);
+        /* 새로 들어온 게 없고 중복만 나온 건 실패가 아니라 "이미 최신"이다 */
+        if (result.added === 0 && result.duplicates > 0) {
+          parts.push(`레퍼런스는 이미 최신 상태예요 (새 게시물 0건)`);
+        } else {
+          parts.push(`레퍼런스 ${result.added}건 수집`);
+          if (result.duplicates > 0) parts.push(`중복 ${result.duplicates}건 제외`);
+        }
         if (result.excludedLowQuality > 0) parts.push(`반응 낮은 ${result.excludedLowQuality}건 제외`);
         if (result.failedSources.length > 0) {
           parts.push(`기준 ${result.failedSources.map((v) => `'${v}'`).join(", ")}은 실패`);
@@ -439,7 +444,11 @@ export function LibraryClient({
 
       if (adResult) {
         if (adResult.ok) {
-          parts.push(`메타광고 ${adResult.added}건 수집`);
+          parts.push(
+            adResult.added === 0 && adResult.duplicates > 0
+              ? "메타광고도 이미 최신 상태예요"
+              : `메타광고 ${adResult.added}건 수집`,
+          );
         } else if (adResult.reason !== "no_sources") {
           parts.push(adResult.error);
           tone = "error";

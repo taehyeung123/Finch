@@ -176,7 +176,14 @@ function normalizeIgUserPost(raw: Json, handle: string): CollectedPost | null {
     views: metric(raw.play_count) || metric(raw.ig_play_count),
     likes: metric(raw.like_count),
     comments: metric(raw.comment_count),
-    followerCount: metric(user.follower_count),
+    /* 0 = 모름 (레포 규약, 216행·apify.ts:53과 동일). 이 엔드포인트의 user 객체에는
+       follower_count가 아예 없다 — 2026-08-09 실측 키: pk·id·full_name·is_private·
+       is_verified·profile_pic_url·username 등뿐. 따라서 이 경로로 들어온 게시물은
+       "팔로워 대비 조회수"를 계산할 수 없고, 표시부가 followerCount > 0으로 가드해
+       지표 자체를 숨긴다(0을 분모로 쓰지 않는다).
+       실제 팔로워 수가 필요하면 /v1/instagram/profile을 계정당 1콜 따로 태워야 한다
+       (실측 확인: medicube_korea → 213,790). 브랜드 아카이브 단계에서 도입 예정. */
+    followerCount: 0,
     postedAt: takenAt ? new Date(takenAt * 1000).toISOString() : str(raw.taken_at) || null,
     region: null,
   };

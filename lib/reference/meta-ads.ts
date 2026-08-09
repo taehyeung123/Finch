@@ -72,21 +72,33 @@ function normalizeAd(raw: Json): CollectedAd | null {
   };
 }
 
+export interface AdSearchPage {
+  ads: CollectedAd[];
+  /** 다음 페이지 커서 — null이면 더 없음 */
+  cursor: string | null;
+  /** 공급사가 보고한 총 검색 결과 수(추정치라 콜마다 흔들린다) */
+  totalCount: number;
+}
+
 /**
- * 키워드로 KR 상업광고 검색 — 페이지당 1크레딧.
- * trim=true로 응답 축약(불필요 필드 절약), 실패해도 예외를 던져 호출부가
- * out_of_credits 등 이유별로 분기하게 한다(수집 엔진과 동일 원칙).
+ * 키워드로 KR 상업광고 검색 — 콜당 1크레딧.
+ *
+ * **페이지네이션은 반드시 cursor로 한다.** 이 엔드포인트에는 `page` 파라미터가
+ * 먹지 않는다 — 2026-08-09 실측: page=1과 page=2가 첫 ID·끝 ID까지 완전히 동일한
+ * 30건을 반환했다(중복률 100%). 과거 page 기반 병렬 호출은 크레딧의 절반을
+ * 같은 데이터에 태우면서 실제 수집량은 30건에서 늘지 않았다.
+ * cursor는 정상 동작한다(1페이지 30건, 이후 10건씩, 중복 0).
+ *
+ * trim=true로 응답 축약. 실패는 예외로 던져 호출부가 out_of_credits 등 이유별로
+ * 분기하게 한다(수집 엔진과 동일 원칙).
  */
-export async function searchAds(query: string, page = 1): Promise<CollectedAd[]> {
+export async function searchAds(query: string, cursor?: string | null): Promise<AdSearchPage> {
   const key = process.env.SCRAPECREATORS_API_KEY;
   if (!key) throw new CollectError("no_key", "SCRAPECREATORS_API_KEY 미설정");
 
-  const url = `${BASE}/v1/facebook/adLibrary/search/ads?${new URLSearchParams({
-    query,
-    country: "KR",
-    trim: "true",
-    page: String(page),
-  }).toString()}`;
+  const params = new URLSearchParams({ query, country: "KR", trim: "true" });
+  if (cursor) params.set("cursor", cursor);
+  const url = `${BASE}/v1/facebook/adLibrary/search/ads?${params.toString()}`;
 
   let res: Response;
   try {
@@ -112,5 +124,9 @@ export async function searchAds(query: string, page = 1): Promise<CollectedAd[]>
     throw new CollectError("provider_error", `공급사 오류: ${msg}`);
   }
   const results = Array.isArray(data.searchResults) ? (data.searchResults as Json[]) : [];
-  return results.map(normalizeAd).filter((a): a is CollectedAd => a !== null);
+  return {
+    ads: results.map(normalizeAd).filter((a): a is CollectedAd => a !== null),
+    cursor: typeof data.cursor === "string" && data.cursor ? data.cursor : null,
+    totalCount: typeof data.searchResultsCount === "number" ? data.searchResultsCount : results.length,
+  };
 }

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { chargeGeneration, refundGenerationCredits, CREDIT_COSTS } from "@/lib/actions/credits";
-import { searchAds, isAdCollectionConfigured, type CollectedAd } from "@/lib/reference/meta-ads";
+import { searchAds, isAdCollectionConfigured, type AdSearchPage, type CollectedAd } from "@/lib/reference/meta-ads";
 import { CollectError } from "@/lib/reference/scrapecreators";
 import { acquireCollectLock, releaseCollectLock } from "@/lib/reference/engine";
 import type { AdSource, ReferenceAd } from "@/lib/types";
@@ -20,8 +20,11 @@ import type { AdSource, ReferenceAd } from "@/lib/types";
 
 const MAX_AD_SOURCES = 10;
 const MAX_SOURCES_PER_RUN = 3;
-/** 검색어 하나당 가져올 페이지 수 — 페이지당 1크레딧 실비, 페이지당 약 30건 */
-const FETCH_PAGES_PER_SOURCE = 2;
+/**
+ * 검색어 하나당 이어받을 커서 페이지 수 — 콜당 1크레딧.
+ * 1페이지 30건, 2페이지부터 10건씩(실측). 같은 2크레딧으로 과거 30건 → 지금 40건.
+ */
+const MAX_CURSOR_PAGES = 2;
 const KEEP_PER_SOURCE = 20;
 const MAX_TOTAL_PER_RUN = 30;
 
@@ -277,18 +280,21 @@ export async function runAdCollection(): Promise<AdCollectRunResult> {
     for (const src of used) {
       if (added >= MAX_TOTAL_PER_RUN) break;
 
-      const pageResults = await Promise.allSettled(
-        Array.from({ length: FETCH_PAGES_PER_SOURCE }, (_, i) => searchAds(src.value, i + 1)),
-      );
+      /* 커서 순차 호출 — 병렬로 못 쏜다(다음 커서를 이전 응답에서만 얻는다).
+         과거엔 page=1,2를 병렬로 쏴서 같은 30건을 두 번 받고 크레딧을 절반 버렸다. */
       const ads: CollectedAd[] = [];
       let anyFulfilled = false;
-      for (const r of pageResults) {
-        if (r.status === "fulfilled") {
+      let cursor: string | null = null;
+      for (let i = 0; i < MAX_CURSOR_PAGES; i++) {
+        try {
+          const page: AdSearchPage = await searchAds(src.value, cursor);
           anyFulfilled = true;
-          ads.push(...r.value);
-        } else {
-          const err = r.reason instanceof CollectError ? r.reason : new CollectError("provider_error", String(r.reason));
-          failures.push(err);
+          ads.push(...page.ads);
+          cursor = page.cursor;
+          if (!cursor || page.ads.length === 0) break; // 더 없음
+        } catch (e) {
+          failures.push(e instanceof CollectError ? e : new CollectError("provider_error", String(e)));
+          break; // 커서가 끊겼으므로 이 기준은 여기까지
         }
       }
       if (!anyFulfilled) {
@@ -362,12 +368,10 @@ export async function runAdCollection(): Promise<AdCollectRunResult> {
           error: "수집에 실패했어요. 잠시 후 다시 시도해 주세요 — 사용하신 횟수는 차감되지 않았습니다.",
         };
       }
+      /* 중복만 나온 건 실패가 아니다 — 이미 최신 상태라는 뜻이다.
+         풀 커버리지가 완벽할수록 사용자에게 빨간 실패로 보이던 분기를 정상 응답으로 뒤집는다. */
       if (duplicates > 0) {
-        return {
-          ok: false,
-          reason: "provider",
-          error: `${duplicates}개를 발견했지만 전부 이미 수집된 광고예요. 새 광고가 게재되면 다시 수집돼요 — 사용하신 횟수는 차감되지 않았습니다.`,
-        };
+        return { ok: true, added: 0, duplicates, usedSources: used.length, totalSources: sources.length, failedSources };
       }
       return {
         ok: false,
