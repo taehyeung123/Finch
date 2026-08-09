@@ -72,14 +72,19 @@
 2. **Login Kit** + **Display API** 신청 → 심사 수주 소요, 지금 신청만 해두기
 3. 승인 후 (Claude Code 작업) OAuth + 지표 수집 배치
 
-## 6. 3rd party 트렌드 데이터 공급사 — 탐색/트렌드/타계정 정밀 (Phase 2)
+## 6. 3rd party 데이터 공급사 — 레퍼런스 수집함/타계정 정밀 (Phase 2)
 
-**채우는 것**: `trendItems`(탐색 페이지 전체 — 검색·카테고리·실시간), 타계정 정밀 분석.
+**채우는 것**: `reference_items`(레퍼런스 수집함 `/library` 전체 — 검색·카테고리·후킹·정렬), 타계정 정밀 분석.
+
+> 구 `trendItems`(탐색 전용 목데이터)는 제거됐다 — `/discover`가 `/library`로 흡수되면서
+> 수집 파이프라인이 채우는 `reference_items` 하나로 통일했다 (PRD PART 4.4 흡수 기록).
 
 1. 소액 테스트: HikerAPI(인스타그램, 요청당 ~$0.0006)로 데이터 품질 검증
 2. 본계약: EnsembleData(TikTok·IG 커버, 월 $100~) 또는 Modash — 월 예산 상한을 먼저 정할 것 (PRD 2.3)
-3. (Claude Code 작업) 공급사 응답 → `TrendItem` 타입 매핑 어댑터 + 수집 배치 + `lib/data` 교체
-4. 화면의 출처·갱신시점 표기는 이미 구현돼 있음 (DataSourceBadge/DataSourceNote)
+3. (Claude Code 작업) 공급사 응답 → `ReferenceItem` 타입 매핑 어댑터(`lib/reference/engine.ts`) + 수집 배치
+   - 게시 시각은 `reference_items.posted_at`(0019)에 저장 → `ReferenceItem.postedAgoHours`로 노출.
+     공급사가 게시 시각을 주지 않는 경로에서는 `undefined`이므로 "게시 최신순" 정렬에 가드가 필요하다.
+4. 화면의 데이터 출처 배지는 노출하지 않는다(2026-07 결정) — 갱신 시점 표기만 유지
 
 ## 7. Toss Payments — 결제 (출시 직전)
 

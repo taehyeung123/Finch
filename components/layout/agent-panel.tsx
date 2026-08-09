@@ -38,8 +38,8 @@ function mockReply(q: string): AgentMessage {
   if (q.includes("트렌드") || q.includes("뜨는") || q.includes("뷰티")) {
     return {
       role: "agent",
-      text: "뷰티 카테고리에서 팔로워 대비 조회수 28.6배를 기록 중인 '5초 쿨톤 베이스 루틴' 콘텐츠가 가장 눈에 띄어요. 최근 6시간 급상승 콘텐츠 4건을 탐색 탭에 정리해뒀습니다.",
-      linkCard: { href: "/discover", label: "탐색에서 트렌드 보기" },
+      text: "뷰티 카테고리에서 팔로워 대비 조회수 28.6배를 기록 중인 '5초 쿨톤 베이스 루틴' 콘텐츠가 가장 눈에 띄어요. 최근 수집된 관련 콘텐츠 4건을 레퍼런스 수집함에 정리해뒀습니다.",
+      linkCard: { href: "/library", label: "레퍼런스에서 찾아보기" },
     };
   }
   if (q.includes("광고")) {
@@ -58,7 +58,7 @@ function mockReply(q: string): AgentMessage {
   }
   return {
     role: "agent",
-    text: "채널 성과 요약, 트렌드 탐색, 경쟁사 광고 확인, 카드뉴스 생성까지 도와드릴 수 있어요. 아래 자주 쓰는 질문을 눌러보셔도 좋아요.",
+    text: "채널 성과 요약, 레퍼런스 찾기, 경쟁사 광고 확인, 카드뉴스 생성까지 도와드릴 수 있어요. 아래 자주 쓰는 질문을 눌러보셔도 좋아요.",
   };
 }
 

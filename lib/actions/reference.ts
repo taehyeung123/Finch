@@ -255,6 +255,7 @@ interface DbItemRow {
   follower_count: number;
   matched_source: string;
   favorite: boolean;
+  posted_at: string | null;
   collected_at: string;
 }
 
@@ -275,6 +276,10 @@ function rowToItem(r: DbItemRow): ReferenceItem {
     followerCount: Math.max(0, Number(r.follower_count) || 0),
     matchedSource: r.matched_source,
     collectedAgoHours: hours,
+    // 게시 시각은 0019부터 저장 — 없는 행(구 수집분·공급사 미제공)은 undefined로 남긴다
+    postedAgoHours: r.posted_at
+      ? Math.max(0, Math.floor((Date.now() - new Date(r.posted_at).getTime()) / 3_600_000))
+      : undefined,
     dataSource: "thirdparty",
     url: r.url,
     thumbnailUrl: r.thumbnail_url,
@@ -297,14 +302,15 @@ export async function listReferenceItems(): Promise<ReferenceItem[]> {
   if (!user) return [];
 
   // 스키마 세대별 컬럼 목록 — 미적용 마이그레이션이 있어도 목록은 항상 살린다
+  // posted_at은 0019부터 존재하는 컬럼이라 네 세대 모두에 안전하게 들어간다
   const SELECT_FULL =
-    "id, channel, title, summary, category, hooks, creator_handle, url, thumbnail_url, views, likes, comments, hashtags, ai_comment, caption, note, transcript, status, follower_count, matched_source, favorite, collected_at";
+    "id, channel, title, summary, category, hooks, creator_handle, url, thumbnail_url, views, likes, comments, hashtags, ai_comment, caption, note, transcript, status, follower_count, matched_source, favorite, posted_at, collected_at";
   const SELECT_0022 =
-    "id, channel, title, summary, category, hooks, creator_handle, url, thumbnail_url, views, likes, comments, hashtags, ai_comment, caption, follower_count, matched_source, favorite, collected_at";
+    "id, channel, title, summary, category, hooks, creator_handle, url, thumbnail_url, views, likes, comments, hashtags, ai_comment, caption, follower_count, matched_source, favorite, posted_at, collected_at";
   const SELECT_0020 =
-    "id, channel, title, summary, category, hooks, creator_handle, url, thumbnail_url, views, likes, follower_count, matched_source, favorite, collected_at";
+    "id, channel, title, summary, category, hooks, creator_handle, url, thumbnail_url, views, likes, follower_count, matched_source, favorite, posted_at, collected_at";
   const SELECT_0019 =
-    "id, channel, title, summary, category, hooks, creator_handle, url, views, likes, follower_count, matched_source, favorite, collected_at";
+    "id, channel, title, summary, category, hooks, creator_handle, url, views, likes, follower_count, matched_source, favorite, posted_at, collected_at";
 
   for (const columns of [SELECT_FULL, SELECT_0022, SELECT_0020, SELECT_0019]) {
     const { data, error } = await supabase
@@ -313,7 +319,7 @@ export async function listReferenceItems(): Promise<ReferenceItem[]> {
       .eq("user_id", user.id)
       .order("collected_at", { ascending: false })
       .order("likes", { ascending: false })
-      .limit(60);
+      .limit(200);
     if (!error) {
       return ((data ?? []) as unknown as Partial<DbItemRow>[]).map((r) =>
         rowToItem({
@@ -325,6 +331,7 @@ export async function listReferenceItems(): Promise<ReferenceItem[]> {
           note: "",
           transcript: "",
           status: "unseen",
+          posted_at: null,
           ...r,
         } as DbItemRow),
       );

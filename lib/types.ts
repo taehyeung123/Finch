@@ -181,23 +181,6 @@ export type HookType =
   | "공감자극"
   | "호기심";
 
-export interface TrendItem {
-  id: string;
-  channel: Channel;
-  category: string;
-  title: string;
-  creatorHandle: string;
-  views: number;
-  likes: number;
-  followerCount: number;
-  /** 팔로워 대비 조회수 비율 — 자체 추정 스코어 (고지 필수, PART 4.4) */
-  reachScore: number;
-  postedAgoHours: number;
-  dataSource: DataSource;
-  /** AI가 감지한 후킹 기법 — 자체 분석 태그 (고지 필수, PART 4.4) */
-  hooks: HookType[];
-}
-
 /** 레퍼런스 수집 필터 설정 (마이그레이션 0021·0022) — 기간·한국·형식·제외 키워드 */
 export interface CollectSettings {
   /** 발행일 필터 — all(상관없음) / 1주 / 1·3·6개월 / 1년 */
@@ -258,6 +241,11 @@ export interface ReferenceItem {
   /** 어떤 등록 기준(키워드·계정·해시태그)에 걸려 수집됐는지 */
   matchedSource: string;
   collectedAgoHours: number;
+  /**
+   * 게시 시각으로부터 지난 시간(h) — 수집 시각(collectedAgoHours)과 별개.
+   * 0019 이전 수집분·공급사가 게시 시각을 안 주는 경로에서는 undefined.
+   */
+  postedAgoHours?: number;
   dataSource: DataSource;
   /** 원본 게시물 링크 — 저작권 안전장치(요약+출처 링크). 목데이터는 생략 가능 */
   url?: string | null;

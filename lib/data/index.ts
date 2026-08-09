@@ -38,10 +38,8 @@ export const competitorAds = src.competitorAds;
 export const campaigns = src.campaigns;
 export const campaignDetails = src.campaignDetails;
 
-/* ---- 트렌드 (3rd party 데이터 공급사로 교체 예정) ---- */
-export const trendItems = src.trendItems;
-
-/* ---- 레퍼런스 수집함 (소스: Supabase 0018 / 아이템: 수집 엔진 연동 예정) ---- */
+/* ---- 레퍼런스 수집함 (소스: Supabase 0018 / 아이템: 수집 엔진 연동 예정)
+       구 trendItems(탐색 전용 트렌드 목록)는 /discover의 /library 흡수와 함께 제거됨 ---- */
 export const referenceSources = src.referenceSources;
 export const referenceItems = src.referenceItems;
 
@@ -60,5 +58,6 @@ export const autoDmRules = src.autoDmRules;
 export const autoDmSummary = src.autoDmSummary;
 
 /* ---- 제품 설정 (데이터가 아님 — 모드와 무관하게 동일) ---- */
+/** 카테고리 어휘 — /library 빈 상태 씨앗 칩, 스튜디오 아이디어 카테고리 필터 */
 export const TREND_CATEGORIES = sample.TREND_CATEGORIES;
 export const planFeatures = sample.planFeatures;

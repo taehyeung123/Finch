@@ -26,7 +26,6 @@ import type {
   ReferenceSource,
   ReportItem,
   TopEngager,
-  TrendItem,
   UsageStat,
 } from "../types";
 
@@ -83,7 +82,6 @@ export const competitors: Competitor[] = [];
 export const competitorAds: CompetitorAd[] = [];
 export const campaigns: AdCampaign[] = [];
 export const campaignDetails: Record<string, AdCampaignDetail> = {};
-export const trendItems: TrendItem[] = [];
 
 /** 레퍼런스 수집함 — 실 모드 소스는 DB(0018)에서 읽고, 수집 아이템은 수집 엔진 연동 전 빈 값 */
 export const referenceSources: ReferenceSource[] = [];

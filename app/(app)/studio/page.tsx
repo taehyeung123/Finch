@@ -24,8 +24,8 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/cn";
 import { formatCompact } from "@/lib/format";
-import { ideaSuggestions, trendItems, TREND_CATEGORIES } from "@/lib/data";
-import type { Channel, IdeaSuggestion, TrendItem } from "@/lib/types";
+import { ideaSuggestions, referenceItems, TREND_CATEGORIES } from "@/lib/data";
+import type { Channel, IdeaSuggestion, ReferenceItem } from "@/lib/types";
 import { generateCardNews, generateIdeas } from "./actions";
 import { exportSlidesAsPng, renderSlidesToDataUrls, type ExportSlide, type LoadedLogo } from "@/lib/studio/export-slides";
 import { renderImagesToVideo, downloadVideo, isVideoSupported } from "@/lib/studio/video";
@@ -228,14 +228,23 @@ interface GeneratedIdea {
 interface IdeaSearchResult {
   keyword: string;
   category: string;
-  related: TrendItem[];
+  related: ReferenceItem[];
   ideas: GeneratedIdea[];
 }
 
-/** 키워드·카테고리로 트렌드 근거 콘텐츠 최대 3개 — 키워드 매칭 우선, 없으면 선택 카테고리 인기순 */
-function findRelatedTrends(keyword: string, category: string): TrendItem[] {
+/**
+ * 팔로워 대비 조회수(도달 스코어) — 자체 추정치. 팔로워 0이면 0으로 가드.
+ * 구 TrendItem.reachScore가 들고 있던 값을 ReferenceItem 필드로 그 자리에서 계산한다.
+ */
+function reachScoreOf(item: ReferenceItem): number {
+  if (!item.followerCount) return 0;
+  return Math.round((item.views / item.followerCount) * 10) / 10;
+}
+
+/** 키워드·카테고리로 근거 레퍼런스 최대 3개 — 키워드 매칭 우선, 없으면 선택 카테고리 인기순 */
+function findRelatedTrends(keyword: string, category: string): ReferenceItem[] {
   const tokens = keyword.toLowerCase().split(/[\s,]+/).filter(Boolean);
-  const inCategory = trendItems.filter((item) => category === "전체" || item.category === category);
+  const inCategory = referenceItems.filter((item) => category === "전체" || item.category === category);
   const keywordHits = inCategory.filter((item) =>
     tokens.some(
       (t) => item.title.toLowerCase().includes(t) || item.category.toLowerCase().includes(t),
@@ -251,7 +260,7 @@ function findRelatedTrends(keyword: string, category: string): TrendItem[] {
 }
 
 /** 포맷 템플릿 x 키워드 치환으로 아이디어 4~6개 생성 — 해시 기반이라 같은 입력은 같은 결과 */
-function buildIdeas(keyword: string, category: string, related: TrendItem[]): GeneratedIdea[] {
+function buildIdeas(keyword: string, category: string, related: ReferenceItem[]): GeneratedIdea[] {
   const h = hashString(`${keyword}|${category}`);
   const count = 4 + (h % 3); // 4~6개
   const catLabel = category !== "전체" ? category : (related[0]?.category ?? "라이프스타일");
@@ -259,10 +268,10 @@ function buildIdeas(keyword: string, category: string, related: TrendItem[]): Ge
     const tpl = IDEA_TEMPLATES[(h + i) % IDEA_TEMPLATES.length];
     const evidence = related.length > 0 ? related[i % related.length] : null;
     const reason = evidence
-      ? `지금 뜨는 "${evidence.title}"(조회수 ${formatCompact(evidence.views)})와 같은 수요를 겨냥해요 — ${tpl.angle}`
+      ? `수집된 "${evidence.title}"(조회수 ${formatCompact(evidence.views)})와 같은 수요를 겨냥해요 — ${tpl.angle}`
       : `'${keyword}' 키워드 조합 추천 — ${tpl.angle}`;
     const engagement: GeneratedIdea["engagement"] = evidence
-      ? evidence.reachScore >= 10
+      ? reachScoreOf(evidence) >= 10
         ? "high"
         : "mid"
       : (h + i * 31) % 5 < 3
@@ -1014,12 +1023,12 @@ export default function StudioPage() {
                 </Button>
               </div>
 
-              {/* 2-1. 근거 섹션 — 매칭된 트렌드가 없으면 생략 */}
+              {/* 2-1. 근거 섹션 — 수집된 레퍼런스 중 매칭이 없으면 섹션 자체를 생략 */}
               {ideaResult.related.length > 0 ? (
-                <section aria-label="지금 뜨는 관련 콘텐츠" className="space-y-3">
+                <section aria-label="수집된 관련 레퍼런스" className="space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <Flame className="size-4 text-primary" aria-hidden />
-                    <h3 className="text-[15px] font-bold">지금 뜨는 관련 콘텐츠</h3>
+                    <h3 className="text-[15px] font-bold">수집된 관련 레퍼런스</h3>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {ideaResult.related.map((item) => (
@@ -1039,16 +1048,18 @@ export default function StudioPage() {
                               {formatCompact(item.views)}
                             </span>
                           </span>
-                          <span className="inline-flex items-center gap-1">
-                            도달 스코어{" "}
-                            <span className="tnum font-semibold text-primary">
-                              {item.reachScore}배
+                          {reachScoreOf(item) > 0 ? (
+                            <span className="inline-flex items-center gap-1">
+                              도달 스코어{" "}
+                              <span className="tnum font-semibold text-primary">
+                                {reachScoreOf(item)}배
+                              </span>
+                              <InfoTip>
+                                조회수 ÷ 팔로워 수. 핀치 자체 추정치이며 플랫폼 공식 지표가
+                                아닙니다.
+                              </InfoTip>
                             </span>
-                            <InfoTip>
-                              조회수 ÷ 팔로워 수. 핀치 자체 추정치이며 플랫폼 공식 지표가
-                              아닙니다.
-                            </InfoTip>
-                          </span>
+                          ) : null}
                         </div>
                       </Card>
                     ))}

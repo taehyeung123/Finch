@@ -1,12 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Link from "next/link";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bookmark, ExternalLink, Eye, FolderPlus, Heart, Info, Megaphone, MessageCircle, RotateCcw, Search, SearchX, SlidersHorizontal, Sparkles, X, Zap } from "lucide-react";
-import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
+import { FolderPlus, Info, SearchX, Zap } from "lucide-react";
 import { FinchMark } from "@/components/logo";
-import type { AdSource, Channel, ChannelFilter, CollectSettings, ReferenceAd, ReferenceItem, ReferenceSource } from "@/lib/types";
+import type {
+  AdSource,
+  Channel,
+  CollectSettings,
+  ReferenceAd,
+  ReferenceItem,
+  ReferenceSource,
+} from "@/lib/types";
 import {
   addReferenceSource,
   removeReferenceSource,
@@ -14,112 +19,53 @@ import {
   saveCollectSettings,
   toggleReferenceFavorite,
 } from "@/lib/actions/reference";
-import {
-  addAdSource,
-  removeAdSource,
-  runAdCollection,
-  toggleAdFavorite,
-} from "@/lib/actions/ads-reference";
-import { formatCompact } from "@/lib/format";
+import { addAdSource, removeAdSource, runAdCollection, toggleAdFavorite } from "@/lib/actions/ads-reference";
+import { TREND_CATEGORIES } from "@/lib/data";
 import { cn } from "@/lib/cn";
-import { PageHeader } from "@/components/ui/section-header";
-import { ReferenceDetailModal } from "./reference-detail";
-import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Badge, ChannelBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { InfoTip } from "@/components/ui/info-tip";
+import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ReferenceDetailModal } from "./reference-detail";
+import { AdCard, ReferenceCard } from "./reference-card";
+import { LibrarySettingsDrawer, type DrawerTab, type SourceBaseline } from "./library-settings-drawer";
+import {
+  DEFAULT_FILTERS,
+  SearchConsole,
+  countActiveFilters,
+  type Facet,
+  type LibraryFilters,
+  type SourceFacet,
+} from "./search-console";
 
-type SourceKind = ReferenceSource["kind"];
+/*
+  레퍼런스 — 검색 주도 화면.
 
-const CHANNEL_OPTIONS: { value: Channel; label: string }[] = [
-  { value: "instagram", label: "인스타그램" },
-  { value: "tiktok", label: "틱톡" },
-  { value: "threads", label: "스레드" },
-];
+  최상위 세로 블록은 항상 **2개**다: ① sticky 검색 콘솔, ② 결과 영역.
+  그 외 모든 것(수집 기준·메타광고 검색어·수집 옵션·상세·수집 진행)은 문서 흐름
+  밖(드로어·오버레이)에 둔다. 이 규율이 없으면 기능이 늘 때마다 화면이 다시
+  세로로 길어진다 — 개편 직전 이 화면은 블록 11개였다.
 
-const KIND_OPTIONS: { value: SourceKind; label: string }[] = [
-  { value: "keyword", label: "키워드" },
-  { value: "account", label: "계정" },
-  { value: "hashtag", label: "해시태그" },
-];
+  /discover(트렌드 탐색)는 이 화면에 흡수됐다. 그 화면의 실제 가치였던 "발견"은
+  별도 라우트가 아니라 **검색어가 없을 때의 기본 상태**로 들어온다(아래 탐색 모드).
+  '실시간 급상승' 탭의 실체는 게시 시각 오름차순 정렬 한 줄이었으므로 정렬 옵션
+  '게시 최신순'이 대체한다.
+*/
 
-const KIND_LABEL: Record<SourceKind, string> = {
-  keyword: "키워드",
-  account: "계정",
-  hashtag: "해시태그",
+const WITHIN_HOURS: Record<LibraryFilters["within"], number | null> = {
+  all: null,
+  "24h": 24,
+  "7d": 168,
+  "30d": 720,
 };
 
-const KIND_PLACEHOLDER: Record<SourceKind, string> = {
-  keyword: "예: 여름 스킨케어",
-  account: "@handle 또는 프로필 주소",
-  hashtag: "#해시태그 (예: #단백질간식)",
-};
-
-/* 검색 필터 — 오가닉 채널 + 메타광고. 메타광고는 Channel이 아니라 별도 축이라 유니온을 확장한다
-   (인스타그램 필터를 고르면 IG에도 게재된 광고까지 같이 보여준다 — 틱톡·스레드엔 메타광고가 게재되지 않는다) */
-type SearchFilter = ChannelFilter | "ads";
-
-/* 채널 필터 — 이 화면은 한국어 레이블 사용 */
-const CHANNEL_FILTER_OPTIONS: { value: SearchFilter; label: string }[] = [
-  { value: "all", label: "전체" },
-  { value: "instagram", label: "인스타그램" },
-  { value: "tiktok", label: "틱톡" },
-  { value: "threads", label: "스레드" },
-  { value: "ads", label: "메타광고" },
-];
-
-/* 수집 필터 옵션 — runCollection이 서버·후처리로 적용 */
-const PERIOD_OPTIONS: { value: CollectSettings["period"]; label: string }[] = [
-  { value: "7d", label: "최근 1주" },
-  { value: "1m", label: "최근 1개월" },
-  { value: "3m", label: "최근 3개월" },
-  { value: "6m", label: "최근 6개월 (추천)" },
-  { value: "1y", label: "최근 1년" },
-  { value: "all", label: "기간 상관없음" },
-];
-
-type ItemSort = "views" | "likes" | "recent";
-
-const ITEM_SORT_OPTIONS: { value: ItemSort; label: string }[] = [
-  { value: "views", label: "반응 높은 순" },
-  { value: "likes", label: "좋아요순" },
-  { value: "recent", label: "최근 수집순" },
-];
-
-/* 상세 필터 패널 — 수집 시기 (collectedAgoHours 기준) */
-const COLLECTED_WITHIN_OPTIONS = [
-  { value: "all", label: "전체" },
-  { value: "24h", label: "오늘 수집" },
-  { value: "7d", label: "최근 1주" },
-  { value: "30d", label: "최근 1개월" },
-] as const;
-type CollectedWithin = (typeof COLLECTED_WITHIN_OPTIONS)[number]["value"];
-const WITHIN_HOURS: Record<CollectedWithin, number | null> = { all: null, "24h": 24, "7d": 168, "30d": 720 };
-
-/** Set 토글 — 있으면 빼고 없으면 넣은 새 Set 반환 */
-function toggleSet(set: Set<string>, v: string): Set<string> {
-  const next = new Set(set);
-  if (next.has(v)) next.delete(v);
-  else next.add(v);
-  return next;
+/** 반응 점수 — 정렬·베이스라인 공용 (조회수 없는 스레드도 좋아요·댓글로 비교) */
+function itemScore(i: ReferenceItem): number {
+  return i.views + i.likes * 20 + (i.comments ?? 0) * 40;
 }
 
-const FORMAT_OPTIONS: { value: CollectSettings["mediaFormat"]; label: string }[] = [
-  { value: "all", label: "전체 형식" },
-  { value: "video", label: "영상·릴스만" },
-  { value: "photo", label: "사진만" },
-  { value: "carousel", label: "카드뉴스(캐러셀)만" },
-];
+type Entry = { kind: "item"; data: ReferenceItem } | { kind: "ad"; data: ReferenceAd };
 
-/* 칩·카드 장식용 채널 글리프 — 배지와 동일한 색 규칙 (Instagram만 브랜드색) */
-const CHANNEL_GLYPH: Record<Channel, React.ReactNode> = {
-  instagram: <InstagramGlyph className="size-3.5 text-ig" />,
-  tiktok: <TiktokGlyph className="size-3.5 text-fg" />,
-  threads: <ThreadsGlyph className="size-3.5 text-fg" />,
-};
-
-type FormMessage = { tone: "error" | "notice"; text: string };
+const PAGE_SIZE = 60;
 
 export function LibraryClient({
   sources: initialSources,
@@ -138,62 +84,23 @@ export function LibraryClient({
 }) {
   const router = useRouter();
 
-  /* 수집 필터 — 변경 즉시 저장(실 모드). 데모는 화면 상태로만 */
-  const [settings, setSettings] = useState<CollectSettings>(initialSettings);
-  const [excludeInput, setExcludeInput] = useState("");
-  const [settingsMsg, setSettingsMsg] = useState<string | null>(null);
-
-  async function updateSettings(next: CollectSettings) {
-    setSettings(next);
-    setSettingsMsg(null);
-    if (isDemo) return;
-    const result = await saveCollectSettings(next);
-    if (!result.ok) setSettingsMsg(result.error ?? "설정 저장에 실패했습니다.");
-  }
-
-  function addExcludeKeyword() {
-    const k = excludeInput.trim();
-    if (!k) return;
-    if (settings.excludeKeywords.includes(k)) {
-      setExcludeInput("");
-      return;
-    }
-    if (settings.excludeKeywords.length >= 10) {
-      setSettingsMsg("제외 키워드는 최대 10개까지예요.");
-      return;
-    }
-    setExcludeInput("");
-    void updateSettings({ ...settings, excludeKeywords: [...settings.excludeKeywords, k] });
-  }
-
-  /* 수집 기준 — 서버 액션 성공/실패에 맞춰 로컬에서 직접 동기화 */
   const [sources, setSources] = useState<ReferenceSource[]>(initialSources);
-  const [channel, setChannel] = useState<Channel>("instagram");
-  const [kind, setKind] = useState<SourceKind>("keyword");
-  const [value, setValue] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [formMsg, setFormMsg] = useState<FormMessage | null>(null);
-
-  /* 메타광고 수집 기준 — 채널·종류 없이 검색어만 등록 (Ad Library 검색어 그대로) */
   const [adSources, setAdSources] = useState<AdSource[]>(initialAdSources);
-  const [adValue, setAdValue] = useState("");
-  const [adSubmitting, setAdSubmitting] = useState(false);
-  const [adFormMsg, setAdFormMsg] = useState<FormMessage | null>(null);
+  const [settings, setSettings] = useState<CollectSettings>(initialSettings);
 
-  /* 지금 수집 — 데모는 짧은 시뮬레이션, 실 모드는 runCollection(+runAdCollection) 실행 */
-  const [collecting, setCollecting] = useState(false);
-  const [collectNotice, setCollectNotice] = useState<FormMessage | null>(null);
-
-  /* 필터·정렬·즐겨찾기 — 즐겨찾기 초기값은 실 모드 DB의 favorite 컬럼에서 온다 */
-  const [filter, setFilter] = useState<SearchFilter>("all");
-  const [favOnly, setFavOnly] = useState(false);
-  const [itemSort, setItemSort] = useState<ItemSort>("views");
-  /* 패싯 검색 — 텍스트 검색 + 상세 필터 패널(수집 시기·카테고리·후킹 기법은 다중 선택) */
   const [query, setQuery] = useState("");
-  const [panelOpen, setPanelOpen] = useState(true);
-  const [collectedWithin, setCollectedWithin] = useState<CollectedWithin>("all");
-  const [categories, setCategories] = useState<Set<string>>(() => new Set());
-  const [hooks, setHooks] = useState<Set<string>>(() => new Set());
+  const [filters, setFilters] = useState<LibraryFilters>(DEFAULT_FILTERS);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<DrawerTab>("sources");
+  /* 수집 기준 입력값을 부모가 든다 — 빈 상태 씨앗 칩·검색 0건 CTA가 값을 채운 채
+     드로어를 열기 때문. 드로어 안에서 effect로 동기화하면 캐스케이딩 렌더가 난다. */
+  const [sourceInput, setSourceInput] = useState("");
+
+  const [collecting, setCollecting] = useState(false);
+  const [toast, setToast] = useState<{ tone: "error" | "notice"; text: string } | null>(null);
+
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(
     () => new Set(items.filter((i) => i.favorite).map((i) => i.id)),
   );
@@ -203,136 +110,90 @@ export function LibraryClient({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedItem = items.find((i) => i.id === selectedId) ?? null;
 
-  /* 아이템 반응 점수 — 정렬·베이스라인 공용 (조회수 없는 스레드도 좋아요·댓글로 비교) */
-  const itemScore = (i: ReferenceItem) => i.views + i.likes * 20 + (i.comments ?? 0) * 40;
+  const activeFilterCount = countActiveFilters(filters);
+  const hasQuery = query.trim() !== "" || activeFilterCount > 0;
 
-  /* 카테고리·후킹 패싯 — AI가 붙인 분류를 건수 많은 순으로 노출 (수집물에 실재하는 값만) */
-  const categoryFacets = useMemo(() => {
+  /* 필터·검색어가 바뀌면 더보기 페이지를 처음으로 되돌린다 */
+  const applyFilters = useCallback((next: LibraryFilters) => {
+    setFilters(next);
+    setVisibleCount(PAGE_SIZE);
+  }, []);
+  const applyQuery = useCallback((q: string) => {
+    setQuery(q);
+    setVisibleCount(PAGE_SIZE);
+  }, []);
+
+  /* ---------------- 패싯 (수집물에 실재하는 값만) ---------------- */
+
+  const categoryFacets = useMemo<Facet[]>(() => {
     const counts = new Map<string, number>();
     for (const item of items) {
       const c = item.category || "일반";
       counts.set(c, (counts.get(c) ?? 0) + 1);
     }
-    return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 12)
-      .map(([name, count]) => ({ name, count }));
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([name, count]) => ({ name, count }));
   }, [items]);
 
-  /* 저장한 계정 카드 — 등록된 "계정" 기준마다 지금까지 모인 콘텐츠 건수·최고 조회수 집계.
-     matchedSource가 등록 시 입력한 값(예: "@handle")과 정확히 일치하는 항목만 센다. */
-  const accountBoards = useMemo(() => {
-    return sources
-      .filter((s) => s.kind === "account")
-      .map((source) => {
-        const matched = items.filter((i) => i.matchedSource === source.value);
-        const maxViews = matched.reduce((max, i) => Math.max(max, i.views), 0);
-        return { source, count: matched.length, maxViews };
-      });
-  }, [sources, items]);
-
-  const hookFacets = useMemo(() => {
+  const hookFacets = useMemo<Facet[]>(() => {
     const counts = new Map<string, number>();
     for (const item of items) for (const h of item.hooks) counts.set(h, (counts.get(h) ?? 0) + 1);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));
+  }, [items]);
+
+  const advertiserFacets = useMemo<Facet[]>(() => {
+    const counts = new Map<string, number>();
+    for (const ad of ads) counts.set(ad.pageName, (counts.get(ad.pageName) ?? 0) + 1);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));
+  }, [ads]);
+
+  /* 수집 기준 패싯 — 구 "저장한 계정" 카드를 정식 필터 축으로 승격한 것.
+     검색창에 핸들을 채워넣던 우회를 대체하고, 다른 축과 조합이 가능해진다. */
+  const sourceFacets = useMemo<SourceFacet[]>(() => {
+    const counts = new Map<string, number>();
+    for (const item of items) counts.set(item.matchedSource, (counts.get(item.matchedSource) ?? 0) + 1);
+    for (const ad of ads) counts.set(ad.matchedSource, (counts.get(ad.matchedSource) ?? 0) + 1);
+    const kindOf = new Map<string, string>();
+    for (const s of sources) kindOf.set(s.value, s.kind);
+    for (const s of adSources) kindOf.set(s.value, "ads");
     return [...counts.entries()]
       .sort((a, b) => b[1] - a[1])
-      .map(([name, count]) => ({ name, count }));
-  }, [items]);
+      .map(([value, count]) => ({ value, count, kind: kindOf.get(value) ?? "keyword" }));
+  }, [items, ads, sources, adSources]);
 
-  /* 활성 필터 수 — 필터 버튼 배지·초기화 노출 판단 */
-  const activeFilterCount =
-    (filter !== "all" ? 1 : 0) +
-    (collectedWithin !== "all" ? 1 : 0) +
-    categories.size +
-    hooks.size +
-    (favOnly ? 1 : 0);
-
-  function resetFilters() {
-    setFilter("all");
-    setCollectedWithin("all");
-    setCategories(new Set());
-    setHooks(new Set());
-    setFavOnly(false);
-  }
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const maxHours = WITHIN_HOURS[collectedWithin];
-    const base = items.filter((item) => {
-      if (filter === "ads") return false; // 메타광고 탭에서는 오가닉을 안 섞는다
-      if (filter !== "all" && item.channel !== filter) return false;
-      if (favOnly && !favoriteIds.has(item.id)) return false;
-      if (maxHours !== null && item.collectedAgoHours > maxHours) return false;
-      if (categories.size > 0 && !categories.has(item.category || "일반")) return false;
-      if (hooks.size > 0 && !item.hooks.some((h) => hooks.has(h))) return false;
-      if (q) {
-        const haystack = [item.title, item.caption, item.summary, item.creatorHandle, item.category, ...(item.hashtags ?? [])]
-          .join(" ")
-          .toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      return true;
-    });
-    if (itemSort === "views") return [...base].sort((a, b) => itemScore(b) - itemScore(a));
-    if (itemSort === "likes") return [...base].sort((a, b) => b.likes - a.likes);
-    return [...base].sort((a, b) => a.collectedAgoHours - b.collectedAgoHours);
-  }, [items, filter, favOnly, favoriteIds, itemSort, query, collectedWithin, categories, hooks]);
-
-  /* 메타광고 필터링 — 틱톡·스레드엔 게재되지 않으므로 해당 채널 필터에선 항상 제외,
-     인스타그램 필터에선 platforms에 INSTAGRAM이 걸린 광고만 같이 보여준다 */
-  const filteredAds = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const maxHours = WITHIN_HOURS[collectedWithin];
-    return ads.filter((ad) => {
-      if (filter === "tiktok" || filter === "threads") return false;
-      if (filter === "instagram" && !ad.platforms.includes("INSTAGRAM")) return false;
-      if (favOnly && !adFavoriteIds.has(ad.id)) return false;
-      if (maxHours !== null && ad.collectedAgoHours > maxHours) return false;
-      if (q) {
-        const haystack = [ad.body, ad.pageName, ad.matchedSource].join(" ").toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [ads, filter, favOnly, adFavoriteIds, query, collectedWithin]);
-
-  /* 통합 표시 목록 — 오가닉+메타광고를 한 그리드에 섞는다. 광고는 반응 지표(조회·좋아요)가
-     없어 그 정렬에서는 최신순으로 목록 끝에 붙이고, 최근 수집순에서는 완전히 섞는다 */
-  const displayEntries = useMemo(() => {
-    const itemEntries = filtered.map((data) => ({ kind: "item" as const, data }));
-    const adEntries = [...filteredAds]
-      .sort((a, b) => a.collectedAgoHours - b.collectedAgoHours)
-      .map((data) => ({ kind: "ad" as const, data }));
-    if (itemSort === "recent") {
-      return [...itemEntries, ...adEntries].sort((a, b) => a.data.collectedAgoHours - b.data.collectedAgoHours);
-    }
-    return [...itemEntries, ...adEntries];
-  }, [filtered, filteredAds, itemSort]);
-
-  /* 기준(matchedSource)별 베이스라인 — "이 기준, 지금까지 이렇게 나왔어요" */
-  const sourceBaselines = useMemo(() => {
-    const groups = new Map<string, number[]>();
+  /* 기준별 베이스라인 — 드로어 [수집 기준] 탭 보조 텍스트로 착지 */
+  const baselines = useMemo(() => {
+    const map = new Map<string, SourceBaseline>();
+    const grouped = new Map<string, number[]>();
     for (const item of items) {
-      const arr = groups.get(item.matchedSource) ?? [];
-      arr.push(itemScore(item));
-      groups.set(item.matchedSource, arr);
+      const arr = grouped.get(item.matchedSource) ?? [];
+      arr.push(item.views);
+      grouped.set(item.matchedSource, arr);
     }
-    return [...groups.entries()]
-      .filter(([, scores]) => scores.length >= 3)
-      .map(([source, scores]) => {
-        const sorted = [...scores].sort((a, b) => a - b);
-        const viewsOf = items.filter((i) => i.matchedSource === source).map((i) => i.views).sort((a, b) => a - b);
-        const median = viewsOf[Math.floor(viewsOf.length / 2)] ?? 0;
-        const max = viewsOf[viewsOf.length - 1] ?? 0;
-        const avgScore = sorted.reduce((a, b) => a + b, 0) / sorted.length;
-        return { source, count: scores.length, medianViews: median, maxViews: max, avgScore };
+    for (const [source, views] of grouped) {
+      const sorted = [...views].sort((a, b) => a - b);
+      map.set(source, {
+        count: sorted.length,
+        medianViews: sorted[Math.floor(sorted.length / 2)] ?? 0,
+        maxViews: sorted[sorted.length - 1] ?? 0,
       });
+    }
+    return map;
   }, [items]);
 
-  /* 기준 평균 대비 배수 — 1.5배 이상이면 카드에 "기준 대비 N배" 표시 */
+  /* 기준 평균 대비 배수 — 1.5배 이상이면 카드 배지 + "잘 나온 것만" 필터의 근거 */
   const overAvgMultiple = useMemo(() => {
     const map = new Map<string, number>();
-    const avgBySource = new Map(sourceBaselines.map((b) => [b.source, b.avgScore]));
+    const grouped = new Map<string, number[]>();
+    for (const item of items) {
+      const arr = grouped.get(item.matchedSource) ?? [];
+      arr.push(itemScore(item));
+      grouped.set(item.matchedSource, arr);
+    }
+    const avgBySource = new Map<string, number>();
+    for (const [source, scores] of grouped) {
+      if (scores.length < 3) continue; // 표본이 적으면 평균이 의미가 없다
+      avgBySource.set(source, scores.reduce((a, b) => a + b, 0) / scores.length);
+    }
     for (const item of items) {
       const avg = avgBySource.get(item.matchedSource);
       if (avg && avg > 0) {
@@ -341,125 +202,231 @@ export function LibraryClient({
       }
     }
     return map;
-  }, [items, sourceBaselines]);
+  }, [items]);
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (submitting) return;
-    setFormMsg(null);
-    setSubmitting(true);
-    const result = await addReferenceSource({ channel, kind, value });
-    setSubmitting(false);
-    if (result.ok) {
-      setSources((prev) => [...prev, result.source]);
-      setValue("");
-      return;
+  /* ---------------- 필터링 ---------------- */
+
+  const filteredItems = useMemo(() => {
+    const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const maxHours = WITHIN_HOURS[filters.within];
+    const base = items.filter((item) => {
+      if (filters.target === "ads") return false; // 메타광고만 볼 때는 오가닉을 안 섞는다
+      if (filters.target !== "all" && item.channel !== filters.target) return false;
+      if (filters.favOnly && !favoriteIds.has(item.id)) return false;
+      if (filters.overOnly && !overAvgMultiple.has(item.id)) return false;
+      if (maxHours !== null && item.collectedAgoHours > maxHours) return false;
+      if (filters.categories.length > 0 && !filters.categories.includes(item.category || "일반")) return false;
+      if (filters.hooks.length > 0 && !item.hooks.some((h) => filters.hooks.includes(h))) return false;
+      if (filters.sources.length > 0 && !filters.sources.includes(item.matchedSource)) return false;
+      if (tokens.length > 0) {
+        /* 다단어는 AND — 단일 문자열 includes였을 때 "웨딩 릴스"처럼 띄우면 0건이 됐다 */
+        const haystack = [
+          item.title,
+          item.caption,
+          item.summary,
+          item.creatorHandle,
+          item.category,
+          item.matchedSource,
+          item.note,
+          item.transcript,
+          ...(item.hashtags ?? []),
+          ...item.hooks,
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!tokens.every((t) => haystack.includes(t))) return false;
+      }
+      return true;
+    });
+
+    if (filters.sort === "views") return [...base].sort((a, b) => itemScore(b) - itemScore(a));
+    if (filters.sort === "likes") return [...base].sort((a, b) => b.likes - a.likes);
+    if (filters.sort === "posted") {
+      /* 게시 시각을 모르는 항목(0019 이전 수집분)은 목록 끝으로 */
+      return [...base].sort(
+        (a, b) =>
+          (a.postedAgoHours ?? Number.MAX_SAFE_INTEGER) - (b.postedAgoHours ?? Number.MAX_SAFE_INTEGER),
+      );
     }
-    // 데모 거부는 오류가 아니라 안내로 — 형식 검증 오류는 그대로 노출
-    if (isDemo && result.error.startsWith("데모")) {
-      setFormMsg({
-        tone: "notice",
-        text: "데모 모드에서는 등록할 수 없어요 — 실제 계정으로 로그인하면 저장됩니다",
+    return [...base].sort((a, b) => a.collectedAgoHours - b.collectedAgoHours);
+  }, [items, filters, favoriteIds, overAvgMultiple, query]);
+
+  /* 메타광고 — 틱톡·스레드엔 게재되지 않으므로 그 채널 필터에선 항상 제외.
+     인스타 필터에선 platforms에 INSTAGRAM이 걸린 광고만 함께 보여준다. */
+  const filteredAds = useMemo(() => {
+    const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const maxHours = WITHIN_HOURS[filters.within];
+    return ads.filter((ad) => {
+      if (filters.target === "tiktok" || filters.target === "threads") return false;
+      if (filters.target === "instagram" && !ad.platforms.includes("INSTAGRAM")) return false;
+      if (filters.favOnly && !adFavoriteIds.has(ad.id)) return false;
+      if (filters.overOnly) return false; // 광고는 반응 지표가 없어 '잘 나온 것' 판정 대상이 아니다
+      if (maxHours !== null && ad.collectedAgoHours > maxHours) return false;
+      if (filters.sources.length > 0 && !filters.sources.includes(ad.matchedSource)) return false;
+      /* 광고 화면에서는 카테고리 축을 광고주(pageName)로 재사용한다 */
+      if (filters.target === "ads" && filters.categories.length > 0 && !filters.categories.includes(ad.pageName)) {
+        return false;
+      }
+      if (filters.target !== "ads" && (filters.categories.length > 0 || filters.hooks.length > 0)) return false;
+      if (tokens.length > 0) {
+        const haystack = [ad.body, ad.pageName, ad.matchedSource, ad.ctaText ?? "", ad.category, ad.aiComment]
+          .join(" ")
+          .toLowerCase();
+        if (!tokens.every((t) => haystack.includes(t))) return false;
+      }
+      return true;
+    });
+  }, [ads, filters, adFavoriteIds, query]);
+
+  /* 통합 목록 — 광고는 조회·좋아요가 없어 반응 기반 정렬에서는 뒤에 붙이고,
+     시간 기반 정렬에서는 완전히 섞는다 */
+  const displayEntries = useMemo<Entry[]>(() => {
+    const itemEntries: Entry[] = filteredItems.map((data) => ({ kind: "item", data }));
+    const adEntries: Entry[] = [...filteredAds]
+      .sort((a, b) => a.collectedAgoHours - b.collectedAgoHours)
+      .map((data) => ({ kind: "ad", data }));
+    if (filters.sort === "recent" || filters.sort === "posted") {
+      return [...itemEntries, ...adEntries].sort((a, b) => a.data.collectedAgoHours - b.data.collectedAgoHours);
+    }
+    return [...itemEntries, ...adEntries];
+  }, [filteredItems, filteredAds, filters.sort]);
+
+  /* ---------------- 탐색 모드 섹션 (검색어·필터가 없을 때) ---------------- */
+
+  const exploreSections = useMemo(() => {
+    if (hasQuery) return [];
+    const byRecent = [...items].sort((a, b) => a.collectedAgoHours - b.collectedAgoHours);
+    const today = byRecent.filter((i) => i.collectedAgoHours < 24);
+    const accountValues = sources.filter((s) => s.kind === "account").map((s) => s.value);
+
+    const sections: {
+      key: string;
+      title: string;
+      entries: Entry[];
+      apply: () => void;
+    }[] = [];
+
+    /* ① 항상 렌더 — 수집물이 1건이라도 있으면 최근순은 절대 0이 안 된다.
+       이게 기본 상태가 비지 않는다는 보증이다. */
+    if (byRecent.length > 0) {
+      const pool = today.length > 0 ? today : byRecent;
+      sections.push({
+        key: "recent",
+        title: today.length > 0 ? "오늘 들어온 레퍼런스" : "최근 수집분",
+        entries: pool.slice(0, 4).map((data) => ({ kind: "item", data })),
+        apply: () =>
+          applyFilters({ ...DEFAULT_FILTERS, within: today.length > 0 ? "24h" : "all", sort: "recent" }),
       });
-    } else {
-      setFormMsg({ tone: "error", text: result.error });
     }
+
+    // ② 기준 평균 대비 잘 나온 것
+    const over = byRecent.filter((i) => overAvgMultiple.has(i.id));
+    if (over.length > 0) {
+      sections.push({
+        key: "over",
+        title: "내 기준보다 잘 나온 콘텐츠",
+        entries: over
+          .sort((a, b) => (overAvgMultiple.get(b.id) ?? 0) - (overAvgMultiple.get(a.id) ?? 0))
+          .slice(0, 4)
+          .map((data) => ({ kind: "item", data })),
+        apply: () => applyFilters({ ...DEFAULT_FILTERS, overOnly: true, sort: "views" }),
+      });
+    }
+
+    // ③ 저장한 계정의 새 글
+    if (accountValues.length > 0) {
+      const fromAccounts = byRecent.filter((i) => accountValues.includes(i.matchedSource));
+      if (fromAccounts.length > 0) {
+        sections.push({
+          key: "accounts",
+          title: "저장한 계정의 새 글",
+          entries: fromAccounts.slice(0, 4).map((data) => ({ kind: "item", data })),
+          apply: () => applyFilters({ ...DEFAULT_FILTERS, sources: accountValues, sort: "posted" }),
+        });
+      }
+    }
+
+    return sections;
+  }, [hasQuery, items, sources, overAvgMultiple, applyFilters]);
+
+  /* ---------------- 액션 ---------------- */
+
+  function openDrawer(tab: DrawerTab, seed?: string) {
+    setDrawerTab(tab);
+    if (seed !== undefined) setSourceInput(seed);
+    setDrawerOpen(true);
   }
 
-  async function handleRemove(id: string) {
+  async function handleAddSource(input: { channel: Channel; kind: ReferenceSource["kind"]; value: string }) {
+    const result = await addReferenceSource(input);
+    if (result.ok) {
+      setSources((prev) => [...prev, result.source]);
+      return { ok: true };
+    }
+    return { ok: false, error: result.error };
+  }
+
+  async function handleRemoveSource(id: string) {
     const before = sources;
     setSources((prev) => prev.filter((s) => s.id !== id)); // 낙관적 제거
     const result = await removeReferenceSource(id);
-    if (!result.ok) {
-      setSources(before); // 실패 시 원복
-      setFormMsg(
-        isDemo
-          ? {
-              tone: "notice",
-              text: "데모 모드에서는 삭제할 수 없어요 — 실제 계정으로 로그인하면 반영됩니다",
-            }
-          : { tone: "error", text: "삭제에 실패했습니다. 잠시 후 다시 시도해주세요." },
-      );
-    }
+    if (!result.ok) setSources(before);
+    return result;
   }
 
-  async function handleAdSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (adSubmitting) return;
-    setAdFormMsg(null);
-    setAdSubmitting(true);
-    const result = await addAdSource({ value: adValue });
-    setAdSubmitting(false);
+  async function handleAddAdSource(value: string) {
+    const result = await addAdSource({ value });
     if (result.ok) {
       setAdSources((prev) => [...prev, result.source]);
-      setAdValue("");
-      return;
+      return { ok: true };
     }
-    if (isDemo && result.error.startsWith("데모")) {
-      setAdFormMsg({
-        tone: "notice",
-        text: "데모 모드에서는 등록할 수 없어요 — 실제 계정으로 로그인하면 저장됩니다",
-      });
-    } else {
-      setAdFormMsg({ tone: "error", text: result.error });
-    }
+    return { ok: false, error: result.error };
   }
 
-  async function handleAdRemove(id: string) {
+  async function handleRemoveAdSource(id: string) {
     const before = adSources;
-    setAdSources((prev) => prev.filter((s) => s.id !== id)); // 낙관적 제거
+    setAdSources((prev) => prev.filter((s) => s.id !== id));
     const result = await removeAdSource(id);
-    if (!result.ok) {
-      setAdSources(before); // 실패 시 원복
-      setAdFormMsg(
-        isDemo
-          ? {
-              tone: "notice",
-              text: "데모 모드에서는 삭제할 수 없어요 — 실제 계정으로 로그인하면 반영됩니다",
-            }
-          : { tone: "error", text: "삭제에 실패했습니다. 잠시 후 다시 시도해주세요." },
-      );
-    }
+    if (!result.ok) setAdSources(before);
+    return result;
+  }
+
+  function handleUpdateSettings(next: CollectSettings) {
+    setSettings(next);
+    if (isDemo) return;
+    void saveCollectSettings(next);
   }
 
   async function handleCollect() {
     if (collecting) return;
-    setCollectNotice(null);
+    setToast(null);
 
     if (isDemo) {
       setCollecting(true);
-      // 이벤트 핸들러 안의 타이머 — 데모 수집 시뮬레이션 (약 1.2초)
+      // 이벤트 핸들러 안의 타이머 — 데모 수집 시뮬레이션
       setTimeout(() => {
         setCollecting(false);
-        setCollectNotice({ tone: "notice", text: "데모 수집 완료 — 실제 계정에서는 등록한 기준으로 실수집이 실행됩니다" });
+        setToast({ tone: "notice", text: "데모 수집 완료 — 실제 계정에서는 등록한 기준으로 실수집이 실행됩니다" });
       }, 1200);
       return;
     }
 
-    // 실 모드 — 서버 액션이 공급사 호출 → AI 요약 → 저장까지 수행 (수십 초 걸릴 수 있음)
-    // 메타광고 기준이 등록돼 있으면 오가닉 수집과 함께 실행해 한 번에 결과를 모은다
     setCollecting(true);
     try {
-      const hasAdSources = adSources.length > 0;
       const [result, adResult] = await Promise.all([
         runCollection(),
-        hasAdSources ? runAdCollection() : Promise.resolve(null),
+        adSources.length > 0 ? runAdCollection() : Promise.resolve(null),
       ]);
 
       const parts: string[] = [];
       let tone: "notice" | "error" = "notice";
 
       if (result.ok) {
-        parts.push(`오가닉 레퍼런스 ${result.added}건 수집`);
-        if (result.duplicates > 0) parts.push(`이미 수집된 ${result.duplicates}건 제외`);
-        if (result.excludedByFilter > 0) parts.push(`수집 필터로 ${result.excludedByFilter}건 제외`);
+        parts.push(`레퍼런스 ${result.added}건 수집`);
+        if (result.duplicates > 0) parts.push(`중복 ${result.duplicates}건 제외`);
         if (result.excludedLowQuality > 0) parts.push(`반응 낮은 ${result.excludedLowQuality}건 제외`);
-        if (result.excludedIrrelevant > 0) parts.push(`주제와 무관해 ${result.excludedIrrelevant}건 제외`);
         if (result.failedSources.length > 0) {
           parts.push(`기준 ${result.failedSources.map((v) => `'${v}'`).join(", ")}은 실패`);
-        }
-        if (result.usedSources < result.totalSources) {
-          parts.push(`기준 ${result.totalSources}개 중 ${result.usedSources}개 사용`);
         }
         if (result.aiWarning) {
           parts.push(result.aiWarning);
@@ -473,7 +440,6 @@ export function LibraryClient({
       if (adResult) {
         if (adResult.ok) {
           parts.push(`메타광고 ${adResult.added}건 수집`);
-          if (adResult.duplicates > 0) parts.push(`광고 중복 ${adResult.duplicates}건 제외`);
         } else if (adResult.reason !== "no_sources") {
           parts.push(adResult.error);
           tone = "error";
@@ -481,666 +447,263 @@ export function LibraryClient({
       }
 
       if (parts.length === 0) parts.push("등록된 수집 기준이 없어요 — 먼저 기준을 추가해 주세요.");
-
-      setCollectNotice({ tone, text: parts.join(" · ") });
-      router.refresh(); // 서버 데이터 다시 로드 — 새 아이템 반영
+      setToast({ tone, text: parts.join(" · ") });
+      router.refresh();
     } catch {
-      setCollectNotice({ tone: "error", text: "수집 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요." });
+      setToast({ tone: "error", text: "수집 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요." });
     } finally {
       setCollecting(false);
     }
   }
 
   async function toggleFavorite(id: string) {
-    const wasFavorite = favoriteIds.has(id);
+    const was = favoriteIds.has(id);
     setFavoriteIds((prev) => {
       const next = new Set(prev);
-      if (wasFavorite) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-    if (isDemo) return; // 데모는 화면 상태로만
-    const result = await toggleReferenceFavorite(id, !wasFavorite);
-    if (!result.ok) {
-      // 실패 시 원복
-      setFavoriteIds((prev) => {
-        const next = new Set(prev);
-        if (wasFavorite) next.add(id);
-        else next.delete(id);
-        return next;
-      });
-    }
-  }
-
-  async function toggleAdFavoriteLocal(id: string) {
-    const wasFavorite = adFavoriteIds.has(id);
-    setAdFavoriteIds((prev) => {
-      const next = new Set(prev);
-      if (wasFavorite) next.delete(id);
+      if (was) next.delete(id);
       else next.add(id);
       return next;
     });
     if (isDemo) return;
-    const result = await toggleAdFavorite(id, !wasFavorite);
+    const result = await toggleReferenceFavorite(id, !was);
     if (!result.ok) {
-      setAdFavoriteIds((prev) => {
+      setFavoriteIds((prev) => {
         const next = new Set(prev);
-        if (wasFavorite) next.add(id);
+        if (was) next.add(id);
         else next.delete(id);
         return next;
       });
     }
   }
 
+  async function toggleAdFav(id: string) {
+    const was = adFavoriteIds.has(id);
+    setAdFavoriteIds((prev) => {
+      const next = new Set(prev);
+      if (was) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    if (isDemo) return;
+    const result = await toggleAdFavorite(id, !was);
+    if (!result.ok) {
+      setAdFavoriteIds((prev) => {
+        const next = new Set(prev);
+        if (was) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+    }
+  }
+
+  function renderEntry(entry: Entry) {
+    if (entry.kind === "item") {
+      return (
+        <ReferenceCard
+          key={entry.data.id}
+          item={entry.data}
+          favorite={favoriteIds.has(entry.data.id)}
+          onToggleFavorite={() => toggleFavorite(entry.data.id)}
+          overAvgMultiple={overAvgMultiple.get(entry.data.id)}
+          onOpen={() => setSelectedId(entry.data.id)}
+        />
+      );
+    }
+    return (
+      <AdCard
+        key={entry.data.id}
+        ad={entry.data}
+        favorite={adFavoriteIds.has(entry.data.id)}
+        onToggleFavorite={() => toggleAdFav(entry.data.id)}
+      />
+    );
+  }
+
+  const totalCollected = items.length + ads.length;
+  const totalSources = sources.length + adSources.length;
+  const gridCls = "grid gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <PageHeader
-        title="레퍼런스"
-        description={
-          <>
-            등록해둔 키워드·계정·해시태그만 계속 모으는 내 자료함이에요 — 잘되는 콘텐츠를 AI가
-            요약·후킹 태그까지 붙여 쌓아드려요. 아직 뭘 찾을지 안 정했다면{" "}
-            <Link href="/discover" className="font-semibold text-primary hover:text-primary-hover">
-              트렌드 탐색
-            </Link>
-            에서 먼저 둘러보세요.
-          </>
-        }
+    <div className="mx-auto w-full max-w-[1400px]">
+      <h1 className="sr-only">레퍼런스</h1>
+
+      {/* ── 블록 1 — 검색 콘솔 ── */}
+      <SearchConsole
+        query={query}
+        onQueryChange={applyQuery}
+        filters={filters}
+        setFilters={applyFilters}
+        resultCount={displayEntries.length}
+        hasQuery={hasQuery}
+        categoryFacets={categoryFacets}
+        hookFacets={hookFacets}
+        sourceFacets={sourceFacets}
+        advertiserFacets={advertiserFacets}
+        registeredSources={[
+          ...sources.map((s) => ({ id: s.id, value: s.value, kind: s.kind as string })),
+          ...adSources.map((s) => ({ id: s.id, value: s.value, kind: "ads" })),
+        ]}
+        onOpenSettings={() => openDrawer("sources")}
+        onCollect={handleCollect}
+        collecting={collecting}
       />
 
-      {/* 수집 기준 관리 */}
-      <Card>
-        <CardHeader
-          title="수집 기준 관리"
-          description="등록한 기준에 걸리는 콘텐츠를 모아드려요. 채널당 키워드·계정·해시태그를 섞어 등록할 수 있습니다."
-        />
-        <CardBody className="space-y-4">
-          <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-2">
-            <select
-              value={channel}
-              onChange={(e) => setChannel(e.target.value as Channel)}
-              aria-label="채널"
-              className="h-10 rounded-card border border-line bg-overlay px-2.5 text-[13px] font-medium text-fg outline-none transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
-            >
-              {CHANNEL_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={kind}
-              onChange={(e) => setKind(e.target.value as SourceKind)}
-              aria-label="기준 종류"
-              className="h-10 rounded-card border border-line bg-overlay px-2.5 text-[13px] font-medium text-fg outline-none transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
-            >
-              {KIND_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <input
-              type="text"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder={KIND_PLACEHOLDER[kind]}
-              aria-label="수집 값"
-              className="h-10 min-w-52 flex-1 rounded-card border border-line bg-body px-3 text-[14px] placeholder:text-fg-faint focus:border-primary focus:outline-none"
-            />
-            <Button type="submit" size="md" disabled={submitting}>
-              등록
-            </Button>
-          </form>
-
-          {formMsg ? (
-            formMsg.tone === "error" ? (
-              <p role="alert" className="text-[13px] text-negative">
-                {formMsg.text}
-              </p>
-            ) : (
-              <p role="status" className="flex items-start gap-1.5 text-[13px] text-fg-sub">
-                <Info className="mt-0.5 size-3.5 shrink-0 text-fg-faint" aria-hidden />
-                {formMsg.text}
-              </p>
-            )
-          ) : null}
-
-          {sources.length > 0 ? (
-            <ul className="flex flex-wrap gap-2" aria-label="등록된 수집 기준">
-              {sources.map((s) => (
-                <li
-                  key={s.id}
-                  className="inline-flex items-center gap-1.5 rounded-chip border border-line bg-overlay px-3 py-1.5 text-[13px]"
-                >
-                  <span aria-hidden>{CHANNEL_GLYPH[s.channel]}</span>
-                  <span className="text-[11px] font-semibold text-fg-faint">
-                    {KIND_LABEL[s.kind]}
-                  </span>
-                  <span className="font-medium text-fg">{s.value}</span>
-                  <button
-                    type="button"
-                    aria-label={`${s.value} 기준 삭제`}
-                    onClick={() => handleRemove(s.id)}
-                    className="text-fg-faint transition-colors hover:text-negative"
-                  >
-                    <X className="size-3.5" aria-hidden />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-[13px] text-fg-faint">
-              아직 등록한 기준이 없어요 — 위에서 첫 기준을 추가해보세요.
-            </p>
+      {toast ? (
+        <p
+          role={toast.tone === "error" ? "alert" : "status"}
+          className={cn(
+            "mt-4 flex items-start gap-1.5 rounded-card border border-line bg-body px-4 py-2.5 text-[13px]",
+            toast.tone === "error" ? "text-negative" : "text-fg-sub",
           )}
-        </CardBody>
-      </Card>
-
-      {/* 메타광고 수집 기준 — 채널·종류 구분 없이 검색어만 등록. Ad Library 검색어와 동일하게 동작 */}
-      <Card>
-        <CardHeader
-          title="메타광고 검색 키워드"
-          description="Meta 광고 라이브러리에서 이 검색어로 걸리는 국내 게재 중인 광고를 함께 모아드려요."
-        />
-        <CardBody className="space-y-4">
-          <form onSubmit={handleAdSubmit} className="flex flex-wrap items-center gap-2">
-            <input
-              type="text"
-              value={adValue}
-              onChange={(e) => setAdValue(e.target.value)}
-              placeholder="예: 단백질 간식, 여름 스킨케어"
-              aria-label="메타광고 검색 키워드"
-              className="h-10 min-w-52 flex-1 rounded-card border border-line bg-body px-3 text-[14px] placeholder:text-fg-faint focus:border-primary focus:outline-none"
-            />
-            <Button type="submit" size="md" disabled={adSubmitting}>
-              등록
-            </Button>
-          </form>
-
-          {adFormMsg ? (
-            adFormMsg.tone === "error" ? (
-              <p role="alert" className="text-[13px] text-negative">
-                {adFormMsg.text}
-              </p>
-            ) : (
-              <p role="status" className="flex items-start gap-1.5 text-[13px] text-fg-sub">
-                <Info className="mt-0.5 size-3.5 shrink-0 text-fg-faint" aria-hidden />
-                {adFormMsg.text}
-              </p>
-            )
-          ) : null}
-
-          {adSources.length > 0 ? (
-            <ul className="flex flex-wrap gap-2" aria-label="등록된 메타광고 검색 키워드">
-              {adSources.map((s) => (
-                <li
-                  key={s.id}
-                  className="inline-flex items-center gap-1.5 rounded-chip border border-line bg-overlay px-3 py-1.5 text-[13px]"
-                >
-                  <Megaphone className="size-3.5 text-fg-faint" aria-hidden />
-                  <span className="font-medium text-fg">{s.value}</span>
-                  <button
-                    type="button"
-                    aria-label={`${s.value} 키워드 삭제`}
-                    onClick={() => handleAdRemove(s.id)}
-                    className="text-fg-faint transition-colors hover:text-negative"
-                  >
-                    <X className="size-3.5" aria-hidden />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-[13px] text-fg-faint">
-              아직 등록한 검색어가 없어요 — 위에서 첫 검색어를 추가해보세요.
-            </p>
-          )}
-        </CardBody>
-      </Card>
-
-      {/* 저장한 계정 — 등록해둔 "계정" 기준을 브랜드/크리에이터 카드로 모아 보여준다.
-          클릭하면 검색창에 핸들을 채워 그 계정이 모은 콘텐츠만 바로 걸러본다(별도 뷰 없이
-          기존 검색·필터를 재사용 — 상태 하나 안 늘려도 됨). */}
-      {accountBoards.length > 0 ? (
-        <Card>
-          <CardHeader
-            title="저장한 계정"
-            description="등록해둔 계정별로 지금까지 모인 콘텐츠를 언제든 다시 볼 수 있어요."
-          />
-          <CardBody>
-            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4" aria-label="저장한 계정 목록">
-              {accountBoards.map((b) => (
-                <li key={b.source.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuery(b.source.value.replace(/^@/, ""));
-                      setPanelOpen(false);
-                    }}
-                    className="flex w-full flex-col items-start gap-2 rounded-card border border-line bg-body p-3.5 text-left transition-colors hover:border-line-strong hover:bg-overlay"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <span aria-hidden>{CHANNEL_GLYPH[b.source.channel]}</span>
-                      <span className="truncate text-[14px] font-semibold text-fg">{b.source.value}</span>
-                    </span>
-                    {b.count > 0 ? (
-                      <span className="tnum text-[12px] text-fg-sub">
-                        {b.count}건 수집 · 최고{" "}
-                        <span className="font-semibold text-primary">{formatCompact(b.maxViews)}</span>
-                      </span>
-                    ) : (
-                      <span className="text-[12px] text-fg-faint">아직 수집된 콘텐츠 없음</span>
-                    )}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </CardBody>
-        </Card>
-      ) : null}
-
-      {/* 수집 필터 — 기간·한국·형식·제외 키워드 (수집 실행에 적용) */}
-      <Card>
-        <CardHeader
-          title="수집 필터"
-          description="다음 수집부터 적용돼요. 이미 수집된 카드에는 영향을 주지 않습니다."
-        />
-        <CardBody className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={settings.period}
-              onChange={(e) => void updateSettings({ ...settings, period: e.target.value as CollectSettings["period"] })}
-              aria-label="발행 기간"
-              className="h-9 rounded-card border border-line bg-overlay px-2.5 text-[13px] font-medium text-fg outline-none transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
-            >
-              {PERIOD_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={settings.mediaFormat}
-              onChange={(e) =>
-                void updateSettings({ ...settings, mediaFormat: e.target.value as CollectSettings["mediaFormat"] })
-              }
-              aria-label="콘텐츠 형식"
-              className="h-9 rounded-card border border-line bg-overlay px-2.5 text-[13px] font-medium text-fg outline-none transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
-            >
-              {FORMAT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              aria-pressed={settings.krOnly}
-              onClick={() => void updateSettings({ ...settings, krOnly: !settings.krOnly })}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-chip px-3.5 py-1.5 text-[13px] font-semibold transition-colors",
-                settings.krOnly
-                  ? "bg-primary text-on-primary"
-                  : "border border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg",
-              )}
-            >
-              한국 콘텐츠만
-            </button>
-            <InfoTip>
-              틱톡은 게시물의 국가 정보로, 인스타그램·스레드는 국가 정보가 제공되지 않아 한글 포함
-              여부로 판단합니다. 형식 필터는 채널 특성상 틱톡은 전부 영상, 카드뉴스(캐러셀)는
-              인스타그램에서만 걸러져요.
-            </InfoTip>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="text"
-              value={excludeInput}
-              onChange={(e) => setExcludeInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addExcludeKeyword();
-                }
-              }}
-              placeholder="제외 키워드 (예: 광고, 협찬)"
-              aria-label="제외 키워드"
-              className="h-9 w-56 rounded-card border border-line bg-body px-3 text-[13px] placeholder:text-fg-faint focus:border-primary focus:outline-none"
-            />
-            <Button type="button" variant="secondary" size="sm" onClick={addExcludeKeyword}>
-              추가
-            </Button>
-            {settings.excludeKeywords.map((k) => (
-              <span
-                key={k}
-                className="inline-flex items-center gap-1.5 rounded-chip border border-line bg-overlay px-3 py-1 text-[13px]"
-              >
-                {k}
-                <button
-                  type="button"
-                  aria-label={`제외 키워드 ${k} 삭제`}
-                  onClick={() =>
-                    void updateSettings({
-                      ...settings,
-                      excludeKeywords: settings.excludeKeywords.filter((x) => x !== k),
-                    })
-                  }
-                  className="text-fg-faint transition-colors hover:text-negative"
-                >
-                  <X className="size-3" aria-hidden />
-                </button>
-              </span>
-            ))}
-          </div>
-
-          {settingsMsg ? (
-            <p role="alert" className="text-[13px] text-negative">
-              {settingsMsg}
-            </p>
-          ) : null}
-          {isDemo ? (
-            <p className="text-[12px] text-fg-faint">
-              데모 모드에서는 필터가 저장되지 않아요 — 실제 계정에서는 자동 저장됩니다.
-            </p>
-          ) : null}
-        </CardBody>
-      </Card>
-
-      {/* 수집 결과 헤더 + 지금 수집 */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="flex items-baseline gap-2 text-[19px] font-bold leading-snug">
-          수집된 레퍼런스
-          {items.length > 0 || ads.length > 0 ? (
-            <span className="tnum text-[14px] font-semibold text-fg-sub">{displayEntries.length}건</span>
-          ) : null}
-        </h3>
-        <Button
-          size="sm"
-          onClick={handleCollect}
-          disabled={collecting}
-          aria-busy={collecting}
-          title="등록한 기준으로 즉시 수집을 실행해요"
         >
-          <Zap className="size-4" aria-hidden />
-          {collecting ? "수집 중" : "지금 수집"}
-        </Button>
-      </div>
-
-      {collectNotice ? (
-        collectNotice.tone === "error" ? (
-          <p role="alert" className="text-[13px] text-negative">
-            {collectNotice.text}
-          </p>
-        ) : (
-          <p role="status" className="flex items-start gap-1.5 text-[13px] text-fg-sub">
-            <Info className="mt-0.5 size-3.5 shrink-0 text-fg-faint" aria-hidden />
-            {collectNotice.text}
-          </p>
-        )
+          <Info className="mt-0.5 size-3.5 shrink-0 text-fg-faint" aria-hidden />
+          {toast.text}
+        </p>
       ) : null}
 
-      {/* 기준별 베이스라인 — 이 기준으로 지금까지 어떻게 나왔는지 (수집 3건 이상일 때) */}
-      {sourceBaselines.length > 0 ? (
-        <Card className="p-4">
-          <p className="flex items-center gap-1.5 text-[13px] font-semibold">
-            기준별 수집 성적
-            <InfoTip>
-              지금까지 수집된 콘텐츠 기준의 자체 집계입니다. 보통 조회수는 중앙값, 반응 점수는
-              조회수·좋아요·댓글 가중 합계 — 플랫폼 공식 지표가 아닌 핀치 자체 계산이에요.
-            </InfoTip>
-          </p>
-          <ul className="mt-2.5 space-y-1.5">
-            {sourceBaselines.map((b) => (
-              <li key={b.source} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[13px]">
-                <span className="font-semibold text-fg">&lsquo;{b.source}&rsquo;</span>
-                <span className="tnum text-fg-sub">{b.count}건 수집</span>
-                {b.medianViews > 0 ? (
-                  <span className="tnum text-fg-sub">
-                    보통 조회수 <span className="font-semibold text-fg">{formatCompact(b.medianViews)}</span>
-                  </span>
-                ) : null}
-                {b.maxViews > 0 ? (
-                  <span className="tnum text-fg-sub">
-                    최고 <span className="font-semibold text-primary">{formatCompact(b.maxViews)}</span>
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ) : null}
-
-      {/* 탐색 존 — 통합 검색바 + 상세 필터 패널 (수집 결과가 있을 때만 의미가 있다) */}
-      {items.length > 0 || ads.length > 0 ? (
-        <section aria-label="레퍼런스 탐색" className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[240px] flex-1">
-              <Search
-                className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-fg-faint"
-                aria-hidden
-              />
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="수집한 레퍼런스에서 캡션·계정·태그로 찾기"
-                aria-label="수집한 레퍼런스 검색"
-                className="h-12 w-full rounded-card border border-line bg-body pl-11 pr-10 text-[15px] text-fg placeholder:text-fg-faint transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
-              />
-              {query ? (
-                <button
-                  type="button"
-                  onClick={() => setQuery("")}
-                  aria-label="검색어 지우기"
-                  className="absolute right-2.5 top-1/2 flex size-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded-chip text-fg-faint transition-colors hover:bg-overlay hover:text-fg"
-                >
-                  <X className="size-4" aria-hidden />
-                </button>
-              ) : null}
+      {/* ── 블록 2 — 결과 영역 ── */}
+      <section aria-label="레퍼런스 결과" className="mt-5">
+        {totalSources === 0 && totalCollected === 0 ? (
+          /* ① 신규 — 온보딩으로 결과 영역을 대체한다(추가가 아니라 대체) */
+          <Card className="p-8 text-center">
+            <p className="text-[19px] font-bold text-fg">1분이면 첫 레퍼런스가 도착해요</p>
+            <p className="mt-1.5 text-[14px] text-fg-sub">
+              관심 키워드나 계정을 등록하면 매일 아침 자동으로 모아드려요.
+            </p>
+            <p className="mt-1 text-[13px] text-fg-faint">① 주제·계정 등록 → ② 채널 선택 → ③ 매일 자동 수집</p>
+            <div className="mt-5">
+              <Button onClick={() => openDrawer("sources")}>수집 기준 등록하기</Button>
             </div>
-            <button
-              type="button"
-              aria-expanded={panelOpen}
-              onClick={() => setPanelOpen((v) => !v)}
-              className={cn(
-                "inline-flex h-12 cursor-pointer items-center gap-2 rounded-card border px-4 text-[14px] font-semibold transition-colors",
-                panelOpen || activeFilterCount > 0
-                  ? "border-primary bg-primary-weak text-primary"
-                  : "border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg",
-              )}
-            >
-              <SlidersHorizontal className="size-4" aria-hidden />
-              필터
-              {activeFilterCount > 0 ? (
-                <span className="tnum flex size-5 items-center justify-center rounded-chip bg-primary text-[11px] font-bold text-on-primary">
-                  {activeFilterCount}
-                </span>
-              ) : null}
-            </button>
-            <label className="flex items-center gap-2 text-[13px] text-fg-sub">
-              정렬
-              <select
-                value={itemSort}
-                onChange={(e) => setItemSort(e.target.value as ItemSort)}
-                className="h-12 cursor-pointer rounded-card border border-line bg-body px-3 text-[14px] font-medium text-fg transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
-              >
-                {ITEM_SORT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
+            <div className="mt-6 border-t border-line pt-5">
+              <p className="text-[12px] font-semibold text-fg-faint">이런 주제로 시작해보세요</p>
+              <div className="mt-2.5 flex flex-wrap justify-center gap-1.5">
+                {TREND_CATEGORIES.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => openDrawer("sources", c)}
+                    className="cursor-pointer rounded-chip bg-overlay px-3 py-1 text-[13px] text-fg-sub transition-colors hover:text-fg"
+                  >
+                    {c}
+                  </button>
                 ))}
-              </select>
-            </label>
-          </div>
-
-          {/* 상세 필터 패널 — 스니핏식 패싯 패널을 핀치 토큰으로 구성 */}
-          {panelOpen ? (
-            <div role="region" aria-label="상세 필터" className="rounded-card border border-line bg-body p-5 shadow-pop">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[13px] font-semibold text-fg-sub">
-                  원하는 조건을 조합해 정확한 레퍼런스를 찾아보세요
-                </p>
-                {activeFilterCount > 0 ? (
+              </div>
+            </div>
+          </Card>
+        ) : totalCollected === 0 ? (
+          /* ② 기준은 있는데 수집물 0건 */
+          <EmptyState
+            icon={Zap}
+            title="이제 수집할 준비가 됐어요"
+            description={`기준 ${totalSources}개 등록됨 — '지금 수집'을 누르면 첫 수집이 시작됩니다. 매일 아침에도 자동으로 모아둘게요.`}
+            action={<Button onClick={handleCollect}>지금 수집</Button>}
+          />
+        ) : !hasQuery && exploreSections.length > 0 ? (
+          /* (a) 탐색 모드 — 큐레이션 행 그룹. 최상위 블록이 아니라 이 section 안의 행이다 */
+          <div className="space-y-8">
+            {exploreSections.map((s) => (
+              <div key={s.key}>
+                <div className="flex h-9 items-center justify-between gap-3">
+                  <div className="flex items-baseline gap-2">
+                    <h2 className="text-[15px] font-bold text-fg">{s.title}</h2>
+                    <span className="tnum text-[13px] text-fg-faint">{s.entries.length}건</span>
+                  </div>
                   <button
                     type="button"
-                    onClick={resetFilters}
-                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-chip px-3 py-1 text-[12px] font-semibold text-fg-sub transition-colors hover:bg-overlay hover:text-fg"
+                    onClick={s.apply}
+                    className="shrink-0 cursor-pointer rounded-chip px-3 py-1 text-[13px] font-semibold text-fg-sub transition-colors hover:bg-overlay hover:text-fg"
                   >
-                    <RotateCcw className="size-3.5" aria-hidden />
-                    초기화
+                    전체 보기
                   </button>
+                </div>
+                {/* lg(3열)에서 4번째를 숨겨 모든 폭에서 고아 카드 없이 정확히 한 행이 된다 */}
+                <div
+                  className={cn(gridCls, "mt-2 [&>*:nth-child(4)]:hidden xl:[&>*:nth-child(4)]:block")}
+                >
+                  {s.entries.map(renderEntry)}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : displayEntries.length > 0 ? (
+          /* (b) 검색 모드 — 단일 그리드 */
+          <>
+            <div className={gridCls}>{displayEntries.slice(0, visibleCount).map(renderEntry)}</div>
+            <div className="mt-6 flex justify-center">
+              {displayEntries.length > visibleCount ? (
+                <Button variant="ghost" onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}>
+                  더 보기
+                </Button>
+              ) : displayEntries.length > PAGE_SIZE ? (
+                <p className="text-[13px] text-fg-faint">모두 불러왔어요</p>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          /* ④ 검색·필터 결과 0건 — 문구만 있는 빈 상태를 만들지 않는다 */
+          <EmptyState
+            icon={SearchX}
+            title={
+              query.trim()
+                ? `'${query.trim()}'${activeFilterCount > 0 ? " · 지금 조건" : ""}에 맞는 레퍼런스가 없어요`
+                : "이 조건에 맞는 레퍼런스가 없어요"
+            }
+            description="조건을 하나씩 풀어보거나, 아직 안 모은 주제라면 새 수집 기준으로 만들어보세요."
+            action={
+              <div className="flex flex-wrap justify-center gap-2">
+                {query.trim() ? (
+                  <Button variant="ghost" onClick={() => applyQuery("")}>
+                    검색어 지우기
+                  </Button>
+                ) : null}
+                {activeFilterCount > 0 ? (
+                  <Button variant="ghost" onClick={() => applyFilters({ ...DEFAULT_FILTERS, sort: filters.sort })}>
+                    필터 초기화
+                  </Button>
+                ) : null}
+                {/* 등록된 기준 어디에도 없는 검색어 = 콜드스타트.
+                    /discover의 유일한 고유 가치("등록 안 한 주제도 만나는 발견")를
+                    별도 화면이 아니라 검색의 자연스러운 실패 경로로 흡수한다. */}
+                {query.trim() && !sourceFacets.some((s) => s.value.includes(query.trim())) ? (
+                  <Button onClick={() => openDrawer("sources", query.trim())}>
+                    &lsquo;{query.trim()}&rsquo;로 수집 기준 만들기
+                  </Button>
                 ) : null}
               </div>
+            }
+          />
+        )}
 
-              <div className="mt-4 grid gap-x-8 gap-y-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]">
-                <div className="space-y-5">
-                  <div>
-                    <p className="text-[13px] font-semibold text-fg-sub">수집 시기</p>
-                    <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="수집 시기 필터">
-                      {COLLECTED_WITHIN_OPTIONS.map((opt) => (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          aria-pressed={collectedWithin === opt.value}
-                          onClick={() => setCollectedWithin(opt.value)}
-                          className={cn(
-                            "cursor-pointer rounded-chip border px-3 py-1.5 text-[13px] font-medium transition-colors",
-                            collectedWithin === opt.value
-                              ? "border-primary bg-primary-weak font-semibold text-primary"
-                              : "border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg",
-                          )}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-[13px] font-semibold text-fg-sub">채널</p>
-                    <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="채널 필터">
-                      {CHANNEL_FILTER_OPTIONS.map((opt) => {
-                        const active = filter === opt.value;
-                        const Glyph =
-                          opt.value === "instagram"
-                            ? InstagramGlyph
-                            : opt.value === "tiktok"
-                              ? TiktokGlyph
-                              : opt.value === "threads"
-                                ? ThreadsGlyph
-                                : opt.value === "ads"
-                                  ? Megaphone
-                                  : null;
-                        return (
-                          <button
-                            key={opt.value}
-                            type="button"
-                            aria-pressed={active}
-                            onClick={() => setFilter(opt.value)}
-                            className={cn(
-                              "inline-flex cursor-pointer items-center gap-1.5 rounded-chip border px-3 py-1.5 text-[13px] font-medium transition-colors",
-                              active
-                                ? "border-primary bg-primary-weak font-semibold text-primary"
-                                : "border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg",
-                            )}
-                          >
-                            {Glyph ? <Glyph className="size-3.5" aria-hidden /> : null}
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-[13px] font-semibold text-fg-sub">보기 옵션</p>
-                    <div className="mt-2">
-                      <button
-                        type="button"
-                        aria-pressed={favOnly}
-                        onClick={() => setFavOnly((v) => !v)}
-                        className={cn(
-                          "inline-flex cursor-pointer items-center gap-1.5 rounded-chip border px-3 py-1.5 text-[13px] font-medium transition-colors",
-                          favOnly
-                            ? "border-primary bg-primary-weak font-semibold text-primary"
-                            : "border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg",
-                        )}
-                      >
-                        <Bookmark className="size-3.5" fill={favOnly ? "currentColor" : "none"} aria-hidden />
-                        즐겨찾기만
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-5">
-                  {categoryFacets.length > 0 ? (
-                    <div>
-                      <p className="text-[13px] font-semibold text-fg-sub">
-                        카테고리 <span className="font-normal text-fg-faint">— AI 자동 분류, 복수 선택</span>
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="카테고리 필터">
-                        {categoryFacets.map((c) => (
-                          <button
-                            key={c.name}
-                            type="button"
-                            aria-pressed={categories.has(c.name)}
-                            onClick={() => setCategories((prev) => toggleSet(prev, c.name))}
-                            className={cn(
-                              "cursor-pointer rounded-chip border px-3 py-1.5 text-[13px] font-medium transition-colors",
-                              categories.has(c.name)
-                                ? "border-primary bg-primary-weak font-semibold text-primary"
-                                : "border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg",
-                            )}
-                          >
-                            {c.name} <span className="tnum text-[11px] opacity-60">{c.count}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {hookFacets.length > 0 ? (
-                    <div>
-                      <p className="text-[13px] font-semibold text-fg-sub">
-                        후킹 기법 <span className="font-normal text-fg-faint">— AI가 감지한 표현 전략, 복수 선택</span>
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="후킹 기법 필터">
-                        {hookFacets.map((h) => (
-                          <button
-                            key={h.name}
-                            type="button"
-                            aria-pressed={hooks.has(h.name)}
-                            onClick={() => setHooks((prev) => toggleSet(prev, h.name))}
-                            className={cn(
-                              "cursor-pointer rounded-chip border px-3 py-1.5 text-[13px] font-medium transition-colors",
-                              hooks.has(h.name)
-                                ? "border-primary bg-primary-weak font-semibold text-primary"
-                                : "border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg",
-                            )}
-                          >
-                            {h.name} <span className="tnum text-[11px] opacity-60">{h.count}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          <p className="tnum text-[13px] text-fg-sub" aria-live="polite">
-            {displayEntries.length}건 표시 중
-            {query.trim() ? ` · '${query.trim()}' 검색` : ""}
-            {activeFilterCount > 0 ? ` · 필터 ${activeFilterCount}개 적용` : ""}
+        {totalCollected > 0 && totalSources === 0 ? (
+          <p className="mt-6 flex items-start gap-1.5 text-[12px] text-fg-faint">
+            <FolderPlus className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+            수집 기준을 등록하면 매일 아침 자동으로 새 레퍼런스가 쌓여요.
           </p>
-        </section>
-      ) : null}
+        ) : null}
+      </section>
 
-      {/* 수집 로딩 오버레이 — 핀치 로고 둘레를 빛이 도는 오빗 링 */}
+      {/* ── 흐름 밖 ── */}
+
+      <LibrarySettingsDrawer
+        open={drawerOpen}
+        tab={drawerTab}
+        onTabChange={setDrawerTab}
+        onClose={() => setDrawerOpen(false)}
+        sources={sources}
+        adSources={adSources}
+        baselines={baselines}
+        settings={settings}
+        isDemo={isDemo}
+        value={sourceInput}
+        onValueChange={setSourceInput}
+        onAddSource={handleAddSource}
+        onRemoveSource={handleRemoveSource}
+        onAddAdSource={handleAddAdSource}
+        onRemoveAdSource={handleRemoveAdSource}
+        onUpdateSettings={handleUpdateSettings}
+      />
+
+      {/* 수집 진행 — 수십 초 걸리고 끝나면 화면 전체가 바뀌므로 전체화면이 옳다 */}
       {collecting ? (
         <div
           role="status"
@@ -1161,62 +724,6 @@ export function LibraryClient({
         </div>
       ) : null}
 
-      {/* 수집 결과 — 사유별 정직한 빈 상태 안내 */}
-      {displayEntries.length > 0 ? (
-        <section
-          aria-label="수집된 레퍼런스 목록"
-          className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
-        >
-          {displayEntries.map((entry) =>
-            entry.kind === "item" ? (
-              <ReferenceCard
-                key={entry.data.id}
-                item={entry.data}
-                favorite={favoriteIds.has(entry.data.id)}
-                onToggleFavorite={() => toggleFavorite(entry.data.id)}
-                overAvgMultiple={overAvgMultiple.get(entry.data.id)}
-                onOpen={() => setSelectedId(entry.data.id)}
-              />
-            ) : (
-              <AdCard
-                key={entry.data.id}
-                ad={entry.data}
-                favorite={adFavoriteIds.has(entry.data.id)}
-                onToggleFavorite={() => toggleAdFavoriteLocal(entry.data.id)}
-              />
-            ),
-          )}
-        </section>
-      ) : items.length > 0 || ads.length > 0 ? (
-        <EmptyState
-          icon={SearchX}
-          title="이 조건에 맞는 레퍼런스가 없어요"
-          description="검색어를 지우거나 채널·카테고리 필터를 '전체'로 바꿔보세요."
-        />
-      ) : sources.length === 0 && adSources.length === 0 ? (
-        <EmptyState
-          icon={FolderPlus}
-          title="아직 등록한 수집 기준이 없어요"
-          description="위에서 키워드나 계정, 메타광고 검색어를 등록하고 '지금 수집'을 누르면 바로 모으기 시작해요."
-        />
-      ) : (
-        <EmptyState
-          icon={Zap}
-          title="이제 수집할 준비가 됐어요"
-          description={`기준 ${sources.length + adSources.length}개 등록됨 — '지금 수집'을 누르면 이 기준으로 첫 수집이 시작됩니다.`}
-        />
-      )}
-
-      {/* 하단 안내 — 스튜디오 연결 */}
-      <Card className="flex items-start gap-3 p-4">
-        <Info className="mt-0.5 size-4 shrink-0 text-fg-faint" aria-hidden />
-        <p className="text-[13px] leading-relaxed text-fg-sub">
-          수집된 레퍼런스는 AI 스튜디오와 연결됩니다 — 카드에서 바로 카드뉴스 제작으로 넘어갈 수
-          있어요.
-        </p>
-      </Card>
-
-      {/* 상세 모달 */}
       {selectedItem ? (
         <ReferenceDetailModal
           item={selectedItem}
@@ -1231,321 +738,5 @@ export function LibraryClient({
         />
       ) : null}
     </div>
-  );
-}
-
-function ReferenceCard({
-  item,
-  favorite,
-  onToggleFavorite,
-  overAvgMultiple,
-  onOpen,
-}: {
-  item: ReferenceItem;
-  favorite: boolean;
-  onToggleFavorite: () => void;
-  /** 같은 기준 평균 대비 반응 배수 — 1.5배 이상일 때만 전달됨 */
-  overAvgMultiple?: number;
-  onOpen: () => void;
-}) {
-  const router = useRouter();
-
-  /* 레퍼런스 → 스튜디오 원클릭 핸드오프 — 트렌드 탐색과 같은 localStorage 채널 사용 */
-  function makeCardNews() {
-    try {
-      localStorage.setItem(
-        "finch:studio:pending",
-        JSON.stringify({
-          topic: item.title,
-          note: `이 레퍼런스를 참고해 새로 써줘. 요약: ${item.summary} 후킹 기법 '${item.hooks[0] ?? "호기심"}' 각도를 살리되, 베끼지 말고 구조만 참고할 것.`,
-        }),
-      );
-    } catch {
-      // localStorage 실패해도 이동은 계속 — 스튜디오에서 주제만 비어있을 뿐
-    }
-    router.push("/studio");
-  }
-
-  const PlaceholderGlyph =
-    item.channel === "instagram" ? InstagramGlyph : item.channel === "tiktok" ? TiktokGlyph : ThreadsGlyph;
-
-  return (
-    <Card hover className="flex flex-col overflow-hidden">
-      {/* 썸네일 미리보기 — 클릭 시 상세 모달. 없으면(텍스트 글·캐시 실패·과거 수집분) 채널 글리프 */}
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label={`${item.title} 상세 보기`}
-        className="block w-full cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
-      >
-        {item.thumbnailUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- Storage 캐시 URL이라 최적화 프록시를 거치지 않는다
-          <img
-            src={item.thumbnailUrl}
-            alt=""
-            loading="lazy"
-            className="aspect-[4/5] w-full border-b border-line bg-overlay object-cover"
-          />
-        ) : (
-          <span className="flex aspect-[4/5] items-center justify-center border-b border-line bg-overlay" aria-hidden>
-            <PlaceholderGlyph className="size-9 text-fg-faint" />
-          </span>
-        )}
-      </button>
-
-      <div className="flex flex-1 flex-col gap-2.5 p-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <ChannelBadge channel={item.channel} />
-          <Badge>{item.category}</Badge>
-          {overAvgMultiple ? (
-            <Badge tone="positive" title="같은 수집 기준의 평균 반응 대비 — 핀치 자체 계산">
-              <span className="size-1.5 rounded-full bg-current" aria-hidden />
-              기준 대비 {overAvgMultiple.toFixed(1)}배
-            </Badge>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          aria-pressed={favorite}
-          aria-label={favorite ? "즐겨찾기 해제" : "즐겨찾기"}
-          onClick={onToggleFavorite}
-          className={cn(
-            "shrink-0 rounded-card p-1.5 transition-colors",
-            favorite ? "text-primary" : "text-fg-faint hover:bg-overlay hover:text-fg-sub",
-          )}
-        >
-          <Bookmark className="size-4" fill={favorite ? "currentColor" : "none"} aria-hidden />
-        </button>
-      </div>
-
-      <button type="button" onClick={onOpen} className="min-w-0 cursor-pointer text-left">
-        <p className="line-clamp-2 text-[15px] font-semibold leading-snug transition-colors hover:text-primary">
-          {item.title}
-        </p>
-        <p className="mt-1 text-[13px] text-fg-sub">{item.creatorHandle}</p>
-      </button>
-
-      {/* AI 요약 — 영상을 재생하지 않아도 내용이 파악되게 */}
-      <p className="line-clamp-3 text-[13px] leading-relaxed text-fg-sub">{item.summary}</p>
-
-      {/* AI 분석 코멘트 — 왜 반응을 얻었는지 (자체 추정) */}
-      {item.aiComment ? (
-        <p className="flex items-start gap-1.5 rounded-card bg-overlay px-2.5 py-2 text-[12px] leading-relaxed text-fg-sub">
-          <Sparkles className="mt-0.5 size-3 shrink-0 text-primary" aria-hidden />
-          <span>
-            {item.aiComment}
-            <InfoTip>핀치 AI의 반응 요인 분석으로, 플랫폼 공식 데이터가 아닌 자체 추정치입니다.</InfoTip>
-          </span>
-        </p>
-      ) : null}
-
-      {/* 후킹 기법 태그 — 자체 분석, 고지 필수 */}
-      {item.hooks.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {item.hooks.map((h) => (
-            <span
-              key={h}
-              className="inline-flex items-center rounded-chip bg-primary-weak px-2 py-0.5 text-[11px] font-semibold text-primary"
-            >
-              {h}
-            </span>
-          ))}
-          <InfoTip>
-            핀치 AI가 분석한 후킹 기법 태그로, 플랫폼 공식 데이터가 아닌 자체 추정치입니다.
-          </InfoTip>
-        </div>
-      ) : null}
-
-      {/* 지표 — 아이콘형 (조회·좋아요·댓글 + 공감률 칩) */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px]">
-        {item.views > 0 ? (
-          <span className="inline-flex items-center gap-1 text-fg-sub" title="조회수">
-            <Eye className="size-3.5 text-fg-faint" aria-hidden />
-            <span className="tnum font-semibold text-fg">{formatCompact(item.views)}</span>
-          </span>
-        ) : null}
-        <span className="inline-flex items-center gap-1 text-fg-sub" title="좋아요">
-          <Heart className="size-3.5 text-fg-faint" aria-hidden />
-          <span className="tnum font-semibold text-fg">{formatCompact(item.likes)}</span>
-        </span>
-        {(item.comments ?? 0) > 0 ? (
-          <span className="inline-flex items-center gap-1 text-fg-sub" title="댓글">
-            <MessageCircle className="size-3.5 text-fg-faint" aria-hidden />
-            <span className="tnum font-semibold text-fg">{formatCompact(item.comments ?? 0)}</span>
-          </span>
-        ) : null}
-        {item.views > 0 ? (
-          <span className="inline-flex items-center gap-1 rounded-chip bg-positive-weak px-2 py-0.5 text-[11px] font-semibold text-positive">
-            공감률{" "}
-            <span className="tnum">
-              {(((item.likes + (item.comments ?? 0)) / item.views) * 100).toFixed(2)}%
-            </span>
-            <InfoTip>(좋아요+댓글) ÷ 조회수. 플랫폼 공식 지표가 아닌 핀치 자체 계산이에요.</InfoTip>
-          </span>
-        ) : null}
-      </div>
-
-      {/* 캡션에서 추출한 해시태그 */}
-      {item.hashtags && item.hashtags.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
-          {item.hashtags.map((tag) => (
-            <span key={tag} className="text-[12px] text-fg-faint">
-              {tag}
-            </span>
-          ))}
-        </div>
-      ) : null}
-
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-fg-faint">
-        <span>&lsquo;{item.matchedSource}&rsquo; 기준으로 수집</span>
-        {item.url ? (
-          <a
-            href={item.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 font-semibold text-fg-sub transition-colors hover:text-primary"
-          >
-            원본 보기
-            <ExternalLink className="size-3" aria-hidden />
-          </a>
-        ) : null}
-      </div>
-
-      <div className="mt-auto border-t border-line pt-3">
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={makeCardNews}
-          title="이 레퍼런스의 주제와 후킹 각도를 AI 스튜디오로 가져가요"
-          className="w-full"
-        >
-          <Sparkles className="size-3.5" aria-hidden />
-          이 레퍼런스로 카드뉴스
-        </Button>
-      </div>
-      </div>
-    </Card>
-  );
-}
-
-const PLATFORM_LABEL: Record<string, string> = {
-  FACEBOOK: "페이스북",
-  INSTAGRAM: "인스타그램",
-  AUDIENCE_NETWORK: "오디언스 네트워크",
-  MESSENGER: "메신저",
-};
-
-function AdCard({
-  ad,
-  favorite,
-  onToggleFavorite,
-}: {
-  ad: ReferenceAd;
-  favorite: boolean;
-  onToggleFavorite: () => void;
-}) {
-  const router = useRouter();
-  const adLibraryUrl = `https://www.facebook.com/ads/library/?id=${ad.adArchiveId}`;
-
-  function makeCardNews() {
-    try {
-      localStorage.setItem(
-        "finch:studio:pending",
-        JSON.stringify({
-          topic: ad.pageName,
-          note: `이 메타광고 소재를 참고해 새로 써줘. 문구: ${ad.body} 베끼지 말고 각도만 참고할 것.`,
-        }),
-      );
-    } catch {
-      // localStorage 실패해도 이동은 계속
-    }
-    router.push("/studio");
-  }
-
-  return (
-    <Card hover className="flex flex-col overflow-hidden">
-      {ad.thumbnailUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element -- 공급사 원본 썸네일 URL, 최적화 프록시 미대상
-        <img
-          src={ad.thumbnailUrl}
-          alt=""
-          loading="lazy"
-          className="aspect-[4/5] w-full border-b border-line bg-overlay object-cover"
-        />
-      ) : (
-        <span className="flex aspect-[4/5] items-center justify-center border-b border-line bg-overlay" aria-hidden>
-          <Megaphone className="size-9 text-fg-faint" />
-        </span>
-      )}
-
-      <div className="flex flex-1 flex-col gap-2.5 p-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Badge tone={ad.isActive ? "positive" : "neutral"}>
-              <Megaphone className="size-3 shrink-0" aria-hidden />
-              메타광고
-            </Badge>
-            {!ad.isActive ? <Badge>종료됨</Badge> : null}
-          </div>
-          <button
-            type="button"
-            aria-pressed={favorite}
-            aria-label={favorite ? "즐겨찾기 해제" : "즐겨찾기"}
-            onClick={onToggleFavorite}
-            className={cn(
-              "shrink-0 rounded-card p-1.5 transition-colors",
-              favorite ? "text-primary" : "text-fg-faint hover:bg-overlay hover:text-fg-sub",
-            )}
-          >
-            <Bookmark className="size-4" fill={favorite ? "currentColor" : "none"} aria-hidden />
-          </button>
-        </div>
-
-        <p className="text-[15px] font-semibold leading-snug">{ad.pageName}</p>
-
-        <p className="line-clamp-4 text-[13px] leading-relaxed text-fg-sub">{ad.body || "광고 문구가 없는 이미지·영상 소재예요."}</p>
-
-        {ad.ctaText ? (
-          <span className="inline-flex w-fit items-center rounded-chip bg-primary-weak px-2.5 py-1 text-[12px] font-semibold text-primary">
-            {ad.ctaText}
-          </span>
-        ) : null}
-
-        {ad.platforms.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5 text-[12px] text-fg-faint">
-            {ad.platforms.map((p) => (
-              <span key={p}>{PLATFORM_LABEL[p] ?? p}</span>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-fg-faint">
-          <span>&lsquo;{ad.matchedSource}&rsquo; 검색으로 수집</span>
-          <a
-            href={adLibraryUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 font-semibold text-fg-sub transition-colors hover:text-primary"
-          >
-            광고 라이브러리에서 보기
-            <ExternalLink className="size-3" aria-hidden />
-          </a>
-        </div>
-
-        <div className="mt-auto border-t border-line pt-3">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={makeCardNews}
-            title="이 광고 소재의 각도를 AI 스튜디오로 가져가요"
-            className="w-full"
-          >
-            <Sparkles className="size-3.5" aria-hidden />
-            이 소재로 카드뉴스
-          </Button>
-        </div>
-      </div>
-    </Card>
   );
 }

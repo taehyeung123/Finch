@@ -161,7 +161,7 @@ export async function listReferenceAds(): Promise<ReferenceAd[]> {
     )
     .eq("user_id", user.id)
     .order("collected_at", { ascending: false })
-    .limit(60);
+    .limit(200);
   if (error) {
     const missing = error.message.includes("does not exist") || error.message.includes("Could not find the table");
     if (!missing) console.error("[ads-reference] 광고 조회 실패:", error.message);

@@ -29,7 +29,7 @@ const ROUTES = [
   "/analyze",
   "/auto-dm",
   "/studio",
-  "/discover",
+  "/library",
   "/competitors",
   "/competitors/ads",
   "/ads",
