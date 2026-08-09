@@ -6,7 +6,6 @@ import { useState } from "react";
 import {
   Bell,
   ChevronsLeft,
-  ChevronsRight,
   Compass,
   Eye,
   FileSearch,
@@ -23,7 +22,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { usageStats } from "@/lib/data";
-import { FinchLogo, FinchMark } from "@/components/logo";
+import { FinchMark } from "@/components/logo";
 import { UsageGauge } from "@/components/ui/charts";
 import { ButtonLink } from "@/components/ui/button";
 
@@ -50,40 +49,44 @@ export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
 
+  /* 접기·펼치기 공용 이징 — 랜딩 진입 애니메이션(globals.css .anim-fade-up/.reveal)과 같은
+     커브를 써서 앱 전체 모션 리듬을 통일한다. 폭은 레이아웃 속성이라 GPU 가속 대상이 아니지만
+     사이드바 접기는 본질적으로 형제 요소(본문)의 리플로우를 동반하는 레이아웃 동작이라
+     transform으로 대체할 수 없다 — duration을 300ms로 짧게 잡아 버벅임 체감을 줄인다. */
+  const EASE = "ease-[cubic-bezier(0.16,1,0.3,1)]";
+
   return (
     <aside
       className={cn(
-        "sticky top-0 hidden h-screen shrink-0 flex-col border-r border-line bg-body md:flex",
+        "sticky top-0 hidden h-screen shrink-0 flex-col overflow-hidden border-r border-line bg-body transition-[width] duration-300 md:flex",
+        EASE,
         collapsed ? "w-[72px]" : "w-60",
       )}
     >
-      <div className={cn("flex h-16 items-center border-b border-line", collapsed ? "justify-center" : "justify-between pl-5 pr-3")}>
-        <Link href="/dashboard" aria-label="핀치 홈">
-          {collapsed ? <FinchMark className="text-primary" /> : <FinchLogo />}
-        </Link>
-        {!collapsed ? (
-          <button
-            type="button"
-            onClick={() => setCollapsed(true)}
-            aria-label="사이드바 접기"
-            className="rounded-card p-1.5 text-fg-faint hover:bg-overlay hover:text-fg"
+      <div className="flex h-16 items-center gap-2 border-b border-line pl-5 pr-3">
+        <Link href="/dashboard" aria-label="핀치 홈" className="flex min-w-0 items-center gap-2">
+          <FinchMark className="shrink-0 text-primary" />
+          <span
+            className={cn(
+              "overflow-hidden whitespace-nowrap text-lg font-bold tracking-tight text-fg transition-all duration-300",
+              EASE,
+              collapsed ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[100px] translate-x-0 opacity-100",
+            )}
           >
-            <ChevronsLeft className="size-4" />
-          </button>
-        ) : null}
+            핀치
+          </span>
+        </Link>
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          aria-label={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
+          className="ml-auto shrink-0 rounded-card p-1.5 text-fg-faint transition-colors hover:bg-overlay hover:text-fg"
+        >
+          <ChevronsLeft className={cn("size-4 transition-transform duration-300", EASE, collapsed && "rotate-180")} />
+        </button>
       </div>
 
-      <nav className={cn("flex-1 overflow-y-auto py-3", collapsed ? "px-3" : "px-3")} aria-label="주 메뉴">
-        {collapsed ? (
-          <button
-            type="button"
-            onClick={() => setCollapsed(false)}
-            aria-label="사이드바 펼치기"
-            className="mb-2 flex w-full items-center justify-center rounded-card p-2.5 text-fg-faint hover:bg-overlay hover:text-fg"
-          >
-            <ChevronsRight className="size-4" />
-          </button>
-        ) : null}
+      <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="주 메뉴">
         <ul className="space-y-0.5">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(`${href}/`);
@@ -95,12 +98,19 @@ export function Sidebar() {
                   title={collapsed ? label : undefined}
                   className={cn(
                     "flex items-center gap-3 rounded-card px-3 py-2.5 text-[15px] font-medium transition-colors",
-                    collapsed && "justify-center px-0",
                     active ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-overlay hover:text-fg",
                   )}
                 >
                   <Icon className="size-[18px] shrink-0" aria-hidden />
-                  {!collapsed ? label : null}
+                  <span
+                    className={cn(
+                      "overflow-hidden whitespace-nowrap transition-all duration-300",
+                      EASE,
+                      collapsed ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[160px] translate-x-0 opacity-100",
+                    )}
+                  >
+                    {label}
+                  </span>
                 </Link>
               </li>
             );
@@ -108,19 +118,26 @@ export function Sidebar() {
         </ul>
       </nav>
 
-      {!collapsed ? (
-        <div className="border-t border-line p-4">
-          {/* 사용량 게이지 미니 위젯 + 업그레이드 (PART 6.2) */}
-          <div className="space-y-3">
+      {/* 사용량 게이지 미니 위젯 + 업그레이드 (PART 6.2) — grid-rows 0fr↔1fr 트릭으로 높이를
+          부드럽게 접는다. 항상 DOM에 남겨 접힘 중에도 순간적으로 사라지지 않게 한다. */}
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows,opacity] duration-300",
+          EASE,
+          collapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] border-t border-line opacity-100",
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="space-y-3 p-4">
             {usageStats.slice(0, 2).map((u) => (
               <UsageGauge key={u.label} {...u} compact />
             ))}
+            <ButtonLink href="/settings/billing" size="sm" className="mt-4 w-full">
+              플랜 업그레이드
+            </ButtonLink>
           </div>
-          <ButtonLink href="/settings/billing" size="sm" className="mt-4 w-full">
-            플랜 업그레이드
-          </ButtonLink>
         </div>
-      ) : null}
+      </div>
     </aside>
   );
 }
