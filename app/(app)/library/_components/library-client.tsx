@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bookmark, ExternalLink, Eye, FolderPlus, Heart, Info, MessageCircle, RotateCcw, Search, SearchX, SlidersHorizontal, Sparkles, X, Zap } from "lucide-react";
 import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
@@ -385,7 +386,16 @@ export function LibraryClient({
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title="레퍼런스"
-        description="키워드·계정·해시태그를 등록해두면 잘되는 콘텐츠를 모아 AI가 요약과 후킹 태그를 붙여줍니다."
+        description={
+          <>
+            등록해둔 키워드·계정·해시태그만 계속 모으는 내 자료함이에요 — 잘되는 콘텐츠를 AI가
+            요약·후킹 태그까지 붙여 쌓아드려요. 아직 뭘 찾을지 안 정했다면{" "}
+            <Link href="/discover" className="font-semibold text-primary hover:text-primary-hover">
+              트렌드 탐색
+            </Link>
+            에서 먼저 둘러보세요.
+          </>
+        }
       />
 
       {/* 수집 기준 관리 */}

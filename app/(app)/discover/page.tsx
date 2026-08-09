@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bookmark, Flame, Info, Search, SearchX, Sparkles } from "lucide-react";
 import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
@@ -80,7 +81,16 @@ export default function DiscoverPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title="트렌드 탐색"
-        description="지금 뜨는 콘텐츠를 카테고리와 채널별로 살펴보세요."
+        description={
+          <>
+            아직 안 찾아본 주제도 만나는 발견용 공간이에요 — 인스타그램·틱톡·쓰레드 전체에서 지금
+            뜨는 콘텐츠를 카테고리·채널별로 훑어보세요. 특정 키워드·계정을 계속 추적하고 싶다면{" "}
+            <Link href="/library" className="font-semibold text-primary hover:text-primary-hover">
+              레퍼런스 수집함
+            </Link>
+            에 등록해보세요.
+          </>
+        }
       />
 
       {/* 탭: 실시간 급상승 / 카테고리별 */}
