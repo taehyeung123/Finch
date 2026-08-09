@@ -63,6 +63,8 @@ export function Sidebar() {
         collapsed ? "w-[72px]" : "w-60",
       )}
     >
+      {/* 헤더 — 접힘 폭(72px)에선 로고 하나만으로도 여유가 빠듯해 토글 버튼을 여기 두면
+          겹친다. 토글은 하단에 고정 위치로 따로 둔다(아래 footer 참고). */}
       <div className="flex h-16 items-center gap-2 border-b border-line pl-5 pr-3">
         <Link href="/dashboard" aria-label="핀치 홈" className="flex min-w-0 items-center gap-2">
           <FinchMark className="shrink-0 text-primary" />
@@ -76,14 +78,6 @@ export function Sidebar() {
             핀치
           </span>
         </Link>
-        <button
-          type="button"
-          onClick={() => setCollapsed((v) => !v)}
-          aria-label={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
-          className="ml-auto shrink-0 rounded-card p-1.5 text-fg-faint transition-colors hover:bg-overlay hover:text-fg"
-        >
-          <ChevronsLeft className={cn("size-4 transition-transform duration-300", EASE, collapsed && "rotate-180")} />
-        </button>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="주 메뉴">
@@ -137,6 +131,18 @@ export function Sidebar() {
             </ButtonLink>
           </div>
         </div>
+      </div>
+
+      {/* 접기·펼치기 — 상태와 무관하게 항상 같은 자리(맨 아래)에 고정 */}
+      <div className="border-t border-line p-2">
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          aria-label={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
+          className="flex w-full items-center justify-center rounded-card p-2 text-fg-faint transition-colors hover:bg-overlay hover:text-fg"
+        >
+          <ChevronsLeft className={cn("size-4 transition-transform duration-300", EASE, collapsed && "rotate-180")} />
+        </button>
       </div>
     </aside>
   );

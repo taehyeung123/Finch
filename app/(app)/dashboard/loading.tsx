@@ -1,12 +1,15 @@
-import { Skeleton, SkeletonCard, SkeletonStatGrid } from "@/components/ui/skeleton";
+import { LoadingMark, Skeleton, SkeletonCard, SkeletonStatGrid } from "@/components/ui/skeleton";
 
 /* 대시보드 로딩 — 라이브 인사이트 호출(수 초) 동안 골격을 먼저 그린다 */
 export default function DashboardLoading() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div>
-        <Skeleton className="h-7 w-32" />
-        <Skeleton className="mt-2.5 h-4 w-64" />
+      <div className="flex items-center gap-3">
+        <LoadingMark />
+        <div>
+          <Skeleton className="h-7 w-32" />
+          <Skeleton className="mt-2.5 h-4 w-64" />
+        </div>
       </div>
       <SkeletonStatGrid />
       <div className="grid gap-6 lg:grid-cols-3">

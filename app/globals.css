@@ -246,7 +246,15 @@ body {
   }
 }
 
-/* 수집 로딩 오빗 — 핀치 로고 둘레를 빛줄기가 도는 링 (레퍼런스 수집 오버레이) */
+/*
+  로딩 오빗 — 핀치 로고 둘레를 브랜드색 빛줄기가 도는 링.
+  .collect-orbit(108px, 레퍼런스 수집 전체화면 오버레이용)와 .collect-orbit-sm(40px,
+  페이지별 loading.tsx 헤더 인라인용)은 완전히 독립된 규칙으로 각자 정의한다 —
+  --orbit-size 커스텀 프로퍼티로 한 규칙을 공유시키는 버전은 빌드 실측에서
+  Lightning CSS(Turbopack 프로덕션 번들러)가 클래스 간 커스텀 프로퍼티 오버라이드를
+  인식하지 못해(값이 항상 108px로 굳음) 폐기했다. 로딩이 길어져도 화면이 "멈췄나"
+  싶지 않게 계속 도는 신호를 준다.
+*/
 @keyframes orbit-spin {
   to {
     transform: rotate(360deg);
@@ -299,9 +307,58 @@ body {
   filter: blur(10px);
   animation: orbit-spin 1.4s linear infinite;
 }
+
+.collect-orbit-sm {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-primary) 7%, transparent);
+}
+.collect-orbit-sm::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  padding: 1.5px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0%,
+    transparent 62%,
+    color-mix(in srgb, var(--color-primary) 45%, transparent) 80%,
+    var(--color-primary) 96%,
+    transparent 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: orbit-spin 1.4s linear infinite;
+}
+.collect-orbit-sm::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0%,
+    transparent 88%,
+    color-mix(in srgb, var(--color-primary) 26%, transparent) 96%,
+    transparent 100%
+  );
+  filter: blur(4px);
+  animation: orbit-spin 1.4s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .collect-orbit::before,
-  .collect-orbit::after {
+  .collect-orbit::after,
+  .collect-orbit-sm::before,
+  .collect-orbit-sm::after {
     animation: none;
   }
 }

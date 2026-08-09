@@ -1,4 +1,4 @@
-import { Skeleton, SkeletonCard, SkeletonStatGrid } from "@/components/ui/skeleton";
+import { LoadingMark, Skeleton, SkeletonCard, SkeletonStatGrid } from "@/components/ui/skeleton";
 
 /*
   (app) 그룹 공용 로딩 — 자체 loading.tsx가 없는 모든 페이지에 적용된다.
@@ -10,9 +10,12 @@ import { Skeleton, SkeletonCard, SkeletonStatGrid } from "@/components/ui/skelet
 export default function AppLoading() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div>
-        <Skeleton className="h-7 w-40" />
-        <Skeleton className="mt-2.5 h-4 w-72" />
+      <div className="flex items-center gap-3">
+        <LoadingMark />
+        <div>
+          <Skeleton className="h-7 w-40" />
+          <Skeleton className="mt-2.5 h-4 w-72" />
+        </div>
       </div>
       <SkeletonStatGrid />
       <div className="grid gap-6 lg:grid-cols-2">
