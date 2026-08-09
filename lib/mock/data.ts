@@ -5,6 +5,7 @@
 import type {
   AdCampaign,
   AdCampaignDetail,
+  AdSource,
   AnalyzeResult,
   AppNotification,
   AudienceDaily,
@@ -21,6 +22,7 @@ import type {
   PlanFeature,
   Post,
   ProfileGridPost,
+  ReferenceAd,
   ReferenceItem,
   ReferenceSource,
   ReportItem,
@@ -728,6 +730,54 @@ export const referenceItems: ReferenceItem[] = [
     comments: 720,
     hashtags: ["#여름휴가", "#피부관리", "#디데이케어"],
     aiComment: "날짜 역산 캘린더 구조라 저장 후 재방문이 반복된다",
+  },
+];
+
+/* ---- 메타광고 레퍼런스 (0026_reference_ads) — 수집 엔진 연동 전 목데이터 ---- */
+
+export const adSources: AdSource[] = [
+  { id: "as1", value: "여름 스킨케어", createdAt: "2026-07-09T09:00:00+09:00" },
+  { id: "as2", value: "단백질 간식", createdAt: "2026-07-11T13:30:00+09:00" },
+];
+
+export const referenceAds: ReferenceAd[] = [
+  {
+    id: "ad1",
+    adArchiveId: "1180234567890123",
+    pageName: "글로우민트 공식몰",
+    pageProfileUrl: null,
+    body: "쿨링 세럼 하나로 끝내는 여름 수분 케어. 첫 구매 30% 할인, 오늘까지만.",
+    ctaText: "지금 쇼핑하기",
+    thumbnailUrl: null,
+    isActive: true,
+    startDate: "2026-07-20T00:00:00+09:00",
+    endDate: null,
+    platforms: ["INSTAGRAM", "FACEBOOK"],
+    matchedSource: "여름 스킨케어",
+    aiComment: "",
+    category: "광고",
+    status: "unseen",
+    favorite: false,
+    collectedAgoHours: 6,
+  },
+  {
+    id: "ad2",
+    adArchiveId: "1180234567890456",
+    pageName: "머슬핏 단백질",
+    pageProfileUrl: null,
+    body: "단백질 20g, 당류 2g. 편의점 대신 이 바 하나로. 3+1 구성 런칭 프로모션 진행 중.",
+    ctaText: "더 알아보기",
+    thumbnailUrl: null,
+    isActive: true,
+    startDate: "2026-07-15T00:00:00+09:00",
+    endDate: null,
+    platforms: ["FACEBOOK", "INSTAGRAM", "AUDIENCE_NETWORK"],
+    matchedSource: "단백질 간식",
+    aiComment: "",
+    category: "광고",
+    status: "unseen",
+    favorite: true,
+    collectedAgoHours: 20,
   },
 ];
 

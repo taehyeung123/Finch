@@ -45,6 +45,10 @@ export const trendItems = src.trendItems;
 export const referenceSources = src.referenceSources;
 export const referenceItems = src.referenceItems;
 
+/* ---- 메타광고 레퍼런스 (소스·아이템: Supabase 0026 / 수집: ScrapeCreators Ad Library 연동 예정) ---- */
+export const adSources = src.adSources;
+export const referenceAds = src.referenceAds;
+
 /* ---- 서비스 내부 데이터 (Supabase DB로 교체 예정) ---- */
 export const notifications = src.notifications;
 export const usageStats = src.usageStats;

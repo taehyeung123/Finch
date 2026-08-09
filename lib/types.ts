@@ -275,6 +275,38 @@ export interface ReferenceItem {
   status?: "unseen" | "seen" | "skipped";
 }
 
+/** 메타광고 레퍼런스 수집 기준 — 사용자가 등록한 검색 키워드 (마이그레이션 0026) */
+export interface AdSource {
+  id: string;
+  value: string;
+  createdAt: string;
+}
+
+/**
+ * 수집된 메타광고 레퍼런스 — reference_items(오가닉)와 필드가 다르다(creatorHandle 대신
+ * pageName, 단일 postedAt 대신 startDate/endDate). Channel 없이 별도 목록으로 다룬다
+ * (KR 광고는 Instagram·Facebook 등 여러 platforms에 동시 게재되는 경우가 흔함).
+ */
+export interface ReferenceAd {
+  id: string;
+  adArchiveId: string;
+  pageName: string;
+  pageProfileUrl: string | null;
+  body: string;
+  ctaText: string | null;
+  thumbnailUrl: string | null;
+  isActive: boolean;
+  startDate: string | null;
+  endDate: string | null;
+  platforms: string[];
+  matchedSource: string;
+  aiComment: string;
+  category: string;
+  status: "unseen" | "seen" | "skipped";
+  favorite: boolean;
+  collectedAgoHours: number;
+}
+
 export type NotificationType =
   | "competitor_ad"
   | "trend"

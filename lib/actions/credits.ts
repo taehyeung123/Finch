@@ -27,6 +27,8 @@ export const CREDIT_COSTS = {
   diagnosis: 3,
   /** 레퍼런스 수집 1회 — 공급사 API 호출(기준당 1크레딧 원가) + AI 요약·태깅 */
   collect: 2,
+  /** 메타광고 레퍼런스 수집 1회 — Ad Library 검색(기준당 1크레딧 원가) */
+  adCollect: 2,
 } as const;
 
 /** 플랜별 무료 월 한도 — planFeatures 표와 일치 유지 (무료 3회, 유료 사실상 무제한) */
@@ -35,6 +37,7 @@ export const FREE_MONTHLY_LIMITS: Record<string, Record<string, number>> = {
   growth_diagnosis: { free: 3, creator: 1000000, pro: 1000000, agency: 1000000, enterprise: 1000000 },
   // 레퍼런스 수집은 공급사 원가가 실비로 나가므로 유료 플랜도 월 한도를 둔다(사실상 넉넉한 수준)
   reference_collect: { free: 3, creator: 60, pro: 150, agency: 300, enterprise: 1000 },
+  ad_collect: { free: 3, creator: 60, pro: 150, agency: 300, enterprise: 1000 },
 };
 
 export type ChargeResult =

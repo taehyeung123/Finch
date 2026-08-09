@@ -3,10 +3,10 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bookmark, ExternalLink, Eye, FolderPlus, Heart, Info, MessageCircle, RotateCcw, Search, SearchX, SlidersHorizontal, Sparkles, X, Zap } from "lucide-react";
+import { Bookmark, ExternalLink, Eye, FolderPlus, Heart, Info, Megaphone, MessageCircle, RotateCcw, Search, SearchX, SlidersHorizontal, Sparkles, X, Zap } from "lucide-react";
 import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 import { FinchMark } from "@/components/logo";
-import type { Channel, ChannelFilter, CollectSettings, ReferenceItem, ReferenceSource } from "@/lib/types";
+import type { AdSource, Channel, ChannelFilter, CollectSettings, ReferenceAd, ReferenceItem, ReferenceSource } from "@/lib/types";
 import {
   addReferenceSource,
   removeReferenceSource,
@@ -14,6 +14,12 @@ import {
   saveCollectSettings,
   toggleReferenceFavorite,
 } from "@/lib/actions/reference";
+import {
+  addAdSource,
+  removeAdSource,
+  runAdCollection,
+  toggleAdFavorite,
+} from "@/lib/actions/ads-reference";
 import { formatCompact } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { PageHeader } from "@/components/ui/section-header";
@@ -50,12 +56,17 @@ const KIND_PLACEHOLDER: Record<SourceKind, string> = {
   hashtag: "#해시태그 (예: #단백질간식)",
 };
 
+/* 검색 필터 — 오가닉 채널 + 메타광고. 메타광고는 Channel이 아니라 별도 축이라 유니온을 확장한다
+   (인스타그램 필터를 고르면 IG에도 게재된 광고까지 같이 보여준다 — 틱톡·스레드엔 메타광고가 게재되지 않는다) */
+type SearchFilter = ChannelFilter | "ads";
+
 /* 채널 필터 — 이 화면은 한국어 레이블 사용 */
-const CHANNEL_FILTER_OPTIONS: { value: ChannelFilter; label: string }[] = [
+const CHANNEL_FILTER_OPTIONS: { value: SearchFilter; label: string }[] = [
   { value: "all", label: "전체" },
   { value: "instagram", label: "인스타그램" },
   { value: "tiktok", label: "틱톡" },
   { value: "threads", label: "스레드" },
+  { value: "ads", label: "메타광고" },
 ];
 
 /* 수집 필터 옵션 — runCollection이 서버·후처리로 적용 */
@@ -114,11 +125,15 @@ export function LibraryClient({
   sources: initialSources,
   items,
   settings: initialSettings,
+  adSources: initialAdSources,
+  ads,
   isDemo,
 }: {
   sources: ReferenceSource[];
   items: ReferenceItem[];
   settings: CollectSettings;
+  adSources: AdSource[];
+  ads: ReferenceAd[];
   isDemo: boolean;
 }) {
   const router = useRouter();
@@ -159,12 +174,18 @@ export function LibraryClient({
   const [submitting, setSubmitting] = useState(false);
   const [formMsg, setFormMsg] = useState<FormMessage | null>(null);
 
-  /* 지금 수집 — 데모는 짧은 시뮬레이션, 실 모드는 runCollection 실행 */
+  /* 메타광고 수집 기준 — 채널·종류 없이 검색어만 등록 (Ad Library 검색어 그대로) */
+  const [adSources, setAdSources] = useState<AdSource[]>(initialAdSources);
+  const [adValue, setAdValue] = useState("");
+  const [adSubmitting, setAdSubmitting] = useState(false);
+  const [adFormMsg, setAdFormMsg] = useState<FormMessage | null>(null);
+
+  /* 지금 수집 — 데모는 짧은 시뮬레이션, 실 모드는 runCollection(+runAdCollection) 실행 */
   const [collecting, setCollecting] = useState(false);
   const [collectNotice, setCollectNotice] = useState<FormMessage | null>(null);
 
   /* 필터·정렬·즐겨찾기 — 즐겨찾기 초기값은 실 모드 DB의 favorite 컬럼에서 온다 */
-  const [filter, setFilter] = useState<ChannelFilter>("all");
+  const [filter, setFilter] = useState<SearchFilter>("all");
   const [favOnly, setFavOnly] = useState(false);
   const [itemSort, setItemSort] = useState<ItemSort>("views");
   /* 패싯 검색 — 텍스트 검색 + 상세 필터 패널(수집 시기·카테고리·후킹 기법은 다중 선택) */
@@ -175,6 +196,9 @@ export function LibraryClient({
   const [hooks, setHooks] = useState<Set<string>>(() => new Set());
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(
     () => new Set(items.filter((i) => i.favorite).map((i) => i.id)),
+  );
+  const [adFavoriteIds, setAdFavoriteIds] = useState<Set<string>>(
+    () => new Set(ads.filter((a) => a.favorite).map((a) => a.id)),
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedItem = items.find((i) => i.id === selectedId) ?? null;
@@ -194,6 +218,18 @@ export function LibraryClient({
       .slice(0, 12)
       .map(([name, count]) => ({ name, count }));
   }, [items]);
+
+  /* 저장한 계정 카드 — 등록된 "계정" 기준마다 지금까지 모인 콘텐츠 건수·최고 조회수 집계.
+     matchedSource가 등록 시 입력한 값(예: "@handle")과 정확히 일치하는 항목만 센다. */
+  const accountBoards = useMemo(() => {
+    return sources
+      .filter((s) => s.kind === "account")
+      .map((source) => {
+        const matched = items.filter((i) => i.matchedSource === source.value);
+        const maxViews = matched.reduce((max, i) => Math.max(max, i.views), 0);
+        return { source, count: matched.length, maxViews };
+      });
+  }, [sources, items]);
 
   const hookFacets = useMemo(() => {
     const counts = new Map<string, number>();
@@ -223,6 +259,7 @@ export function LibraryClient({
     const q = query.trim().toLowerCase();
     const maxHours = WITHIN_HOURS[collectedWithin];
     const base = items.filter((item) => {
+      if (filter === "ads") return false; // 메타광고 탭에서는 오가닉을 안 섞는다
       if (filter !== "all" && item.channel !== filter) return false;
       if (favOnly && !favoriteIds.has(item.id)) return false;
       if (maxHours !== null && item.collectedAgoHours > maxHours) return false;
@@ -240,6 +277,37 @@ export function LibraryClient({
     if (itemSort === "likes") return [...base].sort((a, b) => b.likes - a.likes);
     return [...base].sort((a, b) => a.collectedAgoHours - b.collectedAgoHours);
   }, [items, filter, favOnly, favoriteIds, itemSort, query, collectedWithin, categories, hooks]);
+
+  /* 메타광고 필터링 — 틱톡·스레드엔 게재되지 않으므로 해당 채널 필터에선 항상 제외,
+     인스타그램 필터에선 platforms에 INSTAGRAM이 걸린 광고만 같이 보여준다 */
+  const filteredAds = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const maxHours = WITHIN_HOURS[collectedWithin];
+    return ads.filter((ad) => {
+      if (filter === "tiktok" || filter === "threads") return false;
+      if (filter === "instagram" && !ad.platforms.includes("INSTAGRAM")) return false;
+      if (favOnly && !adFavoriteIds.has(ad.id)) return false;
+      if (maxHours !== null && ad.collectedAgoHours > maxHours) return false;
+      if (q) {
+        const haystack = [ad.body, ad.pageName, ad.matchedSource].join(" ").toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [ads, filter, favOnly, adFavoriteIds, query, collectedWithin]);
+
+  /* 통합 표시 목록 — 오가닉+메타광고를 한 그리드에 섞는다. 광고는 반응 지표(조회·좋아요)가
+     없어 그 정렬에서는 최신순으로 목록 끝에 붙이고, 최근 수집순에서는 완전히 섞는다 */
+  const displayEntries = useMemo(() => {
+    const itemEntries = filtered.map((data) => ({ kind: "item" as const, data }));
+    const adEntries = [...filteredAds]
+      .sort((a, b) => a.collectedAgoHours - b.collectedAgoHours)
+      .map((data) => ({ kind: "ad" as const, data }));
+    if (itemSort === "recent") {
+      return [...itemEntries, ...adEntries].sort((a, b) => a.data.collectedAgoHours - b.data.collectedAgoHours);
+    }
+    return [...itemEntries, ...adEntries];
+  }, [filtered, filteredAds, itemSort]);
 
   /* 기준(matchedSource)별 베이스라인 — "이 기준, 지금까지 이렇게 나왔어요" */
   const sourceBaselines = useMemo(() => {
@@ -315,6 +383,45 @@ export function LibraryClient({
     }
   }
 
+  async function handleAdSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (adSubmitting) return;
+    setAdFormMsg(null);
+    setAdSubmitting(true);
+    const result = await addAdSource({ value: adValue });
+    setAdSubmitting(false);
+    if (result.ok) {
+      setAdSources((prev) => [...prev, result.source]);
+      setAdValue("");
+      return;
+    }
+    if (isDemo && result.error.startsWith("데모")) {
+      setAdFormMsg({
+        tone: "notice",
+        text: "데모 모드에서는 등록할 수 없어요 — 실제 계정으로 로그인하면 저장됩니다",
+      });
+    } else {
+      setAdFormMsg({ tone: "error", text: result.error });
+    }
+  }
+
+  async function handleAdRemove(id: string) {
+    const before = adSources;
+    setAdSources((prev) => prev.filter((s) => s.id !== id)); // 낙관적 제거
+    const result = await removeAdSource(id);
+    if (!result.ok) {
+      setAdSources(before); // 실패 시 원복
+      setAdFormMsg(
+        isDemo
+          ? {
+              tone: "notice",
+              text: "데모 모드에서는 삭제할 수 없어요 — 실제 계정으로 로그인하면 반영됩니다",
+            }
+          : { tone: "error", text: "삭제에 실패했습니다. 잠시 후 다시 시도해주세요." },
+      );
+    }
+  }
+
   async function handleCollect() {
     if (collecting) return;
     setCollectNotice(null);
@@ -330,30 +437,53 @@ export function LibraryClient({
     }
 
     // 실 모드 — 서버 액션이 공급사 호출 → AI 요약 → 저장까지 수행 (수십 초 걸릴 수 있음)
+    // 메타광고 기준이 등록돼 있으면 오가닉 수집과 함께 실행해 한 번에 결과를 모은다
     setCollecting(true);
     try {
-      const result = await runCollection();
+      const hasAdSources = adSources.length > 0;
+      const [result, adResult] = await Promise.all([
+        runCollection(),
+        hasAdSources ? runAdCollection() : Promise.resolve(null),
+      ]);
+
+      const parts: string[] = [];
+      let tone: "notice" | "error" = "notice";
+
       if (result.ok) {
-        const parts = [`새 레퍼런스 ${result.added}건 수집 완료`];
+        parts.push(`오가닉 레퍼런스 ${result.added}건 수집`);
         if (result.duplicates > 0) parts.push(`이미 수집된 ${result.duplicates}건 제외`);
         if (result.excludedByFilter > 0) parts.push(`수집 필터로 ${result.excludedByFilter}건 제외`);
         if (result.excludedLowQuality > 0) parts.push(`반응 낮은 ${result.excludedLowQuality}건 제외`);
         if (result.excludedIrrelevant > 0) parts.push(`주제와 무관해 ${result.excludedIrrelevant}건 제외`);
         if (result.failedSources.length > 0) {
-          parts.push(`기준 ${result.failedSources.map((v) => `'${v}'`).join(", ")}은 수집에 실패했어요`);
+          parts.push(`기준 ${result.failedSources.map((v) => `'${v}'`).join(", ")}은 실패`);
         }
         if (result.usedSources < result.totalSources) {
-          parts.push(`기준 ${result.totalSources}개 중 ${result.usedSources}개 사용 — 다음 수집에서 나머지 기준이 돌아가요`);
+          parts.push(`기준 ${result.totalSources}개 중 ${result.usedSources}개 사용`);
         }
-        setCollectNotice(
-          result.aiWarning
-            ? { tone: "error", text: `${parts.join(" · ")} — ${result.aiWarning}` }
-            : { tone: "notice", text: parts.join(" · ") },
-        );
-        router.refresh(); // 서버 데이터 다시 로드 — 새 아이템 반영
-      } else {
-        setCollectNotice({ tone: result.reason === "no_sources" ? "notice" : "error", text: result.error });
+        if (result.aiWarning) {
+          parts.push(result.aiWarning);
+          tone = "error";
+        }
+      } else if (result.reason !== "no_sources") {
+        parts.push(result.error);
+        tone = "error";
       }
+
+      if (adResult) {
+        if (adResult.ok) {
+          parts.push(`메타광고 ${adResult.added}건 수집`);
+          if (adResult.duplicates > 0) parts.push(`광고 중복 ${adResult.duplicates}건 제외`);
+        } else if (adResult.reason !== "no_sources") {
+          parts.push(adResult.error);
+          tone = "error";
+        }
+      }
+
+      if (parts.length === 0) parts.push("등록된 수집 기준이 없어요 — 먼저 기준을 추가해 주세요.");
+
+      setCollectNotice({ tone, text: parts.join(" · ") });
+      router.refresh(); // 서버 데이터 다시 로드 — 새 아이템 반영
     } catch {
       setCollectNotice({ tone: "error", text: "수집 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요." });
     } finally {
@@ -374,6 +504,26 @@ export function LibraryClient({
     if (!result.ok) {
       // 실패 시 원복
       setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        if (wasFavorite) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+    }
+  }
+
+  async function toggleAdFavoriteLocal(id: string) {
+    const wasFavorite = adFavoriteIds.has(id);
+    setAdFavoriteIds((prev) => {
+      const next = new Set(prev);
+      if (wasFavorite) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    if (isDemo) return;
+    const result = await toggleAdFavorite(id, !wasFavorite);
+    if (!result.ok) {
+      setAdFavoriteIds((prev) => {
         const next = new Set(prev);
         if (wasFavorite) next.add(id);
         else next.delete(id);
@@ -487,6 +637,109 @@ export function LibraryClient({
         </CardBody>
       </Card>
 
+      {/* 메타광고 수집 기준 — 채널·종류 구분 없이 검색어만 등록. Ad Library 검색어와 동일하게 동작 */}
+      <Card>
+        <CardHeader
+          title="메타광고 검색 키워드"
+          description="Meta 광고 라이브러리에서 이 검색어로 걸리는 국내 게재 중인 광고를 함께 모아드려요."
+        />
+        <CardBody className="space-y-4">
+          <form onSubmit={handleAdSubmit} className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={adValue}
+              onChange={(e) => setAdValue(e.target.value)}
+              placeholder="예: 단백질 간식, 여름 스킨케어"
+              aria-label="메타광고 검색 키워드"
+              className="h-10 min-w-52 flex-1 rounded-card border border-line bg-body px-3 text-[14px] placeholder:text-fg-faint focus:border-primary focus:outline-none"
+            />
+            <Button type="submit" size="md" disabled={adSubmitting}>
+              등록
+            </Button>
+          </form>
+
+          {adFormMsg ? (
+            adFormMsg.tone === "error" ? (
+              <p role="alert" className="text-[13px] text-negative">
+                {adFormMsg.text}
+              </p>
+            ) : (
+              <p role="status" className="flex items-start gap-1.5 text-[13px] text-fg-sub">
+                <Info className="mt-0.5 size-3.5 shrink-0 text-fg-faint" aria-hidden />
+                {adFormMsg.text}
+              </p>
+            )
+          ) : null}
+
+          {adSources.length > 0 ? (
+            <ul className="flex flex-wrap gap-2" aria-label="등록된 메타광고 검색 키워드">
+              {adSources.map((s) => (
+                <li
+                  key={s.id}
+                  className="inline-flex items-center gap-1.5 rounded-chip border border-line bg-overlay px-3 py-1.5 text-[13px]"
+                >
+                  <Megaphone className="size-3.5 text-fg-faint" aria-hidden />
+                  <span className="font-medium text-fg">{s.value}</span>
+                  <button
+                    type="button"
+                    aria-label={`${s.value} 키워드 삭제`}
+                    onClick={() => handleAdRemove(s.id)}
+                    className="text-fg-faint transition-colors hover:text-negative"
+                  >
+                    <X className="size-3.5" aria-hidden />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[13px] text-fg-faint">
+              아직 등록한 검색어가 없어요 — 위에서 첫 검색어를 추가해보세요.
+            </p>
+          )}
+        </CardBody>
+      </Card>
+
+      {/* 저장한 계정 — 등록해둔 "계정" 기준을 브랜드/크리에이터 카드로 모아 보여준다.
+          클릭하면 검색창에 핸들을 채워 그 계정이 모은 콘텐츠만 바로 걸러본다(별도 뷰 없이
+          기존 검색·필터를 재사용 — 상태 하나 안 늘려도 됨). */}
+      {accountBoards.length > 0 ? (
+        <Card>
+          <CardHeader
+            title="저장한 계정"
+            description="등록해둔 계정별로 지금까지 모인 콘텐츠를 언제든 다시 볼 수 있어요."
+          />
+          <CardBody>
+            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4" aria-label="저장한 계정 목록">
+              {accountBoards.map((b) => (
+                <li key={b.source.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuery(b.source.value.replace(/^@/, ""));
+                      setPanelOpen(false);
+                    }}
+                    className="flex w-full flex-col items-start gap-2 rounded-card border border-line bg-body p-3.5 text-left transition-colors hover:border-line-strong hover:bg-overlay"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span aria-hidden>{CHANNEL_GLYPH[b.source.channel]}</span>
+                      <span className="truncate text-[14px] font-semibold text-fg">{b.source.value}</span>
+                    </span>
+                    {b.count > 0 ? (
+                      <span className="tnum text-[12px] text-fg-sub">
+                        {b.count}건 수집 · 최고{" "}
+                        <span className="font-semibold text-primary">{formatCompact(b.maxViews)}</span>
+                      </span>
+                    ) : (
+                      <span className="text-[12px] text-fg-faint">아직 수집된 콘텐츠 없음</span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </CardBody>
+        </Card>
+      ) : null}
+
       {/* 수집 필터 — 기간·한국·형식·제외 키워드 (수집 실행에 적용) */}
       <Card>
         <CardHeader
@@ -599,8 +852,8 @@ export function LibraryClient({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="flex items-baseline gap-2 text-[19px] font-bold leading-snug">
           수집된 레퍼런스
-          {items.length > 0 ? (
-            <span className="tnum text-[14px] font-semibold text-fg-sub">{filtered.length}건</span>
+          {items.length > 0 || ads.length > 0 ? (
+            <span className="tnum text-[14px] font-semibold text-fg-sub">{displayEntries.length}건</span>
           ) : null}
         </h3>
         <Button
@@ -660,7 +913,7 @@ export function LibraryClient({
       ) : null}
 
       {/* 탐색 존 — 통합 검색바 + 상세 필터 패널 (수집 결과가 있을 때만 의미가 있다) */}
-      {items.length > 0 ? (
+      {items.length > 0 || ads.length > 0 ? (
         <section aria-label="레퍼런스 탐색" className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-[240px] flex-1">
@@ -777,7 +1030,9 @@ export function LibraryClient({
                               ? TiktokGlyph
                               : opt.value === "threads"
                                 ? ThreadsGlyph
-                                : null;
+                                : opt.value === "ads"
+                                  ? Megaphone
+                                  : null;
                         return (
                           <button
                             key={opt.value}
@@ -878,7 +1133,7 @@ export function LibraryClient({
           ) : null}
 
           <p className="tnum text-[13px] text-fg-sub" aria-live="polite">
-            {filtered.length}건 표시 중
+            {displayEntries.length}건 표시 중
             {query.trim() ? ` · '${query.trim()}' 검색` : ""}
             {activeFilterCount > 0 ? ` · 필터 ${activeFilterCount}개 적용` : ""}
           </p>
@@ -907,39 +1162,48 @@ export function LibraryClient({
       ) : null}
 
       {/* 수집 결과 — 사유별 정직한 빈 상태 안내 */}
-      {filtered.length > 0 ? (
+      {displayEntries.length > 0 ? (
         <section
           aria-label="수집된 레퍼런스 목록"
           className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
         >
-          {filtered.map((item) => (
-            <ReferenceCard
-              key={item.id}
-              item={item}
-              favorite={favoriteIds.has(item.id)}
-              onToggleFavorite={() => toggleFavorite(item.id)}
-              overAvgMultiple={overAvgMultiple.get(item.id)}
-              onOpen={() => setSelectedId(item.id)}
-            />
-          ))}
+          {displayEntries.map((entry) =>
+            entry.kind === "item" ? (
+              <ReferenceCard
+                key={entry.data.id}
+                item={entry.data}
+                favorite={favoriteIds.has(entry.data.id)}
+                onToggleFavorite={() => toggleFavorite(entry.data.id)}
+                overAvgMultiple={overAvgMultiple.get(entry.data.id)}
+                onOpen={() => setSelectedId(entry.data.id)}
+              />
+            ) : (
+              <AdCard
+                key={entry.data.id}
+                ad={entry.data}
+                favorite={adFavoriteIds.has(entry.data.id)}
+                onToggleFavorite={() => toggleAdFavoriteLocal(entry.data.id)}
+              />
+            ),
+          )}
         </section>
-      ) : items.length > 0 ? (
+      ) : items.length > 0 || ads.length > 0 ? (
         <EmptyState
           icon={SearchX}
           title="이 조건에 맞는 레퍼런스가 없어요"
           description="검색어를 지우거나 채널·카테고리 필터를 '전체'로 바꿔보세요."
         />
-      ) : sources.length === 0 ? (
+      ) : sources.length === 0 && adSources.length === 0 ? (
         <EmptyState
           icon={FolderPlus}
           title="아직 등록한 수집 기준이 없어요"
-          description="위에서 키워드나 계정을 등록하고 '지금 수집'을 누르면 바로 모으기 시작해요."
+          description="위에서 키워드나 계정, 메타광고 검색어를 등록하고 '지금 수집'을 누르면 바로 모으기 시작해요."
         />
       ) : (
         <EmptyState
           icon={Zap}
           title="이제 수집할 준비가 됐어요"
-          description={`기준 ${sources.length}개 등록됨 — '지금 수집'을 누르면 이 기준으로 첫 수집이 시작됩니다.`}
+          description={`기준 ${sources.length + adSources.length}개 등록됨 — '지금 수집'을 누르면 이 기준으로 첫 수집이 시작됩니다.`}
         />
       )}
 
@@ -1160,6 +1424,127 @@ function ReferenceCard({
           이 레퍼런스로 카드뉴스
         </Button>
       </div>
+      </div>
+    </Card>
+  );
+}
+
+const PLATFORM_LABEL: Record<string, string> = {
+  FACEBOOK: "페이스북",
+  INSTAGRAM: "인스타그램",
+  AUDIENCE_NETWORK: "오디언스 네트워크",
+  MESSENGER: "메신저",
+};
+
+function AdCard({
+  ad,
+  favorite,
+  onToggleFavorite,
+}: {
+  ad: ReferenceAd;
+  favorite: boolean;
+  onToggleFavorite: () => void;
+}) {
+  const router = useRouter();
+  const adLibraryUrl = `https://www.facebook.com/ads/library/?id=${ad.adArchiveId}`;
+
+  function makeCardNews() {
+    try {
+      localStorage.setItem(
+        "finch:studio:pending",
+        JSON.stringify({
+          topic: ad.pageName,
+          note: `이 메타광고 소재를 참고해 새로 써줘. 문구: ${ad.body} 베끼지 말고 각도만 참고할 것.`,
+        }),
+      );
+    } catch {
+      // localStorage 실패해도 이동은 계속
+    }
+    router.push("/studio");
+  }
+
+  return (
+    <Card hover className="flex flex-col overflow-hidden">
+      {ad.thumbnailUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- 공급사 원본 썸네일 URL, 최적화 프록시 미대상
+        <img
+          src={ad.thumbnailUrl}
+          alt=""
+          loading="lazy"
+          className="aspect-[4/5] w-full border-b border-line bg-overlay object-cover"
+        />
+      ) : (
+        <span className="flex aspect-[4/5] items-center justify-center border-b border-line bg-overlay" aria-hidden>
+          <Megaphone className="size-9 text-fg-faint" />
+        </span>
+      )}
+
+      <div className="flex flex-1 flex-col gap-2.5 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge tone={ad.isActive ? "positive" : "neutral"}>
+              <Megaphone className="size-3 shrink-0" aria-hidden />
+              메타광고
+            </Badge>
+            {!ad.isActive ? <Badge>종료됨</Badge> : null}
+          </div>
+          <button
+            type="button"
+            aria-pressed={favorite}
+            aria-label={favorite ? "즐겨찾기 해제" : "즐겨찾기"}
+            onClick={onToggleFavorite}
+            className={cn(
+              "shrink-0 rounded-card p-1.5 transition-colors",
+              favorite ? "text-primary" : "text-fg-faint hover:bg-overlay hover:text-fg-sub",
+            )}
+          >
+            <Bookmark className="size-4" fill={favorite ? "currentColor" : "none"} aria-hidden />
+          </button>
+        </div>
+
+        <p className="text-[15px] font-semibold leading-snug">{ad.pageName}</p>
+
+        <p className="line-clamp-4 text-[13px] leading-relaxed text-fg-sub">{ad.body || "광고 문구가 없는 이미지·영상 소재예요."}</p>
+
+        {ad.ctaText ? (
+          <span className="inline-flex w-fit items-center rounded-chip bg-primary-weak px-2.5 py-1 text-[12px] font-semibold text-primary">
+            {ad.ctaText}
+          </span>
+        ) : null}
+
+        {ad.platforms.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5 text-[12px] text-fg-faint">
+            {ad.platforms.map((p) => (
+              <span key={p}>{PLATFORM_LABEL[p] ?? p}</span>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-fg-faint">
+          <span>&lsquo;{ad.matchedSource}&rsquo; 검색으로 수집</span>
+          <a
+            href={adLibraryUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 font-semibold text-fg-sub transition-colors hover:text-primary"
+          >
+            광고 라이브러리에서 보기
+            <ExternalLink className="size-3" aria-hidden />
+          </a>
+        </div>
+
+        <div className="mt-auto border-t border-line pt-3">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={makeCardNews}
+            title="이 광고 소재의 각도를 AI 스튜디오로 가져가요"
+            className="w-full"
+          >
+            <Sparkles className="size-3.5" aria-hidden />
+            이 소재로 카드뉴스
+          </Button>
+        </div>
       </div>
     </Card>
   );
