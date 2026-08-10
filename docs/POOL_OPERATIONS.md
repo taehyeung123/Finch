@@ -48,14 +48,21 @@
 ### (1) 마이그레이션 적용 — Supabase SQL 편집기에서 순서대로
 
 ```
-0027_shared_pool.sql       공용 풀 표 + 불변식 트리거
-0028_pool_ops.sql          예산 하드캡 + 작업 큐
-0029_personal_saves.sql    저장·보드·검색 이력
-0030_industry_seed.sql     업종 22개 + 시드 검색어 253개
-0031_migrate_keywords.sql  기존 사용자 등록 검색어를 크롤 목록으로 승격
+0027_shared_pool.sql        공용 풀 표 + 불변식 트리거
+0028_pool_ops.sql           예산 하드캡 + 작업 큐
+0029_personal_saves.sql     저장·보드·검색 이력
+0030_industry_seed.sql      업종 22개 + 시드 검색어 253개
+0031_migrate_keywords.sql   기존 사용자 등록 검색어를 크롤 목록으로 승격
+0032_lock_pool_functions.sql 운영 함수 실행 권한 회수 ← 반드시 같이 적용
 ```
 
 0031은 기존 사용자가 있을 때만 의미가 있다. 없어도 실행에는 문제 없다.
+
+**0032는 건너뛰면 안 된다.** Postgres가 새 함수의 실행 권한을 기본으로 전체 공개로
+주기 때문에, 0032 전에는 공개 anon 키만으로 `claim_crawl_budget`을 직접 부를 수 있다.
+음수를 넣으면 사용량 카운터가 0으로 돌아가므로 **하루 지출 상한이 무력화된다.**
+0032가 그 권한을 회수하고 service_role(크론)에만 다시 준다.
+0032 끝에 붙은 SELECT가 0027~0031 적용 결과를 표로 보여준다.
 
 ### (2) Storage 버킷 확인
 
