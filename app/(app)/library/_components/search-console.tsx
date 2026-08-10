@@ -54,6 +54,12 @@ export type ItemSort = "views" | "likes" | "recent" | "posted";
 export interface LibraryFilters {
   target: SearchTarget;
   within: CollectedWithin;
+  /**
+   * 업종 — categories(수집 카테고리)와 별도 축이다.
+   * 겹쳐 쓰지 않는 이유: 광고 화면에서 categories 는 이미 광고주(pageName) 축으로
+   * 재사용되고 있다. 여기에 업종까지 얹으면 한 배열이 세 가지 뜻을 갖는다.
+   */
+  industries: string[];
   categories: string[];
   hooks: string[];
   sources: string[];
@@ -65,6 +71,7 @@ export interface LibraryFilters {
 export const DEFAULT_FILTERS: LibraryFilters = {
   target: "all",
   within: "all",
+  industries: [],
   categories: [],
   hooks: [],
   sources: [],
@@ -72,6 +79,13 @@ export const DEFAULT_FILTERS: LibraryFilters = {
   overOnly: false,
   sort: "views",
 };
+
+/** 업종 칩 하나 — 서버가 노출 자격을 통과한 업종만 내려준다 */
+export interface IndustryFacet {
+  id: string;
+  label: string;
+  count: number;
+}
 
 export interface Facet {
   name: string;
@@ -111,6 +125,7 @@ export function countActiveFilters(f: LibraryFilters): number {
   return (
     (f.target !== "all" ? 1 : 0) +
     (f.within !== "all" ? 1 : 0) +
+    f.industries.length +
     f.categories.length +
     f.hooks.length +
     f.sources.length +
@@ -171,7 +186,7 @@ function describeFilters(f: LibraryFilters): string {
   const parts: string[] = [];
   if (f.target !== "all") parts.push(TARGET_OPTIONS.find((o) => o.value === f.target)?.label ?? f.target);
   if (f.within !== "all") parts.push(WITHIN_OPTIONS.find((o) => o.value === f.within)?.label ?? f.within);
-  parts.push(...f.categories, ...f.hooks, ...f.sources);
+  parts.push(...f.industries, ...f.categories, ...f.hooks, ...f.sources);
   if (f.favOnly) parts.push("즐겨찾기만");
   if (f.overOnly) parts.push("잘 나온 것만");
   return parts.slice(0, 4).join(" · ") || "기본 조합";
@@ -187,13 +202,7 @@ interface ActiveChip {
 
 function buildActiveChips(f: LibraryFilters): ActiveChip[] {
   const chips: ActiveChip[] = [];
-  if (f.target !== "all") {
-    chips.push({
-      key: "target",
-      label: TARGET_OPTIONS.find((o) => o.value === f.target)?.label ?? f.target,
-      clear: (p) => ({ ...p, target: "all" }),
-    });
-  }
+  /* target(플랫폼)·업종은 전용 행이 상시 노출하므로 칩으로 중복 표시하지 않는다 */
   if (f.within !== "all") {
     chips.push({
       key: "within",
@@ -561,6 +570,7 @@ export function SearchConsole({
   hookFacets,
   sourceFacets,
   advertiserFacets,
+  industryFacets,
   registeredSources,
   onOpenSettings,
   onCollect,
@@ -576,6 +586,8 @@ export function SearchConsole({
   hookFacets: Facet[];
   sourceFacets: SourceFacet[];
   advertiserFacets: Facet[];
+  /** 노출 자격을 통과한 업종. 비어 있으면 행 자체를 그리지 않는다 — 빈 줄은 미완성으로 읽힌다 */
+  industryFacets: IndustryFacet[];
   registeredSources: { id: string; value: string; kind: string }[];
   onOpenSettings: () => void;
   onCollect: () => void;
@@ -652,36 +664,25 @@ export function SearchConsole({
 
       {/* 1행 — 콘솔 줄. relative는 여기에만(필터 패널 앵커) */}
       <div ref={rootRef} className="relative flex items-center gap-2">
-        {/* (1) 복합 콘솔 박스 — 이 화면의 유일한 테두리 컨트롤 */}
-        <div className="flex h-14 min-w-0 flex-1 items-center rounded-card border border-line bg-body focus-within:border-line-strong">
-          <select
-            value={filters.target}
-            onChange={(e) => setFilters({ ...filters, target: e.target.value as SearchTarget })}
-            aria-label="검색 대상"
-            className="h-full w-[112px] shrink-0 cursor-pointer border-0 bg-transparent px-3 text-[14px] font-semibold text-fg outline-none sm:w-[132px]"
-          >
-            {TARGET_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-          <span className="h-7 w-px shrink-0 bg-line" aria-hidden />
-          <Search className="ml-3 size-[18px] shrink-0 text-fg-faint" aria-hidden />
+        {/* (1) 복합 콘솔 박스 — 이 화면의 유일한 테두리 컨트롤.
+            검색 대상(플랫폼)은 2행 세그먼트 탭으로 내렸다. 드롭다운으로 두면
+            지금 무엇을 보고 있는지가 접힌 채라 매번 열어봐야 알 수 있다. */}
+        <div className="flex h-12 min-w-0 flex-1 items-center rounded-card border border-line bg-body focus-within:border-line-strong">
+          <Search className="ml-3.5 size-[18px] shrink-0 text-fg-faint" aria-hidden />
           <input
             type="search"
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
             placeholder="제목·요약·계정·해시태그로 찾기"
             aria-label="수집한 레퍼런스 검색"
-            className="h-full min-w-0 flex-1 bg-transparent px-2.5 text-[17px] font-medium text-fg outline-none placeholder:text-fg-faint"
+            className="h-full min-w-0 flex-1 bg-transparent px-2.5 text-[16px] font-medium text-fg outline-none placeholder:text-fg-faint"
           />
           {query ? (
             <button
               type="button"
               onClick={() => onQueryChange("")}
               aria-label="검색어 지우기"
-              className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-chip text-fg-faint transition-colors hover:bg-overlay hover:text-fg"
+              className="trans-state flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-chip text-fg-faint hover:bg-overlay hover:text-fg"
             >
               <X className="size-4" aria-hidden />
             </button>
@@ -692,7 +693,7 @@ export function SearchConsole({
             aria-expanded={panelOpen}
             onClick={() => setPanelOpen((v) => !v)}
             className={cn(
-              "mx-2 inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-card px-3.5 text-[14px] font-semibold transition-colors",
+              "trans-state mx-2 inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-card px-3.5 text-[14px] font-semibold",
               panelOpen || activeCount > 0 ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-overlay hover:text-fg",
             )}
           >
@@ -712,7 +713,7 @@ export function SearchConsole({
           onClick={onOpenSettings}
           aria-label="수집 설정"
           title="수집 기준·메타광고 검색어·수집 옵션"
-          className="flex size-14 shrink-0 cursor-pointer items-center justify-center rounded-card border border-line bg-body text-fg-sub transition-colors hover:border-line-strong hover:text-fg"
+          className="trans-state flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-card border border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg"
         >
           <Settings2 className="size-[18px]" aria-hidden />
         </button>
@@ -722,7 +723,7 @@ export function SearchConsole({
           onClick={onCollect}
           disabled={collecting}
           aria-busy={collecting}
-          className="h-14 shrink-0 px-4 md:px-5"
+          className="h-12 shrink-0 px-4 md:px-5"
         >
           <Zap className="size-4" aria-hidden />
           <span className="hidden md:inline">{collecting ? "수집 중…" : "지금 수집"}</span>
@@ -740,8 +741,78 @@ export function SearchConsole({
         ) : null}
       </div>
 
-      {/* 2행 — 상태 줄. 높이 36px 고정이라 필터를 걸고 풀어도 그리드가 안 움직인다 */}
-      <div className="mt-2 flex h-9 items-center justify-between gap-3">
+      {/* 2행 — 플랫폼 세그먼트. 지금 무엇을 보고 있는지가 접히지 않고 항상 보인다.
+          드롭다운이던 걸 여기로 내려서 1행이 검색 하나에만 집중하게 됐다. */}
+      <div className="mt-2 flex h-9 items-center gap-1" role="tablist" aria-label="검색 대상">
+        {TARGET_OPTIONS.map((o) => {
+          const on = filters.target === o.value;
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              onClick={() => setFilters({ ...filters, target: o.value })}
+              className={cn(
+                "trans-state h-8 shrink-0 cursor-pointer rounded-chip px-3.5 text-[13px] font-semibold",
+                on ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-overlay hover:text-fg",
+              )}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 3행 — 업종. 스니핏의 태그 줄에 해당하는 축이다. 검색어를 떠올리지 못한 사람이
+          곧바로 누를 수 있는 입구라, 검색창 바로 아래에 두는 게 맞다.
+          자격 미달 업종은 서버에서 이미 걸러져 오므로 여기서 count를 다시 검사하지 않는다. */}
+      {industryFacets.length > 0 ? (
+        <div
+          className="mt-1.5 flex h-9 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          role="group"
+          aria-label="업종"
+        >
+          <button
+            type="button"
+            onClick={() => setFilters({ ...filters, industries: [] })}
+            aria-pressed={filters.industries.length === 0}
+            className={cn(
+              "trans-state h-7 shrink-0 cursor-pointer rounded-chip px-3 text-[13px] font-semibold",
+              filters.industries.length === 0
+                ? "bg-fg text-body"
+                : "border border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg",
+            )}
+          >
+            전체 업종
+          </button>
+          {industryFacets.map((f) => {
+            const on = filters.industries.includes(f.label);
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFilters({ ...filters, industries: toggleIn(filters.industries, f.label) })}
+                aria-pressed={on}
+                className={cn(
+                  "trans-state inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-chip px-3 text-[13px] font-semibold",
+                  on
+                    ? "bg-primary-weak text-primary"
+                    : "border border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg",
+                )}
+              >
+                {f.label}
+                <span className={cn("tnum text-[11px] font-medium", on ? "text-primary/70" : "text-fg-faint")}>
+                  {f.count > 999 ? `${Math.floor(f.count / 1000)}k` : f.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {/* 4행 — 상태 줄. 높이 36px 고정이라 필터를 걸고 풀어도 그리드가 안 움직인다 */}
+      <div className="mt-1 flex h-9 items-center justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {activeChips.length > 0 ? (
             <>

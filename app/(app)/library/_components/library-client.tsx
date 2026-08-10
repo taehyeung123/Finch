@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FolderPlus, Info, SearchX, Zap } from "lucide-react";
 import { FinchMark } from "@/components/logo";
@@ -20,6 +20,7 @@ import {
   toggleReferenceFavorite,
 } from "@/lib/actions/reference";
 import { addAdSource, removeAdSource, runAdCollection, toggleAdFavorite } from "@/lib/actions/ads-reference";
+import { searchPoolAction } from "../pool-actions";
 import { TREND_CATEGORIES } from "@/lib/data";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ import {
   SearchConsole,
   countActiveFilters,
   type Facet,
+  type IndustryFacet,
   type LibraryFilters,
   type SourceFacet,
 } from "./search-console";
@@ -69,10 +71,12 @@ const PAGE_SIZE = 60;
 
 export function LibraryClient({
   sources: initialSources,
-  items,
   settings: initialSettings,
   adSources: initialAdSources,
-  ads,
+  items: initialItems,
+  ads: initialAds,
+  industryFacets,
+  poolReady,
   isDemo,
 }: {
   sources: ReferenceSource[];
@@ -80,6 +84,14 @@ export function LibraryClient({
   settings: CollectSettings;
   adSources: AdSource[];
   ads: ReferenceAd[];
+  /** 공용 풀에서 노출 자격을 통과한 업종. 풀이 비었으면 빈 배열 → 업종 줄이 안 그려진다 */
+  industryFacets: IndustryFacet[];
+  /**
+   * 공용 풀이 준비됐는가. true 면 검색어를 서버로 보낸다 —
+   * 풀은 수백만 행이라 처음 40건만 받아 브라우저에서 거르면 가짜 검색이 된다.
+   * false 면 개인 수집분을 브라우저에서 거른다(기존 동작 그대로).
+   */
+  poolReady: boolean;
   isDemo: boolean;
 }) {
   const router = useRouter();
@@ -91,6 +103,20 @@ export function LibraryClient({
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<LibraryFilters>(DEFAULT_FILTERS);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  /* 풀 검색 결과. null = 아직 서버에 안 물어봤다(첫 진입 = 서버가 준 인기 상위).
+     이 값이 있으면 이걸 그리고, 없으면 초기 props 를 그린다. */
+  const [poolResult, setPoolResult] = useState<{ items: ReferenceItem[]; ads: ReferenceAd[]; isGap: boolean } | null>(
+    null,
+  );
+  const [poolSearching, setPoolSearching] = useState(false);
+  /* 디바운스 타이머와 요청 순번. 순번이 없으면 느린 이전 요청이 나중에 도착해
+     새 검색 결과를 덮어쓴다(타이핑이 빠를수록 확실히 재현된다). */
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchSeq = useRef(0);
+
+  const items = poolResult?.items ?? initialItems;
+  const ads = poolResult?.ads ?? initialAds;
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTab, setDrawerTab] = useState<DrawerTab>("sources");
@@ -113,15 +139,64 @@ export function LibraryClient({
   const activeFilterCount = countActiveFilters(filters);
   const hasQuery = query.trim() !== "" || activeFilterCount > 0;
 
+  /* 업종 라벨 → id. 화면은 사람이 읽는 라벨로 다루고 서버에는 id 로 보낸다 —
+     라벨은 언제든 바뀔 수 있고, 바뀌는 순간 저장된 필터 조합이 전부 깨진다. */
+  const industryIdByLabel = useMemo(
+    () => new Map(industryFacets.map((f) => [f.label, f.id])),
+    [industryFacets],
+  );
+
+  /**
+   * 풀 검색 — 디바운스 후 서버 조회.
+   * effect 가 아니라 이벤트 핸들러에서 부른다(입력 → 요청이 직접 인과관계이므로
+   * effect 로 두면 렌더가 한 번 더 돌고 취소 처리가 복잡해진다).
+   */
+  const runPoolSearch = useCallback(
+    (q: string, f: LibraryFilters, delay: number) => {
+      if (!poolReady) return;
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+      const seq = ++searchSeq.current;
+      setPoolSearching(true);
+      searchTimer.current = setTimeout(async () => {
+        try {
+          const res = await searchPoolAction({
+            query: q,
+            target: f.target,
+            industryIds: f.industries.map((l) => industryIdByLabel.get(l)).filter((v): v is string => Boolean(v)),
+            sort: f.sort,
+            page: 0,
+          });
+          // 나보다 나중에 시작된 요청이 이미 돌아왔으면 이 결과는 버린다
+          if (seq !== searchSeq.current) return;
+          setPoolResult({ items: res.items, ads: res.ads, isGap: res.isGap });
+        } catch {
+          // 검색 실패는 화면을 비우지 않는다 — 직전 결과를 그대로 두는 편이 낫다
+        } finally {
+          if (seq === searchSeq.current) setPoolSearching(false);
+        }
+      }, delay);
+    },
+    [poolReady, industryIdByLabel],
+  );
+
   /* 필터·검색어가 바뀌면 더보기 페이지를 처음으로 되돌린다 */
-  const applyFilters = useCallback((next: LibraryFilters) => {
-    setFilters(next);
-    setVisibleCount(PAGE_SIZE);
-  }, []);
-  const applyQuery = useCallback((q: string) => {
-    setQuery(q);
-    setVisibleCount(PAGE_SIZE);
-  }, []);
+  const applyFilters = useCallback(
+    (next: LibraryFilters) => {
+      setFilters(next);
+      setVisibleCount(PAGE_SIZE);
+      // 필터는 클릭이라 오타 보정이 필요 없다 — 바로 보낸다
+      runPoolSearch(query, next, 0);
+    },
+    [query, runPoolSearch],
+  );
+  const applyQuery = useCallback(
+    (q: string) => {
+      setQuery(q);
+      setVisibleCount(PAGE_SIZE);
+      runPoolSearch(q, filters, 260);
+    },
+    [filters, runPoolSearch],
+  );
 
   /* ---------------- 패싯 (수집물에 실재하는 값만) ---------------- */
 
@@ -215,6 +290,8 @@ export function LibraryClient({
       if (filters.favOnly && !favoriteIds.has(item.id)) return false;
       if (filters.overOnly && !overAvgMultiple.has(item.id)) return false;
       if (maxHours !== null && item.collectedAgoHours > maxHours) return false;
+      /* 업종 — 풀 소재는 category 자리에 업종 라벨이 들어온다(lib/pool/bridge.ts) */
+      if (filters.industries.length > 0 && !filters.industries.includes(item.category)) return false;
       if (filters.categories.length > 0 && !filters.categories.includes(item.category || "일반")) return false;
       if (filters.hooks.length > 0 && !item.hooks.some((h) => filters.hooks.includes(h))) return false;
       if (filters.sources.length > 0 && !filters.sources.includes(item.matchedSource)) return false;
@@ -262,6 +339,7 @@ export function LibraryClient({
       if (filters.favOnly && !adFavoriteIds.has(ad.id)) return false;
       if (filters.overOnly) return false; // 광고는 반응 지표가 없어 '잘 나온 것' 판정 대상이 아니다
       if (maxHours !== null && ad.collectedAgoHours > maxHours) return false;
+      if (filters.industries.length > 0 && !filters.industries.includes(ad.category)) return false;
       if (filters.sources.length > 0 && !filters.sources.includes(ad.matchedSource)) return false;
       /* 광고 화면에서는 카테고리 축을 광고주(pageName)로 재사용한다 */
       if (filters.target === "ads" && filters.categories.length > 0 && !filters.categories.includes(ad.pageName)) {
@@ -299,11 +377,15 @@ export function LibraryClient({
     const today = byRecent.filter((i) => i.collectedAgoHours < 24);
     const accountValues = sources.filter((s) => s.kind === "account").map((s) => s.value);
 
+    /* apply 를 함수가 아니라 **필터 값**으로 든다.
+       렌더 중에 만든 클로저가 상태·ref 를 붙잡으면 오래된 값을 그대로 물고 다닌다
+       (react-hooks/refs 가 잡아내는 바로 그 패턴). 값으로 두면 클릭 시점에
+       최신 applyFilters 로 적용되므로 그 위험 자체가 없어진다. */
     const sections: {
       key: string;
       title: string;
       entries: Entry[];
-      apply: () => void;
+      preset: LibraryFilters;
     }[] = [];
 
     /* ① 항상 렌더 — 수집물이 1건이라도 있으면 최근순은 절대 0이 안 된다.
@@ -314,8 +396,7 @@ export function LibraryClient({
         key: "recent",
         title: today.length > 0 ? "오늘 들어온 레퍼런스" : "최근 수집분",
         entries: pool.slice(0, 4).map((data) => ({ kind: "item", data })),
-        apply: () =>
-          applyFilters({ ...DEFAULT_FILTERS, within: today.length > 0 ? "24h" : "all", sort: "recent" }),
+        preset: { ...DEFAULT_FILTERS, within: today.length > 0 ? "24h" : "all", sort: "recent" },
       });
     }
 
@@ -329,7 +410,7 @@ export function LibraryClient({
           .sort((a, b) => (overAvgMultiple.get(b.id) ?? 0) - (overAvgMultiple.get(a.id) ?? 0))
           .slice(0, 4)
           .map((data) => ({ kind: "item", data })),
-        apply: () => applyFilters({ ...DEFAULT_FILTERS, overOnly: true, sort: "views" }),
+        preset: { ...DEFAULT_FILTERS, overOnly: true, sort: "views" },
       });
     }
 
@@ -341,13 +422,13 @@ export function LibraryClient({
           key: "accounts",
           title: "저장한 계정의 새 글",
           entries: fromAccounts.slice(0, 4).map((data) => ({ kind: "item", data })),
-          apply: () => applyFilters({ ...DEFAULT_FILTERS, sources: accountValues, sort: "posted" }),
+          preset: { ...DEFAULT_FILTERS, sources: accountValues, sort: "posted" },
         });
       }
     }
 
     return sections;
-  }, [hasQuery, items, sources, overAvgMultiple, applyFilters]);
+  }, [hasQuery, items, sources, overAvgMultiple]);
 
   /* ---------------- 액션 ---------------- */
 
@@ -551,6 +632,7 @@ export function LibraryClient({
         hookFacets={hookFacets}
         sourceFacets={sourceFacets}
         advertiserFacets={advertiserFacets}
+        industryFacets={industryFacets}
         registeredSources={[
           ...sources.map((s) => ({ id: s.id, value: s.value, kind: s.kind as string })),
           ...adSources.map((s) => ({ id: s.id, value: s.value, kind: "ads" })),
@@ -580,7 +662,13 @@ export function LibraryClient({
       </div>
 
       {/* ── 블록 2 — 결과 영역 ── */}
-      <section aria-label="레퍼런스 결과" className="mt-5">
+      {/* 서버 검색 중에는 결과를 지우지 않고 살짝 물러나게만 한다.
+          지웠다 다시 그리면 타이핑 한 글자마다 화면이 깜빡이고, 스크롤 위치도 튄다. */}
+      <section
+        aria-label="레퍼런스 결과"
+        aria-busy={poolSearching}
+        className={cn("mt-5 transition-opacity duration-150", poolSearching && "opacity-60")}
+      >
         {totalSources === 0 && totalCollected === 0 ? (
           /* ① 신규 — 온보딩으로 결과 영역을 대체한다(추가가 아니라 대체) */
           <Card className="p-8 text-center">
@@ -628,7 +716,7 @@ export function LibraryClient({
                   </div>
                   <button
                     type="button"
-                    onClick={s.apply}
+                    onClick={() => applyFilters(s.preset)}
                     className="shrink-0 cursor-pointer rounded-chip px-3 py-1 text-[13px] font-semibold text-fg-sub transition-colors hover:bg-overlay hover:text-fg"
                   >
                     전체 보기
@@ -664,7 +752,11 @@ export function LibraryClient({
                 ? `'${query.trim()}'${activeFilterCount > 0 ? " · 지금 조건" : ""}에 맞는 레퍼런스가 없어요`
                 : "이 조건에 맞는 레퍼런스가 없어요"
             }
-            description="조건을 하나씩 풀어보거나, 아직 안 모은 주제라면 새 수집 기준으로 만들어보세요."
+            description={
+              poolResult?.isGap
+                ? "아직 공용 자료에 없는 주제예요. 방금 검색으로 수집 대기열에 올려뒀으니 곧 채워집니다."
+                : "조건을 하나씩 풀어보거나, 아직 안 모은 주제라면 새 수집 기준으로 만들어보세요."
+            }
             action={
               <div className="flex flex-wrap justify-center gap-2">
                 {query.trim() ? (
