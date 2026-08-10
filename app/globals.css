@@ -50,6 +50,16 @@
   /* 라운드 2단계 (PART 7.2) */
   --radius-card: 8px;
   --radius-chip: 32px;
+
+  /* ── 앱 모션 이징 3종 (ease-arrive / ease-depart / ease-state 유틸 생성)
+     랜딩의 cubic-bezier(0.16,1,0.3,1)·700ms는 그 스케일 전용으로 격리한다 —
+     앱 화면에서는 아래 셋과 --dur-* 만 쓴다. out 커브가 2종인 건 체계 위반. */
+  --ease-arrive: cubic-bezier(0.2, 0, 0, 1);
+  --ease-depart: cubic-bezier(0.4, 0, 1, 1);
+  --ease-state: cubic-bezier(0.3, 0, 0.2, 1);
+
+  /* 미디어 레터박스 판 — body와 surface 사이 정확히 한 칸 */
+  --color-plate: var(--plate);
 }
 
 /* ── 라이트 팔레트 (기본) ─────────────────────────────── */
@@ -93,6 +103,10 @@
 
   /* 떠있는 요소용 그림자 (라이트 전용) — 다크에서는 none */
   --shadow-pop: 0 6px 20px -4px rgba(17, 20, 26, 0.14), 0 2px 6px -2px rgba(17, 20, 26, 0.08);
+
+  /* object-contain 썸네일의 레터박스 — bg-surface(#F4F5F7)면 회색 구멍으로 읽힌다.
+     카드 호버 시 이 판만 body로 한 칸 올라온다(요소는 1px도 안 움직인다). */
+  --plate: #fafafb;
 }
 
 /* ── 다크 팔레트 (토글) ─────────────────────────────── */
@@ -123,6 +137,7 @@
 
   /* 다크는 그림자 대신 반투명 테두리로 깊이 (PART 7.2) */
   --shadow-pop: none;
+  --plate: #101015;
 }
 
 body {
@@ -427,4 +442,424 @@ body {
     transform: none;
     transition: none;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   앱 모션 체계 — "정밀한 계기"
+   ───────────────────────────────────────────────────────────────────────
+   전제(2026-08-10 실측): 이 레포의 transition 유틸 116곳 중 106곳이 명시
+   duration 없이 Tailwind 기본값(150ms / cubic-bezier(0.4,0,0.2,1))으로
+   돌고 있었다. 즉 체계가 없고 기본값이 있었다. 아래 duration 4개와 이징
+   3개가 앱 화면 모션의 전부다.
+
+   위 랜딩 모션 유틸(.anim-fade-up / .reveal / .marquee-track / .collect-orbit)은
+   마케팅 페이지 전용이다. 두 체계를 섞어 쓰지 않는다.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* 틱 τ = 40ms. 퇴장은 진입 "한 단계 아래" 토큰을 재사용한다(240→160, 160→80). */
+  --dur-1: 80ms;   /*  2τ 색·불투명도 — hover, focus, 칩 on/off, 스크롤 상태 */
+  --dur-2: 160ms;  /*  4τ 요소 1개 진입/퇴장 — 토스트, 크로스페이드, 추가 카드 */
+  --dur-3: 240ms;  /*  6τ 표면 이동 — 필터 패널, 시트, 드로어, 사이드바 폭 */
+  --dur-4: 380ms;
+  --dur-morph: 380ms;
+}
+
+/* ───────────────────────────────────────────────────────────────
+   전환 프리셋 — 화면 코드에서 duration/ease를 직접 쓰지 않게 한다.
+   transition-property를 명시 나열해 outline(포커스 링)이 절대 전환
+   대상에 끼지 않도록 보장한다. transition-all은 앱 화면에서 금지.
+─────────────────────────────────────────────────────────────── */
+
+.trans-state {
+  transition-property: color, background-color, border-color, opacity, fill, stroke;
+  transition-duration: var(--dur-1);
+  transition-timing-function: var(--ease-state);
+  /* 이탈 지연 1틱 — 카드 사이 gap을 커서가 스칠 때 깜빡임이 사라진다.
+     "어긋남이 없음"의 실체가 이 40ms다. */
+  transition-delay: 40ms;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .trans-state:hover,
+  .trans-state:focus-visible {
+    transition-delay: 0ms; /* 진입은 즉시, 이탈만 1틱 늦게 */
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────
+   결과 그리드 — 카드 폭 계약 [224px, 240px).
+   n열 조건: n×224 + (n−1)×16 ≤ W  →  어떤 컨테이너 폭에서도
+   카드 폭이 224~240px 밴드를 벗어나지 않는다(폭 밴드 7%).
+   현행 lg 3열(234px) → xl 4열(338px)의 44% 점프를 제거한다.
+─────────────────────────────────────────────────────────────── */
+
+.grid-refs {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr)); /* 모바일 2열 고정 */
+  opacity: 1;
+  transition: opacity var(--dur-2) var(--ease-arrive);
+}
+
+@media (min-width: 40rem) {
+  .grid-refs {
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  }
+}
+
+/* 필터·정렬 재배열 = FLIP이 아니라 컨테이너 1개의 불투명도 교차.
+   60장을 FLIP으로 옮기면 동시 transform 60개이고 화면은 혼돈이 된다.
+   높이는 애니메이션하지 않고 스크롤 위치도 건드리지 않는다. */
+.grid-refs[data-pending="true"] {
+  opacity: 0.62;
+  transition-duration: var(--dur-1);
+  transition-timing-function: var(--ease-depart);
+}
+
+/* 브랜드 칩 트랙·대표 소재 스트립 — 가로 셸프.
+   카드 폭이 검색 그리드와 완전히 동일해서 모드가 바뀌어도 크기가 안 변하고,
+   어떤 폭에서도 고아 카드가 없다(열 수 하드코딩이 필요 없다). */
+.row-shelf {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(14rem, 1fr);
+  gap: 1rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+.row-shelf::-webkit-scrollbar { display: none; }
+.row-shelf > * { scroll-snap-align: start; }
+
+/* ───────────────────────────────────────────────────────────────
+   카드 — 진입 애니메이션 없음. 호버는 선과 판만 반응한다.
+─────────────────────────────────────────────────────────────── */
+
+/* 썸네일 레터박스 판. 호버 시 body로 한 칸 올라온다 —
+   transform·scale·shadow 없이 깊이를 표현하는 유일한 방법이고,
+   다크(--shadow-pop: none)에서도 동일하게 작동하는 유일한 방법이다. */
+.card-plate {
+  background-color: var(--color-plate);
+  transition: background-color var(--dur-1) var(--ease-state);
+  transition-delay: 40ms;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .group:hover .card-plate {
+    background-color: var(--color-body);
+    transition-delay: 0ms;
+  }
+}
+
+/* 접힘선 아래 카드의 스타일·레이아웃·페인트 비용 제거.
+   안전 전제: 카드 높이가 결정론적이어야 한다 — 지표 행 상시 렌더(빈 h-[18px])와
+   요약 min-h-[2lh]가 그 전제를 만든다. auto 키워드가 첫 렌더 후 실측값을 기억한다.
+   (썸네일 4:5 ≈ 288px + 푸터 128px + 미터 3px ≈ 419px) */
+.card-defer {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 27rem;
+}
+
+/* '더 보기'로 추가된 배치 전용. 초기 페인트 카드에는 절대 붙이지 않는다.
+   --i는 인라인 style로 주입(Lightning CSS 제약). 8개 상한 → 꼬리 최대 160ms. */
+@keyframes card-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.card-appear {
+  animation: card-in var(--dur-2) var(--ease-arrive) both;
+  animation-delay: calc(min(var(--i, 0), 8) * 20ms);
+}
+
+/* ───────────────────────────────────────────────────────────────
+   기준선 미터 — 카드 최하단 3px 풀블리드 자. 글자 0개.
+   같은 열 카드를 세로로 훑으면 성과가 바코드처럼 읽힌다.
+   조건부 "기준 대비 N배" Badge를 흡수하므로 정보 슬롯은 순감한다.
+   --meter-fill(0~1)·--meter-mark(1.0배 눈금 %)는 인라인 style로만 주입.
+─────────────────────────────────────────────────────────────── */
+.baseline-meter {
+  position: relative;
+  height: 3px;
+  overflow: hidden;
+  background: var(--color-line);
+}
+.baseline-meter > i {
+  display: block;
+  height: 100%;
+  background: var(--color-fg-faint);
+  transform: scaleX(var(--meter-fill, 0));
+  transform-origin: left center;
+  transition: transform var(--dur-3) var(--ease-arrive);
+}
+.baseline-meter[data-over="true"] > i {
+  background: var(--color-primary);
+}
+.baseline-meter::after {
+  /* 1.0배(기준) 눈금 — 정적 요소. 텍스트 없이 "기준을 넘었나"가 판독된다 */
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  left: var(--meter-mark, 50%);
+  width: 1px;
+  background: var(--color-line-strong);
+}
+
+/* 게이지 채움 — width:% 는 값이 바뀔 때마다 레이아웃을 트리거한다.
+   사이드바 크레딧 progressbar가 가장 자주 변하는 요소라 transform으로 바꾼다. */
+.gauge-fill {
+  height: 100%;
+  transform: scaleX(var(--meter-fill, 0));
+  transform-origin: left center;
+  transition: transform var(--dur-3) var(--ease-arrive);
+}
+
+/* 크레딧 차감 순간 1회 점멸 — 글자 노드는 건드리지 않는다(리페인트·a11y 트리 무영향).
+   재트리거: el.removeAttribute("data-dir"); void el.offsetWidth; el.setAttribute(...) */
+@keyframes tick-flash {
+  0% { opacity: 0; }
+  18% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.tick-flash { position: relative; isolation: isolate; }
+.tick-flash::after {
+  content: "";
+  position: absolute;
+  inset: -2px -5px;
+  z-index: -1;
+  border-radius: var(--radius-card);
+  opacity: 0;
+  pointer-events: none;
+}
+.tick-flash[data-dir="down"]::after {
+  background: var(--color-primary-weak);
+  animation: tick-flash 900ms var(--ease-arrive);
+}
+.tick-flash[data-dir="up"]::after {
+  background: var(--color-positive-weak);
+  animation: tick-flash 900ms var(--ease-arrive);
+}
+
+/* ───────────────────────────────────────────────────────────────
+   표면 레이어 — @starting-style + transition-behavior: allow-discrete.
+   현행 `{open ? <Panel/> : null}` 조건부 렌더는 퇴장 애니메이션이 물리적으로
+   불가능하다. 상시 렌더 + data-open 토글로 바꾼다.
+   부수 이득: 닫을 때마다 날아가던 FilterPanelBody의 showAllSources 상태가 보존된다.
+   JS 마운트 상태머신 0줄. 미지원 브라우저는 즉시 표시/즉시 소멸(깨지지 않는다).
+─────────────────────────────────────────────────────────────── */
+
+.layer-panel {
+  display: block;
+  opacity: 1;
+  translate: 0 0;
+  transition:
+    opacity var(--dur-3) var(--ease-arrive),
+    translate var(--dur-3) var(--ease-arrive),
+    display var(--dur-3) allow-discrete;
+}
+/* −4px은 의도적으로 작다 — "날아 들어옴"이 아니라 "자리를 잡음" */
+@starting-style {
+  .layer-panel[data-open="true"] { opacity: 0; translate: 0 -4px; }
+}
+.layer-panel[data-open="false"] {
+  display: none;
+  opacity: 0;
+  translate: 0 -4px;
+  transition-duration: var(--dur-2);
+  transition-timing-function: var(--ease-depart);
+}
+
+.layer-sheet {
+  display: flex;
+  translate: 0 0;
+  transition:
+    translate var(--dur-3) var(--ease-arrive),
+    display var(--dur-3) allow-discrete;
+}
+@starting-style {
+  .layer-sheet[data-open="true"] { translate: 0 100%; }
+}
+.layer-sheet[data-open="false"] {
+  display: none;
+  translate: 0 100%;
+  transition-duration: var(--dur-2);
+  transition-timing-function: var(--ease-depart);
+}
+
+.layer-drawer {
+  display: flex;
+  translate: 0 0;
+  transition:
+    translate var(--dur-3) var(--ease-arrive),
+    display var(--dur-3) allow-discrete;
+}
+@starting-style {
+  .layer-drawer[data-open="true"] { translate: 100% 0; }
+}
+.layer-drawer[data-open="false"] {
+  display: none;
+  translate: 100% 0;
+  transition-duration: var(--dur-2);
+  transition-timing-function: var(--ease-depart);
+}
+
+/* 스크림 — 퇴장은 스크림(80ms)이 시트(160ms)보다 먼저 끝난다.
+   이미 밝아진 화면 위로 시트가 미끄러지지 않게. */
+.layer-scrim {
+  display: block;
+  opacity: 1;
+  transition:
+    opacity var(--dur-2) var(--ease-arrive),
+    display var(--dur-2) allow-discrete;
+}
+@starting-style {
+  .layer-scrim[data-open="true"] { opacity: 0; }
+}
+.layer-scrim[data-open="false"] {
+  display: none;
+  opacity: 0;
+  transition-duration: var(--dur-1);
+  transition-timing-function: var(--ease-depart);
+}
+
+/* 토스트 — 문서 흐름 밖. 현행 library-client.tsx의 mt-4 인라인 <p>는
+   결과 그리드를 즉시 40px 아래로 밀어내는, 이 화면의 유일한 실측 CLS다. */
+.toast-pop {
+  opacity: 1;
+  translate: 0 0;
+  transition:
+    opacity var(--dur-2) var(--ease-arrive),
+    translate var(--dur-2) var(--ease-arrive),
+    display var(--dur-2) allow-discrete;
+}
+@starting-style {
+  .toast-pop[data-open="true"] { opacity: 0; translate: 0 8px; }
+}
+.toast-pop[data-open="false"] {
+  display: none;
+  opacity: 0;
+  translate: 0 4px;
+  transition-duration: var(--dur-1);
+  transition-timing-function: var(--ease-depart);
+}
+
+/* ───────────────────────────────────────────────────────────────
+   스켈레톤 — animate-pulse(Tailwind 기본 2s, 앱의 어떤 리듬과도 무관) 폐기.
+   ① 200ms 미만 로딩에서는 아예 안 보인다: duration 0 + delay 200ms + backwards
+      fill의 순수 CSS 지연 노출. 90ms 번쩍이는 스켈레톤은 없느니만 못하다. JS 타이머 없음.
+   ② 호흡은 1600ms(40τ) — 같은 틱 그리드 위.
+   ③ 스태거는 카드가 아니라 행 단위(--row × 80ms) — 위→아래 느린 파동. 인라인 style 주입.
+   기존 .shimmer는 역할이 겹치므로 앱 화면에서 사용 중단(랜딩 전용으로 격리).
+─────────────────────────────────────────────────────────────── */
+@keyframes skeleton-reveal { from { opacity: 0; } to { opacity: 1; } }
+@keyframes skeleton-breathe { from { opacity: 1; } to { opacity: 0.55; } }
+
+.skeleton {
+  background-color: var(--color-overlay);
+  border-radius: var(--radius-card);
+  animation:
+    skeleton-reveal 0ms var(--ease-state) calc(200ms + var(--row, 0) * 80ms) both,
+    skeleton-breathe 1600ms var(--ease-state) calc(200ms + var(--row, 0) * 80ms) infinite alternate;
+}
+
+/* ───────────────────────────────────────────────────────────────
+   카드 ⇄ 상세 morph — 네이티브 document.startViewTransition.
+   상세는 라우트가 아니라 같은 라우트의 모달(reference-detail.tsx)이라
+   Next의 라우터 통합이 트리거되지 않는다. 그래서 명령형으로 부른다:
+   experimental.viewTransition 플래그도 react/canary 타입도 필요 없다.
+
+   이름은 클릭된 요소 1개(+scrim/panel)에만 붙는다 → 스냅샷 레이어 O(1).
+   React <ViewTransition name={id}>로 60장을 감쌌다면 스냅샷 60장이 된다.
+─────────────────────────────────────────────────────────────── */
+
+/* 같은 라우트라 뒤 격자는 바뀐 게 없다. 루트를 크로스페이드하면 소재 수십 장이
+   통째로 한 번 깜빡인다 → 즉시 교체. 덤으로 사이드바·탑바가 자동 고정된다. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+::view-transition-group(ref-hero) {
+  animation-duration: var(--dur-morph);
+  animation-timing-function: var(--ease-arrive);
+  z-index: 30;
+}
+::view-transition-old(ref-hero),
+::view-transition-new(ref-hero) {
+  animation-duration: var(--dur-morph);
+  animation-timing-function: var(--ease-arrive);
+}
+/* 픽셀 보간 아티팩트를 가린다. 3px 넘기면 필터 비용이 눈에 보인다. */
+@keyframes hero-via-blur { 30% { filter: blur(1.5px); } }
+::view-transition-image-pair(ref-hero) {
+  animation-name: hero-via-blur;
+  animation-duration: var(--dur-morph);
+}
+
+@keyframes vt-fade { from { opacity: 0; } to { opacity: 1; } }
+::view-transition-new(ref-scrim) {
+  animation: vt-fade var(--dur-2) var(--ease-arrive) both;
+}
+::view-transition-old(ref-scrim) {
+  animation: vt-fade var(--dur-1) var(--ease-depart) both reverse;
+}
+::view-transition-group(ref-panel) {
+  animation-duration: var(--dur-morph);
+  animation-timing-function: var(--ease-arrive);
+}
+
+/* ───────────────────────────────────────────────────────────────
+   접근성 환경설정 — 3단 대응. 전면 차단(* { animation: none })을 쓰지 않는다.
+   WCAG 2.3.3의 대상은 이동이지 색 변화가 아니고, hover 피드백까지 죽이면
+   UI가 고장난 것처럼 읽힌다.
+─────────────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  /* ① 이동만 제거 — 색·불투명도 전환(.trans-state, .card-plate)은 유지 */
+  .layer-panel, .layer-sheet, .layer-drawer, .toast-pop,
+  .layer-panel[data-open="false"], .layer-sheet[data-open="false"],
+  .layer-drawer[data-open="false"], .toast-pop[data-open="false"] {
+    translate: 0 0 !important;
+  }
+  .card-appear { animation-delay: 0ms !important; }
+
+  /* ② 값 변화는 남기되 애니메이션만 제거 — 미터는 최종 길이로 즉시 렌더된다.
+        정보는 남고 움직임만 사라진다. */
+  .baseline-meter > i,
+  .gauge-fill { transition: none !important; }
+  .tick-flash::after { animation: none !important; }
+
+  /* ③ 무한 반복 정지 (200ms 지연 노출은 모션이 아니라 타이밍이므로 유지) */
+  .skeleton {
+    animation: skeleton-reveal 0ms linear 200ms both !important;
+  }
+
+  /* ④ morph 차단 — 1차 방어선은 JS(startViewTransition을 아예 호출하지 않아
+        스냅샷 래스터 비용 자체가 발생하지 않는다). 이건 2차. */
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 1ms !important;
+    animation-delay: 0s !important;
+  }
+
+  .row-shelf { scroll-snap-type: none; }
+}
+
+/* 투명도 축소 — sticky 콘솔의 반투명 + blur를 불투명으로 */
+@media (prefers-reduced-transparency: reduce) {
+  .bg-surface\/95, .bg-surface\/85 { background-color: var(--color-surface) !important; }
+  .backdrop-blur, .backdrop-blur-sm { backdrop-filter: none !important; }
+}
+
+/* 고대비 — 테두리를 한 단계 승격. "선이 반응한다"는 호버 언어와 일관. */
+@media (prefers-contrast: more) {
+  :root { --line: rgba(17, 20, 26, 0.28); --line-strong: rgba(17, 20, 26, 0.44); }
+  :root[data-theme="dark"] { --line: rgba(255, 255, 255, 0.24); --line-strong: rgba(255, 255, 255, 0.4); }
+}
+
+/* 강제 색상 모드 — 미터는 색만으로 판정하므로 경계로 위치를 보존한다 */
+@media (forced-colors: active) {
+  .baseline-meter > i { border-inline-end: 2px solid CanvasText; }
 }

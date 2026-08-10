@@ -530,7 +530,10 @@ export function LibraryClient({
 
   const totalCollected = items.length + ads.length;
   const totalSources = sources.length + adSources.length;
-  const gridCls = "grid gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+  /* .grid-refs — globals.css의 모션 체계가 소유한다. 모바일 2열 고정,
+     40rem부터 auto-fill minmax(14rem)이라 카드 폭이 224~240px 밴드에 머문다.
+     하드코딩 컬럼 수를 화면마다 두면 loading.tsx와 어긋나 로딩→콘텐츠에서 시프트가 난다. */
+  const gridCls = "grid-refs";
 
   return (
     <div className="mx-auto w-full max-w-[1400px]">
@@ -557,18 +560,24 @@ export function LibraryClient({
         collecting={collecting}
       />
 
-      {toast ? (
+      {/* 토스트 — 문서 흐름 밖(fixed). 예전엔 mt-4 인라인 <p>라 뜰 때마다 결과 그리드를
+          40px 밀어냈다. 이 화면에서 실측된 유일한 레이아웃 시프트였다. */}
+      <div
+        aria-live={toast?.tone === "error" ? "assertive" : "polite"}
+        className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center px-4"
+      >
         <p
-          role={toast.tone === "error" ? "alert" : "status"}
+          data-open={toast ? "true" : "false"}
+          role={toast?.tone === "error" ? "alert" : "status"}
           className={cn(
-            "mt-4 flex items-start gap-1.5 rounded-card border border-line bg-body px-4 py-2.5 text-[13px]",
-            toast.tone === "error" ? "text-negative" : "text-fg-sub",
+            "toast-pop pointer-events-auto flex max-w-xl items-start gap-1.5 rounded-card border border-line-strong bg-overlay px-4 py-2.5 text-[13px] shadow-pop",
+            toast?.tone === "error" ? "text-negative" : "text-fg-sub",
           )}
         >
           <Info className="mt-0.5 size-3.5 shrink-0 text-fg-faint" aria-hidden />
-          {toast.text}
+          {toast?.text ?? ""}
         </p>
-      ) : null}
+      </div>
 
       {/* ── 블록 2 — 결과 영역 ── */}
       <section aria-label="레퍼런스 결과" className="mt-5">
@@ -625,12 +634,10 @@ export function LibraryClient({
                     전체 보기
                   </button>
                 </div>
-                {/* lg(3열)에서 4번째를 숨겨 모든 폭에서 고아 카드 없이 정확히 한 행이 된다 */}
-                <div
-                  className={cn(gridCls, "mt-2 [&>*:nth-child(4)]:hidden xl:[&>*:nth-child(4)]:block")}
-                >
-                  {s.entries.map(renderEntry)}
-                </div>
+                {/* 가로 선반 — 결과 그리드가 auto-fill이라 컬럼 수를 알 수 없으므로
+                    nth-child로 고아 카드를 숨기던 방식은 성립하지 않는다. 스냅 스크롤로
+                    바꾸면 폭과 무관하게 항상 한 줄이고, 넘치는 만큼 옆으로 밀린다. */}
+                <div className="row-shelf mt-2">{s.entries.map(renderEntry)}</div>
               </div>
             ))}
           </div>

@@ -21,7 +21,9 @@ export default function LibraryLoading() {
         <LoadingMark />
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4" aria-hidden>
+      {/* 실제 결과 그리드와 같은 .grid-refs — 컬럼 수를 여기서 따로 하드코딩하면
+          로딩→콘텐츠 전환에서 카드 폭이 튄다 */}
+      <div className="grid-refs mt-5" aria-hidden>
         {Array.from({ length: 8 }, (_, i) => (
           <div key={i} className="overflow-hidden rounded-card border border-line">
             <Skeleton className="aspect-[4/5] w-full rounded-none" />

@@ -136,7 +136,7 @@ export function Sidebar() {
      커브를 써서 앱 전체 모션 리듬을 통일한다. 폭은 레이아웃 속성이라 GPU 가속 대상이 아니지만
      사이드바 접기는 본질적으로 형제 요소(본문)의 리플로우를 동반하는 레이아웃 동작이라
      transform으로 대체할 수 없다 — duration을 300ms로 짧게 잡아 버벅임 체감을 줄인다. */
-  const EASE = "ease-[cubic-bezier(0.16,1,0.3,1)]";
+  const EASE = "ease-[var(--ease-state)]";
 
   /** 항목 하나 — 그룹 소속이면 접힘 폭 툴팁에 그룹명을 앞에 붙인다 */
   function renderItem({ href, label, icon: Icon }: NavItem, groupLabel?: string) {

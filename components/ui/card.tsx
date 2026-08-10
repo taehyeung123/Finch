@@ -10,7 +10,7 @@ export function Card({
     <div
       className={cn(
         "bg-body border border-line rounded-card",
-        hover && "transition-colors hover:border-line-strong",
+        hover && "trans-state hover:border-line-strong",
         className,
       )}
       {...props}

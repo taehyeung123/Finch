@@ -39,7 +39,7 @@ function SaveToggle({ on, onClick }: { on: boolean; onClick: () => void }) {
         onClick();
       }}
       className={cn(
-        "absolute right-2 top-2 inline-flex size-8 cursor-pointer items-center justify-center rounded-chip bg-overlay/90 backdrop-blur-sm transition-colors",
+        "absolute right-2 top-2 inline-flex size-8 cursor-pointer items-center justify-center rounded-chip bg-overlay/95 trans-state",
         on ? "text-primary" : "text-fg-faint hover:text-fg",
       )}
     >
@@ -85,10 +85,10 @@ export function ReferenceCard({
               src={item.thumbnailUrl}
               alt=""
               loading="lazy"
-              className="aspect-[4/5] w-full border-b border-line bg-surface object-contain"
+              className="aspect-[4/5] w-full border-b border-line card-plate object-contain"
             />
           ) : (
-            <span className="flex aspect-[4/5] items-center justify-center border-b border-line bg-surface" aria-hidden>
+            <span className="flex aspect-[4/5] items-center justify-center border-b border-line card-plate" aria-hidden>
               <Glyph className="size-9 text-fg-faint" />
             </span>
           )}
@@ -109,7 +109,7 @@ export function ReferenceCard({
         </div>
 
         <button type="button" onClick={onOpen} className="cursor-pointer text-left">
-          <p className="line-clamp-1 text-[15px] font-semibold leading-snug text-fg transition-colors group-hover:text-primary">
+          <p className="line-clamp-1 text-[15px] font-semibold leading-snug text-fg trans-state group-hover:text-primary">
             {item.title}
           </p>
         </button>
@@ -186,16 +186,16 @@ export function AdCard({
               src={ad.thumbnailUrl}
               alt=""
               loading="lazy"
-              className="aspect-[4/5] w-full border-b border-line bg-surface object-contain"
+              className="aspect-[4/5] w-full border-b border-line card-plate object-contain"
             />
           ) : (
-            <span className="flex aspect-[4/5] items-center justify-center border-b border-line bg-surface" aria-hidden>
+            <span className="flex aspect-[4/5] items-center justify-center border-b border-line card-plate" aria-hidden>
               <Megaphone className="size-9 text-fg-faint" />
             </span>
           )}
         </a>
         {/* 좌상단 종류 오버레이 — 오가닉 카드에는 없다. 이게 유일한 종류 구분 표식 */}
-        <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-chip bg-overlay/90 px-2 py-0.5 text-[11px] font-semibold text-fg-sub backdrop-blur-sm">
+        <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-chip bg-overlay/90 px-2 py-0.5 text-[11px] font-semibold text-fg-sub">
           <Megaphone className="size-3" aria-hidden />
           메타광고
         </span>
@@ -221,7 +221,7 @@ export function AdCard({
         </div>
 
         <a href={href} target="_blank" rel="noopener noreferrer" className="cursor-pointer">
-          <p className="line-clamp-1 text-[15px] font-semibold leading-snug text-fg transition-colors group-hover:text-primary">
+          <p className="line-clamp-1 text-[15px] font-semibold leading-snug text-fg trans-state group-hover:text-primary">
             {ad.body || "문구 없는 이미지·영상 소재"}
           </p>
         </a>
