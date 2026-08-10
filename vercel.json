@@ -3,6 +3,8 @@
     { "path": "/api/cron/refresh-tokens", "schedule": "0 18 * * *" },
     { "path": "/api/cron/flush-dms", "schedule": "10 23 * * *" },
     { "path": "/api/cron/publish-scheduled", "schedule": "0 21 * * *" },
-    { "path": "/api/cron/collect-references", "schedule": "30 21 * * *" }
+    { "path": "/api/cron/pool-plan", "schedule": "0 20 * * *" },
+    { "path": "/api/cron/pool-work", "schedule": "0 */2 * * *" },
+    { "path": "/api/cron/pool-finalize", "schedule": "30 21 * * *" }
   ]
 }

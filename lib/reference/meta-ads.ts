@@ -16,11 +16,19 @@ import { CollectError } from "@/lib/reference/scrapecreators";
 export interface CollectedAd {
   /** Meta 광고 라이브러리 고유 ID — 중복 수집 방지 키 */
   adArchiveId: string;
+  /**
+   * 페이지 ID — **브랜드 동일성의 유일한 근거.**
+   * 광고주 이름은 '㈜아모레퍼시픽'·'아모레퍼시픽'·'AMOREPACIFIC'이 뒤섞여 들어와
+   * 이름으로 묶으면 같은 브랜드가 3개로 쪼개진다. 공용 풀의 brands.external_id 가 이 값이다.
+   */
+  pageId: string | null;
   pageName: string;
   pageProfileUrl: string | null;
   body: string;
   ctaText: string | null;
   thumbnailUrl: string | null;
+  /** 영상 광고 여부 — 풀에서 형식 필터(릴스만 보기)를 걸려면 수집 시점에 알아야 한다 */
+  mediaFormat: "video" | "photo" | "carousel";
   isActive: boolean;
   startDate: string | null;
   endDate: string | null;
@@ -57,13 +65,20 @@ function normalizeAd(raw: Json): CollectedAd | null {
     str(videos[0]?.video_preview_image_url) || str(images[0]?.resized_image_url) || str(images[0]?.original_image_url) || null;
   const startSec = num(raw.start_date);
   const endSec = num(raw.end_date);
+  // page_id 는 숫자로 올 때가 있어 문자열로 통일한다 (brands.external_id 가 text).
+  const rawPageId = raw.page_id ?? snapshot.page_id;
+  const pageId =
+    typeof rawPageId === "string" || typeof rawPageId === "number" ? String(rawPageId) : "";
+  const cards = Array.isArray(snapshot.cards) ? (snapshot.cards as Json[]) : [];
   return {
     adArchiveId: id,
+    pageId: pageId || null,
     pageName: str(raw.page_name) || str(snapshot.page_name) || "알 수 없는 광고주",
     pageProfileUrl: str(snapshot.page_profile_uri) || null,
     body: str(body.text),
     ctaText: str(snapshot.cta_text) || null,
     thumbnailUrl: thumbnail || null,
+    mediaFormat: videos.length > 0 ? "video" : cards.length > 1 || images.length > 1 ? "carousel" : "photo",
     isActive: raw.is_active !== false,
     startDate: startSec ? new Date(startSec * 1000).toISOString() : null,
     endDate: endSec ? new Date(endSec * 1000).toISOString() : null,
