@@ -24,15 +24,15 @@ export default function LibraryLoading() {
       {/* 실제 결과 그리드와 같은 .grid-refs — 컬럼 수를 여기서 따로 하드코딩하면
           로딩→콘텐츠 전환에서 카드 폭이 튄다 */}
       <div className="grid-refs mt-5" aria-hidden>
-        {Array.from({ length: 8 }, (_, i) => (
+        {/* 실제 카드와 같은 지오메트리 — 미디어 3:4 + 정보 바 44px.
+            어긋나면 로딩→콘텐츠에서 스크롤이 튄다. */}
+        {Array.from({ length: 10 }, (_, i) => (
           <div key={i} className="overflow-hidden rounded-card border border-line">
-            <Skeleton className="aspect-[4/5] w-full rounded-none" />
-            <div className="space-y-2 p-4">
-              <Skeleton className="h-[18px] w-24" />
-              <Skeleton className="h-5 w-3/4" />
-              <Skeleton className="h-3.5 w-full" />
-              <Skeleton className="h-3.5 w-5/6" />
-              <Skeleton className="h-3.5 w-28" />
+            <Skeleton className="aspect-[3/4] w-full rounded-none" />
+            <div className="flex h-11 items-center gap-1.5 px-2.5">
+              <Skeleton className="size-3.5 shrink-0 rounded-chip" />
+              <Skeleton className="h-3 flex-1" />
+              <Skeleton className="h-3 w-10 shrink-0" />
             </div>
           </div>
         ))}

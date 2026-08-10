@@ -494,18 +494,25 @@ body {
    현행 lg 3열(234px) → xl 4열(338px)의 44% 점프를 제거한다.
 ─────────────────────────────────────────────────────────────── */
 
+/* 결과 그리드 — 컬럼 수를 폭 구간마다 명시한다.
+   auto-fill로 두면 컨테이너 폭에 따라 4~6열을 오가며 카드 크기가 흔들리는데,
+   레퍼런스 도구는 "한 화면에 몇 개가 보이는가"가 곧 밀도이자 제품 인상이라
+   구간별로 못박는 편이 낫다. 1400px 컨테이너 · 5열 · gap 12px → 카드 약 270px. */
 .grid-refs {
   display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr)); /* 모바일 2열 고정 */
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   opacity: 1;
   transition: opacity var(--dur-2) var(--ease-arrive);
 }
-
 @media (min-width: 40rem) {
-  .grid-refs {
-    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
-  }
+  .grid-refs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 64rem) {
+  .grid-refs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 80rem) {
+  .grid-refs { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
 
 /* 필터·정렬 재배열 = FLIP이 아니라 컨테이너 1개의 불투명도 교차.
@@ -523,8 +530,8 @@ body {
 .row-shelf {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(14rem, 1fr);
-  gap: 1rem;
+  grid-auto-columns: minmax(16rem, 1fr);
+  gap: 0.75rem;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scroll-snap-type: x proximity;
@@ -559,7 +566,8 @@ body {
    (썸네일 4:5 ≈ 288px + 푸터 128px + 미터 3px ≈ 419px) */
 .card-defer {
   content-visibility: auto;
-  contain-intrinsic-size: auto 27rem;
+  /* 카드 실측 높이(이미지 3:4 + 정보바 44px)에 맞춘 예약값 — 어긋나면 스크롤바가 튄다 */
+  contain-intrinsic-size: auto 24rem;
 }
 
 /* '더 보기'로 추가된 배치 전용. 초기 페인트 카드에는 절대 붙이지 않는다.
@@ -862,4 +870,63 @@ body {
 /* 강제 색상 모드 — 미터는 색만으로 판정하므로 경계로 위치를 보존한다 */
 @media (forced-colors: active) {
   .baseline-meter > i { border-inline-end: 2px solid CanvasText; }
+}
+
+/* ───────────────────────────────────────────────────────────────
+   미디어 우선 카드 — Solari 실측(2026-08-10) 이식.
+   측정값: 카드 = 미디어 그 자체(329x584, 9:16), object-cover, rounded 8px,
+   정보는 오버레이, gap 8px. 그래서 화면에 많이 들어가고 꽉 차 보인다.
+
+   핀치 조정 2가지:
+   ① 프레임을 9:16이 아니라 3:4로 잡는다. 우리 그리드에는 세로 릴스와
+      가로형 메타광고가 섞이는데 9:16으로 고정하면 광고가 심하게 잘린다.
+   ② 항상 보이는 정보 바를 하단에 남긴다. 이 제품은 갤러리가 아니라
+      "왜 이게 잘됐는지"를 읽는 도구라, 요약을 전부 호버 뒤로 숨기면
+      스캔이 불가능해진다. 제목·요약만 호버 오버레이로 올린다.
+─────────────────────────────────────────────────────────────── */
+
+.media-frame {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  width: 100%;
+  overflow: hidden;
+  background-color: var(--color-plate);
+}
+.media-frame > img,
+.media-frame > video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* 호버 오버레이 — 제목·요약. 기본은 숨김, 포인터 있는 기기에서만 뜬다.
+   translate/opacity만 쓰므로 레이아웃을 건드리지 않는다. */
+.media-veil {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  padding: 2.5rem 0.75rem 0.75rem;
+  opacity: 0;
+  translate: 0 8px;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.82) 0%, rgb(0 0 0 / 0.55) 45%, transparent 100%);
+  transition:
+    opacity var(--dur-2) var(--ease-depart),
+    translate var(--dur-2) var(--ease-depart);
+}
+@media (hover: hover) and (pointer: fine) {
+  .group:hover .media-veil,
+  .group:focus-within .media-veil {
+    opacity: 1;
+    translate: 0 0;
+    transition-timing-function: var(--ease-arrive);
+  }
+}
+/* 터치 기기에는 호버가 없다 — 항상 보이되 더 얕게 */
+@media not all and (hover: hover) {
+  .media-veil { opacity: 1; translate: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .media-veil { transition: opacity var(--dur-1) linear; translate: 0 0; }
 }

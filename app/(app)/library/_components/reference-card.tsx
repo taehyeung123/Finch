@@ -1,25 +1,26 @@
 "use client";
 
-import { Bookmark, Eye, Megaphone } from "lucide-react";
+import { Bookmark, Eye, Megaphone, Play } from "lucide-react";
 import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
-import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/cn";
 import { formatCompact } from "@/lib/format";
 import type { ReferenceAd, ReferenceItem } from "@/lib/types";
 
 /*
-  결과 카드 — 오가닉·메타광고 공통 셸.
-  현행 카드가 정보 블록 13개를 담아 그리드 리듬을 끊었다. 7개로 줄이고 나머지는
-  상세 오버레이로 미룬다(후킹 태그·해시태그·AI 코멘트·개별 지표·원본 링크·카드뉴스 CTA).
+  결과 카드 — 미디어 우선 구조 (2026-08-10 Solari 실측 이식).
 
-  두 종류의 **외곽 치수는 완전히 동일하다** — 같은 aspect-[4/5] 썸네일 + 같은 푸터.
-  담기는 정보만 다르다. 그래야 한 그리드에 섞여도 리듬이 안 깨진다.
+  이전 구조는 이미지 아래에 제목·요약·지표 4행이 세로로 붙어 카드 높이가 컸고
+  1400px 화면에 4장밖에 안 들어갔다. Solari는 카드를 미디어 그 자체로 만들고
+  정보를 오버레이로 올려 같은 폭에 훨씬 많이, 훨씬 꽉 차 보이게 한다
+  (실측: 329x584 9:16 프레임, object-cover, gap 8px, 정보 전부 오버레이).
 
-  썸네일은 object-cover가 아니라 object-contain이다. 9:16 릴스의 상단 후킹 문구와
-  하단 자막이 크롭에 잘려나가는데, 레퍼런스 도구에서 잘린 그 부분이 바로 사용자가
-  보러 온 것이다. contain은 카드 높이를 픽셀 단위로 균일하게 유지하면서 크리에이티브를
-  통째로 보존하는 유일한 절충안이다.
+  핀치 조정 2가지:
+  ① 프레임을 9:16이 아니라 3:4로 잡는다 — 우리 그리드에는 세로 릴스와 가로형
+     메타광고가 섞이므로 9:16 고정은 광고를 심하게 자른다.
+  ② 하단 정보 바(44px)는 항상 보인다 — 이 제품은 갤러리가 아니라 "왜 이게
+     잘됐는지"를 읽는 도구다. 채널·핸들·핵심 지표는 스캔 가능해야 하고,
+     제목·요약만 호버 오버레이로 올린다.
 */
 
 const CHANNEL_GLYPH = {
@@ -33,18 +34,39 @@ function SaveToggle({ on, onClick }: { on: boolean; onClick: () => void }) {
     <button
       type="button"
       aria-pressed={on}
-      aria-label={on ? "즐겨찾기 해제" : "즐겨찾기"}
+      aria-label={on ? "저장 해제" : "저장"}
       onClick={(e) => {
         e.stopPropagation();
         onClick();
       }}
       className={cn(
-        "absolute right-2 top-2 inline-flex size-8 cursor-pointer items-center justify-center rounded-chip bg-overlay/95 trans-state",
-        on ? "text-primary" : "text-fg-faint hover:text-fg",
+        "trans-state absolute right-2 top-2 z-10 inline-flex size-7 cursor-pointer items-center justify-center rounded-chip bg-black/45 text-white",
+        on && "text-primary",
       )}
     >
-      <Bookmark className="size-4" fill={on ? "currentColor" : "none"} aria-hidden />
+      <Bookmark className="size-3.5" fill={on ? "currentColor" : "none"} aria-hidden />
     </button>
+  );
+}
+
+/** 하단 정보 바 — 두 카드가 픽셀 단위로 같은 높이를 쓰게 44px 고정 */
+function InfoBar({
+  glyph,
+  label,
+  metric,
+}: {
+  glyph: React.ReactNode;
+  label: string;
+  metric: React.ReactNode;
+}) {
+  return (
+    <div className="flex h-11 items-center gap-1.5 px-2.5">
+      <span className="shrink-0" aria-hidden>
+        {glyph}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-[12px] text-fg-sub">{label}</span>
+      {metric}
+    </div>
   );
 }
 
@@ -63,91 +85,66 @@ export function ReferenceCard({
   onOpen: () => void;
 }) {
   const Glyph = CHANNEL_GLYPH[item.channel];
-
-  /* 지표는 최대 2개. 팔로워 대비 배수가 산출되면 그걸 우선한다 —
-     /discover의 '도달 스코어'를 실측 가능한 형태로 대체하는 값이다. */
-  const reachMultiple = item.followerCount > 0 && item.views > 0 ? item.views / item.followerCount : null;
-  const engageRate =
-    item.views > 0 ? ((item.likes + (item.comments ?? 0)) / item.views) * 100 : null;
+  const isVideo = item.channel === "tiktok" || item.views > 0;
 
   return (
-    <Card hover className="group flex flex-col overflow-hidden" title={`'${item.matchedSource}' 기준으로 수집`}>
-      <div className="relative">
-        <button
-          type="button"
-          onClick={onOpen}
-          aria-label={`${item.title} 상세 보기`}
-          className="block w-full cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
-        >
-          {item.thumbnailUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- Storage 캐시 URL이라 최적화 프록시를 거치지 않는다
-            <img
-              src={item.thumbnailUrl}
-              alt=""
-              loading="lazy"
-              className="aspect-[4/5] w-full border-b border-line card-plate object-contain"
-            />
-          ) : (
-            <span className="flex aspect-[4/5] items-center justify-center border-b border-line card-plate" aria-hidden>
-              <Glyph className="size-9 text-fg-faint" />
-            </span>
-          )}
-        </button>
-        <SaveToggle on={favorite} onClick={onToggleFavorite} />
-      </div>
+    <Card hover className="group card-defer relative flex flex-col overflow-hidden">
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`${item.title} 상세 보기`}
+        className="media-frame block cursor-pointer text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+      >
+        {item.thumbnailUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- Storage 캐시 URL이라 최적화 프록시를 거치지 않는다
+          <img src={item.thumbnailUrl} alt="" loading="lazy" decoding="async" />
+        ) : (
+          <span className="flex size-full items-center justify-center" aria-hidden>
+            <Glyph className="size-8 text-fg-faint" />
+          </span>
+        )}
 
-      <div className="flex flex-1 flex-col gap-1.5 p-4">
-        {/* 메타 행 — 채널 글리프 + 핸들 + (우) 기준 대비 배수 */}
-        <div className="flex h-[18px] items-center gap-1.5">
-          <Glyph className={cn("size-3.5 shrink-0", item.channel === "instagram" ? "text-ig" : "text-fg")} aria-hidden />
-          <span className="min-w-0 flex-1 truncate text-[12px] text-fg-sub">{item.creatorHandle}</span>
-          {overAvgMultiple ? (
-            <Badge tone="positive" className="shrink-0" title="같은 수집 기준의 평균 반응 대비 — 핀치 자체 계산">
-              기준 대비 {overAvgMultiple.toFixed(1)}배
-            </Badge>
-          ) : null}
-        </div>
-
-        <button type="button" onClick={onOpen} className="cursor-pointer text-left">
-          <p className="line-clamp-1 text-[15px] font-semibold leading-snug text-fg trans-state group-hover:text-primary">
-            {item.title}
-          </p>
-        </button>
-
-        {/* AI 요약 — 카드가 영상 재생을 대체해야 한다는 게 이 제품의 핵심 가치라 반드시 남긴다 */}
-        <p className="line-clamp-2 text-[13px] leading-relaxed text-fg-sub">{item.summary}</p>
-
-        {/* 지표 행 — 산출 불가면 행 자체를 렌더하지 않는다(0을 지어내지 않는다) */}
-        {item.views > 0 || reachMultiple !== null ? (
-          <div className="mt-auto flex items-center gap-3 pt-1 text-[12px] text-fg-sub">
-            {item.views > 0 ? (
-              <span className="inline-flex items-center gap-1" title="조회수">
-                <Eye className="size-3.5 text-fg-faint" aria-hidden />
-                <span className="tnum font-semibold text-fg">{formatCompact(item.views)}</span>
-              </span>
-            ) : null}
-            {reachMultiple !== null ? (
-              <span className="tnum" title="조회수 ÷ 팔로워 수 — 핀치 자체 계산">
-                팔로워 대비 <span className="font-semibold text-fg">{reachMultiple.toFixed(1)}배</span>
-              </span>
-            ) : engageRate !== null ? (
-              <span className="tnum" title="(좋아요+댓글) ÷ 조회수 — 핀치 자체 계산">
-                공감률 <span className="font-semibold text-fg">{engageRate.toFixed(2)}%</span>
-              </span>
-            ) : null}
-          </div>
+        {/* 성과 배지 — 같은 수집 기준 평균 대비 배수 */}
+        {overAvgMultiple ? (
+          <span className="tnum absolute left-2 top-2 rounded-chip bg-primary px-2 py-0.5 text-[11px] font-bold text-on-primary">
+            {overAvgMultiple.toFixed(1)}배
+          </span>
         ) : null}
-      </div>
+
+        {isVideo && item.thumbnailUrl ? (
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden>
+            <span className="flex size-9 items-center justify-center rounded-chip bg-black/30">
+              <Play className="size-4 text-white" fill="currentColor" />
+            </span>
+          </span>
+        ) : null}
+
+        {/* 호버 오버레이 — 제목 + AI 요약 */}
+        <span className="media-veil pointer-events-none block">
+          <span className="line-clamp-2 text-[13px] font-semibold leading-snug text-white">{item.title}</span>
+          {item.summary ? (
+            <span className="mt-1 line-clamp-3 block text-[12px] leading-relaxed text-white/80">{item.summary}</span>
+          ) : null}
+        </span>
+      </button>
+
+      <SaveToggle on={favorite} onClick={onToggleFavorite} />
+
+      <InfoBar
+        glyph={<Glyph className={cn("size-3.5", item.channel === "instagram" ? "text-ig" : "text-fg")} />}
+        label={item.creatorHandle}
+        metric={
+          item.views > 0 ? (
+            <span className="tnum inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold text-fg">
+              <Eye className="size-3.5 text-fg-faint" aria-hidden />
+              {formatCompact(item.views)}
+            </span>
+          ) : null
+        }
+      />
     </Card>
   );
 }
-
-const PLATFORM_LABEL: Record<string, string> = {
-  FACEBOOK: "페이스북",
-  INSTAGRAM: "인스타그램",
-  AUDIENCE_NETWORK: "오디언스 네트워크",
-  MESSENGER: "메신저",
-};
 
 /** 게재 일수 — 오래 도는 광고는 성과 신호다. startDate가 없으면 null */
 function runningDays(ad: ReferenceAd): number | null {
@@ -171,77 +168,64 @@ export function AdCard({
   const href = `https://www.facebook.com/ads/library/?id=${ad.adArchiveId}`;
 
   return (
-    <Card hover className="group flex flex-col overflow-hidden" title={`'${ad.matchedSource}' 검색으로 수집`}>
-      <div className="relative">
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={`${ad.pageName} 광고를 광고 라이브러리에서 보기`}
-          className="block w-full cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
-        >
-          {ad.thumbnailUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- 공급사 원본 썸네일 URL, 최적화 프록시 미대상
-            <img
-              src={ad.thumbnailUrl}
-              alt=""
-              loading="lazy"
-              className="aspect-[4/5] w-full border-b border-line card-plate object-contain"
-            />
-          ) : (
-            <span className="flex aspect-[4/5] items-center justify-center border-b border-line card-plate" aria-hidden>
-              <Megaphone className="size-9 text-fg-faint" />
-            </span>
-          )}
-        </a>
-        {/* 좌상단 종류 오버레이 — 오가닉 카드에는 없다. 이게 유일한 종류 구분 표식 */}
-        <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-chip bg-overlay/90 px-2 py-0.5 text-[11px] font-semibold text-fg-sub">
-          <Megaphone className="size-3" aria-hidden />
-          메타광고
-        </span>
-        <SaveToggle on={favorite} onClick={onToggleFavorite} />
-      </div>
-
-      <div className="flex flex-1 flex-col gap-1.5 p-4">
-        <div className="flex h-[18px] items-center gap-1.5">
-          <Megaphone className="size-3.5 shrink-0 text-fg-faint" aria-hidden />
-          <span className="min-w-0 flex-1 truncate text-[12px] text-fg-sub">{ad.pageName}</span>
-          <span
-            className={cn(
-              "inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold",
-              ad.isActive ? "text-positive" : "text-fg-faint",
-            )}
-          >
-            <span
-              className={cn("size-1.5 rounded-full", ad.isActive ? "bg-positive" : "bg-fg-faint")}
-              aria-hidden
-            />
-            {ad.isActive ? "게재 중" : "종료"}
+    <Card hover className="group card-defer relative flex flex-col overflow-hidden">
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`${ad.pageName} 광고를 광고 라이브러리에서 보기`}
+        className="media-frame block cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+      >
+        {ad.thumbnailUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- 공급사 원본 썸네일 URL, 최적화 프록시 미대상
+          <img src={ad.thumbnailUrl} alt="" loading="lazy" decoding="async" />
+        ) : (
+          <span className="flex size-full items-center justify-center" aria-hidden>
+            <Megaphone className="size-8 text-fg-faint" />
           </span>
-        </div>
+        )}
 
-        <a href={href} target="_blank" rel="noopener noreferrer" className="cursor-pointer">
-          <p className="line-clamp-1 text-[15px] font-semibold leading-snug text-fg trans-state group-hover:text-primary">
+        {/* 좌상단 종류 표식 — 오가닉 카드에는 없다. 광고를 구분하는 유일한 신호 */}
+        <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-chip bg-black/45 px-2 py-0.5 text-[11px] font-semibold text-white">
+          <Megaphone className="size-3" aria-hidden />
+          광고
+        </span>
+
+        <span className="media-veil pointer-events-none block">
+          <span className="line-clamp-3 text-[13px] font-semibold leading-snug text-white">
             {ad.body || "문구 없는 이미지·영상 소재"}
-          </p>
-        </a>
+          </span>
+          {ad.ctaText ? (
+            <span className="mt-1.5 inline-block rounded-chip bg-white/90 px-2 py-0.5 text-[11px] font-bold text-black">
+              {ad.ctaText}
+            </span>
+          ) : null}
+        </span>
+      </a>
 
-        <p className="line-clamp-2 text-[13px] leading-relaxed text-fg-sub">
-          {ad.aiComment || (ad.platforms.length > 0 ? ad.platforms.map((p) => PLATFORM_LABEL[p] ?? p).join(" · ") : "")}
-        </p>
+      <SaveToggle on={favorite} onClick={onToggleFavorite} />
 
-        {days !== null || ad.ctaText ? (
-          <div className="mt-auto flex items-center gap-2 pt-1 text-[12px] text-fg-sub">
-            {days !== null ? (
-              <span className="tnum">
-                <span className="font-semibold text-fg">{days}</span>일간 게재
-              </span>
-            ) : null}
-            {days !== null && ad.ctaText ? <span className="text-fg-faint">·</span> : null}
-            {ad.ctaText ? <span className="truncate">{ad.ctaText}</span> : null}
-          </div>
-        ) : null}
-      </div>
+      <InfoBar
+        glyph={<Megaphone className="size-3.5 text-fg-faint" />}
+        label={ad.pageName}
+        metric={
+          days !== null ? (
+            <span
+              className={cn(
+                "tnum inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold",
+                ad.isActive ? "text-positive" : "text-fg-faint",
+              )}
+              title={ad.isActive ? "게재 중" : "게재 종료"}
+            >
+              <span
+                className={cn("size-1.5 rounded-full", ad.isActive ? "bg-positive" : "bg-fg-faint")}
+                aria-hidden
+              />
+              {days}일
+            </span>
+          ) : null
+        }
+      />
     </Card>
   );
 }
