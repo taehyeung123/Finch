@@ -10,6 +10,7 @@ import { isKnownIndustry } from "@/lib/industry/taxonomy";
 
   우선순위 — 낮은 숫자가 먼저.
    10  팔로우된 브랜드          : 돈 낸 사람이 지켜보는 대상. 제일 먼저 신선해야 한다.
+   20  유명 브랜드 시드          : 아는 이름이 깔려야 "진짜 데이터"로 읽힌다. 첫인상을 만드는 줄.
    30  결과 0건이었던 사용자 검색어 : 실제 수요인데 풀에 구멍이 난 자리. 메꾸면 바로 체감된다.
    60  자격 미달 업종의 시드어    : 빈 업종을 채워 화면에 띄우는 게 전체 품질을 가장 크게 올린다.
   100  나머지 시드어 순환        : 오래된 것부터.
@@ -20,6 +21,7 @@ import { isKnownIndustry } from "@/lib/industry/taxonomy";
 
 const PRIORITY = {
   followedBrand: 10,
+  brandSeed: 20,
   searchMiss: 30,
   thinIndustry: 60,
   rotation: 100,
@@ -178,19 +180,31 @@ export async function planCrawl(capacity = 120): Promise<PlanResult> {
 
   const { data: keywords } = await db
     .from("industry_keywords")
-    .select("industry_id, platform, keyword, last_crawled_at, weight")
+    .select("industry_id, platform, keyword, last_crawled_at, weight, origin")
     .eq("is_active", true)
     .order("last_crawled_at", { ascending: true, nullsFirst: true })
     .order("weight", { ascending: false })
     .limit(capacity * 3);
 
-  // 오래된 순으로 이미 정렬돼 있다. 그 안에서 자격 미달 업종만 먼저 훑고,
-  // 그 다음 나머지를 훑는다 — 각 그룹 안에서는 여전히 "오래된 것 먼저"가 유지된다.
+  /* 이미 "오래된 것 먼저"로 정렬돼 있다. 그 순서를 유지한 채 세 번 훑는다:
+     ① 유명 브랜드 → ② 자격 미달 업종의 시드어 → ③ 나머지.
+     한 번에 훑으면서 정렬을 다시 하면 각 그룹 안의 "오래된 것 먼저"가 깨진다. */
   const kws = keywords ?? [];
-  for (const pass of [true, false]) {
+  const PASSES = [
+    { key: "brandSeed", pick: (o: string) => o === "brand", priority: PRIORITY.brandSeed },
+    {
+      key: "thinIndustry",
+      pick: (_o: string, ind: string) => thin.has(ind),
+      priority: PRIORITY.thinIndustry,
+    },
+    { key: "rotation", pick: () => true, priority: PRIORITY.rotation },
+  ] as const;
+
+  for (const pass of PASSES) {
     for (const k of kws) {
       const industryId = String(k.industry_id);
-      if (thin.has(industryId) !== pass) continue;
+      const origin = String(k.origin ?? "seed");
+      if (!pass.pick(origin, industryId)) continue;
       const platform = String(k.platform);
       take(
         {
@@ -199,9 +213,9 @@ export async function planCrawl(capacity = 120): Promise<PlanResult> {
           target: String(k.keyword),
           industry_id: industryId,
           brand_id: null,
-          priority: pass ? PRIORITY.thinIndustry : PRIORITY.rotation,
+          priority: pass.priority,
         },
-        pass ? "thinIndustry" : "rotation",
+        pass.key,
       );
     }
   }
