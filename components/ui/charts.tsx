@@ -280,7 +280,7 @@ export function UsageGauge({
   unit: string;
   compact?: boolean;
 }) {
-  const pct = Math.min((used / limit) * 100, 100);
+  const pct = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
   const nearLimit = pct >= 80;
   return (
     <div>

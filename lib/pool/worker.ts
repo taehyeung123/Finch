@@ -23,6 +23,21 @@ import { upsertAds, upsertPosts } from "@/lib/pool/upsert";
 const CURSOR_PAGES = 2; // 키워드당 최대 페이지. 1페이지 30건 + 2페이지 10건 ≈ 40건
 const MAX_ATTEMPTS = 3;
 
+/**
+ * job 하나가 지금까지 **실제로** 쓴 콜 수를 담는 상자.
+ *
+ * 예전에는 성공했을 때만 { calls } 를 돌려줬다. 그래서 1페이지가 성공한 뒤
+ * 2페이지에서 402(크레딧 소진)가 나면, 이미 과금된 1콜이 통째로 유실되고
+ * 바깥에서는 청구분을 **전액** 환불해 버렸다 — 실제로는 썼는데 장부에는 안 쓴 걸로 남는다.
+ * 일반 실패도 실제 콜 수와 무관하게 1로 고정돼 있었다.
+ *
+ * 예외가 나도 이 상자에는 값이 남으므로, 바깥에서 실측치로 환불량을 계산할 수 있다.
+ * 하드캡이 의미를 가지려면 장부가 실지출과 같아야 한다.
+ */
+interface CallMeter {
+  used: number;
+}
+
 export interface WorkResult {
   jobsDone: number;
   callsUsed: number;
@@ -88,9 +103,10 @@ export async function runCrawlWorker(maxJobs = 12, budgetMs = 240_000): Promise<
       break;
     }
 
+    const meter: CallMeter = { used: 0 };
     let used = 0;
     try {
-      const r = await runJob(db, job, granted);
+      const r = await runJob(db, job, granted, meter);
       used = r.calls;
       out.newCreatives += r.creatives;
       out.newBrands += r.brands;
@@ -104,8 +120,10 @@ export async function runCrawlWorker(maxJobs = 12, budgetMs = 240_000): Promise<
       out.errors += 1;
       const msg = e instanceof Error ? e.message : String(e);
       const outOfCredits = e instanceof CollectError && e.reason === "out_of_credits";
-      // 실패했으면 청구분을 되돌린다. 공급사가 402 를 준 호출은 과금되지 않는다.
-      used = outOfCredits ? 0 : 1;
+      /* 실제로 쓴 만큼만 청구로 남긴다. 402 를 받은 마지막 콜은 과금되지 않으므로 한 번 뺀다.
+         예전처럼 0 이나 1 로 고정하면, 1페이지가 성공한 뒤 2페이지에서 소진된 경우
+         이미 과금된 1콜이 장부에서 사라져 하드캡이 실지출보다 헐거워진다. */
+      used = Math.max(0, meter.used - (outOfCredits ? 1 : 0));
 
       await db
         .from("crawl_jobs")
@@ -118,7 +136,9 @@ export async function runCrawlWorker(maxJobs = 12, budgetMs = 240_000): Promise<
         .eq("id", job.id);
 
       if (outOfCredits) {
-        await refundCalls(granted);
+        // 청구분 중 **안 쓴 몫만** 되돌린다(전액 환불하면 성공한 콜이 장부에서 지워진다)
+        if (granted > used) await refundCalls(granted - used);
+        out.callsUsed += used;
         await release(db, jobs.slice(jobs.indexOf(job) + 1));
         out.stoppedBy = "credits";
         break;
@@ -154,26 +174,28 @@ async function runJob(
   db: NonNullable<ReturnType<typeof createAdminClient>>,
   job: Job,
   budget: number,
+  meter: CallMeter,
 ): Promise<JobOutcome> {
   if (job.job_type === "kw_ads" || job.job_type === "brand_ads") {
-    return runAdJob(db, job, budget);
+    return runAdJob(db, job, budget, meter);
   }
-  return runPostJob(db, job, budget);
+  return runPostJob(db, job, budget, meter);
 }
 
 async function runAdJob(
   db: NonNullable<ReturnType<typeof createAdminClient>>,
   job: Job,
   budget: number,
+  meter: CallMeter,
 ): Promise<JobOutcome> {
   let cursor: string | null = job.cursor;
-  let calls = 0;
   let creatives = 0;
   let brands = 0;
 
   for (let page = 0; page < Math.min(CURSOR_PAGES, budget); page++) {
+    // 미터를 **호출 직전에** 올린다. 호출이 던지면 그 콜도 이미 과금됐을 수 있다.
+    meter.used += 1;
     const res = await searchAds(job.target, cursor);
-    calls += 1;
     if (res.ads.length === 0) break;
 
     const r = await upsertAds(db, res.ads, job.industry_id, job.target);
@@ -187,17 +209,27 @@ async function runAdJob(
   // 다음 회차가 이어받을 수 있게 커서를 남긴다 — 매번 1페이지만 다시 긁는 낭비를 막는다.
   await db.from("crawl_jobs").update({ cursor }).eq("id", job.id);
 
-  return { calls, creatives, brands };
+  return { calls: meter.used, creatives, brands };
 }
 
 async function runPostJob(
   db: NonNullable<ReturnType<typeof createAdminClient>>,
   job: Job,
   budget: number,
+  meter: CallMeter,
 ): Promise<JobOutcome> {
+  /* 예산이 1콜밖에 안 남았으면 이 job 을 아예 시작하지 않는다.
+     collectFromSource 는 커서가 있으면 **자기 판단으로** 2콜까지 쓰고, 상한을 받는
+     인자가 없다. 즉 잔여 1콜일 때 시작하면 청구되지 않은 2번째 콜이 실제로 나간다.
+     하루에 한 번은 반드시 이 경계에 걸리므로(부분 허용 설계) 그냥 다음 회차로 미룬다. */
+  if (budget < CURSOR_PAGES) {
+    return { calls: 0, creatives: 0, brands: 0 };
+  }
+
   const channel = job.platform === "instagram" ? "instagram" : job.platform === "tiktok" ? "tiktok" : "threads";
   // collectFromSource 는 내부에서 여러 콜을 쓴다(IG 키워드 경로는 최대 10콜).
   // 공용 풀에서는 그 경로를 쓰지 않는다 — hashtag 로 넣어 2콜 경로를 타게 한다.
+  meter.used += CURSOR_PAGES;
   const posts = await collectFromSource(
     { channel, kind: "hashtag", value: job.target },
     60,
@@ -206,7 +238,7 @@ async function runPostJob(
 
   const r = await upsertPosts(db, posts, job.industry_id, job.target);
 
-  return { calls: Math.min(2, budget), creatives: r.creatives, brands: r.brands };
+  return { calls: meter.used, creatives: r.creatives, brands: r.brands };
 }
 
 /** 키워드의 회전 순서를 갱신한다. 이걸 안 하면 플래너가 같은 키워드만 계속 뽑는다. */

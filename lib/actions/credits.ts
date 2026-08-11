@@ -29,6 +29,14 @@ export const CREDIT_COSTS = {
   collect: 2,
   /** 메타광고 레퍼런스 수집 1회 — Ad Library 검색(기준당 1크레딧 원가) */
   adCollect: 2,
+  /** 릴스 대본 추출 1회 — 공급사 받아쓰기 호출(1크레딧 원가) */
+  transcript: 1,
+  /** 아이디어 추천 1회 — 카드뉴스와 토큰·사고 설정이 같아 원가도 같다 */
+  ideas: 2,
+  /** 브랜드 톤 학습 1회 */
+  brandTone: 1,
+  /** AI 에이전트 메시지 1건 — 건당은 싸지만 횟수 상한이 없으면 누적이 무제한이다 */
+  agentChat: 1,
 } as const;
 
 /** 플랜별 무료 월 한도 — planFeatures 표와 일치 유지 (무료 3회, 유료 사실상 무제한) */
@@ -38,6 +46,13 @@ export const FREE_MONTHLY_LIMITS: Record<string, Record<string, number>> = {
   // 레퍼런스 수집은 공급사 원가가 실비로 나가므로 유료 플랜도 월 한도를 둔다(사실상 넉넉한 수준)
   reference_collect: { free: 3, creator: 60, pro: 150, agency: 300, enterprise: 1000 },
   ad_collect: { free: 3, creator: 60, pro: 150, agency: 300, enterprise: 1000 },
+  /* 아래 넷은 과금 게이트가 아예 없던 기능들이다(2026-08-11 감사에서 발견).
+     대본 추출은 공급사 실비가 나가고, 나머지 셋은 Claude 토큰이 나간다.
+     무료는 "체험"만 — 사장님 지시(2026-08-10)대로 몇 회만 주고 그 뒤는 유료다. */
+  reference_transcript: { free: 1, creator: 30, pro: 80, agency: 150, enterprise: 400 },
+  ai_ideas: { free: 1, creator: 1000000, pro: 1000000, agency: 1000000, enterprise: 1000000 },
+  ai_brand_tone: { free: 1, creator: 1000000, pro: 1000000, agency: 1000000, enterprise: 1000000 },
+  ai_agent_chat: { free: 10, creator: 500, pro: 2000, agency: 5000, enterprise: 20000 },
 };
 
 export type ChargeResult =

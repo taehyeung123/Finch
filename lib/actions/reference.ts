@@ -430,15 +430,33 @@ export async function extractTranscript(id: string): Promise<TranscriptResult> {
   }
   if (!row.url) return { ok: false, error: "원본 링크가 없어 추출할 수 없어요." };
 
+  /* 과금은 캐시 확인 뒤·공급사 호출 앞이다. 이미 추출해 둔 대본을 다시 보는 건
+     공짜여야 하고(위에서 이미 반환됐다), 실제로 돈이 나가는 호출만 과금해야 한다.
+     이 게이트가 없어서 "대본 추출"을 연타하면 공급사 크레딧이 무제한으로 나갔다. */
+  const charge = await chargeGeneration({
+    metric: "reference_transcript",
+    creditCost: CREDIT_COSTS.transcript,
+    reason: "reference_transcript",
+  });
+  if (!charge.ok) return { ok: false, error: charge.error };
+  const refundIfCharged = async () => {
+    if (charge.via === "credits") {
+      await refundGenerationCredits(charge.userId, CREDIT_COSTS.transcript, "transcript_fail_refund");
+    }
+  };
+
   try {
     const text = await fetchIgTranscript(row.url as string);
     if (!text) {
+      // 음성이 없는 영상은 우리 잘못이 아니지만 사용자 잘못도 아니다 — 돌려준다
+      await refundIfCharged();
       return { ok: false, error: "음성이 감지되지 않았어요 — 말로 설명하는 릴스만 대본을 만들 수 있어요." };
     }
     const transcript = text.slice(0, 8000);
     await supabase.from("reference_items").update({ transcript }).eq("id", id).eq("user_id", user.id);
     return { ok: true, transcript };
   } catch (e) {
+    await refundIfCharged();
     const isCredits = e instanceof CollectError && e.reason === "out_of_credits";
     console.error("[reference] 대본 추출 실패:", e);
     return {

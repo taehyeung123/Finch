@@ -121,7 +121,21 @@ export async function analyzeUrl(url: string): Promise<AnalyzeActionResult> {
     return { ok: false, error: "먼저 설정에서 인스타그램 계정을 연동해 주세요." };
   }
 
-  // 사용량 차감 — 플랜별 한도 (free 월 10회)
+  /* 매칭을 **먼저** 한다. 예전에는 차감이 먼저였는데, 남의 계정 URL 을 넣어
+     "최근 50개에서 못 찾았다"는 에러를 받은 사용자도 월 10회 중 1회를 잃었다.
+     아무것도 못 받았는데 횟수만 깎이는 건 그냥 뺏은 것이다.
+     이 조회는 우리 Graph API 토큰이라 공급사 과금이 없다 — 먼저 해도 손해가 없다. */
+  const media = await fetchRecentMedia(ctx.igUserId, ctx.token, 50);
+  const target = media.find((m) => m.permalink?.includes(`/${shortcode}/`) || m.permalink?.includes(`/${shortcode}`));
+  if (!target) {
+    return {
+      ok: false,
+      error:
+        "연동한 계정의 최근 게시물 50개에서 이 URL을 찾지 못했어요. 내 계정 게시물인지 확인해 주세요. (타 계정 게시물 분석은 준비 중입니다)",
+    };
+  }
+
+  // 분석할 대상이 확정된 뒤에 차감 — 플랜별 한도 (free 월 10회)
   const { data: profile } = await supabase.from("users_profile").select("plan").eq("id", user.id).maybeSingle();
   const limit = ANALYSIS_LIMITS[profile?.plan ?? "free"] ?? 10;
   const { data: allowed, error: quotaErr } = await supabase.rpc("use_quota", {
@@ -135,17 +149,6 @@ export async function analyzeUrl(url: string): Promise<AnalyzeActionResult> {
   }
   if (!allowed) {
     return { ok: false, error: "이번 달 콘텐츠 분석 한도를 모두 사용했어요. 요금제에서 플랜을 올리면 한도가 늘어납니다." };
-  }
-
-  // 내 최근 게시물에서 shortcode 매칭 (Graph API는 shortcode 직접 조회를 제공하지 않음)
-  const media = await fetchRecentMedia(ctx.igUserId, ctx.token, 50);
-  const target = media.find((m) => m.permalink?.includes(`/${shortcode}/`) || m.permalink?.includes(`/${shortcode}`));
-  if (!target) {
-    return {
-      ok: false,
-      error:
-        "연동한 계정의 최근 게시물 50개에서 이 URL을 찾지 못했어요. 내 계정 게시물인지 확인해 주세요. (타 계정 게시물 분석은 준비 중입니다)",
-    };
   }
 
   const [insights, commentTexts] = await Promise.all([

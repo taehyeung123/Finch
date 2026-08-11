@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/lib/cron";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fillThumbs } from "@/lib/pool/thumbs";
+import { saveBoost } from "@/lib/pool/heat";
 
 /**
  * 공용 풀 — 마감 회차 (매일 1회, 실행 회차 뒤).
@@ -34,7 +35,12 @@ export async function GET(request: Request) {
 
   const { data: visibleCount } = await admin.rpc("visible_industry_count");
 
-  // 저장 수 반영 — 담아간 소재를 상단으로. 상한 300건은 매 회차 조금씩 밀어올리는 수준이다.
+  /* 저장 수 반영 — 담아간 소재를 상단으로.
+
+     예전에는 heat_score 에 배수를 곱해 **덮어썼다.** 그런데 이 크론은 매일 돌고,
+     다음 날에는 이미 부스트된 값에 또 곱한다. 며칠이면 복리로 100 상한에 붙어버려서
+     집행 기간·조회 배수 같은 원래 신호가 저장 수 하나로 뭉개진다.
+     그래서 원본을 heat_base 에 따로 남기고, 매번 **원본에서 다시 계산**한다. */
   let boosted = 0;
   const { data: hot } = await admin
     .from("creative_stats")
@@ -45,14 +51,16 @@ export async function GET(request: Request) {
   for (const s of hot ?? []) {
     const { data: c } = await admin
       .from("creatives")
-      .select("heat_score")
+      .select("heat_score, heat_base")
       .eq("id", s.creative_id)
       .maybeSingle();
     if (!c) continue;
-    const base = Number(c.heat_score ?? 0);
-    const next = Math.min(100, Math.round(base * (1 + Math.min(0.35, Number(s.save_count) * 0.02)) * 10) / 10);
-    if (next !== base) {
-      await admin.from("creatives").update({ heat_score: next }).eq("id", s.creative_id);
+    const current = Number(c.heat_score ?? 0);
+    // 첫 회차에는 heat_base 가 비어 있다 — 그때의 heat_score 가 곧 원본이다
+    const base = c.heat_base === null || c.heat_base === undefined ? current : Number(c.heat_base);
+    const next = Math.min(100, Math.round(base * saveBoost(Number(s.save_count)) * 10) / 10);
+    if (next !== current || c.heat_base === null || c.heat_base === undefined) {
+      await admin.from("creatives").update({ heat_score: next, heat_base: base }).eq("id", s.creative_id);
       boosted += 1;
     }
   }

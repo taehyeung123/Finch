@@ -150,9 +150,14 @@ export function ReferenceDetailModal({
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <ChannelBadge channel={item.channel} />
             <Badge>{item.category}</Badge>
-            <span className="text-[13px] text-fg-faint">
-              &lsquo;{item.matchedSource}&rsquo; 기준 · {item.collectedAgoHours}시간 전 수집
-            </span>
+            {item.matchedSource ? (
+              <span className="text-[13px] text-fg-faint">
+                &lsquo;{item.matchedSource}&rsquo; 기준 · {item.collectedAgoHours}시간 전 수집
+              </span>
+            ) : (
+              /* 공용 풀 소재에는 개인 "수집 기준"이 없다 — 빈 따옴표만 남기지 않는다 */
+              <span className="text-[13px] text-fg-faint">{item.collectedAgoHours}시간 전 수집</span>
+            )}
           </div>
           <button
             type="button"

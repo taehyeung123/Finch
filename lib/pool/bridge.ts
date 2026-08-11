@@ -64,12 +64,12 @@ export function poolItemToAd(p: PoolItem): ReferenceAd {
     pageName: p.brandName ?? "알 수 없는 광고주",
     pageProfileUrl: null,
     body: p.body,
-    ctaText: null,
+    ctaText: p.ctaText,
     thumbnailUrl: p.thumbUrl,
     isActive: p.isActive ?? true,
     startDate: p.postedAt,
-    endDate: null,
-    platforms: [],
+    endDate: p.endedAt,
+    platforms: p.adPlatforms,
     matchedSource: "",
     // 집행 기간이 이 카드가 파는 정보다. AI 코멘트 자리에 실측값을 넣는다 —
     // 지어낸 문장보다 "62일째 집행 중"이 훨씬 쓸모 있다.

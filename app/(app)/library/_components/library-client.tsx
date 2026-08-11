@@ -224,9 +224,17 @@ export function LibraryClient({
   /* 수집 기준 패싯 — 구 "저장한 계정" 카드를 정식 필터 축으로 승격한 것.
      검색창에 핸들을 채워넣던 우회를 대체하고, 다른 축과 조합이 가능해진다. */
   const sourceFacets = useMemo<SourceFacet[]>(() => {
+    /* 빈 값은 세지 않는다. 공용 풀에는 개인 "수집 기준" 개념이 없어 전부 빈 문자열로 오는데,
+       그대로 세면 라벨 없는 빈 칩이 필터 패널에 하나 뜬다(눌러도 아무 일 안 하는 칩). */
     const counts = new Map<string, number>();
-    for (const item of items) counts.set(item.matchedSource, (counts.get(item.matchedSource) ?? 0) + 1);
-    for (const ad of ads) counts.set(ad.matchedSource, (counts.get(ad.matchedSource) ?? 0) + 1);
+    for (const item of items) {
+      if (!item.matchedSource) continue;
+      counts.set(item.matchedSource, (counts.get(item.matchedSource) ?? 0) + 1);
+    }
+    for (const ad of ads) {
+      if (!ad.matchedSource) continue;
+      counts.set(ad.matchedSource, (counts.get(ad.matchedSource) ?? 0) + 1);
+    }
     const kindOf = new Map<string, string>();
     for (const s of sources) kindOf.set(s.value, s.kind);
     for (const s of adSources) kindOf.set(s.value, "ads");
@@ -298,7 +306,11 @@ export function LibraryClient({
         const ind = industryFromText(item.category, item.title, item.summary);
         if (!ind || !filters.industries.includes(ind)) return false;
       }
-      if (filters.categories.length > 0 && !filters.categories.includes(item.category || "일반")) return false;
+      /* categories 는 **광고주 축**이라 오가닉에는 적용하지 않는다.
+         칩은 메타광고 탭에서만 렌더되는데, 광고주를 고른 뒤 인스타 탭으로 넘어가면
+         '올리브영'이 업종 라벨과 영영 안 맞아 결과가 통째로 0건이 됐다.
+         그 칩은 오가닉 화면에 보이지도 않아 사용자가 지울 방법조차 없었다.
+         (이 블록은 위에서 target==='ads' 를 이미 걸러냈으므로 여기 오는 건 항상 오가닉이다.) */
       if (filters.hooks.length > 0 && !item.hooks.some((h) => filters.hooks.includes(h))) return false;
       if (!passMetric(item.views, filters.views)) return false;
       if (!passMetric(item.likes, filters.likes)) return false;

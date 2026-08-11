@@ -51,6 +51,14 @@ export interface PoolItem {
   followerCount: number;
   isActive: boolean | null;
   runDays: number | null;
+  /* 광고 3종. 안 뽑으면 화면이 조용히 죽는다:
+     · adPlatforms  — 인스타 탭이 platforms.includes("INSTAGRAM") 로 거르므로
+                      빈 배열이면 풀 광고가 인스타 탭에서 통째로 사라진다
+     · ctaText      — 카드의 CTA 배지가 영영 안 뜨고 검색어에도 안 걸린다
+     · endedAt      — 종료된 광고의 집행일수가 오늘까지로 계속 늘어 거짓말을 한다 */
+  adPlatforms: string[];
+  ctaText: string | null;
+  endedAt: string | null;
   industryIds: string[];
   heatScore: number;
   saveCount: number;
@@ -85,6 +93,9 @@ interface Row {
   follower_count: number;
   is_active: boolean | null;
   run_days: number | null;
+  ad_platforms: string[] | null;
+  cta_text: string | null;
+  ended_at: string | null;
   industry_ids: string[] | null;
   heat_score: number;
   posted_at: string | null;
@@ -118,6 +129,9 @@ function toItem(r: Row): PoolItem {
     followerCount: r.follower_count ?? 0,
     isActive: r.is_active,
     runDays: r.run_days,
+    adPlatforms: Array.isArray(r.ad_platforms) ? r.ad_platforms : [],
+    ctaText: r.cta_text,
+    endedAt: r.ended_at,
     industryIds: Array.isArray(r.industry_ids) ? r.industry_ids : [],
     heatScore: r.heat_score ?? 0,
     saveCount: stats?.save_count ?? 0,
@@ -128,7 +142,8 @@ function toItem(r: Row): PoolItem {
 
 const SELECT =
   "id, kind, platform, title, body, permalink, thumb_path, media_format, brand_id, " +
-  "views, likes, comments, follower_count, is_active, run_days, industry_ids, heat_score, posted_at, first_seen_at, " +
+  "views, likes, comments, follower_count, is_active, run_days, ad_platforms, cta_text, ended_at, " +
+  "industry_ids, heat_score, posted_at, first_seen_at, " +
   "brands(id, name), creative_stats(save_count)";
 
 export async function searchPool(query: PoolQuery): Promise<PoolResult> {

@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { chargeGeneration, refundGenerationCredits, CREDIT_COSTS } from "@/lib/actions/credits";
 import { isDemoMode } from "@/lib/supabase/config";
 import { createClaudeClient, STUDIO_MODEL } from "@/lib/ai/claude";
 import { getConnectedInstagramAccount, getInstagramAccessContext } from "@/lib/data/live";
@@ -76,6 +77,19 @@ export async function agentChat(history: AgentChatMessage[]): Promise<AgentChatR
   } = await supabase.auth.getUser();
   if (!user) return null;
 
+  /* 메시지 상한. 건당 비용은 작지만 상한이 없으면 누적이 무제한이다 —
+     로그인만 하면 누구나 무한히 부를 수 있는 유료 호출이었다(2026-08-11 감사).
+     한도를 넘으면 조용히 끊지 않고 안내 문구를 돌려준다: 답이 안 오는 것과
+     "이번 달 한도를 다 썼다"는 전혀 다른 경험이다. */
+  const charge = await chargeGeneration({
+    metric: "ai_agent_chat",
+    creditCost: CREDIT_COSTS.agentChat,
+    reason: "agent_chat",
+  });
+  if (!charge.ok) {
+    return { text: charge.error, linkCard: { href: "/settings/billing", label: "요금제 보기" } };
+  }
+
   const context = await buildAccountContext();
 
   try {
@@ -129,6 +143,10 @@ export async function agentChat(history: AgentChatMessage[]): Promise<AgentChatR
           : undefined,
     };
   } catch (e) {
+    // 답을 못 줬으면 차감분을 돌려준다 — 실패한 요청에 돈을 받으면 안 된다
+    if (charge.via === "credits") {
+      await refundGenerationCredits(charge.userId, CREDIT_COSTS.agentChat, "agent_chat_fail_refund");
+    }
     console.error("[agent-chat] 호출 실패:", e instanceof Error ? e.message : String(e));
     return null;
   }

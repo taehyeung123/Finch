@@ -100,19 +100,35 @@ const TONE_LABEL: Record<string, string> = {
   witty: "위트있고 재치있는",
 };
 
-/** 인증만 확인(과금 없음 — 가벼운 호출용). 데모/키 미설정이면 fallback 신호. */
-async function guard(): Promise<
-  { ok: true } | { ok: false; fallback: true } | { ok: false; fallback?: false; error: string }
+/**
+ * AI 호출 게이트 — 인증 + 과금.
+ *
+ * 전에는 "가벼운 호출용이라 과금 없음"이었는데, 실제로는 아이디어 추천이
+ * 카드뉴스와 **완전히 같은 설정**(max_tokens 16000 + adaptive thinking)으로 돌고 있었다.
+ * 가볍다는 건 주석에만 있었고 코드에는 없었다 — 그래서 버튼을 연타하면 토큰이 무제한으로 나갔다.
+ * (2026-08-11 감사에서 발견. 브랜드 톤 학습도 같은 경로였다.)
+ *
+ * 반환된 refund 는 AI 호출이 실패했을 때 반드시 불러야 한다 —
+ * 크레딧이 차감됐는데 결과를 못 주면 그건 그냥 돈을 가져간 것이다.
+ */
+async function guard(charge: { metric: string; creditCost: number; reason: string }): Promise<
+  | { ok: true; refund: () => Promise<void> }
+  | { ok: false; fallback: true }
+  | { ok: false; fallback?: false; error: string }
 > {
   if (isDemoMode() || !process.env.ANTHROPIC_API_KEY) return { ok: false, fallback: true };
 
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: "로그인이 필요합니다." };
-    return { ok: true };
+    const result = await chargeGeneration(charge);
+    if (!result.ok) return { ok: false, error: result.error };
+    return {
+      ok: true,
+      refund: async () => {
+        if (result.via === "credits") {
+          await refundGenerationCredits(result.userId, charge.creditCost, `${charge.reason}_fail_refund`);
+        }
+      },
+    };
   } catch {
     return { ok: false, error: "인증 확인에 실패했습니다." };
   }
@@ -310,7 +326,8 @@ export async function learnBrandProfile(input: string): Promise<LearnResult> {
   const text = input.trim();
   if (text.length < 20) return { ok: false, error: "브랜드 톤을 파악할 수 있게 예시 캡션이나 설명을 조금 더 입력해 주세요." };
   if (text.length > 4000) return { ok: false, error: "입력이 너무 길어요. 4000자 이내로 줄여 주세요." };
-  if (isDemoMode() || !process.env.ANTHROPIC_API_KEY) return { ok: false, fallback: true };
+  const claude = createClaudeClient();
+  if (!claude) return { ok: false, fallback: true };
 
   const supabase = await createClient();
   const {
@@ -318,8 +335,14 @@ export async function learnBrandProfile(input: string): Promise<LearnResult> {
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "로그인이 필요합니다." };
 
-  const claude = createClaudeClient();
-  if (!claude) return { ok: false, fallback: true };
+  const guarded = await guard({
+    metric: "ai_brand_tone",
+    creditCost: CREDIT_COSTS.brandTone,
+    reason: "studio_brand_tone",
+  });
+  if (!guarded.ok) {
+    return guarded.fallback ? { ok: false, fallback: true } : { ok: false, error: guarded.error };
+  }
 
   try {
     const response = await claude.messages.create({
@@ -372,11 +395,13 @@ export async function learnBrandProfile(input: string): Promise<LearnResult> {
       .upsert({ user_id: user.id, profile, samples, updated_at: new Date().toISOString() });
     if (error) {
       console.error("[studio] 브랜드 프로필 저장 실패:", error.message);
+      await guarded.refund();
       return { ok: false, error: "저장에 실패했어요. 다시 시도해 주세요." };
     }
     return { ok: true, profile };
   } catch (e) {
     console.error("[studio] 브랜드 톤 학습 실패:", e);
+    await guarded.refund();
     return { ok: false, error: "분석 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요." };
   }
 }
@@ -396,11 +421,19 @@ export async function generateIdeas(keyword: string, category: string): Promise<
   if (!kw) return { ok: false, error: "키워드를 입력해 주세요." };
   if (kw.length > 100) return { ok: false, error: "키워드는 100자 이내로 입력해 주세요." };
 
-  const guarded = await guard(); // 아이디어는 한도 미차감 (가벼운 호출)
-  if (!guarded.ok) return guarded;
-
   const claude = createClaudeClient();
   if (!claude) return { ok: false, fallback: true };
+
+  /* 과금은 실제로 호출 가능한 상태를 확인한 뒤에 한다 — 키가 없어 못 돌리는데
+     한도만 깎이면 사용자는 아무것도 못 받고 횟수를 잃는다. */
+  const guarded = await guard({
+    metric: "ai_ideas",
+    creditCost: CREDIT_COSTS.ideas,
+    reason: "studio_ideas",
+  });
+  if (!guarded.ok) {
+    return guarded.fallback ? { ok: false, fallback: true } : { ok: false, error: guarded.error };
+  }
 
   try {
     const response = await claude.messages.create({
@@ -451,6 +484,7 @@ export async function generateIdeas(keyword: string, category: string): Promise<
     });
 
     if (response.stop_reason === "refusal") {
+      await guarded.refund();
       return { ok: false, error: "이 키워드로는 생성할 수 없어요. 다른 키워드로 시도해 주세요." };
     }
     const parsed = parseJsonText(response.content as { type: string; text?: string }[]) as {
@@ -458,11 +492,13 @@ export async function generateIdeas(keyword: string, category: string): Promise<
     } | null;
     const ideas = parsed?.ideas?.filter((i) => i.title && i.reason).slice(0, 6);
     if (!ideas || ideas.length === 0) {
+      await guarded.refund();
       return { ok: false, error: "생성 결과 처리에 실패했어요. 다시 시도해 주세요." };
     }
     return { ok: true, ideas };
   } catch (e) {
     console.error("[studio] 아이디어 생성 실패:", e);
+    await guarded.refund();
     return { ok: false, error: "AI 생성 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요." };
   }
 }
