@@ -27,24 +27,31 @@ import { INDUSTRY_LIST } from "@/lib/industry/list";
 import type { ChannelFilter } from "@/lib/types";
 
 /*
-  복합 검색 콘솔 — 자사 뷰스코프(components/search/search-console.tsx, 2026-08-08
-  "스니핏 벤치마크" 표준)를 핀치 토큰으로 이식한 것. 뷰스코프 DESIGN.md가
-  "다른 검색 화면으로 확대할 때는 이 컴포넌트를 재사용할 것"이라고 못박은 표준이다.
+  검색 콘솔 — 스니핏 **실측 이식** (2026-08-11, 로그인 상태의 실제 DOM 을 계측).
+  이전까지는 스크린샷을 보고 짐작해서 세 번 틀렸다. 아래는 전부 잰 값이다.
 
-  이식한 핵심 3가지:
-  1) [대상 드롭다운 | 헤어라인 | 입력 | 필터] 를 테두리 하나로 묶은 복합 바
-     — 인풋·필터버튼·정렬이 따로 놀던 구조를 대체한다.
-  2) 필터 패널을 인라인 확장이 아니라 **바에 앵커된 absolute 오버레이**로 —
-     패널을 열어도 결과 그리드가 아래로 밀리지 않는다(접힘선 위에 남는다).
-  3) 필터 조합 저장(localStorage) + 원클릭 재적용.
-     useSyncExternalStore로 구독해 setState-in-effect 없이, SSR 스냅샷은 빈 목록.
+  구조 (뷰포트 1920 기준)
+    검색 줄 = 박스 두 개가 **붙어서** 한 줄
+      [검색 기준 220x72] [검색 입력 1277x72]      ← 사이 간격 0
+    필터 패널 = 검색 줄 바로 아래 **떠 있는 층**
+      position:absolute · z-index 250 · 바 아래 10px
+      카드 좌변은 검색 입력 박스에 맞고(검색 기준 220 + 간격 12), 우변은 바와 같다
 
-  핀치 고유 조정:
-  - 활성 필터에 진한 bg-primary를 쓰지 않는다(bg-primary-weak + text-primary).
-    칩이 10개 뜨면 화면이 코랄 덩어리가 되고 [지금 수집]이 묻힌다.
-    같은 이유로 components/ui/chip-filter.tsx의 ChipFilter는 여기서 쓰지 않는다.
-  - 상태 줄 높이를 h-9로 고정 — 필터를 걸고 풀어도 아래 그리드가 1px도 안 움직인다.
-  - shadow-pop은 다크에서 none이므로 오버레이 테두리를 border-line-strong으로 승격.
+  카드
+    radius 12 · border 1px · shadow 0 0 16px rgba(107,110,116,.16) · padding 16
+    두 열 사이 간격 64
+
+  칩 (기간·업종 전부 같은 규격)
+    높이 28 · radius 8 · border 1px · padding 0 20 · font 14/400 · 칩 간격 8
+
+  여는 동작
+    **검색창에 포커스가 가면 열린다.** 별도 버튼을 찾아 누르는 게 아니다.
+  여는 모션
+    **opacity 0.15s ease 하나뿐이다.** 슬라이드도 스케일도 없다.
+    (내가 넣었던 translate+scale 은 스니핏에 없는 것이고, 그래서 더 무거워 보였다.)
+
+  핀치가 다르게 가는 축은 색 하나다 — 업종 22개를 5개 대분류 색으로 나눈다.
+  radius 12 는 우리 토큰(8/32 두 단계) 밖이라 rounded-card(8)로 맞춘다.
 */
 
 /* ---------------- 필터 상태 ---------------- */
@@ -405,7 +412,7 @@ function Chip({
       aria-pressed={on}
       onClick={onClick}
       className={cn(
-        "trans-state inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-card border px-3 text-[13px]",
+        "trans-state inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-card border px-5 text-[14px]",
         on
           ? "border-primary bg-primary-weak font-semibold text-primary"
           : tint
@@ -465,7 +472,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
       <p className="w-[4.5rem] shrink-0 text-[12px] font-semibold text-fg-sub">{label}</p>
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">{children}</div>
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{children}</div>
     </div>
   );
 }
@@ -560,11 +567,11 @@ function FilterPanelBody({
   const hiddenSelected = sourceFacets.slice(6).filter((s) => filters.sources.includes(s.value)).length;
 
   return (
-    <div className="grid gap-x-10 gap-y-7 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+    <div className="grid gap-x-16 gap-y-7 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
       {/* ── 왼쪽: 어디서 · 언제 ── */}
       <div className="space-y-6">
         <Field label="수집 시기">
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="수집 시기 필터">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="수집 시기 필터">
             {WITHIN_OPTIONS.map((o) => (
               <Chip
                 key={o.value}
@@ -669,7 +676,7 @@ function FilterPanelBody({
             업종은 데이터가 아니라 제품이 정하는 축이라, 언제 들어와도 같은 목록이
             같은 자리에 있어야 사용자가 외운다. */}
         <Field label="업종 카테고리" hint="색이 같으면 같은 분야예요">
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="업종 필터">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="업종 필터">
             {INDUSTRY_LIST.map((ind) => (
               <Chip
                 key={ind.id}
@@ -686,7 +693,7 @@ function FilterPanelBody({
         {isAds ? (
           advertiserFacets.length > 0 ? (
             <Field label="광고주">
-              <div className="flex flex-wrap gap-1.5" role="group" aria-label="광고주 필터">
+              <div className="flex flex-wrap gap-2" role="group" aria-label="광고주 필터">
                 {advertiserFacets.slice(0, 12).map((a) => (
                   <Chip
                     key={a.name}
@@ -712,7 +719,7 @@ function FilterPanelBody({
             label="후킹 기법"
             info="핀치 AI가 콘텐츠에서 추정한 후킹 기법이에요. 플랫폼 공식 데이터가 아닌 자체 추정치입니다."
           >
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="후킹 기법 필터">
+            <div className="flex flex-wrap gap-2" role="group" aria-label="후킹 기법 필터">
               {hookFacets.map((h) => (
                 <Chip
                   key={h.name}
@@ -888,17 +895,19 @@ export function SearchConsole({
 
   /* 검색바에 붙은 두 드롭다운 — 바깥 클릭·Escape 로 닫는다 */
   useEffect(() => {
-    if (!scopeOpen && !recentOpen) return;
+    if (!scopeOpen && !recentOpen && !panelOpen) return;
     function onDown(e: MouseEvent) {
       if (barRef.current && !barRef.current.contains(e.target as Node)) {
         setScopeOpen(false);
         setRecentOpen(false);
+        setPanelOpen(false);
       }
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         setScopeOpen(false);
         setRecentOpen(false);
+        setPanelOpen(false);
       }
     }
     document.addEventListener("mousedown", onDown);
@@ -907,7 +916,7 @@ export function SearchConsole({
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [scopeOpen, recentOpen]);
+  }, [scopeOpen, recentOpen, panelOpen]);
 
   /** 확정 — 초안을 결과에 반영한다 */
   const applyDraft = useCallback(() => {
@@ -960,7 +969,7 @@ export function SearchConsole({
             onClick={() => setPanelOpen(false)}
             className="trans-state hidden shrink-0 cursor-pointer items-center gap-1 rounded-card px-2 py-1 text-[12px] font-semibold text-fg-sub hover:bg-surface hover:text-fg lg:inline-flex"
           >
-            접기
+            닫기
           </button>
         </div>
       </div>
@@ -1003,10 +1012,14 @@ export function SearchConsole({
     <header className="-mx-4 -mt-6 border-b border-line bg-surface/95 px-4 pb-3 pt-4 backdrop-blur md:-mx-6 md:px-6">
       <h2 className="sr-only">레퍼런스 검색</h2>
 
-      {/* ── 1행 — 검색 줄 ── */}
+      {/* ── 1행 — 검색 줄.
+          스니핏 실측(1523px 화면): 상단이 **박스 두 개**다.
+            [검색 기준 218px] [검색 입력 ~1285px]
+          그리고 아래 필터 카드의 왼쪽 모서리가 **검색 입력 박스**에 맞춰 시작한다.
+          한 테두리 안에 다 넣으면 그 정렬 기준이 사라진다. ── */}
       <div ref={barRef} className="relative flex items-center gap-2">
-        <div className="flex h-14 min-w-0 flex-1 items-center rounded-card border border-line bg-body transition-colors focus-within:border-line-strong">
-          {/* 검색 기준 — 무엇을 훑을지. 대본은 추출해 둔 것만 대상이라 축이 다르다 */}
+        {/* (1) 검색 기준 — 자체 테두리를 가진 별도 박스 */}
+        <div className="relative hidden shrink-0 lg:block">
           <button
             type="button"
             aria-expanded={scopeOpen}
@@ -1015,69 +1028,29 @@ export function SearchConsole({
               setRecentOpen(false);
             }}
             className={cn(
-              "trans-state ml-1.5 inline-flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-card px-3 text-[13px] font-semibold",
-              scopeOpen ? "bg-surface text-fg" : "text-fg-sub hover:bg-surface hover:text-fg",
+              "trans-state flex h-14 w-48 cursor-pointer items-center gap-2 rounded-card border px-4 text-[14px] font-bold",
+              scopeOpen
+                ? "border-primary bg-primary-weak text-primary"
+                : "border-line bg-body text-fg hover:border-line-strong",
             )}
           >
             {filters.scope === "transcript" ? (
-              <Type className="size-4" aria-hidden />
+              <Type className="size-4 shrink-0" aria-hidden />
             ) : (
-              <Search className="size-4" aria-hidden />
+              <Search className="size-4 shrink-0" aria-hidden />
             )}
-            <span className="hidden sm:inline">{scope.label}</span>
+            <span className="min-w-0 flex-1 truncate text-left">{scope.label}</span>
             <ChevronDown
-              className={cn("size-3.5 transition-transform", scopeOpen && "rotate-180")}
+              className={cn("size-4 shrink-0 transition-transform", scopeOpen && "rotate-180")}
               aria-hidden
             />
           </button>
-          <span className="h-6 w-px shrink-0 bg-line" aria-hidden />
 
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => onQueryChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") rememberQuery(query);
-            }}
-            placeholder="브랜드·문구·계정·해시태그로 찾기"
-            aria-label="레퍼런스 검색"
-            className="h-full min-w-0 flex-1 bg-transparent px-3 text-[15px] font-medium text-fg outline-none placeholder:font-normal placeholder:text-fg-faint"
-          />
-
-          {query ? (
-            <button
-              type="button"
-              onClick={() => onQueryChange("")}
-              aria-label="검색어 지우기"
-              className="trans-state flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-card text-fg-faint hover:bg-surface hover:text-fg"
-            >
-              <X className="size-4" aria-hidden />
-            </button>
-          ) : null}
-
-          {/* 최근 검색 */}
-          <button
-            type="button"
-            aria-expanded={recentOpen}
-            aria-label="최근 검색어"
-            onClick={() => {
-              setRecentOpen((v) => !v);
-              setScopeOpen(false);
-            }}
-            className={cn(
-              "trans-state mr-1.5 flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-card",
-              recentOpen ? "bg-surface text-fg" : "text-fg-faint hover:bg-surface hover:text-fg",
-            )}
-          >
-            <Clock className="size-[18px]" aria-hidden />
-          </button>
-
-          {/* 검색 기준 목록 */}
           {scopeOpen ? (
             <div
               role="listbox"
               aria-label="검색 기준"
-              className="panel-open absolute left-0 top-full z-40 mt-2 w-64 overflow-hidden rounded-card border border-line-strong bg-overlay p-1.5 shadow-pop"
+              className="panel-drop absolute left-0 top-full z-40 mt-2 w-64 overflow-hidden rounded-card border border-line-strong bg-overlay p-1.5 shadow-pop"
             >
               {SCOPE_OPTIONS.map((o) => {
                 const on = filters.scope === o.value;
@@ -1111,11 +1084,84 @@ export function SearchConsole({
               })}
             </div>
           ) : null}
+        </div>
 
-          {/* 최근 검색어 목록 */}
+        {/* (2) 검색 입력 박스 — 필터 카드가 이 박스의 왼쪽 모서리에 맞춰 열린다 */}
+        <div className="relative flex h-14 min-w-0 flex-1 items-center rounded-card border border-line bg-body transition-colors focus-within:border-line-strong">
+          <Search className="ml-4 size-5 shrink-0 text-fg-faint" aria-hidden />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => onQueryChange(e.target.value)}
+            onFocus={() => setPanelOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") rememberQuery(query);
+            }}
+            placeholder="브랜드·문구·계정·해시태그로 찾기"
+            aria-label="레퍼런스 검색"
+            className="h-full min-w-0 flex-1 bg-transparent px-3 text-[15px] font-medium text-fg outline-none placeholder:font-normal placeholder:text-fg-faint"
+          />
+
+          {query ? (
+            <button
+              type="button"
+              onClick={() => onQueryChange("")}
+              aria-label="검색어 지우기"
+              className="trans-state flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-card text-fg-faint hover:bg-surface hover:text-fg"
+            >
+              <X className="size-4" aria-hidden />
+            </button>
+          ) : null}
+
+          {/* 필터 여닫이 — 스니핏의 카드가 늘 열려 있는 자리라 우리도 기본은 열림이다.
+              누르는 자리를 검색창 안에 두는 이유: 검색과 조건은 한 동작이다. */}
+          <button
+            type="button"
+            aria-expanded={panelOpen}
+            aria-controls="library-filter-panel"
+            onClick={() => {
+              setPanelOpen((v) => !v);
+              setScopeOpen(false);
+              setRecentOpen(false);
+            }}
+            className={cn(
+              "trans-state mr-1 inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-card px-3 text-[14px] font-semibold",
+              panelOpen ? "bg-surface text-fg" : "text-fg-sub hover:bg-surface hover:text-fg",
+            )}
+          >
+            <SlidersHorizontal className="size-4" aria-hidden />
+            <span className="hidden sm:inline">필터</span>
+            {activeCount > 0 ? (
+              <span className="tnum flex size-5 items-center justify-center rounded-chip bg-primary text-[11px] font-bold text-on-primary">
+                {activeCount}
+              </span>
+            ) : null}
+            <ChevronDown
+              className={cn("size-3.5 transition-transform", panelOpen && "rotate-180")}
+              aria-hidden
+            />
+          </button>
+
+          {/* 최근 검색 */}
+          <button
+            type="button"
+            aria-expanded={recentOpen}
+            aria-label="최근 검색어"
+            onClick={() => {
+              setRecentOpen((v) => !v);
+              setScopeOpen(false);
+            }}
+            className={cn(
+              "trans-state mr-1.5 flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-card",
+              recentOpen ? "bg-surface text-fg" : "text-fg-faint hover:bg-surface hover:text-fg",
+            )}
+          >
+            <Clock className="size-[18px]" aria-hidden />
+          </button>
+
           {recentOpen ? (
             <div
-              className="panel-open absolute right-0 top-full z-40 mt-2 w-72 overflow-hidden rounded-card border border-line-strong bg-overlay p-1.5 shadow-pop"
+              className="panel-drop absolute right-0 top-full z-40 mt-2 w-72 overflow-hidden rounded-card border border-line-strong bg-overlay p-1.5 shadow-pop"
               role="region"
               aria-label="최근 검색어"
             >
@@ -1137,6 +1183,22 @@ export function SearchConsole({
                   </button>
                 ))
               )}
+            </div>
+          ) : null}
+
+          {/* ── 필터 카드 — **화면 위에 떠서** 열린다.
+              흐름 안에 두면 열 때마다 아래 결과가 통째로 내려가고, 조건을 만지는 동안
+              보고 있던 카드가 화면 밖으로 밀려난다. 스니핏도 띄운다(스크린샷에서
+              카드 뒤로 썸네일이 비친다). 왼쪽 모서리는 이 입력 박스에 맞고,
+              오른쪽은 [지금 수집]까지 덮어 화면 폭을 다 쓴다. ── */}
+          {panelOpen ? (
+            <div
+              id="library-filter-panel"
+              role="region"
+              aria-label="상세 필터"
+              className="panel-drop absolute left-0 right-0 top-full z-30 mt-2.5 hidden max-h-[calc(100dvh-13rem)] overflow-y-auto rounded-card border border-line bg-overlay p-4 shadow-panel lg:block"
+            >
+              {panelInner}
             </div>
           ) : null}
         </div>
@@ -1162,31 +1224,6 @@ export function SearchConsole({
           <span className="hidden md:inline">{collecting ? "수집 중…" : "지금 수집"}</span>
         </Button>
       </div>
-
-      {/* ── 2행 — 필터 카드. 서랍이 아니라 화면의 일부라 흐름 안에 둔다 ── */}
-      {panelOpen ? (
-        <div
-          role="region"
-          aria-label="상세 필터"
-          className="panel-open mt-2 hidden rounded-card border border-line bg-body p-6 lg:block"
-        >
-          {panelInner}
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setPanelOpen(true)}
-          className="trans-state mt-2 hidden h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-card border border-line bg-body text-[13px] font-semibold text-fg-sub hover:border-line-strong hover:text-fg lg:flex"
-        >
-          <SlidersHorizontal className="size-4" aria-hidden />
-          필터 펼치기
-          {activeCount > 0 ? (
-            <span className="tnum inline-flex size-5 items-center justify-center rounded-chip bg-primary text-[11px] font-bold text-on-primary">
-              {activeCount}
-            </span>
-          ) : null}
-        </button>
-      )}
 
       {/* lg 미만 — 필터를 시트로 연다 */}
       <button

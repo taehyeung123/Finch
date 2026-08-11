@@ -992,15 +992,28 @@ body {
   :root[data-theme="dark"] .tint-blue:hover   { background-color: oklch(0.355 0.062 245); }
 }
 
-/* 필터 패널이 접히고 펴지는 동작 — 높이는 애니메이션하지 않는다(리플로우가 60fps를 못 낸다).
-   나타남만 짧게 준다. */
-.panel-open {
-  animation: panel-in var(--dur-3) var(--ease-arrive) both;
+/* 필터 패널이 뜨는 모션 — 스니핏 실측: transition: opacity 0.15s ease. **그게 전부다.**
+   슬라이드도 스케일도 없다. 내가 넣었던 translate+scale 은 없는 동작이었고,
+   그래서 열 때마다 화면이 한 번 더 움직여 무겁게 느껴졌다.
+   높이는 애니메이션하지 않는다 — 리플로우는 60fps 를 못 낸다. */
+.panel-drop {
+  animation: panel-fade 150ms ease both;
 }
-@keyframes panel-in {
-  from { opacity: 0; translate: 0 -4px; }
-  to   { opacity: 1; translate: 0 0; }
+@keyframes panel-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .panel-open { animation: none; }
+  .panel-drop { animation: none; }
+}
+
+/* 패널 그림자 — 스니핏 실측: 0 0 16px rgba(107,110,116,0.16).
+   오프셋 없는 균일 확산이라 "떠 있다"보다 "위에 놓였다"에 가깝다.
+   다크에서는 그림자가 안 읽히므로 테두리를 올려 대신한다(우리 규칙과 같다). */
+.shadow-panel {
+  box-shadow: 0 0 16px rgba(107, 110, 116, 0.16);
+}
+:root[data-theme="dark"] .shadow-panel {
+  box-shadow: none;
+  border-color: var(--line-strong);
 }
