@@ -48,7 +48,21 @@ export async function GET(request: Request) {
     .gt("save_count", 0)
     .order("save_count", { ascending: false })
     .limit(300);
-  for (const s of hot ?? []) {
+
+  /* heat_base 컬럼(0034)이 아직 없을 수도 있다. 없으면 부스트를 **건너뛴다** —
+     예전처럼 heat_score 를 덮어쓰면 매일 복리로 쌓여 며칠 만에 상한에 붙는다.
+     하루 이틀 부스트가 안 붙는 건 되돌릴 수 있지만, 복리로 뭉개진 점수는 못 되돌린다.
+     마이그레이션 적용 여부로 크론이 죽지 않게 한 번만 확인하고 넘어간다. */
+  let hasHeatBase = true;
+  if ((hot?.length ?? 0) > 0) {
+    const { error: probeErr } = await admin.from("creatives").select("heat_base").limit(1);
+    if (probeErr) {
+      hasHeatBase = false;
+      console.warn("[pool] heat_base 컬럼 없음(0034 미적용) — 저장수 부스트를 건너뜁니다:", probeErr.message);
+    }
+  }
+
+  for (const s of hasHeatBase ? (hot ?? []) : []) {
     const { data: c } = await admin
       .from("creatives")
       .select("heat_score, heat_base")
@@ -76,7 +90,7 @@ export async function GET(request: Request) {
     run_kind: "finalize",
     started_at: started,
     ended_at: new Date().toISOString(),
-    note: `thumbs ok=${thumbs.ok} fail=${thumbs.failed} · boosted=${boosted} · visible=${visibleCount ?? "?"}`,
+    note: `thumbs ok=${thumbs.ok} fail=${thumbs.failed} · boosted=${boosted}${hasHeatBase ? "" : "(heat_base 미적용)"} · visible=${visibleCount ?? "?"}`,
   });
 
   return NextResponse.json({
