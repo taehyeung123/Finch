@@ -1009,7 +1009,11 @@ export function SearchConsole({
   );
 
   return (
-    <header className="-mx-4 -mt-6 border-b border-line bg-surface/95 px-4 pb-3 pt-4 backdrop-blur md:-mx-6 md:px-6">
+    /* sticky + z-20 은 장식이 아니라 **필터 패널이 보이기 위한 전제**다.
+       이걸 빼면 헤더가 쌓임 순서에서 결과 영역보다 아래가 되고, 패널 안에 z-30 을 아무리
+       줘도 그 값은 헤더 안에서만 유효하므로 카드가 패널 위를 덮는다(2026-08-11 실측 사고).
+       top-16 은 상단바 높이. 상단바가 z-30 이라 그보다 낮게 둬야 패널이 상단바를 안 가린다. */
+    <header className="sticky top-16 z-20 -mx-4 -mt-6 border-b border-line bg-surface/95 px-4 pb-3 pt-4 backdrop-blur md:-mx-6 md:px-6">
       <h2 className="sr-only">레퍼런스 검색</h2>
 
       {/* ── 1행 — 검색 줄.
