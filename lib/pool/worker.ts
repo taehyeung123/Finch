@@ -14,6 +14,10 @@ import { upsertAds, upsertPosts } from "@/lib/pool/upsert";
   2. 크레딧 소진(out_of_credits)은 재시도하지 않는다 — 재시도할수록 402 만 더 받는다.
      남은 job 은 queued 로 돌려놓고 다음 회차로 넘긴다.
   3. 한 job 이 실패해도 회차 전체를 죽이지 않는다. 실패는 job 에 기록하고 다음으로 간다.
+  4. **시간을 스스로 지킨다.** 남은 시간이 모자라면 다음 job 을 집지 않고 반납한다.
+     job 개수만으로 조절하면 공급사가 느린 날 실행시간을 넘겨 강제 종료되고,
+     그때 집어둔 job 들이 running 에 박제된다(15분간 아무도 못 집는다).
+     플랫폼 실행시간 상한은 요금제마다 다르므로(Hobby 60초·Pro 300초) 호출부가 넘겨준다.
 */
 
 const CURSOR_PAGES = 2; // 키워드당 최대 페이지. 1페이지 30건 + 2페이지 10건 ≈ 40건
@@ -25,7 +29,7 @@ export interface WorkResult {
   newCreatives: number;
   newBrands: number;
   errors: number;
-  stoppedBy: "budget" | "credits" | "empty" | "complete";
+  stoppedBy: "budget" | "credits" | "empty" | "time" | "complete";
 }
 
 interface Job {
@@ -40,10 +44,12 @@ interface Job {
 }
 
 /**
- * @param maxJobs 이번 회차에 처리할 job 수 상한. 서버리스 실행시간 안에 끝나야 하므로
- *                예산과 별개로 건다(예산이 남아도 타임아웃 나면 job 이 running 에 묶인다).
+ * @param maxJobs  이번 회차에 처리할 job 수 상한.
+ * @param budgetMs 이번 회차에 쓸 수 있는 벽시계 시간. 이걸 넘기면 남은 job 을 반납하고 끝낸다.
+ *                 플랫폼 실행시간 상한보다 넉넉히 작게 준다(마무리 DB 쓰기 시간이 필요하다).
  */
-export async function runCrawlWorker(maxJobs = 12): Promise<WorkResult> {
+export async function runCrawlWorker(maxJobs = 12, budgetMs = 240_000): Promise<WorkResult> {
+  const startedAt = Date.now();
   const out: WorkResult = {
     jobsDone: 0,
     callsUsed: 0,
@@ -65,6 +71,14 @@ export async function runCrawlWorker(maxJobs = 12): Promise<WorkResult> {
   if (jobs.length === 0) return { ...out, stoppedBy: "empty" };
 
   for (const job of jobs) {
+    // 남은 시간이 job 하나를 감당 못 하면 여기서 접는다. 억지로 시작했다가 잘리면
+    // 그 job 은 running 인 채로 남고, 공급사 호출은 이미 과금된 뒤다.
+    if (Date.now() - startedAt > budgetMs) {
+      await release(db, jobs.slice(jobs.indexOf(job)));
+      out.stoppedBy = "time";
+      break;
+    }
+
     // job 하나가 최대 CURSOR_PAGES 콜을 쓴다. 통째로 미리 청구한다 —
     // 페이지마다 청구하면 1페이지만 받고 2페이지에서 잘리는 반쪽 수집이 나온다.
     const granted = await claimCalls(CURSOR_PAGES);

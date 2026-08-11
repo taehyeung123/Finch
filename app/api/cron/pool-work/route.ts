@@ -17,10 +17,14 @@ import { alertPool } from "@/lib/pool/alert";
  * 2번이 핵심이다. 사용자가 1만 명이 되어도 이 숫자가 그대로면 하루 지출도 그대로다.
  */
 export const runtime = "nodejs";
-export const maxDuration = 300;
+/* Hobby 플랜 함수 실행 상한이 60초다. Pro 로 올리면 300 으로 되돌리고
+   아래 두 숫자(MAX_JOBS_PER_RUN·TIME_BUDGET_MS)도 함께 키운다. */
+export const maxDuration = 60;
 
-/** 회차당 job 상한 — job 하나가 최대 2콜, 콜당 최대 45초를 잡는다 */
-const MAX_JOBS_PER_RUN = 12;
+/** 회차당 job 상한 — job 하나가 최대 2콜 */
+const MAX_JOBS_PER_RUN = 8;
+/** 실행시간 상한(60초)에서 마무리 DB 쓰기 몫을 뺀 값 */
+const TIME_BUDGET_MS = 45_000;
 
 export async function GET(request: Request) {
   if (!isAuthorizedCron(request)) return new NextResponse("unauthorized", { status: 401 });
@@ -32,7 +36,7 @@ export async function GET(request: Request) {
   }
 
   const started = new Date().toISOString();
-  const result = await runCrawlWorker(MAX_JOBS_PER_RUN);
+  const result = await runCrawlWorker(MAX_JOBS_PER_RUN, TIME_BUDGET_MS);
 
   /* 수집이 멈췄으면 운영자에게 메일. 이게 없으면 크레딧이 떨어져도 아무 일도
      안 일어난 것처럼 보이고, 화면은 어제 데이터를 계속 보여준다. */

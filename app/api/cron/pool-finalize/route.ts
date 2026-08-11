@@ -16,9 +16,9 @@ import { fillThumbs } from "@/lib/pool/thumbs";
  * 2번이 "빈 업종이 보이는" 사고를 막는 장치다. is_visible 을 사람이 켜지 않는다.
  */
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 60; // Hobby 상한. Pro 전환 시 300 으로.
 
-const THUMBS_PER_RUN = 120;
+const THUMBS_PER_RUN = 40; // 60초 안에 끝나는 규모
 
 export async function GET(request: Request) {
   if (!isAuthorizedCron(request)) return new NextResponse("unauthorized", { status: 401 });
