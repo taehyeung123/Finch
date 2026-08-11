@@ -47,7 +47,8 @@ export function poolItemToReference(p: PoolItem): ReferenceItem {
     followerCount: p.followerCount,
     comments: p.comments,
     matchedSource: "",
-    collectedAgoHours: 0,
+    // 0으로 두면 '수집 기간' 필터와 '최근 수집순' 정렬이 통째로 죽는다
+    collectedAgoHours: agoHours(p.firstSeenAt),
     postedAgoHours: p.postedAt ? agoHours(p.postedAt) : undefined,
     dataSource: "thirdparty",
     url: p.permalink,
@@ -76,7 +77,7 @@ export function poolItemToAd(p: PoolItem): ReferenceAd {
     category: categoryOf(p.industryIds),
     status: "unseen",
     favorite: false,
-    collectedAgoHours: 0,
+    collectedAgoHours: agoHours(p.firstSeenAt),
   };
 }
 

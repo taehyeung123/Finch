@@ -20,6 +20,13 @@ import { InfoTip } from "@/components/ui/info-tip";
 /*
   레퍼런스 상세 모달 — 카드 클릭 시. 미리보기 크게 + AI 분석 + 원본 캡션 전문 +
   릴스 대본 추출(인스타 전용, 음성 받아쓰기) + 내 메모 + 확인 상태 + 삭제.
+
+  poolMode: 공용 풀 소재를 볼 때다. 이때 개인 표(reference_items)를 건드리는 기능은
+  **전부 감춘다.** 남겨두면 누를 수 있지만 대상 행이 없어 조용히 실패한다 —
+  "눌러도 아무 일도 안 일어나는 버튼"이 에러 메시지보다 나쁘다.
+   · 삭제 — 공용 자료라 한 사람이 지울 수 없다(신고는 별도 경로)
+   · 메모·확인 상태 — saved_creatives 로 옮겨야 하는데 아직 배선 전이라 감춘다
+   · 대본 추출 — 유료 산출물 파이프라인(creative_transcripts 공용 캐시) 구축 전
 */
 
 const GLYPH: Record<Channel, (props: { className?: string }) => React.ReactNode> = {
@@ -38,6 +45,7 @@ export function ReferenceDetailModal({
   item,
   favorite,
   isDemo,
+  poolMode = false,
   onToggleFavorite,
   onClose,
   onDeleted,
@@ -45,6 +53,8 @@ export function ReferenceDetailModal({
   item: ReferenceItem;
   favorite: boolean;
   isDemo: boolean;
+  /** 공용 풀 소재인가 — 개인 표를 건드리는 기능을 감춘다 */
+  poolMode?: boolean;
   onToggleFavorite: () => void;
   onClose: () => void;
   onDeleted: () => void;
@@ -263,8 +273,9 @@ export function ReferenceDetailModal({
                 </div>
               ) : null}
 
-              {/* 릴스 대본 — 음성 받아쓰기 (인스타 전용) */}
-              <div>
+              {/* 릴스 대본 — 음성 받아쓰기 (인스타 전용).
+                  공용 풀에서는 감춘다: 유료 산출물 공용 캐시를 아직 안 붙였다. */}
+              <div hidden={poolMode}>
                 <p className="flex items-center gap-1.5 text-[13px] font-semibold">
                   <Captions className="size-3.5 text-fg-faint" aria-hidden />
                   릴스 대본
@@ -301,7 +312,7 @@ export function ReferenceDetailModal({
               </div>
 
               {/* 내 메모 */}
-              <div>
+              <div hidden={poolMode}>
                 <p className="text-[13px] font-semibold">내 메모</p>
                 <textarea
                   value={note}
@@ -319,7 +330,7 @@ export function ReferenceDetailModal({
               </div>
 
               {/* 확인 상태 */}
-              <label className="flex items-center gap-2 text-[13px] text-fg-sub">
+              <label hidden={poolMode} className="flex items-center gap-2 text-[13px] text-fg-sub">
                 확인 상태
                 <select
                   value={status}
@@ -340,7 +351,7 @@ export function ReferenceDetailModal({
         {/* 푸터 */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-3.5">
           <div className="flex items-center gap-2">
-            {confirmDelete ? (
+            {poolMode ? null : confirmDelete ? (
               <>
                 <Button variant="danger" size="sm" onClick={handleDelete} disabled={deleting}>
                   정말 삭제

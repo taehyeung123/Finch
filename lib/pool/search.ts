@@ -55,6 +55,8 @@ export interface PoolItem {
   heatScore: number;
   saveCount: number;
   postedAt: string | null;
+  /** 풀에 처음 들어온 시각 — 화면의 '수집 시각'에 해당한다 */
+  firstSeenAt: string | null;
 }
 
 export interface PoolResult {
@@ -86,6 +88,7 @@ interface Row {
   industry_ids: string[] | null;
   heat_score: number;
   posted_at: string | null;
+  first_seen_at: string | null;
   brands: { id: string; name: string } | { id: string; name: string }[] | null;
   creative_stats: { save_count: number } | { save_count: number }[] | null;
 }
@@ -119,12 +122,13 @@ function toItem(r: Row): PoolItem {
     heatScore: r.heat_score ?? 0,
     saveCount: stats?.save_count ?? 0,
     postedAt: r.posted_at,
+    firstSeenAt: r.first_seen_at,
   };
 }
 
 const SELECT =
   "id, kind, platform, title, body, permalink, thumb_path, media_format, brand_id, " +
-  "views, likes, comments, follower_count, is_active, run_days, industry_ids, heat_score, posted_at, " +
+  "views, likes, comments, follower_count, is_active, run_days, industry_ids, heat_score, posted_at, first_seen_at, " +
   "brands(id, name), creative_stats(save_count)";
 
 export async function searchPool(query: PoolQuery): Promise<PoolResult> {

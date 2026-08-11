@@ -137,6 +137,10 @@ export async function upsertAds(
       is_active: ad.isActive,
       started_at: ad.startDate,
       ended_at: ad.endDate,
+      /* 광고의 "게시 시각"은 집행 시작일이다. 이걸 안 채우면 두 가지가 죽는다:
+         ① 카드의 "N일 집행 중" 배지 — 이 제품이 파는 핵심 신호가 통째로 사라진다.
+         ② '게시 최신순' 정렬 — 광고가 전부 목록 끝으로 밀린다. */
+      posted_at: ad.startDate,
       run_days: runDays,
       ad_platforms: ad.platforms,
       industry_ids: industryId ? [industryId] : [],

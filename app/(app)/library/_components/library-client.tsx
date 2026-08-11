@@ -790,6 +790,7 @@ export function LibraryClient({
       {selectedItem ? (
         <ReferenceDetailModal
           item={selectedItem}
+          poolMode={poolReady}
           favorite={favoriteIds.has(selectedItem.id)}
           isDemo={isDemo}
           onToggleFavorite={() => toggleFavorite(selectedItem.id)}
