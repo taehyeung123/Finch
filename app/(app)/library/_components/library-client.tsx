@@ -36,6 +36,7 @@ import {
   countActiveFilters,
   type Facet,
   type LibraryFilters,
+  type MetricFilter,
   type SourceFacet,
 } from "./search-console";
 
@@ -59,6 +60,19 @@ const WITHIN_HOURS: Record<LibraryFilters["within"], number | null> = {
   "7d": 168,
   "30d": 720,
 };
+
+/**
+ * 숫자 조건 판정. null 이면 조건이 없는 것이라 무조건 통과다.
+ * "0 이상"을 조건으로 세지 않는 이유는 search-console 의 MetricFilter 주석에 있다.
+ */
+function passMetric(value: number, m: MetricFilter): boolean {
+  if (!m) return true;
+  if (m.mode === "gte") return value >= m.min;
+  if (m.mode === "lte") return value <= m.min;
+  const lo = Math.min(m.min, m.max);
+  const hi = Math.max(m.min, m.max);
+  return value >= lo && value <= hi;
+}
 
 /** 반응 점수 — 정렬·베이스라인 공용 (조회수 없는 스레드도 좋아요·댓글로 비교) */
 function itemScore(i: ReferenceItem): number {
@@ -286,23 +300,30 @@ export function LibraryClient({
       }
       if (filters.categories.length > 0 && !filters.categories.includes(item.category || "일반")) return false;
       if (filters.hooks.length > 0 && !item.hooks.some((h) => filters.hooks.includes(h))) return false;
+      if (!passMetric(item.views, filters.views)) return false;
+      if (!passMetric(item.likes, filters.likes)) return false;
+      if (!passMetric(item.comments ?? 0, filters.comments)) return false;
       if (filters.sources.length > 0 && !filters.sources.includes(item.matchedSource)) return false;
       if (tokens.length > 0) {
-        /* 다단어는 AND — 단일 문자열 includes였을 때 "웨딩 릴스"처럼 띄우면 0건이 됐다 */
-        const haystack = [
-          item.title,
-          item.caption,
-          item.summary,
-          item.creatorHandle,
-          item.category,
-          item.matchedSource,
-          item.note,
-          item.transcript,
-          ...(item.hashtags ?? []),
-          ...item.hooks,
-        ]
-          .join(" ")
-          .toLowerCase();
+        /* 검색 범위 — '영상 대본'을 고르면 추출해 둔 대본만 훑는다.
+           대본이 없는 항목은 그 모드에서 애초에 대상이 아니다(빈 문자열이라 자동 탈락). */
+        const haystack =
+          filters.scope === "transcript"
+            ? (item.transcript ?? "").toLowerCase()
+            : /* 다단어는 AND — 단일 문자열 includes였을 때 "웨딩 릴스"처럼 띄우면 0건이 됐다 */
+              [
+                item.title,
+                item.caption,
+                item.summary,
+                item.creatorHandle,
+                item.category,
+                item.matchedSource,
+                item.note,
+                ...(item.hashtags ?? []),
+                ...item.hooks,
+              ]
+                .join(" ")
+                .toLowerCase();
         if (!tokens.every((t) => haystack.includes(t))) return false;
       }
       return true;
@@ -330,6 +351,9 @@ export function LibraryClient({
       if (filters.target === "instagram" && !ad.platforms.includes("INSTAGRAM")) return false;
       if (filters.favOnly && !adFavoriteIds.has(ad.id)) return false;
       if (filters.overOnly) return false; // 광고는 반응 지표가 없어 '잘 나온 것' 판정 대상이 아니다
+      /* 조회수·좋아요·댓글 조건이 하나라도 걸리면 광고는 제외한다. 메타는 광고의 반응
+         지표를 공개하지 않으므로 "조회수 1만 이상"에 광고가 섞여 나오면 거짓말이 된다. */
+      if (filters.views || filters.likes || filters.comments) return false;
       if (maxHours !== null && ad.collectedAgoHours > maxHours) return false;
       if (filters.industries.length > 0) {
         const ind = industryFromText(ad.category, ad.pageName, ad.body);

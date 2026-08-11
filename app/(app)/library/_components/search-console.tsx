@@ -3,9 +3,13 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   AtSign,
-  Hash,
-  Megaphone,
   Bookmark,
+  Check,
+  ChevronDown,
+  Clock,
+  Hash,
+  LayoutGrid,
+  Megaphone,
   Plus,
   RotateCcw,
   Search,
@@ -15,6 +19,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/ui/info-tip";
 import { cn } from "@/lib/cn";
@@ -50,6 +55,26 @@ export type CollectedWithin = "all" | "24h" | "7d" | "30d";
 export type ItemSort = "views" | "likes" | "recent" | "posted";
 
 /**
+ * 숫자 조건. null 이면 조건 없음이다 — "0 이상"으로 두면 아무것도 안 거르면서
+ * 활성 필터로 세어져 "2개 걸림"인데 결과가 그대로인 상태가 된다.
+ */
+export type MetricFilter = { mode: "gte" | "lte" | "between"; min: number; max: number } | null;
+
+export const METRIC_MODES: { value: NonNullable<MetricFilter>["mode"]; label: string }[] = [
+  { value: "gte", label: "이상" },
+  { value: "lte", label: "이하" },
+  { value: "between", label: "범위" },
+];
+
+/** 검색이 무엇을 훑을지. 대본은 수집해 둔 것만 대상이라 별도 축으로 둔다 */
+export type SearchScope = "text" | "transcript";
+
+export const SCOPE_OPTIONS: { value: SearchScope; label: string; desc: string }[] = [
+  { value: "text", label: "문구·계정", desc: "제목·본문·해시태그·계정명" },
+  { value: "transcript", label: "영상 대본", desc: "추출해 둔 릴스 대본 안에서" },
+];
+
+/**
  * 배열로 둔다(Set 아님) — localStorage 저장 조합과 URL 직렬화가 그대로 되고,
  * 저장된 조합을 다시 적용할 때 변환 계층이 필요 없다.
  */
@@ -64,6 +89,12 @@ export interface LibraryFilters {
    * 축으로 재사용되고 있다. 여기에 업종까지 얹으면 한 배열이 세 가지 뜻을 갖는다.
    */
   industries: string[];
+  /** 검색어가 훑을 대상 */
+  scope: SearchScope;
+  /** 숫자 조건 — 오가닉 전용(광고는 반응 지표가 공개되지 않는다) */
+  views: MetricFilter;
+  likes: MetricFilter;
+  comments: MetricFilter;
   categories: string[];
   hooks: string[];
   sources: string[];
@@ -76,6 +107,10 @@ export const DEFAULT_FILTERS: LibraryFilters = {
   target: "all",
   within: "all",
   industries: [],
+  scope: "text",
+  views: null,
+  likes: null,
+  comments: null,
   categories: [],
   hooks: [],
   sources: [],
@@ -123,12 +158,21 @@ export function countActiveFilters(f: LibraryFilters): number {
     (f.target !== "all" ? 1 : 0) +
     (f.within !== "all" ? 1 : 0) +
     f.industries.length +
+    (f.views ? 1 : 0) +
+    (f.likes ? 1 : 0) +
+    (f.comments ? 1 : 0) +
     f.categories.length +
     f.hooks.length +
     f.sources.length +
     (f.favOnly ? 1 : 0) +
     (f.overOnly ? 1 : 0)
   );
+}
+
+/** 숫자 조건을 사람이 읽는 한 줄로 — 활성 칩 라벨용 */
+function describeMetric(m: NonNullable<MetricFilter>): string {
+  if (m.mode === "between") return `${m.min.toLocaleString()}~${m.max.toLocaleString()}`;
+  return `${m.min.toLocaleString()} ${m.mode === "gte" ? "이상" : "이하"}`;
 }
 
 /** 업종 id → 라벨. 화면에 보여줄 때만 쓴다(저장은 항상 id) */
@@ -240,6 +284,19 @@ function buildActiveChips(f: LibraryFilters): ActiveChip[] {
       clear: (p) => ({ ...p, sources: p.sources.filter((x) => x !== s) }),
     });
   }
+  for (const [key, label] of [
+    ["views", "조회수"],
+    ["likes", "좋아요"],
+    ["comments", "댓글"],
+  ] as const) {
+    const m = f[key];
+    if (!m) continue;
+    chips.push({
+      key: `m:${key}`,
+      label: `${label} ${describeMetric(m)}`,
+      clear: (p) => ({ ...p, [key]: null }),
+    });
+  }
   if (f.favOnly) chips.push({ key: "fav", label: "즐겨찾기만", clear: (p) => ({ ...p, favOnly: false }) });
   if (f.overOnly) chips.push({ key: "over", label: "잘 나온 것만", clear: (p) => ({ ...p, overOnly: false }) });
   return chips;
@@ -253,25 +310,49 @@ function SourceGlyph({ kind, className }: { kind: string; className?: string }) 
   return <Type className={cls} aria-hidden />;
 }
 
-/* ---------------- 필터 패널 본문 (오버레이·시트 공용) ---------------- */
+/* ---------------- 필터 패널 본문 ---------------- */
 
 /*
-  구성 (스니핏 필터 카드 실측 이식, 2026-08-11)
+  스니핏 필터 카드를 구조 그대로 옮기고, 색만 우리 것으로 다시 짰다 (2026-08-11).
 
-  왼쪽 = "어디서 · 언제"          오른쪽 = "무엇을"
-    · 수집 시기                     · 업종 카테고리 (고정 22개)
-    · 플랫폼 (세그먼트 트랙)         · 후킹 기법 / 광고주
-    · 플랫폼에 딸린 조건 (회색 판)
+  구조 (스니핏과 1:1)
+    왼쪽 "어디서 · 언제"            오른쪽 "무엇을"
+      · 수집 시기 (기간 칩)            · 업종 카테고리 (고정 22개)
+      · 플랫폼 (브랜드 로고 세그먼트)   · 후킹 기법 / 광고주
+      · 플랫폼에 딸린 조건 (회색 판)
+          라벨 왼쪽 / 컨트롤 오른쪽 2단 행
+          조회수·좋아요·댓글 = 숫자 입력 + [이상·이하·범위]
 
-  플랫폼을 패널 밖에 두지 않는다. 밖에 두면 축이 두 군데로 흩어지고,
-  "필터"를 눌러도 정작 제일 많이 쓰는 축은 거기 없다.
-  지금 무엇을 보고 있는지는 상태 줄의 활성 칩이 대신 알려준다.
+  색 (스니핏과 다르게 간 유일한 축)
+    스니핏은 전부 회색 칩에 파란 선택색 하나다. 우리는 업종 22개를 5개 대분류 색으로
+    나눈다 — 장식이 아니라 분류다. 같은 색 = 같은 대분류라서 22개를 훑을 때
+    "이 근처가 리빙 쪽"이 눈으로 잡힌다. 회색 칩 22개는 벽이고, 벽은 안 읽힌다.
+    코랄은 선택 상태와 [지금 수집]에만 남긴다. 대분류 색은 넓고 옅게, 코랄은 좁고 진하게 —
+    면적과 채도를 반대로 나누기 때문에 색이 많아도 시선은 코랄로 간다.
 
-  색: 선택 표시에 코랄을 남발하지 않는다. 플랫폼 세그먼트의 선택은 흰 알약 + 미세 그림자로
-  표현한다(배경 트랙이 회색이라 그것만으로 충분히 읽힌다). 코랄은 조건 칩과
-  [지금 수집]에만 남긴다 — 칩 열 개가 전부 코랄이면 화면이 코랄 덩어리가 되고
-  정작 눌러야 할 버튼이 묻힌다.
+  적용 시점
+    패널 안 조작은 **초안**이다. [필터 적용]을 눌러야 결과가 바뀐다.
+    칩 하나 누를 때마다 아래가 갈아엎히면 조건을 조합하는 동안 화면이 계속 흔들린다.
 */
+
+/** 업종 대분류 → 색 클래스. globals.css 의 .tint-* 와 짝이다 */
+const GROUP_TINT: Record<string, string> = {
+  beauty_fashion: "tint-rose",
+  food_health: "tint-green",
+  living_home: "tint-teal",
+  service_local: "tint-violet",
+  digital_finance: "tint-blue",
+};
+
+/** 플랫폼 세그먼트의 브랜드 마크 — 이 줄이 패널에서 가장 색이 강한 자리다 */
+function TargetGlyph({ value, on }: { value: SearchTarget; on: boolean }) {
+  const dim = on ? "" : "opacity-70";
+  if (value === "instagram") return <InstagramGlyph className={cn("size-3.5 text-ig", dim)} />;
+  if (value === "tiktok") return <TiktokGlyph className={cn("size-3.5 text-fg", dim)} />;
+  if (value === "threads") return <ThreadsGlyph className={cn("size-3.5 text-fg", dim)} />;
+  if (value === "ads") return <Megaphone className={cn("size-3.5 text-meta", dim)} aria-hidden />;
+  return <LayoutGrid className={cn("size-3.5 text-fg-faint", dim)} aria-hidden />;
+}
 
 /** 한 조건 묶음 — 라벨 + 내용. 모든 축이 같은 리듬을 갖게 하는 유일한 통로 */
 function Field({
@@ -287,27 +368,36 @@ function Field({
 }) {
   return (
     <div>
-      <p className="flex items-center gap-1.5 text-[13px] font-bold text-fg">
-        {label}
-        {info ? <InfoTip>{info}</InfoTip> : null}
-      </p>
-      {hint ? <p className="mt-0.5 text-[12px] text-fg-faint">{hint}</p> : null}
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <p className="flex items-center gap-1.5 text-[13px] font-bold text-fg">
+          {label}
+          {info ? <InfoTip>{info}</InfoTip> : null}
+        </p>
+        {/* 힌트를 아랫줄로 내리지 않는다 — 라벨과 한 줄이어야 "이 축의 설명"으로 읽힌다 */}
+        {hint ? <p className="text-[12px] text-fg-faint">{hint}</p> : null}
+      </div>
       <div className="mt-2.5">{children}</div>
     </div>
   );
 }
 
-/** 선택 칩 — 이 패널의 유일한 선택 표현. 축마다 크기·모양이 달라지면 조잡해진다 */
+/**
+ * 선택 칩. 모서리는 rounded-card(8px) — 알약(32px)을 쓰면 글자가 길수록 좌우 여백이
+ * 과장돼 22개가 늘어섰을 때 줄이 안 맞는다. 카드·버튼과 같은 8px이라 규칙도 유지된다.
+ */
 function Chip({
   on,
   onClick,
   children,
   count,
+  tint,
 }: {
   on: boolean;
   onClick: () => void;
   children: React.ReactNode;
   count?: number;
+  /** 대분류 색 클래스. 없으면 중립 */
+  tint?: string;
 }) {
   return (
     <button
@@ -315,39 +405,39 @@ function Chip({
       aria-pressed={on}
       onClick={onClick}
       className={cn(
-        "trans-state inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-chip border px-3.5 text-[13px]",
+        "trans-state inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-card border px-3 text-[13px]",
         on
           ? "border-primary bg-primary-weak font-semibold text-primary"
-          : "border-line bg-body font-medium text-fg-sub hover:border-line-strong hover:text-fg",
+          : tint
+            ? cn("border-transparent font-medium", tint)
+            : "border-line bg-body font-medium text-fg-sub hover:border-line-strong hover:text-fg",
       )}
     >
+      {/* 선택을 색으로만 말하지 않는다 — 색각 이상이나 흑백 인쇄에서도 읽혀야 한다 */}
+      {on ? <Check className="size-3.5 shrink-0" aria-hidden /> : null}
       {children}
       {count !== undefined ? (
-        <span className={cn("tnum text-[11px]", on ? "text-primary/70" : "text-fg-faint")}>{count}</span>
+        <span className={cn("tnum text-[11px]", on ? "text-primary/70" : "opacity-60")}>{count}</span>
       ) : null}
     </button>
   );
 }
 
 /** 세그먼트 트랙 — 배타 선택 축(플랫폼) 전용. 회색 판 위에서 흰 알약이 움직인다 */
-function Segmented({
-  options,
+function TargetSegmented({
   value,
   onChange,
-  ariaLabel,
 }: {
-  options: { value: SearchTarget; label: string }[];
   value: SearchTarget;
   onChange: (v: SearchTarget) => void;
-  ariaLabel: string;
 }) {
   return (
     <div
       role="tablist"
-      aria-label={ariaLabel}
-      className="flex w-full items-center gap-1 overflow-x-auto rounded-card bg-surface p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      aria-label="플랫폼 필터"
+      className="flex w-full items-center gap-0.5 overflow-x-auto rounded-t-card bg-surface p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
-      {options.map((o) => {
+      {TARGET_OPTIONS.map((o) => {
         const on = value === o.value;
         return (
           <button
@@ -357,15 +447,97 @@ function Segmented({
             aria-selected={on}
             onClick={() => onChange(o.value)}
             className={cn(
-              "trans-state h-8 flex-1 shrink-0 cursor-pointer whitespace-nowrap rounded-card px-3 text-[13px]",
+              "trans-state inline-flex h-8 flex-1 shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-card px-2.5 text-[13px]",
               on ? "bg-body font-bold text-fg shadow-pop" : "font-medium text-fg-sub hover:text-fg",
             )}
           >
+            <TargetGlyph value={o.value} on={on} />
             {o.label}
           </button>
         );
       })}
     </div>
+  );
+}
+
+/** 라벨 왼쪽 / 컨트롤 오른쪽 — 회색 판 안의 모든 행이 이 형태를 쓴다 */
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <p className="w-[4.5rem] shrink-0 text-[12px] font-semibold text-fg-sub">{label}</p>
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">{children}</div>
+    </div>
+  );
+}
+
+/** 숫자 조건 한 줄 — [입력] + [이상·이하·범위]. 값이 0이면 조건 없음이다 */
+function MetricRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: MetricFilter;
+  onChange: (next: MetricFilter) => void;
+}) {
+  const mode = value?.mode ?? "gte";
+  const min = value?.min ?? 0;
+  const max = value?.max ?? 0;
+
+  const commit = (patch: Partial<NonNullable<MetricFilter>>) => {
+    const next = { mode, min, max, ...patch };
+    // 값이 전부 0이면 조건 자체를 끈다 — "0 이상"은 아무것도 안 거르면서 활성으로 세어진다
+    onChange(next.min === 0 && next.max === 0 ? null : next);
+  };
+
+  return (
+    <Row label={label}>
+      <input
+        type="number"
+        min={0}
+        inputMode="numeric"
+        value={min || ""}
+        placeholder="0"
+        onChange={(e) => commit({ min: Math.max(0, Number(e.target.value) || 0) })}
+        aria-label={`${label} 최소`}
+        className="tnum h-8 w-24 rounded-card border border-line bg-body px-2.5 text-[13px] text-fg outline-none transition-colors placeholder:text-fg-faint focus:border-primary"
+      />
+      {mode === "between" ? (
+        <>
+          <span className="text-[12px] text-fg-faint" aria-hidden>
+            ~
+          </span>
+          <input
+            type="number"
+            min={0}
+            inputMode="numeric"
+            value={max || ""}
+            placeholder="0"
+            onChange={(e) => commit({ max: Math.max(0, Number(e.target.value) || 0) })}
+            aria-label={`${label} 최대`}
+            className="tnum h-8 w-24 rounded-card border border-line bg-body px-2.5 text-[13px] text-fg outline-none transition-colors placeholder:text-fg-faint focus:border-primary"
+          />
+        </>
+      ) : null}
+      <div className="inline-flex h-8 items-center overflow-hidden rounded-card border border-line" role="group">
+        {METRIC_MODES.map((m) => (
+          <button
+            key={m.value}
+            type="button"
+            aria-pressed={mode === m.value}
+            onClick={() => commit({ mode: m.value })}
+            className={cn(
+              "trans-state h-full cursor-pointer border-l border-line px-2.5 text-[12px] first:border-l-0",
+              mode === m.value
+                ? "bg-primary-weak font-semibold text-primary"
+                : "bg-body font-medium text-fg-sub hover:text-fg",
+            )}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+    </Row>
   );
 }
 
@@ -388,7 +560,7 @@ function FilterPanelBody({
   const hiddenSelected = sourceFacets.slice(6).filter((s) => filters.sources.includes(s.value)).length;
 
   return (
-    <div className="grid gap-x-10 gap-y-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.92fr)]">
+    <div className="grid gap-x-10 gap-y-7 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
       {/* ── 왼쪽: 어디서 · 언제 ── */}
       <div className="space-y-6">
         <Field label="수집 시기">
@@ -406,26 +578,42 @@ function FilterPanelBody({
         </Field>
 
         <Field label="플랫폼" hint="플랫폼을 고르면 아래 조건이 달라져요">
-          <Segmented
-            ariaLabel="플랫폼 필터"
-            options={TARGET_OPTIONS}
-            value={filters.target}
-            onChange={(v) => setFilters({ ...filters, target: v })}
-          />
+          {/* 트랙과 종속 조건을 하나의 회색 덩어리로 붙인다 — 떨어뜨리면
+              아래 조건이 위 선택에 딸린 것이라는 관계가 안 보인다 */}
+          <div className="overflow-hidden rounded-card bg-surface">
+            <TargetSegmented
+              value={filters.target}
+              onChange={(v) => setFilters({ ...filters, target: v })}
+            />
+            <div className="space-y-3 px-4 pb-4 pt-1">
+              {isAds ? (
+                <Row label="게재 상태">
+                  <span className="text-[12px] text-fg-faint">
+                    메타광고는 반응 지표를 공개하지 않아 수치 조건을 쓸 수 없어요
+                  </span>
+                </Row>
+              ) : (
+                <>
+                  <MetricRow
+                    label="조회수"
+                    value={filters.views}
+                    onChange={(v) => setFilters({ ...filters, views: v })}
+                  />
+                  <MetricRow
+                    label="좋아요 수"
+                    value={filters.likes}
+                    onChange={(v) => setFilters({ ...filters, likes: v })}
+                  />
+                  <MetricRow
+                    label="댓글 수"
+                    value={filters.comments}
+                    onChange={(v) => setFilters({ ...filters, comments: v })}
+                  />
+                </>
+              )}
 
-          {/* 플랫폼에 딸린 조건 — 회색 판으로 묶어 "위 선택에 종속된 것"임을 형태로 말한다 */}
-          <div className="mt-2.5 space-y-4 rounded-card bg-surface p-4">
-            {sourceFacets.length > 0 ? (
-              <div>
-                <p className="flex items-center gap-1.5 text-[12px] font-semibold text-fg-sub">
-                  수집 기준
-                  {hiddenSelected > 0 ? (
-                    <span className="tnum rounded-chip bg-primary-weak px-1.5 text-[11px] font-bold text-primary">
-                      {hiddenSelected}
-                    </span>
-                  ) : null}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="수집 기준 필터">
+              {sourceFacets.length > 0 ? (
+                <Row label="수집 기준">
                   {visibleSources.map((s) => (
                     <Chip
                       key={s.value}
@@ -437,25 +625,27 @@ function FilterPanelBody({
                         kind={s.kind}
                         className={filters.sources.includes(s.value) ? "text-primary" : undefined}
                       />
-                      <span className="max-w-[9rem] truncate">{s.value}</span>
+                      <span className="max-w-[8rem] truncate">{s.value}</span>
                     </Chip>
                   ))}
                   {sourceFacets.length > 6 ? (
                     <button
                       type="button"
                       onClick={() => setShowAllSources((v) => !v)}
-                      className="h-9 cursor-pointer px-2 text-[12px] font-semibold text-fg-sub transition-colors hover:text-fg"
+                      className="h-8 cursor-pointer px-1.5 text-[12px] font-semibold text-fg-sub transition-colors hover:text-fg"
                     >
                       {showAllSources ? "접기" : `+${sourceFacets.length - 6}`}
                     </button>
                   ) : null}
-                </div>
-              </div>
-            ) : null}
+                  {hiddenSelected > 0 ? (
+                    <span className="tnum rounded-card bg-primary-weak px-1.5 text-[11px] font-bold text-primary">
+                      +{hiddenSelected}
+                    </span>
+                  ) : null}
+                </Row>
+              ) : null}
 
-            <div>
-              <p className="text-[12px] font-semibold text-fg-sub">보기 옵션</p>
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <Row label="보기 옵션">
                 <Chip on={filters.favOnly} onClick={() => setFilters({ ...filters, favOnly: !filters.favOnly })}>
                   즐겨찾기만
                 </Chip>
@@ -465,7 +655,7 @@ function FilterPanelBody({
                 <InfoTip>
                   같은 수집 기준으로 모인 콘텐츠의 평균 반응 대비 1.5배 이상인 항목만 봅니다. 핀치 자체 계산이에요.
                 </InfoTip>
-              </div>
+              </Row>
             </div>
           </div>
         </Field>
@@ -473,18 +663,19 @@ function FilterPanelBody({
 
       {/* ── 오른쪽: 무엇을 ── */}
       <div className="space-y-6">
-        {/* 업종 — **고정 목록이다. 데이터에서 뽑지 않는다.**
+        {/* 업종은 **고정 목록이다. 데이터에서 뽑지 않는다.**
             예전에는 수집물의 AI 자동 분류를 그대로 칩으로 만들어서, 웨딩 자료가 많으면
             '웨딩드레스 4 · 웨딩촬영 2 · 웨딩케이크 1' 같은 잡동사니가 이 자리를 차지했다.
             업종은 데이터가 아니라 제품이 정하는 축이라, 언제 들어와도 같은 목록이
             같은 자리에 있어야 사용자가 외운다. */}
-        <Field label="업종 카테고리">
+        <Field label="업종 카테고리" hint="색이 같으면 같은 분야예요">
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="업종 필터">
             {INDUSTRY_LIST.map((ind) => (
               <Chip
                 key={ind.id}
                 on={filters.industries.includes(ind.id)}
                 onClick={() => setFilters({ ...filters, industries: toggleIn(filters.industries, ind.id) })}
+                tint={GROUP_TINT[ind.group]}
               >
                 {ind.label}
               </Chip>
@@ -599,6 +790,47 @@ function SavedCombosRow({
   );
 }
 
+/* ---------------- 최근 검색어 (localStorage 외부 스토어) ---------------- */
+
+const RECENT_KEY = "finch:library:recent:v1";
+const RECENT_MAX = 8;
+
+let recentCache: string[] | null = null;
+const recentListeners = new Set<() => void>();
+const RECENT_EMPTY: string[] = [];
+
+function getRecentSnapshot(): string[] {
+  if (recentCache === null) {
+    try {
+      const raw = localStorage.getItem(RECENT_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      recentCache = Array.isArray(parsed) ? parsed.slice(0, RECENT_MAX) : [];
+    } catch {
+      recentCache = [];
+    }
+  }
+  return recentCache;
+}
+
+function subscribeRecent(onChange: () => void) {
+  recentListeners.add(onChange);
+  return () => recentListeners.delete(onChange);
+}
+
+/** 검색어 기록. 같은 말을 다시 찾으면 맨 앞으로 올린다 */
+export function rememberQuery(q: string) {
+  const v = q.trim();
+  if (v.length < 2) return;
+  const next = [v, ...getRecentSnapshot().filter((x) => x !== v)].slice(0, RECENT_MAX);
+  recentCache = next;
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch {
+    // 저장 공간 초과 — 메모리에만 유지
+  }
+  recentListeners.forEach((l) => l());
+}
+
 /* ---------------- 콘솔 본체 ---------------- */
 
 export function SearchConsole({
@@ -630,41 +862,76 @@ export function SearchConsole({
   onCollect: () => void;
   collecting: boolean;
 }) {
-  const [panelOpen, setPanelOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const filterBtnRef = useRef<HTMLButtonElement>(null);
+  /* 패널은 기본으로 펼쳐져 있다. 접었다 펴는 서랍이 아니라 화면의 일부다 —
+     조건을 바꾸려고 매번 여는 것과, 조건이 늘 보이는 것은 전혀 다른 도구가 된다. */
+  const [panelOpen, setPanelOpen] = useState(true);
+  /* 모바일은 시트라 기본이 닫힘이다 — panelOpen 을 같이 쓰면 진입하자마자 시트가 덮는다 */
+  const [sheetOpen, setSheetOpen] = useState(false);
 
+  /*
+    패널 조작은 **초안**이다. null 이면 "고칠 것 없음 = 확정본 그대로".
+    이렇게 두면 바깥에서 필터가 바뀌어도(칩 해제·저장 조합 적용) effect 로 동기화할 일이
+    없다 — 초안을 비우기만 하면 자동으로 확정본을 따라간다.
+  */
+  const [draft, setDraft] = useState<LibraryFilters | null>(null);
+  const editing = draft ?? filters;
+  const dirty = draft !== null;
+
+  const [scopeOpen, setScopeOpen] = useState(false);
+  const [recentOpen, setRecentOpen] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
+
+  const recent = useSyncExternalStore(subscribeRecent, getRecentSnapshot, () => RECENT_EMPTY);
   const activeCount = countActiveFilters(filters);
   const activeChips = buildActiveChips(filters);
+  const scope = SCOPE_OPTIONS.find((o) => o.value === filters.scope) ?? SCOPE_OPTIONS[0];
 
-  /* 바깥 클릭·Escape — 비모달이라 포커스 트랩은 걸지 않는다(뒤 결과를 보며 조작) */
+  /* 검색바에 붙은 두 드롭다운 — 바깥 클릭·Escape 로 닫는다 */
   useEffect(() => {
-    if (!panelOpen) return;
-    function onMouseDown(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setPanelOpen(false);
-    }
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setPanelOpen(false);
-        filterBtnRef.current?.focus();
+    if (!scopeOpen && !recentOpen) return;
+    function onDown(e: MouseEvent) {
+      if (barRef.current && !barRef.current.contains(e.target as Node)) {
+        setScopeOpen(false);
+        setRecentOpen(false);
       }
     }
-    document.addEventListener("mousedown", onMouseDown);
-    document.addEventListener("keydown", onKeyDown);
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setScopeOpen(false);
+        setRecentOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("mousedown", onMouseDown);
-      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
     };
-  }, [panelOpen]);
+  }, [scopeOpen, recentOpen]);
 
-  const resetFilters = useCallback(() => {
-    setFilters({ ...DEFAULT_FILTERS, sort: filters.sort });
-  }, [setFilters, filters.sort]);
+  /** 확정 — 초안을 결과에 반영한다 */
+  const applyDraft = useCallback(() => {
+    if (draft) setFilters(draft);
+    setDraft(null);
+  }, [draft, setFilters]);
+
+  /** 확정본을 직접 바꾼다(칩 해제 등). 초안이 남아 있으면 버린다 — 안 그러면
+      해제한 조건이 [적용]을 누르는 순간 되살아난다. */
+  const commit = useCallback(
+    (next: LibraryFilters) => {
+      setDraft(null);
+      setFilters(next);
+    },
+    [setFilters],
+  );
+
+  const resetAll = useCallback(() => {
+    commit({ ...DEFAULT_FILTERS, sort: filters.sort, scope: filters.scope });
+  }, [commit, filters.sort, filters.scope]);
 
   const panelInner = (
     <>
-      {/* 패널 머리 줄 — 왼쪽에 안내·활성 개수·초기화, 오른쪽에 저장 조합.
-          스니핏이 이 줄에서 "지금 몇 개가 걸려 있나"를 한 번에 보여준다. */}
+      {/* 머리 줄 — 왼쪽 안내·활성 개수·초기화, 오른쪽 저장 조합·접기 */}
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="flex min-w-0 items-center gap-2">
           <p className="truncate text-[13px] text-fg-sub">
@@ -677,8 +944,8 @@ export function SearchConsole({
               </span>
               <button
                 type="button"
-                onClick={resetFilters}
-                className="trans-state inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-chip px-2 py-1 text-[12px] font-semibold text-fg-sub hover:bg-surface hover:text-fg"
+                onClick={resetAll}
+                className="trans-state inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-card px-2 py-1 text-[12px] font-semibold text-fg-sub hover:bg-surface hover:text-fg"
               >
                 <RotateCcw className="size-3.5" aria-hidden />
                 필터 초기화
@@ -686,81 +953,195 @@ export function SearchConsole({
             </>
           ) : null}
         </div>
-        <SavedCombosRow filters={filters} setFilters={setFilters} />
+        <div className="flex items-center gap-2">
+          <SavedCombosRow filters={editing} setFilters={setDraft} />
+          <button
+            type="button"
+            onClick={() => setPanelOpen(false)}
+            className="trans-state hidden shrink-0 cursor-pointer items-center gap-1 rounded-card px-2 py-1 text-[12px] font-semibold text-fg-sub hover:bg-surface hover:text-fg lg:inline-flex"
+          >
+            접기
+          </button>
+        </div>
       </div>
 
       <div className="mt-5">
         <FilterPanelBody
-          filters={filters}
-          setFilters={setFilters}
+          filters={editing}
+          setFilters={setDraft}
           hookFacets={hookFacets}
           sourceFacets={sourceFacets}
           advertiserFacets={advertiserFacets}
         />
       </div>
+
+      {/* 확정 줄 — 여기를 누르기 전에는 아래 결과가 바뀌지 않는다.
+          칩 하나 누를 때마다 결과가 갈아엎히면 조건을 조합하는 동안 화면이 계속 흔들린다. */}
+      <div className="mt-6 flex items-center justify-end gap-2 border-t border-line pt-4">
+        {dirty ? (
+          <>
+            <span className="mr-auto text-[12px] font-medium text-fg-faint">
+              바꾼 조건이 아직 적용되지 않았어요
+            </span>
+            <button
+              type="button"
+              onClick={() => setDraft(null)}
+              className="trans-state h-9 cursor-pointer rounded-card px-3 text-[13px] font-semibold text-fg-sub hover:bg-surface hover:text-fg"
+            >
+              되돌리기
+            </button>
+          </>
+        ) : null}
+        <Button onClick={applyDraft} disabled={!dirty} className="h-9 px-4">
+          필터 적용
+        </Button>
+      </div>
     </>
   );
 
   return (
-    <header
-      className={cn(
-        "sticky top-16 z-20 -mx-4 -mt-6 border-b border-line bg-surface/95 px-4 pb-3 pt-3 backdrop-blur",
-        "md:-mx-6 md:px-6",
-      )}
-    >
+    <header className="-mx-4 -mt-6 border-b border-line bg-surface/95 px-4 pb-3 pt-4 backdrop-blur md:-mx-6 md:px-6">
       <h2 className="sr-only">레퍼런스 검색</h2>
 
-      {/* 1행 — 콘솔 줄. relative는 여기에만(필터 패널 앵커) */}
-      <div ref={rootRef} className="relative flex items-center gap-2">
-        {/* (1) 복합 콘솔 박스 — 이 화면의 유일한 테두리 컨트롤.
-            검색 대상(플랫폼)은 2행 세그먼트 탭으로 내렸다. 드롭다운으로 두면
-            지금 무엇을 보고 있는지가 접힌 채라 매번 열어봐야 알 수 있다. */}
-        {/* 검색 바. 높이 56px — 이 화면에서 가장 많이 쓰는 컨트롤이라 제일 커야 한다.
-            필터 버튼은 세로 헤어라인 뒤에 둔다: 입력과 조작을 한 테두리 안에 두되
-            역할이 다르다는 걸 선 하나로 말한다. 열려 있어도 코랄로 칠하지 않는다 —
-            패널이 열린 건 이미 눈에 보이고, 코랄은 [지금 수집] 몫이다. */}
+      {/* ── 1행 — 검색 줄 ── */}
+      <div ref={barRef} className="relative flex items-center gap-2">
         <div className="flex h-14 min-w-0 flex-1 items-center rounded-card border border-line bg-body transition-colors focus-within:border-line-strong">
-          <Search className="ml-4 size-5 shrink-0 text-fg-faint" aria-hidden />
+          {/* 검색 기준 — 무엇을 훑을지. 대본은 추출해 둔 것만 대상이라 축이 다르다 */}
+          <button
+            type="button"
+            aria-expanded={scopeOpen}
+            onClick={() => {
+              setScopeOpen((v) => !v);
+              setRecentOpen(false);
+            }}
+            className={cn(
+              "trans-state ml-1.5 inline-flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-card px-3 text-[13px] font-semibold",
+              scopeOpen ? "bg-surface text-fg" : "text-fg-sub hover:bg-surface hover:text-fg",
+            )}
+          >
+            {filters.scope === "transcript" ? (
+              <Type className="size-4" aria-hidden />
+            ) : (
+              <Search className="size-4" aria-hidden />
+            )}
+            <span className="hidden sm:inline">{scope.label}</span>
+            <ChevronDown
+              className={cn("size-3.5 transition-transform", scopeOpen && "rotate-180")}
+              aria-hidden
+            />
+          </button>
+          <span className="h-6 w-px shrink-0 bg-line" aria-hidden />
+
           <input
             type="search"
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") rememberQuery(query);
+            }}
             placeholder="브랜드·문구·계정·해시태그로 찾기"
             aria-label="레퍼런스 검색"
             className="h-full min-w-0 flex-1 bg-transparent px-3 text-[15px] font-medium text-fg outline-none placeholder:font-normal placeholder:text-fg-faint"
           />
+
           {query ? (
             <button
               type="button"
               onClick={() => onQueryChange("")}
               aria-label="검색어 지우기"
-              className="trans-state flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-chip text-fg-faint hover:bg-surface hover:text-fg"
+              className="trans-state flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-card text-fg-faint hover:bg-surface hover:text-fg"
             >
               <X className="size-4" aria-hidden />
             </button>
           ) : null}
-          <span className="mx-1 h-6 w-px shrink-0 bg-line" aria-hidden />
+
+          {/* 최근 검색 */}
           <button
-            ref={filterBtnRef}
             type="button"
-            aria-expanded={panelOpen}
+            aria-expanded={recentOpen}
+            aria-label="최근 검색어"
+            onClick={() => {
+              setRecentOpen((v) => !v);
+              setScopeOpen(false);
+            }}
             className={cn(
-              "trans-state mr-2 inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-card px-3.5 text-[14px] font-semibold",
-              panelOpen ? "bg-surface text-fg" : "text-fg-sub hover:bg-surface hover:text-fg",
+              "trans-state mr-1.5 flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-card",
+              recentOpen ? "bg-surface text-fg" : "text-fg-faint hover:bg-surface hover:text-fg",
             )}
-            onClick={() => setPanelOpen((v) => !v)}
           >
-            <SlidersHorizontal className="size-4" aria-hidden />
-            <span className="hidden sm:inline">필터</span>
-            {activeCount > 0 ? (
-              <span className="tnum flex size-5 items-center justify-center rounded-chip bg-primary text-[11px] font-bold text-on-primary">
-                {activeCount}
-              </span>
-            ) : null}
+            <Clock className="size-[18px]" aria-hidden />
           </button>
+
+          {/* 검색 기준 목록 */}
+          {scopeOpen ? (
+            <div
+              role="listbox"
+              aria-label="검색 기준"
+              className="panel-open absolute left-0 top-full z-40 mt-2 w-64 overflow-hidden rounded-card border border-line-strong bg-overlay p-1.5 shadow-pop"
+            >
+              {SCOPE_OPTIONS.map((o) => {
+                const on = filters.scope === o.value;
+                return (
+                  <button
+                    key={o.value}
+                    type="button"
+                    role="option"
+                    aria-selected={on}
+                    onClick={() => {
+                      commit({ ...filters, scope: o.value });
+                      setScopeOpen(false);
+                    }}
+                    className={cn(
+                      "trans-state flex w-full cursor-pointer items-start gap-2 rounded-card px-2.5 py-2 text-left",
+                      on ? "bg-primary-weak" : "hover:bg-surface",
+                    )}
+                  >
+                    <Check
+                      className={cn("mt-0.5 size-3.5 shrink-0", on ? "text-primary" : "text-transparent")}
+                      aria-hidden
+                    />
+                    <span className="min-w-0">
+                      <span className={cn("block text-[13px] font-semibold", on ? "text-primary" : "text-fg")}>
+                        {o.label}
+                      </span>
+                      <span className="block text-[12px] text-fg-faint">{o.desc}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {/* 최근 검색어 목록 */}
+          {recentOpen ? (
+            <div
+              className="panel-open absolute right-0 top-full z-40 mt-2 w-72 overflow-hidden rounded-card border border-line-strong bg-overlay p-1.5 shadow-pop"
+              role="region"
+              aria-label="최근 검색어"
+            >
+              {recent.length === 0 ? (
+                <p className="px-2.5 py-3 text-[13px] text-fg-faint">아직 검색 기록이 없어요</p>
+              ) : (
+                recent.map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => {
+                      onQueryChange(r);
+                      setRecentOpen(false);
+                    }}
+                    className="trans-state flex w-full cursor-pointer items-center gap-2 rounded-card px-2.5 py-2 text-left text-[13px] text-fg-sub hover:bg-surface hover:text-fg"
+                  >
+                    <Clock className="size-3.5 shrink-0 text-fg-faint" aria-hidden />
+                    <span className="min-w-0 flex-1 truncate">{r}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          ) : null}
         </div>
 
-        {/* (2) 수집 설정 — 현행 카드 3장의 유일한 진입점 */}
+        {/* 수집 설정 */}
         <button
           type="button"
           onClick={onOpenSettings}
@@ -771,7 +1152,6 @@ export function SearchConsole({
           <Settings2 className="size-[18px]" aria-hidden />
         </button>
 
-        {/* (3) 지금 수집 */}
         <Button
           onClick={onCollect}
           disabled={collecting}
@@ -781,37 +1161,62 @@ export function SearchConsole({
           <Zap className="size-4" aria-hidden />
           <span className="hidden md:inline">{collecting ? "수집 중…" : "지금 수집"}</span>
         </Button>
-
-        {/* 필터 패널 — 콘솔 줄에 앵커된 오버레이. 결과 그리드를 밀지 않는다 (lg 이상) */}
-        {panelOpen ? (
-          <div
-            role="region"
-            aria-label="상세 필터"
-            className="absolute inset-x-0 top-full z-30 mt-2 hidden max-h-[68vh] overflow-y-auto rounded-card border border-line-strong bg-overlay p-6 shadow-pop lg:block"
-          >
-            {panelInner}
-          </div>
-        ) : null}
       </div>
 
-      {/* 2행 — 상태 줄. 높이 36px 고정이라 필터를 걸고 풀어도 그리드가 안 움직인다.
+      {/* ── 2행 — 필터 카드. 서랍이 아니라 화면의 일부라 흐름 안에 둔다 ── */}
+      {panelOpen ? (
+        <div
+          role="region"
+          aria-label="상세 필터"
+          className="panel-open mt-2 hidden rounded-card border border-line bg-body p-6 lg:block"
+        >
+          {panelInner}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setPanelOpen(true)}
+          className="trans-state mt-2 hidden h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-card border border-line bg-body text-[13px] font-semibold text-fg-sub hover:border-line-strong hover:text-fg lg:flex"
+        >
+          <SlidersHorizontal className="size-4" aria-hidden />
+          필터 펼치기
+          {activeCount > 0 ? (
+            <span className="tnum inline-flex size-5 items-center justify-center rounded-chip bg-primary text-[11px] font-bold text-on-primary">
+              {activeCount}
+            </span>
+          ) : null}
+        </button>
+      )}
 
-          플랫폼·업종을 여기 밖에 따로 깔지 않는다. 축을 밖에 늘어놓으면 필터를 눌러도
-          정작 제일 많이 쓰는 축은 거기 없고, 화면 위쪽이 칩 줄로 계속 두꺼워진다.
-          지금 무엇이 걸려 있는지는 아래 활성 칩이 전부 말해 준다. */}
-      <div className="mt-1 flex h-9 items-center justify-between gap-3">
+      {/* lg 미만 — 필터를 시트로 연다 */}
+      <button
+        type="button"
+        onClick={() => setSheetOpen(true)}
+        className="trans-state mt-2 flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-card border border-line bg-body text-[13px] font-semibold text-fg-sub lg:hidden"
+      >
+        <SlidersHorizontal className="size-4" aria-hidden />
+        필터
+        {activeCount > 0 ? (
+          <span className="tnum inline-flex size-5 items-center justify-center rounded-chip bg-primary text-[11px] font-bold text-on-primary">
+            {activeCount}
+          </span>
+        ) : null}
+      </button>
+
+      {/* ── 3행 — 상태 줄. 지금 무엇이 걸려 있는지 ── */}
+      <div className="mt-2 flex h-9 items-center justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {activeChips.length > 0 ? (
             <>
               {activeChips.map((chip) => (
                 <span
                   key={chip.key}
-                  className="inline-flex h-7 shrink-0 items-center gap-1 rounded-chip bg-primary-weak px-3 text-[13px] font-semibold text-primary"
+                  className="inline-flex h-7 shrink-0 items-center gap-1 rounded-card bg-primary-weak px-2.5 text-[13px] font-semibold text-primary"
                 >
                   {chip.label}
                   <button
                     type="button"
-                    onClick={() => setFilters(chip.clear(filters))}
+                    onClick={() => commit(chip.clear(filters))}
                     aria-label={`${chip.label} 조건 해제`}
                     className="cursor-pointer text-primary/70 transition-colors hover:text-primary"
                   >
@@ -823,21 +1228,20 @@ export function SearchConsole({
                 type="button"
                 onClick={() => {
                   onQueryChange("");
-                  resetFilters();
+                  resetAll();
                 }}
-                className="shrink-0 cursor-pointer rounded-chip px-3 text-[13px] font-semibold text-fg-sub transition-colors hover:bg-overlay hover:text-fg"
+                className="shrink-0 cursor-pointer rounded-card px-2.5 text-[13px] font-semibold text-fg-sub transition-colors hover:bg-overlay hover:text-fg"
               >
                 전체 해제
               </button>
             </>
           ) : (
-            /* 조건이 없을 때는 내가 등록한 수집 기준 트랙 — 클릭 = 그 기준으로 좁히기 */
             registeredSources.map((s) => (
               <button
                 key={s.id}
                 type="button"
-                onClick={() => setFilters({ ...filters, sources: toggleIn(filters.sources, s.value) })}
-                className="inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-chip border border-line bg-body px-3 text-[13px] font-medium text-fg-sub transition-colors hover:border-line-strong hover:text-fg"
+                onClick={() => commit({ ...filters, sources: toggleIn(filters.sources, s.value) })}
+                className="inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-card border border-line bg-body px-2.5 text-[13px] font-medium text-fg-sub transition-colors hover:border-line-strong hover:text-fg"
               >
                 <SourceGlyph kind={s.kind} />
                 {s.value}
@@ -848,7 +1252,7 @@ export function SearchConsole({
             <button
               type="button"
               onClick={onOpenSettings}
-              className="inline-flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-chip px-3 text-[13px] font-medium text-fg-faint transition-colors hover:bg-overlay hover:text-fg"
+              className="inline-flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-card px-2.5 text-[13px] font-medium text-fg-faint transition-colors hover:bg-overlay hover:text-fg"
             >
               <Plus className="size-3" aria-hidden />
               기준 추가
@@ -864,7 +1268,7 @@ export function SearchConsole({
           ) : null}
           <select
             value={filters.sort}
-            onChange={(e) => setFilters({ ...filters, sort: e.target.value as ItemSort })}
+            onChange={(e) => commit({ ...filters, sort: e.target.value as ItemSort })}
             aria-label="정렬"
             className="h-8 cursor-pointer border-0 bg-transparent text-[13px] font-semibold text-fg-sub outline-none transition-colors hover:text-fg"
           >
@@ -877,10 +1281,10 @@ export function SearchConsole({
         </div>
       </div>
 
-      {/* 모바일·태블릿 필터 — 하단 시트 (lg 미만). 오버레이와 같은 본문을 재사용 */}
-      {panelOpen ? (
+      {/* lg 미만 필터 시트 — 같은 본문을 재사용 */}
+      {sheetOpen ? (
         <div className="lg:hidden">
-          <div className="fixed inset-0 z-50 bg-black/40" onClick={() => setPanelOpen(false)} aria-hidden />
+          <div className="fixed inset-0 z-50 bg-black/40" onClick={() => setSheetOpen(false)} aria-hidden />
           <div
             role="dialog"
             aria-modal="true"
@@ -888,12 +1292,9 @@ export function SearchConsole({
             className="fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col rounded-t-card border-t border-line-strong bg-overlay"
           >
             <div className="flex-1 overflow-y-auto p-5">{panelInner}</div>
-            <div className="sticky bottom-0 flex items-center gap-2 border-t border-line bg-overlay px-5 py-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
-              <Button variant="secondary" onClick={resetFilters} className="flex-1">
-                초기화
-              </Button>
-              <Button onClick={() => setPanelOpen(false)} className="flex-1">
-                <span className="tnum">{resultCount}건</span> 보기
+            <div className="border-t border-line p-4">
+              <Button className="w-full" onClick={() => setSheetOpen(false)}>
+                닫기
               </Button>
             </div>
           </div>
