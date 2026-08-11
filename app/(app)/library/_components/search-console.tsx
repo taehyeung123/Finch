@@ -5,6 +5,7 @@ import {
   AtSign,
   Hash,
   Megaphone,
+  Bookmark,
   Plus,
   RotateCcw,
   Search,
@@ -203,7 +204,22 @@ interface ActiveChip {
 
 function buildActiveChips(f: LibraryFilters): ActiveChip[] {
   const chips: ActiveChip[] = [];
-  /* target(플랫폼)·업종은 전용 행이 상시 노출하므로 칩으로 중복 표시하지 않는다 */
+  /* 플랫폼·업종이 필터 패널 안으로 들어갔으므로, 접힌 상태에서 무엇이 걸려 있는지는
+     이 칩 줄이 유일한 단서다. 여기서 빠뜨리면 "왜 결과가 이것뿐이지"가 된다. */
+  if (f.target !== "all") {
+    chips.push({
+      key: "target",
+      label: TARGET_OPTIONS.find((o) => o.value === f.target)?.label ?? f.target,
+      clear: (p) => ({ ...p, target: "all" }),
+    });
+  }
+  for (const id of f.industries) {
+    chips.push({
+      key: `ind:${id}`,
+      label: industryLabelById(id),
+      clear: (p) => ({ ...p, industries: p.industries.filter((x) => x !== id) }),
+    });
+  }
   if (f.within !== "all") {
     chips.push({
       key: "within",
@@ -239,6 +255,120 @@ function SourceGlyph({ kind, className }: { kind: string; className?: string }) 
 
 /* ---------------- 필터 패널 본문 (오버레이·시트 공용) ---------------- */
 
+/*
+  구성 (스니핏 필터 카드 실측 이식, 2026-08-11)
+
+  왼쪽 = "어디서 · 언제"          오른쪽 = "무엇을"
+    · 수집 시기                     · 업종 카테고리 (고정 22개)
+    · 플랫폼 (세그먼트 트랙)         · 후킹 기법 / 광고주
+    · 플랫폼에 딸린 조건 (회색 판)
+
+  플랫폼을 패널 밖에 두지 않는다. 밖에 두면 축이 두 군데로 흩어지고,
+  "필터"를 눌러도 정작 제일 많이 쓰는 축은 거기 없다.
+  지금 무엇을 보고 있는지는 상태 줄의 활성 칩이 대신 알려준다.
+
+  색: 선택 표시에 코랄을 남발하지 않는다. 플랫폼 세그먼트의 선택은 흰 알약 + 미세 그림자로
+  표현한다(배경 트랙이 회색이라 그것만으로 충분히 읽힌다). 코랄은 조건 칩과
+  [지금 수집]에만 남긴다 — 칩 열 개가 전부 코랄이면 화면이 코랄 덩어리가 되고
+  정작 눌러야 할 버튼이 묻힌다.
+*/
+
+/** 한 조건 묶음 — 라벨 + 내용. 모든 축이 같은 리듬을 갖게 하는 유일한 통로 */
+function Field({
+  label,
+  hint,
+  info,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  info?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <p className="flex items-center gap-1.5 text-[13px] font-bold text-fg">
+        {label}
+        {info ? <InfoTip>{info}</InfoTip> : null}
+      </p>
+      {hint ? <p className="mt-0.5 text-[12px] text-fg-faint">{hint}</p> : null}
+      <div className="mt-2.5">{children}</div>
+    </div>
+  );
+}
+
+/** 선택 칩 — 이 패널의 유일한 선택 표현. 축마다 크기·모양이 달라지면 조잡해진다 */
+function Chip({
+  on,
+  onClick,
+  children,
+  count,
+}: {
+  on: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  count?: number;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className={cn(
+        "trans-state inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-chip border px-3.5 text-[13px]",
+        on
+          ? "border-primary bg-primary-weak font-semibold text-primary"
+          : "border-line bg-body font-medium text-fg-sub hover:border-line-strong hover:text-fg",
+      )}
+    >
+      {children}
+      {count !== undefined ? (
+        <span className={cn("tnum text-[11px]", on ? "text-primary/70" : "text-fg-faint")}>{count}</span>
+      ) : null}
+    </button>
+  );
+}
+
+/** 세그먼트 트랙 — 배타 선택 축(플랫폼) 전용. 회색 판 위에서 흰 알약이 움직인다 */
+function Segmented({
+  options,
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  options: { value: SearchTarget; label: string }[];
+  value: SearchTarget;
+  onChange: (v: SearchTarget) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label={ariaLabel}
+      className="flex w-full items-center gap-1 overflow-x-auto rounded-card bg-surface p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      {options.map((o) => {
+        const on = value === o.value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            role="tab"
+            aria-selected={on}
+            onClick={() => onChange(o.value)}
+            className={cn(
+              "trans-state h-8 flex-1 shrink-0 cursor-pointer whitespace-nowrap rounded-card px-3 text-[13px]",
+              on ? "bg-body font-bold text-fg shadow-pop" : "font-medium text-fg-sub hover:text-fg",
+            )}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function FilterPanelBody({
   filters,
   setFilters,
@@ -254,265 +384,159 @@ function FilterPanelBody({
 }) {
   const [showAllSources, setShowAllSources] = useState(false);
   const isAds = filters.target === "ads";
-  const visibleSources = showAllSources ? sourceFacets : sourceFacets.slice(0, 8);
-
-  /* 접힌 목록 안에 선택이 남아 있으면 헤더에 개수 배지 — 안 그러면 '왜 안 걸리지'가 된다 */
-  const hiddenSelected = sourceFacets
-    .slice(8)
-    .filter((s) => filters.sources.includes(s.value)).length;
+  const visibleSources = showAllSources ? sourceFacets : sourceFacets.slice(0, 6);
+  const hiddenSelected = sourceFacets.slice(6).filter((s) => filters.sources.includes(s.value)).length;
 
   return (
-    <div className="grid gap-x-8 gap-y-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-      <div className="space-y-5">
-        {/* 축 1 — 수집 시기 (단일선택이라 사각 칩) */}
-        <div>
-          <GroupLabel>수집 시기</GroupLabel>
-          <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="수집 시기 필터">
+    <div className="grid gap-x-10 gap-y-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.92fr)]">
+      {/* ── 왼쪽: 어디서 · 언제 ── */}
+      <div className="space-y-6">
+        <Field label="수집 시기">
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="수집 시기 필터">
             {WITHIN_OPTIONS.map((o) => (
-              <button
+              <Chip
                 key={o.value}
-                type="button"
-                aria-pressed={filters.within === o.value}
+                on={filters.within === o.value}
                 onClick={() => setFilters({ ...filters, within: o.value })}
-                className={cn(
-                  "h-8 cursor-pointer rounded-card border px-4 text-[13px] font-medium transition-colors",
-                  filters.within === o.value
-                    ? "border-primary bg-primary-weak font-semibold text-primary"
-                    : "border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg",
-                )}
               >
                 {o.label}
-              </button>
+              </Chip>
             ))}
           </div>
-        </div>
+        </Field>
 
-        {/* 축 2 — 수집 기준 (다중, 값 가변 → 리스트 행 + 건수) */}
-        {sourceFacets.length > 0 ? (
-          <div>
-            <GroupLabel badge={hiddenSelected > 0 ? hiddenSelected : undefined}>수집 기준</GroupLabel>
-            <ul className="mt-2 space-y-0.5" aria-label="수집 기준 필터">
-              {visibleSources.map((s) => {
-                const on = filters.sources.includes(s.value);
-                return (
-                  <li key={s.value}>
-                    <button
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() => setFilters({ ...filters, sources: toggleIn(filters.sources, s.value) })}
-                      className={cn(
-                        "flex w-full cursor-pointer items-center gap-2 rounded-card px-2 py-1.5 text-left text-[13px] transition-colors",
-                        on ? "bg-primary-weak font-semibold text-primary" : "text-fg-sub hover:bg-overlay hover:text-fg",
-                      )}
-                    >
-                      <SourceGlyph kind={s.kind} className={on ? "text-primary" : undefined} />
-                      <span className="min-w-0 flex-1 truncate">{s.value}</span>
-                      <span className={cn("tnum shrink-0 text-[12px]", on ? "text-primary" : "text-fg-faint")}>
-                        {s.count}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-            {sourceFacets.length > 8 ? (
-              <button
-                type="button"
-                onClick={() => setShowAllSources((v) => !v)}
-                className="mt-1 cursor-pointer px-2 text-[12px] font-semibold text-fg-sub transition-colors hover:text-fg"
-              >
-                {showAllSources ? "접기" : `+${sourceFacets.length - 8}개 더 보기`}
-              </button>
-            ) : null}
-          </div>
-        ) : null}
+        <Field label="플랫폼" hint="플랫폼을 고르면 아래 조건이 달라져요">
+          <Segmented
+            ariaLabel="플랫폼 필터"
+            options={TARGET_OPTIONS}
+            value={filters.target}
+            onChange={(v) => setFilters({ ...filters, target: v })}
+          />
 
-        {/* 축 5 — 보기 옵션 (on/off 토글 행) */}
-        <div>
-          <GroupLabel>보기 옵션</GroupLabel>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-            <ToggleRow
-              on={filters.favOnly}
-              onClick={() => setFilters({ ...filters, favOnly: !filters.favOnly })}
-              label="즐겨찾기만"
-            />
-            <span className="hidden h-4 w-px bg-line sm:block" aria-hidden />
-            <ToggleRow
-              on={filters.overOnly}
-              onClick={() => setFilters({ ...filters, overOnly: !filters.overOnly })}
-              label="기준 대비 잘 나온 것만"
-              info="같은 수집 기준으로 모인 콘텐츠의 평균 반응 대비 1.5배 이상인 항목만 봅니다. 핀치 자체 계산이에요."
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-5">
-        {/* 대상이 메타광고면 카테고리·후킹 대신 광고주·게재 상태 */}
-        {isAds ? (
-          advertiserFacets.length > 0 ? (
-            <div>
-              <GroupLabel>광고주</GroupLabel>
-              <ul className="mt-2 space-y-0.5" aria-label="광고주 필터">
-                {advertiserFacets.slice(0, 10).map((a) => {
-                  const on = filters.categories.includes(a.name);
-                  return (
-                    <li key={a.name}>
-                      <button
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => setFilters({ ...filters, categories: toggleIn(filters.categories, a.name) })}
-                        className={cn(
-                          "flex w-full cursor-pointer items-center gap-2 rounded-card px-2 py-1.5 text-left text-[13px] transition-colors",
-                          on ? "bg-primary-weak font-semibold text-primary" : "text-fg-sub hover:bg-overlay hover:text-fg",
-                        )}
-                      >
-                        <Megaphone className={cn("size-3 shrink-0", on ? "text-primary" : "text-fg-faint")} aria-hidden />
-                        <span className="min-w-0 flex-1 truncate">{a.name}</span>
-                        <span className={cn("tnum shrink-0 text-[12px]", on ? "text-primary" : "text-fg-faint")}>
-                          {a.count}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ) : null
-        ) : (
-          <>
-            {/* 축 3 — 업종 카테고리.
-
-                **고정 목록이다. 데이터에서 뽑지 않는다.**
-                예전에는 수집물의 AI 자동 분류를 그대로 칩으로 만들었는데, 웨딩 자료가
-                많으면 '웨딩드레스 4 · 웨딩촬영 2 · 웨딩케이크 1' 같은 잡동사니가
-                카테고리 자리를 차지했다. 'ai'를 찾으러 온 사람에게는 아무 의미가 없다.
-                업종은 데이터가 아니라 제품이 정하는 축이라, 언제 들어와도 같은 목록이
-                같은 자리에 있어야 사용자가 외운다. */}
-            <div>
-              <GroupLabel>업종 카테고리</GroupLabel>
-              <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="업종 필터">
-                {INDUSTRY_LIST.map((ind) => {
-                  const on = filters.industries.includes(ind.id);
-                  return (
-                    <button
-                      key={ind.id}
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() =>
-                        setFilters({ ...filters, industries: toggleIn(filters.industries, ind.id) })
-                      }
-                      className={cn(
-                        "h-8 cursor-pointer rounded-chip border px-3.5 text-[13px] transition-colors",
-                        on
-                          ? "border-primary bg-primary-weak font-semibold text-primary"
-                          : "border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg",
-                      )}
-                    >
-                      {ind.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* 축 4 — 후킹 기법 (다중, 알약 칩 + 건수) */}
-            {hookFacets.length > 0 ? (
+          {/* 플랫폼에 딸린 조건 — 회색 판으로 묶어 "위 선택에 종속된 것"임을 형태로 말한다 */}
+          <div className="mt-2.5 space-y-4 rounded-card bg-surface p-4">
+            {sourceFacets.length > 0 ? (
               <div>
-                <GroupLabel info="핀치 AI가 콘텐츠에서 추정한 후킹 기법이에요. 플랫폼 공식 데이터가 아닌 자체 추정치입니다.">
-                  후킹 기법
-                </GroupLabel>
-                <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="후킹 기법 필터">
-                  {hookFacets.map((h) => (
-                    <FacetChip
-                      key={h.name}
-                      facet={h}
-                      on={filters.hooks.includes(h.name)}
-                      onClick={() => setFilters({ ...filters, hooks: toggleIn(filters.hooks, h.name) })}
-                    />
+                <p className="flex items-center gap-1.5 text-[12px] font-semibold text-fg-sub">
+                  수집 기준
+                  {hiddenSelected > 0 ? (
+                    <span className="tnum rounded-chip bg-primary-weak px-1.5 text-[11px] font-bold text-primary">
+                      {hiddenSelected}
+                    </span>
+                  ) : null}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="수집 기준 필터">
+                  {visibleSources.map((s) => (
+                    <Chip
+                      key={s.value}
+                      on={filters.sources.includes(s.value)}
+                      onClick={() => setFilters({ ...filters, sources: toggleIn(filters.sources, s.value) })}
+                      count={s.count}
+                    >
+                      <SourceGlyph
+                        kind={s.kind}
+                        className={filters.sources.includes(s.value) ? "text-primary" : undefined}
+                      />
+                      <span className="max-w-[9rem] truncate">{s.value}</span>
+                    </Chip>
                   ))}
+                  {sourceFacets.length > 6 ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllSources((v) => !v)}
+                      className="h-9 cursor-pointer px-2 text-[12px] font-semibold text-fg-sub transition-colors hover:text-fg"
+                    >
+                      {showAllSources ? "접기" : `+${sourceFacets.length - 6}`}
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ) : null}
-          </>
-        )}
+
+            <div>
+              <p className="text-[12px] font-semibold text-fg-sub">보기 옵션</p>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <Chip on={filters.favOnly} onClick={() => setFilters({ ...filters, favOnly: !filters.favOnly })}>
+                  즐겨찾기만
+                </Chip>
+                <Chip on={filters.overOnly} onClick={() => setFilters({ ...filters, overOnly: !filters.overOnly })}>
+                  잘 나온 것만
+                </Chip>
+                <InfoTip>
+                  같은 수집 기준으로 모인 콘텐츠의 평균 반응 대비 1.5배 이상인 항목만 봅니다. 핀치 자체 계산이에요.
+                </InfoTip>
+              </div>
+            </div>
+          </div>
+        </Field>
+      </div>
+
+      {/* ── 오른쪽: 무엇을 ── */}
+      <div className="space-y-6">
+        {/* 업종 — **고정 목록이다. 데이터에서 뽑지 않는다.**
+            예전에는 수집물의 AI 자동 분류를 그대로 칩으로 만들어서, 웨딩 자료가 많으면
+            '웨딩드레스 4 · 웨딩촬영 2 · 웨딩케이크 1' 같은 잡동사니가 이 자리를 차지했다.
+            업종은 데이터가 아니라 제품이 정하는 축이라, 언제 들어와도 같은 목록이
+            같은 자리에 있어야 사용자가 외운다. */}
+        <Field label="업종 카테고리">
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="업종 필터">
+            {INDUSTRY_LIST.map((ind) => (
+              <Chip
+                key={ind.id}
+                on={filters.industries.includes(ind.id)}
+                onClick={() => setFilters({ ...filters, industries: toggleIn(filters.industries, ind.id) })}
+              >
+                {ind.label}
+              </Chip>
+            ))}
+          </div>
+        </Field>
+
+        {isAds ? (
+          advertiserFacets.length > 0 ? (
+            <Field label="광고주">
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="광고주 필터">
+                {advertiserFacets.slice(0, 12).map((a) => (
+                  <Chip
+                    key={a.name}
+                    on={filters.categories.includes(a.name)}
+                    onClick={() => setFilters({ ...filters, categories: toggleIn(filters.categories, a.name) })}
+                    count={a.count}
+                  >
+                    <Megaphone
+                      className={cn(
+                        "size-3 shrink-0",
+                        filters.categories.includes(a.name) ? "text-primary" : "text-fg-faint",
+                      )}
+                      aria-hidden
+                    />
+                    <span className="max-w-[10rem] truncate">{a.name}</span>
+                  </Chip>
+                ))}
+              </div>
+            </Field>
+          ) : null
+        ) : hookFacets.length > 0 ? (
+          <Field
+            label="후킹 기법"
+            info="핀치 AI가 콘텐츠에서 추정한 후킹 기법이에요. 플랫폼 공식 데이터가 아닌 자체 추정치입니다."
+          >
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="후킹 기법 필터">
+              {hookFacets.map((h) => (
+                <Chip
+                  key={h.name}
+                  on={filters.hooks.includes(h.name)}
+                  onClick={() => setFilters({ ...filters, hooks: toggleIn(filters.hooks, h.name) })}
+                  count={h.count}
+                >
+                  {h.name}
+                </Chip>
+              ))}
+            </div>
+          </Field>
+        ) : null}
       </div>
     </div>
-  );
-}
-
-function GroupLabel({
-  children,
-  hint,
-  info,
-  badge,
-}: {
-  children: React.ReactNode;
-  hint?: string;
-  info?: string;
-  badge?: number;
-}) {
-  return (
-    <p className="flex items-center gap-1.5 text-[13px] font-semibold text-fg-sub">
-      {children}
-      {hint ? <span className="font-normal text-fg-faint">— {hint}</span> : null}
-      {info ? <InfoTip>{info}</InfoTip> : null}
-      {badge ? (
-        <span className="tnum rounded-chip bg-primary-weak px-2 text-[11px] font-bold text-primary">{badge}</span>
-      ) : null}
-    </p>
-  );
-}
-
-function FacetChip({ facet, on, onClick }: { facet: Facet; on: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={on}
-      onClick={onClick}
-      className={cn(
-        "inline-flex h-7 cursor-pointer items-center gap-1 rounded-chip border px-3 text-[13px] font-medium transition-colors",
-        on
-          ? "border-primary bg-primary-weak font-semibold text-primary"
-          : facet.count === 0
-            ? "border-line bg-body text-fg-faint hover:border-line-strong"
-            : "border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg",
-      )}
-    >
-      {facet.name}
-      <span className="tnum text-[11px] opacity-60">{facet.count}</span>
-    </button>
-  );
-}
-
-function ToggleRow({
-  on,
-  onClick,
-  label,
-  info,
-}: {
-  on: boolean;
-  onClick: () => void;
-  label: string;
-  info?: string;
-}) {
-  return (
-    <span className="inline-flex items-center gap-1">
-      <button
-        type="button"
-        aria-pressed={on}
-        onClick={onClick}
-        className={cn(
-          "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-chip border px-3 text-[13px] font-medium transition-colors",
-          on
-            ? "border-primary bg-primary-weak font-semibold text-primary"
-            : "border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg",
-        )}
-      >
-        {label}
-      </button>
-      {info ? <InfoTip>{info}</InfoTip> : null}
-    </span>
   );
 }
 
@@ -536,18 +560,19 @@ function SavedCombosRow({
   }
 
   return (
-    <div className="mt-4 flex flex-wrap items-center gap-1.5 border-t border-line pt-3">
-      <span className="text-[12px] font-semibold text-fg-faint">저장된 조합</span>
+    /* 패널 머리 줄 오른쪽에 붙는다. 예전에는 패널 맨 아래 구분선 밑에 깔려 있었는데,
+       거기까지 스크롤해야 보이니 "저장해 둔 조합"이 사실상 없는 기능이었다. */
+    <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
       {saved.map((combo, index) => (
         <span
           key={`${combo.name}-${index}`}
-          className="inline-flex items-center overflow-hidden rounded-chip border border-line bg-body"
+          className="inline-flex h-7 items-center overflow-hidden rounded-chip border border-line bg-body"
         >
           <button
             type="button"
             onClick={() => setFilters({ ...combo.filters })}
             title={combo.name}
-            className="max-w-56 cursor-pointer truncate px-3 py-1 text-[12px] text-fg-sub transition-colors hover:bg-overlay hover:text-fg"
+            className="trans-state max-w-40 cursor-pointer truncate px-2.5 text-[12px] text-fg-sub hover:bg-surface hover:text-fg"
           >
             {combo.name}
           </button>
@@ -555,7 +580,7 @@ function SavedCombosRow({
             type="button"
             onClick={() => writeSaved(saved.filter((_, i) => i !== index))}
             aria-label={`저장된 조합 삭제: ${combo.name}`}
-            className="cursor-pointer self-stretch border-l border-line px-1.5 text-fg-faint transition-colors hover:bg-overlay hover:text-negative"
+            className="trans-state cursor-pointer self-stretch border-l border-line px-1.5 text-fg-faint hover:bg-surface hover:text-negative"
           >
             <X className="size-3" aria-hidden />
           </button>
@@ -565,10 +590,10 @@ function SavedCombosRow({
         type="button"
         onClick={saveCurrent}
         disabled={active === 0}
-        className="inline-flex cursor-pointer items-center gap-1 rounded-chip border border-line bg-body px-3 py-1 text-[12px] font-medium text-fg-sub transition-colors hover:border-line-strong hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
+        className="trans-state inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-chip px-2.5 text-[12px] font-semibold text-fg-sub hover:bg-surface hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
       >
-        <Plus className="size-3" aria-hidden />
-        현재 조합 저장
+        <Bookmark className="size-3.5" aria-hidden />
+        조합 저장
       </button>
     </div>
   );
@@ -638,20 +663,33 @@ export function SearchConsole({
 
   const panelInner = (
     <>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[13px] font-semibold text-fg-sub">조건을 조합해 정확한 레퍼런스를 찾아보세요</p>
-        {activeCount > 0 ? (
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-chip px-3 py-1 text-[12px] font-semibold text-fg-sub transition-colors hover:bg-overlay hover:text-fg"
-          >
-            <RotateCcw className="size-3.5" aria-hidden />
-            초기화
-          </button>
-        ) : null}
+      {/* 패널 머리 줄 — 왼쪽에 안내·활성 개수·초기화, 오른쪽에 저장 조합.
+          스니핏이 이 줄에서 "지금 몇 개가 걸려 있나"를 한 번에 보여준다. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <p className="truncate text-[13px] text-fg-sub">
+            조건을 조합해 정확한 레퍼런스를 찾아보세요
+          </p>
+          {activeCount > 0 ? (
+            <>
+              <span className="tnum inline-flex size-5 shrink-0 items-center justify-center rounded-chip bg-primary text-[11px] font-bold text-on-primary">
+                {activeCount}
+              </span>
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="trans-state inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-chip px-2 py-1 text-[12px] font-semibold text-fg-sub hover:bg-surface hover:text-fg"
+              >
+                <RotateCcw className="size-3.5" aria-hidden />
+                필터 초기화
+              </button>
+            </>
+          ) : null}
+        </div>
+        <SavedCombosRow filters={filters} setFilters={setFilters} />
       </div>
-      <div className="mt-4">
+
+      <div className="mt-5">
         <FilterPanelBody
           filters={filters}
           setFilters={setFilters}
@@ -660,7 +698,6 @@ export function SearchConsole({
           advertiserFacets={advertiserFacets}
         />
       </div>
-      <SavedCombosRow filters={filters} setFilters={setFilters} />
     </>
   );
 
@@ -678,35 +715,40 @@ export function SearchConsole({
         {/* (1) 복합 콘솔 박스 — 이 화면의 유일한 테두리 컨트롤.
             검색 대상(플랫폼)은 2행 세그먼트 탭으로 내렸다. 드롭다운으로 두면
             지금 무엇을 보고 있는지가 접힌 채라 매번 열어봐야 알 수 있다. */}
-        <div className="flex h-12 min-w-0 flex-1 items-center rounded-card border border-line bg-body focus-within:border-line-strong">
-          <Search className="ml-3.5 size-[18px] shrink-0 text-fg-faint" aria-hidden />
+        {/* 검색 바. 높이 56px — 이 화면에서 가장 많이 쓰는 컨트롤이라 제일 커야 한다.
+            필터 버튼은 세로 헤어라인 뒤에 둔다: 입력과 조작을 한 테두리 안에 두되
+            역할이 다르다는 걸 선 하나로 말한다. 열려 있어도 코랄로 칠하지 않는다 —
+            패널이 열린 건 이미 눈에 보이고, 코랄은 [지금 수집] 몫이다. */}
+        <div className="flex h-14 min-w-0 flex-1 items-center rounded-card border border-line bg-body transition-colors focus-within:border-line-strong">
+          <Search className="ml-4 size-5 shrink-0 text-fg-faint" aria-hidden />
           <input
             type="search"
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="제목·요약·계정·해시태그로 찾기"
-            aria-label="수집한 레퍼런스 검색"
-            className="h-full min-w-0 flex-1 bg-transparent px-2.5 text-[16px] font-medium text-fg outline-none placeholder:text-fg-faint"
+            placeholder="브랜드·문구·계정·해시태그로 찾기"
+            aria-label="레퍼런스 검색"
+            className="h-full min-w-0 flex-1 bg-transparent px-3 text-[15px] font-medium text-fg outline-none placeholder:font-normal placeholder:text-fg-faint"
           />
           {query ? (
             <button
               type="button"
               onClick={() => onQueryChange("")}
               aria-label="검색어 지우기"
-              className="trans-state flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-chip text-fg-faint hover:bg-overlay hover:text-fg"
+              className="trans-state flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-chip text-fg-faint hover:bg-surface hover:text-fg"
             >
               <X className="size-4" aria-hidden />
             </button>
           ) : null}
+          <span className="mx-1 h-6 w-px shrink-0 bg-line" aria-hidden />
           <button
             ref={filterBtnRef}
             type="button"
             aria-expanded={panelOpen}
-            onClick={() => setPanelOpen((v) => !v)}
             className={cn(
-              "trans-state mx-2 inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-card px-3.5 text-[14px] font-semibold",
-              panelOpen || activeCount > 0 ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-overlay hover:text-fg",
+              "trans-state mr-2 inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-card px-3.5 text-[14px] font-semibold",
+              panelOpen ? "bg-surface text-fg" : "text-fg-sub hover:bg-surface hover:text-fg",
             )}
+            onClick={() => setPanelOpen((v) => !v)}
           >
             <SlidersHorizontal className="size-4" aria-hidden />
             <span className="hidden sm:inline">필터</span>
@@ -724,7 +766,7 @@ export function SearchConsole({
           onClick={onOpenSettings}
           aria-label="수집 설정"
           title="수집 기준·메타광고 검색어·수집 옵션"
-          className="trans-state flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-card border border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg"
+          className="trans-state flex h-14 w-12 shrink-0 cursor-pointer items-center justify-center rounded-card border border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg"
         >
           <Settings2 className="size-[18px]" aria-hidden />
         </button>
@@ -734,7 +776,7 @@ export function SearchConsole({
           onClick={onCollect}
           disabled={collecting}
           aria-busy={collecting}
-          className="h-12 shrink-0 px-4 md:px-5"
+          className="h-14 shrink-0 px-4 md:px-5"
         >
           <Zap className="size-4" aria-hidden />
           <span className="hidden md:inline">{collecting ? "수집 중…" : "지금 수집"}</span>
@@ -745,39 +787,18 @@ export function SearchConsole({
           <div
             role="region"
             aria-label="상세 필터"
-            className="absolute inset-x-0 top-full z-30 mt-2 hidden max-h-[60vh] overflow-y-auto rounded-card border border-line-strong bg-overlay p-5 shadow-pop lg:block"
+            className="absolute inset-x-0 top-full z-30 mt-2 hidden max-h-[68vh] overflow-y-auto rounded-card border border-line-strong bg-overlay p-6 shadow-pop lg:block"
           >
             {panelInner}
           </div>
         ) : null}
       </div>
 
-      {/* 2행 — 플랫폼 세그먼트. 지금 무엇을 보고 있는지가 접히지 않고 항상 보인다.
-          드롭다운이던 걸 여기로 내려서 1행이 검색 하나에만 집중하게 됐다. */}
-      <div className="mt-2 flex h-9 items-center gap-1" role="tablist" aria-label="검색 대상">
-        {TARGET_OPTIONS.map((o) => {
-          const on = filters.target === o.value;
-          return (
-            <button
-              key={o.value}
-              type="button"
-              role="tab"
-              aria-selected={on}
-              onClick={() => setFilters({ ...filters, target: o.value })}
-              className={cn(
-                "trans-state h-8 shrink-0 cursor-pointer rounded-chip px-3.5 text-[13px] font-semibold",
-                on ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-overlay hover:text-fg",
-              )}
-            >
-              {o.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* 2행 — 상태 줄. 높이 36px 고정이라 필터를 걸고 풀어도 그리드가 안 움직인다.
 
-      {/* 3행 — 상태 줄. 높이 36px 고정이라 필터를 걸고 풀어도 그리드가 안 움직인다.
-          업종은 필터 패널의 고정 목록으로 옮겼다 — 상단에도 두면 같은 축이 두 군데
-          생기고, 풀이 비었을 땐 그 줄이 통째로 사라져 자리가 들쭉날쭉해진다. */}
+          플랫폼·업종을 여기 밖에 따로 깔지 않는다. 축을 밖에 늘어놓으면 필터를 눌러도
+          정작 제일 많이 쓰는 축은 거기 없고, 화면 위쪽이 칩 줄로 계속 두꺼워진다.
+          지금 무엇이 걸려 있는지는 아래 활성 칩이 전부 말해 준다. */}
       <div className="mt-1 flex h-9 items-center justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {activeChips.length > 0 ? (
