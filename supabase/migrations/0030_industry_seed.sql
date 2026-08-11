@@ -1,7 +1,7 @@
 -- 0030_industry_seed.sql — 업종 23개 + 시드 검색어 253개
 --
 -- ⚠ 자동 생성 파일. 손으로 고치지 말 것.
---   원본: lib/industry/taxonomy.ts · lib/industry/seeds.ts
+--   원본: lib/industry/list.ts · lib/industry/seeds.ts
 --   재생성: node scripts/gen-industry-seed.mjs
 -- 화면 라벨(TS)과 크롤 대상(DB)이 갈라지면 "메뉴에는 있는데 수집은 안 도는" 업종이 생긴다.
 --
@@ -21,7 +21,7 @@ insert into public.industries (id, name_ko, group_key, sort_order) values
   ('household', '생활용품', 'living_home', 100),
   ('baby_kids', '유아·출산', 'living_home', 110),
   ('pet', '반려동물', 'living_home', 120),
-  ('appliance', '가전·디지털기기', 'living_home', 130),
+  ('appliance', '가전·디지털', 'living_home', 130),
   ('medical', '병원·의료', 'service_local', 140),
   ('education', '교육·학원', 'service_local', 150),
   ('travel', '여행·숙박', 'service_local', 160),

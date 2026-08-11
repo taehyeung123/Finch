@@ -8,14 +8,18 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 
-const TAX = readFileSync("lib/industry/taxonomy.ts", "utf8");
+const LIST = readFileSync("lib/industry/list.ts", "utf8");
 const SEEDS = readFileSync("lib/industry/seeds.ts", "utf8");
 
+/* 업종 목록의 단일 출처는 lib/industry/list.ts 다(화면도 같은 목록을 쓴다). */
 const industries = [
-  ...TAX.matchAll(/\{ id: "([^"]+)", nameKo: "([^"]+)", group: "([^"]+)", sort: (\d+) \}/g),
-].map((m) => ({ id: m[1], ko: m[2], group: m[3], sort: Number(m[4]) }));
+  ...LIST.matchAll(/\{ id: "([^"]+)", label: "([^"]+)", group: "([^"]+)"/g),
+].map((m, i) => ({ id: m[1], ko: m[2], group: m[3], sort: (i + 1) * 10 }));
 
-if (industries.length === 0) throw new Error("taxonomy.ts 에서 업종을 못 읽었습니다");
+if (industries.length === 0) throw new Error("list.ts 에서 업종을 못 읽었습니다");
+
+// 분류 실패분의 대피소
+industries.push({ id: "etc", ko: "기타", group: "digital_finance", sort: 999 });
 
 const tableSrc = SEEDS.match(/const TABLE[^=]*=\s*(\[[\s\S]*?\n\];)/);
 if (!tableSrc) throw new Error("seeds.ts 에서 TABLE 을 못 읽었습니다");
@@ -26,7 +30,7 @@ const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
 const keywordRows = [];
 for (const [industryId, ads, organic] of table) {
   if (!industries.some((i) => i.id === industryId)) {
-    throw new Error(`seeds.ts 의 '${industryId}' 가 taxonomy.ts 에 없습니다`);
+    throw new Error(`seeds.ts 의 '${industryId}' 가 list.ts 에 없습니다`);
   }
   ads.forEach((k, i) =>
     keywordRows.push(`  (${q(industryId)}, 'meta_ads', ${q(k)}, 'seed', ${200 - i * 5})`),
@@ -39,7 +43,7 @@ for (const [industryId, ads, organic] of table) {
 const sql = `-- 0030_industry_seed.sql — 업종 ${industries.length}개 + 시드 검색어 ${keywordRows.length}개
 --
 -- ⚠ 자동 생성 파일. 손으로 고치지 말 것.
---   원본: lib/industry/taxonomy.ts · lib/industry/seeds.ts
+--   원본: lib/industry/list.ts · lib/industry/seeds.ts
 --   재생성: node scripts/gen-industry-seed.mjs
 -- 화면 라벨(TS)과 크롤 대상(DB)이 갈라지면 "메뉴에는 있는데 수집은 안 도는" 업종이 생긴다.
 --

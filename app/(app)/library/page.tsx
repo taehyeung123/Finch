@@ -8,7 +8,6 @@ import {
 import { getCollectSettings, listReferenceItems, listReferenceSources } from "@/lib/actions/reference";
 import { listAdSources, listReferenceAds } from "@/lib/actions/ads-reference";
 import { loadPoolFeed } from "@/lib/pool/bridge";
-import { listVisibleIndustries } from "@/lib/pool/search";
 import { listPoolSaves } from "./pool-actions";
 import { DEFAULT_COLLECT_SETTINGS } from "@/lib/types";
 import { LibraryClient } from "./_components/library-client";
@@ -29,8 +28,8 @@ export const maxDuration = 300;
 
 export default async function LibraryPage() {
   const isDemo = isDemoMode();
-  const [sources, ownItems, settings, adSources, ownAds, pool, industries, poolSavedIds] = isDemo
-    ? [mockSources, mockItems, DEFAULT_COLLECT_SETTINGS, mockAdSources, mockAds, null, [], []]
+  const [sources, ownItems, settings, adSources, ownAds, pool, poolSavedIds] = isDemo
+    ? [mockSources, mockItems, DEFAULT_COLLECT_SETTINGS, mockAdSources, mockAds, null, []]
     : await Promise.all([
         listReferenceSources().then((s) => s ?? []),
         listReferenceItems(),
@@ -38,18 +37,14 @@ export default async function LibraryPage() {
         listAdSources().then((s) => s ?? []),
         listReferenceAds(),
         loadPoolFeed().catch(() => null),
-        listVisibleIndustries().catch(() => []),
         listPoolSaves().catch(() => []),
       ]);
 
   const items = pool?.ready ? pool.items : ownItems;
   const ads = pool?.ready ? pool.ads : ownAds;
 
-  /* 업종 줄은 풀이 실제로 준비됐을 때만 그린다. 풀이 비어 있는데 업종 칩만 뜨면
-     눌러도 0건이 나오는 죽은 버튼이 된다 — 없는 것보다 나쁘다. */
-  const industryFacets = pool?.ready
-    ? industries.map((i) => ({ id: i.id, label: i.nameKo, count: i.creativeCount }))
-    : [];
+  /* 업종 목록은 서버에서 내려주지 않는다. 화면이 lib/industry/list.ts 의 고정 목록을
+     그대로 그린다 — 스니핏처럼 언제 들어와도 같은 목록이 같은 자리에 있어야 한다. */
 
   return (
     <LibraryClient
@@ -58,7 +53,6 @@ export default async function LibraryPage() {
       settings={settings}
       adSources={adSources}
       ads={ads}
-      industryFacets={industryFacets}
       poolReady={Boolean(pool?.ready)}
       poolSavedIds={poolSavedIds}
       isDemo={isDemo}

@@ -20,6 +20,7 @@ import {
   toggleReferenceFavorite,
 } from "@/lib/actions/reference";
 import { addAdSource, removeAdSource, runAdCollection, toggleAdFavorite } from "@/lib/actions/ads-reference";
+import { industryFromText } from "@/lib/industry/list";
 import { requestPoolCollect, searchPoolAction, togglePoolSave } from "../pool-actions";
 import { TREND_CATEGORIES } from "@/lib/data";
 import { cn } from "@/lib/cn";
@@ -34,7 +35,6 @@ import {
   SearchConsole,
   countActiveFilters,
   type Facet,
-  type IndustryFacet,
   type LibraryFilters,
   type SourceFacet,
 } from "./search-console";
@@ -75,7 +75,6 @@ export function LibraryClient({
   adSources: initialAdSources,
   items: initialItems,
   ads: initialAds,
-  industryFacets,
   poolReady,
   poolSavedIds,
   isDemo,
@@ -85,8 +84,6 @@ export function LibraryClient({
   settings: CollectSettings;
   adSources: AdSource[];
   ads: ReferenceAd[];
-  /** 공용 풀에서 노출 자격을 통과한 업종. 풀이 비었으면 빈 배열 → 업종 줄이 안 그려진다 */
-  industryFacets: IndustryFacet[];
   /**
    * 공용 풀이 준비됐는가. true 면 검색어를 서버로 보낸다 —
    * 풀은 수백만 행이라 처음 40건만 받아 브라우저에서 거르면 가짜 검색이 된다.
@@ -144,13 +141,6 @@ export function LibraryClient({
   const activeFilterCount = countActiveFilters(filters);
   const hasQuery = query.trim() !== "" || activeFilterCount > 0;
 
-  /* 업종 라벨 → id. 화면은 사람이 읽는 라벨로 다루고 서버에는 id 로 보낸다 —
-     라벨은 언제든 바뀔 수 있고, 바뀌는 순간 저장된 필터 조합이 전부 깨진다. */
-  const industryIdByLabel = useMemo(
-    () => new Map(industryFacets.map((f) => [f.label, f.id])),
-    [industryFacets],
-  );
-
   /**
    * 풀 검색 — 디바운스 후 서버 조회.
    * effect 가 아니라 이벤트 핸들러에서 부른다(입력 → 요청이 직접 인과관계이므로
@@ -167,7 +157,7 @@ export function LibraryClient({
           const res = await searchPoolAction({
             query: q,
             target: f.target,
-            industryIds: f.industries.map((l) => industryIdByLabel.get(l)).filter((v): v is string => Boolean(v)),
+            industryIds: f.industries,
             sort: f.sort,
             page: 0,
           });
@@ -181,7 +171,7 @@ export function LibraryClient({
         }
       }, delay);
     },
-    [poolReady, industryIdByLabel],
+    [poolReady],
   );
 
   /* 필터·검색어가 바뀌면 더보기 페이지를 처음으로 되돌린다 */
@@ -204,15 +194,6 @@ export function LibraryClient({
   );
 
   /* ---------------- 패싯 (수집물에 실재하는 값만) ---------------- */
-
-  const categoryFacets = useMemo<Facet[]>(() => {
-    const counts = new Map<string, number>();
-    for (const item of items) {
-      const c = item.category || "일반";
-      counts.set(c, (counts.get(c) ?? 0) + 1);
-    }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([name, count]) => ({ name, count }));
-  }, [items]);
 
   const hookFacets = useMemo<Facet[]>(() => {
     const counts = new Map<string, number>();
@@ -295,8 +276,14 @@ export function LibraryClient({
       if (filters.favOnly && !favoriteIds.has(item.id)) return false;
       if (filters.overOnly && !overAvgMultiple.has(item.id)) return false;
       if (maxHours !== null && item.collectedAgoHours > maxHours) return false;
-      /* 업종 — 풀 소재는 category 자리에 업종 라벨이 들어온다(lib/pool/bridge.ts) */
-      if (filters.industries.length > 0 && !filters.industries.includes(item.category)) return false;
+      /* 업종 — 풀 소재는 category 자리에 업종 라벨이 들어오고(lib/pool/bridge.ts),
+         예전 개인 수집분은 AI 자동 분류 문구가 들어온다. 어느 쪽이든 글자에서 업종을
+         추정해 맞춘다 — 안 그러면 고정 업종 칩이 옛 자료에서 항상 0건이 되어
+         눌러도 아무 일도 안 일어나는 버튼이 된다. */
+      if (filters.industries.length > 0) {
+        const ind = industryFromText(item.category, item.title, item.summary);
+        if (!ind || !filters.industries.includes(ind)) return false;
+      }
       if (filters.categories.length > 0 && !filters.categories.includes(item.category || "일반")) return false;
       if (filters.hooks.length > 0 && !item.hooks.some((h) => filters.hooks.includes(h))) return false;
       if (filters.sources.length > 0 && !filters.sources.includes(item.matchedSource)) return false;
@@ -344,7 +331,10 @@ export function LibraryClient({
       if (filters.favOnly && !adFavoriteIds.has(ad.id)) return false;
       if (filters.overOnly) return false; // 광고는 반응 지표가 없어 '잘 나온 것' 판정 대상이 아니다
       if (maxHours !== null && ad.collectedAgoHours > maxHours) return false;
-      if (filters.industries.length > 0 && !filters.industries.includes(ad.category)) return false;
+      if (filters.industries.length > 0) {
+        const ind = industryFromText(ad.category, ad.pageName, ad.body);
+        if (!ind || !filters.industries.includes(ind)) return false;
+      }
       if (filters.sources.length > 0 && !filters.sources.includes(ad.matchedSource)) return false;
       /* 광고 화면에서는 카테고리 축을 광고주(pageName)로 재사용한다 */
       if (filters.target === "ads" && filters.categories.length > 0 && !filters.categories.includes(ad.pageName)) {
@@ -600,11 +590,9 @@ export function LibraryClient({
         setFilters={applyFilters}
         resultCount={displayEntries.length}
         hasQuery={hasQuery}
-        categoryFacets={categoryFacets}
         hookFacets={hookFacets}
         sourceFacets={sourceFacets}
         advertiserFacets={advertiserFacets}
-        industryFacets={industryFacets}
         registeredSources={[
           ...sources.map((s) => ({ id: s.id, value: s.value, kind: s.kind as string })),
           ...adSources.map((s) => ({ id: s.id, value: s.value, kind: "ads" })),

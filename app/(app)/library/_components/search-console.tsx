@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/ui/info-tip";
 import { cn } from "@/lib/cn";
+import { INDUSTRY_LIST } from "@/lib/industry/list";
 import type { ChannelFilter } from "@/lib/types";
 
 /*
@@ -55,9 +56,11 @@ export interface LibraryFilters {
   target: SearchTarget;
   within: CollectedWithin;
   /**
-   * 업종 — categories(수집 카테고리)와 별도 축이다.
-   * 겹쳐 쓰지 않는 이유: 광고 화면에서 categories 는 이미 광고주(pageName) 축으로
-   * 재사용되고 있다. 여기에 업종까지 얹으면 한 배열이 세 가지 뜻을 갖는다.
+   * 업종 **id** 배열 — 라벨이 아니라 id 를 담는다(라벨은 언제든 바뀔 수 있고,
+   * 바뀌는 순간 저장해 둔 필터 조합이 통째로 깨진다).
+   *
+   * categories 와 별도 축인 이유: 광고 화면에서 categories 는 이미 광고주(pageName)
+   * 축으로 재사용되고 있다. 여기에 업종까지 얹으면 한 배열이 세 가지 뜻을 갖는다.
    */
   industries: string[];
   categories: string[];
@@ -79,13 +82,6 @@ export const DEFAULT_FILTERS: LibraryFilters = {
   overOnly: false,
   sort: "views",
 };
-
-/** 업종 칩 하나 — 서버가 노출 자격을 통과한 업종만 내려준다 */
-export interface IndustryFacet {
-  id: string;
-  label: string;
-  count: number;
-}
 
 export interface Facet {
   name: string;
@@ -132,6 +128,11 @@ export function countActiveFilters(f: LibraryFilters): number {
     (f.favOnly ? 1 : 0) +
     (f.overOnly ? 1 : 0)
   );
+}
+
+/** 업종 id → 라벨. 화면에 보여줄 때만 쓴다(저장은 항상 id) */
+function industryLabelById(id: string): string {
+  return INDUSTRY_LIST.find((i) => i.id === id)?.label ?? id;
 }
 
 /** 배열 토글 — 있으면 빼고 없으면 넣은 새 배열 */
@@ -186,7 +187,7 @@ function describeFilters(f: LibraryFilters): string {
   const parts: string[] = [];
   if (f.target !== "all") parts.push(TARGET_OPTIONS.find((o) => o.value === f.target)?.label ?? f.target);
   if (f.within !== "all") parts.push(WITHIN_OPTIONS.find((o) => o.value === f.within)?.label ?? f.within);
-  parts.push(...f.industries, ...f.categories, ...f.hooks, ...f.sources);
+  parts.push(...f.industries.map(industryLabelById), ...f.categories, ...f.hooks, ...f.sources);
   if (f.favOnly) parts.push("즐겨찾기만");
   if (f.overOnly) parts.push("잘 나온 것만");
   return parts.slice(0, 4).join(" · ") || "기본 조합";
@@ -241,14 +242,12 @@ function SourceGlyph({ kind, className }: { kind: string; className?: string }) 
 function FilterPanelBody({
   filters,
   setFilters,
-  categoryFacets,
   hookFacets,
   sourceFacets,
   advertiserFacets,
 }: {
   filters: LibraryFilters;
   setFilters: (next: LibraryFilters) => void;
-  categoryFacets: Facet[];
   hookFacets: Facet[];
   sourceFacets: SourceFacet[];
   advertiserFacets: Facet[];
@@ -263,7 +262,7 @@ function FilterPanelBody({
     .filter((s) => filters.sources.includes(s.value)).length;
 
   return (
-    <div className="grid gap-x-8 gap-y-5 lg:grid-cols-2">
+    <div className="grid gap-x-8 gap-y-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
       <div className="space-y-5">
         {/* 축 1 — 수집 시기 (단일선택이라 사각 칩) */}
         <div>
@@ -382,22 +381,40 @@ function FilterPanelBody({
           ) : null
         ) : (
           <>
-            {/* 축 3 — 카테고리 (다중, 알약 칩 + 건수) */}
-            {categoryFacets.length > 0 ? (
-              <div>
-                <GroupLabel hint="AI 자동 분류">카테고리</GroupLabel>
-                <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="카테고리 필터">
-                  {categoryFacets.map((c) => (
-                    <FacetChip
-                      key={c.name}
-                      facet={c}
-                      on={filters.categories.includes(c.name)}
-                      onClick={() => setFilters({ ...filters, categories: toggleIn(filters.categories, c.name) })}
-                    />
-                  ))}
-                </div>
+            {/* 축 3 — 업종 카테고리.
+
+                **고정 목록이다. 데이터에서 뽑지 않는다.**
+                예전에는 수집물의 AI 자동 분류를 그대로 칩으로 만들었는데, 웨딩 자료가
+                많으면 '웨딩드레스 4 · 웨딩촬영 2 · 웨딩케이크 1' 같은 잡동사니가
+                카테고리 자리를 차지했다. 'ai'를 찾으러 온 사람에게는 아무 의미가 없다.
+                업종은 데이터가 아니라 제품이 정하는 축이라, 언제 들어와도 같은 목록이
+                같은 자리에 있어야 사용자가 외운다. */}
+            <div>
+              <GroupLabel>업종 카테고리</GroupLabel>
+              <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="업종 필터">
+                {INDUSTRY_LIST.map((ind) => {
+                  const on = filters.industries.includes(ind.id);
+                  return (
+                    <button
+                      key={ind.id}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() =>
+                        setFilters({ ...filters, industries: toggleIn(filters.industries, ind.id) })
+                      }
+                      className={cn(
+                        "h-8 cursor-pointer rounded-chip border px-3.5 text-[13px] transition-colors",
+                        on
+                          ? "border-primary bg-primary-weak font-semibold text-primary"
+                          : "border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg",
+                      )}
+                    >
+                      {ind.label}
+                    </button>
+                  );
+                })}
               </div>
-            ) : null}
+            </div>
 
             {/* 축 4 — 후킹 기법 (다중, 알약 칩 + 건수) */}
             {hookFacets.length > 0 ? (
@@ -566,11 +583,9 @@ export function SearchConsole({
   setFilters,
   resultCount,
   hasQuery,
-  categoryFacets,
   hookFacets,
   sourceFacets,
   advertiserFacets,
-  industryFacets,
   registeredSources,
   onOpenSettings,
   onCollect,
@@ -582,12 +597,9 @@ export function SearchConsole({
   setFilters: (next: LibraryFilters) => void;
   resultCount: number;
   hasQuery: boolean;
-  categoryFacets: Facet[];
   hookFacets: Facet[];
   sourceFacets: SourceFacet[];
   advertiserFacets: Facet[];
-  /** 노출 자격을 통과한 업종. 비어 있으면 행 자체를 그리지 않는다 — 빈 줄은 미완성으로 읽힌다 */
-  industryFacets: IndustryFacet[];
   registeredSources: { id: string; value: string; kind: string }[];
   onOpenSettings: () => void;
   onCollect: () => void;
@@ -643,7 +655,6 @@ export function SearchConsole({
         <FilterPanelBody
           filters={filters}
           setFilters={setFilters}
-          categoryFacets={categoryFacets}
           hookFacets={hookFacets}
           sourceFacets={sourceFacets}
           advertiserFacets={advertiserFacets}
@@ -764,54 +775,9 @@ export function SearchConsole({
         })}
       </div>
 
-      {/* 3행 — 업종. 스니핏의 태그 줄에 해당하는 축이다. 검색어를 떠올리지 못한 사람이
-          곧바로 누를 수 있는 입구라, 검색창 바로 아래에 두는 게 맞다.
-          자격 미달 업종은 서버에서 이미 걸러져 오므로 여기서 count를 다시 검사하지 않는다. */}
-      {industryFacets.length > 0 ? (
-        <div
-          className="mt-1.5 flex h-9 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          role="group"
-          aria-label="업종"
-        >
-          <button
-            type="button"
-            onClick={() => setFilters({ ...filters, industries: [] })}
-            aria-pressed={filters.industries.length === 0}
-            className={cn(
-              "trans-state h-7 shrink-0 cursor-pointer rounded-chip px-3 text-[13px] font-semibold",
-              filters.industries.length === 0
-                ? "bg-fg text-body"
-                : "border border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg",
-            )}
-          >
-            전체 업종
-          </button>
-          {industryFacets.map((f) => {
-            const on = filters.industries.includes(f.label);
-            return (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setFilters({ ...filters, industries: toggleIn(filters.industries, f.label) })}
-                aria-pressed={on}
-                className={cn(
-                  "trans-state inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-chip px-3 text-[13px] font-semibold",
-                  on
-                    ? "bg-primary-weak text-primary"
-                    : "border border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg",
-                )}
-              >
-                {f.label}
-                <span className={cn("tnum text-[11px] font-medium", on ? "text-primary/70" : "text-fg-faint")}>
-                  {f.count > 999 ? `${Math.floor(f.count / 1000)}k` : f.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-
-      {/* 4행 — 상태 줄. 높이 36px 고정이라 필터를 걸고 풀어도 그리드가 안 움직인다 */}
+      {/* 3행 — 상태 줄. 높이 36px 고정이라 필터를 걸고 풀어도 그리드가 안 움직인다.
+          업종은 필터 패널의 고정 목록으로 옮겼다 — 상단에도 두면 같은 축이 두 군데
+          생기고, 풀이 비었을 땐 그 줄이 통째로 사라져 자리가 들쭉날쭉해진다. */}
       <div className="mt-1 flex h-9 items-center justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {activeChips.length > 0 ? (

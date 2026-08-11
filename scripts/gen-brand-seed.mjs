@@ -8,7 +8,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
 const SRC = readFileSync("lib/industry/brand-seeds.ts", "utf8");
-const TAX = readFileSync("lib/industry/taxonomy.ts", "utf8");
+const TAX = readFileSync("lib/industry/list.ts", "utf8");
 
 const known = new Set([...TAX.matchAll(/\{ id: "([^"]+)"/g)].map((m) => m[1]));
 
@@ -20,7 +20,7 @@ const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
 
 const rows = [];
 for (const [industryId, brands] of table) {
-  if (!known.has(industryId)) throw new Error(`'${industryId}' 가 taxonomy.ts 에 없습니다`);
+  if (!known.has(industryId)) throw new Error(`'${industryId}' 가 list.ts 에 없습니다`);
   brands.forEach((keyword, i) =>
     rows.push(`  (${q(industryId)}, 'meta_ads', ${q(keyword)}, 'brand', ${340 - i * 5})`),
   );
