@@ -25,18 +25,22 @@
 
 | 항목 | 수치 | 환산 |
 |---|---|---|
-| 실행 크론 일정 | 2시간마다 = 하루 12회 | |
-| 회차당 처리 | 최대 12건 × 요청 2회 | |
-| **하루 실제 최대** | **288회** | **746원 / 월 22,400원** |
-| 브랜드 시드 한 바퀴 | 107개 × 2 = 214회 | 554원 (첫날 대부분이 여기 쓰인다) |
+| 실행 크론 일정 | 하루 8회 (3시간 간격) | |
+| 회차당 처리 | 최대 8건 × 요청 2회 = 16회 | |
+| **하루 실제 최대** | **128회** | **332원 / 월 약 9,900원** |
+| 브랜드 시드 한 바퀴 | 107개 × 2 = 214회 | 554원 (첫날·이튿날에 대부분 소화된다) |
 | DB 하드캡 (`crawl_budget.calls_limit`) | 420회 | 1,088원 / 월 32,600원 |
+
+하루 8회인 이유는 Vercel Hobby 가 **크론 하나당 하루 1회**만 허용하기 때문이다
+(자세한 건 `vercel.json` 참고 — 같은 경로를 시각만 달리해 8개로 쪼갰다).
+Pro 로 올리면 한 줄로 합치고 회차·처리량을 함께 키우면 된다.
 
 **이 금액은 가입자 수와 무관하다.** 1명이든 1만 명이든 같다.
 늘리고 싶으면 `crawl_budget.calls_limit` 한 숫자만 올리면 되고, 그게 상한의 전부다.
 
 검색어 361개(일반 254 + 브랜드 107)를 한 바퀴 도는 데 722회(1,870원)가 든다
-→ **약 2.5일에 전 업종이 한 번 갱신**된다.
-브랜드가 우선순위 20이라 **첫날에 아는 이름부터 깔린다.**
+→ 현재 속도로 **약 5.6일에 전 업종이 한 번 갱신**된다.
+브랜드가 우선순위 20이라 **첫 이틀 안에 아는 이름부터 깔린다.**
 
 ### 상한이 진짜로 지켜지는 이유
 
@@ -93,7 +97,15 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://finch.ai.kr/api/cron/pool-f
 
 썸네일을 채우고 업종 노출 자격을 계산한다. **공급사 크레딧 0.**
 
-이후로는 `vercel.json`의 크론이 알아서 돈다(계획 05:00, 실행 2시간마다, 마감 06:30 KST).
+이후로는 `vercel.json`의 크론이 알아서 돈다(KST 기준):
+
+| 크론 | 시각 |
+|---|---|
+| 계획 `pool-plan` | 05:00 |
+| 실행 `pool-work` | 05:30 · 08:30 · 11:30 · 14:30 · 17:30 · 20:30 · 23:30 · 02:30 |
+| 마감 `pool-finalize` | 03:30 |
+
+계획이 큐를 채운 뒤 30분 만에 첫 수집이 돈다. 큐가 비어 있는 회차는 그냥 넘어간다(돈 안 나감).
 
 ### (4) 화면 전환은 자동
 
@@ -217,8 +229,9 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://finch.ai.kr/api/cron/pool-f
 |---|---|
 | 하루 지출 상한 | `crawl_budget.calls_limit` (기본 420) |
 | 수집 빈도 | `vercel.json`의 `pool-work` 스케줄 |
-| 회차당 처리량 | `app/api/cron/pool-work/route.ts`의 `MAX_JOBS_PER_RUN` |
+| 회차당 처리량 | `app/api/cron/pool-work/route.ts`의 `MAX_JOBS_PER_RUN`·`TIME_BUDGET_MS` |
 | 업종 노출 기준 | `lib/industry/taxonomy.ts`의 `INDUSTRY_VISIBLE_MIN_*` + `0030`의 롤업 함수 |
-| 업종·검색어 목록 | `lib/industry/taxonomy.ts` · `seeds.ts` 고친 뒤 `node scripts/gen-industry-seed.mjs` |
+| 유료 기능 무료 한도 | `lib/actions/credits.ts`의 `FREE_MONTHLY_LIMITS` |
+| 업종·검색어 목록 | `lib/industry/list.ts` · `seeds.ts` 고친 뒤 `node scripts/gen-industry-seed.mjs` |
 | 유명 브랜드 목록 | `lib/industry/brand-seeds.ts` 고친 뒤 `node scripts/gen-brand-seed.mjs` |
 | 경보 받을 주소 | 환경변수 `OWNER_EMAIL` |
