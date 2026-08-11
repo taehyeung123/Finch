@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isCollectionConfigured } from "@/lib/reference/scrapecreators";
 import { runCrawlWorker } from "@/lib/pool/worker";
 import { readBudget } from "@/lib/pool/budget";
+import { alertPool } from "@/lib/pool/alert";
 
 /**
  * 공용 풀 — 실행 회차 (하루 여러 번).
@@ -32,6 +33,11 @@ export async function GET(request: Request) {
 
   const started = new Date().toISOString();
   const result = await runCrawlWorker(MAX_JOBS_PER_RUN);
+
+  /* 수집이 멈췄으면 운영자에게 메일. 이게 없으면 크레딧이 떨어져도 아무 일도
+     안 일어난 것처럼 보이고, 화면은 어제 데이터를 계속 보여준다. */
+  if (result.stoppedBy === "credits") await alertPool(admin, "credits_exhausted");
+  else if (result.stoppedBy === "budget") await alertPool(admin, "budget_exhausted");
 
   await admin.from("crawl_runs").insert({
     run_kind: "work",
