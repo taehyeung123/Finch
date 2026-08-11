@@ -369,66 +369,6 @@ export function LibraryClient({
     return [...itemEntries, ...adEntries];
   }, [filteredItems, filteredAds, filters.sort]);
 
-  /* ---------------- 탐색 모드 섹션 (검색어·필터가 없을 때) ---------------- */
-
-  const exploreSections = useMemo(() => {
-    if (hasQuery) return [];
-    const byRecent = [...items].sort((a, b) => a.collectedAgoHours - b.collectedAgoHours);
-    const today = byRecent.filter((i) => i.collectedAgoHours < 24);
-    const accountValues = sources.filter((s) => s.kind === "account").map((s) => s.value);
-
-    /* apply 를 함수가 아니라 **필터 값**으로 든다.
-       렌더 중에 만든 클로저가 상태·ref 를 붙잡으면 오래된 값을 그대로 물고 다닌다
-       (react-hooks/refs 가 잡아내는 바로 그 패턴). 값으로 두면 클릭 시점에
-       최신 applyFilters 로 적용되므로 그 위험 자체가 없어진다. */
-    const sections: {
-      key: string;
-      title: string;
-      entries: Entry[];
-      preset: LibraryFilters;
-    }[] = [];
-
-    /* ① 항상 렌더 — 수집물이 1건이라도 있으면 최근순은 절대 0이 안 된다.
-       이게 기본 상태가 비지 않는다는 보증이다. */
-    if (byRecent.length > 0) {
-      const pool = today.length > 0 ? today : byRecent;
-      sections.push({
-        key: "recent",
-        title: today.length > 0 ? "오늘 들어온 레퍼런스" : "최근 수집분",
-        entries: pool.slice(0, 4).map((data) => ({ kind: "item", data })),
-        preset: { ...DEFAULT_FILTERS, within: today.length > 0 ? "24h" : "all", sort: "recent" },
-      });
-    }
-
-    // ② 기준 평균 대비 잘 나온 것
-    const over = byRecent.filter((i) => overAvgMultiple.has(i.id));
-    if (over.length > 0) {
-      sections.push({
-        key: "over",
-        title: "내 기준보다 잘 나온 콘텐츠",
-        entries: over
-          .sort((a, b) => (overAvgMultiple.get(b.id) ?? 0) - (overAvgMultiple.get(a.id) ?? 0))
-          .slice(0, 4)
-          .map((data) => ({ kind: "item", data })),
-        preset: { ...DEFAULT_FILTERS, overOnly: true, sort: "views" },
-      });
-    }
-
-    // ③ 저장한 계정의 새 글
-    if (accountValues.length > 0) {
-      const fromAccounts = byRecent.filter((i) => accountValues.includes(i.matchedSource));
-      if (fromAccounts.length > 0) {
-        sections.push({
-          key: "accounts",
-          title: "저장한 계정의 새 글",
-          entries: fromAccounts.slice(0, 4).map((data) => ({ kind: "item", data })),
-          preset: { ...DEFAULT_FILTERS, sources: accountValues, sort: "posted" },
-        });
-      }
-    }
-
-    return sections;
-  }, [hasQuery, items, sources, overAvgMultiple]);
 
   /* ---------------- 액션 ---------------- */
 
@@ -667,7 +607,7 @@ export function LibraryClient({
       <section
         aria-label="레퍼런스 결과"
         aria-busy={poolSearching}
-        className={cn("mt-5 transition-opacity duration-150", poolSearching && "opacity-60")}
+        className={cn("results-area mt-5 transition-opacity duration-150", poolSearching && "opacity-60")}
       >
         {totalSources === 0 && totalCollected === 0 ? (
           /* ① 신규 — 온보딩으로 결과 영역을 대체한다(추가가 아니라 대체) */
@@ -704,33 +644,16 @@ export function LibraryClient({
             description={`기준 ${totalSources}개 등록됨 — '지금 수집'을 누르면 첫 수집이 시작됩니다. 매일 아침에도 자동으로 모아둘게요.`}
             action={<Button onClick={handleCollect}>지금 수집</Button>}
           />
-        ) : !hasQuery && exploreSections.length > 0 ? (
-          /* (a) 탐색 모드 — 큐레이션 행 그룹. 최상위 블록이 아니라 이 section 안의 행이다 */
-          <div className="space-y-8">
-            {exploreSections.map((s) => (
-              <div key={s.key}>
-                <div className="flex h-9 items-center justify-between gap-3">
-                  <div className="flex items-baseline gap-2">
-                    <h2 className="text-[15px] font-bold text-fg">{s.title}</h2>
-                    <span className="tnum text-[13px] text-fg-faint">{s.entries.length}건</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => applyFilters(s.preset)}
-                    className="shrink-0 cursor-pointer rounded-chip px-3 py-1 text-[13px] font-semibold text-fg-sub transition-colors hover:bg-overlay hover:text-fg"
-                  >
-                    전체 보기
-                  </button>
-                </div>
-                {/* 가로 선반 — 결과 그리드가 auto-fill이라 컬럼 수를 알 수 없으므로
-                    nth-child로 고아 카드를 숨기던 방식은 성립하지 않는다. 스냅 스크롤로
-                    바꾸면 폭과 무관하게 항상 한 줄이고, 넘치는 만큼 옆으로 밀린다. */}
-                <div className="row-shelf mt-2">{s.entries.map(renderEntry)}</div>
-              </div>
-            ))}
-          </div>
         ) : displayEntries.length > 0 ? (
-          /* (b) 검색 모드 — 단일 그리드 */
+          /* 첫 화면도 검색 결과도 **같은 그리드 하나**다.
+
+             예전에는 검색어가 없을 때 큐레이션 가로 선반 3줄을 그렸다. 실측해 보니
+             선반 2개가 카드 1장짜리였고, .row-shelf의 1fr 때문에 그 1장이 가로 전체를
+             차지해 카드 하나가 화면을 덮었다(첫 화면 총 6장). 조건이 붙을 때만 성립하는
+             레이아웃은 실제 데이터에서 무너진다.
+
+             선반을 없애니 첫 화면이 곧 전체 목록이 된다 — 스니핏·솔라리와 같은 구조이고,
+             "무엇을 볼지 고르는 화면"이 아니라 "보면서 고르는 화면"이 된다. */
           <>
             <div className={gridCls}>{displayEntries.slice(0, visibleCount).map(renderEntry)}</div>
             <div className="mt-6 flex justify-center">

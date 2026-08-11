@@ -494,10 +494,17 @@ body {
    현행 lg 3열(234px) → xl 4열(338px)의 44% 점프를 제거한다.
 ─────────────────────────────────────────────────────────────── */
 
-/* 결과 그리드 — 컬럼 수를 폭 구간마다 명시한다.
-   auto-fill로 두면 컨테이너 폭에 따라 4~6열을 오가며 카드 크기가 흔들리는데,
-   레퍼런스 도구는 "한 화면에 몇 개가 보이는가"가 곧 밀도이자 제품 인상이라
-   구간별로 못박는 편이 낫다. 1400px 컨테이너 · 5열 · gap 12px → 카드 약 270px. */
+/* 결과 그리드 — 컬럼 수를 **컨테이너 폭** 구간마다 명시한다.
+
+   미디어 쿼리(뷰포트 기준)에서 컨테이너 쿼리로 바꾼 이유:
+   뷰포트 1280px여도 사이드바 240px과 좌우 여백 48px을 빼면 본문은 990px이다.
+   min-width: 80rem(1280px) 조건은 뷰포트로는 참인데 카드가 실제로 놓이는 폭은
+   62rem밖에 안 된다 — 사이드바를 접거나 펴면 같은 화면에서 열 수가 어긋난다.
+   컨테이너 쿼리는 카드가 실제로 놓이는 폭을 재므로 그 어긋남이 사라진다.
+
+   목표는 "몇 열"이 아니라 **카드 폭을 170~250px 밴드 안에 붙잡아 두는 것**이다.
+   1200px 넘는 본문에서 5열을 고집하면 카드가 280px을 넘어 다시 커지므로,
+   그 지점부터는 6·7열로 넘겨 밀도를 유지한다. */
 .grid-refs {
   display: grid;
   gap: 0.75rem;
@@ -505,15 +512,23 @@ body {
   opacity: 1;
   transition: opacity var(--dur-2) var(--ease-arrive);
 }
-@media (min-width: 40rem) {
-  .grid-refs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* 폴백 — 컨테이너 쿼리를 못 쓰는 브라우저에서만 뷰포트 기준으로 근사한다.
+   @supports 로 감싸는 이유: 감싸지 않으면 두 규칙이 동시에 적용될 수 있고,
+   "컨테이너는 좁은데 뷰포트는 넓은" 조합에서 뷰포트 쪽 열 수가 이겨 카드가 뭉개진다. */
+@supports not (container-type: inline-size) {
+  @media (min-width: 40rem) { .grid-refs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (min-width: 64rem) { .grid-refs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (min-width: 80rem) { .grid-refs { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 }
-@media (min-width: 64rem) {
-  .grid-refs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-}
-@media (min-width: 80rem) {
-  .grid-refs { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-}
+
+/* 결과 영역이 측정 기준이 된다 */
+.results-area { container-type: inline-size; }
+
+@container (min-width: 26rem) { .grid-refs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container (min-width: 38rem) { .grid-refs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container (min-width: 50rem) { .grid-refs { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@container (min-width: 74rem) { .grid-refs { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+@container (min-width: 96rem) { .grid-refs { grid-template-columns: repeat(7, minmax(0, 1fr)); } }
 
 /* 필터·정렬 재배열 = FLIP이 아니라 컨테이너 1개의 불투명도 교차.
    60장을 FLIP으로 옮기면 동시 transform 60개이고 화면은 혼돈이 된다.
@@ -524,13 +539,16 @@ body {
   transition-timing-function: var(--ease-depart);
 }
 
-/* 브랜드 칩 트랙·대표 소재 스트립 — 가로 셸프.
-   카드 폭이 검색 그리드와 완전히 동일해서 모드가 바뀌어도 크기가 안 변하고,
-   어떤 폭에서도 고아 카드가 없다(열 수 하드코딩이 필요 없다). */
+/* 가로 셸프 — 브랜드 칩 트랙 등 한 줄로 흘려보내는 목록.
+
+   grid-auto-columns를 minmax(16rem, 1fr)로 뒀던 것이 사고의 원인이었다.
+   항목이 1개면 그 1개가 1fr을 전부 가져가 가로 전체를 덮는다(실측: 카드 1장이
+   본문 폭 전체). 항목 수에 따라 카드 크기가 변하는 트랙은 만들면 안 된다.
+   고정 폭으로 못박아 몇 개가 들어오든 카드 크기가 같게 한다. */
 .row-shelf {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(16rem, 1fr);
+  grid-auto-columns: 13rem;
   gap: 0.75rem;
   overflow-x: auto;
   overscroll-behavior-x: contain;
