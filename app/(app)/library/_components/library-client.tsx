@@ -20,7 +20,7 @@ import {
   toggleReferenceFavorite,
 } from "@/lib/actions/reference";
 import { addAdSource, removeAdSource, runAdCollection, toggleAdFavorite } from "@/lib/actions/ads-reference";
-import { searchPoolAction } from "../pool-actions";
+import { requestPoolCollect, searchPoolAction, togglePoolSave } from "../pool-actions";
 import { TREND_CATEGORIES } from "@/lib/data";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
@@ -77,6 +77,7 @@ export function LibraryClient({
   ads: initialAds,
   industryFacets,
   poolReady,
+  poolSavedIds,
   isDemo,
 }: {
   sources: ReferenceSource[];
@@ -92,6 +93,8 @@ export function LibraryClient({
    * false 면 개인 수집분을 브라우저에서 거른다(기존 동작 그대로).
    */
   poolReady: boolean;
+  /** 이미 저장한 풀 소재 id — 카드 북마크 상태를 첫 렌더부터 맞춘다 */
+  poolSavedIds: string[];
   isDemo: boolean;
 }) {
   const router = useRouter();
@@ -127,11 +130,13 @@ export function LibraryClient({
   const [collecting, setCollecting] = useState(false);
   const [toast, setToast] = useState<{ tone: "error" | "notice"; text: string } | null>(null);
 
-  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(
-    () => new Set(items.filter((i) => i.favorite).map((i) => i.id)),
+  /* 풀이 켜지면 저장 상태의 출처가 saved_creatives 로 바뀐다.
+     풀 소재의 id 는 creatives.id 라서 reference_items 의 favorite 과는 애초에 다른 세계다. */
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(() =>
+    poolReady ? new Set(poolSavedIds) : new Set(items.filter((i) => i.favorite).map((i) => i.id)),
   );
-  const [adFavoriteIds, setAdFavoriteIds] = useState<Set<string>>(
-    () => new Set(ads.filter((a) => a.favorite).map((a) => a.id)),
+  const [adFavoriteIds, setAdFavoriteIds] = useState<Set<string>>(() =>
+    poolReady ? new Set(poolSavedIds) : new Set(ads.filter((a) => a.favorite).map((a) => a.id)),
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedItem = items.find((i) => i.id === selectedId) ?? null;
@@ -432,6 +437,32 @@ export function LibraryClient({
       return;
     }
 
+    /* 풀이 켜져 있으면 개인 수집을 돌리지 않는다.
+       돌려봐야 reference_items 에 쌓이는데 화면은 풀을 보고 있어서 아무것도 안 보이고,
+       크레딧만 사용자 수만큼 나간다 — 이 구조를 버리려고 풀을 만들었다.
+       대신 등록해 둔 기준을 공용 수집 대기열 상단으로 올린다. */
+    if (poolReady) {
+      setCollecting(true);
+      try {
+        const targets = [
+          ...sources.map((s) => ({ value: s.value, platform: s.channel as string })),
+          ...adSources.map((a) => ({ value: a.value, platform: "meta_ads" })),
+        ];
+        const res = await requestPoolCollect(targets);
+        setToast(
+          res.ok
+            ? {
+                tone: "notice",
+                text: `기준 ${res.queued}개를 수집 대기열 맨 앞에 올렸어요 — 다음 수집 회차에 반영됩니다`,
+              }
+            : { tone: "error", text: res.error ?? "요청에 실패했어요" },
+        );
+      } finally {
+        setCollecting(false);
+      }
+      return;
+    }
+
     setCollecting(true);
     try {
       const [result, adResult] = await Promise.all([
@@ -495,7 +526,7 @@ export function LibraryClient({
       return next;
     });
     if (isDemo) return;
-    const result = await toggleReferenceFavorite(id, !was);
+    const result = poolReady ? await togglePoolSave(id, !was) : await toggleReferenceFavorite(id, !was);
     if (!result.ok) {
       setFavoriteIds((prev) => {
         const next = new Set(prev);
@@ -515,7 +546,8 @@ export function LibraryClient({
       return next;
     });
     if (isDemo) return;
-    const result = await toggleAdFavorite(id, !was);
+    /* 광고도 풀에서는 같은 creatives 표의 행이다 — 저장 경로가 하나로 합쳐진다 */
+    const result = poolReady ? await togglePoolSave(id, !was) : await toggleAdFavorite(id, !was);
     if (!result.ok) {
       setAdFavoriteIds((prev) => {
         const next = new Set(prev);

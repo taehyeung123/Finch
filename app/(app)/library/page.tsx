@@ -9,6 +9,7 @@ import { getCollectSettings, listReferenceItems, listReferenceSources } from "@/
 import { listAdSources, listReferenceAds } from "@/lib/actions/ads-reference";
 import { loadPoolFeed } from "@/lib/pool/bridge";
 import { listVisibleIndustries } from "@/lib/pool/search";
+import { listPoolSaves } from "./pool-actions";
 import { DEFAULT_COLLECT_SETTINGS } from "@/lib/types";
 import { LibraryClient } from "./_components/library-client";
 
@@ -28,8 +29,8 @@ export const maxDuration = 300;
 
 export default async function LibraryPage() {
   const isDemo = isDemoMode();
-  const [sources, ownItems, settings, adSources, ownAds, pool, industries] = isDemo
-    ? [mockSources, mockItems, DEFAULT_COLLECT_SETTINGS, mockAdSources, mockAds, null, []]
+  const [sources, ownItems, settings, adSources, ownAds, pool, industries, poolSavedIds] = isDemo
+    ? [mockSources, mockItems, DEFAULT_COLLECT_SETTINGS, mockAdSources, mockAds, null, [], []]
     : await Promise.all([
         listReferenceSources().then((s) => s ?? []),
         listReferenceItems(),
@@ -38,6 +39,7 @@ export default async function LibraryPage() {
         listReferenceAds(),
         loadPoolFeed().catch(() => null),
         listVisibleIndustries().catch(() => []),
+        listPoolSaves().catch(() => []),
       ]);
 
   const items = pool?.ready ? pool.items : ownItems;
@@ -58,6 +60,7 @@ export default async function LibraryPage() {
       ads={ads}
       industryFacets={industryFacets}
       poolReady={Boolean(pool?.ready)}
+      poolSavedIds={poolSavedIds}
       isDemo={isDemo}
     />
   );
