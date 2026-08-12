@@ -30,19 +30,21 @@ export async function GET(request: Request) {
 
   const started = new Date().toISOString();
   const t0 = Date.now();
-  const thumbs = await fillThumbs(THUMBS_PER_RUN);
 
-  /* 실행 회차가 못 따라간 AI 태깅 잔여분 — 40건이면 2청크 병렬 ≈ 10초.
-     썸네일이 시간을 다 먹은 회차에는 건너뛴다: 이 뒤에 롤업·부스트 루프(최대 300행)가
-     남아 있고, 60초 강제종료는 회차 기록까지 통째로 날린다. */
+  /* AI 태깅을 **썸네일보다 먼저** 돌린다 (2026-08-12 실측: 썸네일을 먼저 두면
+     실패 장당 10초 타임아웃이 시간을 다 먹어 enrich 가 매번 굶었다 — enriched=0).
+     enrich 는 청크당 20초 API 상한이 있어 40건 = 최악 ~25초로 유계다.
+     이 뒤 단계들 몫은 아래 썸네일 건수 조절이 지킨다. */
   let enriched = 0;
-  if (Date.now() - t0 < 15_000) {
-    try {
-      enriched = (await enrichPool(admin, 40)).enriched;
-    } catch (e) {
-      console.error("[pool] 마감 AI 태깅 실패(마감은 계속):", e instanceof Error ? e.message : String(e));
-    }
+  try {
+    enriched = (await enrichPool(admin, 40)).enriched;
+  } catch (e) {
+    console.error("[pool] 마감 AI 태깅 실패(마감은 계속):", e instanceof Error ? e.message : String(e));
   }
+
+  // 남은 시간에 맞춰 썸네일 건수를 줄인다 — 장당 250ms 낙관치지만 상한 역할은 한다
+  const thumbBudget = Math.max(0, Math.min(THUMBS_PER_RUN, Math.floor((40_000 - (Date.now() - t0)) / 250)));
+  const thumbs = thumbBudget > 0 ? await fillThumbs(thumbBudget) : { ok: 0, failed: 0, skipped: 0 };
 
   const { error: rollupErr } = await admin.rpc("rollup_industry_stats");
   if (rollupErr) console.error("[pool] 업종 롤업 실패", rollupErr.message);
