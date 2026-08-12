@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bookmark, Captions, ExternalLink, Eye, Heart, MessageCircle, Sparkles, Trash2, X } from "lucide-react";
+import { Bookmark, Captions, Download, ExternalLink, Eye, Heart, MessageCircle, Share2, Sparkles, Trash2, X } from "lucide-react";
 import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 import type { Channel, ReferenceItem } from "@/lib/types";
 import {
@@ -11,6 +11,7 @@ import {
   saveReferenceNote,
   setReferenceStatus,
 } from "@/lib/actions/reference";
+import { extractPoolTranscript } from "../pool-actions";
 import { formatCompact } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { Badge, ChannelBadge } from "@/components/ui/badge";
@@ -21,12 +22,14 @@ import { InfoTip } from "@/components/ui/info-tip";
   레퍼런스 상세 모달 — 카드 클릭 시. 미리보기 크게 + AI 분석 + 원본 캡션 전문 +
   릴스 대본 추출(인스타 전용, 음성 받아쓰기) + 내 메모 + 확인 상태 + 삭제.
 
-  poolMode: 공용 풀 소재를 볼 때다. 이때 개인 표(reference_items)를 건드리는 기능은
-  **전부 감춘다.** 남겨두면 누를 수 있지만 대상 행이 없어 조용히 실패한다 —
+  poolMode: 공용 풀 소재를 볼 때다. 개인 표(reference_items)를 건드리는 기능은
+  감춘다 — 남겨두면 누를 수 있지만 대상 행이 없어 조용히 실패한다.
   "눌러도 아무 일도 안 일어나는 버튼"이 에러 메시지보다 나쁘다.
    · 삭제 — 공용 자료라 한 사람이 지울 수 없다(신고는 별도 경로)
    · 메모·확인 상태 — saved_creatives 로 옮겨야 하는데 아직 배선 전이라 감춘다
-   · 대본 추출 — 유료 산출물 파이프라인(creative_transcripts 공용 캐시) 구축 전
+  대본 추출은 poolMode 에서도 **동작한다** — extractPoolTranscript 가
+  creative_transcripts 공용 캐시를 먼저 보고, 이미 추출된 건 무료로 준다.
+  이미지 저장·공유는 양쪽 모두 기본 제공(광고 상세와 같은 수준).
 */
 
 const GLYPH: Record<Channel, (props: { className?: string }) => React.ReactNode> = {
@@ -69,6 +72,7 @@ export function ReferenceDetailModal({
   const [extracting, setExtracting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -114,10 +118,54 @@ export function ReferenceDetailModal({
     if (extracting) return;
     setExtracting(true);
     setTranscriptMsg(null);
-    const result = await extractTranscript(item.id);
+    /* 풀 소재는 id 가 creatives 의 것이라 개인용 액션이 행을 못 찾는다 — 경로 분리 */
+    const result = poolMode ? await extractPoolTranscript(item.id) : await extractTranscript(item.id);
     setExtracting(false);
     if (result.ok) setTranscript(result.transcript);
     else setTranscriptMsg(result.error);
+  }
+
+  /** 이미지 저장 — Storage 가 교차 출처라 a[download] 만으로는 이동해 버린다. blob 으로 받는다 */
+  async function downloadImage() {
+    if (!item.thumbnailUrl) {
+      setActionMsg("이 게시물은 저장할 이미지가 없어요.");
+      return;
+    }
+    try {
+      const res = await fetch(item.thumbnailUrl);
+      if (!res.ok) throw new Error(String(res.status));
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `finch-${(item.creatorHandle || item.title).replace(/[\\/:*?"<>|@\s]+/g, "_")}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setActionMsg("이미지를 저장했어요.");
+    } catch {
+      setActionMsg("이미지 저장에 실패했어요 — 원본에서 직접 저장해 주세요.");
+    }
+  }
+
+  /** 공유 — 기기 공유 시트, 없으면 원본 링크 복사 */
+  async function share() {
+    const url = item.url;
+    if (!url) {
+      setActionMsg("공유할 원본 링크가 없어요.");
+      return;
+    }
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: item.title, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setActionMsg("링크를 복사했어요.");
+    } catch {
+      // 공유 시트를 닫은 경우 — 조용히
+    }
   }
 
   async function handleDelete() {
@@ -200,6 +248,22 @@ export function ReferenceDetailModal({
                   <ExternalLink className="size-3.5" aria-hidden />
                 </a>
               ) : null}
+              {/* 기본 행동 — 광고 상세와 같은 수준으로 맞춘다 */}
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="secondary" size="sm" onClick={downloadImage}>
+                  <Download className="size-3.5" aria-hidden />
+                  이미지 저장
+                </Button>
+                <Button variant="secondary" size="sm" onClick={share}>
+                  <Share2 className="size-3.5" aria-hidden />
+                  공유하기
+                </Button>
+              </div>
+              {actionMsg ? (
+                <p role="status" className="text-[12.5px] text-fg-sub">
+                  {actionMsg}
+                </p>
+              ) : null}
             </div>
 
             {/* 정보 */}
@@ -279,14 +343,15 @@ export function ReferenceDetailModal({
               ) : null}
 
               {/* 릴스 대본 — 음성 받아쓰기 (인스타 전용).
-                  공용 풀에서는 감춘다: 유료 산출물 공용 캐시를 아직 안 붙였다. */}
-              <div hidden={poolMode}>
+                  풀 소재는 extractPoolTranscript(공용 캐시 우선) 경로로 동작한다. */}
+              <div>
                 <p className="flex items-center gap-1.5 text-[13px] font-semibold">
                   <Captions className="size-3.5 text-fg-faint" aria-hidden />
                   릴스 대본
                   <InfoTip>
                     영상 음성을 받아써서 재생 없이 내용을 읽을 수 있게 합니다. 현재 인스타그램 릴스(2분
                     미만, 말로 설명하는 영상)만 지원돼요.
+                    {poolMode ? " 다른 사용자가 이미 추출해 둔 대본은 크레딧 차감 없이 바로 불러와요." : null}
                   </InfoTip>
                 </p>
                 {transcript ? (
@@ -371,18 +436,26 @@ export function ReferenceDetailModal({
                 삭제
               </Button>
             )}
-            <button
-              type="button"
-              aria-pressed={favorite}
-              aria-label={favorite ? "즐겨찾기 해제" : "즐겨찾기"}
-              onClick={onToggleFavorite}
-              className={cn(
-                "rounded-card p-1.5 transition-colors",
-                favorite ? "text-primary" : "text-fg-faint hover:bg-body hover:text-fg-sub",
-              )}
-            >
-              <Bookmark className="size-4" fill={favorite ? "currentColor" : "none"} aria-hidden />
-            </button>
+            {poolMode ? (
+              /* 풀에서는 저장이 주 행동이다 — 아이콘이 아니라 광고 상세와 같은 라벨 버튼으로 */
+              <Button size="sm" variant={favorite ? "secondary" : "primary"} onClick={onToggleFavorite}>
+                <Bookmark className="size-4" fill={favorite ? "currentColor" : "none"} aria-hidden />
+                {favorite ? "보드에서 빼기" : "보드에 저장"}
+              </Button>
+            ) : (
+              <button
+                type="button"
+                aria-pressed={favorite}
+                aria-label={favorite ? "즐겨찾기 해제" : "즐겨찾기"}
+                onClick={onToggleFavorite}
+                className={cn(
+                  "rounded-card p-1.5 transition-colors",
+                  favorite ? "text-primary" : "text-fg-faint hover:bg-body hover:text-fg-sub",
+                )}
+              >
+                <Bookmark className="size-4" fill={favorite ? "currentColor" : "none"} aria-hidden />
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" onClick={onClose}>

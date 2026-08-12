@@ -1,6 +1,9 @@
 "use server";
 
 import { createClient, getAuthUser } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { chargeGeneration, refundGenerationCredits, CREDIT_COSTS } from "@/lib/actions/credits";
+import { fetchIgTranscript, isCollectionConfigured, CollectError } from "@/lib/reference/scrapecreators";
 import { logSearch, searchPool, type PoolPlatformFilter, type PoolSort } from "@/lib/pool/search";
 import { poolItemToAd, poolItemToReference } from "@/lib/pool/bridge";
 import type { ReferenceAd, ReferenceItem } from "@/lib/types";
@@ -187,4 +190,86 @@ export async function requestPoolCollect(
   const { error } = await supabase.from("search_history").insert(rows);
   if (error) return { ok: false, queued: 0, error: error.message };
   return { ok: true, queued: rows.length };
+}
+
+
+/**
+ * 풀 소재 대본 추출 — **공용 캐시**가 핵심이다.
+ *
+ * 개인 수집분과 달리 풀 소재는 전원이 같은 행을 본다. 그래서 대본도
+ * creative_transcripts(0027) 한 곳에 저장하고, 누가 이미 추출했으면
+ * **다음 사람부터는 공짜다.** 이게 공용 풀의 세일즈 포인트이고
+ * (docs/POOL_OPERATIONS.md), 같은 영상에 공급사 크레딧을 두 번 쓰지 않는
+ * 원가 장치이기도 하다.
+ *
+ * 과금은 캐시 확인 뒤·공급사 호출 앞 — 실제로 돈이 나가는 호출만 과금한다.
+ * 쓰기는 admin 클라이언트로 한다: 공용 캐시 표는 사용자 쓰기 정책이 없다
+ * (일부러 — 아무나 남의 대본을 덮어쓰면 안 된다).
+ */
+export async function extractPoolTranscript(
+  creativeId: string,
+): Promise<{ ok: true; transcript: string; cached: boolean } | { ok: false; error: string }> {
+  const user = await getAuthUser();
+  if (!user) return { ok: false, error: "로그인이 필요해요." };
+
+  const supabase = await createClient();
+  const { data: c } = await supabase
+    .from("creatives")
+    .select("platform, kind, permalink")
+    .eq("id", creativeId)
+    .maybeSingle();
+  if (!c) return { ok: false, error: "게시물을 찾을 수 없어요." };
+  if (c.kind !== "post" || c.platform !== "instagram") {
+    return { ok: false, error: "대본 추출은 현재 인스타그램 릴스만 지원해요." };
+  }
+
+  // 누군가 이미 추출했으면 공짜 — 공용 풀의 존재 이유
+  const { data: cached } = await supabase
+    .from("creative_transcripts")
+    .select("transcript")
+    .eq("creative_id", creativeId)
+    .maybeSingle();
+  if (cached?.transcript) return { ok: true, transcript: cached.transcript as string, cached: true };
+
+  if (!c.permalink) return { ok: false, error: "원본 링크가 없어 추출할 수 없어요." };
+  if (!isCollectionConfigured()) return { ok: false, error: "수집 엔진 설정이 완료되지 않았어요." };
+
+  const charge = await chargeGeneration({
+    metric: "reference_transcript",
+    creditCost: CREDIT_COSTS.transcript,
+    reason: "pool_transcript",
+  });
+  if (!charge.ok) return { ok: false, error: charge.error };
+  const refundIfCharged = async () => {
+    if (charge.via === "credits") {
+      await refundGenerationCredits(charge.userId, CREDIT_COSTS.transcript, "pool_transcript_fail_refund");
+    }
+  };
+
+  try {
+    const text = await fetchIgTranscript(c.permalink as string);
+    if (!text) {
+      await refundIfCharged();
+      return { ok: false, error: "음성이 감지되지 않았어요 — 말로 설명하는 릴스만 대본을 만들 수 있어요." };
+    }
+    const transcript = text.slice(0, 8000);
+    const admin = createAdminClient();
+    if (admin) {
+      const { error } = await admin
+        .from("creative_transcripts")
+        .upsert({ creative_id: creativeId, transcript });
+      if (error) console.error("[pool] 대본 캐시 저장 실패(추출 결과는 반환):", error.message);
+    }
+    return { ok: true, transcript, cached: false };
+  } catch (e) {
+    await refundIfCharged();
+    const isCredits = e instanceof CollectError && e.reason === "out_of_credits";
+    console.error("[pool] 대본 추출 실패:", e);
+    return {
+      ok: false,
+      error: isCredits
+        ? "수집 엔진 사용량이 일시적으로 소진됐어요. 잠시 후 다시 시도해 주세요."
+        : "대본 추출에 실패했어요. 2분 미만의 말로 설명하는 영상만 지원돼요.",
+    };
+  }
 }
