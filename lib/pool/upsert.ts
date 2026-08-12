@@ -70,27 +70,30 @@ export async function upsertAds(
     else byPage.set(ad.pageId, [ad]);
   }
 
+  /* industry_ids 를 **아예 넣지 않는다.**
+     전에는 `{ ...r, industry_ids: undefined }` 로 지웠는데, supabase-js 는 여러 행을 보낼 때
+     모든 행의 키를 합집합으로 모은 뒤 빠진 자리를 **null 로 채운다**(PostgREST 대량 삽입이
+     컬럼을 균일하게 요구하기 때문). 그래서 undefined 가 null 이 되어 날아갔고,
+     brands.industry_ids 는 not null 이라 적재가 통째로 거부됐다.
+     (2026-08-11 실측: 공급사 호출 16건이 전부 과금됐는데 저장은 0건이었다.)
+
+     키를 아예 빼면 INSERT 는 컬럼 기본값 '{}' 을 받고, UPDATE 는 기존 값을 그대로 둔다 —
+     원래 의도(AI 가 정한 분류를 시드값이 되돌리지 않는다)가 그대로 지켜진다. */
   const brandRows = [...byPage.entries()].map(([pageId, group]) => ({
     platform: "meta",
     external_id: pageId,
     name: group[0].pageName,
     profile_url: group[0].pageProfileUrl,
-    industry_ids: industryId ? [industryId] : [],
     industry_source: "seed",
     last_seen_at: new Date().toISOString(),
   }));
 
   let brandIdByPage = new Map<string, string>();
   if (brandRows.length > 0) {
-    // ignoreDuplicates: false — 이름·프로필이 바뀌면 갱신한다.
-    // 단 industry_ids 는 여기서 덮어쓰면 AI 가 정한 분류를 시드값이 되돌린다.
-    // 그래서 신규 행에만 시드가 들어가도록, 기존 행의 업종은 아래에서 따로 병합한다.
+    // 이름·프로필이 바뀌면 갱신한다. 업종은 위 이유로 여기서 건드리지 않는다.
     const { data, error } = await db
       .from("brands")
-      .upsert(
-        brandRows.map((r) => ({ ...r, industry_ids: undefined })),
-        { onConflict: "platform,external_id" },
-      )
+      .upsert(brandRows, { onConflict: "platform,external_id" })
       .select("id, external_id, industry_ids, industry_source");
     if (error) throw new Error(`브랜드 적재 실패: ${error.message}`);
 
