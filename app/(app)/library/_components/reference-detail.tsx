@@ -11,7 +11,7 @@ import {
   saveReferenceNote,
   setReferenceStatus,
 } from "@/lib/actions/reference";
-import { extractPoolTranscript } from "../pool-actions";
+import { analyzePoolCreative, extractPoolTranscript, type PoolVideoAnalysis } from "../pool-actions";
 import { formatCompact } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { Badge, ChannelBadge } from "@/components/ui/badge";
@@ -73,6 +73,9 @@ export function ReferenceDetailModal({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<PoolVideoAnalysis | null>(null);
+  const [analysisMsg, setAnalysisMsg] = useState<string | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -123,6 +126,21 @@ export function ReferenceDetailModal({
     setExtracting(false);
     if (result.ok) setTranscript(result.transcript);
     else setTranscriptMsg(result.error);
+  }
+
+  async function handleAnalyze() {
+    if (analyzing) return;
+    setAnalyzing(true);
+    setAnalysisMsg(null);
+    const result = await analyzePoolCreative(item.id);
+    setAnalyzing(false);
+    if (result.ok) {
+      setAnalysis(result.analysis);
+      // 분석 과정에서 대본이 새로 추출됐으면 대본 칸도 같이 채운다 — 두 번 살 필요 없다
+      if (result.transcript && !transcript) setTranscript(result.transcript);
+    } else {
+      setAnalysisMsg(result.error);
+    }
   }
 
   /** 이미지 저장 — Storage 가 교차 출처라 a[download] 만으로는 이동해 버린다. blob 으로 받는다 */
@@ -380,6 +398,84 @@ export function ReferenceDetailModal({
                   </div>
                 )}
               </div>
+
+              {/* AI 영상 분석 — 풀 전용. 대본 기반 후킹 구조 분석, creative_analyses 공용 캐시 */}
+              {poolMode ? (
+                <div>
+                  <p className="flex items-center gap-1.5 text-[13px] font-semibold">
+                    <Sparkles className="size-3.5 text-fg-faint" aria-hidden />
+                    AI 영상 분석
+                    <InfoTip>
+                      대본을 바탕으로 첫 3초 훅·전개 구조·타깃을 분석해요. 다른 사용자가 이미 분석한
+                      영상은 크레딧 차감 없이 바로 보여요.
+                    </InfoTip>
+                  </p>
+                  {analysis ? (
+                    <div className="mt-1.5 space-y-2.5 rounded-card border border-line bg-body px-3 py-2.5">
+                      {analysis.hookTags.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {analysis.hookTags.map((h) => (
+                            <span
+                              key={h}
+                              className="inline-flex items-center rounded-chip bg-primary-weak px-2 py-0.5 text-[11px] font-semibold text-primary"
+                            >
+                              {h}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                      {analysis.opening ? (
+                        <div>
+                          <p className="text-[12px] font-semibold text-fg-sub">첫 3초</p>
+                          <p className="mt-0.5 text-[13px] leading-relaxed">{analysis.opening}</p>
+                        </div>
+                      ) : null}
+                      {analysis.flow.length > 0 ? (
+                        <div>
+                          <p className="text-[12px] font-semibold text-fg-sub">전개 구조</p>
+                          <ol className="mt-0.5 list-decimal space-y-0.5 pl-4 text-[13px] leading-relaxed">
+                            {analysis.flow.map((step, i) => (
+                              <li key={i}>{step}</li>
+                            ))}
+                          </ol>
+                        </div>
+                      ) : null}
+                      {analysis.target ? (
+                        <div>
+                          <p className="text-[12px] font-semibold text-fg-sub">타깃 추정</p>
+                          <p className="mt-0.5 text-[13px] leading-relaxed">{analysis.target}</p>
+                        </div>
+                      ) : null}
+                      {analysis.improvement ? (
+                        <div>
+                          <p className="text-[12px] font-semibold text-fg-sub">적용 포인트</p>
+                          <p className="mt-0.5 text-[13px] leading-relaxed">{analysis.improvement}</p>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="mt-1.5">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleAnalyze}
+                        disabled={analyzing || item.channel !== "instagram"}
+                        aria-busy={analyzing}
+                      >
+                        {analyzing ? "분석 중 (10~40초)" : "영상 분석"}
+                      </Button>
+                      {item.channel !== "instagram" ? (
+                        <span className="ml-2 text-[12px] text-fg-faint">인스타그램 릴스만 지원</span>
+                      ) : null}
+                      {analysisMsg ? (
+                        <p role="alert" className="mt-1.5 text-[13px] text-negative">
+                          {analysisMsg}
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              ) : null}
 
               {/* 내 메모 */}
               <div hidden={poolMode}>

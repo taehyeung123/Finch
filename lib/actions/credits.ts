@@ -37,6 +37,8 @@ export const CREDIT_COSTS = {
   brandTone: 1,
   /** AI 에이전트 메시지 1건 — 건당은 싸지만 횟수 상한이 없으면 누적이 무제한이다 */
   agentChat: 1,
+  /** 풀 영상 AI 분석 1회 — 대본(공급사 1크레딧 원가, 캐시 시 0) + Opus 분석. 결과는 공용 캐시 */
+  videoAnalysis: 2,
 } as const;
 
 /** 플랜별 무료 월 한도 — planFeatures 표와 일치 유지 (무료 3회, 유료 사실상 무제한) */
@@ -53,6 +55,8 @@ export const FREE_MONTHLY_LIMITS: Record<string, Record<string, number>> = {
   ai_ideas: { free: 1, creator: 1000000, pro: 1000000, agency: 1000000, enterprise: 1000000 },
   ai_brand_tone: { free: 1, creator: 1000000, pro: 1000000, agency: 1000000, enterprise: 1000000 },
   ai_agent_chat: { free: 10, creator: 500, pro: 2000, agency: 5000, enterprise: 20000 },
+  // 영상 분석은 대본 추출(공급사 실비)을 내장하므로 한도도 대본과 같은 결로 잡는다
+  ai_video_analysis: { free: 1, creator: 30, pro: 80, agency: 150, enterprise: 400 },
 };
 
 export type ChargeResult =
