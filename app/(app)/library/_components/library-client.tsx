@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ReferenceDetailModal } from "./reference-detail";
+import { AdDetailModal } from "./ad-detail";
 import { AdCard, ReferenceCard } from "./reference-card";
 import { LibrarySettingsDrawer, type DrawerTab, type SourceBaseline } from "./library-settings-drawer";
 import {
@@ -190,6 +191,20 @@ export function LibraryClient({
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedItem = items.find((i) => i.id === selectedId) ?? null;
+
+  const [selectedAdId, setSelectedAdId] = useState<string | null>(null);
+  const selectedAd = ads.find((a) => a.id === selectedAdId) ?? null;
+
+  /* 유사 광고 — 서버 호출 없이 이미 받아 둔 목록에서 고른다.
+     같은 광고주가 먼저(그 브랜드의 다른 소재), 다음이 같은 업종. 6개까지. */
+  const similarAds = useMemo<ReferenceAd[]>(() => {
+    if (!selectedAd) return [];
+    const sameBrand = ads.filter((a) => a.id !== selectedAd.id && a.pageName === selectedAd.pageName);
+    const sameIndustry = ads.filter(
+      (a) => a.id !== selectedAd.id && a.pageName !== selectedAd.pageName && a.category === selectedAd.category,
+    );
+    return [...sameBrand, ...sameIndustry].slice(0, 6);
+  }, [ads, selectedAd]);
 
   const activeFilterCount = countActiveFilters(filters);
   const hasQuery = query.trim() !== "" || activeFilterCount > 0;
@@ -672,6 +687,7 @@ export function LibraryClient({
         key={entry.data.id}
         ad={entry.data}
         favorite={adFavoriteIds.has(entry.data.id)}
+        onOpen={() => setSelectedAdId(entry.data.id)}
         onToggleFavorite={() => toggleAdFav(entry.data.id)}
       />
     );
@@ -907,6 +923,17 @@ export function LibraryClient({
             </p>
           </div>
         </div>
+      ) : null}
+
+      {selectedAd ? (
+        <AdDetailModal
+          ad={selectedAd}
+          similar={similarAds}
+          favorite={adFavoriteIds.has(selectedAd.id)}
+          onToggleFavorite={() => toggleAdFav(selectedAd.id)}
+          onSelect={(a) => setSelectedAdId(a.id)}
+          onClose={() => setSelectedAdId(null)}
+        />
       ) : null}
 
       {selectedItem ? (

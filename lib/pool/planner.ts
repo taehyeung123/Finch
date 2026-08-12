@@ -21,6 +21,10 @@ import { isKnownIndustry } from "@/lib/industry/taxonomy";
 
 const PRIORITY = {
   followedBrand: 10,
+  /* 오가닉을 브랜드 시드보다 앞세운다(2026-08-12 지시). 광고는 이미 수백 건이
+     쌓였는데 오가닉은 0건이다 — "팔로워 수 대비 인기 영상" 섹션이 비어 있는 이유.
+     한 회차 30건 상한이 있어 브랜드 시드를 굶기지는 않는다. */
+  organicSeed: 15,
   brandSeed: 20,
   searchMiss: 30,
   thinIndustry: 60,
@@ -190,22 +194,30 @@ export async function planCrawl(capacity = 120): Promise<PlanResult> {
      ① 유명 브랜드 → ② 자격 미달 업종의 시드어 → ③ 나머지.
      한 번에 훑으면서 정렬을 다시 하면 각 그룹 안의 "오래된 것 먼저"가 깨진다. */
   const kws = keywords ?? [];
-  const PASSES = [
-    { key: "brandSeed", pick: (o: string) => o === "brand", priority: PRIORITY.brandSeed },
-    {
-      key: "thinIndustry",
-      pick: (_o: string, ind: string) => thin.has(ind),
-      priority: PRIORITY.thinIndustry,
-    },
+  const PASSES: Array<{
+    key: string;
+    pick: (origin: string, industryId: string, platform: string) => boolean;
+    priority: number;
+    /** 회차당 상한 — 한 축이 큐를 독식하지 않게 */
+    cap?: number;
+  }> = [
+    /* 오가닉(인스타 해시태그) — 광고만 쌓이고 오가닉이 0인 불균형을 메꾼다.
+       cap 30: 광고 브랜드 시드도 계속 굴러가야 한다. */
+    { key: "organicSeed", pick: (_o, _i, p) => p !== "meta_ads", priority: PRIORITY.organicSeed, cap: 30 },
+    { key: "brandSeed", pick: (o) => o === "brand", priority: PRIORITY.brandSeed },
+    { key: "thinIndustry", pick: (_o, ind) => thin.has(ind), priority: PRIORITY.thinIndustry },
     { key: "rotation", pick: () => true, priority: PRIORITY.rotation },
-  ] as const;
+  ];
 
   for (const pass of PASSES) {
+    let passCount = 0;
     for (const k of kws) {
+      if (pass.cap !== undefined && passCount >= pass.cap) break;
       const industryId = String(k.industry_id);
       const origin = String(k.origin ?? "seed");
-      if (!pass.pick(origin, industryId)) continue;
       const platform = String(k.platform);
+      if (!pass.pick(origin, industryId, platform)) continue;
+      const before = rows.length;
       take(
         {
           job_type: platform === "meta_ads" ? "kw_ads" : "kw_posts",
@@ -217,6 +229,7 @@ export async function planCrawl(capacity = 120): Promise<PlanResult> {
         },
         pass.key,
       );
+      if (rows.length > before) passCount += 1;
     }
   }
 

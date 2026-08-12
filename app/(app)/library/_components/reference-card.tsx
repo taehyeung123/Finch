@@ -159,22 +159,25 @@ export function AdCard({
   ad,
   favorite,
   onToggleFavorite,
+  onOpen,
 }: {
   ad: ReferenceAd;
   favorite: boolean;
   onToggleFavorite: () => void;
+  /** 상세 모달 열기 — 외부(메타 라이브러리)로 곧장 나가지 않는다.
+      보던 화면을 떠나는 데다 우리가 가진 정보(집행 기간·유사 광고)를 하나도 못 준다.
+      외부 링크는 모달 안 [원본 보기]로만. */
+  onOpen: () => void;
 }) {
   const days = runningDays(ad);
-  const href = `https://www.facebook.com/ads/library/?id=${ad.adArchiveId}`;
 
   return (
     <Card hover className="group card-defer relative flex flex-col overflow-hidden">
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label={`${ad.pageName} 광고를 광고 라이브러리에서 보기`}
-        className="media-frame block cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`${ad.pageName} 광고 상세 보기`}
+        className="media-frame block w-full cursor-pointer text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
       >
         {ad.thumbnailUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- 공급사 원본 썸네일 URL, 최적화 프록시 미대상
@@ -201,7 +204,7 @@ export function AdCard({
             </span>
           ) : null}
         </span>
-      </a>
+      </button>
 
       <SaveToggle on={favorite} onClick={onToggleFavorite} />
 
