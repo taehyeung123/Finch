@@ -36,6 +36,9 @@ export interface PoolQuery {
 
 export interface PoolItem {
   id: string;
+  /** 플랫폼 쪽 원본 ID — 광고는 Meta ad_archive_id. 원본 링크는 이걸로 만들어야 한다.
+      내부 UUID(id)로 만들면 메타가 모르는 ID 라 빈 창이 뜬다(2026-08-12 실측 사고). */
+  externalId: string;
   kind: "ad" | "post";
   platform: string;
   title: string;
@@ -79,6 +82,7 @@ const DEFAULT_PAGE_SIZE = 40; // 5열 그리드 × 8줄
 
 interface Row {
   id: string;
+  external_id: string;
   kind: string;
   platform: string;
   title: string;
@@ -114,6 +118,7 @@ function toItem(r: Row): PoolItem {
   const stats = one(r.creative_stats);
   return {
     id: r.id,
+    externalId: r.external_id,
     kind: r.kind === "ad" ? "ad" : "post",
     platform: r.platform,
     title: r.title,
@@ -141,7 +146,7 @@ function toItem(r: Row): PoolItem {
 }
 
 const SELECT =
-  "id, kind, platform, title, body, permalink, thumb_path, media_format, brand_id, " +
+  "id, external_id, kind, platform, title, body, permalink, thumb_path, media_format, brand_id, " +
   "views, likes, comments, follower_count, is_active, run_days, ad_platforms, cta_text, ended_at, " +
   "industry_ids, heat_score, posted_at, first_seen_at, " +
   "brands(id, name), creative_stats(save_count)";

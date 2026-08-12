@@ -60,7 +60,9 @@ export function poolItemToReference(p: PoolItem): ReferenceItem {
 export function poolItemToAd(p: PoolItem): ReferenceAd {
   return {
     id: p.id,
-    adArchiveId: p.id,
+    // 카드가 이 값으로 facebook.com/ads/library/?id=... 링크를 만든다.
+    // 내부 UUID 를 넣으면 메타가 모르는 ID 라 "결과 없음" 창이 뜬다.
+    adArchiveId: p.externalId,
     pageName: p.brandName ?? "알 수 없는 광고주",
     pageProfileUrl: null,
     body: p.body,
