@@ -203,7 +203,7 @@ export function LibraryClient({
     const sameIndustry = ads.filter(
       (a) => a.id !== selectedAd.id && a.pageName !== selectedAd.pageName && a.category === selectedAd.category,
     );
-    return [...sameBrand, ...sameIndustry].slice(0, 8);
+    return [...sameBrand, ...sameIndustry].slice(0, 24);
   }, [ads, selectedAd]);
 
   const activeFilterCount = countActiveFilters(filters);
@@ -930,7 +930,9 @@ export function LibraryClient({
           ad={selectedAd}
           similar={similarAds}
           favorite={adFavoriteIds.has(selectedAd.id)}
+          savedIds={adFavoriteIds}
           onToggleFavorite={() => toggleAdFav(selectedAd.id)}
+          onToggleSave={(id) => toggleAdFav(id)}
           onSelect={(a) => setSelectedAdId(a.id)}
           onClose={() => setSelectedAdId(null)}
         />
