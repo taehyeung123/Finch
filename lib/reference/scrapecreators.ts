@@ -48,7 +48,12 @@ export class CollectError extends Error {
 }
 
 const BASE = "https://api.scrapecreators.com";
-const TIMEOUT_MS = 45_000;
+/* 20초 상한 (45초에서 하향, 2026-08-12).
+   Vercel Hobby 함수 상한이 60초인데, 호출 1건이 45초까지 기다릴 수 있으면
+   작업 하나(2콜)가 90초를 잡아먹어 함수가 통째로 강제 종료된다 — 실측으로 겪었다.
+   강제 종료는 최악이다: 과금은 됐는데 회계·저장·기록이 전부 유실된다.
+   정상 응답은 2~5초라 20초를 넘는 호출은 사실상 죽은 호출이다. */
+const TIMEOUT_MS = 20_000;
 
 export function isCollectionConfigured(): boolean {
   return Boolean(process.env.SCRAPECREATORS_API_KEY);
