@@ -238,10 +238,14 @@ export function AdDetailModal({
       }}
     >
       <div className="shadow-pop grid h-[92dvh] w-full grid-rows-[minmax(0,1fr)] overflow-hidden rounded-t-card border border-line bg-overlay sm:h-[90dvh] sm:w-[90vw] sm:max-w-[1728px] sm:rounded-card md:grid-cols-[minmax(320px,480px)_minmax(0,1fr)]">
-        {/* ══ 왼쪽 480px — 이 광고의 모든 것 ══ */}
+        {/* ══ 왼쪽 480px — 이 광고의 모든 것 ══
+            스크롤 컬럼의 자식은 전부 shrink-0 이어야 한다. 없으면 내용이 길 때
+            flex 가 미디어 칸을 짜부라뜨리고, 안의 이미지(max-h 46dvh)가 칸 밖으로
+            넘쳐 버튼 위에 그려진다 — 실측으로 겪은 겹침 사고다. 줄어드는 대신
+            컬럼이 스크롤되는 게 맞다. */}
         <div className="flex min-h-0 flex-col overflow-y-auto border-b border-line md:border-b-0 md:border-r">
           {/* 플랫폼 칩 — 스니핏의 [Instagram ↗] 자리 */}
-          <div className="flex items-center justify-between px-4 pt-4">
+          <div className="flex shrink-0 items-center justify-between px-4 pt-4">
             <a
               href={libraryHref}
               target="_blank"
@@ -264,7 +268,7 @@ export function AdDetailModal({
           </div>
 
           {/* 미디어 */}
-          <div className="flex min-h-[16rem] items-center justify-center p-4">
+          <div className="flex min-h-[16rem] shrink-0 items-center justify-center p-4">
             {ad.thumbnailUrl ? (
               // eslint-disable-next-line @next/next/no-img-element -- Storage 캐시 URL, 최적화 프록시 미대상
               <img
@@ -278,7 +282,7 @@ export function AdDetailModal({
           </div>
 
           {/* 행동 줄 — 스니핏 배치: [이미지] 왼쪽, [공유하기][보드에 저장] 오른쪽 */}
-          <div className="flex items-center justify-between gap-2 px-4">
+          <div className="flex shrink-0 items-center justify-between gap-2 px-4">
             <Button size="sm" variant="secondary" onClick={downloadImage}>
               <Download className="size-4" aria-hidden />
               이미지
@@ -301,7 +305,7 @@ export function AdDetailModal({
           ) : null}
 
           {/* 광고주 블록 — 스니핏 순서: 이름 → 날짜 → 게재정보 → 본문 */}
-          <div className="space-y-2.5 px-4 py-4">
+          <div className="shrink-0 space-y-2.5 px-4 py-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate text-[15px] font-bold text-fg">{ad.pageName}</p>
