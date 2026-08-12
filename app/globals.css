@@ -1027,7 +1027,9 @@ body {
 .panel-scrim {
   position: fixed;
   inset: 0;
-  z-index: 10;
+  /* 상단바(z-30)와 같은 값 — DOM 순서가 나중이라 상단바 위에 칠해진다.
+     콘솔 헤더(z-40)와 그 안의 패널만 밝게 남는다. */
+  z-index: 30;
   background: rgba(15, 23, 42, 0.32);
   animation: panel-fade 150ms ease both;
 }

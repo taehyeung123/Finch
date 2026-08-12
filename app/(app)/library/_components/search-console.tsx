@@ -1052,11 +1052,22 @@ export function SearchConsole({
   );
 
   return (
-    /* sticky + z-20 은 장식이 아니라 **필터 패널이 보이기 위한 전제**다.
-       이걸 빼면 헤더가 쌓임 순서에서 결과 영역보다 아래가 되고, 패널 안에 z-30 을 아무리
-       줘도 그 값은 헤더 안에서만 유효하므로 카드가 패널 위를 덮는다(2026-08-11 실측 사고).
-       top-16 은 상단바 높이. 상단바가 z-30 이라 그보다 낮게 둬야 패널이 상단바를 안 가린다. */
-    <header className="sticky top-16 z-20 -mx-4 -mt-6 border-b border-line bg-surface/95 px-4 pb-3 pt-4 backdrop-blur md:-mx-6 md:px-6">
+    <>
+      {/* 스크림 — 반드시 헤더 **밖**에 있어야 한다.
+         헤더의 backdrop-blur(backdrop-filter)는 fixed 자손의 기준(containing block)을
+         뷰포트에서 헤더 자신으로 바꿔버린다. 안에 두면 inset:0 이 "화면 전체"가 아니라
+         "검색줄 영역"이 되어, 검색창만 어두워지는 코미디가 났다(2026-08-12 실측 사고).
+         z-30: 상단바(z-30)와 같은 값 + DOM 이 나중이라 상단바까지 덮는다 —
+         스니핏처럼 검색줄과 패널만 남고 전부 가라앉는다. */}
+      {panelOpen ? <div className="panel-scrim hidden lg:block" aria-hidden /> : null}
+
+      {/* sticky + z 는 장식이 아니라 **필터 패널이 보이기 위한 전제**다.
+         z 를 빼면 헤더가 쌓임 순서에서 결과 영역보다 아래가 되고, 패널 안에 z-30 을 아무리
+         줘도 그 값은 헤더 안에서만 유효하므로 카드가 패널 위를 덮는다(2026-08-11 실측 사고).
+         z-40 인 이유: 스크림(z-30)이 상단바까지 덮는 동안 이 헤더와 그 안의 패널은
+         밝게 남아야 한다. 상단바(top-0 h-16)와 이 헤더(top-16)는 화면에서 절대 겹치지
+         않으므로 z 가 더 커도 시각적 충돌이 없다. */}
+      <header className="sticky top-16 z-40 -mx-4 -mt-6 border-b border-line bg-surface/95 px-4 pb-3 pt-4 backdrop-blur md:-mx-6 md:px-6">
       <h2 className="sr-only">레퍼런스 검색</h2>
 
       {/* ── 1행 — 검색 줄.
@@ -1238,11 +1249,6 @@ export function SearchConsole({
               보고 있던 카드가 화면 밖으로 밀려난다. 스니핏도 띄운다(스크린샷에서
               카드 뒤로 썸네일이 비친다). 왼쪽 모서리는 이 입력 박스에 맞고,
               오른쪽은 [지금 수집]까지 덮어 화면 폭을 다 쓴다. ── */}
-          {/* 스크림 — 패널이 떠 있는 동안 뒤 화면을 가라앉힌다(스니핏 실측 rgba(15,23,42,.32)).
-              헤더(z-20)보다 아래라 검색줄은 밝게 남는다. 클릭은 기존 바깥클릭 핸들러가
-              받아 패널을 닫는다 — 카드 오클릭도 자연히 막힌다. */}
-          {panelOpen ? <div className="panel-scrim hidden lg:block" aria-hidden /> : null}
-
           {panelOpen ? (
             <div
               id="library-filter-panel"
@@ -1390,5 +1396,6 @@ export function SearchConsole({
         </div>
       ) : null}
     </header>
+    </>
   );
 }
