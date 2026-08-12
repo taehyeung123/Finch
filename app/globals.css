@@ -1017,3 +1017,52 @@ body {
   box-shadow: none;
   border-color: var(--line-strong);
 }
+
+/* ───────────────────────────────────────────────────────────────
+   필터 패널 스크림 — 스니핏 실측 rgba(15,23,42,0.32).
+   패널이 열리면 뒤 화면을 살짝 가라앉혀 "지금은 조건을 만지는 중"을 만든다.
+   블러는 안 쓴다(실측 backdropFilter: none) — 색만으로 충분하고 블러는 비싸다.
+   z-10: 헤더(z-20) 아래라 검색줄·상태줄은 밝게 남고, 본문 카드만 가라앉는다.
+─────────────────────────────────────────────────────────────── */
+.panel-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: rgba(15, 23, 42, 0.32);
+  animation: panel-fade 150ms ease both;
+}
+:root[data-theme="dark"] .panel-scrim {
+  /* 다크에서 같은 값은 안 보인다 — 더 깊게 */
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* ───────────────────────────────────────────────────────────────
+   세그먼트 슬라이드 썸 — 스니핏 실측:
+   transition: transform 0.2s, width 0.2s / 흰 알약 radius 8 /
+   shadow 0 4px 14px rgba(15,23,42,.14), 0 1px 3px rgba(15,23,42,.1)
+   배경만 뚝 바뀌는 게 아니라 알약이 미끄러져 가야 "옮겨갔다"가 읽힌다.
+─────────────────────────────────────────────────────────────── */
+.seg-thumb {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  border-radius: var(--radius-card);
+  background: var(--body);
+  box-shadow:
+    0 4px 14px rgba(15, 23, 42, 0.14),
+    0 1px 3px rgba(15, 23, 42, 0.1);
+  transition:
+    transform 0.2s var(--ease-state),
+    width 0.2s var(--ease-state);
+  /* 첫 측정 전에는 숨긴다 — 0 위치에서 번쩍이며 나타나는 것 방지 */
+  opacity: 0;
+}
+:root[data-theme="dark"] .seg-thumb {
+  background: var(--overlay);
+  box-shadow: none;
+  border: 1px solid var(--line-strong);
+}
+@media (prefers-reduced-motion: reduce) {
+  .seg-thumb { transition: opacity 0.1s linear; }
+}

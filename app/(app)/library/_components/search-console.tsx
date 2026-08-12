@@ -15,6 +15,7 @@ import {
   Search,
   Settings2,
   SlidersHorizontal,
+  Sparkles,
   Type,
   X,
   Zap,
@@ -375,13 +376,19 @@ function Field({
 }) {
   return (
     <div>
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <p className="flex items-center gap-1.5 text-[13px] font-bold text-fg">
+      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+        <p className="flex items-center gap-1.5 text-[14px] font-bold text-fg">
           {label}
           {info ? <InfoTip>{info}</InfoTip> : null}
         </p>
-        {/* 힌트를 아랫줄로 내리지 않는다 — 라벨과 한 줄이어야 "이 축의 설명"으로 읽힌다 */}
-        {hint ? <p className="text-[12px] text-fg-faint">{hint}</p> : null}
+        {/* 힌트는 회색 잔글씨가 아니라 **포인트 컬러**다(스니핏 실측 — 강조색 14px).
+            "여기서 뭔가 달라진다"는 안내는 눈에 띄어야 안내다. */}
+        {hint ? (
+          <p className="flex items-center gap-1 text-[12.5px] font-medium text-primary">
+            <Sparkles className="size-3 shrink-0" aria-hidden />
+            {hint}
+          </p>
+        ) : null}
       </div>
       <div className="mt-2.5">{children}</div>
     </div>
@@ -430,7 +437,15 @@ function Chip({
   );
 }
 
-/** 세그먼트 트랙 — 배타 선택 축(플랫폼) 전용. 회색 판 위에서 흰 알약이 움직인다 */
+/**
+ * 세그먼트 트랙 — 흰 알약이 선택지로 **미끄러져 간다** (스니핏 실측:
+ * transition: transform 0.2s, width 0.2s). 배경색만 뚝 바뀌면 "바뀌었다"는 알아도
+ * "옮겨갔다"는 못 읽는다 — 이동감이 곧 이 컨트롤의 문법이다.
+ *
+ * 썸 위치는 React 상태가 아니라 DOM 스타일로 직접 쓴다.
+ * 상태로 두면 effect 안 setState 가 되어 lint(react-hooks/set-state-in-effect)에
+ * 걸리고, 굳이 리렌더를 태울 이유도 없다 — 움직이는 건 장식 요소 하나다.
+ */
 function TargetSegmented({
   value,
   onChange,
@@ -438,24 +453,49 @@ function TargetSegmented({
   value: SearchTarget;
   onChange: (v: SearchTarget) => void;
 }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const thumbRef = useRef<HTMLSpanElement>(null);
+  const btnRefs = useRef(new Map<SearchTarget, HTMLButtonElement>());
+
+  useEffect(() => {
+    const move = () => {
+      const btn = btnRefs.current.get(value);
+      const thumb = thumbRef.current;
+      if (!btn || !thumb) return;
+      thumb.style.transform = `translateX(${btn.offsetLeft}px)`;
+      thumb.style.width = `${btn.offsetWidth}px`;
+      thumb.style.opacity = "1";
+    };
+    move();
+    // 컨테이너 폭이 바뀌면(패널 열림 직후 측정 0 포함) 다시 잰다
+    const ro = new ResizeObserver(move);
+    if (trackRef.current) ro.observe(trackRef.current);
+    return () => ro.disconnect();
+  }, [value]);
+
   return (
     <div
+      ref={trackRef}
       role="tablist"
       aria-label="플랫폼 필터"
-      className="flex w-full items-center gap-0.5 overflow-x-auto rounded-t-card bg-surface p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="relative flex w-full items-center gap-0.5 overflow-x-auto rounded-t-card bg-surface p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
+      <span ref={thumbRef} className="seg-thumb" aria-hidden />
       {TARGET_OPTIONS.map((o) => {
         const on = value === o.value;
         return (
           <button
             key={o.value}
+            ref={(el) => {
+              if (el) btnRefs.current.set(o.value, el);
+            }}
             type="button"
             role="tab"
             aria-selected={on}
             onClick={() => onChange(o.value)}
             className={cn(
-              "trans-state inline-flex h-8 flex-1 shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-card px-2.5 text-[13px]",
-              on ? "bg-body font-bold text-fg shadow-pop" : "font-medium text-fg-sub hover:text-fg",
+              "relative z-10 inline-flex h-8 flex-1 shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-card px-2.5 text-[13.5px] transition-colors duration-200",
+              on ? "font-bold text-fg" : "font-medium text-fg-sub hover:text-fg",
             )}
           >
             <TargetGlyph value={o.value} on={on} />
@@ -943,8 +983,11 @@ export function SearchConsole({
       {/* 머리 줄 — 왼쪽 안내·활성 개수·초기화, 오른쪽 저장 조합·접기 */}
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="flex min-w-0 items-center gap-2">
-          <p className="truncate text-[13px] text-fg-sub">
-            조건을 조합해 정확한 레퍼런스를 찾아보세요
+          {/* 본문은 진하게, 핵심 단어 하나만 포인트 컬러 — 스니핏 실측 구조.
+              전부 연회색이면 안내문이 아니라 배경 무늬가 된다. */}
+          <p className="truncate text-[14px] text-fg">
+            다양한 <span className="font-semibold text-primary">필터</span>를 조합해 정확한
+            레퍼런스를 찾아보세요
           </p>
           {activeCount > 0 ? (
             <>
@@ -1195,6 +1238,11 @@ export function SearchConsole({
               보고 있던 카드가 화면 밖으로 밀려난다. 스니핏도 띄운다(스크린샷에서
               카드 뒤로 썸네일이 비친다). 왼쪽 모서리는 이 입력 박스에 맞고,
               오른쪽은 [지금 수집]까지 덮어 화면 폭을 다 쓴다. ── */}
+          {/* 스크림 — 패널이 떠 있는 동안 뒤 화면을 가라앉힌다(스니핏 실측 rgba(15,23,42,.32)).
+              헤더(z-20)보다 아래라 검색줄은 밝게 남는다. 클릭은 기존 바깥클릭 핸들러가
+              받아 패널을 닫는다 — 카드 오클릭도 자연히 막힌다. */}
+          {panelOpen ? <div className="panel-scrim hidden lg:block" aria-hidden /> : null}
+
           {panelOpen ? (
             <div
               id="library-filter-panel"
