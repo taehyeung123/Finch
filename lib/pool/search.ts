@@ -24,6 +24,8 @@ export type PoolPlatformFilter = "all" | "meta_ads" | "instagram" | "tiktok" | "
 
 export interface PoolQuery {
   q?: string;
+  /** ad(광고) / post(오가닉) — 안 주면 둘 다 */
+  kind?: "ad" | "post";
   industryId?: string | null;
   platform?: PoolPlatformFilter;
   mediaFormat?: "all" | "video" | "photo" | "carousel";
@@ -161,6 +163,7 @@ export async function searchPool(query: PoolQuery): Promise<PoolResult> {
 
   let sel = supabase.from("creatives").select(SELECT, { count: "estimated" });
 
+  if (query.kind) sel = sel.eq("kind", query.kind);
   if (query.platform && query.platform !== "all") sel = sel.eq("platform", query.platform);
   if (query.mediaFormat && query.mediaFormat !== "all") sel = sel.eq("media_format", query.mediaFormat);
   if (query.industryId) sel = sel.contains("industry_ids", [query.industryId]);

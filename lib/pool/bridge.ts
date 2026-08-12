@@ -97,12 +97,15 @@ export interface PoolFeed {
  * 공급사 호출은 없다. 이 경로 전체가 DB 조회다.
  */
 export async function loadPoolFeed(pageSize = 40): Promise<PoolFeed> {
+  /* 오가닉은 kind 로 **따로** 뽑는다. 전체를 히트순으로 섞어 뽑으면 광고 수백 건이
+     상위를 채워 오가닉 게시물이 첫 40건에서 밀려난다 — 오가닉을 수집해도 화면에는
+     하나도 안 보이는 상태가 된다("팔로워 수 대비 인기 영상" 섹션이 안 뜨는 원인). */
   const [posts, ads] = await Promise.all([
-    searchPool({ platform: "all", sort: "heat", pageSize }).catch(() => null),
-    searchPool({ platform: "meta_ads", sort: "longest", pageSize }).catch(() => null),
+    searchPool({ kind: "post", sort: "heat", pageSize }).catch(() => null),
+    searchPool({ kind: "ad", platform: "meta_ads", sort: "longest", pageSize }).catch(() => null),
   ]);
 
-  const postItems = (posts?.items ?? []).filter((p) => p.kind === "post");
+  const postItems = posts?.items ?? [];
   const adItems = ads?.items ?? [];
 
   return {

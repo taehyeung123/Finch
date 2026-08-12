@@ -22,7 +22,11 @@ import { Button } from "@/components/ui/button";
   보던 화면을 떠나는 데다, 우리가 가진 정보(집행 기간·업종·유사 광고)를
   하나도 못 보여준다 — 상세는 우리 안에서 열고, 외부는 [원본 보기]로만 나간다.
 
-  구성: 왼쪽 미디어 / 오른쪽 광고 정보 + 행동 줄 + 유사 광고.
+  치수는 스니핏 실측(1920 뷰포트): 모달 1728×851 = **화면의 90%**, 두 열
+  [미디어 480px | 정보 1248px], radius 10, 행동 버튼은 미디어 아래.
+  처음엔 max-w-4xl(896px)로 만들었더니 화면 절반짜리 창에 요소가 구겨져 보였다 —
+  상세는 "보는 화면"이라 크게 쓰는 게 맞다.
+
   유사 광고는 서버 호출 없이 이미 받아 둔 목록에서 같은 광고주 → 같은 업종 순으로
   고른다 — 모달 안에서 옆 광고로 계속 넘어가며 탐색하는 동선(스니핏과 동일)이다.
 */
@@ -126,7 +130,7 @@ export function AdDetailModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="shadow-pop flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-card border border-line bg-overlay sm:rounded-card">
+      <div className="shadow-pop flex h-[92dvh] w-full flex-col overflow-hidden rounded-t-card border border-line bg-overlay sm:h-[90dvh] sm:w-[90vw] sm:max-w-[1728px] sm:rounded-card">
         {/* 머리 줄 */}
         <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -139,31 +143,61 @@ export function AdDetailModal({
             </div>
             <Badge>{ad.category}</Badge>
           </div>
-          <button
-            type="button"
-            aria-label="닫기"
-            onClick={onClose}
-            className="trans-state shrink-0 cursor-pointer rounded-card p-1.5 text-fg-faint hover:bg-body hover:text-fg"
-          >
-            <X className="size-4" aria-hidden />
-          </button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <a
+              href={libraryHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="trans-state inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-card px-3 text-[13px] font-semibold text-fg-sub hover:bg-body hover:text-fg"
+            >
+              <ExternalLink className="size-3.5" aria-hidden />
+              원본 보기
+            </a>
+            <button
+              type="button"
+              aria-label="닫기"
+              onClick={onClose}
+              className="trans-state cursor-pointer rounded-card p-1.5 text-fg-faint hover:bg-body hover:text-fg"
+            >
+              <X className="size-4" aria-hidden />
+            </button>
+          </div>
         </div>
 
-        <div className="grid min-h-0 flex-1 overflow-y-auto md:grid-cols-[minmax(0,5fr)_minmax(0,4fr)] md:overflow-hidden">
-          {/* ── 왼쪽: 미디어 ── */}
-          <div className="flex items-center justify-center bg-plate p-4 md:overflow-hidden">
-            {ad.thumbnailUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element -- Storage 캐시 URL, 최적화 프록시 미대상
-              <img
-                src={ad.thumbnailUrl}
-                alt={`${ad.pageName} 광고 소재`}
-                className="max-h-[70dvh] w-auto max-w-full rounded-card object-contain"
-              />
-            ) : (
-              <div className="flex aspect-[4/5] w-full items-center justify-center">
+        <div className="grid min-h-0 flex-1 overflow-y-auto md:grid-cols-[minmax(320px,480px)_minmax(0,1fr)] md:overflow-hidden">
+          {/* ── 왼쪽: 미디어 + 행동 버튼 (스니핏 배치 — 버튼이 미디어 바로 아래) ── */}
+          <div className="flex min-h-0 flex-col border-b border-line bg-plate md:border-b-0 md:border-r">
+            <div className="flex min-h-0 flex-1 items-center justify-center p-4">
+              {ad.thumbnailUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- Storage 캐시 URL, 최적화 프록시 미대상
+                <img
+                  src={ad.thumbnailUrl}
+                  alt={`${ad.pageName} 광고 소재`}
+                  className="max-h-full w-auto max-w-full rounded-card object-contain"
+                />
+              ) : (
                 <Megaphone className="size-12 text-fg-faint" aria-hidden />
-              </div>
-            )}
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 px-4 pb-4">
+              <Button size="sm" variant={favorite ? "secondary" : "primary"} onClick={onToggleFavorite}>
+                <Bookmark className="size-4" fill={favorite ? "currentColor" : "none"} aria-hidden />
+                {favorite ? "보드에서 빼기" : "보드에 저장"}
+              </Button>
+              <Button size="sm" variant="secondary" onClick={downloadImage}>
+                <Download className="size-4" aria-hidden />
+                이미지 저장
+              </Button>
+              <Button size="sm" variant="secondary" onClick={share}>
+                <Share2 className="size-4" aria-hidden />
+                공유
+              </Button>
+            </div>
+            {msg ? (
+              <p role="status" className="px-4 pb-3 text-[12.5px] text-fg-sub">
+                {msg}
+              </p>
+            ) : null}
           </div>
 
           {/* ── 오른쪽: 정보 + 행동 + 유사 광고 ── */}
@@ -218,47 +252,17 @@ export function AdDetailModal({
             {ad.body ? (
               <div className="min-h-0">
                 <p className="text-[13px] font-bold text-fg">광고 문구</p>
-                <div className="mt-1.5 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-card border border-line bg-body px-3 py-2.5 text-[13px] leading-relaxed text-fg-sub">
+                <div className="mt-1.5 max-h-56 overflow-y-auto whitespace-pre-wrap rounded-card border border-line bg-body px-3 py-2.5 text-[13px] leading-relaxed text-fg-sub">
                   {ad.body}
                 </div>
               </div>
             ) : null}
 
-            {/* 행동 줄 — 보드에 저장이 주 행동이다 */}
-            <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" variant={favorite ? "secondary" : "primary"} onClick={onToggleFavorite}>
-                <Bookmark className="size-4" fill={favorite ? "currentColor" : "none"} aria-hidden />
-                {favorite ? "보드에서 빼기" : "보드에 저장"}
-              </Button>
-              <Button size="sm" variant="secondary" onClick={downloadImage}>
-                <Download className="size-4" aria-hidden />
-                이미지 저장
-              </Button>
-              <Button size="sm" variant="secondary" onClick={share}>
-                <Share2 className="size-4" aria-hidden />
-                공유
-              </Button>
-              <a
-                href={libraryHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="trans-state inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-card px-3 text-[13px] font-semibold text-fg-sub hover:bg-body hover:text-fg"
-              >
-                <ExternalLink className="size-3.5" aria-hidden />
-                원본 보기
-              </a>
-            </div>
-            {msg ? (
-              <p role="status" className="text-[12.5px] text-fg-sub">
-                {msg}
-              </p>
-            ) : null}
-
             {/* 유사 광고 — 같은 광고주 우선, 다음 같은 업종 */}
             {similar.length > 0 ? (
               <div>
-                <p className="text-[13px] font-bold text-fg">유사 광고</p>
-                <div className="mt-2 grid grid-cols-3 gap-2">
+                <p className="text-[14px] font-bold text-fg">유사한 미디어</p>
+                <div className="mt-2 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
                   {similar.map((s) => (
                     <button
                       key={s.id}

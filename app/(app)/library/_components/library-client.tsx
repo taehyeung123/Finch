@@ -203,7 +203,7 @@ export function LibraryClient({
     const sameIndustry = ads.filter(
       (a) => a.id !== selectedAd.id && a.pageName !== selectedAd.pageName && a.category === selectedAd.category,
     );
-    return [...sameBrand, ...sameIndustry].slice(0, 6);
+    return [...sameBrand, ...sameIndustry].slice(0, 8);
   }, [ads, selectedAd]);
 
   const activeFilterCount = countActiveFilters(filters);
