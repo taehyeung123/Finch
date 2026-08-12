@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FolderPlus, Info, SearchX, Zap } from "lucide-react";
+import { FolderPlus, Info, RefreshCw, SearchX, Zap } from "lucide-react";
 import { FinchMark } from "@/components/logo";
 import type {
   AdSource,
@@ -80,6 +80,45 @@ function itemScore(i: ReferenceItem): number {
 }
 
 type Entry = { kind: "item"; data: ReferenceItem } | { kind: "ad"; data: ReferenceAd };
+
+/** 탐색 섹션 헤더 — 스니핏 실측: 제목 18px/700 + 부제 12px 회색이 **같은 줄**,
+ *  오른쪽에 새로고침 글씨 버튼(14px/600 연회색). */
+function SectionHead({
+  title,
+  subtitle,
+  moreLabel,
+  onMore,
+}: {
+  title: string;
+  subtitle: string;
+  moreLabel: string;
+  onMore: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+        <h2 className="text-[18px] font-bold text-fg">{title}</h2>
+        <p className="text-[12px] text-fg-sub">{subtitle}</p>
+      </div>
+      <button
+        type="button"
+        onClick={onMore}
+        className="trans-state inline-flex shrink-0 cursor-pointer items-center gap-1.5 text-[13.5px] font-semibold text-fg-faint hover:text-fg"
+      >
+        <RefreshCw className="size-3.5" aria-hidden />
+        {moreLabel}
+      </button>
+    </div>
+  );
+}
+
+/** n개씩 도는 창 — "다른 레퍼런스 보기"가 다음 묶음으로 넘긴다. 끝에 오면 처음으로 */
+function windowOf<T>(list: T[], offset: number, size: number): T[] {
+  if (list.length <= size) return list;
+  const start = (offset * size) % list.length;
+  const out = list.slice(start, start + size);
+  return out.length < size ? [...out, ...list.slice(0, size - out.length)] : out;
+}
 
 const PAGE_SIZE = 60;
 
@@ -401,6 +440,37 @@ export function LibraryClient({
   }, [filteredItems, filteredAds, filters.sort]);
 
 
+  /* ---------------- 탐색 섹션 (검색어·필터가 없을 때) — 스니핏 구조 ---------------- */
+
+  const [savedOffset, setSavedOffset] = useState(0);
+  const [risingOffset, setRisingOffset] = useState(0);
+
+  /* ① 자주 저장된 레퍼런스 — 서버가 이미 히트 순(저장 부스트 포함)으로 내려준다.
+     상위 25개 안에서 5개씩 돌려 보여준다("다른 레퍼런스 보기"). */
+  const savedPool = useMemo<Entry[]>(() => {
+    const merged: Entry[] = [
+      ...ads.map((data) => ({ kind: "ad" as const, data })),
+      ...items.map((data) => ({ kind: "item" as const, data })),
+    ];
+    return merged.slice(0, 25);
+  }, [ads, items]);
+
+  /* ② 팔로워 수 대비 인기 영상 — 조회수/팔로워 배수 순.
+     최근 3일 내 게시분을 우선하고(스니핏 문구 그대로), 풀 초기라 3일 내가 비면
+     전체에서 뽑는다 — 섹션이 통째로 사라지는 것보다 낫고 부제로 구분한다. */
+  const rising = useMemo(() => {
+    const candidates = items.filter((i) => i.views > 0 && i.followerCount > 0);
+    const ranked = [...candidates].sort(
+      (a, b) => b.views / b.followerCount - a.views / a.followerCount,
+    );
+    const recent = ranked.filter((i) => (i.postedAgoHours ?? Infinity) <= 72);
+    const pool = recent.length >= 5 ? recent : ranked;
+    return {
+      pool: pool.slice(0, 25).map((data) => ({ kind: "item" as const, data })),
+      isRecent: recent.length >= 5,
+    };
+  }, [items]);
+
   /* ---------------- 액션 ---------------- */
 
   function openDrawer(tab: DrawerTab, seed?: string) {
@@ -701,16 +771,44 @@ export function LibraryClient({
             action={<Button onClick={handleCollect}>지금 수집</Button>}
           />
         ) : displayEntries.length > 0 ? (
-          /* 첫 화면도 검색 결과도 **같은 그리드 하나**다.
-
-             예전에는 검색어가 없을 때 큐레이션 가로 선반 3줄을 그렸다. 실측해 보니
-             선반 2개가 카드 1장짜리였고, .row-shelf의 1fr 때문에 그 1장이 가로 전체를
-             차지해 카드 하나가 화면을 덮었다(첫 화면 총 6장). 조건이 붙을 때만 성립하는
-             레이아웃은 실제 데이터에서 무너진다.
-
-             선반을 없애니 첫 화면이 곧 전체 목록이 된다 — 스니핏·솔라리와 같은 구조이고,
-             "무엇을 볼지 고르는 화면"이 아니라 "보면서 고르는 화면"이 된다. */
+          /* 탐색 상태(검색어 없음)는 스니핏 구조다: 큐레이션 섹션 → 전체 그리드.
+             섹션은 항상 5장 고정 창이라, 예전 선반처럼 "카드 1장이 화면을 덮는" 붕괴가 없다.
+             검색을 시작하면 섹션이 사라지고 결과 그리드만 남는다. */
           <>
+            {!hasQuery && savedPool.length >= 5 ? (
+              <div className="mb-8">
+                <SectionHead
+                  title="자주 저장된 레퍼런스"
+                  subtitle="다른 사용자가 자주 저장한 레퍼런스를 모아봤어요"
+                  moreLabel="다른 레퍼런스 보기"
+                  onMore={() => setSavedOffset((v) => v + 1)}
+                />
+                <div className="grid-refs mt-3">{windowOf(savedPool, savedOffset, 5).map(renderEntry)}</div>
+              </div>
+            ) : null}
+
+            {!hasQuery && rising.pool.length >= 3 ? (
+              <div className="mb-8">
+                <SectionHead
+                  title="팔로워 수 대비 인기 영상"
+                  subtitle={
+                    rising.isRecent
+                      ? "최근 3일 내에 업로드된 영상 중 팔로워 수 대비 조회수가 높은 영상들을 가져왔어요"
+                      : "팔로워 수 대비 조회수가 높은 영상들을 모아봤어요"
+                  }
+                  moreLabel="다른 영상 보기"
+                  onMore={() => setRisingOffset((v) => v + 1)}
+                />
+                <div className="grid-refs mt-3">{windowOf(rising.pool, risingOffset, 5).map(renderEntry)}</div>
+              </div>
+            ) : null}
+
+            {!hasQuery ? (
+              <div className="mb-3 flex items-baseline gap-2.5">
+                <h2 className="text-[18px] font-bold text-fg">전체 레퍼런스</h2>
+                <span className="tnum text-[12px] text-fg-sub">{displayEntries.length}건</span>
+              </div>
+            ) : null}
             <div className={gridCls}>{displayEntries.slice(0, visibleCount).map(renderEntry)}</div>
             <div className="mt-6 flex justify-center">
               {displayEntries.length > visibleCount ? (

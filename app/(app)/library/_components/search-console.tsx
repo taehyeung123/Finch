@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
+  ArrowLeftRight,
   AtSign,
   Bookmark,
   Check,
@@ -16,6 +17,8 @@ import {
   Settings2,
   SlidersHorizontal,
   Sparkles,
+  Sun,
+  Tag,
   Type,
   X,
   Zap,
@@ -186,6 +189,27 @@ function describeMetric(m: NonNullable<MetricFilter>): string {
 /** 업종 id → 라벨. 화면에 보여줄 때만 쓴다(저장은 항상 id) */
 function industryLabelById(id: string): string {
   return INDUSTRY_LIST.find((i) => i.id === id)?.label ?? id;
+}
+
+/**
+ * 추천 검색어 — 검색 줄 바로 아래 칩 (스니핏 실측: 알약 · 높이 30 · 흰 배경 + 연테두리).
+ * 라벨은 사람이 읽는 말, q 는 실제로 풀에 잘 걸리는 짧은 토큰이다 —
+ * "8월 여름세일"을 통째로 검색하면 0건이지만 "세일"은 광고 문구 어디에나 있다.
+ */
+const SUGGESTED_QUERIES: { label: string; q: string; icon: "sun" | "sparkles" | "tag" | "compare" }[] = [
+  { label: "8월 여름세일", q: "세일", icon: "sun" },
+  { label: "신제품 런칭", q: "신제품", icon: "sparkles" },
+  { label: "오늘의 특가", q: "특가", icon: "tag" },
+  { label: "제품 비교", q: "비교", icon: "compare" },
+  { label: "이벤트·경품", q: "이벤트", icon: "tag" },
+];
+
+function SuggestIcon({ kind }: { kind: string }) {
+  const cls = "size-3.5 shrink-0 text-fg-faint";
+  if (kind === "sun") return <Sun className={cls} aria-hidden />;
+  if (kind === "sparkles") return <Sparkles className={cls} aria-hidden />;
+  if (kind === "compare") return <ArrowLeftRight className={cls} aria-hidden />;
+  return <Tag className={cls} aria-hidden />;
 }
 
 /** 배열 토글 — 있으면 빼고 없으면 넣은 새 배열 */
@@ -909,9 +933,9 @@ export function SearchConsole({
   onCollect: () => void;
   collecting: boolean;
 }) {
-  /* 패널은 기본으로 펼쳐져 있다. 접었다 펴는 서랍이 아니라 화면의 일부다 —
-     조건을 바꾸려고 매번 여는 것과, 조건이 늘 보이는 것은 전혀 다른 도구가 된다. */
-  const [panelOpen, setPanelOpen] = useState(true);
+  /* 진입 시 패널은 **닫혀 있다** — 첫 화면의 주인공은 콘텐츠다.
+     열리는 건 스니핏과 같은 두 경로뿐: 검색창 포커스, 필터 버튼. */
+  const [panelOpen, setPanelOpen] = useState(false);
   /* 모바일은 시트라 기본이 닫힘이다 — panelOpen 을 같이 쓰면 진입하자마자 시트가 덮는다 */
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -1297,6 +1321,27 @@ export function SearchConsole({
           </span>
         ) : null}
       </button>
+
+      {/* ── 추천 검색어 — 검색 줄 바로 아래, 뭘 칠지 모르는 손을 위한 입구.
+          검색어가 있으면 치운다: 이미 찾는 중인 사람에게는 소음이다. ── */}
+      {!query.trim() ? (
+        <div className="mt-2.5 flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {SUGGESTED_QUERIES.map((sq) => (
+            <button
+              key={sq.label}
+              type="button"
+              onClick={() => {
+                onQueryChange(sq.q);
+                rememberQuery(sq.q);
+              }}
+              className="trans-state inline-flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-chip border border-line bg-body px-3 text-[13.5px] font-medium text-fg hover:border-line-strong"
+            >
+              <SuggestIcon kind={sq.icon} />
+              {sq.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {/* ── 3행 — 상태 줄. 지금 무엇이 걸려 있는지 ── */}
       <div className="mt-2 flex h-9 items-center justify-between gap-3">
