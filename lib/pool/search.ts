@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { thumbPublicUrl } from "@/lib/pool/thumbs";
+import { hasTagColumns } from "@/lib/pool/schema";
 
 /*
   풀 검색 — 사용자가 실제로 두드리는 읽기 경로.
@@ -70,6 +71,14 @@ export interface PoolItem {
   postedAt: string | null;
   /** 풀에 처음 들어온 시각 — 화면의 '수집 시각'에 해당한다 */
   firstSeenAt: string | null;
+  /* AI 태깅(enrich 배치) 산출물. 배치가 아직 안 지나간 소재는 전부 빈 값 —
+     bridge 가 본문 앞부분 등으로 대체하므로 화면은 안 깨진다. */
+  aiSummary: string;
+  aiHooks: string[];
+  aiTopic: string;
+  aiComment: string;
+  /** 수집 시 원문 캡션에서 뽑은 해시태그 (0035 미적용이면 빈 배열) */
+  hashtags: string[];
 }
 
 export interface PoolResult {
@@ -106,8 +115,17 @@ interface Row {
   heat_score: number;
   posted_at: string | null;
   first_seen_at: string | null;
+  ai_summary: string | null;
+  ai_hooks: unknown;
+  ai_topic?: string | null;
+  ai_comment?: string | null;
+  hashtags?: unknown;
   brands: { id: string; name: string } | { id: string; name: string }[] | null;
   creative_stats: { save_count: number } | { save_count: number }[] | null;
+}
+
+function strArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
 
 function one<T>(v: T | T[] | null): T | null {
@@ -144,14 +162,26 @@ function toItem(r: Row): PoolItem {
     saveCount: stats?.save_count ?? 0,
     postedAt: r.posted_at,
     firstSeenAt: r.first_seen_at,
+    aiSummary: r.ai_summary ?? "",
+    aiHooks: strArray(r.ai_hooks),
+    aiTopic: r.ai_topic ?? "",
+    aiComment: r.ai_comment ?? "",
+    hashtags: strArray(r.hashtags),
   };
 }
 
-const SELECT =
+/* ai_summary·ai_hooks 는 0027 컬럼이라 무조건 뽑는다.
+   hashtags·ai_topic·ai_comment 는 0035 — 미적용 DB 에서 SELECT 에 넣으면
+   검색 전체가 에러로 죽으므로 프로브를 거쳐 조건부로 붙인다. */
+const SELECT_BASE =
   "id, external_id, kind, platform, title, body, permalink, thumb_path, media_format, brand_id, " +
   "views, likes, comments, follower_count, is_active, run_days, ad_platforms, cta_text, ended_at, " +
-  "industry_ids, heat_score, posted_at, first_seen_at, " +
+  "industry_ids, heat_score, posted_at, first_seen_at, ai_summary, ai_hooks, " +
   "brands(id, name), creative_stats(save_count)";
+const SELECT_TAGS = SELECT_BASE.replace(
+  "ai_summary, ai_hooks,",
+  "ai_summary, ai_hooks, ai_topic, ai_comment, hashtags,",
+);
 
 export async function searchPool(query: PoolQuery): Promise<PoolResult> {
   const supabase = await createClient();
@@ -161,7 +191,10 @@ export async function searchPool(query: PoolQuery): Promise<PoolResult> {
   const size = Math.min(60, Math.max(10, query.pageSize ?? DEFAULT_PAGE_SIZE));
   const from = page * size;
 
-  let sel = supabase.from("creatives").select(SELECT, { count: "estimated" });
+  const withTags = await hasTagColumns(supabase);
+  let sel = supabase
+    .from("creatives")
+    .select(withTags ? SELECT_TAGS : SELECT_BASE, { count: "estimated" });
 
   if (query.kind) sel = sel.eq("kind", query.kind);
   if (query.platform && query.platform !== "all") sel = sel.eq("platform", query.platform);

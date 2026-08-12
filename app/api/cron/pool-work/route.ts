@@ -7,6 +7,7 @@ import { runCrawlWorker } from "@/lib/pool/worker";
 import { readBudget } from "@/lib/pool/budget";
 import { alertPool } from "@/lib/pool/alert";
 import { fillThumbs, type ThumbResult } from "@/lib/pool/thumbs";
+import { enrichPool, type EnrichRunResult } from "@/lib/pool/enrich";
 
 /**
  * 공용 풀 — 실행 회차 (하루 여러 번).
@@ -50,6 +51,20 @@ export async function GET(request: Request) {
 
      장당 ~250ms 로 잡고 남은 시간만큼만. 10초 미만이면 시작하지 않는다 —
      Hobby 60초 상한을 넘겨 강제 종료되면 이 회차 기록까지 날아간다. */
+  /* 남은 시간 1순위: AI 태깅(enrich). 후킹·주제 태그가 필터와 상세 화면을 살리는
+     제품 신호라 썸네일보다 먼저다. 60건 = Haiku 3청크 병렬 ≈ 10~15초.
+     공급사 크레딧 0 — Claude 토큰만 나가고, 하루 상한은 claim_ai_budget 이 잡는다.
+     시작 게이트 25초 = 청크 호출 상한 20초(enrich 쪽 per-request timeout) + DB 몫 —
+     최악에도 60초 강제종료 전에 끝나 회차 기록·경보를 지킨다. */
+  let enrich: EnrichRunResult | null = null;
+  if (55_000 - (Date.now() - t0) > 25_000) {
+    try {
+      enrich = await enrichPool(admin, 60);
+    } catch (e) {
+      console.error("[pool] AI 태깅 실패(회차는 계속):", e instanceof Error ? e.message : String(e));
+    }
+  }
+
   let thumbs: ThumbResult | null = null;
   const remainMs = 55_000 - (Date.now() - t0);
   if (remainMs > 10_000) {
@@ -74,8 +89,8 @@ export async function GET(request: Request) {
     new_creatives: result.newCreatives,
     new_brands: result.newBrands,
     errors: result.errors,
-    note: result.stoppedBy,
+    note: result.stoppedBy + (enrich && enrich.enriched > 0 ? ` · enrich=${enrich.enriched}` : ""),
   });
 
-  return NextResponse.json({ ok: true, ...result, thumbs, budget: await readBudget() });
+  return NextResponse.json({ ok: true, ...result, enrich, thumbs, budget: await readBudget() });
 }

@@ -4,6 +4,7 @@ import { isAuthorizedCron } from "@/lib/cron";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fillThumbs } from "@/lib/pool/thumbs";
 import { saveBoost } from "@/lib/pool/heat";
+import { enrichPool } from "@/lib/pool/enrich";
 
 /**
  * 공용 풀 — 마감 회차 (매일 1회, 실행 회차 뒤).
@@ -28,7 +29,20 @@ export async function GET(request: Request) {
   if (!admin) return new NextResponse("not_configured", { status: 503 });
 
   const started = new Date().toISOString();
+  const t0 = Date.now();
   const thumbs = await fillThumbs(THUMBS_PER_RUN);
+
+  /* 실행 회차가 못 따라간 AI 태깅 잔여분 — 40건이면 2청크 병렬 ≈ 10초.
+     썸네일이 시간을 다 먹은 회차에는 건너뛴다: 이 뒤에 롤업·부스트 루프(최대 300행)가
+     남아 있고, 60초 강제종료는 회차 기록까지 통째로 날린다. */
+  let enriched = 0;
+  if (Date.now() - t0 < 15_000) {
+    try {
+      enriched = (await enrichPool(admin, 40)).enriched;
+    } catch (e) {
+      console.error("[pool] 마감 AI 태깅 실패(마감은 계속):", e instanceof Error ? e.message : String(e));
+    }
+  }
 
   const { error: rollupErr } = await admin.rpc("rollup_industry_stats");
   if (rollupErr) console.error("[pool] 업종 롤업 실패", rollupErr.message);
@@ -90,12 +104,13 @@ export async function GET(request: Request) {
     run_kind: "finalize",
     started_at: started,
     ended_at: new Date().toISOString(),
-    note: `thumbs ok=${thumbs.ok} fail=${thumbs.failed} · boosted=${boosted}${hasHeatBase ? "" : "(heat_base 미적용)"} · visible=${visibleCount ?? "?"}`,
+    note: `thumbs ok=${thumbs.ok} fail=${thumbs.failed} · enrich=${enriched} · boosted=${boosted}${hasHeatBase ? "" : "(heat_base 미적용)"} · visible=${visibleCount ?? "?"}`,
   });
 
   return NextResponse.json({
     ok: true,
     thumbs,
+    enriched,
     visibleIndustries: visibleCount ?? null,
     boosted,
     purgedJobs: purged ?? 0,

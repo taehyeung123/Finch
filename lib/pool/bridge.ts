@@ -3,6 +3,7 @@ import "server-only";
 import type { Channel, HookType, ReferenceAd, ReferenceItem } from "@/lib/types";
 import { searchPool, type PoolItem } from "@/lib/pool/search";
 import { industryLabel } from "@/lib/industry/taxonomy";
+import { HOOK_VALUES } from "@/lib/reference/engine";
 
 /*
   풀 → 화면 어댑터.
@@ -31,17 +32,26 @@ function categoryOf(industryIds: string[]): string {
   return industryIds.length > 0 ? industryLabel(industryIds[0]) : "기타";
 }
 
+/** enrich 배치 산출 후킹 태그 — 목록 밖 값이 DB 에 섞여도 화면 타입을 지킨다 */
+function hooksOf(p: PoolItem): HookType[] {
+  return p.aiHooks.filter((h): h is HookType => (HOOK_VALUES as string[]).includes(h)).slice(0, 2);
+}
+
 export function poolItemToReference(p: PoolItem): ReferenceItem {
   return {
     id: p.id,
     channel: isChannel(p.platform) ? p.platform : "instagram",
-    category: categoryOf(p.industryIds),
+    // AI 주제어(ai_topic)가 업종명보다 구체적이다 — 배치가 지나간 소재부터 세밀해진다
+    category: p.aiTopic || categoryOf(p.industryIds),
     title: p.title || p.body.slice(0, 40),
-    // 풀은 AI 요약을 배치로 채운다. 아직 없으면 본문 앞부분이 그 자리를 대신한다 —
+    // enrich 배치 전에는 본문 앞부분이 요약 자리를 대신한다 —
     // 빈 줄을 두면 카드 높이가 들쭉날쭉해져 그리드가 흔들린다.
-    summary: p.body.slice(0, 120),
+    summary: p.aiSummary || p.body.slice(0, 120),
     creatorHandle: p.brandName ? `@${p.brandName.replace(/^@/, "")}` : "",
-    hooks: [] as HookType[],
+    // 후킹 태그가 채워지는 순간 탐색의 후킹기법 필터(패싯)가 되살아난다
+    hooks: hooksOf(p),
+    aiComment: p.aiComment || undefined,
+    hashtags: p.hashtags.length > 0 ? p.hashtags : undefined,
     views: p.views,
     likes: p.likes,
     followerCount: p.followerCount,

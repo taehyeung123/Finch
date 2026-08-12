@@ -65,6 +65,14 @@ export async function refundCalls(n: number): Promise<void> {
   await db.rpc("claim_crawl_budget", { p_calls: -n });
 }
 
+/** 청구했는데 AI 호출이 통째로 실패한 건수를 되돌린다 (refundCalls 와 동일 규약). */
+export async function refundAiItems(n: number): Promise<void> {
+  if (n <= 0) return;
+  const db = createAdminClient();
+  if (!db) return;
+  await db.rpc("claim_ai_budget", { p_items: -n });
+}
+
 export async function readBudget(): Promise<BudgetStatus | null> {
   const db = createAdminClient();
   if (!db) return null;

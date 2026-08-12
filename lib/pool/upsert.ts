@@ -5,6 +5,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CollectedAd } from "@/lib/reference/meta-ads";
 import type { CollectedPost } from "@/lib/reference/scrapecreators";
 import { adHeat, postHeat } from "@/lib/pool/heat";
+import { extractHashtags } from "@/lib/reference/engine";
+import { hasTagColumns } from "@/lib/pool/schema";
 
 /*
   공용 풀 적재 — 수집물을 brands / creatives 로 밀어넣는다.
@@ -121,10 +123,15 @@ export async function upsertAds(
 
   /* 2. 소재 */
   const now = new Date().toISOString();
+  /* 해시태그는 여기(원문이 살아있는 순간)서 뽑는다 — trimBody 가 줄바꿈을 접고
+     600자에서 자르므로, 캡션 끝에 몰린 태그는 배치 시점엔 이미 유실된 뒤다.
+     0035 미적용이면 컬럼 자체가 없어 insert 가 통째로 거부된다 — 프로브로 가른다. */
+  const withTags = await hasTagColumns(db);
   const creativeRows = ads.map((ad) => {
     const body = trimBody(ad.body);
     const runDays = runDaysOf(ad.startDate, ad.endDate, ad.isActive);
     return {
+      ...(withTags ? { hashtags: extractHashtags(ad.body) } : {}),
       kind: "ad",
       platform: "meta_ads",
       external_id: ad.adArchiveId,
@@ -209,10 +216,13 @@ export async function upsertPosts(
     brandIdByHandle = new Map((data ?? []).map((b) => [String(b.external_id), String(b.id)]));
   }
 
+  // 해시태그는 원문 캡션에서 — trimBody 절단 전에 뽑아야 전부 잡힌다 (upsertAds 와 동일)
+  const withTags = await hasTagColumns(db);
   const rows = posts.map((p) => {
     const body = trimBody(p.caption);
     const handle = p.creatorHandle.replace(/^@/, "").trim();
     return {
+      ...(withTags ? { hashtags: extractHashtags(p.caption) } : {}),
       kind: "post",
       platform: p.channel,
       external_id: p.externalId,
