@@ -6,6 +6,7 @@ import { isCollectionConfigured } from "@/lib/reference/scrapecreators";
 import { runCrawlWorker } from "@/lib/pool/worker";
 import { readBudget } from "@/lib/pool/budget";
 import { alertPool } from "@/lib/pool/alert";
+import { fillThumbs, type ThumbResult } from "@/lib/pool/thumbs";
 
 /**
  * 공용 풀 — 실행 회차 (하루 여러 번).
@@ -36,7 +37,28 @@ export async function GET(request: Request) {
   }
 
   const started = new Date().toISOString();
+  const t0 = Date.now();
   const result = await runCrawlWorker(MAX_JOBS_PER_RUN, TIME_BUDGET_MS);
+
+  /* 남은 시간에 썸네일을 채운다.
+
+     이미지는 이 제품의 본체다 — 레퍼런스 도구에서 이미지 없는 카드는 반쪽이다.
+     그런데 썸네일 캐시를 마감 크론(하루 1회 × 40장)에만 맡겨두면, 수집은 하루
+     수백 장씩 들어오는데 캐시는 40장/일로 굳는다. 영원히 못 따라잡는다.
+     실행 회차는 하루 8번 돌고 대부분 예산보다 시간이 남으므로, 그 자투리로 채운다.
+     공급사 크레딧은 0 — 나가는 건 이미지 대역폭뿐이다.
+
+     장당 ~250ms 로 잡고 남은 시간만큼만. 10초 미만이면 시작하지 않는다 —
+     Hobby 60초 상한을 넘겨 강제 종료되면 이 회차 기록까지 날아간다. */
+  let thumbs: ThumbResult | null = null;
+  const remainMs = 55_000 - (Date.now() - t0);
+  if (remainMs > 10_000) {
+    try {
+      thumbs = await fillThumbs(Math.min(100, Math.floor(remainMs / 250)));
+    } catch (e) {
+      console.error("[pool] 썸네일 채우기 실패(회차는 계속):", e instanceof Error ? e.message : String(e));
+    }
+  }
 
   /* 수집이 멈췄으면 운영자에게 메일. 이게 없으면 크레딧이 떨어져도 아무 일도
      안 일어난 것처럼 보이고, 화면은 어제 데이터를 계속 보여준다. */
@@ -55,5 +77,5 @@ export async function GET(request: Request) {
     note: result.stoppedBy,
   });
 
-  return NextResponse.json({ ok: true, ...result, budget: await readBudget() });
+  return NextResponse.json({ ok: true, ...result, thumbs, budget: await readBudget() });
 }
