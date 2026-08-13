@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { chargeGeneration, refundGenerationCredits, CREDIT_COSTS } from "@/lib/actions/credits";
 import { isDemoMode } from "@/lib/supabase/config";
-import { createClaudeClient, STUDIO_MODEL } from "@/lib/ai/claude";
+import { CHAT_MODEL, createClaudeClient } from "@/lib/ai/claude";
 import { getConnectedInstagramAccount, getInstagramAccessContext } from "@/lib/data/live";
 import { fetchAccountInsightsRange } from "@/lib/meta/instagram";
 
@@ -94,7 +94,7 @@ export async function agentChat(history: AgentChatMessage[]): Promise<AgentChatR
 
   try {
     const response = await claude.messages.create({
-      model: STUDIO_MODEL,
+      model: CHAT_MODEL,
       max_tokens: 1000,
       output_config: {
         format: {

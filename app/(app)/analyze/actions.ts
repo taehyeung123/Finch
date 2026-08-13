@@ -5,7 +5,7 @@ import { isDemoMode } from "@/lib/supabase/config";
 import { analyzeSample } from "@/lib/mock/data";
 import { getInstagramAccessContext } from "@/lib/data/live";
 import { fetchMediaComments, fetchMediaInsights, fetchRecentMedia } from "@/lib/meta/instagram";
-import { createClaudeClient, STUDIO_MODEL } from "@/lib/ai/claude";
+import { createClaudeClient, FAST_MODEL } from "@/lib/ai/claude";
 import type { AnalyzeResult } from "@/lib/types";
 
 /**
@@ -53,7 +53,7 @@ async function classifySentiment(comments: string[]): Promise<AnalyzeResult["sen
   if (!client) return null;
   try {
     const response = await client.messages.create({
-      model: STUDIO_MODEL,
+      model: FAST_MODEL, // 감성 3분류는 Haiku 로 충분 — Opus 는 과스펙 (2026-08-14 확정)
       max_tokens: 300,
       output_config: {
         format: {

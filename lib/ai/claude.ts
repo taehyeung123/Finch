@@ -14,6 +14,13 @@ export function createClaudeClient(): Anthropic | null {
 export const STUDIO_MODEL = "claude-opus-4-8";
 
 /**
+ * 에이전트 챗 전용 — 빈도 높고 답이 짧아(메시지당 ≤1,000토큰) Opus 는 과스펙이다.
+ * Sonnet 5 는 품질 상위권 유지하면서 메시지당 원가를 ~60원 → ~35원으로 낮춘다
+ * (2026-08-14 AI 배치 확정안).
+ */
+export const CHAT_MODEL = "claude-sonnet-5";
+
+/**
  * 대량 보조 작업용 모델 — 레퍼런스 요약·태깅, 검색어 확장처럼 항목이 많고
  * 분류 성격인 작업. 최저가 모델로 충분한 품질이 나오는 작업이라 Haiku 고정
  * (Opus 대비 출력단가 1/5 → Haiku는 그 1/5, 속도도 최상) — 수집 1회 AI 비용을
