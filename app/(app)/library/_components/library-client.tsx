@@ -21,7 +21,7 @@ import {
 } from "@/lib/actions/reference";
 import { addAdSource, removeAdSource, runAdCollection, toggleAdFavorite } from "@/lib/actions/ads-reference";
 import { industryFromText } from "@/lib/industry/list";
-import { requestPoolCollect, searchPoolAction, togglePoolSave } from "../pool-actions";
+import { collectPoolNow, requestPoolCollect, searchPoolAction, togglePoolSave } from "../pool-actions";
 import { TREND_CATEGORIES } from "@/lib/data";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
@@ -553,26 +553,43 @@ export function LibraryClient({
       return;
     }
 
-    /* 풀이 켜져 있으면 개인 수집을 돌리지 않는다.
-       돌려봐야 reference_items 에 쌓이는데 화면은 풀을 보고 있어서 아무것도 안 보이고,
-       크레딧만 사용자 수만큼 나간다 — 이 구조를 버리려고 풀을 만들었다.
-       대신 등록해 둔 기준을 공용 수집 대기열 상단으로 올린다. */
+    /* 풀 모드 [지금 수집] — 2트랙 수집 구조(2026-08-14 확정)의 트랙 2.
+       오가닉(인스타) 기준 앞 2개는 **그 자리에서 실시간 수집**해 공용 풀에 적재한다
+       (훔쳐봐 방식 즉시성 — 크레딧 과금, 결과는 전원 공유 자산이 된다).
+       광고 기준·나머지 오가닉 기준은 기존대로 수집 대기열 상단 예약. */
     if (poolReady) {
       setCollecting(true);
       try {
-        const targets = [
-          ...sources.map((s) => ({ value: s.value, platform: s.channel as string })),
+        const organicTargets = sources
+          .filter((s) => s.channel === "instagram")
+          .map((s) => ({ value: s.value, kind: s.kind as string }));
+        const liveTargets = organicTargets.slice(0, 2);
+        const queueTargets = [
+          ...organicTargets.slice(2).map((t) => ({ value: t.value, platform: "instagram" })),
+          ...sources.filter((s) => s.channel !== "instagram").map((s) => ({ value: s.value, platform: s.channel as string })),
           ...adSources.map((a) => ({ value: a.value, platform: "meta_ads" })),
         ];
-        const res = await requestPoolCollect(targets);
-        setToast(
-          res.ok
-            ? {
-                tone: "notice",
-                text: `기준 ${res.queued}개를 수집 대기열 맨 앞에 올렸어요 — 다음 수집 회차에 반영됩니다`,
-              }
-            : { tone: "error", text: res.error ?? "요청에 실패했어요" },
-        );
+
+        const [live, queued] = await Promise.all([
+          liveTargets.length > 0 ? collectPoolNow(liveTargets) : Promise.resolve(null),
+          queueTargets.length > 0 ? requestPoolCollect(queueTargets) : Promise.resolve(null),
+        ]);
+
+        const parts: string[] = [];
+        let tone: "notice" | "error" = "notice";
+        if (live) {
+          if (live.ok) parts.push(`지금 ${live.added}건을 수집해 풀에 담았어요`);
+          else {
+            tone = "error";
+            parts.push(live.error ?? "실시간 수집에 실패했어요");
+          }
+        }
+        if (queued?.ok && queued.queued > 0) parts.push(`기준 ${queued.queued}개는 다음 수집 회차에 예약`);
+        if (parts.length === 0) parts.push("등록된 수집 기준이 없어요 — 수집 설정에서 먼저 등록해 주세요");
+        setToast({ tone, text: parts.join(" · ") });
+
+        // 방금 적재된 소재가 화면에 보이게 서버 데이터 재조회
+        if (live?.ok) router.refresh();
       } finally {
         setCollecting(false);
       }

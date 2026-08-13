@@ -3,7 +3,10 @@
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { chargeGeneration, refundGenerationCredits, CREDIT_COSTS } from "@/lib/actions/credits";
-import { fetchIgTranscript, isCollectionConfigured, CollectError } from "@/lib/reference/scrapecreators";
+import { collectFromSource, fetchIgTranscript, isCollectionConfigured, CollectError } from "@/lib/reference/scrapecreators";
+import { upsertPosts } from "@/lib/pool/upsert";
+import { claimCalls, refundCalls } from "@/lib/pool/budget";
+import { industryFromText } from "@/lib/industry/list";
 import { createClaudeClient, STUDIO_MODEL } from "@/lib/ai/claude";
 import { HOOK_VALUES } from "@/lib/reference/engine";
 import { logSearch, searchPool, type PoolPlatformFilter, type PoolSort } from "@/lib/pool/search";
@@ -496,5 +499,104 @@ export async function analyzePoolCreative(creativeId: string): Promise<AnalyzeRe
         ? "수집 엔진 사용량이 일시적으로 소진됐어요. 잠시 후 다시 시도해 주세요."
         : "영상 분석에 실패했어요. 2분 미만의 말로 설명하는 영상만 지원돼요.",
     };
+  }
+}
+
+/**
+ * [지금 수집] 실시간 풀 수집 — 훔쳐봐 방식 + 스니핏 자산화 (2026-08-14 확정 구조).
+ *
+ * 2트랙 수집 인프라의 트랙 2:
+ *  · 트랙 1(기본): 크론이 하루 예산 안에서 자동 수집 → 공용 풀 (스니핏 방식, 회사 부담)
+ *  · 트랙 2(부가): 기다리기 싫은 사용자가 이 액션으로 **그 자리에서** 수집 (훔쳐봐 방식)
+ *    — 크레딧 과금 + 월 한도로 원가를 사용자가 부담하고,
+ *    — 결과는 개인 표가 아니라 **공용 풀에 적재**된다. 즉시성을 산 사람의 돈으로
+ *      풀이 영구히 부자가 되는 구조 — 두 벤치마크의 장점 결합.
+ *
+ * 공급사 지출 통제는 변함없이 crawl_budget 하나다: 여기서도 claimCalls 로 같은
+ * 하루 상한에서 차감한다. 상한 소진 시엔 실시간을 거부하고 대기열 폴백을 안내한다 —
+ * 유료 사용자가 몰려도 공급사 계정이 하루 상한을 넘길 수 없다.
+ *
+ * 실시간은 오가닉(인스타)만이다: 광고는 이미 풀에 수백 건 쌓여 있고, 부족한 쪽이
+ * 오가닉이라 즉시성의 가치도 오가닉에 있다. 광고 기준은 호출측이 대기열로 보낸다.
+ */
+export async function collectPoolNow(
+  targets: Array<{ value: string; kind?: string }>,
+): Promise<{ ok: boolean; added: number; error?: string }> {
+  const user = await getAuthUser();
+  if (!user) return { ok: false, added: 0, error: "로그인이 필요해요." };
+  if (!isCollectionConfigured()) return { ok: false, added: 0, error: "수집 엔진 설정이 완료되지 않았어요." };
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, added: 0, error: "수집 설정이 완료되지 않았어요." };
+
+  /* 서버 액션 60초 상한 안에 끝나야 한다: 기준당 공급사 2콜 × 최악 20초.
+     2개까지 병렬로 돌리면 최악 ~40초 — 등록 기준이 더 많으면 앞의 2개만 실시간,
+     나머지는 호출측이 대기열로 보낸다. */
+  const picked = targets
+    .map((t) => ({ value: t.value.trim().replace(/^#/, ""), kind: t.kind }))
+    .filter((t) => t.value.length >= 2 && t.value.length <= 60)
+    .slice(0, 2);
+  if (picked.length === 0) return { ok: false, added: 0, error: "수집할 기준이 없어요." };
+
+  const charge = await chargeGeneration({
+    metric: "reference_collect",
+    creditCost: CREDIT_COSTS.collect,
+    reason: "pool_collect_now",
+  });
+  if (!charge.ok) return { ok: false, added: 0, error: charge.error };
+  const refund = async () => {
+    if (charge.via === "credits") {
+      await refundGenerationCredits(charge.userId, CREDIT_COSTS.collect, "pool_collect_now_fail_refund");
+    }
+  };
+
+  // 공급사 하루 상한에서 차감 — 소진이면 실시간 거부 (대기열 폴백은 호출측 안내)
+  const need = picked.length * 2;
+  const granted = await claimCalls(need);
+  if (granted < 2) {
+    if (granted > 0) await refundCalls(granted);
+    await refund();
+    return { ok: false, added: 0, error: "오늘 실시간 수집 한도가 소진됐어요 — 대기열에 올려두면 다음 회차에 수집됩니다." };
+  }
+  const live = picked.slice(0, Math.floor(granted / 2));
+
+  try {
+    const batches = await Promise.all(
+      live.map(async (t) => {
+        try {
+          const posts = await collectFromSource(
+            {
+              channel: "instagram",
+              kind: t.kind === "account" || t.value.startsWith("@") ? "account" : "hashtag",
+              value: t.value,
+            },
+            60,
+            { period: "all", mediaFormat: "all" },
+          );
+          return { t, posts };
+        } catch (e) {
+          console.error("[pool] 실시간 수집 실패:", t.value, e instanceof Error ? e.message : String(e));
+          return { t, posts: [] as Awaited<ReturnType<typeof collectFromSource>> };
+        }
+      }),
+    );
+
+    let added = 0;
+    for (const { t, posts } of batches) {
+      if (posts.length === 0) continue;
+      const industry = industryFromText(t.value);
+      const r = await upsertPosts(admin, posts, industry, t.value.replace(/^@/, ""));
+      added += r.creatives;
+    }
+
+    if (added === 0) {
+      await refund();
+      return { ok: false, added: 0, error: "새로 수집된 게시물이 없어요 — 잠시 후 다시 시도하거나 다른 기준으로 해보세요." };
+    }
+    return { ok: true, added };
+  } catch (e) {
+    await refund();
+    console.error("[pool] 실시간 풀 수집 실패:", e);
+    return { ok: false, added: 0, error: "수집에 실패했어요. 잠시 후 다시 시도해 주세요." };
   }
 }
