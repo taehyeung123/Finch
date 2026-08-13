@@ -78,16 +78,21 @@ export function PerformanceTrend({
     />
   );
 
+  /* min-h-[232px] = 수치 블록(48) + 여백(16) + 차트(168).
+     지표마다 내용 유무가 달라도 카드 높이가 출렁이지 않게 **두 분기 모두** 같은 높이를 깐다.
+     key={metric} + anim-swap: 지표 전환 시 뚝 바뀌지 않고 스르륵 떠오른다 (2026-08-13 지시). */
   if (!hasSeries) {
     return (
       <Card>
         {header}
         <CardBody>
-          <p className="py-10 text-center text-[13px] leading-relaxed text-fg-faint">
-            {metric === "engagement"
-              ? "일별 참여율은 공식 API가 제공하지 않아 추이를 그릴 수 없어요. 기간 합산 참여율은 위 요약 카드에서 확인하세요."
-              : "이 지표의 추이 데이터가 아직 없어요. 데이터가 쌓이면 자동으로 표시됩니다."}
-          </p>
+          <div key={metric} className="anim-swap flex min-h-[232px] items-center justify-center">
+            <p className="max-w-md text-center text-[13px] leading-relaxed text-fg-faint">
+              {metric === "engagement"
+                ? "일별 참여율은 공식 API가 제공하지 않아 추이를 그릴 수 없어요. 기간 합산 참여율은 위 요약 카드에서 확인하세요."
+                : "이 지표의 추이 데이터가 아직 없어요. 데이터가 쌓이면 자동으로 표시됩니다."}
+            </p>
+          </div>
         </CardBody>
       </Card>
     );
@@ -105,26 +110,28 @@ export function PerformanceTrend({
     <Card>
       {header}
       <CardBody>
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <p className="tnum text-2xl font-bold leading-none">{format(last)}</p>
-            <p
-              className={cn(
-                "tnum mt-1.5 text-[13px] font-semibold",
-                up ? "text-positive" : "text-negative",
-              )}
-            >
-              {up ? "+" : ""}
-              {deltaPct.toFixed(1)}% <span className="font-normal text-fg-faint">· 기간 시작 대비</span>
-            </p>
+        <div key={metric} className="anim-swap min-h-[232px]">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <p className="tnum text-2xl font-bold leading-none">{format(last)}</p>
+              <p
+                className={cn(
+                  "tnum mt-1.5 text-[13px] font-semibold",
+                  up ? "text-positive" : "text-negative",
+                )}
+              >
+                {up ? "+" : ""}
+                {deltaPct.toFixed(1)}% <span className="font-normal text-fg-faint">· 기간 시작 대비</span>
+              </p>
+            </div>
           </div>
+          <LineChart
+            data={series}
+            height={168}
+            stroke={up ? "var(--color-positive)" : "var(--color-negative)"}
+            className="mt-4"
+          />
         </div>
-        <LineChart
-          data={series}
-          height={168}
-          stroke={up ? "var(--color-positive)" : "var(--color-negative)"}
-          className="mt-4"
-        />
       </CardBody>
     </Card>
   );

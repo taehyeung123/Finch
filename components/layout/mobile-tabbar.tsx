@@ -70,7 +70,7 @@ export function MobileTabbar() {
       {sheetOpen ? (
         <>
           <div
-            className="fixed inset-0 z-50 bg-black/40 md:hidden"
+            className="modal-scrim-in fixed inset-0 z-50 bg-black/40 md:hidden"
             aria-hidden
             onClick={() => setSheetOpen(false)}
           />
@@ -78,7 +78,7 @@ export function MobileTabbar() {
             role="dialog"
             aria-modal="true"
             aria-label="전체 메뉴"
-            className="shadow-pop fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] overflow-y-auto rounded-t-card border-t border-line-strong bg-overlay md:hidden"
+            className="sheet-in-up shadow-pop fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] overflow-y-auto rounded-t-card border-t border-line-strong bg-overlay md:hidden"
           >
             <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-3">
               <p className="text-[13px] font-semibold text-fg-faint">전체 메뉴</p>

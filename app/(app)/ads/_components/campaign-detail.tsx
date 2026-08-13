@@ -120,7 +120,7 @@ export function CampaignDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+      className="modal-scrim-in fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-label={`${campaign.name} 상세 성과`}
@@ -128,7 +128,7 @@ export function CampaignDetailModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="shadow-pop flex max-h-[94vh] w-full max-w-5xl flex-col rounded-card border border-line bg-overlay">
+      <div className="modal-card-in shadow-pop flex max-h-[94vh] w-full max-w-5xl flex-col rounded-card border border-line bg-overlay">
         {/* 헤더 */}
         <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
           <div className="flex min-w-0 items-center gap-3.5">

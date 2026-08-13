@@ -229,7 +229,7 @@ export function AdDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+      className="modal-scrim-in fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-label={`${ad.pageName} 광고 상세`}
@@ -237,7 +237,7 @@ export function AdDetailModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="shadow-pop grid h-[92dvh] w-full grid-rows-[minmax(0,1fr)] overflow-hidden rounded-t-card border border-line bg-overlay sm:h-[90dvh] sm:w-[90vw] sm:max-w-[1728px] sm:rounded-card md:grid-cols-[minmax(320px,480px)_minmax(0,1fr)]">
+      <div className="modal-card-in shadow-pop grid h-[92dvh] w-full grid-rows-[minmax(0,1fr)] overflow-hidden rounded-t-card border border-line bg-overlay sm:h-[90dvh] sm:w-[90vw] sm:max-w-[1728px] sm:rounded-card md:grid-cols-[minmax(320px,480px)_minmax(0,1fr)]">
         {/* ══ 왼쪽 480px — 이 광고의 모든 것 ══
             스크롤 컬럼의 자식은 전부 shrink-0 이어야 한다. 없으면 내용이 길 때
             flex 가 미디어 칸을 짜부라뜨리고, 안의 이미지(max-h 46dvh)가 칸 밖으로

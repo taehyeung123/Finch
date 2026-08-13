@@ -47,7 +47,7 @@ export function OpeningNotice() {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      className="modal-scrim-in fixed inset-0 z-[60] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-label="임시오픈 안내"
@@ -55,7 +55,7 @@ export function OpeningNotice() {
         if (e.target === e.currentTarget) setClosedThisSession(true);
       }}
     >
-      <div className="shadow-pop w-full max-w-md rounded-card border border-line bg-overlay">
+      <div className="modal-card-in shadow-pop w-full max-w-md rounded-card border border-line bg-overlay">
         <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
           <span className="inline-flex items-center gap-2 font-bold">
             <FinchMark className="size-5 text-primary" />

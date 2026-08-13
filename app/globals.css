@@ -1068,3 +1068,50 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .seg-thumb { transition: opacity 0.1s linear; }
 }
+
+/* ───────────────────────────────────────────────────────────────
+   모달·콘텐츠 전환 모션 (2026-08-13 지시: "모달 클릭하는거 전부 스르륵")
+
+   .modal-scrim-in  — 오버레이(어두운 배경) 페이드인
+   .modal-card-in   — 모달 카드: 살짝 아래에서 떠오르며 나타난다.
+                      transform 은 첫 프레임 이후 none 이 되므로 내부
+                      position:fixed 자식의 기준을 깨지 않는다(애니메이션 종료 후).
+   .anim-swap       — 키 교체형 콘텐츠 전환(홈 성과추이 지표 탭 등):
+                      key={상태} 로 리마운트되는 블록에 붙인다.
+─────────────────────────────────────────────────────────────── */
+@keyframes modal-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modal-card-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes anim-swap-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.modal-scrim-in { animation: modal-scrim-in 0.18s ease-out both; }
+.modal-card-in { animation: modal-card-in 0.24s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.anim-swap { animation: anim-swap-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .modal-scrim-in,
+  .modal-card-in,
+  .anim-swap { animation: none; }
+}
+
+/* 드로어(오른쪽에서)·바텀시트(아래에서) 등장 — 같은 지시("전부 스르륵")의 변형 */
+@keyframes drawer-in-right {
+  from { opacity: 0.6; transform: translateX(28px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes sheet-in-up {
+  from { opacity: 0.6; transform: translateY(24px); }
+  to { opacity: 1; transform: none; }
+}
+.drawer-in-right { animation: drawer-in-right 0.24s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.sheet-in-up { animation: sheet-in-up 0.24s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .drawer-in-right,
+  .sheet-in-up { animation: none; }
+}

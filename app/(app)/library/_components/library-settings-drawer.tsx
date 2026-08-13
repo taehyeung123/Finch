@@ -240,13 +240,13 @@ export function LibrarySettingsDrawer({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/40" onClick={onClose} aria-hidden />
+      <div className="modal-scrim-in fixed inset-0 z-50 bg-black/40" onClick={onClose} aria-hidden />
       <aside
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="수집 설정"
-        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[440px] flex-col border-l border-line-strong bg-overlay"
+        className="drawer-in-right fixed inset-y-0 right-0 z-50 flex w-full max-w-[440px] flex-col border-l border-line-strong bg-overlay"
       >
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-line px-5">
           <h2 className="text-[17px] font-bold text-fg">수집 설정</h2>

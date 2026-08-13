@@ -167,7 +167,7 @@ export function RuleEditor({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+      className="modal-scrim-in fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-label={initial ? "자동 DM 규칙 편집" : "새 자동 DM 규칙"}
@@ -177,7 +177,7 @@ export function RuleEditor({
     >
       <div
         ref={dialogRef}
-        className="shadow-pop flex max-h-[92vh] w-full max-w-2xl flex-col rounded-card border border-line bg-overlay sm:max-h-[88vh]"
+        className="modal-card-in shadow-pop flex max-h-[92vh] w-full max-w-2xl flex-col rounded-card border border-line bg-overlay sm:max-h-[88vh]"
       >
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <h2 className="text-[17px] font-bold">{initial ? "자동 DM 규칙 편집" : "새 자동 DM 규칙"}</h2>
