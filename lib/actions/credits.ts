@@ -41,7 +41,8 @@ export const CREDIT_COSTS = {
 
 /** 플랜별 무료 월 한도 — planFeatures 표와 일치 유지 (무료 3회, 유료 사실상 무제한) */
 export const FREE_MONTHLY_LIMITS: Record<string, Record<string, number>> = {
-  ai_cardnews: { free: 3, creator: 1000000, pro: 1000000, agency: 1000000, enterprise: 1000000 },
+  // 카드뉴스는 유료 전용 — 무료 0회 (2026-08-14 지시: 건당 Opus 원가 ~200원, 무료 개방 시 월 수십만 원 유출)
+  ai_cardnews: { free: 0, creator: 1000000, pro: 1000000, agency: 1000000, enterprise: 1000000 },
   growth_diagnosis: { free: 3, creator: 1000000, pro: 1000000, agency: 1000000, enterprise: 1000000 },
   // 레퍼런스 수집은 공급사 원가가 실비로 나가므로 유료 플랜도 월 한도를 둔다(사실상 넉넉한 수준)
   reference_collect: { free: 3, creator: 60, pro: 150, agency: 300, enterprise: 1000 },
@@ -108,7 +109,10 @@ export async function chargeGeneration(opts: {
     const balance = profile?.credits ?? 0;
     return {
       ok: false,
-      error: `이번 달 무료 한도(${limit === 1000000 ? "무제한" : `${limit}회`})를 다 썼고, 크레딧이 부족해요(필요 ${opts.creditCost} · 보유 ${balance}). 크레딧을 충전받거나 플랜을 업그레이드하면 계속 쓸 수 있어요.`,
+      error:
+        limit === 0
+          ? "이 기능은 유료 플랜 전용이에요. 플랜을 업그레이드하거나 크레딧을 충전하면 쓸 수 있어요."
+          : `이번 달 무료 한도(${limit === 1000000 ? "무제한" : `${limit}회`})를 다 썼고, 크레딧이 부족해요(필요 ${opts.creditCost} · 보유 ${balance}). 크레딧을 충전받거나 플랜을 업그레이드하면 계속 쓸 수 있어요.`,
     };
   }
   // 표시용 잔액 — 차감 전 조회값 기준 근사(동시 요청 시 오차 가능, 원장은 항상 정확)
