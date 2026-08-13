@@ -310,14 +310,13 @@ function parseAnalysisRow(row: {
 }
 
 /**
- * 풀 영상 AI 분석 — 대본 기반 후킹 구조 분석. **결과는 creative_analyses 공용 캐시**라
- * 한 명이 사면 이후 전원 무료다 (대본 추출과 같은 pay-once 원가 구조, 0027 설계 그대로 —
- * 표는 그때 만들어졌고 이 함수가 첫 사용자다).
+ * 풀 영상 AI 분석 — 대본 기반 후킹 구조 분석. **무료다** (2026-08-13 사장님 지시
+ * "AI 요약은 그냥 무료로 풀어놔" — 원래 2크레딧이었다).
  *
- * 과금 2크레딧의 원가: 대본 추출(공급사 1크레딧, creative_transcripts 캐시 시 0)
- * + Opus 분석 토큰. 분석까지 가기 전에 실패하면 전액 환불한다.
- * 대본이 이 과정에서 새로 추출되면 공용 대본 캐시에도 넣는다 — 분석을 산 사람이
- * 대본 캐시까지 채워 주는 구조다.
+ * 무료로 풀 수 있는 근거가 creative_analyses **공용 캐시**다: 영상 하나당 원가
+ * (대본 공급사 1크레딧 + Opus 토큰 ~수십 원)는 **최초 1회만** 나가고, 이후 전원이
+ * 캐시를 읽는다. 원가 상방은 "사용자 수"가 아니라 "분석된 영상 수"로 잡힌다.
+ * 대본이 이 과정에서 새로 추출되면 공용 대본 캐시에도 넣는다.
  */
 export async function analyzePoolCreative(creativeId: string): Promise<AnalyzeResult> {
   const user = await getAuthUser();
@@ -355,10 +354,9 @@ export async function analyzePoolCreative(creativeId: string): Promise<AnalyzeRe
   const claude = createClaudeClient();
   if (!claude) return { ok: false, error: "AI 분석 설정이 완료되지 않았어요." };
 
-  /* 대본 캐시 확인과 무비용 사전조건(원본 링크·수집 엔진 설정)은 **과금보다 앞에** 둔다.
-     여기서 실패하는 건 재시도해도 똑같이 실패하는 결정적 실패인데, 과금을 먼저 하면
-     무료 월 1회(quota)로 통과한 사용자의 한 달치가 외부 비용 0원짜리 실패에 증발한다
-     (quota 는 환불 경로가 없다 — extractPoolTranscript 와 같은 순서를 지킨다). */
+  /* 무비용 사전조건(대본 캐시·원본 링크·수집 엔진 설정)을 먼저 확인한다 —
+     여기서 걸리는 건 재시도해도 똑같이 실패하는 결정적 실패라, 선점 자리표시를
+     만들기 전에 걸러야 잔해도 안 남는다. */
   const { data: t } = await supabase
     .from("creative_transcripts")
     .select("transcript")
@@ -371,7 +369,7 @@ export async function analyzePoolCreative(creativeId: string): Promise<AnalyzeRe
 
   const admin = createAdminClient();
   /* 동시 호출 선점 — 자리표시 행을 원자적으로 insert 한다. 같은 릴스를 두 사람이
-     동시에 분석하면 둘 다 캐시 미스 → 둘 다 과금 → Opus 2회가 되는 걸 PK 충돌로 막는다.
+     동시에 분석하면 둘 다 캐시 미스 → Opus 2회(이중 원가)가 되는 걸 PK 충돌로 막는다.
      실패·강제종료 시 잔해는 위의 10분 시효가 회수한다. */
   let preempted = false;
   if (admin && !cachedRow) {
@@ -393,22 +391,6 @@ export async function analyzePoolCreative(creativeId: string): Promise<AnalyzeRe
     }
   };
 
-  const charge = await chargeGeneration({
-    metric: "ai_video_analysis",
-    creditCost: CREDIT_COSTS.videoAnalysis,
-    reason: "pool_video_analysis",
-  });
-  if (!charge.ok) {
-    await releaseLock();
-    return { ok: false, error: charge.error };
-  }
-  const refundIfCharged = async () => {
-    await releaseLock();
-    if (charge.via === "credits") {
-      await refundGenerationCredits(charge.userId, CREDIT_COSTS.videoAnalysis, "pool_video_analysis_fail_refund");
-    }
-  };
-
   try {
     /* 1. 대본 — 캐시가 없으면 여기서 추출한다 (사전조건은 위에서 이미 통과) */
     let transcript: string | null = cachedTranscript;
@@ -418,7 +400,7 @@ export async function analyzePoolCreative(creativeId: string): Promise<AnalyzeRe
       freshTranscript = Boolean(transcript);
     }
     if (!transcript) {
-      await refundIfCharged();
+      await releaseLock();
       return { ok: false, error: "음성이 감지되지 않았어요 — 말로 설명하는 릴스만 분석할 수 있어요." };
     }
     transcript = transcript.slice(0, 8000);
@@ -464,7 +446,7 @@ export async function analyzePoolCreative(creativeId: string): Promise<AnalyzeRe
       ],
     });
     if (response.stop_reason === "refusal") {
-      await refundIfCharged();
+      await releaseLock();
       return { ok: false, error: "이 영상은 분석할 수 없어요." };
     }
     const text = (response.content as { type: string; text?: string }[]).find((b) => b.type === "text")?.text;
@@ -498,7 +480,7 @@ export async function analyzePoolCreative(creativeId: string): Promise<AnalyzeRe
 
     return { ok: true, analysis, cached: false, ...(freshTranscript ? { transcript } : {}) };
   } catch (e) {
-    await refundIfCharged();
+    await releaseLock();
     const isCredits = e instanceof CollectError && e.reason === "out_of_credits";
     console.error("[pool] 영상 분석 실패:", e);
     return {

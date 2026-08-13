@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bookmark, Captions, Download, ExternalLink, Eye, Heart, MessageCircle, Share2, Sparkles, Trash2, X } from "lucide-react";
+import { Bookmark, Captions, Download, ExternalLink, Eye, Heart, Loader2, MessageCircle, Share2, Sparkles, Trash2, X } from "lucide-react";
 import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 import type { Channel, ReferenceItem } from "@/lib/types";
 import {
@@ -43,6 +43,24 @@ const STATUS_OPTIONS: { value: NonNullable<ReferenceItem["status"]>; label: stri
   { value: "seen", label: "봤음" },
   { value: "skipped", label: "건너뜀" },
 ];
+
+/** 오래 걸리는 AI 작업 자리 — 버튼 라벨만 바꾸면 눈에 안 띈다는 지적(2026-08-13)로
+    결과가 나타날 자리에 스피너 + 뼈대 줄을 미리 깔아 "일하고 있다"를 보이게 한다. */
+function WorkingBlock({ label }: { label: string }) {
+  return (
+    <div role="status" aria-live="polite" className="anim-swap mt-1.5 space-y-2.5 rounded-card border border-line bg-body px-3 py-3">
+      <p className="flex items-center gap-2 text-[13px] font-medium text-fg-sub">
+        <Loader2 className="size-4 animate-spin text-primary" aria-hidden />
+        {label}
+      </p>
+      <div className="space-y-1.5" aria-hidden>
+        <div className="h-2.5 w-4/5 animate-pulse rounded-chip bg-plate" />
+        <div className="h-2.5 w-3/5 animate-pulse rounded-chip bg-plate" />
+        <div className="h-2.5 w-2/3 animate-pulse rounded-chip bg-plate" />
+      </div>
+    </div>
+  );
+}
 
 export function ReferenceDetailModal({
   item,
@@ -202,7 +220,7 @@ export function ReferenceDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+      className="modal-scrim-in fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-label={`${item.title} 상세`}
@@ -210,7 +228,7 @@ export function ReferenceDetailModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="shadow-pop flex max-h-[94vh] w-full max-w-3xl flex-col rounded-card border border-line bg-overlay">
+      <div className="modal-card-in shadow-pop flex max-h-[94vh] w-full max-w-3xl flex-col rounded-card border border-line bg-overlay">
         {/* 헤더 */}
         <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
@@ -373,19 +391,20 @@ export function ReferenceDetailModal({
                   </InfoTip>
                 </p>
                 {transcript ? (
-                  <div className="mt-1.5 max-h-36 overflow-y-auto whitespace-pre-wrap rounded-card border border-line bg-body px-3 py-2.5 text-[13px] leading-relaxed text-fg-sub">
+                  <div className="anim-swap mt-1.5 max-h-36 overflow-y-auto whitespace-pre-wrap rounded-card border border-line bg-body px-3 py-2.5 text-[13px] leading-relaxed text-fg-sub">
                     {transcript}
                   </div>
+                ) : extracting ? (
+                  <WorkingBlock label="영상 음성을 받아쓰고 있어요 — 보통 10~30초 걸려요" />
                 ) : (
                   <div className="mt-1.5">
                     <Button
                       variant="secondary"
                       size="sm"
                       onClick={handleExtract}
-                      disabled={extracting || item.channel !== "instagram"}
-                      aria-busy={extracting}
+                      disabled={item.channel !== "instagram"}
                     >
-                      {extracting ? "추출 중 (10~30초)" : "대본 추출"}
+                      대본 추출
                     </Button>
                     {item.channel !== "instagram" ? (
                       <span className="ml-2 text-[12px] text-fg-faint">인스타그램 릴스만 지원</span>
@@ -406,12 +425,12 @@ export function ReferenceDetailModal({
                     <Sparkles className="size-3.5 text-fg-faint" aria-hidden />
                     AI 영상 분석
                     <InfoTip>
-                      대본을 바탕으로 첫 3초 훅·전개 구조·타깃을 분석해요. 다른 사용자가 이미 분석한
-                      영상은 크레딧 차감 없이 바로 보여요.
+                      대본을 바탕으로 첫 3초 훅·전개 구조·타깃을 분석해요. 무료로 제공되고, 다른
+                      사용자가 이미 분석한 영상은 결과가 바로 보여요.
                     </InfoTip>
                   </p>
                   {analysis ? (
-                    <div className="mt-1.5 space-y-2.5 rounded-card border border-line bg-body px-3 py-2.5">
+                    <div className="anim-swap mt-1.5 space-y-2.5 rounded-card border border-line bg-body px-3 py-2.5">
                       {analysis.hookTags.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5">
                           {analysis.hookTags.map((h) => (
@@ -453,16 +472,17 @@ export function ReferenceDetailModal({
                         </div>
                       ) : null}
                     </div>
+                  ) : analyzing ? (
+                    <WorkingBlock label="영상 구조를 분석하고 있어요 — 보통 10~40초 걸려요" />
                   ) : (
                     <div className="mt-1.5">
                       <Button
                         variant="secondary"
                         size="sm"
                         onClick={handleAnalyze}
-                        disabled={analyzing || item.channel !== "instagram"}
-                        aria-busy={analyzing}
+                        disabled={item.channel !== "instagram"}
                       >
-                        {analyzing ? "분석 중 (10~40초)" : "영상 분석"}
+                        영상 분석
                       </Button>
                       {item.channel !== "instagram" ? (
                         <span className="ml-2 text-[12px] text-fg-faint">인스타그램 릴스만 지원</span>
