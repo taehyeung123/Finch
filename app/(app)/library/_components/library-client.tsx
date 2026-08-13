@@ -344,7 +344,11 @@ export function LibraryClient({
   /* ---------------- 필터링 ---------------- */
 
   const filteredItems = useMemo(() => {
-    const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    /* 풀 모드에서는 텍스트 필터를 서버가 이미 끝냈다(글자 일치 + **의미 검색 보충**).
+       여기서 글자 포함으로 또 거르면 의미 보충분("휘낭시에" → 베이킹 소재처럼
+       검색어 글자가 캡션에 없는 결과)이 전부 떨어져 나간다 — 기능이 통째로 사라진다.
+       클라이언트 토큰 필터는 개인 수집분(서버 검색이 없는 데모·개인 모드) 전용. */
+    const tokens = poolReady ? [] : query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const maxHours = WITHIN_HOURS[filters.within];
     const base = items.filter((item) => {
       if (filters.target === "ads") return false; // 메타광고만 볼 때는 오가닉을 안 섞는다
@@ -405,12 +409,13 @@ export function LibraryClient({
       );
     }
     return [...base].sort((a, b) => a.collectedAgoHours - b.collectedAgoHours);
-  }, [items, filters, favoriteIds, overAvgMultiple, query]);
+  }, [items, filters, favoriteIds, overAvgMultiple, query, poolReady]);
 
   /* 메타광고 — 틱톡·스레드엔 게재되지 않으므로 그 채널 필터에선 항상 제외.
      인스타 필터에선 platforms에 INSTAGRAM이 걸린 광고만 함께 보여준다. */
   const filteredAds = useMemo(() => {
-    const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    // 풀 모드는 서버 검색(글자+의미) 결과라 토큰 재필터 금지 — filteredItems 와 같은 이유
+    const tokens = poolReady ? [] : query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const maxHours = WITHIN_HOURS[filters.within];
     return ads.filter((ad) => {
       if (filters.target === "tiktok" || filters.target === "threads") return false;
@@ -439,7 +444,7 @@ export function LibraryClient({
       }
       return true;
     });
-  }, [ads, filters, adFavoriteIds, query]);
+  }, [ads, filters, adFavoriteIds, query, poolReady]);
 
   /* 통합 목록 — 광고는 조회·좋아요가 없어 반응 기반 정렬에서는 뒤에 붙이고,
      시간 기반 정렬에서는 완전히 섞는다 */

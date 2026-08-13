@@ -11,6 +11,28 @@ import type { SupabaseClient } from "@supabase/supabase-js";
   마감 크론이 통째로 죽었던 사고와 같은 유형을 막는 장치다.
 */
 let cached: boolean | null = null;
+let cachedEmbedding: boolean | null = null;
+
+/** 0036(embedding·match_creatives) 적용 여부 — hasTagColumns 와 같은 규약 */
+export async function hasEmbeddingColumn(db: SupabaseClient): Promise<boolean> {
+  if (cachedEmbedding !== null) return cachedEmbedding;
+  /* 필터 없이 컬럼만 짚는다 — `not null` 조건을 걸면 임베딩이 아직 드문 구간에
+     매칭 행을 찾느라 테이블 전체를 순차 스캔한다(HNSW 는 IS NOT NULL 을 못 받친다).
+     컬럼이 없으면 이 형태로도 동일하게 42703 이 난다. */
+  const { error } = await db.from("creatives").select("embedding").limit(1);
+  if (!error) {
+    cachedEmbedding = true;
+    return true;
+  }
+  const missing = error.code === "42703" || /column .* does not exist/i.test(error.message ?? "");
+  if (missing) {
+    cachedEmbedding = false;
+    console.warn("[pool] 0036 미적용 — 의미 검색 없이 동작합니다:", error.message);
+    return false;
+  }
+  console.warn("[pool] 0036 프로브 일시 오류(캐시 안 함):", error.message);
+  return false;
+}
 
 export async function hasTagColumns(db: SupabaseClient): Promise<boolean> {
   if (cached !== null) return cached;

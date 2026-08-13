@@ -5,7 +5,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClaudeClient, FAST_MODEL } from "@/lib/ai/claude";
 import { HOOK_VALUES } from "@/lib/reference/engine";
 import { claimAiItems, refundAiItems } from "@/lib/pool/budget";
-import { hasTagColumns } from "@/lib/pool/schema";
+import { hasEmbeddingColumn, hasTagColumns } from "@/lib/pool/schema";
+import { embeddingTextOf, embedPassages, isEmbeddingConfigured } from "@/lib/pool/embedding";
 import { industryLabel } from "@/lib/industry/taxonomy";
 
 /*
@@ -36,6 +37,7 @@ export interface EnrichRunResult {
 interface TargetRow {
   id: string;
   kind: string;
+  title?: string | null;
   body: string;
   views: number;
   likes: number;
@@ -141,7 +143,7 @@ async function tagChunk(
  * 요약이 아직 없는 소재를 최대 maxItems 건 태깅한다. 크론 자투리 시간에 돌리는 용도.
  * 공급사 크레딧은 쓰지 않는다 — 나가는 건 Claude 토큰뿐이고, 하루 상한은 claim_ai_budget 이 잡는다.
  */
-export async function enrichPool(db: SupabaseClient, maxItems: number): Promise<EnrichRunResult> {
+export async function enrichPool(db: SupabaseClient, maxItems: number, deadline?: number): Promise<EnrichRunResult> {
   const claude = createClaudeClient();
   if (!claude) return { picked: 0, enriched: 0, skipped: "no_api_key" };
 
@@ -152,7 +154,7 @@ export async function enrichPool(db: SupabaseClient, maxItems: number): Promise<
 
   const { data, error } = await db
     .from("creatives")
-    .select("id, kind, body, views, likes, comments, industry_ids")
+    .select("id, kind, title, body, views, likes, comments, industry_ids")
     .eq("ai_summary", "")
     .neq("body", "")
     .is("takedown_at", null)
@@ -206,6 +208,29 @@ export async function enrichPool(db: SupabaseClient, maxItems: number): Promise<
     }
   }
 
+  /* 임베딩 편승 — 태깅이 끝난 텍스트(주제어·요약 포함)로 벡터를 만들어 같은 UPDATE 에
+     싣는다. 소재당 1회, 건당 ~0원. 실패해도 태깅 저장은 그대로 진행하고
+     임베딩은 백필(backfillEmbeddings)이 다음 회차에 줍는다. */
+  if (updates.length > 0 && isEmbeddingConfigured() && (await hasEmbeddingColumn(db))) {
+    const rowById = new Map(targets.map((t) => [t.id, t]));
+    const texts = updates.map((u) => {
+      const row = rowById.get(u.id);
+      return embeddingTextOf({
+        title: row?.title,
+        body: row?.body,
+        ai_topic: String(u.patch.ai_topic ?? ""),
+        ai_summary: String(u.patch.ai_summary ?? ""),
+      });
+    });
+    const vectors = await embedPassages(texts, deadline);
+    if (vectors) {
+      updates.forEach((u, i) => {
+        // 실패·시간초과 청크는 null — 태깅 저장은 그대로 가고 백필이 다음 회차에 줍는다
+        if (vectors[i]) u.patch.embedding = vectors[i];
+      });
+    }
+  }
+
   // 10건씩 병렬 — 60건이어도 DB 왕복 몇 번이면 끝난다
   for (let i = 0; i < updates.length; i += 10) {
     const batch = updates.slice(i, i + 10);
@@ -227,4 +252,50 @@ export async function enrichPool(db: SupabaseClient, maxItems: number): Promise<
   if (failedCount > 0) await refundAiItems(failedCount);
 
   return { picked: candidates.length, enriched, skipped: null };
+}
+
+/**
+ * 임베딩 백필 — 태깅은 끝났는데 벡터가 없는 소재를 줍는다.
+ * (임베딩 키가 태깅보다 늦게 설정된 경우·enrich 시점 임베딩 실패분·기존 적재분)
+ * 공급사 크레딧 0, AI 예산도 안 쓴다 — 임베딩 단가는 사실상 0원이라 게이트 불필요.
+ */
+export async function backfillEmbeddings(db: SupabaseClient, limit: number, deadline?: number): Promise<number> {
+  if (!isEmbeddingConfigured()) return 0;
+  if (!(await hasEmbeddingColumn(db))) return 0;
+
+  const { data, error } = await db
+    .from("creatives")
+    .select("id, title, body, ai_topic, ai_summary")
+    .is("embedding", null)
+    .neq("ai_summary", "")
+    .is("takedown_at", null)
+    .order("heat_score", { ascending: false })
+    .limit(Math.max(1, limit));
+  if (error || !data || data.length === 0) return 0;
+
+  const texts = data.map((r) =>
+    embeddingTextOf({
+      title: r.title as string | null,
+      body: r.body as string | null,
+      ai_topic: r.ai_topic as string | null,
+      ai_summary: r.ai_summary as string | null,
+    }),
+  );
+  const vectors = await embedPassages(texts, deadline);
+  if (!vectors) return 0;
+
+  let done = 0;
+  for (let i = 0; i < data.length; i += 10) {
+    const batch = data.slice(i, i + 10);
+    const ok = await Promise.all(
+      batch.map(async (r, j) => {
+        const vec = vectors[i + j];
+        if (!vec) return false; // 실패 청크 — 다음 회차 재시도
+        const { error: upErr } = await db.from("creatives").update({ embedding: vec }).eq("id", r.id);
+        return !upErr;
+      }),
+    );
+    done += ok.filter(Boolean).length;
+  }
+  return done;
 }

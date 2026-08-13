@@ -4,7 +4,7 @@ import { isAuthorizedCron } from "@/lib/cron";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fillThumbs } from "@/lib/pool/thumbs";
 import { saveBoost } from "@/lib/pool/heat";
-import { enrichPool } from "@/lib/pool/enrich";
+import { backfillEmbeddings, enrichPool } from "@/lib/pool/enrich";
 
 /**
  * 공용 풀 — 마감 회차 (매일 1회, 실행 회차 뒤).
@@ -37,9 +37,20 @@ export async function GET(request: Request) {
      이 뒤 단계들 몫은 아래 썸네일 건수 조절이 지킨다. */
   let enriched = 0;
   try {
-    enriched = (await enrichPool(admin, 40)).enriched;
+    enriched = (await enrichPool(admin, 40, t0 + 48_000)).enriched;
   } catch (e) {
     console.error("[pool] 마감 AI 태깅 실패(마감은 계속):", e instanceof Error ? e.message : String(e));
+  }
+
+  /* 임베딩 백필 잔여분 — 건당 ~0원. 시간 게이트+데드라인 필수: 순차 청크(각 15초 상한)라
+     느린 날엔 게이트 없이 60초를 넘겨 뒤의 롤업·부스트·회차 기록까지 죽는다(리뷰 확정). */
+  let embedded = 0;
+  if (Date.now() - t0 < 20_000) {
+    try {
+      embedded = await backfillEmbeddings(admin, 100, t0 + 48_000);
+    } catch (e) {
+      console.error("[pool] 임베딩 백필 실패(마감은 계속):", e instanceof Error ? e.message : String(e));
+    }
   }
 
   // 남은 시간에 맞춰 썸네일 건수를 줄인다 — 장당 250ms 낙관치지만 상한 역할은 한다
@@ -113,6 +124,7 @@ export async function GET(request: Request) {
     ok: true,
     thumbs,
     enriched,
+    embedded,
     visibleIndustries: visibleCount ?? null,
     boosted,
     purgedJobs: purged ?? 0,

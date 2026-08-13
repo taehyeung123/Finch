@@ -2,7 +2,8 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { thumbPublicUrl } from "@/lib/pool/thumbs";
-import { hasTagColumns } from "@/lib/pool/schema";
+import { hasEmbeddingColumn, hasTagColumns } from "@/lib/pool/schema";
+import { embedQuery, isEmbeddingConfigured } from "@/lib/pool/embedding";
 
 /*
   풀 검색 — 사용자가 실제로 두드리는 읽기 경로.
@@ -87,6 +88,10 @@ export interface PoolResult {
   hasMore: boolean;
   /** 풀이 이 검색어를 아직 모른다 — 화면이 "수집 예약됨" 안내를 띄우는 신호 */
   isGap: boolean;
+  /** 글자 일치로 잡힌 수 — 의미 검색 보충분과 구분한다.
+      수집 미스 판정(플래너 큐잉)은 이 값 기준이어야 한다: 의미 보충으로 화면이
+      채워졌다고 미스 기록을 안 남기면 그 검색어는 영영 정확 수집되지 않는다. */
+  exactCount: number;
 }
 
 const DEFAULT_PAGE_SIZE = 40; // 5열 그리드 × 8줄
@@ -185,7 +190,7 @@ const SELECT_TAGS = SELECT_BASE.replace(
 
 export async function searchPool(query: PoolQuery): Promise<PoolResult> {
   const supabase = await createClient();
-  if (!supabase) return { items: [], total: 0, hasMore: false, isGap: false };
+  if (!supabase) return { items: [], total: 0, hasMore: false, isGap: false, exactCount: 0 };
 
   const page = Math.max(0, query.page ?? 0);
   const size = Math.min(60, Math.max(10, query.pageSize ?? DEFAULT_PAGE_SIZE));
@@ -229,19 +234,69 @@ export async function searchPool(query: PoolQuery): Promise<PoolResult> {
   const { data, count, error } = await sel.range(from, from + size - 1);
   if (error) {
     console.error("[pool] 검색 실패", error.message);
-    return { items: [], total: 0, hasMore: false, isGap: false };
+    return { items: [], total: 0, hasMore: false, isGap: false, exactCount: 0 };
   }
 
   const rows = (data ?? []) as unknown as Row[];
-  const items = rows.map(toItem);
-  const total = count ?? items.length;
+  let items = rows.map(toItem);
+  const exactCount = count ?? items.length;
+
+  /* 의미 검색 보충 — 글자 일치가 첫 페이지를 못 채울 때만.
+     "휘낭시에"처럼 캡션에 그 글자가 없는 롱테일 검색어도 베이킹·디저트 소재가
+     떠야 한다(스니핏의 image_description 검색과 같은 방식, 2026-08-13 실측).
+     정확 매칭이 앞, 의미 매칭이 뒤 — 유사도 순서 그대로 붙인다.
+     미스 큐잉은 exactCount 기준으로 그대로 남으므로, 의미 보충이 화면을 채워도
+     그 검색어는 다음 크론에서 정확 수집된다(풀이 점점 정밀해지는 루프 유지). */
+  if (q.length > 0 && page === 0 && items.length < size && isEmbeddingConfigured()) {
+    try {
+      if (await hasEmbeddingColumn(supabase)) {
+        const qVec = await embedQuery(q);
+        if (qVec) {
+          const { data: matches, error: rpcErr } = await supabase.rpc("match_creatives", {
+            query_embedding: qVec,
+            match_count: size * 2,
+            p_kind: query.kind ?? null,
+            p_platform: query.platform && query.platform !== "all" ? query.platform : null,
+            p_industry: query.industryId ?? null,
+          });
+          if (!rpcErr && Array.isArray(matches) && matches.length > 0) {
+            const seen = new Set(items.map((i) => i.id));
+            /* 유사도 하한 0.3 — 그 밑은 "아무거나"에 가깝다. 분포를 보고 조정한다. */
+            const ids = (matches as Array<{ id: string; similarity: number }>)
+              .filter((m) => m.similarity >= 0.3 && !seen.has(m.id))
+              .map((m) => m.id)
+              .slice(0, size - items.length);
+            if (ids.length > 0) {
+              const order = new Map(ids.map((id, i) => [id, i]));
+              let fillSel = supabase.from("creatives").select(withTags ? SELECT_TAGS : SELECT_BASE).in("id", ids);
+              // RPC 가 안 거른 나머지 필터는 여기서 다시 적용
+              if (query.mediaFormat && query.mediaFormat !== "all")
+                fillSel = fillSel.eq("media_format", query.mediaFormat);
+              if (query.minRunDays && query.minRunDays > 0) fillSel = fillSel.gte("run_days", query.minRunDays);
+              const { data: fillRows } = await fillSel;
+              const fills = ((fillRows ?? []) as unknown as Row[])
+                .map(toItem)
+                .sort((a, b) => (order.get(a.id) ?? 999) - (order.get(b.id) ?? 999));
+              items = [...items, ...fills];
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // 의미 검색은 보조 경로 — 실패해도 글자 일치 결과는 그대로 나간다
+      console.error("[pool] 의미 검색 실패(무시):", e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  const total = Math.max(exactCount, items.length);
 
   return {
     items,
     total,
-    hasMore: from + items.length < total,
-    // 첫 페이지가 비었을 때만 "구멍"이다. 3페이지가 비는 건 그냥 끝에 온 것이다.
-    isGap: page === 0 && items.length === 0 && q.length > 0,
+    hasMore: from + items.length < exactCount,
+    // "구멍" 판정은 글자 일치 기준 — 의미 보충이 있어도 정확 수집은 예약돼야 한다
+    isGap: page === 0 && exactCount === 0 && q.length > 0,
+    exactCount,
   };
 }
 

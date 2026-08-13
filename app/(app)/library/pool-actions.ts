@@ -66,6 +66,10 @@ export async function searchPoolAction(input: PoolSearchInput): Promise<PoolSear
     wantsOrganic
       ? searchPool({
           q,
+          /* kind 를 명시해야 의미 검색 보충 슬롯을 광고가 잠식하지 않는다 —
+             p_kind 없이 부르면 유사도 상위의 광고가 오가닉 몫을 차지하고
+             호출측 사후 필터에서 버려져 슬롯만 날린다(리뷰 확정 결함). */
+          kind: "post",
           industryId,
           platform: (input.target === "all" ? "all" : input.target) as PoolPlatformFilter,
           sort: poolSort(input.sort, false),
@@ -89,10 +93,13 @@ export async function searchPoolAction(input: PoolSearchInput): Promise<PoolSear
   const ads = (adResult?.items ?? []).map(poolItemToAd);
 
   const total = (organic?.total ?? 0) + (adResult?.total ?? 0);
-  const found = items.length + ads.length;
 
+  /* 미스 판정·기록은 **글자 일치 수** 기준 — 의미 검색 보충으로 화면이 채워져도
+     hit_count=0 이어야 플래너가 이 검색어를 정확 수집 대상으로 올리고,
+     isGap 도 같은 기준이어야 "수집 예약됨" 안내가 정직하다. */
+  const exactFound = (organic?.exactCount ?? 0) + (adResult?.exactCount ?? 0);
   if (q && page === 0) {
-    await logSearch(user.id, q, found, industryId, input.target === "ads" ? "meta_ads" : input.target);
+    await logSearch(user.id, q, exactFound, industryId, input.target === "ads" ? "meta_ads" : input.target);
   }
 
   return {
@@ -100,7 +107,7 @@ export async function searchPoolAction(input: PoolSearchInput): Promise<PoolSear
     ads,
     total,
     hasMore: Boolean(organic?.hasMore || adResult?.hasMore),
-    isGap: Boolean(q) && page === 0 && found === 0,
+    isGap: Boolean(q) && page === 0 && exactFound === 0,
   };
 }
 
