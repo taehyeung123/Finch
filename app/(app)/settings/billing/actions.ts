@@ -60,23 +60,36 @@ export async function createCheckout(plan: string): Promise<CreateCheckoutResult
 /**
  * 구독 해지 — 자동갱신을 끈다. 이미 결제한 기간(next_billing_at까지)은 계속 이용 가능하고,
  * 기간 종료 시 크론이 무료 플랜으로 전환한다. 쓰기는 admin 전용(RLS에 update 정책 없음).
+ * 결과는 changePlan과 동일한 planRedirect 배너 패턴으로 항상 사용자에게 알린다 (2026-08-14 감사).
  */
 export async function cancelSubscription(): Promise<void> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) {
+    planRedirect({ planError: "로그인이 필요합니다." });
+  }
   const admin = createAdminClient();
-  if (!admin) return;
+  if (!admin) {
+    planRedirect({ planError: "결제 설정이 완료되지 않았어요." });
+  }
 
-  const { error } = await admin
+  const { data, error } = await admin
     .from("subscriptions")
     .update({ status: "canceled", canceled_at: new Date().toISOString() })
     .eq("user_id", user.id)
-    .in("status", ["active", "past_due"]);
-  if (error) console.error("[billing] 구독 해지 실패:", error.message);
-  revalidatePath("/settings/billing");
+    .in("status", ["active", "past_due"])
+    .select("id");
+  if (error) {
+    console.error("[billing] 구독 해지 실패:", error.message);
+    planRedirect({ planError: "구독 해지에 실패했어요. 잠시 후 다시 시도해 주세요." });
+  }
+  if (!data || data.length === 0) {
+    planRedirect({ planError: "진행 중인 구독이 없어요." });
+  }
+  revalidatePath(BILLING_PATH);
+  planRedirect({ subCanceled: "1" });
 }
 
 /** 해지 취소(재개) — 기간 종료 전이면 자동갱신을 다시 켠다 */
@@ -85,18 +98,30 @@ export async function resumeSubscription(): Promise<void> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) {
+    planRedirect({ planError: "로그인이 필요합니다." });
+  }
   const admin = createAdminClient();
-  if (!admin) return;
+  if (!admin) {
+    planRedirect({ planError: "결제 설정이 완료되지 않았어요." });
+  }
 
-  const { error } = await admin
+  const { data, error } = await admin
     .from("subscriptions")
     .update({ status: "active", canceled_at: null })
     .eq("user_id", user.id)
     .eq("status", "canceled")
-    .gt("next_billing_at", new Date().toISOString());
-  if (error) console.error("[billing] 구독 재개 실패:", error.message);
-  revalidatePath("/settings/billing");
+    .gt("next_billing_at", new Date().toISOString())
+    .select("id");
+  if (error) {
+    console.error("[billing] 구독 재개 실패:", error.message);
+    planRedirect({ planError: "해지 취소에 실패했어요. 잠시 후 다시 시도해 주세요." });
+  }
+  if (!data || data.length === 0) {
+    planRedirect({ planError: "이용 기간이 이미 끝나 자동갱신을 다시 켤 수 없어요. 요금제에서 새로 구독해 주세요." });
+  }
+  revalidatePath(BILLING_PATH);
+  planRedirect({ subResumed: "1" });
 }
 
 /**
@@ -164,7 +189,11 @@ export async function changePlan(formData: FormData): Promise<void> {
       planRedirect({ planError: "결제 수단을 확인할 수 없어요. 카드를 다시 등록해 주세요." });
     }
 
-    const orderId = `chg-${String(sub.id).replaceAll("-", "").slice(0, 12)}-${Date.now()}`;
+    // Idempotency-Key(=orderId)는 시도 단위(Date.now)가 아니라 (구독 id + 목표 플랜 + 현재 결제 주기)
+    // 파생 값으로 만든다 — 더블 클릭·응답 지연 중 재제출이 와도 Toss가 같은 키로 흡수해 이중 청구가 없다.
+    // 업그레이드가 성공하면 next_billing_at이 갱신되므로 다음 정당한 전환은 자연히 새 키를 받는다.
+    const cycleKey = String(sub.next_billing_at ?? "first").replace(/\D/g, "").slice(0, 14) || "none";
+    const orderId = `chg-${String(sub.id).replaceAll("-", "").slice(0, 12)}-${target}-${cycleKey}`;
     const orderName = `핀치 ${targetName} 플랜 (업그레이드)`;
     const charged = await chargeBilling(billingKey, {
       customerKey: sub.toss_customer_key,
@@ -246,15 +275,27 @@ export async function cancelPlanChange(): Promise<void> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) {
+    planRedirect({ planError: "로그인이 필요합니다." });
+  }
   const admin = createAdminClient();
-  if (!admin) return;
+  if (!admin) {
+    planRedirect({ planError: "결제 설정이 완료되지 않았어요." });
+  }
 
-  const { error } = await admin
+  const { data, error } = await admin
     .from("subscriptions")
     .update({ pending_plan: null })
     .eq("user_id", user.id)
-    .in("status", ["active", "past_due"]);
-  if (error) console.error("[billing] 플랜 변경 예약 취소 실패:", error.message);
+    .in("status", ["active", "past_due"])
+    .select("id");
+  if (error) {
+    console.error("[billing] 플랜 변경 예약 취소 실패:", error.message);
+    planRedirect({ planError: "예약 취소에 실패했어요. 잠시 후 다시 시도해 주세요." });
+  }
+  if (!data || data.length === 0) {
+    planRedirect({ planError: "진행 중인 구독이 없어요." });
+  }
   revalidatePath(BILLING_PATH);
+  planRedirect({ scheduleCanceled: "1" });
 }

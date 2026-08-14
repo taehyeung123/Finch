@@ -3,14 +3,17 @@
 import { useRef, useState } from "react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/cn";
 import { SettingsNav } from "../../_components/settings-nav";
 import { saveNotificationSettings } from "../actions";
 
 /*
   알림 설정 (PRD PART 4.13)
-  - 알림 유형 5종 x 수신 경로(인앱/이메일) 토글 매트릭스
+  - 알림 유형 5종 x 수신 경로(인앱/이메일) 토글 매트릭스 — 토글은 공용 Switch(components/ui/switch.tsx)
   - 토글 즉시 낙관적 반영 + 짧은 디바운스 후 서버 저장 (notification_settings upsert)
+  - 저장 실패 시: 화면을 서버가 확인한 마지막 값으로 롤백 + '다시 시도' 버튼 제공
+    (2026-08-14 감사 — 낙관적 상태와 서버 상태가 어긋난 채 방치되던 문제 수리)
 */
 
 export const NOTIFICATION_ROWS = [
@@ -37,42 +40,38 @@ export const DEFAULT_STATE: NotificationSettingsState = {
   studio: { inapp: true, email: false },
 };
 
-function Toggle({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  onChange: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={onChange}
-      className={cn(
-        "relative h-5 w-9 shrink-0 rounded-chip transition-colors",
-        checked ? "bg-primary" : "bg-overlay border border-line",
-      )}
-    >
-      <span
-        className={cn(
-          "absolute top-1/2 size-3.5 -translate-y-1/2 rounded-chip bg-fg transition-transform",
-          checked ? "translate-x-[18px]" : "translate-x-[3px]",
-        )}
-        aria-hidden
-      />
-    </button>
-  );
-}
-
 export function NotificationSettingsClient({ initial }: { initial: NotificationSettingsState }) {
   const [settings, setSettings] = useState(initial);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 서버가 확인한 마지막 값 — 저장 실패 시 여기로 롤백한다 */
+  const lastSavedRef = useRef(initial);
+  /** 마지막으로 저장을 시도한 값 — '다시 시도'가 이 값을 재전송한다 */
+  const pendingRef = useRef(initial);
+  /** 저장 세대 — 진행 중이던 낡은 저장 결과가 새 변경을 덮어쓰지 않게 한다 */
+  const saveSeq = useRef(0);
+
+  const flush = async () => {
+    const seq = ++saveSeq.current;
+    const attempted = pendingRef.current;
+    setSaveState("saving");
+    const res = await saveNotificationSettings(attempted);
+    if (seq !== saveSeq.current) return; // 이후 새 변경이 생겼음 — 낡은 결과 무시
+    if (res.ok) {
+      lastSavedRef.current = attempted;
+      setSaveState("saved");
+    } else {
+      // 롤백 — 화면이 서버에 없는 값을 계속 보여주지 않도록 마지막 저장값으로 되돌린다
+      setSettings(lastSavedRef.current);
+      setSaveState("error");
+    }
+  };
+
+  const retry = () => {
+    // 실패했던 값을 다시 화면에 반영한 뒤 재전송
+    setSettings(pendingRef.current);
+    void flush();
+  };
 
   const toggle = (row: RowKey, channel: ChannelKey) => {
     const next = {
@@ -80,13 +79,12 @@ export function NotificationSettingsClient({ initial }: { initial: NotificationS
       [row]: { ...settings[row], [channel]: !settings[row][channel] },
     };
     setSettings(next);
+    pendingRef.current = next;
+    saveSeq.current++; // 진행 중이던 저장 결과는 무시되도록 세대 갱신
     // 짧은 디바운스 — 연타 토글을 한 번의 저장으로 합친다
     if (saveTimer.current) clearTimeout(saveTimer.current);
     setSaveState("saving");
-    saveTimer.current = setTimeout(async () => {
-      const res = await saveNotificationSettings(next);
-      setSaveState(res.ok ? "saved" : "error");
-    }, 500);
+    saveTimer.current = setTimeout(() => void flush(), 500);
   };
 
   return (
@@ -102,19 +100,42 @@ export function NotificationSettingsClient({ initial }: { initial: NotificationS
           title="알림 수신 설정"
           description="인앱·이메일 경로별로 켜고 끌 수 있어요"
           action={
-            saveState === "saving" ? (
-              <span className="text-xs text-fg-faint">저장 중…</span>
-            ) : saveState === "saved" ? (
-              <span className="text-xs text-positive">저장됨</span>
-            ) : saveState === "error" ? (
-              <span className="text-xs text-negative">저장 실패 — 다시 시도해 주세요</span>
-            ) : null
+            <div className="flex shrink-0 items-center gap-2">
+              {/* 상시 마운트 live region — 조건부 마운트는 스크린리더가 낭독을 놓친다 */}
+              <span
+                role="status"
+                aria-live={saveState === "error" ? "assertive" : "polite"}
+                className={cn(
+                  "text-xs",
+                  saveState === "saving" && "text-fg-sub",
+                  saveState === "saved" && "text-positive",
+                  saveState === "error" && "text-negative",
+                )}
+              >
+                {saveState === "saving"
+                  ? "저장 중…"
+                  : saveState === "saved"
+                    ? "저장됨"
+                    : saveState === "error"
+                      ? "저장 실패 — 변경이 저장 전 상태로 되돌아갔어요"
+                      : null}
+              </span>
+              {saveState === "error" ? (
+                <button
+                  type="button"
+                  onClick={retry}
+                  className="relative cursor-pointer rounded-card text-xs font-semibold text-negative underline underline-offset-2 after:absolute after:-inset-1.5 after:content-[''] focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+                >
+                  다시 시도
+                </button>
+              ) : null}
+            </div>
           }
         />
         <CardBody>
           <div>
             {/* 헤더 행 */}
-            <div className="grid grid-cols-[1fr_56px_56px] gap-x-6 pb-3 text-xs font-medium text-fg-faint">
+            <div className="grid grid-cols-[1fr_56px_56px] gap-x-6 pb-3 text-xs font-medium text-fg-sub">
               <span>알림 유형</span>
               <span className="text-center">인앱</span>
               <span className="text-center">이메일</span>
@@ -127,17 +148,17 @@ export function NotificationSettingsClient({ initial }: { initial: NotificationS
               >
                 <div className="min-w-0 pr-3">
                   <p className="text-[14px] font-semibold">{row.label}</p>
-                  <p className="mt-0.5 text-[13px] text-fg-faint">{row.description}</p>
+                  <p className="mt-0.5 text-[13px] text-fg-sub">{row.description}</p>
                 </div>
                 <div className="flex justify-center">
-                  <Toggle
+                  <Switch
                     checked={settings[row.key].inapp}
                     onChange={() => toggle(row.key, "inapp")}
                     label={`${row.label} 인앱 알림`}
                   />
                 </div>
                 <div className="flex justify-center">
-                  <Toggle
+                  <Switch
                     checked={settings[row.key].email}
                     onChange={() => toggle(row.key, "email")}
                     label={`${row.label} 이메일 알림`}
@@ -146,7 +167,7 @@ export function NotificationSettingsClient({ initial }: { initial: NotificationS
               </div>
             ))}
           </div>
-          <p className="mt-4 text-[13px] text-fg-faint">
+          <p className="mt-4 text-[13px] text-fg-sub">
             이메일 발송은 알림 발송 인프라 오픈과 함께 순차 적용됩니다. 설정은 지금 저장돼요.
           </p>
         </CardBody>

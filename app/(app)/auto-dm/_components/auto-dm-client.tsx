@@ -7,7 +7,6 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { cn } from "@/lib/cn";
 import { formatAgo, formatCompact } from "@/lib/format";
 import { NEXT_POST_SENTINEL } from "@/lib/auto-dm/db";
 import type { AutoDmRule, AutoDmStatus, Post } from "@/lib/types";
@@ -18,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { InfoTip } from "@/components/ui/info-tip";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Switch } from "@/components/ui/switch";
 import { RuleWizard, type RuleDraft } from "./rule-wizard";
 import { createRule, deleteRule, toggleRule, updateRule } from "../actions";
 
@@ -260,26 +260,12 @@ export function AutoDmClient({
 
                     {/* 액션 */}
                     <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={rule.status === "active"}
-                        aria-label={rule.status === "active" ? "일시중지" : "실행"}
+                      <Switch
+                        checked={rule.status === "active"}
+                        onChange={() => toggleStatus(rule)}
                         disabled={rule.status === "review"}
-                        onClick={() => toggleStatus(rule)}
-                        className={cn(
-                          "relative h-5 w-9 shrink-0 rounded-chip transition-colors disabled:opacity-40",
-                          rule.status === "active" ? "bg-primary" : "bg-line-strong",
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "absolute top-0.5 size-4 rounded-full bg-body transition-all",
-                            rule.status === "active" ? "left-[18px]" : "left-0.5",
-                          )}
-                          aria-hidden
-                        />
-                      </button>
+                        label={rule.status === "active" ? "일시중지" : "실행"}
+                      />
                       <button
                         type="button"
                         aria-label="편집"

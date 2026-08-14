@@ -3,8 +3,9 @@ import { Check, ExternalLink, ShieldCheck } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card } from "@/components/ui/card";
 import { Badge, ChannelBadge } from "@/components/ui/badge";
-import { AppIconTile } from "@/components/icons/brand";
-import { Button, buttonClasses } from "@/components/ui/button";
+import { AppIconTile, MetaGlyph } from "@/components/icons/brand";
+import { buttonClasses } from "@/components/ui/button";
+import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import type { Channel } from "@/lib/types";
 import { accounts as mockAccounts } from "@/lib/data";
 import { isDemoMode } from "@/lib/supabase/config";
@@ -58,7 +59,9 @@ async function loadAccountCards(): Promise<AccountCard[]> {
         displayName: m?.displayName ?? null,
         avatarUrl: null,
         connected: m?.connected ?? false,
-        tokenExpiresInDays: m?.tokenExpiresInDays ?? null,
+        // 라이브 분기와 동일 규칙: TikTok은 토큰이 매일 자동 갱신되므로 만료 카운트다운을 숨긴다
+        // (아래 라이브 분기 주석 참조 — 데모에서만 "재연동 필요" 경고가 뜨던 모순 방지).
+        tokenExpiresInDays: channel === "tiktok" ? null : (m?.tokenExpiresInDays ?? null),
       };
     });
   }
@@ -112,15 +115,15 @@ const CONNECT_MESSAGES: Record<string, { tone: "positive" | "warning" | "negativ
   save_failed: { tone: "negative", text: "연동 정보 저장 중 오류가 발생했어요. 다시 시도해 주세요." },
   exchange: { tone: "negative", text: "토큰 교환 중 오류가 발생했어요. 다시 시도해 주세요." },
   encrypt_failed: { tone: "negative", text: "토큰 암호화 중 오류가 발생했어요. 다시 시도해 주세요." },
+  disconnect_failed: { tone: "negative", text: "연동 해제 중 오류가 발생했어요. 다시 시도해 주세요." },
 };
 
 function ConnectActions({ card, oauthReady }: { card: AccountCard; oauthReady: boolean }) {
-  if (!oauthReady) {
-    return <Badge tone="neutral">연동 준비중</Badge>;
-  }
   const startHref = CONNECT_START_PATH[card.channel];
-  if (!startHref) {
-    return <Badge tone="neutral">연동 준비중</Badge>;
+  if (!oauthReady || !startHref) {
+    // 이미 '연동됨' 배지가 붙은 카드(데모 목데이터 등)에 '연동 준비중'을 겹치면 상태가 모순된다
+    // — 상태 배지는 카드당 1개, 미연동 카드에만 준비중을 보여준다.
+    return card.connected ? null : <Badge tone="neutral">연동 준비중</Badge>;
   }
   if (card.connected && card.id) {
     return (
@@ -128,12 +131,15 @@ function ConnectActions({ card, oauthReady }: { card: AccountCard; oauthReady: b
         <a href={startHref} className={buttonClasses("secondary", "sm")}>
           재연동
         </a>
-        <form action={disconnectAccount}>
-          <input type="hidden" name="accountId" value={card.id} />
-          <Button size="sm" variant="danger" type="submit">
-            해제
-          </Button>
-        </form>
+        <ConfirmSubmit
+          action={disconnectAccount}
+          hiddenFields={{ accountId: card.id }}
+          title="연동 해제"
+          description={`연동을 해제하면 저장된 토큰이 삭제되고 분석 데이터 수집이 중단됩니다. ${card.handle} 계정을 해제할까요?`}
+          confirmLabel="해제"
+          pendingLabel="해제 중…"
+          trigger="해제"
+        />
       </div>
     );
   }
@@ -157,9 +163,11 @@ export default async function SettingsPage({
   const banner =
     connectParam === "success"
       ? { tone: "positive" as const, text: `${handleParam ?? "채널"} 연동이 완료되었어요.` }
-      : connectParam === "error" && reasonParam
-        ? (CONNECT_MESSAGES[reasonParam] ?? CONNECT_MESSAGES.exchange)
-        : null;
+      : connectParam === "disconnected"
+        ? { tone: "positive" as const, text: "연동이 해제되었습니다." }
+        : connectParam === "error" && reasonParam
+          ? (CONNECT_MESSAGES[reasonParam] ?? CONNECT_MESSAGES.exchange)
+          : null;
 
   const instagramOAuthConfigured = isInstagramOAuthConfigured();
   const threadsOAuthConfigured = isThreadsOAuthConfigured();
@@ -180,10 +188,10 @@ export default async function SettingsPage({
         <div
           className={
             banner.tone === "positive"
-              ? "rounded-card border border-positive/40 bg-positive-weak p-4 text-[14px] text-positive"
+              ? "rounded-card border border-positive/40 bg-positive-weak p-4 text-[14px] text-positive-strong"
               : banner.tone === "negative"
-                ? "rounded-card border border-negative/40 bg-negative-weak p-4 text-[14px] text-negative"
-                : "rounded-card border border-warning/40 bg-warning-weak p-4 text-[14px] text-warning"
+                ? "rounded-card border border-negative/40 bg-negative-weak p-4 text-[14px] text-negative-strong"
+                : "rounded-card border border-warning/40 bg-warning-weak p-4 text-[14px] text-warning-strong"
           }
           role="status"
         >
@@ -219,10 +227,10 @@ export default async function SettingsPage({
                   {card.connected ? (
                     <p className="mt-2 text-[14px] text-fg-sub">
                       {card.handle}
-                      {card.displayName ? <span className="ml-2 text-fg-faint">{card.displayName}</span> : null}
+                      {card.displayName ? <span className="ml-2 text-fg-sub">{card.displayName}</span> : null}
                     </p>
                   ) : (
-                    <p className="mt-2 text-[14px] text-fg-faint">
+                    <p className="mt-2 text-[14px] text-fg-sub">
                       {OAUTH_READY[card.channel] ? "연동하면 분석 데이터를 불러옵니다." : "공식 연동 준비중입니다."}
                     </p>
                   )}
@@ -232,7 +240,7 @@ export default async function SettingsPage({
                         토큰 <span className="tnum">{card.tokenExpiresInDays}</span>일 후 만료 — 재연동 필요
                       </p>
                     ) : (
-                      <p className="mt-1 text-[13px] text-fg-faint">
+                      <p className="mt-1 text-[13px] text-fg-sub">
                         토큰 <span className="tnum">{card.tokenExpiresInDays}</span>일 후 만료
                       </p>
                     )
@@ -243,7 +251,7 @@ export default async function SettingsPage({
             </div>
 
             {card.channel === "instagram" ? (
-              <div className="mt-4 rounded-card bg-warning-weak p-3 text-[13px] leading-relaxed text-warning">
+              <div className="mt-4 rounded-card bg-warning-weak p-3 text-[13px] leading-relaxed text-warning-strong">
                 개인 계정은 연동할 수 없어요. 비즈니스/크리에이터 계정 전환이 필요합니다.
                 <a
                   href="https://help.instagram.com/502981923235522"
@@ -258,7 +266,7 @@ export default async function SettingsPage({
             ) : null}
 
             {card.channel === "tiktok" ? (
-              <div className="mt-4 rounded-card bg-warning-weak p-3 text-[13px] leading-relaxed text-warning">
+              <div className="mt-4 rounded-card bg-warning-weak p-3 text-[13px] leading-relaxed text-warning-strong">
                 팔로워·좋아요·영상 수 등 기본 정보만 표시돼요 — 조회수·참여율 등 상세 분석은
                 TikTok 앱 심사 완료 후 제공됩니다.
               </div>
@@ -273,18 +281,21 @@ export default async function SettingsPage({
               <AppIconTile app="meta" size={44} className="mt-0.5" />
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 rounded-chip border border-line bg-overlay px-2.5 py-0.5 text-xs font-semibold leading-5 whitespace-nowrap text-fg-sub">
-                    <span className="size-1.5 rounded-full bg-meta" aria-hidden />
+                  {/* 채널 배지와 동일 문법(브랜드 글리프 + 레이블) — 배지 스타일은 Badge 컴포넌트가 단일 출처 */}
+                  <Badge tone="neutral">
+                    <span aria-hidden>
+                      <MetaGlyph className="size-3 text-meta" />
+                    </span>
                     Meta 광고
-                  </span>
-                  <Badge tone="neutral">{isDemoMode() ? "연동됨" : "연동 준비중"}</Badge>
+                  </Badge>
+                  {/* 상태 배지는 카드당 1개, 채널 카드와 동일하게 연동됨=positive */}
+                  {isDemoMode() ? <Badge tone="positive">연동됨</Badge> : <Badge tone="neutral">연동 준비중</Badge>}
                 </div>
-                <p className="mt-2 text-[14px] text-fg-faint">
+                <p className="mt-2 text-[14px] text-fg-sub">
                   {isDemoMode() ? "핀치 마케팅 · 광고 계정 act-2048" : "Marketing API 연동 준비중입니다."}
                 </p>
               </div>
             </div>
-            {isDemoMode() ? <Badge tone="positive">연동됨</Badge> : <Badge tone="neutral">연동 준비중</Badge>}
           </div>
         </Card>
       </section>
@@ -297,7 +308,7 @@ export default async function SettingsPage({
         </h3>
         <div className="mt-3 space-y-4">
           <div>
-            <p className="text-[13px] font-semibold text-fg-faint">인스타그램</p>
+            <h4 className="text-[13px] font-semibold text-fg-sub">인스타그램</h4>
             <ul className="mt-1.5 space-y-2">
               {INSTAGRAM_SCOPE_LABELS.map((scope) => (
                 <li key={scope} className="flex items-center gap-2 text-[14px] text-fg-sub">
@@ -309,7 +320,7 @@ export default async function SettingsPage({
           </div>
           {threadsOAuthConfigured ? (
             <div>
-              <p className="text-[13px] font-semibold text-fg-faint">Threads</p>
+              <h4 className="text-[13px] font-semibold text-fg-sub">Threads</h4>
               <ul className="mt-1.5 space-y-2">
                 {THREADS_SCOPE_LABELS.map((scope) => (
                   <li key={scope} className="flex items-center gap-2 text-[14px] text-fg-sub">
@@ -322,7 +333,7 @@ export default async function SettingsPage({
           ) : null}
           {tiktokOAuthConfigured ? (
             <div>
-              <p className="text-[13px] font-semibold text-fg-faint">TikTok</p>
+              <h4 className="text-[13px] font-semibold text-fg-sub">TikTok</h4>
               <ul className="mt-1.5 space-y-2">
                 {TIKTOK_SCOPE_LABELS.map((scope) => (
                   <li key={scope} className="flex items-center gap-2 text-[14px] text-fg-sub">
@@ -334,7 +345,7 @@ export default async function SettingsPage({
             </div>
           ) : null}
         </div>
-        <p className="mt-3 text-[13px] text-fg-faint">핀치는 기능에 필요한 최소 권한만 요청합니다.</p>
+        <p className="mt-3 text-[13px] text-fg-sub">핀치는 기능에 필요한 최소 권한만 요청합니다.</p>
       </Card>
 
       {/* 모바일은 하단 탭바가 5개로 고정돼 사이드바의 문의하기가 안 보인다 — 여기서도 갈 수 있게 둔다 */}

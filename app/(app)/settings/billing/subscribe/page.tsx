@@ -31,15 +31,15 @@ export default async function SubscribePage({
       <PageHeader title={`${planName} 플랜 구독`} description="카드를 한 번 등록하면 매월 자동으로 결제됩니다." />
 
       <Card className="p-5">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <div>
             <div className="flex items-center gap-2">
               <span className="text-lg font-bold">핀치 {planName}</span>
               <Badge tone="primary">월 자동결제</Badge>
             </div>
-            <p className="mt-1 text-[13px] text-fg-faint">가격은 정식 출시 전 잠정값입니다. (테스트 결제)</p>
+            <p className="mt-1 text-[13px] text-fg-sub">가격은 정식 출시 전 잠정값입니다. (테스트 결제)</p>
           </div>
-          <span className="text-xl font-bold tnum">{formatKRW(amount)}<span className="text-[13px] font-normal text-fg-faint">/월</span></span>
+          <span className="shrink-0 text-xl font-bold tnum">{formatKRW(amount)}<span className="text-[13px] font-normal text-fg-sub">/월</span></span>
         </div>
       </Card>
 

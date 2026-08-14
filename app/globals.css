@@ -33,6 +33,12 @@
   --color-negative-weak: var(--negative-weak);
   --color-warning: var(--warning);
   --color-warning-weak: var(--warning-weak);
+  /* weak 배경 위 "본문 텍스트"용 진한 시맨틱 톤 — 라이트에서 positive/negative/warning 원색은
+     14px 텍스트 대비(4.5:1)에 미달한다(2026-08-14 설정 감사 실측 2.7~3.9:1). 다크는 원색이
+     이미 통과라 그대로 별칭. 배지·아이콘 같은 큰 그래픽 요소는 기존 토큰을 계속 쓴다. */
+  --color-positive-strong: var(--positive-strong);
+  --color-negative-strong: var(--negative-strong);
+  --color-warning-strong: var(--warning-strong);
 
   --color-ig: var(--ig);
   --color-tiktok-cyan: var(--tiktok-cyan);
@@ -85,6 +91,9 @@
 
   /* 시맨틱 — 흰 배경 대비를 위해 라이트에서는 진한 톤 */
   --positive: #16a34a;
+  --positive-strong: #166534;
+  --negative-strong: #b91c1c;
+  --warning-strong: #92400e;
   --positive-hover: #15803d;
   --positive-weak: rgba(22, 163, 74, 0.12);
   --negative: #dc2626;
@@ -126,6 +135,10 @@
   --primary-weak: rgba(255, 107, 74, 0.14);
 
   --positive: #22c55e;
+  /* 다크는 원색이 이미 어두운 배경 위 대비 통과 — strong은 원색 별칭 */
+  --positive-strong: #22c55e;
+  --negative-strong: #f04452;
+  --warning-strong: #f5a524;
   --positive-hover: #16a34a;
   --positive-weak: rgba(34, 197, 94, 0.15);
   --negative: #f04452;

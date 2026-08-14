@@ -291,7 +291,14 @@ export function UsageGauge({
           {unit}
         </span>
       </div>
-      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-chip bg-overlay">
+      <div
+        role="progressbar"
+        aria-valuenow={used}
+        aria-valuemin={0}
+        aria-valuemax={limit}
+        aria-label={`${label} 사용량 ${used}/${limit}${unit}${nearLimit ? " — 한도 임박" : ""}`}
+        className="mt-1.5 h-1.5 w-full overflow-hidden rounded-chip bg-overlay"
+      >
         <div
           className={cn("h-full rounded-chip", nearLimit ? "bg-warning" : "bg-primary")}
           style={{ width: `${pct}%` }}

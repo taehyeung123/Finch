@@ -4,8 +4,13 @@ import { cn } from "@/lib/cn";
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md" | "lg";
 
+/* 2026-08-14 감사 반영:
+   - disabled:pointer-events-none 제거 — 비활성 사유를 담은 title 툴팁이 hover에서 절대 안 뜨던
+     문제 수리. <button disabled>는 어차피 클릭이 무효라 pointer-events를 살려도 안전하다.
+   - after 의사요소로 히트 영역을 상하좌우 6px 확장 — sm(32px) 버튼도 44px 터치 타깃을 채운다.
+     시각 크기는 그대로, 클릭 판정만 넓어진다. */
 const base =
-  "inline-flex items-center justify-center gap-1.5 font-medium rounded-card transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed whitespace-nowrap";
+  "relative inline-flex items-center justify-center gap-1.5 font-medium rounded-card transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap after:absolute after:-inset-1.5 after:content-['']";
 
 /* 코랄 배경 위 텍스트는 항상 다크 (PART 7.3 확정) */
 const variants: Record<Variant, string> = {

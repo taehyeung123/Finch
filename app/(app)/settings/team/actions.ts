@@ -14,7 +14,10 @@ import { sendTeamInviteEmail } from "@/lib/email/resend";
   - 데모 모드는 실 DB가 없으므로 전부 no-op.
 */
 
-export type InviteMemberResult = { ok: true } | { ok: false; error: string };
+/* 모든 팀 액션은 동일한 결과 타입을 반환한다 — 실패를 UI에 표시할 수 있도록
+   (2026-08 감사: revoke/updateRole만 void 반환이라 실패가 조용히 삼켜지던 비대칭 수리). */
+export type TeamActionResult = { ok: true } | { ok: false; error: string };
+export type InviteMemberResult = TeamActionResult;
 
 function siteUrl(): string {
   return (process.env.NEXT_PUBLIC_SITE_URL || "https://finch.ai.kr").replace(/\/$/, "");
@@ -103,37 +106,50 @@ export async function inviteMember(formData: FormData): Promise<InviteMemberResu
 }
 
 /** 멤버 제거 — 소유자 소유 행만 revoked로 전환한다(RLS로도 동일하게 이중 방어). */
-export async function revokeMember(memberId: string): Promise<void> {
-  if (isDemoMode() || !memberId) return;
+export async function revokeMember(memberId: string): Promise<TeamActionResult> {
+  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 멤버를 제거할 수 없어요." };
+  if (!memberId) return { ok: false, error: "잘못된 요청이에요. 화면을 새로고침해 주세요." };
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) return { ok: false, error: "로그인이 필요합니다." };
 
   const { error } = await supabase
     .from("team_members")
     .update({ status: "revoked" })
     .eq("id", memberId)
     .eq("owner_user_id", user.id);
-  if (error) console.error("[team] 멤버 제거 실패:", error.message);
+  if (error) {
+    console.error("[team] 멤버 제거 실패:", error.message);
+    return { ok: false, error: "멤버 제거 중 오류가 발생했어요. 다시 시도해 주세요." };
+  }
   revalidatePath("/settings/team");
+  return { ok: true };
 }
 
 /** 역할 변경 — 소유자 전용(RLS로도 이중 방어). */
-export async function updateMemberRole(memberId: string, role: "editor" | "viewer"): Promise<void> {
-  if (isDemoMode() || !memberId) return;
+export async function updateMemberRole(
+  memberId: string,
+  role: "editor" | "viewer",
+): Promise<TeamActionResult> {
+  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 역할을 변경할 수 없어요." };
+  if (!memberId) return { ok: false, error: "잘못된 요청이에요. 화면을 새로고침해 주세요." };
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) return { ok: false, error: "로그인이 필요합니다." };
 
   const { error } = await supabase
     .from("team_members")
     .update({ role })
     .eq("id", memberId)
     .eq("owner_user_id", user.id);
-  if (error) console.error("[team] 역할 변경 실패:", error.message);
+  if (error) {
+    console.error("[team] 역할 변경 실패:", error.message);
+    return { ok: false, error: "역할 변경 중 오류가 발생했어요. 다시 시도해 주세요." };
+  }
   revalidatePath("/settings/team");
+  return { ok: true };
 }

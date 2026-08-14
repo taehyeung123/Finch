@@ -25,7 +25,8 @@ export function SettingsNav() {
             href={tab.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "rounded-chip px-3.5 py-1.5 text-[13px] font-semibold transition-colors",
+              // 모바일은 py-2.5로 약 44px 터치 타깃 확보, 데스크톱(sm 이상)은 기존 칩 높이 유지
+              "rounded-chip px-3.5 py-2.5 sm:py-1.5 text-[13px] font-semibold transition-colors",
               active
                 ? "bg-primary text-on-primary"
                 : "bg-overlay text-fg-sub border border-line hover:border-line-strong hover:text-fg",

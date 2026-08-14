@@ -54,7 +54,7 @@ export function IssueClient({ authKey, customerKey }: { authKey: string; custome
   }, [authKey, customerKey]);
 
   return (
-    <Card className="flex flex-col items-center gap-4 p-8 text-center">
+    <Card role="status" aria-live="polite" className="flex flex-col items-center gap-4 p-8 text-center">
       {state.phase === "working" ? (
         <>
           <span className="size-10 animate-pulse rounded-chip bg-primary-weak" aria-hidden />
@@ -69,8 +69,19 @@ export function IssueClient({ authKey, customerKey }: { authKey: string; custome
           <div>
             <p className="text-lg font-bold">구독이 시작되었어요</p>
             <p className="mt-1 text-[14px] text-fg-sub">
-              {state.planName} 플랜{state.amount > 0 ? ` · ${formatKRW(state.amount)}/월` : ""}
-              {state.nextBillingAt ? ` · 다음 결제일 ${state.nextBillingAt.slice(0, 10)}` : ""}
+              {state.planName} 플랜
+              {state.amount > 0 ? (
+                <>
+                  {" · "}
+                  <span className="tnum">{formatKRW(state.amount)}</span>/월
+                </>
+              ) : null}
+              {state.nextBillingAt ? (
+                <>
+                  {" · 다음 결제일 "}
+                  <span className="tnum">{state.nextBillingAt.slice(0, 10)}</span>
+                </>
+              ) : null}
             </p>
           </div>
         </>
@@ -83,9 +94,14 @@ export function IssueClient({ authKey, customerKey }: { authKey: string; custome
           </div>
         </>
       )}
-      <Link href="/settings/billing" className={buttonClasses("primary", "md")}>
-        요금제로 돌아가기
-      </Link>
+      {state.phase !== "working" ? (
+        <Link href="/settings/billing" className={buttonClasses("primary", "md")}>
+          요금제로 돌아가기
+        </Link>
+      ) : (
+        // 첫 결제 진행 중 — 이탈 CTA 대신 대기 안내 (결과 확인 전 이탈 방지)
+        <p className="text-[13px] text-fg-sub">결제가 끝날 때까지 이 창을 닫지 마세요.</p>
+      )}
     </Card>
   );
 }

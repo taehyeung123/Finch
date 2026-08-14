@@ -82,7 +82,7 @@ export default async function TeamSettingsPage() {
         <CardBody>
           <TeamClient initialRows={rows} isOwner={isOwner} demoMode={isDemoMode()} />
           {!isOwner && !isDemoMode() ? (
-            <p className="mt-4 text-[13px] text-fg-faint">
+            <p className="mt-4 text-[13px] text-fg-sub">
               멤버 초대·역할 관리는 워크스페이스 소유자만 할 수 있어요.
             </p>
           ) : null}

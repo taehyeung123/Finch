@@ -80,7 +80,7 @@ export function SubscribeClient({
       <Button variant="primary" size="lg" className="w-full" onClick={start} disabled={!agreed || busy}>
         {busy ? "결제창 여는 중…" : "카드 등록하고 구독 시작"}
       </Button>
-      <p className="text-center text-[12px] text-fg-faint">
+      <p className="text-center text-[12px] text-fg-sub">
         테스트 모드입니다. 실제 청구가 발생하지 않는 Toss 테스트 결제로 동작해요.
       </p>
     </div>

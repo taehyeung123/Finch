@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { loadTossPayments, ANONYMOUS, type TossPaymentsWidgets } from "@tosspayments/tosspayments-sdk";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatKRW } from "@/lib/format";
 import { createCheckout } from "../../actions";
 
@@ -91,6 +92,14 @@ export function TossCheckout({
         </div>
       ) : null}
 
+      {/* 위젯 로딩 스켈레톤 — SDK 렌더 전 빈 공간·레이아웃 점프(CLS) 방지 */}
+      {!ready && !error ? (
+        <div className="space-y-3" aria-hidden>
+          <Skeleton className="h-40 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+      ) : null}
+
       {/* Toss 위젯이 그려지는 컨테이너 */}
       <div id="payment-method" />
       <div id="agreement" />
@@ -98,7 +107,7 @@ export function TossCheckout({
       <Button variant="primary" size="lg" className="w-full" onClick={handlePay} disabled={!ready || paying}>
         {paying ? "결제 진행 중…" : `${formatKRW(amount)} 결제하기`}
       </Button>
-      <p className="text-center text-[12px] text-fg-faint">
+      <p className="text-center text-[12px] text-fg-sub">
         테스트 모드입니다. 실제 카드 청구가 발생하지 않는 Toss 테스트 결제로 동작합니다.
       </p>
     </div>

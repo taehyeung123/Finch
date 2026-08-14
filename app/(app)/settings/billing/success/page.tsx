@@ -6,6 +6,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { confirmPayment } from "@/lib/toss/server";
+import { PLAN_NAMES, isPaidPlan } from "@/lib/toss/config";
 import { formatKRW } from "@/lib/format";
 
 /*
@@ -15,6 +16,12 @@ import { formatKRW } from "@/lib/format";
 */
 
 type Outcome = { ok: true; amount: number; planName: string } | { ok: false; message: string };
+
+/** DB의 plan 키("creator")를 표시명("Creator")으로 — 다른 화면의 PLAN_NAMES 표기와 통일 */
+function displayPlanName(plan: unknown): string {
+  const key = String(plan ?? "");
+  return isPaidPlan(key) ? PLAN_NAMES[key] : key;
+}
 
 async function processConfirmation(sp: Record<string, string | string[] | undefined>): Promise<Outcome> {
   const paymentKey = typeof sp.paymentKey === "string" ? sp.paymentKey : null;
@@ -36,7 +43,7 @@ async function processConfirmation(sp: Record<string, string | string[] | undefi
 
   if (order.status === "paid") {
     // 이미 승인된 주문 — 멱등 처리
-    return { ok: true, amount: order.amount, planName: order.plan };
+    return { ok: true, amount: order.amount, planName: displayPlanName(order.plan) };
   }
   // 리다이렉트로 넘어온 금액이 주문 금액과 다르면 변조 — 중단
   if (Number.isFinite(amountParam) && amountParam !== order.amount) {
@@ -75,7 +82,7 @@ async function processConfirmation(sp: Record<string, string | string[] | undefi
     console.warn("[billing] SUPABASE_SERVICE_ROLE_KEY 미설정 — 승인은 됐으나 주문 상태 기록 실패");
   }
 
-  return { ok: true, amount: order.amount, planName: order.plan };
+  return { ok: true, amount: order.amount, planName: displayPlanName(order.plan) };
 }
 
 export default async function BillingSuccessPage({
@@ -96,7 +103,7 @@ export default async function BillingSuccessPage({
             <div>
               <p className="text-lg font-bold">결제가 완료되었어요</p>
               <p className="mt-1 text-[14px] text-fg-sub">
-                {outcome.planName.toUpperCase()} 플랜 · {formatKRW(outcome.amount)}
+                {outcome.planName} 플랜 · <span className="tnum">{formatKRW(outcome.amount)}</span>
               </p>
             </div>
           </>
