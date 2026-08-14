@@ -1,7 +1,7 @@
 import { isDemoMode } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { autoDmRules as sampleRules, recentPosts as samplePosts } from "@/lib/data";
-import { getRecentPostsForPicker } from "@/lib/data/live";
+import { getIgAvatarUrl, getRecentPostsForPicker } from "@/lib/data/live";
 import { getCurrentPlan } from "@/lib/data/internal";
 import { RULE_COLUMNS, RULE_COLUMNS_LEGACY, ruleFromRow, type AutoDmRuleRow } from "@/lib/auto-dm/db";
 import { dmContentLimitFor } from "@/lib/auto-dm/limits";
@@ -18,6 +18,7 @@ export default async function AutoDmPage() {
   let rules: AutoDmRule[] = sampleRules;
   let posts: Post[] = samplePosts.filter((p) => p.channel === "instagram");
   let accountHandle: string | null = null;
+  let accountAvatar: string | null = null;
 
   const plan = await getCurrentPlan();
   const contentLimit = dmContentLimitFor(plan);
@@ -41,7 +42,7 @@ export default async function AutoDmPage() {
         }
         return { data: first.data, error: first.error?.message ?? null };
       };
-      const [{ data, error }, livePosts, accountRes] = await Promise.all([
+      const [{ data, error }, livePosts, accountRes, avatarUrl] = await Promise.all([
         loadRules(),
         getRecentPostsForPicker(),
         supabase
@@ -50,9 +51,11 @@ export default async function AutoDmPage() {
           .eq("channel", "instagram")
           .eq("connected", true)
           .maybeSingle(),
+        getIgAvatarUrl(),
       ]);
       posts = livePosts;
       accountHandle = (accountRes.data?.handle as string | undefined) ?? null;
+      accountAvatar = avatarUrl;
       if (error) {
         console.warn("[auto-dm] 규칙 조회 실패:", error);
       } else if (data) {
@@ -65,6 +68,12 @@ export default async function AutoDmPage() {
   }
 
   return (
-    <AutoDmClient initialRules={rules} posts={posts} contentLimit={contentLimit} accountHandle={accountHandle} />
+    <AutoDmClient
+      initialRules={rules}
+      posts={posts}
+      contentLimit={contentLimit}
+      accountHandle={accountHandle}
+      accountAvatar={accountAvatar}
+    />
   );
 }

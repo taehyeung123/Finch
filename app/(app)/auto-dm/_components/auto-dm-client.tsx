@@ -42,12 +42,15 @@ export function AutoDmClient({
   posts,
   contentLimit,
   accountHandle,
+  accountAvatar,
 }: {
   initialRules: AutoDmRule[];
   posts: Post[];
   /** 플랜별 자동화 콘텐츠(게시물) 한도 — 2026-08-14 개편: 발송량 대신 콘텐츠 수로 게이팅 */
   contentLimit: number;
   accountHandle: string | null;
+  /** 연동 인스타 프로필 사진 — 위저드 DM 미리보기 아바타 (미연동 시 이니셜 폴백) */
+  accountAvatar: string | null;
 }) {
   const [rules, setRules] = useState<AutoDmRule[]>(initialRules);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -309,6 +312,7 @@ export function AutoDmClient({
           existingRules={rules}
           contentLimit={contentLimit}
           accountHandle={accountHandle}
+          accountAvatar={accountAvatar}
           onSave={saveRule}
           onClose={() => {
             setEditorOpen(false);

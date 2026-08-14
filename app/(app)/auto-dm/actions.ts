@@ -7,6 +7,7 @@ import { applyAdDisclosure } from "@/lib/ads/ad-disclosure";
 import {
   RULE_COLUMNS,
   RULE_COLUMNS_LEGACY,
+  normalizeHttpUrl,
   ruleFromRow,
   ruleToWriteRow,
   stripNewColumns,
@@ -43,16 +44,7 @@ export type RuleInput = Omit<
   "sentTotal" | "sentToday" | "failedTotal" | "lastSentAt" | "createdAt"
 > & { createdAt?: string };
 
-function isValidHttpUrl(v: string): boolean {
-  try {
-    const u = new URL(v);
-    return u.protocol === "https:" || u.protocol === "http:";
-  } catch {
-    return false;
-  }
-}
-
-/** 서버측 최소 검증 — 잘못된 입력은 여기서 차단 */
+/** 서버측 최소 검증 — 잘못된 입력은 여기서 차단. URL은 normalizeHttpUrl(프로토콜 자동 보정) 기준 */
 function validate(input: RuleInput): string | null {
   if (!input.postId) return "대상 게시물이 필요합니다.";
   if (!input.dmMessage.trim()) return "DM 내용이 비어 있습니다.";
@@ -61,7 +53,7 @@ function validate(input: RuleInput): string | null {
   if (input.buttons.length > 3) return "버튼은 최대 3개까지 넣을 수 있습니다.";
   for (const b of input.buttons) {
     if (!b.label.trim()) return "버튼명을 입력해 주세요.";
-    if (!isValidHttpUrl(b.url.trim())) return "버튼 링크는 http(s) 형식의 URL이어야 합니다.";
+    if (!normalizeHttpUrl(b.url)) return "버튼 링크 주소를 정확히 입력해 주세요.";
   }
   if (input.dailyCap < 1) return "하루 발송 상한은 1건 이상이어야 합니다.";
   return null;
@@ -159,11 +151,11 @@ async function writeRule(
   return { data: (data as unknown as AutoDmRuleRow) ?? null, error: error?.message ?? null };
 }
 
-/** 검증(trim 기준)과 저장이 어긋나지 않게, 저장 직전 버튼을 trim 정규화한다 (리뷰 확정 결함 수리) */
+/** 검증과 저장이 어긋나지 않게, 저장 직전 버튼을 정규화한다 — URL은 프로토콜 자동 보정 포함 */
 function normalizeInput(input: RuleInput): RuleInput {
   return {
     ...input,
-    buttons: input.buttons.map((b) => ({ label: b.label.trim(), url: b.url.trim() })),
+    buttons: input.buttons.map((b) => ({ label: b.label.trim(), url: normalizeHttpUrl(b.url) ?? b.url.trim() })),
     keywords: input.keywords.map((k) => k.trim()).filter(Boolean),
   };
 }

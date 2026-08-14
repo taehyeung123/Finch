@@ -26,6 +26,7 @@ import {
   fetchAccountInsightsRange,
   fetchDailySeries,
   fetchMediaInsights,
+  fetchProfileAvatar,
   fetchRecentMedia,
   type AccountInsights,
   type MediaItem,
@@ -898,6 +899,15 @@ export async function getInstagramAccessContext(): Promise<{ igUserId: string; t
  * 자동 DM 게시물 피커용 최근 게시물 — 미디어 목록만 경량 조회(개별 인사이트 호출 없음).
  * 연동/토큰 없으면 빈 배열 (에디터가 연동 안내를 띄운다). 인스타그램 전용.
  */
+/** 연동 인스타 프로필 사진 URL — 자동 DM 미리보기 아바타 (미연동·실패 시 null) */
+export async function getIgAvatarUrl(): Promise<string | null> {
+  const row = await loadInstagramRow();
+  if (!row || !row.platform_user_id) return null;
+  const token = await ensureFreshToken(row);
+  if (!token) return null;
+  return fetchProfileAvatar(row.platform_user_id, token);
+}
+
 export async function getRecentPostsForPicker(): Promise<Post[]> {
   const row = await loadInstagramRow();
   if (!row || !row.platform_user_id) return [];

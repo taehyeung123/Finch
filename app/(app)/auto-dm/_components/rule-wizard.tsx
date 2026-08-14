@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ImageOff, Lock, Megaphone, Plus, X } from "lucide-react";
+import { ChevronLeft, ImageOff, Lock, Plus, X } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { applyAdDisclosure } from "@/lib/ads/ad-disclosure";
-import { NEXT_POST_SENTINEL } from "@/lib/auto-dm/db";
+import { NEXT_POST_SENTINEL, normalizeHttpUrl } from "@/lib/auto-dm/db";
 import type { AutoDmRule, AutoDmTrigger, DmButton, Post } from "@/lib/types";
 import { InfoTip } from "@/components/ui/info-tip";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -15,8 +14,10 @@ import { EmptyState } from "@/components/ui/empty-state";
   3) DM 메시지(실시간 미리보기 + 버튼 개수) → 4) 버튼별 링크 설정(URL 검증) →
   5) 자동 답글 → 저장. 버튼 0개면 4단계를 건너뛴다.
 
-  모션은 전부 기존 토큰 재사용: 모달 등장 modal-card-in, 단계 전환 anim-swap(key 교체),
-  진행바 width transition. 광고성 표기(정보통신망법)는 3단계에 유지한다.
+  모션: 모달 등장 modal-card-in, 단계 전환 wizard-step-in(key 교체, 오른쪽에서 스르륵),
+  진행바 width transition, 라디오·선택 상태 transition-colors. 미리보기 아바타는 연동
+  인스타 프로필 사진(accountAvatar), 없으면 이니셜 폴백. 광고성 토글은 2026-08-14
+  사장님 지시로 제거(isAdvertising 필드는 파이프라인 호환용으로만 유지).
 */
 
 const DM_MAX = 900;
@@ -38,15 +39,6 @@ function makeId() {
   return `dm-${Date.now().toString(36)}`;
 }
 
-function isValidHttpUrl(v: string): boolean {
-  try {
-    const u = new URL(v);
-    return u.protocol === "https:" || u.protocol === "http:";
-  } catch {
-    return false;
-  }
-}
-
 type StepKey = "post" | "trigger" | "message" | "links" | "reply";
 
 export function RuleWizard({
@@ -55,6 +47,7 @@ export function RuleWizard({
   existingRules,
   contentLimit,
   accountHandle,
+  accountAvatar,
   onSave,
   onClose,
 }: {
@@ -65,6 +58,8 @@ export function RuleWizard({
   contentLimit: number;
   /** 미리보기 아바타에 쓸 계정 핸들(연동 전이면 null) */
   accountHandle: string | null;
+  /** 연동 인스타 프로필 사진 — 있으면 미리보기 아바타에 실제 사진을 쓴다 */
+  accountAvatar: string | null;
   onSave: (draft: RuleDraft) => void | Promise<void>;
   onClose: () => void;
 }) {
@@ -82,8 +77,6 @@ export function RuleWizard({
   );
   const [wantReply, setWantReply] = useState(Boolean(initial?.publicReply));
   const [publicReply, setPublicReply] = useState(initial?.publicReply ?? "");
-  const [isAdvertising, setIsAdvertising] = useState(initial?.isAdvertising ?? false);
-  const [minorConfirmed, setMinorConfirmed] = useState(initial?.isAdvertising ?? false);
   const [saving, setSaving] = useState(false);
   const [stepIdx, setStepIdx] = useState(0);
 
@@ -155,15 +148,14 @@ export function RuleWizard({
     () => Array.from({ length: buttonCount }, (_, i) => buttons[i] ?? { label: "", url: "" }),
     [buttons, buttonCount],
   );
-  const linksValid = activeButtons.every((b) => b.label.trim() && isValidHttpUrl(b.url.trim()));
-  const linksDone = activeButtons.filter((b) => b.label.trim() && isValidHttpUrl(b.url.trim())).length;
+  const linksValid = activeButtons.every((b) => b.label.trim() && normalizeHttpUrl(b.url));
+  const linksDone = activeButtons.filter((b) => b.label.trim() && normalizeHttpUrl(b.url)).length;
 
   // 닫기 확인 — 작성/수정 내용이 있으면 한 번 묻는다 (5단계 입력을 실수로 날리는 사고 방지)
   const dirty = initial
     ? dmMessage !== initial.dmMessage ||
       trigger !== initial.trigger ||
       postId !== initial.postId ||
-      isAdvertising !== initial.isAdvertising ||
       JSON.stringify(keywords) !== JSON.stringify(initial.keywords) ||
       JSON.stringify(activeButtons) !== JSON.stringify(initial.buttons) ||
       (wantReply && publicReply.trim() ? publicReply.trim() : null) !== initial.publicReply
@@ -219,7 +211,7 @@ export function RuleWizard({
       case "trigger":
         return trigger === "all" || keywords.length > 0;
       case "message":
-        return dmMessage.trim().length > 0 && dmMessage.length <= DM_MAX && (!isAdvertising || minorConfirmed);
+        return dmMessage.trim().length > 0 && dmMessage.length <= DM_MAX;
       case "links":
         return linksValid;
       case "reply":
@@ -263,9 +255,11 @@ export function RuleWizard({
         keywords: trigger === "keyword" ? keywords : [],
         publicReply: wantReply && publicReply.trim() ? publicReply.trim() : null,
         dmMessage: dmMessage.trim(),
-        buttons: activeButtons.map((b) => ({ label: b.label.trim(), url: b.url.trim() })),
+        // URL은 프로토콜 없이 입력해도 https://를 붙여 저장한다 (normalizeHttpUrl)
+        buttons: activeButtons.map((b) => ({ label: b.label.trim(), url: normalizeHttpUrl(b.url) ?? b.url.trim() })),
         status: initial?.status ?? "active",
-        isAdvertising,
+        // 광고성 토글은 2026-08-14 사장님 지시로 UI에서 제거 — 파이프라인 필드는 유지(편집 시 기존값 보존)
+        isAdvertising: initial?.isAdvertising ?? false,
         dailyCap: initial?.dailyCap ?? 300, // 스팸 정책 안전 상한 — 위저드에선 노출하지 않는 기본값
         createdAt: initial?.createdAt,
       });
@@ -290,16 +284,25 @@ export function RuleWizard({
     });
   }
 
-  const previewMessage = applyAdDisclosure(dmMessage, isAdvertising);
+  const previewMessage = dmMessage;
 
   /* DM 미리보기 — 리틀리 실측(2026-08-14) 구조: 흰 패널 안에 아바타(50px 원형) +
      회색 컨테이너(메시지 텍스트와 흰 버튼 행을 함께 담는다) */
   const preview = (
     <div className="rounded-card bg-overlay p-4">
       <div className="flex items-start gap-3">
-        <span className="flex size-[50px] shrink-0 items-center justify-center rounded-full bg-primary text-[15px] font-bold text-on-primary">
-          {(accountHandle ?? "핀치").replace(/^@/, "").slice(0, 2)}
-        </span>
+        {accountAvatar ? (
+          // eslint-disable-next-line @next/next/no-img-element -- 인스타 CDN 임시 URL이라 next/image 도메인 고정 불가
+          <img
+            src={accountAvatar}
+            alt={accountHandle ?? "연동 계정 프로필"}
+            className="size-[50px] shrink-0 rounded-full border border-line object-cover"
+          />
+        ) : (
+          <span className="flex size-[50px] shrink-0 items-center justify-center rounded-full bg-primary text-[15px] font-bold text-on-primary">
+            {(accountHandle ?? "핀치").replace(/^@/, "").slice(0, 2)}
+          </span>
+        )}
         <div className="min-w-0 max-w-[75%] space-y-2 rounded-card bg-surface p-[15px]">
           <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-fg">
             {previewMessage.trim() || <span className="text-fg-faint">메시지를 입력해주세요</span>}
@@ -346,12 +349,17 @@ export function RuleWizard({
     >
       <span
         className={cn(
-          "flex size-[18px] shrink-0 items-center justify-center rounded-full border-2",
-          opts.checked ? "border-fg" : opts.disabled ? "border-line-strong" : "border-line-strong",
+          "flex size-[18px] shrink-0 items-center justify-center rounded-full border-2 transition-colors duration-200",
+          opts.checked ? "border-fg" : "border-line-strong",
         )}
         aria-hidden
       >
-        {opts.checked ? <span className="size-2.5 rounded-full bg-fg" /> : null}
+        <span
+          className={cn(
+            "size-2.5 rounded-full bg-fg transition-all duration-200",
+            opts.checked ? "scale-100 opacity-100" : "scale-0 opacity-0",
+          )}
+        />
       </span>
       <span className={cn("text-[14px] font-medium", opts.disabled ? "text-fg-faint" : "text-fg")}>
         {opts.label}
@@ -414,8 +422,8 @@ export function RuleWizard({
           </p>
         </div>
 
-        {/* 단계 본문 — key 교체로 anim-swap 전환. 리틀리 실측: 본문만 연회색(surface) */}
-        <div key={step} className="anim-swap mt-3 min-h-0 flex-1 overflow-y-auto bg-surface px-5 py-4">
+        {/* 단계 본문 — key 교체로 오른쪽에서 스르륵 전환. 리틀리 실측: 본문만 연회색(surface) */}
+        <div key={step} className="wizard-step-in mt-3 min-h-0 flex-1 overflow-y-auto bg-surface px-5 py-4">
           {step === "post" ? (
             <div>
               <p className="text-[14px] font-medium">
@@ -645,49 +653,6 @@ export function RuleWizard({
                 </div>
               </div>
 
-              {/* 광고성 표기 — 정보통신망법 (리틀리에는 없는 우리 쪽 법적 장치라 이 단계에 유지) */}
-              <div className="mt-4 rounded-card bg-overlay p-3.5">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <Megaphone className="size-4 text-fg-sub" aria-hidden />
-                    <span className="text-[13px] font-semibold">광고성 메시지</span>
-                    <InfoTip>
-                      상품·이벤트 홍보 목적의 DM은 정보통신망법상 광고성 정보에 해당할 수 있습니다. 켜면 (광고) 표기가
-                      본문 맨 앞에, 수신거부 안내가 맨 끝에 자동으로 추가됩니다.
-                    </InfoTip>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={isAdvertising}
-                    aria-label="광고성 메시지"
-                    onClick={() => setIsAdvertising((v) => !v)}
-                    className={cn(
-                      "relative h-5 w-9 shrink-0 rounded-chip transition-colors",
-                      isAdvertising ? "bg-primary" : "bg-line-strong",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "absolute top-0.5 size-4 rounded-full bg-body transition-all",
-                        isAdvertising ? "left-[18px]" : "left-0.5",
-                      )}
-                      aria-hidden
-                    />
-                  </button>
-                </div>
-                {isAdvertising ? (
-                  <label className="anim-swap mt-2.5 flex cursor-pointer items-start gap-2 text-[12px] leading-relaxed text-fg-sub">
-                    <input
-                      type="checkbox"
-                      checked={minorConfirmed}
-                      onChange={(e) => setMinorConfirmed(e.target.checked)}
-                      className="mt-0.5 size-3.5 shrink-0 accent-primary"
-                    />
-                    이 광고는 만 14세 이상을 대상으로 하며, 미성년자에게 광고성 DM을 보내지 않음을 확인합니다.
-                  </label>
-                ) : null}
-              </div>
             </div>
           ) : null}
 
@@ -697,7 +662,7 @@ export function RuleWizard({
                 {Array.from({ length: buttonCount }, (_, i) => {
                   const b = buttons[i] ?? { label: "", url: "" };
                   const urlTouched = b.url.trim().length > 0;
-                  const urlOk = isValidHttpUrl(b.url.trim());
+                  const urlOk = Boolean(normalizeHttpUrl(b.url));
                   return (
                     <div key={i}>
                       {/* 리틀리 실측: 섹션 제목 "N번째 버튼 링크 설정" 14px/500 */}

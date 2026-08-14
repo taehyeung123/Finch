@@ -15,6 +15,26 @@ import type { AutoDmRule, DmButton } from "@/lib/types";
  */
 export const NEXT_POST_SENTINEL = "__next__";
 
+/**
+ * 버튼 URL 정규화 — 프로토콜 없이 "finch.ai.kr"처럼 입력해도 https://를 붙여 통과시킨다
+ * (2026-08-14 사장님 지시). 유효하면 정규화된 절대 URL, 아니면 null.
+ * 위저드(클라이언트)와 서버 액션이 같은 규칙을 쓰도록 여기 한 곳에만 둔다.
+ */
+export function normalizeHttpUrl(raw: string): string | null {
+  const v = raw.trim();
+  if (!v) return null;
+  const withProto = /^https?:\/\//i.test(v) ? v : `https://${v}`;
+  try {
+    const u = new URL(withProto);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    // "abc" 같은 점 없는 호스트는 실수 입력일 확률이 높다 — 도메인 형태만 허용
+    if (!u.hostname.includes(".")) return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 /** DB 행 (snake_case) — supabase 조회 결과 형태 */
 export interface AutoDmRuleRow {
   id: string;

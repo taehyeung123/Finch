@@ -1094,10 +1094,19 @@ body {
 .modal-scrim-in { animation: modal-scrim-in 0.18s ease-out both; }
 .modal-card-in { animation: modal-card-in 0.24s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .anim-swap { animation: anim-swap-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* 자동 DM 위저드 단계 전환 — 오른쪽에서 스르륵 (key 교체형, 리틀리 감각) */
+@keyframes wizard-step-in {
+  from { opacity: 0; transform: translateX(26px); }
+  to { opacity: 1; transform: none; }
+}
+.wizard-step-in { animation: wizard-step-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
 @media (prefers-reduced-motion: reduce) {
   .modal-scrim-in,
   .modal-card-in,
-  .anim-swap { animation: none; }
+  .anim-swap,
+  .wizard-step-in { animation: none; }
 }
 
 /* 드로어(오른쪽에서)·바텀시트(아래에서) 등장 — 같은 지시("전부 스르륵")의 변형 */

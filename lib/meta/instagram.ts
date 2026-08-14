@@ -200,6 +200,16 @@ interface RawMedia {
   comments_count?: number;
 }
 
+/** 연동 계정 프로필 사진 URL — 자동 DM 미리보기 아바타용. 실패·미설정 시 null */
+export async function fetchProfileAvatar(igUserId: string, accessToken: string): Promise<string | null> {
+  try {
+    const res = await graphGet<{ profile_picture_url?: string }>(`/${igUserId}?fields=profile_picture_url`, accessToken);
+    return res.profile_picture_url ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** 단일 미디어 메타 — "다음 게시물" 자동화 바인딩용 (업로드 시각·캡션·형식·썸네일) */
 export interface MediaMeta {
   id: string;
