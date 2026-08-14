@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptToken } from "@/lib/crypto/tokens";
 import { sendPrivateReply, replyToComment } from "@/lib/meta/graph";
 import { applyAdDisclosure } from "@/lib/ads/ad-disclosure";
-import { parseButtons } from "@/lib/auto-dm/db";
+import { parseButtons, parseReplies } from "@/lib/auto-dm/db";
 import { isNightInKST } from "@/lib/auto-dm/match";
 import { isAuthorizedCron } from "@/lib/cron";
 
@@ -74,13 +74,17 @@ export async function GET(request: Request) {
     is_advertising: boolean;
     dm_message: string;
     public_reply: string | null;
+    public_replies?: unknown;
     button_label: string | null;
     button_url: string | null;
     buttons?: unknown;
   }
   const loadRules = async (): Promise<{ rules: FlushRule[]; error: string | null }> => {
-    const first = await admin.from("auto_dm_rules").select(`${RULE_SELECT_BASE}, buttons`).in("id", ruleIds);
-    if (first.error && /buttons/i.test(first.error.message)) {
+    const first = await admin
+      .from("auto_dm_rules")
+      .select(`${RULE_SELECT_BASE}, buttons, public_replies`)
+      .in("id", ruleIds);
+    if (first.error && /buttons|public_replies/i.test(first.error.message)) {
       const fallback = await admin.from("auto_dm_rules").select(RULE_SELECT_BASE).in("id", ruleIds);
       return {
         rules: (fallback.data ?? []) as unknown as FlushRule[],
@@ -146,8 +150,11 @@ export async function GET(request: Request) {
     if (outcome.ok) {
       await finalize(admin, s.id, "sent", outcome.igMessageId, null);
       sent++;
-      if (rule.public_reply) {
-        await replyToComment({ commentId: s.ig_comment_id, message: rule.public_reply, accessToken: token }).catch(() => {});
+      // 준비된 답글 중 랜덤 1개 — 같은 문구 반복 도배로 인한 스팸 신호를 피한다 (0042)
+      const replies = parseReplies(rule);
+      if (replies.length > 0) {
+        const reply = replies[Math.floor(Math.random() * replies.length)];
+        await replyToComment({ commentId: s.ig_comment_id, message: reply, accessToken: token }).catch(() => {});
       }
     } else if (outcome.retryable) {
       // 일시 오류 — pending 유지 후 다음 실행에서 재시도

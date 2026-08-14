@@ -418,8 +418,11 @@ export interface AutoDmRule {
   /** 트리거 방식 */
   trigger: AutoDmTrigger;
   keywords: string[]; // trigger="keyword"일 때만 사용
-  /** 댓글 공개 답글(선택) — Private Reply가 1회로 제한되므로 공개 답글로 보완 */
-  publicReply: string | null;
+  /**
+   * 댓글 공개 답글 후보들(선택) — 발송 시 랜덤으로 1개가 달린다 (리틀리 방식).
+   * 같은 문구 반복 도배는 인스타 스팸 신호가 되므로 여러 개 중 무작위 선택으로 계정을 보호한다.
+   */
+  publicReplies: string[];
   /** 발송 DM 본문 */
   dmMessage: string;
   /** DM 링크 버튼 0~3개 (Meta 버튼 템플릿 상한) */

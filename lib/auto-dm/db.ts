@@ -46,6 +46,7 @@ export interface AutoDmRuleRow {
   trigger: AutoDmRule["trigger"];
   keywords: string[];
   public_reply: string | null;
+  public_replies?: unknown;
   dm_message: string;
   button_label: string | null;
   button_url: string | null;
@@ -63,9 +64,21 @@ export interface AutoDmRuleRow {
 const BASE_COLUMNS =
   "id, post_id, post_caption, post_type, post_views, trigger, keywords, public_reply, dm_message, button_label, button_url, status, is_advertising, daily_cap, sent_total, sent_today, failed_total, last_sent_at, created_at";
 
-export const RULE_COLUMNS = `${BASE_COLUMNS}, buttons, post_thumb`;
-/** 0038 미적용 DB 폴백 — buttons/post_thumb 없이 조회 */
+export const RULE_COLUMNS = `${BASE_COLUMNS}, buttons, post_thumb, public_replies`;
+/** 0038·0042 미적용 DB 폴백 — buttons/post_thumb/public_replies 없이 조회 */
 export const RULE_COLUMNS_LEGACY = BASE_COLUMNS;
+
+/** public_replies jsonb → string[] — 비면 legacy 단일 public_reply로 폴백 (0042 미적용 호환) */
+export function parseReplies(row: Pick<AutoDmRuleRow, "public_replies" | "public_reply">): string[] {
+  if (Array.isArray(row.public_replies)) {
+    const parsed = row.public_replies
+      .map((r) => String(r ?? "").trim())
+      .filter(Boolean)
+      .slice(0, 10);
+    if (parsed.length > 0) return parsed;
+  }
+  return row.public_reply && row.public_reply.trim() ? [row.public_reply.trim()] : [];
+}
 
 /** buttons jsonb → DmButton[] — 형식이 어긋난 항목은 버리고, 비면 legacy 단일 버튼으로 폴백 */
 export function parseButtons(row: Pick<AutoDmRuleRow, "buttons" | "button_label" | "button_url">): DmButton[] {
@@ -91,7 +104,7 @@ export function ruleFromRow(row: AutoDmRuleRow): AutoDmRule {
     postThumb: row.post_thumb ?? null,
     trigger: row.trigger,
     keywords: row.keywords ?? [],
-    publicReply: row.public_reply,
+    publicReplies: parseReplies(row),
     dmMessage: row.dm_message,
     buttons: parseButtons(row),
     status: row.status,
@@ -106,7 +119,7 @@ export function ruleFromRow(row: AutoDmRuleRow): AutoDmRule {
 }
 
 /** 쓰기용 행 — 카운터·타임스탬프는 DB가 관리하므로 제외.
- *  legacy button_label/url에는 첫 버튼을 미러링해 미적용 DB·구버전 발송 경로와 호환을 유지한다. */
+ *  legacy button_label/url·public_reply에는 첫 항목을 미러링해 미적용 DB·구버전 발송 경로와 호환을 유지한다. */
 export function ruleToWriteRow(input: {
   postId: string;
   postCaption: string;
@@ -115,7 +128,7 @@ export function ruleToWriteRow(input: {
   postThumb: string | null;
   trigger: AutoDmRule["trigger"];
   keywords: string[];
-  publicReply: string | null;
+  publicReplies: string[];
   dmMessage: string;
   buttons: DmButton[];
   status: AutoDmRule["status"];
@@ -123,6 +136,7 @@ export function ruleToWriteRow(input: {
   dailyCap: number;
 }) {
   const first = input.buttons[0] ?? null;
+  const replies = input.publicReplies.map((r) => r.trim()).filter(Boolean).slice(0, 10);
   return {
     post_id: input.postId,
     post_caption: input.postCaption,
@@ -131,7 +145,8 @@ export function ruleToWriteRow(input: {
     post_thumb: input.postThumb,
     trigger: input.trigger,
     keywords: input.keywords,
-    public_reply: input.publicReply,
+    public_replies: replies,
+    public_reply: replies[0] ?? null,
     dm_message: input.dmMessage,
     buttons: input.buttons.slice(0, 3),
     button_label: first?.label ?? null,
@@ -142,10 +157,11 @@ export function ruleToWriteRow(input: {
   };
 }
 
-/** 0038 미적용 DB에 쓸 때 — buttons/post_thumb 컬럼을 뺀 행 */
+/** 0038·0042 미적용 DB에 쓸 때 — buttons/post_thumb/public_replies 컬럼을 뺀 행 */
 export function stripNewColumns(row: ReturnType<typeof ruleToWriteRow>): Record<string, unknown> {
   const rest: Record<string, unknown> = { ...row };
   delete rest.buttons;
   delete rest.post_thumb;
+  delete rest.public_replies;
   return rest;
 }

@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptToken } from "@/lib/crypto/tokens";
 import { sendPrivateReply, replyToComment } from "@/lib/meta/graph";
 import { applyAdDisclosure } from "@/lib/ads/ad-disclosure";
-import { parseButtons, NEXT_POST_SENTINEL } from "@/lib/auto-dm/db";
+import { parseButtons, parseReplies, NEXT_POST_SENTINEL } from "@/lib/auto-dm/db";
 import { fetchMediaMeta } from "@/lib/meta/instagram";
 import { isNightInKST, isOptOutMessage, pickRule, type CommentEvent, type MatchableRule } from "@/lib/auto-dm/match";
 
@@ -116,8 +116,8 @@ async function tryBindNextPostRules(
       .eq("user_id", ownerId)
       .eq("post_id", NEXT_POST_SENTINEL)
       .eq("status", "active");
-  let res = await query(`${RULE_SELECT}, buttons`);
-  if (res.error && /buttons/i.test(res.error.message)) res = await query(RULE_SELECT);
+  let res = await query(`${RULE_SELECT}, buttons, public_replies`);
+  if (res.error && /buttons|public_replies/i.test(res.error.message)) res = await query(RULE_SELECT);
   if (res.error) {
     console.error("[auto-dm] 예약 규칙 조회 실패:", res.error.message);
     return null;
@@ -239,8 +239,8 @@ async function processEntry(entry: WebhookEntry) {
           .eq("user_id", ownerId)
           .eq("post_id", event.mediaId)
           .eq("status", "active");
-      const first = await query(`${RULE_SELECT_BASE}, buttons`);
-      if (first.error && /buttons/i.test(first.error.message)) {
+      const first = await query(`${RULE_SELECT_BASE}, buttons, public_replies`);
+      if (first.error && /buttons|public_replies/i.test(first.error.message)) {
         const fallback = await query(RULE_SELECT_BASE);
         return { data: fallback.data, error: fallback.error?.message ?? null };
       }
@@ -264,6 +264,7 @@ async function processEntry(entry: WebhookEntry) {
       | (MatchableRule & {
           dm_message: string;
           public_reply: string | null;
+          public_replies?: unknown;
           button_label: string | null;
           button_url: string | null;
           buttons?: unknown;
@@ -312,9 +313,12 @@ async function processEntry(entry: WebhookEntry) {
 
     if (outcome.ok) {
       await finalize(admin, sendId, "sent", outcome.igMessageId, null);
-      // 공개 답글은 부가 동작 — 실패해도 DM 결과에 영향 없음
-      if (rule.public_reply) {
-        await replyToComment({ commentId: event.commentId, message: rule.public_reply, accessToken }).catch(() => {});
+      // 공개 답글은 부가 동작 — 실패해도 DM 결과에 영향 없음.
+      // 준비된 답글 중 랜덤 1개 — 같은 문구 반복 도배로 인한 스팸 신호를 피한다 (0042)
+      const replies = parseReplies(rule);
+      if (replies.length > 0) {
+        const reply = replies[Math.floor(Math.random() * replies.length)];
+        await replyToComment({ commentId: event.commentId, message: reply, accessToken }).catch(() => {});
       }
     } else {
       await finalize(admin, sendId, outcome.status, null, outcome.error);

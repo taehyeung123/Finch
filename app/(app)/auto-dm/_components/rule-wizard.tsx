@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ImageOff, Lock, Plus, X } from "lucide-react";
+import { ChevronLeft, ImageOff, Lock, Plus, RotateCcw, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { NEXT_POST_SENTINEL, normalizeHttpUrl } from "@/lib/auto-dm/db";
 import type { AutoDmRule, AutoDmTrigger, DmButton, Post } from "@/lib/types";
@@ -41,6 +41,33 @@ function makeId() {
 
 type StepKey = "post" | "trigger" | "message" | "links" | "reply";
 
+/**
+ * 준비된 자동 답글 풀 — [새로고침]이 여기서 랜덤 3개를 뽑는다 (리틀리 실측 방식).
+ * 같은 문구 반복 도배는 인스타 스팸 신호가 되므로 발송 시에도 이 중 랜덤 1개가 달린다.
+ */
+const REPLY_POOL = [
+  "댓글 감사해요! DM 보내드렸어요 💌",
+  "DM으로 자세히 안내드렸어요, 확인해 주세요 🙌",
+  "보내드린 DM 확인 부탁드려요 🙏",
+  "요청하신 내용 DM으로 전달했어요 📩",
+  "방금 DM 드렸어요, 편하실 때 봐주세요 📮",
+  "자세한 내용은 DM에 남겨뒀어요 💬",
+  "DM 발송 완료! 확인 부탁드립니다 ✅",
+  "관심 감사해요, 궁금한 건 DM에서 이어가요 💙",
+  "DM으로 링크 보내드렸어요 🔗",
+  "확인하기 편하게 DM 남겨드렸어요 ☀️",
+  "댓글 잘 봤어요! 답변은 DM으로 드렸습니다 😊",
+  "DM함 한 번 확인해 주세요, 안내 보내드렸어요 📬",
+];
+
+/** 풀에서 겹치지 않게 랜덤 n개 — 직전 세트와 최대한 다르게 뽑는다 */
+function pickRandomReplies(n: number, avoid: string[] = []): string[] {
+  const fresh = REPLY_POOL.filter((r) => !avoid.includes(r));
+  const source = fresh.length >= n ? fresh : REPLY_POOL;
+  const shuffled = [...source].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
+}
+
 export function RuleWizard({
   initial,
   posts,
@@ -75,8 +102,10 @@ export function RuleWizard({
   const [buttons, setButtons] = useState<DmButton[]>(
     initial?.buttons.length ? initial.buttons : [{ label: "", url: "" }],
   );
-  const [wantReply, setWantReply] = useState(Boolean(initial?.publicReply));
-  const [publicReply, setPublicReply] = useState(initial?.publicReply ?? "");
+  const [wantReply, setWantReply] = useState(Boolean(initial?.publicReplies.length));
+  const [publicReplies, setPublicReplies] = useState<string[]>(
+    initial?.publicReplies.length ? initial.publicReplies : pickRandomReplies(3),
+  );
   const [saving, setSaving] = useState(false);
   const [stepIdx, setStepIdx] = useState(0);
 
@@ -158,7 +187,8 @@ export function RuleWizard({
       postId !== initial.postId ||
       JSON.stringify(keywords) !== JSON.stringify(initial.keywords) ||
       JSON.stringify(activeButtons) !== JSON.stringify(initial.buttons) ||
-      (wantReply && publicReply.trim() ? publicReply.trim() : null) !== initial.publicReply
+      JSON.stringify(wantReply ? publicReplies.map((r) => r.trim()).filter(Boolean) : []) !==
+        JSON.stringify(initial.publicReplies)
     : Boolean(
         postId ||
           dmMessage.trim() ||
@@ -215,7 +245,7 @@ export function RuleWizard({
       case "links":
         return linksValid;
       case "reply":
-        return !wantReply || publicReply.trim().length > 0;
+        return !wantReply || publicReplies.some((r) => r.trim().length > 0);
     }
   })();
 
@@ -253,7 +283,7 @@ export function RuleWizard({
         ...postFields,
         trigger,
         keywords: trigger === "keyword" ? keywords : [],
-        publicReply: wantReply && publicReply.trim() ? publicReply.trim() : null,
+        publicReplies: wantReply ? publicReplies.map((r) => r.trim()).filter(Boolean) : [],
         dmMessage: dmMessage.trim(),
         // URL은 프로토콜 없이 입력해도 https://를 붙여 저장한다 (normalizeHttpUrl)
         buttons: activeButtons.map((b) => ({ label: b.label.trim(), url: normalizeHttpUrl(b.url) ?? b.url.trim() })),
@@ -740,15 +770,58 @@ export function RuleWizard({
                   onClick: () => setWantReply(true),
                 })}
               </div>
+
               {wantReply ? (
-                <input
-                  value={publicReply}
-                  aria-label="자동 답글 내용"
-                  onChange={(e) => setPublicReply(e.target.value)}
-                  placeholder="DM 보내드렸어요! 확인 부탁드립니다."
-                  className="anim-swap mt-3 h-11 w-full rounded-card border border-line-strong bg-overlay px-3 text-[15px] placeholder:text-fg-faint focus:border-fg focus:outline-none"
-                />
+                <div className="anim-swap mt-3">
+                  {/* 리틀리 실측 문구 그대로 — 랜덤 발송이 스팸 도배를 피해 계정을 지킨다 */}
+                  <p className="text-[12px] text-fg-faint">준비된 답글이 랜덤으로 달리며, 계정을 보호합니다</p>
+
+                  <div className="mt-2 space-y-2">
+                    {publicReplies.map((reply, i) => (
+                      <div key={i} className="flex items-center gap-1.5">
+                        <input
+                          value={reply}
+                          aria-label={`자동 답글 ${i + 1}`}
+                          maxLength={100}
+                          onChange={(e) =>
+                            setPublicReplies((prev) => prev.map((r, j) => (j === i ? e.target.value : r)))
+                          }
+                          placeholder="답글 내용을 입력해주세요"
+                          className="h-11 min-w-0 flex-1 rounded-card border border-line-strong bg-overlay px-3 text-[15px] placeholder:text-fg-faint focus:border-fg focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          aria-label={`답글 ${i + 1} 삭제`}
+                          onClick={() => setPublicReplies((prev) => prev.filter((_, j) => j !== i))}
+                          disabled={publicReplies.length <= 1}
+                          className="rounded-card p-2 text-fg-faint transition-colors hover:bg-overlay hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <X className="size-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-2.5 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setPublicReplies((prev) => (prev.length >= 10 ? prev : [...prev, ""]))}
+                      disabled={publicReplies.length >= 10}
+                      className="flex h-9 items-center gap-1 rounded-card border border-line-strong bg-overlay px-3 text-[14px] font-medium transition-colors hover:border-fg disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Plus className="size-4" aria-hidden /> 답글 추가
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPublicReplies((prev) => pickRandomReplies(3, prev))}
+                      className="flex h-9 items-center gap-1 rounded-card border border-line-strong bg-overlay px-3 text-[14px] font-medium transition-colors hover:border-fg"
+                    >
+                      <RotateCcw className="size-4" aria-hidden /> 새로고침
+                    </button>
+                  </div>
+                </div>
               ) : null}
+
               <p className="mt-3 text-[12px] text-fg-faint">
                 DM은 댓글당 1회만 보낼 수 있어, 공개 답글로 안내를 보완할 수 있어요.
               </p>

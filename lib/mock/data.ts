@@ -997,7 +997,7 @@ export const autoDmRules: AutoDmRule[] = [
     postThumb: null,
     trigger: "keyword",
     keywords: ["정보", "링크", "가격"],
-    publicReply: "DM 보내드렸어요! 확인해 주세요 :)",
+    publicReplies: ["DM 보내드렸어요! 확인해 주세요 :)", "보내드린 DM 확인 부탁드려요!", "자세한 내용은 DM에 남겨뒀어요."],
     dmMessage:
       "안녕하세요! 관심 가져주셔서 감사해요. 아래 링크에서 여름 신상 전체를 확인하실 수 있어요. 궁금한 점은 편하게 답장 주세요.",
     buttons: [{ label: "신상품 보러가기", url: "https://example.com/summer" }],
@@ -1019,7 +1019,7 @@ export const autoDmRules: AutoDmRule[] = [
     postThumb: null,
     trigger: "keyword",
     keywords: ["참여", "신청"],
-    publicReply: null,
+    publicReplies: [],
     dmMessage:
       "이벤트에 관심 가져주셔서 감사합니다. 참여 방법을 아래에서 안내해 드릴게요. 응모는 이번 주 일요일까지예요.",
     buttons: [{ label: "참여 방법 보기", url: "https://example.com/event" }],
@@ -1041,7 +1041,7 @@ export const autoDmRules: AutoDmRule[] = [
     postThumb: null,
     trigger: "all",
     keywords: [],
-    publicReply: "댓글 감사해요! 자세한 안내 DM 드릴게요.",
+    publicReplies: ["댓글 감사해요! 자세한 안내 DM 드릴게요."],
     dmMessage:
       "소중한 관심 감사합니다. 후기에서 소개한 제품 상세 정보를 보내드려요. 사이즈나 색상 문의도 언제든 답장 주세요.",
     buttons: [],

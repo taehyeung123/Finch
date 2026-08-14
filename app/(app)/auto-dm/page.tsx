@@ -33,7 +33,7 @@ export default async function AutoDmPage() {
           .from("auto_dm_rules")
           .select(RULE_COLUMNS)
           .order("created_at", { ascending: false });
-        if (first.error && /buttons|post_thumb/i.test(first.error.message)) {
+        if (first.error && /buttons|post_thumb|public_replies/i.test(first.error.message)) {
           const fallback = await supabase
             .from("auto_dm_rules")
             .select(RULE_COLUMNS_LEGACY)

@@ -145,7 +145,7 @@ async function writeRule(
   };
 
   let { data, error } = await run(row, RULE_COLUMNS);
-  if (error && /buttons|post_thumb/i.test(error.message)) {
+  if (error && /buttons|post_thumb|public_replies/i.test(error.message)) {
     ({ data, error } = await run(stripNewColumns(row), RULE_COLUMNS_LEGACY));
   }
   return { data: (data as unknown as AutoDmRuleRow) ?? null, error: error?.message ?? null };
