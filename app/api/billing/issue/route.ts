@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptToken, isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
 import { chargeBilling, issueBillingKey } from "@/lib/toss/billing";
 import { PLAN_NAMES, PLAN_PRICES, isPaidPlan } from "@/lib/toss/config";
+import { grantPlanCredits } from "@/lib/actions/credits";
 
 /**
  * 구독 시작 2단계 — 빌링 인증(authKey) → billingKey 발급 → 첫 결제 → 구독 활성화.
@@ -119,6 +120,7 @@ export async function POST(request: Request) {
 
   const { error: planErr } = await admin.from("users_profile").update({ plan: sub.plan }).eq("id", user.id);
   if (planErr) console.error("[billing:issue] 플랜 적용 실패:", planErr.message);
+  await grantPlanCredits(user.id, sub.plan);
 
   return NextResponse.json({
     status: "active",

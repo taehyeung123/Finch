@@ -9,6 +9,7 @@ import { decryptToken } from "@/lib/crypto/tokens";
 import { chargeBilling } from "@/lib/toss/billing";
 import { notifyUser } from "@/lib/notify";
 import { PLAN_NAMES, PLAN_PRICES, isPaidPlan } from "@/lib/toss/config";
+import { grantPlanCredits } from "@/lib/actions/credits";
 
 const BILLING_PATH = "/settings/billing";
 
@@ -208,6 +209,7 @@ export async function changePlan(formData: FormData): Promise<void> {
     if (orderErr) console.error("[billing] 업그레이드 주문 기록 실패:", sub.id, orderErr.message);
 
     await admin.from("users_profile").update({ plan: target }).eq("id", user.id);
+    await grantPlanCredits(user.id, target);
 
     await notifyUser(admin, {
       userId: user.id,

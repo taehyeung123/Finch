@@ -10,6 +10,7 @@ import { chargeBilling } from "@/lib/toss/billing";
 import { PLAN_NAMES, PLAN_PRICES, isPaidPlan, type PaidPlan } from "@/lib/toss/config";
 import { isAuthorizedCron } from "@/lib/cron";
 import { notifyUser } from "@/lib/notify";
+import { grantPlanCredits } from "@/lib/actions/credits";
 
 /**
  * 토큰 자동 갱신 + 계정 스냅샷 크론 (매일 03:00 KST, vercel.json).
@@ -201,6 +202,8 @@ async function processSubscriptions(admin: Admin) {
     if (orderErr) console.error("[cron:billing] 주문 기록 실패:", sub.id, orderErr.message);
     // past_due에서 복구된 경우 대비, 그리고 다운그레이드 예약이 적용된 경우 대비 플랜 재적용
     await admin.from("users_profile").update({ plan: billedPlan }).eq("id", sub.user_id);
+    // 정기갱신 청구 성공 — 크레딧을 이번 달 지급량으로 리셋(다운그레이드였다면 새 플랜 지급량 기준)
+    await grantPlanCredits(sub.user_id, billedPlan);
     chargedCount++;
   }
 

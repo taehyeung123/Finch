@@ -2,66 +2,123 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { PaidPlan } from "@/lib/toss/config";
 
 /*
-  AI 생성 과금 헬퍼 — "무료 월 한도 → 크레딧 소비" 2단계 게이트.
+  AI 생성 과금 헬퍼 — 2026-08-14 4차 개편: "무료=기능별 횟수, 유료=통합 크레딧".
   ----------------------------------------------------------------------------
-  모델(2026-07-26 결정, 마이그레이션 0016_credits.sql 위에서 동작):
-  - 각 AI 기능은 플랜별 무료 월 한도를 먼저 소비한다(use_quota — 기존 동작 유지,
-    기존 무료 사용자는 아무것도 잃지 않는다).
-  - 무료 한도 소진 후에는 크레딧을 소비한다(deduct_my_credits — 잔액 부족 시 차단).
-  - 크레딧은 현재 HQ 관리자 지급으로만 충전된다(판매·자동충전은 별도 결정 후).
-  - 유료 플랜은 한도가 사실상 무제한이라 크레딧 소비 구간에 도달하지 않는다.
+  - 무료 플랜: 기존 그대로 기능별 월 한도(use_quota, FREE_MONTHLY_LIMITS)만 본다.
+  - 유료 플랜(creator/pro/agency/enterprise): 기능별 한도를 없애고 플랜당 "월 크레딧
+    지급량"(PLAN_CREDIT_ALLOWANCE) 하나로 통합한다 — 카드뉴스에 몰아 쓰든 챗에 몰아
+    쓰든 자유. 크레딧은 결제 성공 시점(첫 결제·업그레이드·정기갱신, grant_plan_credits
+    RPC)마다 지급량"까지 채워진다"(top-up, 0039) — 미사용분이 다음 달로 누적되지 않고
+    (잔액이 지급량 이하면 지급량으로 리필, 이월 합산 없음), 관리자 지급·환불로 지급량을
+    넘어선 잔액은 보존된다. 0037의 "리셋"은 관리자 지급분까지 파괴해서 0039에서 고쳤다.
+  - 플랜 해지·강등 후 남은 크레딧은 소멸시키지 않는다(의도된 동작) — 이미 결제로 지급된
+    돈이고, 무료 전환 후에도 2단계 게이트(무료 한도 소진 → 크레딧)로 이어 쓸 수 있다.
+    새 지급은 결제 성공 시에만 일어나므로 무기한 증식은 불가능하다.
+  - 크레딧 1개 = 10원 고정 환율. CREDIT_COSTS는 기능별 실측 원가를 올림(ceil)해서 뒀다
+    (예: 카드뉴스 200원→20크레딧, 대본추출 2원→최소 1크레딧). 그래서 어떤 기능 조합으로
+    크레딧을 다 써도 실제 원가는 "지급 크레딧 수 × 10원"을 못 넘는다 — 기능별 캡이
+    없어져도 플랜의 최악 원가 상한은 그대로 지켜진다.
+  - 무료 플랜은 한도 소진 후에도 관리자 지급 크레딧(add_credits)이 있으면 그걸로 이어
+    쓸 수 있다(기존 동작 유지).
 
   안전 원칙(CLAUDE.md 크레딧 트랜잭션 원칙 승계):
-  - 잔액 직접 UPDATE 금지 — 차감은 deduct_my_credits, 환불은 add_credits RPC로만.
+  - 잔액 직접 UPDATE 금지 — 차감은 deduct_my_credits, 환불은 add_credits RPC로만,
+    플랜 지급/리셋은 grant_plan_credits RPC로만(전부 supabase/migrations/0016·0037).
   - 크레딧이 차감됐는데 AI 호출이 실패하면 반드시 refundGenerationCredits로 복구
     (무료 한도 구간 실패는 기존과 동일하게 미복구 — 금전 성격이 없는 카운터).
 */
 
-/** 기능별 크레딧 가격 — 호출 무게(토큰·데이터 조회) 기준. 변경 시 아래 표만 수정 */
+/**
+ * 기능별 크레딧 가격 — 1크레딧 = 10원 고정 환율로 실측 원가를 올림(ceil)한 값.
+ * 원가 자체가 바뀌면(공급사 단가 변동 등) 이 표만 다시 계산해서 고친다.
+ */
 export const CREDIT_COSTS = {
-  /** AI 카드뉴스 생성(2안) 1회 */
-  cardnews: 2,
-  /** 성장 진단(실측 성과 분석 + AI) 1회 */
-  diagnosis: 3,
-  /** 레퍼런스 수집 1회 — 공급사 API 호출(기준당 1크레딧 원가) + AI 요약·태깅 */
-  collect: 2,
-  /** 메타광고 레퍼런스 수집 1회 — Ad Library 검색(기준당 1크레딧 원가) */
-  adCollect: 2,
-  /** 릴스 대본 추출 1회 — 공급사 받아쓰기 호출(1크레딧 원가) */
+  /** AI 카드뉴스 생성 1회 — 실측 200원 */
+  cardnews: 20,
+  /** 성장 진단(실측 성과 분석 + AI) 1회 — 실측 200원 */
+  diagnosis: 20,
+  /** 레퍼런스 수집 1회(개인 수집 + 실시간 풀 수집 공용) — 실측 100원 */
+  collect: 10,
+  /** 메타광고 레퍼런스 수집 1회 — 실측 100원 */
+  adCollect: 10,
+  /** 릴스 대본 추출 1회 — 실측 2원(최소 단위 1크레딧) */
   transcript: 1,
   /** 아이디어 추천 1회 — 카드뉴스와 토큰·사고 설정이 같아 원가도 같다 */
-  ideas: 2,
-  /** 브랜드 톤 학습 1회 */
-  brandTone: 1,
-  /** AI 에이전트 메시지 1건 — 건당은 싸지만 횟수 상한이 없으면 누적이 무제한이다 */
-  agentChat: 1,
+  ideas: 20,
+  /** 브랜드 톤 학습 1회 — 실측 100원 */
+  brandTone: 10,
+  /** AI 에이전트 메시지 1건 — 실측 35원 */
+  agentChat: 4,
 } as const;
 
-/** 플랜별 무료 월 한도 — planFeatures 표와 일치 유지 (무료 3회, 유료 사실상 무제한) */
-export const FREE_MONTHLY_LIMITS: Record<string, Record<string, number>> = {
-  // 카드뉴스는 유료 전용 — 무료 0회 (2026-08-14 지시: 건당 Opus 원가 ~200원, 무료 개방 시 월 수십만 원 유출)
-  ai_cardnews: { free: 0, creator: 1000000, pro: 1000000, agency: 1000000, enterprise: 1000000 },
-  growth_diagnosis: { free: 3, creator: 1000000, pro: 1000000, agency: 1000000, enterprise: 1000000 },
-  // 레퍼런스 수집은 공급사 원가가 실비로 나가므로 유료 플랜도 월 한도를 둔다(사실상 넉넉한 수준)
-  reference_collect: { free: 3, creator: 60, pro: 150, agency: 300, enterprise: 1000 },
-  ad_collect: { free: 3, creator: 60, pro: 150, agency: 300, enterprise: 1000 },
-  /* 아래 넷은 과금 게이트가 아예 없던 기능들이다(2026-08-11 감사에서 발견).
-     대본 추출은 공급사 실비가 나가고, 나머지 셋은 Claude 토큰이 나간다.
-     무료는 "체험"만 — 사장님 지시(2026-08-10)대로 몇 회만 주고 그 뒤는 유료다. */
-  reference_transcript: { free: 1, creator: 30, pro: 80, agency: 150, enterprise: 400 },
-  ai_ideas: { free: 1, creator: 1000000, pro: 1000000, agency: 1000000, enterprise: 1000000 },
-  ai_brand_tone: { free: 1, creator: 1000000, pro: 1000000, agency: 1000000, enterprise: 1000000 },
-  ai_agent_chat: { free: 10, creator: 500, pro: 2000, agency: 5000, enterprise: 20000 },
+/**
+ * 무료 플랜 전용 — 기능별 월 한도. 유료 플랜은 더 이상 이 표를 쓰지 않고
+ * PLAN_CREDIT_ALLOWANCE(통합 크레딧) 하나로 관리한다(2026-08-14 4차 개편).
+ *
+ * ai_video_analysis·board_saves는 실제로 chargeGeneration을 호출하는 곳이 코드에
+ * 없다(2026-08-14 grep 확인) — 즉 지금은 게이팅되지 않는 죽은 설정이다. 나중에 실제
+ * 영상분석·보드저장에 과금을 붙일 때 값만 그대로 살려 쓸 수 있게 남겨뒀다.
+ */
+export const FREE_MONTHLY_LIMITS: Record<string, number> = {
+  ai_cardnews: 0,
+  growth_diagnosis: 0,
+  // "개인 수집"(구형 runCollection)과 "실시간 풀 수집"(collectPoolNow)이 이 계량기를 공유한다.
+  reference_collect: 1,
+  ad_collect: 1,
+  reference_transcript: 1,
+  ai_ideas: 0,
+  ai_brand_tone: 0,
+  ai_agent_chat: 3,
+  ai_video_analysis: 3, // 미사용(연결 안 됨) — 위 설명 참고
+  board_saves: 20, // 미사용(연결 안 됨) — 위 설명 참고
+};
+
+/**
+ * 유료 플랜 월 크레딧 지급량 — 3차안(2026-08-14)에서 확정한 플랜별 기능 한도를
+ * 그대로 크레딧으로 환산한 값이다(한도 × CREDIT_COSTS 합산). 즉 지금 당장은
+ * "기능별 캡이 통합 크레딧으로 바뀌었을 뿐 최악 원가 상한은 그대로"다.
+ *
+ * 원가(1크레딧=10원 기준, ai_video_analysis 제외 — 미게이팅이라 실제 원가가 아님):
+ *  - Creator 460크레딧=4,600원 / 9,900원 → 최악 마진 53.5%
+ *  - Pro 1,260크레딧=12,600원 / 29,000원 → 최악 마진 56.6%
+ *  - Agency 4,260크레딧=42,600원 / 99,000원 → 최악 마진 57.0%
+ *  - Enterprise 10,550크레딧=105,500원 / 249,000원 → 최악 마진 57.6%
+ *
+ * 1만 명 시나리오(가입 1만·월활성 60%·유료전환 4%, 매출 757만원) 최악 마진 ~23.4%,
+ * 현실적(무료25%·유료40%) 마진 ~67.2% — ai_video_analysis를 원가 계산에서 뺀 만큼
+ * 3차안(최악 3.5%/현실적 60.5%)보다 개선됐다.
+ */
+export const PLAN_CREDIT_ALLOWANCE: Record<PaidPlan, number> = {
+  creator: 460,
+  pro: 1260,
+  agency: 4260,
+  enterprise: 10550,
 };
 
 export type ChargeResult =
   | { ok: true; via: "quota" | "credits"; userId: string; remainingCredits: number | null }
   | { ok: false; error: string };
 
+async function deductMyCredits(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  amount: number,
+  reason: string
+): Promise<{ ok: true; paid: boolean } | { ok: false; error: string }> {
+  const { data: paid, error } = await supabase.rpc("deduct_my_credits", { p_amount: amount, p_reason: reason });
+  if (error) {
+    console.error(`[credits] deduct_my_credits 실패(${reason}):`, error.message);
+    return { ok: false, error: "크레딧 확인에 실패했습니다. 잠시 후 다시 시도해 주세요." };
+  }
+  return { ok: true, paid: Boolean(paid) };
+}
+
 /**
- * 생성 1회 과금: 무료 월 한도(use_quota) 우선, 소진 시 크레딧(deduct_my_credits).
+ * 생성 1회 과금.
+ * - 무료 플랜: 기능별 월 한도(use_quota) 우선, 소진 시 관리자 지급 크레딧으로 이어감.
+ * - 유료 플랜: 기능별 한도 없이 통합 크레딧(deduct_my_credits)만 소비.
  * ok:false면 기능을 실행하지 말 것. via:"credits"였는데 이후 처리가 실패하면
  * 반드시 refundGenerationCredits(userId, cost, ...)로 환불할 것.
  */
@@ -76,15 +133,35 @@ export async function chargeGeneration(opts: {
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "로그인이 필요합니다." };
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileErr } = await supabase
     .from("users_profile")
     .select("plan, credits")
     .eq("id", user.id)
     .maybeSingle();
-  const limits = FREE_MONTHLY_LIMITS[opts.metric] ?? { free: 3 };
-  const limit = limits[profile?.plan ?? "free"] ?? limits.free ?? 3;
+  // 조회 오류를 free 폴백으로 삼키면 유료 사용자가 조용히 무료 게이트를 타게 된다 — 명시적 실패
+  if (profileErr) {
+    console.error("[credits] 플랜 조회 실패:", profileErr.message);
+    return { ok: false, error: "사용자 정보 확인에 실패했습니다. 잠시 후 다시 시도해 주세요." };
+  }
+  const plan = profile?.plan ?? "free";
 
-  // 1단계 — 플랜 무료 월 한도(기존 동작 그대로)
+  if (plan !== "free") {
+    // 유료 플랜 — 기능별 한도 없이 통합 크레딧만 본다(월 지급량은 결제 성공 시 grant_plan_credits로 리셋)
+    const result = await deductMyCredits(supabase, opts.creditCost, opts.reason);
+    if (!result.ok) return { ok: false, error: result.error };
+    if (!result.paid) {
+      const balance = profile?.credits ?? 0;
+      return {
+        ok: false,
+        error: `이번 달 크레딧을 다 썼어요(필요 ${opts.creditCost} · 보유 ${balance}). 다음 결제일에 다시 채워지거나, 플랜을 업그레이드하면 더 많이 쓸 수 있어요.`,
+      };
+    }
+    const remaining = Math.max(0, (profile?.credits ?? opts.creditCost) - opts.creditCost);
+    return { ok: true, via: "credits", userId: user.id, remainingCredits: remaining };
+  }
+
+  // 무료 플랜 — 1단계: 기능별 월 한도
+  const limit = FREE_MONTHLY_LIMITS[opts.metric] ?? 0;
   const { data: allowed, error: quotaErr } = await supabase.rpc("use_quota", {
     p_metric: opts.metric,
     p_limit: limit,
@@ -96,26 +173,19 @@ export async function chargeGeneration(opts: {
   }
   if (allowed) return { ok: true, via: "quota", userId: user.id, remainingCredits: null };
 
-  // 2단계 — 무료 한도 소진: 크레딧 소비(원자적, 잔액 부족 시 false)
-  const { data: paid, error: credErr } = await supabase.rpc("deduct_my_credits", {
-    p_amount: opts.creditCost,
-    p_reason: opts.reason,
-  });
-  if (credErr) {
-    console.error(`[credits] deduct_my_credits 실패(${opts.metric}):`, credErr.message);
-    return { ok: false, error: "크레딧 확인에 실패했습니다. 잠시 후 다시 시도해 주세요." };
-  }
-  if (!paid) {
+  // 2단계 — 무료 한도 소진: 관리자 지급 크레딧이 있으면 이어 쓴다
+  const result = await deductMyCredits(supabase, opts.creditCost, opts.reason);
+  if (!result.ok) return { ok: false, error: result.error };
+  if (!result.paid) {
     const balance = profile?.credits ?? 0;
     return {
       ok: false,
       error:
         limit === 0
           ? "이 기능은 유료 플랜 전용이에요. 플랜을 업그레이드하거나 크레딧을 충전하면 쓸 수 있어요."
-          : `이번 달 무료 한도(${limit === 1000000 ? "무제한" : `${limit}회`})를 다 썼고, 크레딧이 부족해요(필요 ${opts.creditCost} · 보유 ${balance}). 크레딧을 충전받거나 플랜을 업그레이드하면 계속 쓸 수 있어요.`,
+          : `이번 달 무료 한도(${limit}회)를 다 썼고, 크레딧이 부족해요(필요 ${opts.creditCost} · 보유 ${balance}). 크레딧을 충전받거나 플랜을 업그레이드하면 계속 쓸 수 있어요.`,
     };
   }
-  // 표시용 잔액 — 차감 전 조회값 기준 근사(동시 요청 시 오차 가능, 원장은 항상 정확)
   const remaining = Math.max(0, (profile?.credits ?? opts.creditCost) - opts.creditCost);
   return { ok: true, via: "credits", userId: user.id, remainingCredits: remaining };
 }
@@ -140,4 +210,35 @@ export async function refundGenerationCredits(
     p_reason: reason,
   });
   if (error) console.error("[credits] 환불 실패:", error.message);
+}
+
+/**
+ * 유료 플랜 월 크레딧 지급 — 첫 결제·업그레이드·정기갱신 성공 직후에만 호출한다
+ * (app/api/billing/issue, app/(app)/settings/billing/actions.changePlan,
+ * app/api/cron/refresh-tokens processSubscriptions). "지급량까지 채우기"(top-up, 0039):
+ * 이월 누적은 없고, 관리자 지급·환불로 지급량을 넘는 잔액은 보존된다.
+ *
+ * 결제는 이미 성공한 뒤라 지급 실패는 "돈은 받고 크레딧은 못 준" 상태다 — 일시
+ * 오류에 대비해 3회 재시도하고, 최종 실패는 운영자가 수동 지급(add_credits)할 수
+ * 있게 식별자를 전부 로그로 남긴다.
+ */
+export async function grantPlanCredits(userId: string, plan: PaidPlan): Promise<void> {
+  const admin = createAdminClient();
+  if (!admin) {
+    console.error("[credits] 플랜 크레딧 지급 실패: 관리자 클라이언트 미설정 —", userId, plan);
+    return;
+  }
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const { error } = await admin.rpc("grant_plan_credits", {
+      p_user_id: userId,
+      p_amount: PLAN_CREDIT_ALLOWANCE[plan],
+      p_reason: `plan_credits:${plan}`,
+    });
+    if (!error) return;
+    console.error(
+      `[credits] 플랜 크레딧 지급 실패(시도 ${attempt}/3) — user=${userId} plan=${plan} amount=${PLAN_CREDIT_ALLOWANCE[plan]}:`,
+      error.message
+    );
+    if (attempt < 3) await new Promise((r) => setTimeout(r, 400 * attempt));
+  }
 }
