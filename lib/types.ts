@@ -60,6 +60,8 @@ export interface Post {
   shares: number;
   /** 최근 7일 조회수 추이 (스파크라인용) */
   trend: number[];
+  /** 썸네일 URL(연동 미디어) — 자동 DM 게시물 피커 등 표시용, 데모 데이터는 없음 */
+  thumb?: string | null;
 }
 
 export interface DashboardSummary {
@@ -397,6 +399,12 @@ export type AutoDmTrigger = "all" | "keyword";
 /** 규칙 상태 — 활성 / 일시중지 / 검수중(정책·연동 대기) */
 export type AutoDmStatus = "active" | "paused" | "review";
 
+/** DM에 붙는 링크 버튼 — Meta 버튼 템플릿은 최대 3개까지 지원 */
+export interface DmButton {
+  label: string;
+  url: string;
+}
+
 /** 게시물별 자동 DM 규칙 — 하나의 규칙은 계정의 특정 게시물 1개에 연결된다 */
 export interface AutoDmRule {
   id: string;
@@ -405,6 +413,8 @@ export interface AutoDmRule {
   postCaption: string; // 목록에서 게시물을 알아보기 위한 짧은 캡션
   postType: PostType;
   postViews: number; // 게시물 성과 참고용
+  /** 게시물 썸네일(연동 미디어의 thumbnail_url) — 목록·위저드 표시용, 없으면 placeholder */
+  postThumb: string | null;
   /** 트리거 방식 */
   trigger: AutoDmTrigger;
   keywords: string[]; // trigger="keyword"일 때만 사용
@@ -412,9 +422,8 @@ export interface AutoDmRule {
   publicReply: string | null;
   /** 발송 DM 본문 */
   dmMessage: string;
-  /** DM에 붙는 버튼(선택) — 라벨/URL 쌍 */
-  buttonLabel: string | null;
-  buttonUrl: string | null;
+  /** DM 링크 버튼 0~3개 (Meta 버튼 템플릿 상한) */
+  buttons: DmButton[];
   status: AutoDmStatus;
   /**
    * 광고성 정보 여부. true면 정보통신망법에 따라 (광고) 표기와 수신거부 안내를

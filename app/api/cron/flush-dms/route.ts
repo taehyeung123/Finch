@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptToken } from "@/lib/crypto/tokens";
 import { sendPrivateReply, replyToComment } from "@/lib/meta/graph";
 import { applyAdDisclosure } from "@/lib/ads/ad-disclosure";
+import { parseButtons } from "@/lib/auto-dm/db";
 import { isNightInKST } from "@/lib/auto-dm/match";
 import { isAuthorizedCron } from "@/lib/cron";
 
@@ -62,11 +63,34 @@ export async function GET(request: Request) {
   // 규칙·계정(토큰)을 사용자 단위로 한 번에 로드
   const ruleIds = [...new Set(sends.map((s) => s.rule_id))];
   const userIds = [...new Set(sends.map((s) => s.user_id))];
-  const [{ data: rules }, { data: accounts }] = await Promise.all([
-    admin
-      .from("auto_dm_rules")
-      .select("id, status, is_advertising, dm_message, public_reply, button_label, button_url")
-      .in("id", ruleIds),
+  // buttons(0038)는 미적용 DB 폴백 — 실패 시 legacy 컬럼만으로 재조회.
+  // 조회 "오류"를 빈 배열로 삼키면 안 된다 — 아래 루프가 rule 미스를 '규칙 삭제됨'으로
+  // 해석해 보류 DM을 영구 종결(failed_permission)하므로, 오류면 이번 실행을 중단하고
+  // 다음 크론이 재시도하게 한다 (댓글당 Private Reply 1회 기회 보호, 리뷰 확정 결함 수리).
+  const RULE_SELECT_BASE = "id, status, is_advertising, dm_message, public_reply, button_label, button_url";
+  interface FlushRule {
+    id: string;
+    status: string;
+    is_advertising: boolean;
+    dm_message: string;
+    public_reply: string | null;
+    button_label: string | null;
+    button_url: string | null;
+    buttons?: unknown;
+  }
+  const loadRules = async (): Promise<{ rules: FlushRule[]; error: string | null }> => {
+    const first = await admin.from("auto_dm_rules").select(`${RULE_SELECT_BASE}, buttons`).in("id", ruleIds);
+    if (first.error && /buttons/i.test(first.error.message)) {
+      const fallback = await admin.from("auto_dm_rules").select(RULE_SELECT_BASE).in("id", ruleIds);
+      return {
+        rules: (fallback.data ?? []) as unknown as FlushRule[],
+        error: fallback.error?.message ?? null,
+      };
+    }
+    return { rules: (first.data ?? []) as unknown as FlushRule[], error: first.error?.message ?? null };
+  };
+  const [{ rules, error: rulesLoadErr }, { data: accounts }] = await Promise.all([
+    loadRules(),
     admin
       .from("connected_accounts")
       .select("user_id, platform_user_id, access_token_cipher")
@@ -74,7 +98,11 @@ export async function GET(request: Request) {
       .eq("connected", true)
       .in("user_id", userIds),
   ]);
-  const ruleById = new Map((rules ?? []).map((r) => [r.id, r]));
+  if (rulesLoadErr) {
+    console.error("[cron:flush] 규칙 조회 실패 — 실행 중단(다음 크론 재시도):", rulesLoadErr);
+    return NextResponse.json({ ok: false, error: rulesLoadErr }, { status: 500 });
+  }
+  const ruleById = new Map(rules.map((r) => [r.id, r]));
   const accountByUser = new Map((accounts ?? []).map((a) => [a.user_id, a]));
 
   let sent = 0;
@@ -111,8 +139,7 @@ export async function GET(request: Request) {
       igUserId: account.platform_user_id,
       commentId: s.ig_comment_id,
       message,
-      buttonLabel: rule.button_label,
-      buttonUrl: rule.button_url,
+      buttons: parseButtons(rule),
       accessToken: token,
     });
 

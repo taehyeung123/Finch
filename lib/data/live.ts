@@ -916,6 +916,8 @@ export async function getRecentPostsForPicker(): Promise<Post[]> {
     comments: m.commentsCount,
     shares: 0,
     trend: [],
+    // 썸네일 — VIDEO/REELS는 thumbnail_url, IMAGE는 media_url 폴백 (자동 DM 위저드 그리드용)
+    thumb: m.thumbnailUrl ?? m.mediaUrl ?? null,
   }));
 }
 

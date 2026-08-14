@@ -86,27 +86,27 @@ async function graphPost(path: string, accessToken: string, body: Record<string,
 /**
  * Private Reply — 댓글에 대한 1회성 비공개 DM.
  * recipient를 comment_id로 지정하면 Meta가 댓글 작성자에게 DM을 보낸다.
- * buttonLabel/buttonUrl이 있으면 CTA 버튼 템플릿으로 전송한다.
+ * buttons가 있으면 CTA 버튼 템플릿으로 전송한다 (Meta 버튼 템플릿 상한 3개).
  */
 export async function sendPrivateReply(params: {
   igUserId: string; // 연동된 IG 비즈니스 계정 id
   commentId: string;
   message: string;
-  buttonLabel?: string | null;
-  buttonUrl?: string | null;
+  buttons?: { label: string; url: string }[] | null;
   accessToken: string;
 }): Promise<SendOutcome> {
-  const { igUserId, commentId, message, buttonLabel, buttonUrl, accessToken } = params;
+  const { igUserId, commentId, message, accessToken } = params;
+  const buttons = (params.buttons ?? []).filter((b) => b.label && b.url).slice(0, 3);
 
   const messagePayload =
-    buttonLabel && buttonUrl
+    buttons.length > 0
       ? {
           attachment: {
             type: "template",
             payload: {
               template_type: "button",
               text: message,
-              buttons: [{ type: "web_url", url: buttonUrl, title: buttonLabel.slice(0, 20) }],
+              buttons: buttons.map((b) => ({ type: "web_url", url: b.url, title: b.label.slice(0, 20) })),
             },
           },
         }

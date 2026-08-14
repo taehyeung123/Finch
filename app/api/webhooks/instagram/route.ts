@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptToken } from "@/lib/crypto/tokens";
 import { sendPrivateReply, replyToComment } from "@/lib/meta/graph";
 import { applyAdDisclosure } from "@/lib/ads/ad-disclosure";
+import { parseButtons } from "@/lib/auto-dm/db";
 import { isNightInKST, isOptOutMessage, pickRule, type CommentEvent, type MatchableRule } from "@/lib/auto-dm/match";
 
 /**
@@ -24,14 +25,13 @@ import { isNightInKST, isOptOutMessage, pickRule, type CommentEvent, type Matcha
 
 export const runtime = "nodejs"; // node:crypto 사용 (edge 아님)
 
-/** 플랜별 월 발송 한도 — 요금제 표(planFeatures)와 일치 유지 */
-const PLAN_DM_LIMITS: Record<string, number> = {
-  free: 0,
-  creator: 500,
-  pro: 3000,
-  agency: 10000,
-  enterprise: 1000000, // 무제한(실질) — 플랫폼 안전 상한이 별도로 걸린다
-};
+/**
+ * 월 발송 한도 폐지(2026-08-14) — DM은 원가 0원이라 발송량 게이팅을 없앴다.
+ * 플랜 차별화는 "자동화 콘텐츠 개수"(규칙 생성 시점, lib/auto-dm/limits.ts)가 담당하고,
+ * 스팸 방지는 규칙별 daily_cap이 담당한다. reserve_dm_send 함수 시그니처는 유지하되
+ * 실질 무제한 값을 넘긴다.
+ */
+const MONTHLY_LIMIT_UNLIMITED = 1000000;
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -160,49 +160,51 @@ async function processEntry(entry: WebhookEntry) {
 
     // 이 게시물의 활성 규칙 조회 → 댓글당 1개만 실행.
     // 조회 오류는 '규칙 없음'과 다르다 — 멱등 예약 전이므로 중단하면 Meta 재전송으로 재처리된다.
-    const { data: rules, error: rulesErr } = await admin
-      .from("auto_dm_rules")
-      .select("id, post_id, trigger, keywords, status, is_advertising, dm_message, public_reply, button_label, button_url")
-      .eq("user_id", ownerId)
-      .eq("post_id", event.mediaId)
-      .eq("status", "active");
+    // buttons(0038)는 미적용 DB 폴백을 위해 실패 시 legacy 컬럼만으로 재조회한다.
+    const RULE_SELECT_BASE =
+      "id, post_id, trigger, keywords, status, is_advertising, dm_message, public_reply, button_label, button_url";
+    const loadRules = async (): Promise<{ data: unknown; error: string | null }> => {
+      const query = (columns: string) =>
+        admin
+          .from("auto_dm_rules")
+          .select(columns)
+          .eq("user_id", ownerId)
+          .eq("post_id", event.mediaId)
+          .eq("status", "active");
+      const first = await query(`${RULE_SELECT_BASE}, buttons`);
+      if (first.error && /buttons/i.test(first.error.message)) {
+        const fallback = await query(RULE_SELECT_BASE);
+        return { data: fallback.data, error: fallback.error?.message ?? null };
+      }
+      return { data: first.data, error: first.error?.message ?? null };
+    };
+    const { data: rulesData, error: rulesErr } = await loadRules();
+    const rules = rulesData as (MatchableRule & Record<string, unknown>)[] | null;
     if (rulesErr) {
-      console.error("[auto-dm] 규칙 조회 실패:", event.commentId, rulesErr.message);
+      console.error("[auto-dm] 규칙 조회 실패:", event.commentId, rulesErr);
       continue;
     }
     if (!rules || rules.length === 0) continue;
 
-    const rule = pickRule(rules as (MatchableRule & Record<string, unknown>)[], event) as
+    const rule = pickRule(rules, event) as
       | (MatchableRule & {
           dm_message: string;
           public_reply: string | null;
           button_label: string | null;
           button_url: string | null;
+          buttons?: unknown;
         })
       | null;
     if (!rule) continue;
 
-    // 플랜별 월 한도 (성공만 차감 — reserve에서 예약, finalize에서 확정/반납).
-    // 조회 실패를 free(한도 0)로 취급하면 멱등 슬롯이 skipped_limit_reached로 영구 소진되므로,
-    // 반드시 예약 "이전"에 중단한다 — Meta 재전송이 재처리 기회를 준다.
-    const { data: profile, error: profileErr } = await admin
-      .from("users_profile")
-      .select("plan")
-      .eq("id", ownerId)
-      .maybeSingle();
-    if (profileErr) {
-      console.error("[auto-dm] 플랜 조회 실패:", ownerId, profileErr.message);
-      continue;
-    }
-    const monthlyLimit = PLAN_DM_LIMITS[profile?.plan ?? "free"] ?? 0;
-
-    // 멱등 예약 — 중복 웹훅·댓글당 1회·하루 상한·옵트아웃·24h 쿨다운·월 한도를 DB가 원자적으로 판정
+    // 멱등 예약 — 중복 웹훅·댓글당 1회·하루 상한·옵트아웃·24h 쿨다운을 DB가 원자적으로 판정.
+    // 월 한도는 폐지(2026-08-14) — 실질 무제한 값으로 함수 시그니처만 유지한다.
     const { data: sendId, error: reserveErr } = await admin.rpc("reserve_dm_send", {
       p_owner: ownerId,
       p_rule_id: rule.id,
       p_comment_id: event.commentId,
       p_user_hash: hashRecipient(event.fromId),
-      p_monthly_limit: monthlyLimit,
+      p_monthly_limit: MONTHLY_LIMIT_UNLIMITED,
     });
     if (reserveErr) {
       console.error("[auto-dm] 발송 예약 실패:", event.commentId, reserveErr.message);
@@ -230,8 +232,7 @@ async function processEntry(entry: WebhookEntry) {
       igUserId: igAccountId,
       commentId: event.commentId,
       message,
-      buttonLabel: rule.button_label,
-      buttonUrl: rule.button_url,
+      buttons: parseButtons(rule),
       accessToken,
     });
 

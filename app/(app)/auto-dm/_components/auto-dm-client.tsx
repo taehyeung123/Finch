@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { InfoTip } from "@/components/ui/info-tip";
 import { EmptyState } from "@/components/ui/empty-state";
-import { RuleEditor, type RuleDraft } from "./rule-editor";
+import { RuleWizard, type RuleDraft } from "./rule-wizard";
 import { createRule, deleteRule, toggleRule, updateRule } from "../actions";
 
 const POST_TYPE_LABEL: Record<Post["type"], string> = {
@@ -36,13 +36,26 @@ const STATUS_META: Record<AutoDmRule["status"], { label: string; tone: "positive
 };
 
 /** 자동 DM 화면 본체 — 서버 페이지(page.tsx)가 초기 규칙·게시물(데모: 샘플, 실제: DB+실미디어)을 주입한다 */
-export function AutoDmClient({ initialRules, posts }: { initialRules: AutoDmRule[]; posts: Post[] }) {
+export function AutoDmClient({
+  initialRules,
+  posts,
+  contentLimit,
+  accountHandle,
+}: {
+  initialRules: AutoDmRule[];
+  posts: Post[];
+  /** 플랜별 자동화 콘텐츠(게시물) 한도 — 2026-08-14 개편: 발송량 대신 콘텐츠 수로 게이팅 */
+  contentLimit: number;
+  accountHandle: string | null;
+}) {
   const [rules, setRules] = useState<AutoDmRule[]>(initialRules);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<AutoDmRule | null>(null);
 
   // 규칙이 연결할 수 있는 인스타그램 게시물 (연동 전이면 빈 배열 → 에디터가 안내)
   const igPosts = useMemo(() => posts.filter((p) => p.channel === "instagram"), [posts]);
+
+  const contentUsed = useMemo(() => new Set(rules.map((r) => r.postId)).size, [rules]);
 
   const derived = useMemo(() => {
     const active = rules.filter((r) => r.status === "active").length;
@@ -127,10 +140,24 @@ export function AutoDmClient({ initialRules, posts }: { initialRules: AutoDmRule
         description="인스타그램 게시물에 특정 댓글이 달리면 자동으로 다이렉트 메시지를 보냅니다."
         action={
           <Button onClick={openNew}>
-            <Plus className="size-4" aria-hidden /> 새 규칙
+            <Plus className="size-4" aria-hidden /> 자동화 만들기
           </Button>
         }
       />
+
+      {contentLimit < 1000000 ? (
+        <p className="-mt-3 text-[13px] text-fg-sub">
+          자동화 콘텐츠{" "}
+          <span className="tnum font-semibold text-fg">
+            {contentUsed}/{contentLimit}
+          </span>
+          개 사용 중
+          <InfoTip>
+            자동화를 걸 수 있는 게시물 개수는 플랜에 따라 다릅니다. 발송 건수에는 제한이 없어요. 같은 게시물에 규칙을
+            여러 개 만들어도 콘텐츠 1개로 셉니다.
+          </InfoTip>
+        </p>
+      ) : null}
 
       {/* 요약 지표 */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -157,7 +184,7 @@ export function AutoDmClient({ initialRules, posts }: { initialRules: AutoDmRule
           description="게시물을 고르고 어떤 댓글에 어떤 DM을 보낼지 설정하면, 관심 있는 사람에게 자동으로 메시지가 나갑니다."
           action={
             <Button onClick={openNew}>
-              <Plus className="size-4" aria-hidden /> 첫 규칙 만들기
+              <Plus className="size-4" aria-hidden /> 첫 자동화 만들기
             </Button>
           }
         />
@@ -170,6 +197,14 @@ export function AutoDmClient({ initialRules, posts }: { initialRules: AutoDmRule
               <li key={rule.id}>
                 <Card className="p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
+                    {rule.postThumb ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- 인스타 CDN 임시 URL이라 next/image 도메인 고정 불가
+                      <img
+                        src={rule.postThumb}
+                        alt=""
+                        className="size-14 shrink-0 rounded-card border border-line object-cover"
+                      />
+                    ) : null}
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge tone="neutral">{POST_TYPE_LABEL[rule.postType]}</Badge>
@@ -263,10 +298,12 @@ export function AutoDmClient({ initialRules, posts }: { initialRules: AutoDmRule
       )}
 
       {editorOpen ? (
-        <RuleEditor
+        <RuleWizard
           initial={editing}
           posts={igPosts}
           existingRules={rules}
+          contentLimit={contentLimit}
+          accountHandle={accountHandle}
           onSave={saveRule}
           onClose={() => {
             setEditorOpen(false);
