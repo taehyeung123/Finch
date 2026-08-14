@@ -17,7 +17,7 @@ import { aggregateActive } from "@/lib/ads/metrics";
 import { CHANNEL_LABEL } from "@/lib/channels";
 import { ChannelProfilePanel } from "@/components/dashboard/channel-profile-panel";
 import { PerformanceTrend } from "@/components/dashboard/performance-trend";
-import { DailyBrief } from "@/components/dashboard/daily-brief";
+import { ArchiveStatus, DailyBriefChips, DailyBriefHero, NextActions } from "@/components/dashboard/daily-brief";
 import type { PoolHomeStats } from "@/lib/pool/home-stats";
 import type {
   AdCampaign,
@@ -129,7 +129,9 @@ export function DashboardClient({
         description="오늘의 브리핑과 채널 현황을 한눈에 확인하세요."
       />
 
-      <DailyBrief stats={poolStats} />
+      <DailyBriefHero stats={poolStats} />
+      <DailyBriefChips stats={poolStats} />
+      <ArchiveStatus stats={poolStats} />
 
       {disconnected.length > 0 ? (
         <Card className="flex flex-wrap items-center justify-between gap-3 border-warning/40 p-4">
@@ -257,9 +259,11 @@ export function DashboardClient({
               </div>
             </CardBody>
           </Card>
-
         </div>
       </div>
+
+      {/* 다음에 할 것 — 홈 종결부 바로가기 */}
+      <NextActions />
 
       {/* 내 계정 — 전체 보기일 때만 3채널 카드 (개별 선택 시엔 위 프로필 패널이 대체) */}
       {channel === "all" ? (
