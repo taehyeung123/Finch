@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Link2, Megaphone } from "lucide-react";
+import { ArrowRight, Link2 } from "lucide-react";
 import { useChannel } from "@/components/layout/channel-context";
 import { PageHeader } from "@/components/ui/section-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge, ChannelBadge } from "@/components/ui/badge";
 import { AppIconTile } from "@/components/icons/brand";
-import { RatioBar, Sparkline } from "@/components/ui/charts";
+import { Sparkline } from "@/components/ui/charts";
 import { InfoTip } from "@/components/ui/info-tip";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -17,20 +17,19 @@ import { aggregateActive } from "@/lib/ads/metrics";
 import { CHANNEL_LABEL } from "@/lib/channels";
 import { ChannelProfilePanel } from "@/components/dashboard/channel-profile-panel";
 import { PerformanceTrend } from "@/components/dashboard/performance-trend";
+import { DailyBrief } from "@/components/dashboard/daily-brief";
+import type { PoolHomeStats } from "@/lib/pool/home-stats";
 import type {
   AdCampaign,
   Channel,
   ChannelAccount,
   ChannelFilter,
   ChannelTrend,
-  CompetitorAd,
   ContentMix,
   DashboardSummary,
   Post,
   ProfileGridPost,
 } from "@/lib/types";
-
-const MIX_COLORS = ["var(--color-primary)", "var(--color-tiktok-cyan)", "var(--color-warning)", "var(--color-positive)"];
 
 const POST_TYPE_LABEL: Record<string, string> = {
   reels: "릴스",
@@ -59,24 +58,23 @@ export interface DashboardData {
 export function DashboardClient({
   data,
   campaigns,
-  competitorAds,
+  poolStats,
   isLive,
 }: {
   data: DashboardData;
   campaigns: AdCampaign[];
-  competitorAds: CompetitorAd[];
+  /** 오늘의 핀치 브리핑 — 공용 풀 수집 현황 (스니핏식 홈 상단) */
+  poolStats: PoolHomeStats;
   /** true면 연동 계정의 Instagram 공식 API 실데이터 */
   isLive: boolean;
 }) {
   const { channel } = useChannel();
-  const { accounts, summaries, posts: allPosts, contentMix, profileGrid, trends } = data;
+  const { accounts, summaries, posts: allPosts, profileGrid, trends } = data;
   const summary = summaries[channel];
   const posts = channel === "all" ? allPosts : allPosts.filter((p) => p.channel === channel);
-  const mix = contentMix[channel];
   const disconnected = accounts.filter((a) => !a.connected);
   // 진행 중 캠페인 기준 — /ads 페이지와 같은 공통 유틸로 계산 (화면 간 수치 불일치 방지)
   const activeTotals = aggregateActive(campaigns);
-  const newAds = competitorAds.filter((a) => a.isNew);
   // 개별 채널 선택 시 우측 프로필 미러링 패널에 쓸 계정
   const selectedAccount = channel === "all" ? null : accounts.find((a) => a.channel === channel);
 
@@ -127,9 +125,11 @@ export function DashboardClient({
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
-        title="대시보드"
-        description="연동한 채널의 핵심 지표를 한눈에 확인하세요."
+        title="홈"
+        description="오늘의 브리핑과 채널 현황을 한눈에 확인하세요."
       />
+
+      <DailyBrief stats={poolStats} />
 
       {disconnected.length > 0 ? (
         <Card className="flex flex-wrap items-center justify-between gap-3 border-warning/40 p-4">
@@ -229,20 +229,6 @@ export function DashboardClient({
         </Card>
 
         <div className="space-y-6">
-          {/* 채널 스타일 분석 (PART 4.1) */}
-          <Card>
-            <CardHeader title="콘텐츠 유형 비중" description="최근 게시물 기준" />
-            <CardBody>
-              {mix.length > 0 ? (
-                <RatioBar
-                  segments={mix.map((m, i) => ({ ...m, color: MIX_COLORS[i % MIX_COLORS.length] }))}
-                />
-              ) : (
-                <p className="text-[13px] text-fg-faint">계정을 연동하면 유형 비중이 표시됩니다.</p>
-              )}
-            </CardBody>
-          </Card>
-
           {/* 광고 요약 — 오가닉과 나란히 (PART 4.1) */}
           <Card>
             <CardHeader
@@ -272,34 +258,6 @@ export function DashboardClient({
             </CardBody>
           </Card>
 
-          {/* 경쟁사 신규 광고 알림 (PART 4.6 연결) */}
-          <Card>
-            <CardHeader title="경쟁사 새 광고" description="Meta 광고 라이브러리 기준" />
-            <CardBody className="space-y-3">
-              {newAds.length > 0 ? (
-                newAds.map((ad) => (
-                  <Link
-                    key={ad.id}
-                    href="/competitors/ads"
-                    className="flex items-start gap-3 rounded-card border border-line p-3 transition-colors hover:border-line-strong"
-                  >
-                    <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-card bg-primary-weak text-primary">
-                      <Megaphone className="size-4" aria-hidden />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="flex items-center gap-2">
-                        <span className="truncate text-[14px] font-semibold">{ad.pageName}</span>
-                        <Badge tone="primary">NEW</Badge>
-                      </span>
-                      <span className="mt-0.5 block truncate text-[13px] text-fg-sub">{ad.headline}</span>
-                    </span>
-                  </Link>
-                ))
-              ) : (
-                <p className="text-[13px] text-fg-faint">새로 감지된 광고가 없습니다.</p>
-              )}
-            </CardBody>
-          </Card>
         </div>
       </div>
 

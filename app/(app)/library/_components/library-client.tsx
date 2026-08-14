@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FolderPlus, Info, RefreshCw, SearchX, Zap } from "lucide-react";
 import { FinchMark } from "@/components/logo";
@@ -260,6 +260,18 @@ export function LibraryClient({
     },
     [filters, runPoolSearch],
   );
+
+  /* 홈 추천 검색 칩 딥링크(/library?q=…) — 최초 1회만 URL의 q를 검색어로 채운다.
+     useSearchParams 대신 window에서 읽는다: 이 페이지는 정적 렌더라 Suspense 경계가 없다. */
+  const deepLinkApplied = useRef(false);
+  useEffect(() => {
+    if (deepLinkApplied.current) return;
+    deepLinkApplied.current = true;
+    const q = new URLSearchParams(window.location.search).get("q");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- URL→상태 마운트 1회 동기화(딥링크)라 effect가 맞는 자리
+    if (q && q.trim()) applyQuery(q.trim());
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 딥링크 주입
+  }, []);
 
   /* ---------------- 패싯 (수집물에 실재하는 값만) ---------------- */
 
