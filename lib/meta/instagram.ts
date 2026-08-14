@@ -200,6 +200,38 @@ interface RawMedia {
   comments_count?: number;
 }
 
+/** 단일 미디어 메타 — "다음 게시물" 자동화 바인딩용 (업로드 시각·캡션·형식·썸네일) */
+export interface MediaMeta {
+  id: string;
+  caption: string | null;
+  mediaType: string;
+  mediaProductType: string;
+  thumbnailUrl: string | null;
+  mediaUrl: string | null;
+  timestamp: string | null;
+}
+
+export async function fetchMediaMeta(mediaId: string, accessToken: string): Promise<MediaMeta | null> {
+  try {
+    const m = await graphGet<RawMedia>(
+      `/${mediaId}?fields=id,caption,media_type,media_product_type,thumbnail_url,media_url,timestamp`,
+      accessToken,
+    );
+    return {
+      id: m.id,
+      caption: m.caption ?? null,
+      mediaType: m.media_type ?? "IMAGE",
+      mediaProductType: m.media_product_type ?? "FEED",
+      thumbnailUrl: m.thumbnail_url ?? null,
+      mediaUrl: m.media_url ?? null,
+      timestamp: m.timestamp ?? null,
+    };
+  } catch (e) {
+    console.error("[ig-media] 미디어 메타 조회 실패:", mediaId, e instanceof Error ? e.message : String(e));
+    return null;
+  }
+}
+
 /** 최근 미디어 목록 (기본 25개). 썸네일은 VIDEO/REELS만 → IMAGE는 media_url 폴백. */
 export async function fetchRecentMedia(igUserId: string, accessToken: string, limit = 25): Promise<MediaItem[]> {
   const fields = "id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,like_count,comments_count";

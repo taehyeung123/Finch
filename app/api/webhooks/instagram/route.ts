@@ -4,7 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptToken } from "@/lib/crypto/tokens";
 import { sendPrivateReply, replyToComment } from "@/lib/meta/graph";
 import { applyAdDisclosure } from "@/lib/ads/ad-disclosure";
-import { parseButtons } from "@/lib/auto-dm/db";
+import { parseButtons, NEXT_POST_SENTINEL } from "@/lib/auto-dm/db";
+import { fetchMediaMeta } from "@/lib/meta/instagram";
 import { isNightInKST, isOptOutMessage, pickRule, type CommentEvent, type MatchableRule } from "@/lib/auto-dm/match";
 
 /**
@@ -90,6 +91,73 @@ interface WebhookEntry {
 interface WebhookBody {
   object?: string;
   entry?: WebhookEntry[];
+}
+
+/**
+ * "다음에 올릴 게시물" 예약 규칙 바인딩 — 리틀리 예약발송 대응 (2026-08-14).
+ *
+ * 규칙 생성 시 post_id 를 NEXT_POST_SENTINEL 로 두고, 새 게시물에 첫 댓글이 달려
+ * 웹훅이 들어오는 순간 실제 media id 로 치환한다. 게시물 업로드 시각이 규칙 생성
+ * 시각보다 뒤인 경우에만 — 옛날 게시물 댓글이 예약 규칙을 가로채는 것을 막는다.
+ * 메타 조회 실패·토큰 부재 시엔 그냥 null 반환 — 다음 댓글 웹훅에서 재시도된다.
+ */
+async function tryBindNextPostRules(
+  admin: NonNullable<ReturnType<typeof createAdminClient>>,
+  ownerId: string,
+  mediaId: string,
+  accessToken: string | null,
+): Promise<Record<string, unknown>[] | null> {
+  const RULE_SELECT =
+    "id, post_id, trigger, keywords, status, is_advertising, dm_message, public_reply, button_label, button_url, created_at";
+  const query = (columns: string) =>
+    admin
+      .from("auto_dm_rules")
+      .select(columns)
+      .eq("user_id", ownerId)
+      .eq("post_id", NEXT_POST_SENTINEL)
+      .eq("status", "active");
+  let res = await query(`${RULE_SELECT}, buttons`);
+  if (res.error && /buttons/i.test(res.error.message)) res = await query(RULE_SELECT);
+  if (res.error) {
+    console.error("[auto-dm] 예약 규칙 조회 실패:", res.error.message);
+    return null;
+  }
+  const pending = (res.data ?? []) as unknown as ({ id: string; created_at: string } & Record<string, unknown>)[];
+  if (pending.length === 0 || !accessToken) return null;
+
+  const meta = await fetchMediaMeta(mediaId, accessToken);
+  if (!meta?.timestamp) return null;
+  const mediaTime = new Date(meta.timestamp).getTime();
+  const toBind = pending.filter((r) => new Date(r.created_at).getTime() < mediaTime);
+  if (toBind.length === 0) return null;
+
+  const postType =
+    meta.mediaProductType === "REELS"
+      ? "reels"
+      : meta.mediaType === "VIDEO"
+        ? "video"
+        : meta.mediaType === "CAROUSEL_ALBUM"
+          ? "carousel"
+          : "feed";
+  const caption = (meta.caption ?? "").split("\n")[0]?.slice(0, 80) || "새 게시물";
+  const ids = toBind.map((r) => r.id);
+
+  let bind = await admin
+    .from("auto_dm_rules")
+    .update({ post_id: mediaId, post_caption: caption, post_type: postType, post_thumb: meta.thumbnailUrl ?? meta.mediaUrl ?? null })
+    .in("id", ids);
+  if (bind.error && /post_thumb/i.test(bind.error.message)) {
+    bind = await admin
+      .from("auto_dm_rules")
+      .update({ post_id: mediaId, post_caption: caption, post_type: postType })
+      .in("id", ids);
+  }
+  if (bind.error) {
+    console.error("[auto-dm] 예약 규칙 바인딩 실패:", bind.error.message);
+    return null;
+  }
+  console.log(`[auto-dm] 예약 규칙 ${ids.length}건을 게시물 ${mediaId}에 바인딩`);
+  return toBind.map((r) => ({ ...r, post_id: mediaId }));
 }
 
 async function processEntry(entry: WebhookEntry) {
@@ -179,10 +247,16 @@ async function processEntry(entry: WebhookEntry) {
       return { data: first.data, error: first.error?.message ?? null };
     };
     const { data: rulesData, error: rulesErr } = await loadRules();
-    const rules = rulesData as (MatchableRule & Record<string, unknown>)[] | null;
+    let rules = rulesData as (MatchableRule & Record<string, unknown>)[] | null;
     if (rulesErr) {
       console.error("[auto-dm] 규칙 조회 실패:", event.commentId, rulesErr);
       continue;
+    }
+    // 이 게시물에 규칙이 없으면 "다음 게시물" 예약 규칙 바인딩을 시도한다 (새 게시물 첫 댓글)
+    if (!rules || rules.length === 0) {
+      rules = (await tryBindNextPostRules(admin, ownerId, event.mediaId, accessToken)) as
+        | (MatchableRule & Record<string, unknown>)[]
+        | null;
     }
     if (!rules || rules.length === 0) continue;
 

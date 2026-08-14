@@ -8,6 +8,13 @@ import type { AutoDmRule, DmButton } from "@/lib/types";
  * 읽기는 LEGACY 컬럼 셋으로 폴백하고(호출측), 쓰기는 'buttons' 오류 시 legacy만 재시도한다.
  */
 
+/**
+ * "다음에 올릴 게시물" 예약 규칙의 post_id 센티널 (2026-08-14, 리틀리 예약발송 대응).
+ * 웹훅이 새 게시물의 첫 댓글을 받으면 — 게시물 업로드 시각 > 규칙 생성 시각일 때 —
+ * 이 센티널을 실제 media id로 치환(바인딩)한다. 콘텐츠 개수 한도에서는 게시물 1개로 센다.
+ */
+export const NEXT_POST_SENTINEL = "__next__";
+
 /** DB 행 (snake_case) — supabase 조회 결과 형태 */
 export interface AutoDmRuleRow {
   id: string;

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ImageOff, Lock, Megaphone, Plus, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { applyAdDisclosure } from "@/lib/ads/ad-disclosure";
+import { NEXT_POST_SENTINEL } from "@/lib/auto-dm/db";
 import type { AutoDmRule, AutoDmTrigger, DmButton, Post } from "@/lib/types";
 import { InfoTip } from "@/components/ui/info-tip";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -67,7 +68,10 @@ export function RuleWizard({
   onSave: (draft: RuleDraft) => void | Promise<void>;
   onClose: () => void;
 }) {
-  const [postId, setPostId] = useState(initial?.postId ?? "");
+  const [postId, setPostId] = useState(initial && initial.postId !== NEXT_POST_SENTINEL ? initial.postId : "");
+  const [postMode, setPostMode] = useState<"current" | "next">(
+    initial?.postId === NEXT_POST_SENTINEL ? "next" : "current",
+  );
   const [trigger, setTrigger] = useState<AutoDmTrigger>(initial?.trigger ?? "all");
   const [keywords, setKeywords] = useState<string[]>(initial?.keywords ?? []);
   const [keywordInput, setKeywordInput] = useState("");
@@ -142,6 +146,9 @@ export function RuleWizard({
     return !otherRulePosts.has(p.id) && atContentLimit;
   }
 
+  // "다음 게시물" 예약도 콘텐츠 1개로 센다 — 이미 예약 규칙이 있으면 같은 콘텐츠라 허용
+  const nextModeLocked = !otherRulePosts.has(NEXT_POST_SENTINEL) && atContentLimit;
+
   // buttonCount만큼 항상 패딩한다 — buttons 배열이 짧으면 미입력 버튼이 검증을 그냥
   // 통과해 빈 버튼이 저장되는 구멍이 있었다 (리뷰 확정 수리)
   const activeButtons = useMemo<DmButton[]>(
@@ -207,6 +214,7 @@ export function RuleWizard({
   const canNext: boolean = (() => {
     switch (step) {
       case "post":
+        if (postMode === "next") return !nextModeLocked;
         return Boolean(selectedPost) && !(selectedPost && postLocked(selectedPost));
       case "trigger":
         return trigger === "all" || keywords.length > 0;
@@ -227,18 +235,30 @@ export function RuleWizard({
       setStepIdx((i) => i + 1);
       return;
     }
-    if (!selectedPost) return;
+    if (postMode === "current" && !selectedPost) return;
     setSaving(true);
     try {
+      const postFields =
+        postMode === "next" || !selectedPost
+          ? {
+              postId: NEXT_POST_SENTINEL,
+              postCaption: "다음에 올릴 게시물 (업로드 후 첫 댓글에 자동 연결)",
+              postType: "feed" as const,
+              postViews: 0,
+              postThumb: null,
+            }
+          : {
+              postId: selectedPost.id,
+              postCaption: selectedPost.caption,
+              postType: selectedPost.type,
+              postViews: selectedPost.views,
+              // 편집에서 다른 게시물로 바꿨는데 이전 썸네일이 남는 사고 방지 — 폴백은 같은 게시물일 때만
+              postThumb:
+                selectedPost.thumb ?? (initial && selectedPost.id === initial.postId ? initial.postThumb : null),
+            };
       await onSave({
         id: initial?.id ?? makeId(),
-        postId: selectedPost.id,
-        postCaption: selectedPost.caption,
-        postType: selectedPost.type,
-        postViews: selectedPost.views,
-        // 편집에서 다른 게시물로 바꿨는데 이전 게시물 썸네일이 남는 사고 방지 — 폴백은 같은 게시물일 때만
-        postThumb:
-          selectedPost.thumb ?? (initial && selectedPost.id === initial.postId ? initial.postThumb : null),
+        ...postFields,
         trigger,
         keywords: trigger === "keyword" ? keywords : [],
         publicReply: wantReply && publicReply.trim() ? publicReply.trim() : null,
@@ -405,14 +425,32 @@ export function RuleWizard({
 
               {/* 리틀리 1단계 구조 — 원형 라디오 행 2개 (현재 게시물 / 다음 게시물 예약) */}
               <div className="mt-2" role="radiogroup" aria-label="자동화할 게시물 방식">
-                {radioRow({ checked: true, label: "현재 게시물에서 선택할게요" })}
                 {radioRow({
-                  checked: false,
-                  disabled: true,
+                  checked: postMode === "current",
+                  label: "현재 게시물에서 선택할게요",
+                  onClick: () => setPostMode("current"),
+                })}
+                {radioRow({
+                  checked: postMode === "next",
                   label: "다음에 올릴 게시물을 자동화 할게요",
-                  hint: "(준비 중)",
+                  onClick: () => setPostMode("next"),
                 })}
               </div>
+
+              {postMode === "next" ? (
+                <div className="anim-swap mt-3 rounded-card bg-overlay p-4">
+                  <p className="text-[14px] font-medium">다음 게시물에 자동으로 연결돼요</p>
+                  <p className="mt-1.5 text-[13px] leading-relaxed text-fg-sub">
+                    지금 규칙을 만들어두면, 이 규칙을 만든 뒤 새로 올린 게시물에 첫 댓글이 달리는 순간 자동으로 그
+                    게시물에 연결됩니다. 이전에 올린 게시물에는 적용되지 않아요.
+                  </p>
+                  {nextModeLocked ? (
+                    <p className="mt-2 text-[12px] text-negative">
+                      자동화 콘텐츠 한도에 도달했어요. 플랜을 업그레이드하면 예약할 수 있습니다.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
 
               {contentLimit < 1000000 ? (
                 <p className="mt-2 text-[12px] text-fg-faint">
@@ -421,7 +459,7 @@ export function RuleWizard({
                 </p>
               ) : null}
 
-              {effectivePosts.length === 0 ? (
+              {postMode === "next" ? null : effectivePosts.length === 0 ? (
                 <div className="mt-4">
                   {accountHandle ? (
                     <EmptyState

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatAgo, formatCompact } from "@/lib/format";
+import { NEXT_POST_SENTINEL } from "@/lib/auto-dm/db";
 import type { AutoDmRule, AutoDmStatus, Post } from "@/lib/types";
 import { autoDmSummary } from "@/lib/data";
 import { PageHeader } from "@/components/ui/section-header";
@@ -207,7 +208,11 @@ export function AutoDmClient({
                     ) : null}
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge tone="neutral">{POST_TYPE_LABEL[rule.postType]}</Badge>
+                        {rule.postId === NEXT_POST_SENTINEL ? (
+                          <Badge tone="primary">다음 게시물 예약</Badge>
+                        ) : (
+                          <Badge tone="neutral">{POST_TYPE_LABEL[rule.postType]}</Badge>
+                        )}
                         <Badge tone={status.tone}>
                           <span className="size-1.5 rounded-full bg-current" aria-hidden />
                           {status.label}
