@@ -491,7 +491,7 @@ export function RuleWizard({
               ) : null}
 
               {contentLimit < 1000000 ? (
-                <p className="mt-2 text-[12px] text-fg-faint">
+                <p className="mt-2 text-[13px] text-fg-sub">
                   자동화 콘텐츠 {contentUsed}/{contentLimit}개 사용 중
                   {atContentLimit && !initial ? " — 한도에 도달했어요. 기존 자동화 게시물만 선택할 수 있습니다." : ""}
                 </p>
@@ -638,10 +638,10 @@ export function RuleWizard({
 
               <div className="mt-4">
                 <div className="flex items-center justify-between">
-                  <label htmlFor="wizard-dm-msg" className="text-[14px] font-medium text-fg-faint">
+                  <label htmlFor="wizard-dm-msg" className="text-[14px] font-medium text-fg-sub">
                     메시지 입력 <span className="text-negative">*</span>
                   </label>
-                  <span className={cn("tnum text-[12px]", dmMessage.length > DM_MAX ? "text-negative" : "text-fg-faint")}>
+                  <span className={cn("tnum text-[12px]", dmMessage.length > DM_MAX ? "text-negative" : "text-fg-sub")}>
                     {dmMessage.length}/{DM_MAX}
                   </span>
                 </div>
@@ -657,7 +657,7 @@ export function RuleWizard({
               </div>
 
               <div className="mt-3">
-                <span className="text-[14px] font-medium text-fg-faint">
+                <span className="text-[14px] font-medium text-fg-sub">
                   메시지 버튼 <span className="text-negative">*</span>
                 </span>
                 <div className="mt-1.5 grid grid-cols-4 gap-1.5">
@@ -700,7 +700,7 @@ export function RuleWizard({
                       {i === 0 ? <div className="mt-3">{preview}</div> : null}
                       <div className="mt-3 space-y-3">
                         <div>
-                          <label htmlFor={`dm-btn-label-${i}`} className="text-[14px] font-medium text-fg-faint">
+                          <label htmlFor={`dm-btn-label-${i}`} className="text-[14px] font-medium text-fg-sub">
                             버튼 입력 <span className="text-negative">*</span>
                           </label>
                           <input
@@ -713,7 +713,7 @@ export function RuleWizard({
                           />
                         </div>
                         <div>
-                          <label htmlFor={`dm-btn-url-${i}`} className="text-[14px] font-medium text-fg-faint">
+                          <label htmlFor={`dm-btn-url-${i}`} className="text-[14px] font-medium text-fg-sub">
                             URL 입력 <span className="text-negative">*</span>
                           </label>
                           {/* 리틀리 실측: URL 입력 방식 탭 — 직접 입력(활성) / 링크 불러오기(리틀리는 자사
@@ -774,7 +774,7 @@ export function RuleWizard({
               {wantReply ? (
                 <div className="anim-swap mt-3">
                   {/* 리틀리 실측 문구 그대로 — 랜덤 발송이 스팸 도배를 피해 계정을 지킨다 */}
-                  <p className="text-[12px] text-fg-faint">준비된 답글이 랜덤으로 달리며, 계정을 보호합니다</p>
+                  <p className="text-[13px] text-fg-sub">준비된 답글이 랜덤으로 달리며, 계정을 보호합니다</p>
 
                   <div className="mt-2 space-y-2">
                     {publicReplies.map((reply, i) => (
@@ -822,7 +822,7 @@ export function RuleWizard({
                 </div>
               ) : null}
 
-              <p className="mt-3 text-[12px] text-fg-faint">
+              <p className="mt-3 text-[13px] text-fg-sub">
                 DM은 댓글당 1회만 보낼 수 있어, 공개 답글로 안내를 보완할 수 있어요.
               </p>
             </div>
