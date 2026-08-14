@@ -7,7 +7,7 @@ import { collectFromSource, fetchIgTranscript, isCollectionConfigured, CollectEr
 import { upsertPosts } from "@/lib/pool/upsert";
 import { claimCalls, refundCalls } from "@/lib/pool/budget";
 import { industryFromText } from "@/lib/industry/list";
-import { createClaudeClient, STUDIO_MODEL } from "@/lib/ai/claude";
+import { createClaudeClient, CHAT_MODEL } from "@/lib/ai/claude";
 import { HOOK_VALUES } from "@/lib/reference/engine";
 import { logSearch, searchPool, type PoolPlatformFilter, type PoolSort } from "@/lib/pool/search";
 import { poolItemToAd, poolItemToReference } from "@/lib/pool/bridge";
@@ -320,13 +320,15 @@ function parseAnalysisRow(row: {
 }
 
 /**
- * 풀 영상 AI 분석 — 대본 기반 후킹 구조 분석. **무료다** (2026-08-13 사장님 지시
- * "AI 요약은 그냥 무료로 풀어놔" — 원래 2크레딧이었다).
+ * 풀 영상 AI 분석 — 대본 기반 후킹 구조 분석.
  *
- * 무료로 풀 수 있는 근거가 creative_analyses **공용 캐시**다: 영상 하나당 원가
- * (대본 공급사 1크레딧 + Opus 토큰 ~수십 원)는 **최초 1회만** 나가고, 이후 전원이
- * 캐시를 읽는다. 원가 상방은 "사용자 수"가 아니라 "분석된 영상 수"로 잡힌다.
- * 대본이 이 과정에서 새로 추출되면 공용 대본 캐시에도 넣는다.
+ * 과금(2026-08-14 개편 — 이전의 완전 무료는 하루 지출 상한이 없는 유일한 경로였다):
+ *  - 캐시 히트(누군가 이미 분석한 영상)는 무조건 무료 — 공용 풀의 존재 이유.
+ *  - 새 분석만 과금: 무료 플랜 월 1회(사장님 확정), 이후·유료는 크레딧(videoAnalysis).
+ *  - 모델은 Opus → Sonnet 강등(같은 날): 구조 분석 품질은 유지하면서 건당 ~40원 → ~8원.
+ *
+ * creative_analyses 공용 캐시: 영상 하나당 원가(대본 공급사 1크레딧 + Sonnet 토큰)는
+ * 최초 1회만 나가고 이후 전원이 캐시를 읽는다. 대본이 새로 추출되면 대본 캐시에도 넣는다.
  */
 export async function analyzePoolCreative(creativeId: string): Promise<AnalyzeResult> {
   const user = await getAuthUser();
@@ -401,6 +403,24 @@ export async function analyzePoolCreative(creativeId: string): Promise<AnalyzeRe
     }
   };
 
+  /* 과금 — 선점까지 통과한 "실제 새 분석"만. 캐시 히트·사전조건 실패·동시 분석 대기는
+     여기 도달하지 않아 무료다. 이후 실패 시 크레딧 구간만 환불(무료 카운터 미복구는
+     기존 정책과 동일 — credits.ts 안전 원칙). */
+  const charge = await chargeGeneration({
+    metric: "ai_video_analysis",
+    creditCost: CREDIT_COSTS.videoAnalysis,
+    reason: "pool_video_analysis",
+  });
+  if (!charge.ok) {
+    await releaseLock();
+    return { ok: false, error: charge.error };
+  }
+  const refundIfCharged = async (why: string) => {
+    if (charge.via === "credits") {
+      await refundGenerationCredits(charge.userId, CREDIT_COSTS.videoAnalysis, `pool_video_analysis_refund: ${why}`);
+    }
+  };
+
   try {
     /* 1. 대본 — 캐시가 없으면 여기서 추출한다 (사전조건은 위에서 이미 통과) */
     let transcript: string | null = cachedTranscript;
@@ -411,6 +431,7 @@ export async function analyzePoolCreative(creativeId: string): Promise<AnalyzeRe
     }
     if (!transcript) {
       await releaseLock();
+      await refundIfCharged("no_voice");
       return { ok: false, error: "음성이 감지되지 않았어요 — 말로 설명하는 릴스만 분석할 수 있어요." };
     }
     transcript = transcript.slice(0, 8000);
@@ -420,9 +441,9 @@ export async function analyzePoolCreative(creativeId: string): Promise<AnalyzeRe
       if (error) console.error("[pool] 대본 캐시 저장 실패(분석은 계속):", error.message);
     }
 
-    /* 2. Opus 분석 — 대본 + 캡션 + 반응 수치 */
+    /* 2. Sonnet 분석 — 대본 + 캡션 + 반응 수치 (2026-08-14 Opus→Sonnet 강등, 건당 ~40원→~8원) */
     const response = await claude.messages.create({
-      model: STUDIO_MODEL,
+      model: CHAT_MODEL,
       max_tokens: 2000,
       output_config: {
         format: {
@@ -457,6 +478,7 @@ export async function analyzePoolCreative(creativeId: string): Promise<AnalyzeRe
     });
     if (response.stop_reason === "refusal") {
       await releaseLock();
+      await refundIfCharged("refusal");
       return { ok: false, error: "이 영상은 분석할 수 없어요." };
     }
     const text = (response.content as { type: string; text?: string }[]).find((b) => b.type === "text")?.text;
@@ -483,7 +505,7 @@ export async function analyzePoolCreative(creativeId: string): Promise<AnalyzeRe
         hook_breakdown: { opening: analysis.opening, flow: analysis.flow, hook_tags: analysis.hookTags },
         target_guess: analysis.target,
         improvement: analysis.improvement,
-        model: STUDIO_MODEL,
+        model: CHAT_MODEL,
       });
       if (error) console.error("[pool] 분석 캐시 저장 실패(결과는 반환):", error.message);
     }
@@ -491,6 +513,7 @@ export async function analyzePoolCreative(creativeId: string): Promise<AnalyzeRe
     return { ok: true, analysis, cached: false, ...(freshTranscript ? { transcript } : {}) };
   } catch (e) {
     await releaseLock();
+    await refundIfCharged("analysis_error");
     const isCredits = e instanceof CollectError && e.reason === "out_of_credits";
     console.error("[pool] 영상 분석 실패:", e);
     return {

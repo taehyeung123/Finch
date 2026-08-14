@@ -52,15 +52,16 @@ export const CREDIT_COSTS = {
   brandTone: 10,
   /** AI 에이전트 메시지 1건 — 실측 35원 */
   agentChat: 4,
+  /** 풀 영상 AI 분석 1회(새 분석만 — 캐시 히트는 무료) — Sonnet ~8원 + 대본 공급사 ~3원 */
+  videoAnalysis: 2,
 } as const;
 
 /**
  * 무료 플랜 전용 — 기능별 월 한도. 유료 플랜은 더 이상 이 표를 쓰지 않고
  * PLAN_CREDIT_ALLOWANCE(통합 크레딧) 하나로 관리한다(2026-08-14 4차 개편).
  *
- * ai_video_analysis·board_saves는 실제로 chargeGeneration을 호출하는 곳이 코드에
- * 없다(2026-08-14 grep 확인) — 즉 지금은 게이팅되지 않는 죽은 설정이다. 나중에 실제
- * 영상분석·보드저장에 과금을 붙일 때 값만 그대로 살려 쓸 수 있게 남겨뒀다.
+ * board_saves는 실제로 chargeGeneration을 호출하는 곳이 코드에 없다 — 게이팅되지
+ * 않는 예약 설정이다. 나중에 보드 저장에 상한을 붙일 때 값만 살려 쓴다.
  */
 export const FREE_MONTHLY_LIMITS: Record<string, number> = {
   ai_cardnews: 0,
@@ -72,7 +73,8 @@ export const FREE_MONTHLY_LIMITS: Record<string, number> = {
   ai_ideas: 0,
   ai_brand_tone: 0,
   ai_agent_chat: 3,
-  ai_video_analysis: 3, // 미사용(연결 안 됨) — 위 설명 참고
+  // 2026-08-14 사장님 확정: 무료는 새 분석 월 1회 (캐시 히트는 횟수 미차감·무료)
+  ai_video_analysis: 1,
   board_saves: 20, // 미사용(연결 안 됨) — 위 설명 참고
 };
 
@@ -81,7 +83,8 @@ export const FREE_MONTHLY_LIMITS: Record<string, number> = {
  * 그대로 크레딧으로 환산한 값이다(한도 × CREDIT_COSTS 합산). 즉 지금 당장은
  * "기능별 캡이 통합 크레딧으로 바뀌었을 뿐 최악 원가 상한은 그대로"다.
  *
- * 원가(1크레딧=10원 기준, ai_video_analysis 제외 — 미게이팅이라 실제 원가가 아님):
+ * 원가(1크레딧=10원 기준. 영상분석은 이후 같은 날 게이팅 연결됨 — 같은 지급량 안에서
+ * 소비되므로 최악 원가 상한은 그대로다):
  *  - Creator 460크레딧=4,600원 / 9,900원 → 최악 마진 53.5%
  *  - Pro 1,260크레딧=12,600원 / 29,000원 → 최악 마진 56.6%
  *  - Agency 4,260크레딧=42,600원 / 99,000원 → 최악 마진 57.0%
