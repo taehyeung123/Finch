@@ -1,4 +1,4 @@
-import { CreditCard, FileClock, Gauge } from "lucide-react";
+import { CreditCard, FileClock } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,7 +6,6 @@ import { ButtonLink } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { EmptyState } from "@/components/ui/empty-state";
-import { UsageGauge } from "@/components/ui/charts";
 import { formatDate, formatKRW } from "@/lib/format";
 import { PLAN_CARDS, PlanCard, PlanCardGrid } from "@/components/pricing/plan-cards";
 import { PLAN_NAMES, PLAN_PRICES, isPaidPlan } from "@/lib/toss/config";
@@ -14,7 +13,6 @@ import {
   getCurrentPlan,
   getPaymentOrders,
   getSubscription,
-  getUsageStats,
   type PaymentOrderView,
   type PlanKey,
 } from "@/lib/data/internal";
@@ -58,8 +56,8 @@ function PlanAction({
   currentPlanKey: PlanKey;
 }) {
   if (current) {
-    // 상태 표시는 버튼이 아닌 뱃지로 — disabled opacity로 대비를 떨어뜨리지 않는다
-    return <Badge tone="primary">현재 플랜</Badge>;
+    // 카드 상단에 이미 "사용 중" 배지가 붙는다. 여기 또 배지를 두면 같은 말이 두 번이다.
+    return <p className="text-[13px] font-medium text-primary">이용 중인 플랜입니다</p>;
   }
   if (planKey === "free") {
     // 액션이 아닌 안내 — disabled 버튼의 hover 전용 title 대신 항상 보이는 텍스트
@@ -135,8 +133,7 @@ export default async function BillingSettingsPage({
               ? "플랜 변경 예약을 취소했어요."
               : null;
 
-  const [usageStats, currentPlan, orders, subscription] = await Promise.all([
-    getUsageStats(),
+  const [currentPlan, orders, subscription] = await Promise.all([
     getCurrentPlan(),
     getPaymentOrders(),
     getSubscription(),
@@ -154,68 +151,61 @@ export default async function BillingSettingsPage({
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title="설정"
-        description="현재 플랜과 사용량을 확인하고 요금제를 관리하세요."
+        description="현재 플랜과 결제 정보를 확인하고 요금제를 관리하세요."
       />
       <SettingsNav />
 
       <BillingBanner error={planError} notice={notice} />
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* 현재 플랜 + 구독 상태 — users_profile.plan·subscriptions 실조회 */}
-        <Card>
-          <CardHeader title="현재 플랜" description="구독 중인 요금제" />
-          <CardBody className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xl font-bold">{currentName}</span>
-              <Badge tone="primary">사용 중</Badge>
-              {subscription?.status === "active" ? <Badge tone="positive">자동갱신 중</Badge> : null}
-              {subscription?.status === "past_due" ? <Badge tone="warning">결제 재시도 중</Badge> : null}
-              {subscription?.status === "canceled" ? <Badge tone="neutral">해지 예약됨</Badge> : null}
-            </div>
+      {/* 현재 플랜 — 카드 한 장을 통째로 쓰던 자리를 한 줄 상태 바로 압축했다(2026-08-15).
+          "결제 내역이 없습니다" 한 문장을 위해 화면 첫 스크롤을 다 잡아먹고 있었고,
+          정작 알아야 할 플랜·다음 결제일·해지 버튼은 아래 플랜 카드에 밀려 있었다. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-card border border-line bg-body px-5 py-4">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-fg-faint">현재 플랜</span>
+            <span className="text-[18px] font-bold leading-none">{currentName}</span>
+            {subscription?.status === "active" ? <Badge tone="positive">자동갱신 중</Badge> : null}
+            {subscription?.status === "past_due" ? <Badge tone="warning">결제 재시도 중</Badge> : null}
+            {subscription?.status === "canceled" ? <Badge tone="neutral">해지 예약됨</Badge> : null}
+          </div>
 
-            {subscription ? (
-              <div className="space-y-1.5 text-[14px] text-fg-sub">
-                {subscription.nextBillingAt ? (
-                  <p>
-                    {subscription.status === "canceled" ? "이용 종료일" : "다음 결제일"}{" "}
-                    <span className="tnum font-semibold text-fg">{subscription.nextBillingAt.slice(0, 10)}</span>
-                  </p>
-                ) : null}
-                {subscription.cardSummary ? (
-                  <p className="text-[13px] text-fg-sub">결제 카드 {subscription.cardSummary}</p>
-                ) : null}
-                {subscription.status === "past_due" ? (
-                  <p className="text-[13px] font-medium text-warning">
-                    최근 정기결제가 실패했어요. 카드 상태를 확인해 주세요 — 자동으로 재시도합니다.
-                  </p>
-                ) : null}
-                {subscription.status === "canceled" ? (
-                  <p className="text-[13px] text-fg-sub">
-                    자동갱신이 꺼져 있어요. 종료일까지는 그대로 이용할 수 있습니다.
-                  </p>
-                ) : null}
-                {pendingPlanName ? (
-                  <p className="text-[13px] font-medium text-primary">
-                    다음 결제일부터 {pendingPlanName} 플랜으로 변경 예정
-                  </p>
-                ) : null}
-              </div>
-            ) : lastPaid ? (
-              <p className="text-[14px] text-fg-sub">
-                최근 결제{" "}
-                <span className="tnum font-semibold text-fg">
-                  {formatDate(lastPaid.approvedAt ?? lastPaid.createdAt)}
+          {subscription ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-sub">
+              {subscription.nextBillingAt ? (
+                <span>
+                  {subscription.status === "canceled" ? "이용 종료일" : "다음 결제일"}{" "}
+                  <span className="tnum font-semibold text-fg">{subscription.nextBillingAt.slice(0, 10)}</span>
                 </span>
-                <span className="tnum ml-2 text-fg-sub">{formatKRW(lastPaid.amount)}</span>
-              </p>
-            ) : (
-              <p className="text-[14px] text-fg-sub">
-                {currentPlan === "free" ? "무료 플랜을 이용 중입니다." : "결제 내역이 없습니다."}
-              </p>
-            )}
+              ) : null}
+              {subscription.cardSummary ? <span>카드 {subscription.cardSummary}</span> : null}
+              {subscription.status === "past_due" ? (
+                <span className="font-medium text-warning">
+                  최근 정기결제가 실패했어요 — 카드 상태를 확인해 주세요(자동 재시도 중)
+                </span>
+              ) : null}
+              {subscription.status === "canceled" ? (
+                <span>자동갱신이 꺼져 있어요 — 종료일까지는 그대로 이용할 수 있습니다</span>
+              ) : null}
+              {pendingPlanName ? (
+                <span className="font-medium text-primary">다음 결제일부터 {pendingPlanName} 플랜으로 변경 예정</span>
+              ) : null}
+            </div>
+          ) : lastPaid ? (
+            <p className="text-[13px] text-fg-sub">
+              최근 결제{" "}
+              <span className="tnum font-semibold text-fg">{formatDate(lastPaid.approvedAt ?? lastPaid.createdAt)}</span>
+              <span className="tnum ml-2 text-fg-sub">{formatKRW(lastPaid.amount)}</span>
+            </p>
+          ) : (
+            <p className="text-[13px] text-fg-sub">
+              {currentPlan === "free" ? "무료 플랜을 이용 중입니다." : "결제 내역이 없습니다."}
+            </p>
+          )}
+        </div>
 
-            <div className="flex flex-wrap gap-2">
-              {subscription && subscription.status !== "canceled" ? (
+        <div className="flex flex-wrap gap-2">
+          {subscription && subscription.status !== "canceled" ? (
                 <ConfirmSubmit
                   action={cancelSubscription}
                   title="구독을 해지할까요?"
@@ -262,33 +252,7 @@ export default async function BillingSettingsPage({
                   triggerSize="md"
                 />
               ) : null}
-            </div>
-          </CardBody>
-        </Card>
-
-        {/* 이번 달 사용량 (PART 4.13) */}
-        <Card>
-          <CardHeader title="이번 달 사용량" description="플랜 한도 대비 사용 현황" />
-          <CardBody className="space-y-4">
-            {usageStats.length === 0 ? (
-              <EmptyState
-                icon={Gauge}
-                title="아직 사용량 데이터가 없어요"
-                description="기능을 사용하면 이번 달 사용량이 여기에 표시됩니다."
-              />
-            ) : (
-              usageStats.map((stat) => (
-                <UsageGauge
-                  key={stat.label}
-                  label={stat.label}
-                  used={stat.used}
-                  limit={stat.limit}
-                  unit={stat.unit}
-                />
-              ))
-            )}
-          </CardBody>
-        </Card>
+        </div>
       </div>
 
       {/* 플랜 카드 — 마케팅 /pricing 과 **같은 컴포넌트**를 쓴다.

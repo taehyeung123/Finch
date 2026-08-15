@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { ArrowRight, Check, MessageCircle, Megaphone, Sparkles, TrendingUp, Video } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { CREDIT_COSTS, PLAN_CREDIT_ALLOWANCE, creditsBuy } from "@/lib/pricing/credit-config";
@@ -41,6 +41,9 @@ export interface PlanCardData {
   credits: number | null;
   counts?: string[];
   perks: string[];
+  /** 실제로 진행 중인 혜택만 적는다 — 없는 프로모션을 지어내지 않는다.
+      현재 유일한 혜택: 오픈 베타 Creator 3개월 무료(components/landing/promo-banner.tsx) */
+  benefit?: string;
 }
 
 const buysFor = (credits: number) => [
@@ -65,6 +68,7 @@ export const PLAN_CARDS: PlanCardData[] = [
     target: "내 채널을 키우는 개인 크리에이터를 위한 플랜입니다.",
     price: PLAN_PRICES.creator,
     credits: PLAN_CREDIT_ALLOWANCE.creator,
+    benefit: "오픈 베타 — 3개월 무료",
     perks: ["채널 3개 연동", "자동 DM 콘텐츠 5개", "레퍼런스 무제한 열람", "이메일 지원"],
   },
   {
@@ -95,7 +99,16 @@ export const PLAN_CARDS: PlanCardData[] = [
 
 const won = (n: number) => n.toLocaleString("ko-KR");
 
-/** CTA — 제미나이 실측: 높이 44px, 알약, 기본은 테두리만. 채운 버튼은 추천 플랜 하나뿐 */
+/** 포함 기능 아이콘 행 — 레퍼런스의 하단 아이콘 스트립. 텍스트 나열보다 훑기가 빠르다 */
+const FEATURE_ICONS = [
+  { icon: Sparkles, label: "카드뉴스" },
+  { icon: TrendingUp, label: "성장 진단" },
+  { icon: Video, label: "영상 분석" },
+  { icon: MessageCircle, label: "자동 DM" },
+  { icon: Megaphone, label: "메타광고" },
+];
+
+/** CTA — 알약 + 화살표(레퍼런스). 채운 버튼은 강조 플랜 하나뿐 */
 export function PlanCta({
   href,
   label,
@@ -109,13 +122,18 @@ export function PlanCta({
     <Link
       href={href}
       className={cn(
-        "flex h-11 w-full items-center justify-center rounded-chip px-6 text-[16px] font-medium transition-colors",
+        "group flex h-12 w-full items-center justify-center gap-1.5 rounded-chip px-6 text-[16px] font-medium transition-colors",
         filled
           ? "bg-primary text-on-primary hover:bg-primary-hover"
           : "border border-line-strong text-fg hover:bg-surface",
       )}
     >
       {label}
+      <ArrowRight
+        className="size-4 transition-transform duration-300 ease-arrive group-hover:translate-x-0.5"
+        strokeWidth={2}
+        aria-hidden
+      />
     </Link>
   );
 }
@@ -128,91 +146,126 @@ export function PlanCard({
 }: {
   plan: PlanCardData;
   action?: React.ReactNode;
-  /** 강조 = 버튼을 채운다. 테두리·배경은 건드리지 않는다(제미나이 문법) */
   highlight?: boolean;
   badge?: string;
 }) {
   const buys = plan.credits !== null ? buysFor(plan.credits) : null;
 
   return (
-    <div className="flex h-full flex-col rounded-chip border border-line bg-body px-6 py-8">
+    <div
+      className={cn(
+        "flex h-full flex-col rounded-chip border bg-body px-6 py-8 text-center",
+        highlight ? "border-primary" : "border-line",
+      )}
+    >
+      {/* 플랜명 — 가운데, 브랜드 색 (레퍼런스 문법) */}
+      <p className="text-[22px] font-medium tracking-[-0.01em] text-primary">{plan.name}</p>
+
       {badge ? (
-        <span className="mb-4 inline-flex w-fit items-center rounded-chip border border-line-strong px-3 py-1 text-[13px] font-medium text-fg">
+        <span className="mx-auto mt-3 inline-flex w-fit items-center rounded-chip border border-line-strong px-3 py-1 text-[12.5px] font-medium text-fg">
           {badge}
         </span>
       ) : null}
 
-      <h3 className="text-[24px] font-medium tracking-[-0.01em] text-fg">{plan.name}</h3>
+      <p className="mx-auto mt-3 max-w-[34ch] text-[15px] leading-[1.5] text-fg-sub">{plan.target}</p>
 
-      <p className="mt-3 text-[16px] leading-[1.4] text-fg-sub">{plan.target}</p>
-
-      {/* 가격 — 실측 36px/500/-1px. 굵게 쓰지 않는다(그게 싸구려로 읽히는 지점이었다) */}
-      <p className="mt-7 flex items-baseline gap-1">
-        {plan.price === 0 ? (
-          <span className="text-[36px] font-medium leading-[1.1] tracking-[-1px] text-fg">무료</span>
-        ) : (
-          <>
-            <span className="tnum text-[36px] font-medium leading-[1.1] tracking-[-1px] text-fg">
-              {won(plan.price)}
-            </span>
-            <span className="text-[18px] font-medium tracking-[-1px] text-fg">원</span>
-            <span className="ml-1 text-[16px] text-fg-sub">/ 월</span>
-          </>
-        )}
-      </p>
-
-      <div className="mt-6">{action}</div>
-
-      {/* 크레딧 — 우리 제품의 차별점. 색면 없이 구분선과 활자만으로 */}
-      <div className="mt-8 border-t border-line pt-6">
+      {/* 스펙 강조 — 레퍼런스의 200GB/2TB 자리. 우리는 크레딧이 그 자리다 */}
+      <div className="mt-6">
         {buys ? (
           <>
-            <p className="text-[18px] leading-[1.4] text-fg">
-              매월 <span className="tnum font-medium">{won(plan.credits as number)}</span> 크레딧
+            <p className="tnum text-[30px] font-medium leading-none tracking-[-0.02em] text-fg">
+              {won(plan.credits as number)}
             </p>
-            <ul className="mt-4 space-y-2.5">
-              {buys.map((b) => (
-                <li key={b.label} className="flex items-baseline justify-between gap-3 text-[16px] leading-[1.4]">
-                  <span className="text-fg-sub">{b.label}</span>
-                  <span className="tnum text-fg">
-                    {won(b.n)}
-                    {b.unit}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-4 text-[14px] leading-[1.5] text-fg-sub">
-              한 기능에 몰아 썼을 때 기준입니다. 무엇에 쓸지는 자유입니다.
-            </p>
+            <p className="mt-1.5 text-[14px] text-fg-sub">크레딧 / 월</p>
           </>
         ) : (
           <>
-            <p className="text-[18px] leading-[1.4] text-fg">크레딧 없이 월 횟수로 제공</p>
-            <ul className="mt-4 space-y-2.5">
-              {plan.counts?.map((c) => (
-                <li key={c} className="text-[16px] leading-[1.4] text-fg-sub">
-                  {c}
-                </li>
-              ))}
-            </ul>
-            <p className="mt-4 text-[14px] leading-[1.5] text-fg-sub">
-              카드뉴스·성장 진단·아이디어 추천은 유료 플랜 기능입니다.
-            </p>
+            <p className="text-[30px] font-medium leading-none tracking-[-0.02em] text-fg">월 횟수</p>
+            <p className="mt-1.5 text-[14px] text-fg-sub">크레딧 없이 제공</p>
           </>
         )}
       </div>
 
-      {/* 기능 목록 — 실측 18px 검정. 작고 흐린 회색이 아니라 크고 진하게 */}
-      <ul className="mt-6 flex-1 space-y-3.5 border-t border-line pt-6">
+      {/* 가격 — 혜택이 있으면 원가 취소선 + 혜택 문구 */}
+      <div className="mt-6">
+        {plan.price === 0 ? (
+          <p className="text-[28px] font-medium leading-none tracking-[-0.5px] text-fg">무료</p>
+        ) : (
+          <>
+            {/* 취소선을 쓰지 않는다 — 현재 혜택은 '3개월 무료'이지 할인가가 아니다.
+                같은 금액에 취소선을 그으면 없는 할인을 있는 것처럼 보이게 한다. */}
+            <p className="flex items-baseline justify-center gap-1">
+              <span className="tnum text-[28px] font-medium leading-none tracking-[-0.5px] text-fg">
+                {won(plan.price)}
+              </span>
+              <span className="text-[15px] font-medium text-fg">원</span>
+              <span className="text-[14px] text-fg-sub">/ 월</span>
+            </p>
+            {plan.benefit ? (
+              <p className="mt-2 text-[13.5px] font-medium text-primary">{plan.benefit}</p>
+            ) : null}
+          </>
+        )}
+      </div>
+
+      <div className="mt-6">{action}</div>
+
+      {/* 크레딧 환산 — 무엇을 몇 개 살 수 있는지 */}
+      <div className="mt-7 border-t border-line pt-6 text-left">
+        {buys ? (
+          <ul className="space-y-2.5">
+            {buys.map((b) => (
+              <li key={b.label} className="flex items-baseline justify-between gap-3 text-[15px] leading-[1.4]">
+                <span className="text-fg-sub">{b.label}</span>
+                <span className="tnum text-fg">
+                  {won(b.n)}
+                  {b.unit}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <ul className="space-y-2.5">
+            {plan.counts?.map((c) => (
+              <li key={c} className="text-[15px] leading-[1.4] text-fg-sub">
+                {c}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* 포함 기능 아이콘 스트립 — 레퍼런스 하단 구조 */}
+      <div className="mt-6 border-t border-line pt-6">
+        <p className="text-[13px] text-fg-sub">포함 기능</p>
+        <div className="mt-3.5 flex items-start justify-center gap-4">
+          {FEATURE_ICONS.map(({ icon: Icon, label }) => {
+            const off = plan.key === "free" && (label === "카드뉴스" || label === "성장 진단" || label === "메타광고");
+            return (
+              <div key={label} className="flex w-12 flex-col items-center gap-1.5">
+                <Icon
+                  className={cn("size-5", off ? "text-fg-faint" : "text-fg")}
+                  strokeWidth={1.5}
+                  aria-hidden
+                />
+                <span className={cn("text-[11px] leading-tight", off ? "text-fg-faint" : "text-fg-sub")}>
+                  {label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 운영 한도 */}
+      <ul className="mt-6 flex-1 space-y-3 border-t border-line pt-6 text-left">
         {plan.perks.map((p) => (
-          <li key={p} className="flex items-start gap-3 text-[18px] leading-[1.4] text-fg">
-            <Check className="mt-1 size-[18px] shrink-0 text-fg-sub" strokeWidth={1.5} aria-hidden />
+          <li key={p} className="flex items-start gap-2.5 text-[15px] leading-[1.45] text-fg">
+            <Check className="mt-0.5 size-4 shrink-0 text-fg-sub" strokeWidth={1.5} aria-hidden />
             {p}
           </li>
         ))}
       </ul>
-
-      {highlight ? null : null}
     </div>
   );
 }

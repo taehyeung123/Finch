@@ -48,11 +48,22 @@ export async function getNotifications(): Promise<AppNotification[]> {
 /* ── 사용량 ───────────────────────────────────────────────── */
 
 // 사용량 지표 코드 → 표시 라벨/단위 (use_quota의 metric과 일치)
+/* 지표 키 → 사람이 읽는 라벨. **여기 없는 키는 DB 컬럼명이 그대로 화면에 노출된다**
+   (실제로 'reference_collect 11/1000회'가 결제 화면에 새어 나갔다 — 2026-08-15).
+   lib/pricing/credit-config.ts 의 FREE_MONTHLY_LIMITS 에 지표를 추가하면 이 표에도 같이 넣는다. */
 const USAGE_META: Record<string, { label: string; unit: string }> = {
   content_analysis: { label: "콘텐츠 분석", unit: "회" },
   ai_cardnews: { label: "AI 카드뉴스", unit: "회" },
   auto_dm_send: { label: "자동 DM 발송", unit: "건" },
   competitor_track: { label: "경쟁사 추적", unit: "개" },
+  reference_collect: { label: "레퍼런스 수집", unit: "회" },
+  ad_collect: { label: "메타광고 수집", unit: "회" },
+  reference_transcript: { label: "대본 추출", unit: "회" },
+  ai_agent_chat: { label: "AI 챗", unit: "회" },
+  ai_video_analysis: { label: "영상 분석", unit: "회" },
+  growth_diagnosis: { label: "성장 진단", unit: "회" },
+  ai_ideas: { label: "아이디어 추천", unit: "회" },
+  ai_brand_tone: { label: "브랜드 톤 학습", unit: "회" },
 };
 
 function currentMonthStart(): string {
