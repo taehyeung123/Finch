@@ -918,6 +918,7 @@ export function SearchConsole({
   onOpenSettings,
   onCollect,
   collecting,
+  showCollectSettings = true,
 }: {
   query: string;
   onQueryChange: (q: string) => void;
@@ -932,6 +933,8 @@ export function SearchConsole({
   onOpenSettings: () => void;
   onCollect: () => void;
   collecting: boolean;
+  /** 개인 수집 설정 진입점 노출 여부 — 공용 풀 모드에서는 개인 수집 시스템이 검색과 무관해 숨긴다 (2026-08-15) */
+  showCollectSettings?: boolean;
 }) {
   /* 진입 시 패널은 **닫혀 있다** — 첫 화면의 주인공은 콘텐츠다.
      열리는 건 스니핏과 같은 두 경로뿐: 검색창 포커스, 필터 버튼. */
@@ -1285,7 +1288,8 @@ export function SearchConsole({
           ) : null}
         </div>
 
-        {/* 수집 설정 */}
+        {/* 수집 설정 — 풀 모드에서는 숨김(개인 수집 전용 설정) */}
+        {showCollectSettings ? (
         <button
           type="button"
           onClick={onOpenSettings}
@@ -1295,6 +1299,7 @@ export function SearchConsole({
         >
           <Settings2 className="size-[18px]" aria-hidden />
         </button>
+        ) : null}
 
         <Button
           onClick={onCollect}
@@ -1388,7 +1393,7 @@ export function SearchConsole({
               </button>
             ))
           )}
-          {activeChips.length === 0 && registeredSources.length > 0 ? (
+          {showCollectSettings && activeChips.length === 0 && registeredSources.length > 0 ? (
             <button
               type="button"
               onClick={onOpenSettings}

@@ -261,15 +261,27 @@ export function LibraryClient({
     [filters, runPoolSearch],
   );
 
-  /* 홈 추천 검색 칩 딥링크(/library?q=…) — 최초 1회만 URL의 q를 검색어로 채운다.
+  /* 홈 검색바·추천 칩 딥링크(/library?q=…&target=…) — 최초 1회만 URL을 상태로 주입.
      useSearchParams 대신 window에서 읽는다: 이 페이지는 정적 렌더라 Suspense 경계가 없다. */
   const deepLinkApplied = useRef(false);
   useEffect(() => {
     if (deepLinkApplied.current) return;
     deepLinkApplied.current = true;
-    const q = new URLSearchParams(window.location.search).get("q");
+    const params = new URLSearchParams(window.location.search);
+    const q = (params.get("q") ?? "").trim();
+    const targetRaw = params.get("target");
+    const target: LibraryFilters["target"] | null =
+      targetRaw === "instagram" || targetRaw === "tiktok" || targetRaw === "threads" || targetRaw === "ads"
+        ? targetRaw
+        : null;
+    if (!q && !target) return;
+    const nextFilters = target ? { ...filters, target } : filters;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- URL→상태 마운트 1회 동기화(딥링크)라 effect가 맞는 자리
-    if (q && q.trim()) applyQuery(q.trim());
+    if (target) setFilters(nextFilters);
+     
+    if (q) setQuery(q);
+    setVisibleCount(PAGE_SIZE);
+    runPoolSearch(q, nextFilters, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 딥링크 주입
   }, []);
 
@@ -756,6 +768,7 @@ export function LibraryClient({
         onOpenSettings={() => openDrawer("sources")}
         onCollect={handleCollect}
         collecting={collecting}
+        showCollectSettings={!poolReady && !isDemo}
       />
 
       {/* 토스트 — 문서 흐름 밖(fixed). 예전엔 mt-4 인라인 <p>라 뜰 때마다 결과 그리드를
@@ -897,9 +910,9 @@ export function LibraryClient({
                   </Button>
                 ) : null}
                 {/* 등록된 기준 어디에도 없는 검색어 = 콜드스타트.
-                    /discover의 유일한 고유 가치("등록 안 한 주제도 만나는 발견")를
-                    별도 화면이 아니라 검색의 자연스러운 실패 경로로 흡수한다. */}
-                {query.trim() && !sourceFacets.some((s) => s.value.includes(query.trim())) ? (
+                    풀 모드에서는 개인 수집 기준이 검색과 무관하므로 이 CTA를 숨긴다 —
+                    [지금 수집] 버튼(검색 콘솔)이 같은 역할을 실시간으로 한다 (2026-08-15). */}
+                {!poolReady && !isDemo && query.trim() && !sourceFacets.some((s) => s.value.includes(query.trim())) ? (
                   <Button onClick={() => openDrawer("sources", query.trim())}>
                     &lsquo;{query.trim()}&rsquo;로 수집 기준 만들기
                   </Button>

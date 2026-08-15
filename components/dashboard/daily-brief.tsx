@@ -110,24 +110,60 @@ export function DailyBriefHero({ stats }: { stats: PoolHomeStats }) {
 /** 추천 칩 아이콘 컬러 로테이션 — 컬러 밀도(스니핏의 컬러풀 칩 대응) */
 const CHIP_TONES = ["text-primary", "text-positive", "text-warning", "text-ig", "text-tiktok-cyan"];
 
-/** ② 중앙 대형 검색바 — 필 형태 + 부드러운 그림자 */
+/** 검색 대상 세그먼트 — 스니핏 검색바의 [썸네일 ▾] 드롭다운 대응 (탐색 target 필터 딥링크) */
+const SEARCH_TARGETS = [
+  { value: "all", label: "전체" },
+  { value: "instagram", label: "인스타그램" },
+  { value: "tiktok", label: "틱톡" },
+  { value: "ads", label: "메타광고" },
+] as const;
+
+/** ② 중앙 대형 검색바 — 세그먼트 + 필 형태 + 포커스 글로우 */
 export function HomeSearch({ stats }: { stats: PoolHomeStats }) {
   const router = useRouter();
   const [q, setQ] = useState("");
+  const [target, setTarget] = useState<(typeof SEARCH_TARGETS)[number]["value"]>("all");
+
+  function push(v: string) {
+    const params = new URLSearchParams();
+    if (v) params.set("q", v);
+    if (target !== "all") params.set("target", target);
+    const qs = params.toString();
+    router.push(qs ? `/library?${qs}` : "/library");
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    const v = q.trim();
-    router.push(v ? `/library?q=${encodeURIComponent(v)}` : "/library");
+    push(q.trim());
   }
 
   return (
     <section aria-label="레퍼런스 검색" className="mx-auto w-full max-w-2xl py-3">
       <form
         onSubmit={submit}
-        className="shadow-panel flex h-14 items-center gap-2 rounded-chip border border-line/60 bg-overlay pl-5 pr-2 transition-[border-color,box-shadow] focus-within:border-primary"
+        className="shadow-panel flex h-16 items-center rounded-chip border border-line/60 bg-overlay pl-2.5 pr-2 transition-[border-color,box-shadow] focus-within:border-primary focus-within:shadow-[0_0_0_4px_var(--color-primary-weak),0_0_16px_rgba(107,110,116,0.16)]"
       >
-        <Search className="size-5 shrink-0 text-fg-faint" aria-hidden />
+        {/* 검색 대상 세그먼트 — 스니핏의 드롭다운 자리 */}
+        <label className="relative flex h-11 shrink-0 cursor-pointer items-center gap-1 rounded-chip bg-body pl-4 pr-8 text-[14px] font-semibold text-fg-sub transition-colors hover:text-fg">
+          <span className="sr-only">검색 대상</span>
+          <select
+            value={target}
+            onChange={(e) => setTarget(e.target.value as typeof target)}
+            className="absolute inset-0 cursor-pointer appearance-none opacity-0"
+          >
+            {SEARCH_TARGETS.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+          {SEARCH_TARGETS.find((t) => t.value === target)?.label}
+          <ChevronRight className="pointer-events-none absolute right-3 size-3.5 rotate-90 text-fg-faint" aria-hidden />
+        </label>
+
+        <span aria-hidden className="mx-3 h-6 w-px shrink-0 bg-line" />
+
+        <Search className="mr-2 size-5 shrink-0 text-fg-faint" aria-hidden />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -137,8 +173,9 @@ export function HomeSearch({ stats }: { stats: PoolHomeStats }) {
         />
         <button
           type="submit"
-          className="flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-chip bg-primary px-5 text-[14px] font-semibold text-on-primary transition-colors hover:bg-primary-hover"
+          className="flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-chip bg-primary px-6 text-[15px] font-semibold text-on-primary transition-colors hover:bg-primary-hover"
         >
+          <Search className="size-4" aria-hidden />
           검색
         </button>
       </form>

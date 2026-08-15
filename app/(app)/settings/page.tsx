@@ -53,7 +53,9 @@ async function loadAccountCards(): Promise<AccountCard[]> {
     return CHANNELS.map((channel) => {
       const m = mockAccounts.find((a) => a.channel === channel);
       return {
-        id: null,
+        // 데모에도 가짜 id를 준다 — 해제 버튼·확인 모달·성공 배너 흐름을 체험 가능하게
+        // (id: null이면 해제 버튼 자체가 렌더되지 않아 "해제가 안 된다"로 보인다)
+        id: m?.connected ? `demo-${channel}` : null,
         channel,
         handle: m?.handle ?? "",
         displayName: m?.displayName ?? null,
@@ -120,17 +122,16 @@ const CONNECT_MESSAGES: Record<string, { tone: "positive" | "warning" | "negativ
 
 function ConnectActions({ card, oauthReady }: { card: AccountCard; oauthReady: boolean }) {
   const startHref = CONNECT_START_PATH[card.channel];
-  if (!oauthReady || !startHref) {
-    // 이미 '연동됨' 배지가 붙은 카드(데모 목데이터 등)에 '연동 준비중'을 겹치면 상태가 모순된다
-    // — 상태 배지는 카드당 1개, 미연동 카드에만 준비중을 보여준다.
-    return card.connected ? null : <Badge tone="neutral">연동 준비중</Badge>;
-  }
+  // 해제는 OAuth 자격증명과 무관하다(저장된 행 삭제일 뿐) — oauthReady 게이트 안에 두면
+  // 자격증명이 없는 환경(데모, 키 회수 후)에서 연동된 계정을 영영 못 지운다.
   if (card.connected && card.id) {
     return (
       <div className="flex items-center gap-2">
-        <a href={startHref} className={buttonClasses("secondary", "sm")}>
-          재연동
-        </a>
+        {oauthReady && startHref ? (
+          <a href={startHref} className={buttonClasses("secondary", "sm")}>
+            재연동
+          </a>
+        ) : null}
         <ConfirmSubmit
           action={disconnectAccount}
           hiddenFields={{ accountId: card.id }}
@@ -142,6 +143,11 @@ function ConnectActions({ card, oauthReady }: { card: AccountCard; oauthReady: b
         />
       </div>
     );
+  }
+  if (!oauthReady || !startHref) {
+    // 이미 '연동됨' 배지가 붙은 카드(데모 목데이터 등)에 '연동 준비중'을 겹치면 상태가 모순된다
+    // — 상태 배지는 카드당 1개, 미연동 카드에만 준비중을 보여준다.
+    return card.connected ? null : <Badge tone="neutral">연동 준비중</Badge>;
   }
   return (
     <a href={startHref} className={buttonClasses("primary", "sm")}>
