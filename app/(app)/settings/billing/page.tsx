@@ -7,7 +7,8 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatDate, formatKRW } from "@/lib/format";
-import { PLAN_CARDS, PlanCard, PlanCardGrid } from "@/components/pricing/plan-cards";
+import Link from "next/link";
+import { PLAN_CARDS, type PlanCardData } from "@/components/pricing/plan-cards";
 import { PLAN_NAMES, PLAN_PRICES, isPaidPlan } from "@/lib/toss/config";
 import {
   getCurrentPlan,
@@ -44,21 +45,16 @@ const ORDER_STATUS: Record<PaymentOrderView["status"], { label: string; tone: "p
   canceled: { label: "취소됨", tone: "neutral" },
 };
 
+/** 현재 플랜은 목록에 아예 안 나온다(위/아래로만 가른다) — 그래서 "사용 중" 분기가 없다 */
 function PlanAction({
   planKey,
-  current,
   hasActiveSub,
   currentPlanKey,
 }: {
   planKey: (typeof PLAN_DEFS)[number]["key"];
-  current: boolean;
   hasActiveSub: boolean;
   currentPlanKey: PlanKey;
 }) {
-  if (current) {
-    // 카드 상단에 이미 "사용 중" 배지가 붙는다. 여기 또 배지를 두면 같은 말이 두 번이다.
-    return <p className="text-[13px] font-medium text-primary">이용 중인 플랜입니다</p>;
-  }
   if (planKey === "free") {
     // 액션이 아닌 안내 — disabled 버튼의 hover 전용 title 대신 항상 보이는 텍스트
     return <p className="text-[12px] leading-snug text-fg-sub">유료 해지 시 기간 종료 후 자동 전환</p>;
@@ -113,6 +109,37 @@ function PlanAction({
   );
 }
 
+/**
+ * 플랜 한 줄 — 관리 화면 전용 표현. 마케팅 카드(components/pricing/plan-cards)와
+ * **데이터는 같고 렌더링만 다르다**. 여기 필요한 건 설득이 아니라 비교 판단이라
+ * 영업 문구·프로모 배지를 걷고 이름·가격·크레딧·차이점 두 개만 남긴다.
+ */
+function PlanRow({ plan, action }: { plan: PlanCardData; action: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-3 px-5 py-4">
+      <div className="min-w-0 flex-1">
+        <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="text-[16px] font-bold">{plan.name}</span>
+          <span className="text-[13px] text-fg-sub">{plan.ko}</span>
+          <span className="tnum text-[15px] font-semibold">
+            {plan.price === 0 ? "무료" : `${plan.price.toLocaleString("ko-KR")}원 / 월`}
+          </span>
+          {plan.credits !== null ? (
+            <span className="tnum text-[13px] text-fg-sub">
+              · 월 {plan.credits.toLocaleString("ko-KR")} 크레딧
+            </span>
+          ) : (
+            <span className="text-[13px] text-fg-sub">· 크레딧 없이 월 횟수</span>
+          )}
+        </p>
+        {/* 차이를 만드는 항목 둘만 — 전체 목록은 /pricing 이 진다 */}
+        <p className="mt-1 text-[13px] leading-[1.5] text-fg-sub">{plan.perks.slice(0, 2).join(" · ")}</p>
+      </div>
+      <div className="shrink-0">{action}</div>
+    </div>
+  );
+}
+
 export default async function BillingSettingsPage({
   searchParams,
 }: {
@@ -146,6 +173,12 @@ export default async function BillingSettingsPage({
   // 확인 모달 문구용 — 금액은 항상 서버 상수 PLAN_PRICES에서 조립한다
   const subPlanAmount = subscription && isPaidPlan(subscription.plan) ? PLAN_PRICES[subscription.plan] : null;
   const subEndDate = subscription?.nextBillingAt ? subscription.nextBillingAt.slice(0, 10) : null;
+
+  /* 현재 플랜 기준으로 위/아래를 가른다. 관리 화면에서 기본으로 보여야 할 건
+     "올릴 수 있는 것"이고, 내리는 건 찾을 수 있되 눈에 먼저 띌 필요가 없다. */
+  const currentIndex = PLAN_ORDER.indexOf(currentPlan);
+  const upgrades = PLAN_CARDS.filter((p) => PLAN_ORDER.indexOf(p.key) > currentIndex);
+  const downgrades = PLAN_CARDS.filter((p) => PLAN_ORDER.indexOf(p.key) < currentIndex);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -255,38 +288,60 @@ export default async function BillingSettingsPage({
         </div>
       </div>
 
-      {/* 플랜 카드 — 마케팅 /pricing 과 **같은 컴포넌트**를 쓴다.
-          두 화면이 따로 놀아서 사장님이 이 화면을 보며 "뭘 바꾼 거냐"고 물었다(2026-08-15).
-          위 3 / 아래 2 배치, 현재 플랜에 코랄 글로우. */}
+      {/* 플랜 변경 — **마케팅 카드를 쓰지 않는다**(2026-08-15 사장님 지적).
+          숫자(PLAN_CARDS)는 /pricing 과 계속 공유한다. 그 공유를 깨는 순간
+          랜딩이 "카드뉴스 무제한"을 광고하던 사고가 재발한다.
+          하지만 **화면은 다른 일을 한다**: /pricing 은 처음 온 사람을 설득하고,
+          여긴 이미 결제 중인 사람이 올릴지 내릴지 고른다. 그래서 5장 카드를 걷어내고
+          "지금보다 위" 목록만 남겼다 — Creator 쓰는 사람에게 "신용카드 없이 바로
+          써봅니다"(Free 영업 문구)와 "오픈 베타 3개월 무료"(신규 유치용)를 보여주고
+          있었다. */}
       <div>
-        <h2 className="text-[20px] font-bold">플랜 비교</h2>
-        <p className="mt-1 text-[14px] text-fg-sub">워크플로에 맞는 플랜을 선택하세요</p>
-        <div className="mt-5">
-          <PlanCardGrid>
-            {PLAN_CARDS.map((plan) => (
-              <PlanCard
+        <h2 className="text-[20px] font-bold">플랜 변경</h2>
+        <p className="mt-1 text-[14px] text-fg-sub">
+          {upgrades.length > 0
+            ? `지금 ${currentName}보다 위 단계입니다`
+            : "최상위 플랜을 이용 중입니다"}
+        </p>
+
+        {upgrades.length > 0 ? (
+          <div className="mt-4 divide-y divide-line overflow-hidden rounded-card border border-line bg-body">
+            {upgrades.map((plan) => (
+              <PlanRow
                 key={plan.key}
                 plan={plan}
-                highlight={plan.key === currentPlan}
-                badge={
-                  plan.key === currentPlan
-                    ? "사용 중"
-                    : !hasActiveSub && plan.key === "pro"
-                      ? "추천"
-                      : undefined
-                }
                 action={
-                  <PlanAction
-                    planKey={plan.key}
-                    current={plan.key === currentPlan}
-                    hasActiveSub={hasActiveSub}
-                    currentPlanKey={currentPlan}
-                  />
+                  <PlanAction planKey={plan.key} hasActiveSub={hasActiveSub} currentPlanKey={currentPlan} />
                 }
               />
             ))}
-          </PlanCardGrid>
-        </div>
+          </div>
+        ) : null}
+
+        {downgrades.length > 0 ? (
+          <details className="group mt-3">
+            <summary className="cursor-pointer list-none rounded-card px-1 py-2 text-[13.5px] font-medium text-fg-sub hover:text-fg">
+              낮은 플랜으로 내리기 ({downgrades.length}개) ▾
+            </summary>
+            <div className="mt-2 divide-y divide-line overflow-hidden rounded-card border border-line bg-body">
+              {downgrades.map((plan) => (
+                <PlanRow
+                  key={plan.key}
+                  plan={plan}
+                  action={
+                    <PlanAction planKey={plan.key} hasActiveSub={hasActiveSub} currentPlanKey={currentPlan} />
+                  }
+                />
+              ))}
+            </div>
+          </details>
+        ) : null}
+
+        <p className="mt-3 text-[13.5px]">
+          <Link href="/pricing" className="font-medium text-primary-ink hover:underline">
+            전체 요금제·기능 비교 보기 →
+          </Link>
+        </p>
       </div>
 
       {/* 결제 내역 — payment_orders 실조회 (ready 상태 제외). 이력이 없어도 카드는 항상 보인다 */}
