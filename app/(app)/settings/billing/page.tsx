@@ -7,9 +7,8 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { EmptyState } from "@/components/ui/empty-state";
 import { UsageGauge } from "@/components/ui/charts";
-import { cn } from "@/lib/cn";
 import { formatDate, formatKRW } from "@/lib/format";
-import { planFeatures } from "@/lib/data";
+import { PLAN_CARDS, PlanCard, PlanCardGrid } from "@/components/pricing/plan-cards";
 import { PLAN_NAMES, PLAN_PRICES, isPaidPlan } from "@/lib/toss/config";
 import {
   getCurrentPlan,
@@ -142,7 +141,6 @@ export default async function BillingSettingsPage({
     getPaymentOrders(),
     getSubscription(),
   ]);
-  const plans = PLAN_DEFS.map((p) => ({ ...p, current: p.key === currentPlan }));
   const currentName = PLAN_DEFS.find((p) => p.key === currentPlan)?.name ?? "Free";
   const lastPaid = orders.find((o) => o.status === "paid");
   const hasActiveSub = subscription != null && subscription.status !== "canceled";
@@ -293,90 +291,39 @@ export default async function BillingSettingsPage({
         </Card>
       </div>
 
-      {/* 플랜 비교표 (PART 9) */}
-      <Card>
-        <CardHeader title="플랜 비교" description="워크플로에 맞는 플랜을 선택하세요" />
-        <CardBody className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-[14px]">
-            <caption className="sr-only">플랜별 기능 비교</caption>
-            <thead>
-              <tr className="border-b border-line text-left text-xs text-fg-sub">
-                <th scope="col" className="pb-3 pr-3 font-medium">
-                  기능
-                </th>
-                {plans.map((plan) => (
-                  <th
-                    key={plan.key}
-                    scope="col"
-                    className={cn(
-                      "px-3 pb-3 pt-1 font-semibold text-fg",
-                      plan.current && "rounded-t-card bg-primary-weak",
-                    )}
-                  >
-                    <span className="flex items-center gap-2">
-                      {plan.name}
-                      {plan.current ? <Badge tone="primary">사용 중</Badge> : null}
-                      {!hasActiveSub && !plan.current && plan.key === "pro" ? (
-                        <Badge tone="primary">추천</Badge>
-                      ) : null}
-                    </span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {/* 월 요금 — 청구 금액을 결제 전에 화면에서 바로 확인할 수 있게 */}
-              <tr className="border-b border-line">
-                <th scope="row" className="py-3 pr-3 text-left font-normal text-fg-sub">
-                  월 요금
-                </th>
-                {plans.map((plan) => (
-                  <td key={plan.key} className={cn("px-3 py-3", plan.current && "bg-primary-weak")}>
-                    {plan.key === "free" ? (
-                      "무료"
-                    ) : (
-                      <span className="tnum font-semibold">
-                        {formatKRW(PLAN_PRICES[plan.key])}
-                        <span className="font-normal text-fg-sub">/월</span>
-                      </span>
-                    )}
-                  </td>
-                ))}
-              </tr>
-              {planFeatures.map((feature) => (
-                <tr key={feature.label} className="border-b border-line">
-                  <th scope="row" className="py-3 pr-3 text-left font-normal text-fg-sub">
-                    {feature.label}
-                  </th>
-                  {plans.map((plan) => (
-                    <td key={plan.key} className={cn("px-3 py-3", plan.current && "bg-primary-weak")}>
-                      {feature[plan.key]}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td className="pt-4" />
-                {plans.map((plan) => (
-                  <td
-                    key={plan.key}
-                    className={cn("px-3 pb-3 pt-4 align-top", plan.current && "rounded-b-card bg-primary-weak")}
-                  >
-                    <PlanAction
-                      planKey={plan.key}
-                      current={plan.current}
-                      hasActiveSub={hasActiveSub}
-                      currentPlanKey={currentPlan}
-                    />
-                  </td>
-                ))}
-              </tr>
-            </tfoot>
-          </table>
-        </CardBody>
-      </Card>
+      {/* 플랜 카드 — 마케팅 /pricing 과 **같은 컴포넌트**를 쓴다.
+          두 화면이 따로 놀아서 사장님이 이 화면을 보며 "뭘 바꾼 거냐"고 물었다(2026-08-15).
+          위 3 / 아래 2 배치, 현재 플랜에 코랄 글로우. */}
+      <div>
+        <h2 className="text-[20px] font-bold">플랜 비교</h2>
+        <p className="mt-1 text-[14px] text-fg-sub">워크플로에 맞는 플랜을 선택하세요</p>
+        <div className="mt-5">
+          <PlanCardGrid>
+            {PLAN_CARDS.map((plan) => (
+              <PlanCard
+                key={plan.key}
+                plan={plan}
+                highlight={plan.key === currentPlan}
+                badge={
+                  plan.key === currentPlan
+                    ? "사용 중"
+                    : !hasActiveSub && plan.key === "pro"
+                      ? "추천"
+                      : undefined
+                }
+                action={
+                  <PlanAction
+                    planKey={plan.key}
+                    current={plan.key === currentPlan}
+                    hasActiveSub={hasActiveSub}
+                    currentPlanKey={currentPlan}
+                  />
+                }
+              />
+            ))}
+          </PlanCardGrid>
+        </div>
+      </div>
 
       {/* 결제 내역 — payment_orders 실조회 (ready 상태 제외). 이력이 없어도 카드는 항상 보인다 */}
       <Card>

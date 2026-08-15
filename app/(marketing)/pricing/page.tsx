@@ -4,9 +4,9 @@ import { ArrowRight, Sparkles } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { FinchMark } from "@/components/logo";
 import { planFeatures } from "@/lib/data";
-import { CREDIT_COSTS, PLAN_CREDIT_ALLOWANCE, creditsBuy } from "@/lib/pricing/credit-config";
+import { CREDIT_COSTS } from "@/lib/pricing/credit-config";
 import { PLAN_PRICES } from "@/lib/toss/config";
-import { FreeBar, PaidCard, type PlanCard } from "./_components/plan-grid";
+import { PLAN_CARDS, PlanCard, PlanCardGrid } from "@/components/pricing/plan-cards";
 
 /*
   요금제 지면 — 2차 전면 개편(2026-08-15).
@@ -34,72 +34,6 @@ export const metadata: Metadata = {
     "핀치 요금제 — 무료 플랜과 Creator 월 9,900원, Pro 월 29,000원, Agency 월 99,000원, Enterprise 월 249,000원. 유료 플랜은 기능별 횟수 제한 없이 월 크레딧 하나로 AI 카드뉴스·성장 진단·영상 분석·레퍼런스 수집을 자유롭게 씁니다. 무료 플랜은 신용카드 없이 바로 시작할 수 있습니다.",
   alternates: { canonical: "/pricing" },
 };
-
-const FREE_COUNTS = ["AI 챗 3회", "영상 분석 1회", "레퍼런스 수집 1회", "대본 추출 1회", "자동 DM 콘텐츠 1개"];
-const FREE_LOCKED = ["AI 카드뉴스", "성장 진단", "아이디어 추천", "브랜드 톤 학습"];
-
-/** 크레딧으로 무엇을 몇 개 사는가 — 전부 상수에서 파생한다 */
-const buysFor = (credits: number) => [
-  { label: "AI 카드뉴스", n: creditsBuy(credits, CREDIT_COSTS.cardnews), unit: "장" },
-  { label: "AI 챗", n: creditsBuy(credits, CREDIT_COSTS.agentChat), unit: "회" },
-  { label: "영상 분석", n: creditsBuy(credits, CREDIT_COSTS.videoAnalysis), unit: "편" },
-];
-
-const PAID: PlanCard[] = [
-  {
-    key: "creator",
-    name: "Creator",
-    target: "개인 크리에이터",
-    price: PLAN_PRICES.creator,
-    credits: PLAN_CREDIT_ALLOWANCE.creator,
-    buys: buysFor(PLAN_CREDIT_ALLOWANCE.creator),
-    perks: ["채널 3개 연동", "자동 DM 콘텐츠 5개", "레퍼런스 무제한 열람", "이메일 지원"],
-    field: "bg-plan-creator-field",
-    edge: "border-plan-creator-edge",
-    ink: "text-plan-creator-ink",
-    rail: "bg-plan-creator-ink",
-  },
-  {
-    key: "pro",
-    name: "Pro",
-    target: "광고주·1인 마케터",
-    price: PLAN_PRICES.pro,
-    credits: PLAN_CREDIT_ALLOWANCE.pro,
-    buys: buysFor(PLAN_CREDIT_ALLOWANCE.pro),
-    perks: ["메타광고 생성·관리", "자동 DM 콘텐츠 20개", "경쟁사 광고 모니터링", "팀 최대 3인"],
-    featured: true,
-    field: "bg-plan-pro-field",
-    edge: "border-plan-pro-edge",
-    ink: "text-primary",
-    rail: "bg-primary",
-  },
-  {
-    key: "agency",
-    name: "Agency",
-    target: "대행사",
-    price: PLAN_PRICES.agency,
-    credits: PLAN_CREDIT_ALLOWANCE.agency,
-    buys: buysFor(PLAN_CREDIT_ALLOWANCE.agency),
-    perks: ["클라이언트 10팀 연동", "자동 DM 콘텐츠 100개", "멀티 클라이언트 광고 관리", "팀 10인 + 권한 관리"],
-    field: "bg-plan-agency-field",
-    edge: "border-plan-agency-edge",
-    ink: "text-plan-agency-ink",
-    rail: "bg-plan-agency-ink",
-  },
-  {
-    key: "enterprise",
-    name: "Enterprise",
-    target: "대형 대행사·브랜드",
-    price: PLAN_PRICES.enterprise,
-    credits: PLAN_CREDIT_ALLOWANCE.enterprise,
-    buys: buysFor(PLAN_CREDIT_ALLOWANCE.enterprise),
-    perks: ["클라이언트 무제한", "자동 DM 무제한", "무제한 팀 시트 + 권한 관리", "전담 매니저 지원"],
-    field: "bg-plan-ent-field",
-    edge: "border-plan-ent-edge",
-    ink: "text-plan-ent-ink",
-    rail: "bg-plan-ent-ink",
-  },
-];
 
 /** 크레딧 소모 명세 — 비싼 순. 단가는 플랜과 무관하게 같다는 게 이 표의 메시지다. */
 const CREDIT_RATES = [
@@ -167,7 +101,7 @@ const JSON_LD = {
       description:
         "핀치는 무료 플랜과 유료 4단계(Creator·Pro·Agency·Enterprise) 요금제를 제공하는 SNS 통합 분석 도구입니다. 유료 플랜은 월 크레딧 하나로 모든 AI 기능을 씁니다.",
       brand: { "@type": "Brand", name: "핀치 (Finch)" },
-      offers: PAID.map((p) => ({
+      offers: PLAN_CARDS.filter((p) => p.price > 0).map((p) => ({
         "@type": "Offer",
         name: p.name,
         price: String(p.price),
@@ -223,15 +157,27 @@ export default function PricingPage() {
         </div>
       </section>
 
-      {/* ── S1 Free 바 + 유료 4장 카드 ── */}
+      {/* ── S1 플랜 카드 — 위 3 / 아래 2 (사장님 지시). 추천 플랜만 코랄 글로우 ── */}
       <section className="mx-auto max-w-6xl px-4 pt-12 md:px-6">
-        <FreeBar price={0} counts={FREE_COUNTS} locked={FREE_LOCKED} />
-
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:mt-8 lg:grid-cols-4">
-          {PAID.map((plan) => (
-            <PaidCard key={plan.key} plan={plan} />
+        <PlanCardGrid>
+          {PLAN_CARDS.map((plan) => (
+            <PlanCard
+              key={plan.key}
+              plan={plan}
+              highlight={plan.key === "pro"}
+              badge={plan.key === "pro" ? "가장 인기" : undefined}
+              action={
+                <ButtonLink
+                  href="/signup"
+                  variant={plan.key === "pro" ? "primary" : "secondary"}
+                  className="w-full"
+                >
+                  {plan.key === "free" ? "무료로 시작하기" : `${plan.name} 시작하기`}
+                </ButtonLink>
+              }
+            />
           ))}
-        </div>
+        </PlanCardGrid>
       </section>
 
       {/* ── S2 크레딧 소모표 — 밴드 교차(surface). 칩 그리드로 시각 밀도를 올린다 ── */}
