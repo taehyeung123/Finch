@@ -123,6 +123,16 @@ function windowOf<T>(list: T[], offset: number, size: number): T[] {
 
 const PAGE_SIZE = 60;
 
+/**
+ * 수집 시도 기록의 유일한 키 — 쓰기·읽기가 같은 정규화를 써야 '#여름'과 '여름'이 갈리지 않는다.
+ * 탭(target)까지 넣는 이유: 인스타 실시간 수집과 틱톡 대기열 예약은 다른 일이라,
+ * 한쪽을 걸었다고 다른 탭의 수집까지 막으면 막다른 상태가 된다(적대 검증 확정).
+ * 접두 기호는 몇 개가 붙든 다 턴다 — '##여름'과 '여름'이 다른 키가 되면 한 번 더 과금된다.
+ */
+function collectKey(q: string, target: string): string {
+  return `${target}:${q.trim().replace(/^[#@]+/, "").trim()}`;
+}
+
 export function LibraryClient({
   sources: initialSources,
   settings: initialSettings,
@@ -179,6 +189,17 @@ export function LibraryClient({
   const [sourceInput, setSourceInput] = useState("");
 
   const [collecting, setCollecting] = useState(false);
+  /* 전체화면 수집 오버레이 문구 — null 이면 오버레이 없음. collecting 과 분리한 이유:
+     광고 예약(INSERT 한 건, 수백 ms)에 "수십 초" 전체화면이 번쩍이는 걸 막는다(리뷰 확정). */
+  const [collectOverlay, setCollectOverlay] = useState<string | null>(null);
+  /* 이 검색어로 이미 수집을 **시도**했다 — 성공만 기록하면 실패한 검색어(공급사 0건 등
+     재시도해도 같은 결과)에서 CTA가 계속 떠 클릭마다 공용 예산이 나간다(적대 리뷰 확정
+     결함). 성공/실패 무관하게 한 검색어당 한 번으로 닫는다. */
+  const [collectedQueries, setCollectedQueries] = useState<Set<string>>(() => new Set());
+  /* 마지막 수집 시도의 결과 문구 — 빈 화면 안내를 Set 유무가 아니라 **실제로 일어난 일**로
+     쓴다. Set 만 보고 "걸어뒀어요"라고 하면 과금 거절·예산 소진처럼 아무것도 안 걸린
+     실패에서도 같은 말이 나온다(적대 검증 확정). */
+  const [collectNote, setCollectNote] = useState<{ key: string; text: string } | null>(null);
   const [toast, setToast] = useState<{ tone: "error" | "notice"; text: string } | null>(null);
 
   /* 풀이 켜지면 저장 상태의 출처가 saved_creatives 로 바뀐다.
@@ -256,10 +277,23 @@ export function LibraryClient({
     (q: string) => {
       setQuery(q);
       setVisibleCount(PAGE_SIZE);
-      runPoolSearch(q, filters, 260);
+      // 제출(엔터·검색 버튼)에서만 불린다 — 타이핑 디바운스가 필요 없어 바로 조회
+      runPoolSearch(q, filters, 0);
     },
     [filters, runPoolSearch],
   );
+
+  /** [전체 해제] — 검색어와 필터를 한 번에 초기화하고 서버 검색도 한 번만 부른다.
+      onQueryChange("") 뒤에 필터 초기화를 잇는 옛 방식은 applyFilters 가 같은 렌더
+      클로저의 **지우기 전 검색어**로 재검색해, 탐색 화면이 방금 지운 검색어의 결과로
+      오염됐다(적대 리뷰 확정 결함 — runPoolSearch 의 타이머 취소가 빈 검색을 죽인다). */
+  const clearAll = useCallback(() => {
+    const next = { ...DEFAULT_FILTERS, sort: filters.sort, scope: filters.scope };
+    setQuery("");
+    setFilters(next);
+    setVisibleCount(PAGE_SIZE);
+    runPoolSearch("", next, 0);
+  }, [filters.sort, filters.scope, runPoolSearch]);
 
   /* 홈 검색바·추천 칩 딥링크(/library?q=…&target=…) — 최초 1회만 URL을 상태로 주입.
      useSearchParams 대신 window에서 읽는다: 이 페이지는 정적 렌더라 Suspense 경계가 없다. */
@@ -563,64 +597,115 @@ export function LibraryClient({
     void saveCollectSettings(next);
   }
 
-  async function handleCollect() {
+  /**
+   * 검색어 기반 [지금 수집하기] — 검색하듯 키워드를 치면 **그 주제를 그 자리에서** 모아온다.
+   * (2026-08-15 사장님 지시로 재편. 예전 구조 — 수집 설정에 기준을 먼저 등록해 두고
+   * 등록분을 일괄 수집 — 는 풀 모드에서 폐기했다. 검색창 옆 버튼이 "등록된 수집 기준이
+   * 없어요"라고 답하는 게 그 구조의 결함이었다.)
+   * 결과는 공용 풀에 적재되고, 성공하면 같은 검색을 다시 돌려 방금 소재가 바로 보인다.
+   */
+  async function collectByQuery(rawQuery: string) {
     if (collecting) return;
+    const raw = rawQuery.trim();
+    /* 표시·재검색·수집에 쓰는 정규형(접두 기호 제거). 계정 수집 신호인 '@'만 아래에서 되살린다. */
+    const bare = raw.replace(/^[#@]+/, "").trim();
+    const key = collectKey(raw, filters.target);
+    if (bare.length < 2 || bare.length > 60) {
+      /* canCollectQuery 가 같은 조건으로 버튼을 숨기므로 여기 오는 건 이례적인 경로다.
+         서버에 보내면 문맥 안 맞는 에러가 돌아오니 여기서 같은 기준으로 거른다. */
+      setToast({ tone: "notice", text: "수집할 검색어는 2~60자로 입력해 주세요" });
+      return;
+    }
     setToast(null);
+    setCollecting(true);
+    /* 시도 즉시 기록 — 공급사 호출은 결과가 0건이어도 돈이 나가므로, 같은 검색어를
+       연달아 누르지 못하게 먼저 닫는다(공용 예산 보호). 우리 쪽 오류(retriable)로
+       끝나면 아래에서 다시 열어 준다 — 안 그러면 "다시 시도하라"면서 버튼이 없는
+       막다른 화면이 된다(적대 검증 확정). */
+    setCollectedQueries((prev) => new Set(prev).add(key));
+    const allowRetry = () =>
+      setCollectedQueries((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
 
     if (isDemo) {
-      setCollecting(true);
+      setCollectOverlay("데모 수집을 실행하고 있어요");
       // 이벤트 핸들러 안의 타이머 — 데모 수집 시뮬레이션
       setTimeout(() => {
         setCollecting(false);
-        setToast({ tone: "notice", text: "데모 수집 완료 — 실제 계정에서는 등록한 기준으로 실수집이 실행됩니다" });
+        setCollectOverlay(null);
+        setToast({ tone: "notice", text: `데모 수집 완료 — 실제 계정에서는 '${bare}' 소재를 그 자리에서 모아옵니다` });
       }, 1200);
       return;
     }
 
-    /* 풀 모드 [지금 수집] — 2트랙 수집 구조(2026-08-14 확정)의 트랙 2.
-       오가닉(인스타) 기준 앞 2개는 **그 자리에서 실시간 수집**해 공용 풀에 적재한다
-       (훔쳐봐 방식 즉시성 — 크레딧 과금, 결과는 전원 공유 자산이 된다).
-       광고 기준·나머지 오가닉 기준은 기존대로 수집 대기열 상단 예약. */
-    if (poolReady) {
-      setCollecting(true);
-      try {
-        const organicTargets = sources
-          .filter((s) => s.channel === "instagram")
-          .map((s) => ({ value: s.value, kind: s.kind as string }));
-        const liveTargets = organicTargets.slice(0, 2);
-        const queueTargets = [
-          ...organicTargets.slice(2).map((t) => ({ value: t.value, platform: "instagram" })),
-          ...sources.filter((s) => s.channel !== "instagram").map((s) => ({ value: s.value, platform: s.channel as string })),
-          ...adSources.map((a) => ({ value: a.value, platform: "meta_ads" })),
-        ];
-
-        const [live, queued] = await Promise.all([
-          liveTargets.length > 0 ? collectPoolNow(liveTargets) : Promise.resolve(null),
-          queueTargets.length > 0 ? requestPoolCollect(queueTargets) : Promise.resolve(null),
-        ]);
-
-        const parts: string[] = [];
-        let tone: "notice" | "error" = "notice";
-        if (live) {
-          if (live.ok) parts.push(`지금 ${live.added}건을 수집해 풀에 담았어요`);
-          else {
-            tone = "error";
-            parts.push(live.error ?? "실시간 수집에 실패했어요");
-          }
-        }
-        if (queued?.ok && queued.queued > 0) parts.push(`기준 ${queued.queued}개는 다음 수집 회차에 예약`);
-        if (parts.length === 0) parts.push("등록된 수집 기준이 없어요 — 수집 설정에서 먼저 등록해 주세요");
-        setToast({ tone, text: parts.join(" · ") });
-
-        // 방금 적재된 소재가 화면에 보이게 서버 데이터 재조회
-        if (live?.ok) router.refresh();
-      } finally {
-        setCollecting(false);
+    try {
+      /* 실시간 수집은 인스타그램 전용이다(collectPoolNow — 공급사 즉시 호출).
+         메타광고·틱톡·스레드 탭에서 그 경로를 타면 크레딧은 나가는데 인스타 소재만
+         쌓이고, 재검색은 그 탭 필터라 방금 수집분이 하나도 안 보인다(리뷰 확정 결함).
+         → 해당 탭은 다음 수집 회차 최우선 예약으로 보낸다. INSERT 한 건짜리 작업이라
+         전체화면 오버레이는 띄우지 않는다. */
+      const QUEUE_PLATFORM: Partial<Record<LibraryFilters["target"], { platform: string; label: string }>> = {
+        ads: { platform: "meta_ads", label: "메타광고" },
+        tiktok: { platform: "tiktok", label: "틱톡" },
+        threads: { platform: "threads", label: "스레드" },
+      };
+      const queued = QUEUE_PLATFORM[filters.target];
+      if (queued) {
+        const r = await requestPoolCollect([{ value: bare, platform: queued.platform }]);
+        if (!r.ok && r.retriable) allowRetry();
+        const text = r.ok
+          ? `'${bare}' ${queued.label} 소재를 다음 수집 회차에 모아 둘게요 — 반영에는 시간이 조금 걸려요.`
+          : (r.error ?? "수집 예약에 실패했어요. 잠시 후 다시 시도해 주세요.");
+        setCollectNote({ key, text });
+        setToast({ tone: r.ok ? "notice" : "error", text });
+        return;
       }
-      return;
+
+      setCollectOverlay(`'${bare}' 소재를 지금 수집하고 있어요 — 수십 초 걸릴 수 있어요`);
+      /* kind 명시: '@'는 계정, 공백 포함 다단어는 릴스 검색(keyword). 안 넘기면 서버가
+         다단어를 통째로 해시태그 조회해 항상 0건 — 무료 월 1회 한도만 태운다(리뷰 확정). */
+      const isAccount = raw.startsWith("@");
+      const kind = isAccount ? "account" : /\s/.test(bare) ? "keyword" : "hashtag";
+      /* '@ 올리브영'처럼 기호 뒤 공백이 붙은 입력을 그대로 보내면 핸들에 공백이 남아
+         무조건 0건이 된다 — 정규화한 형태로 보낸다(기호는 계정 신호라 유지). */
+      const r = await collectPoolNow([{ value: isAccount ? `@${bare}` : bare, kind }]);
+      if (r.ok) {
+        const text = `'${bare}' 소재 ${r.added}건을 지금 수집했어요`;
+        setCollectNote({ key, text });
+        setToast({ tone: "notice", text });
+        /* 확정 검색어를 접두 기호 없는 형태로 갱신 — 재검색과 입력칸 동기화가 한 번에 된다.
+           '#세일'을 그대로 재검색하면 캡션의 '세일'과 안 맞아 방금 수집분이 안 보인다(리뷰 확정). */
+        applyQuery(bare);
+        // 탐색 피드(초기 props)에도 방금 적재분이 보이게 서버 데이터 재조회
+        router.refresh();
+      } else {
+        if (r.retriable) allowRetry();
+        const text = r.error ?? "수집에 실패했어요. 잠시 후 다시 시도해 주세요.";
+        setCollectNote({ key, text });
+        setToast({ tone: "error", text });
+      }
+    } catch {
+      // 네트워크·서버 액션 자체 실패 — 공급사 호출 여부와 무관하게 사용자에겐 재시도가 답이다
+      allowRetry();
+      setCollectNote(null);
+      setToast({ tone: "error", text: "수집 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요." });
+    } finally {
+      setCollecting(false);
+      setCollectOverlay(null);
     }
+  }
+
+  /** 개인 수집 모드 전용 [지금 수집] — 등록해 둔 기준을 일괄 수집한다. 풀·데모 모드에서는
+      버튼 자체가 숨고(SearchConsole showCollectSettings), 수집은 collectByQuery 가 맡는다. */
+  async function handleCollect() {
+    if (collecting) return;
+    setToast(null);
 
     setCollecting(true);
+    setCollectOverlay("등록한 기준으로 콘텐츠를 수집하고 AI가 요약과 후킹 태그를 붙입니다 — 수십 초 걸릴 수 있어요");
     try {
       const [result, adResult] = await Promise.all([
         runCollection(),
@@ -671,6 +756,7 @@ export function LibraryClient({
       setToast({ tone: "error", text: "수집 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요." });
     } finally {
       setCollecting(false);
+      setCollectOverlay(null);
     }
   }
 
@@ -741,6 +827,21 @@ export function LibraryClient({
 
   const totalCollected = items.length + ads.length;
   const totalSources = sources.length + adSources.length;
+  /* 검색어 수집 CTA 노출 조건 — 전부 "누르면 실제로 뭔가 일어난다"의 필요조건이다.
+     ① 수집 가능한 길이(서버 판정과 같은 기준 — 아니면 눌러도 거절만 하는 죽은 버튼)
+     ② 풀이 그 검색어를 모른다(isGap)거나 데모. isGap=false 인 0건은 서버엔 있는데
+        클라이언트 필터가 다 걸러낸 것이라 수집해도 화면이 안 변하고 재과금만 된다 —
+        그 경우의 정답은 필터 풀기다.
+     ③ 검색 응답 대기 중이 아니다 — 대기 중엔 isGap 이 이전 검색어의 값이라 오과금된다.
+     ④ 이 검색어로 아직 시도하지 않았다. (전부 적대 리뷰 확정 결함) */
+  const collectableQuery = query.trim().replace(/^[#@]+/, "").trim();
+  const collectAttemptKey = collectKey(query, filters.target);
+  const canCollectQuery =
+    collectableQuery.length >= 2 &&
+    collectableQuery.length <= 60 &&
+    (poolReady ? poolResult?.isGap === true : isDemo) &&
+    !poolSearching &&
+    !collectedQueries.has(collectAttemptKey);
   /* .grid-refs — globals.css의 모션 체계가 소유한다. 모바일 2열 고정,
      40rem부터 auto-fill minmax(14rem)이라 카드 폭이 224~240px 밴드에 머문다.
      하드코딩 컬럼 수를 화면마다 두면 loading.tsx와 어긋나 로딩→콘텐츠에서 시프트가 난다. */
@@ -754,6 +855,7 @@ export function LibraryClient({
       <SearchConsole
         query={query}
         onQueryChange={applyQuery}
+        onClearAll={clearAll}
         filters={filters}
         setFilters={applyFilters}
         resultCount={displayEntries.length}
@@ -798,7 +900,11 @@ export function LibraryClient({
         aria-busy={poolSearching}
         className={cn("results-area mt-5 transition-opacity duration-150", poolSearching && "opacity-60")}
       >
-        {totalSources === 0 && totalCollected === 0 ? (
+        {/* ①·② 는 **개인 수집 모드 전용** 온보딩이다. 풀·데모 모드에서 열어두면
+            0건 검색(totalCollected 는 현재 검색 결과 길이다)이 여기로 떨어져
+            폐기한 "수집 기준 등록" 흐름과 개인 일괄 수집(handleCollect — 풀 화면에
+            안 보이는 표에 과금 수집)으로 유도된다(적대 리뷰 확정 결함). */}
+        {!poolReady && !isDemo && totalSources === 0 && totalCollected === 0 ? (
           /* ① 신규 — 온보딩으로 결과 영역을 대체한다(추가가 아니라 대체) */
           <Card className="p-8 text-center">
             <p className="text-[19px] font-bold text-fg">1분이면 첫 레퍼런스가 도착해요</p>
@@ -825,13 +931,17 @@ export function LibraryClient({
               </div>
             </div>
           </Card>
-        ) : totalCollected === 0 ? (
+        ) : !poolReady && !isDemo && totalCollected === 0 ? (
           /* ② 기준은 있는데 수집물 0건 */
           <EmptyState
             icon={Zap}
             title="이제 수집할 준비가 됐어요"
             description={`기준 ${totalSources}개 등록됨 — '지금 수집'을 누르면 첫 수집이 시작됩니다. 매일 아침에도 자동으로 모아둘게요.`}
-            action={<Button onClick={handleCollect}>지금 수집</Button>}
+            action={
+              <Button onClick={handleCollect} disabled={collecting} aria-busy={collecting}>
+                {collecting ? "수집 중…" : "지금 수집"}
+              </Button>
+            }
           />
         ) : displayEntries.length > 0 ? (
           /* 탐색 상태(검색어 없음)는 스니핏 구조다: 큐레이션 섹션 → 전체 그리드.
@@ -872,6 +982,26 @@ export function LibraryClient({
                 <span className="tnum text-[12px] text-fg-sub">{displayEntries.length}건</span>
               </div>
             ) : null}
+            {/* 미적중(글자 일치 0건)인데 의미 검색 보충으로 화면이 채워진 경우 —
+                비슷한 소재임을 알리고, 검색어 그대로의 수집을 한 번에 걸 수 있게 한다.
+                이미 이 검색어로 수집했으면 숨긴다(재과금 루프 차단). */}
+            {poolResult?.isGap && canCollectQuery ? (
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-card border border-line bg-overlay px-4 py-3">
+                <p className="text-[13px] text-fg-sub">
+                  &lsquo;{query.trim()}&rsquo;와 정확히 일치하는 소재는 아직 없어서 비슷한 소재를 보여드리고 있어요.
+                </p>
+                <Button
+                  variant="secondary"
+                  onClick={() => collectByQuery(query)}
+                  disabled={collecting}
+                  aria-busy={collecting}
+                  className="h-9 px-3"
+                >
+                  <Zap className="size-3.5" aria-hidden />
+                  {collecting ? "수집 중…" : "지금 수집하기"}
+                </Button>
+              </div>
+            ) : null}
             <div className={gridCls}>{displayEntries.slice(0, visibleCount).map(renderEntry)}</div>
             <div className="mt-6 flex justify-center">
               {displayEntries.length > visibleCount ? (
@@ -893,9 +1023,19 @@ export function LibraryClient({
                 : "이 조건에 맞는 레퍼런스가 없어요"
             }
             description={
-              poolResult?.isGap
-                ? "아직 공용 자료에 없는 주제예요. 방금 검색으로 수집 대기열에 올려뒀으니 곧 채워집니다."
-                : "조건을 하나씩 풀어보거나, 아직 안 모은 주제라면 새 수집 기준으로 만들어보세요."
+              canCollectQuery
+                ? poolResult?.isGap
+                  ? "아직 공용 자료에 없는 주제예요 — 지금 바로 모아올 수 있어요."
+                  : "조건을 하나씩 풀어보거나, 이 검색어로 바로 수집해 보세요."
+                : collectNote?.key === collectAttemptKey
+                  ? collectNote.text
+                  : collectedQueries.has(collectAttemptKey)
+                    ? "이 검색어는 수집을 한 번 걸어봤어요 — 다른 말로 검색해 보셔도 좋아요."
+                  : !poolReady && !isDemo
+                    ? "조건을 하나씩 풀어보거나, 아직 안 모은 주제라면 새 수집 기준으로 만들어보세요."
+                    : activeFilterCount > 0
+                      ? "조건을 하나씩 풀어보세요 — 필터를 좁힌 만큼 결과가 줄어요."
+                      : "다른 말로 검색해 보세요 — 짧은 단어일수록 잘 찾아져요."
             }
             action={
               <div className="flex flex-wrap justify-center gap-2">
@@ -909,9 +1049,28 @@ export function LibraryClient({
                     필터 초기화
                   </Button>
                 ) : null}
-                {/* 등록된 기준 어디에도 없는 검색어 = 콜드스타트.
-                    풀 모드에서는 개인 수집 기준이 검색과 무관하므로 이 CTA를 숨긴다 —
-                    [지금 수집] 버튼(검색 콘솔)이 같은 역할을 실시간으로 한다 (2026-08-15). */}
+                {/* 풀·데모 모드 — 검색어가 곧 수집 기준이다. 치던 말 그대로 그 자리에서 모아온다
+                    (2026-08-15 사장님 지시: "그냥 검색하는 것처럼 수집"). */}
+                {canCollectQuery ? (
+                  <Button onClick={() => collectByQuery(query)} disabled={collecting} aria-busy={collecting}>
+                    <Zap className="size-4" aria-hidden />
+                    {collecting ? "수집 중…" : `'${query.trim()}' 지금 수집하기`}
+                  </Button>
+                ) : null}
+                {/* 수집을 이미 건 검색어 — 반영을 직접 확인할 수단을 준다.
+                    안내문이 "시간이 조금 걸려요"라고 말하면서 확인 버튼이 없으면 막다른 화면이다. */}
+                {poolReady && collectedQueries.has(collectAttemptKey) ? (
+                  <Button
+                    variant="secondary"
+                    onClick={() => runPoolSearch(query, filters, 0)}
+                    disabled={poolSearching}
+                    aria-busy={poolSearching}
+                  >
+                    <RefreshCw className="size-4" aria-hidden />
+                    {poolSearching ? "확인 중…" : "다시 확인"}
+                  </Button>
+                ) : null}
+                {/* 개인 수집 모드 — 등록된 기준 어디에도 없는 검색어 = 콜드스타트 */}
                 {!poolReady && !isDemo && query.trim() && !sourceFacets.some((s) => s.value.includes(query.trim())) ? (
                   <Button onClick={() => openDrawer("sources", query.trim())}>
                     &lsquo;{query.trim()}&rsquo;로 수집 기준 만들기
@@ -951,8 +1110,9 @@ export function LibraryClient({
         onUpdateSettings={handleUpdateSettings}
       />
 
-      {/* 수집 진행 — 수십 초 걸리고 끝나면 화면 전체가 바뀌므로 전체화면이 옳다 */}
-      {collecting ? (
+      {/* 수집 진행 — 수십 초짜리 실수집만 전체화면. 문구는 실행 경로가 정한다
+          (검색어 수집·기준 일괄 수집·데모가 다르다). 광고 예약은 오버레이 없이 토스트만. */}
+      {collectOverlay ? (
         <div
           role="status"
           aria-live="polite"
@@ -963,11 +1123,7 @@ export function LibraryClient({
           </div>
           <div className="text-center">
             <p className="text-[17px] font-bold">레퍼런스를 모으는 중이에요</p>
-            <p className="mt-1.5 text-[14px] text-fg-sub">
-              {isDemo
-                ? "데모 수집을 실행하고 있어요"
-                : "등록한 기준으로 콘텐츠를 수집하고 AI가 요약과 후킹 태그를 붙입니다 — 수십 초 걸릴 수 있어요"}
-            </p>
+            <p className="mt-1.5 text-[14px] text-fg-sub">{collectOverlay}</p>
           </div>
         </div>
       ) : null}

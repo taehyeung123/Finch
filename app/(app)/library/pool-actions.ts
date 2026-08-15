@@ -179,7 +179,7 @@ export async function listPoolSaves(): Promise<string[]> {
  */
 export async function requestPoolCollect(
   targets: Array<{ value: string; platform: string }>,
-): Promise<{ ok: boolean; queued: number; error?: string }> {
+): Promise<{ ok: boolean; queued: number; error?: string; retriable?: boolean }> {
   const user = await getAuthUser();
   if (!user) return { ok: false, queued: 0, error: "로그인이 필요해요" };
 
@@ -196,11 +196,13 @@ export async function requestPoolCollect(
       platform: t.platform === "all" ? null : t.platform,
     }));
 
-  if (rows.length === 0) return { ok: false, queued: 0, error: "등록된 수집 기준이 없어요" };
+  /* 호출측은 이제 검색어 기반 수집뿐이다(2026-08-15 재편) — "등록된 수집 기준" 화법 금지 */
+  if (rows.length === 0) return { ok: false, queued: 0, error: "수집할 검색어를 2~60자로 입력해 주세요" };
 
   const supabase = await createClient();
   const { error } = await supabase.from("search_history").insert(rows);
-  if (error) return { ok: false, queued: 0, error: error.message };
+  // INSERT 실패는 우리 쪽 오류다 — 같은 검색어로 다시 시도할 수 있어야 한다
+  if (error) return { ok: false, queued: 0, retriable: true, error: "수집 예약에 실패했어요. 잠시 후 다시 시도해 주세요." };
   return { ok: true, queued: rows.length };
 }
 
@@ -544,7 +546,7 @@ export async function analyzePoolCreative(creativeId: string): Promise<AnalyzeRe
  */
 export async function collectPoolNow(
   targets: Array<{ value: string; kind?: string }>,
-): Promise<{ ok: boolean; added: number; error?: string }> {
+): Promise<{ ok: boolean; added: number; error?: string; retriable?: boolean }> {
   const user = await getAuthUser();
   if (!user) return { ok: false, added: 0, error: "로그인이 필요해요." };
   if (!isCollectionConfigured()) return { ok: false, added: 0, error: "수집 엔진 설정이 완료되지 않았어요." };
@@ -552,47 +554,83 @@ export async function collectPoolNow(
   const admin = createAdminClient();
   if (!admin) return { ok: false, added: 0, error: "수집 설정이 완료되지 않았어요." };
 
-  /* 서버 액션 60초 상한 안에 끝나야 한다: 기준당 공급사 2콜 × 최악 20초.
-     2개까지 병렬로 돌리면 최악 ~40초 — 등록 기준이 더 많으면 앞의 2개만 실시간,
-     나머지는 호출측이 대기열로 보낸다. */
+  /* 길이 판정은 접두 기호를 뗀 형태로 — requestPoolCollect(/^[#@]/)와 같은 기준이어야
+     같은 검색어가 탭에 따라 성패가 갈리지 않는다. value 는 '@'를 남긴 원형 그대로 넘긴다
+     (아래 kind 판정이 그 신호를 쓴다). 서버 액션 60초 상한 때문에 최대 2개까지만 실시간. */
   const picked = targets
-    .map((t) => ({ value: t.value.trim().replace(/^#/, ""), kind: t.kind }))
-    .filter((t) => t.value.length >= 2 && t.value.length <= 60)
+    .map((t) => ({ value: t.value.trim(), kind: t.kind }))
+    .map((t) => ({ ...t, bare: t.value.replace(/^[#@]/, "").trim() }))
+    .filter((t) => t.bare.length >= 2 && t.bare.length <= 60)
     .slice(0, 2);
-  if (picked.length === 0) return { ok: false, added: 0, error: "수집할 기준이 없어요." };
+  if (picked.length === 0) return { ok: false, added: 0, error: "수집할 검색어를 2~60자로 입력해 주세요." };
+
+  /* 공급사 실호출 수는 경로마다 다르다 — 이걸 2로 뭉뚱그리면 하루 상한이 뚫린다.
+     (lib/reference/scrapecreators.ts: account=1콜, keyword=릴스 검색 4페이지, hashtag=커서 2콜.
+     lib/pool/worker.ts 가 같은 이유로 크론에서는 hashtag 를 강제한다.) */
+  const CALLS_BY_KIND = { account: 1, keyword: 4, hashtag: 2 } as const;
+  const kindOf = (t: { value: string; kind?: string; bare: string }): keyof typeof CALLS_BY_KIND =>
+    t.kind === "account" || t.value.startsWith("@")
+      ? "account"
+      : /* 다단어를 해시태그로 조회하면 존재하지 않는 태그라 항상 0건이다(리뷰 확정 결함) */
+        t.kind === "keyword" || /\s/.test(t.bare)
+        ? "keyword"
+        : "hashtag";
+
+  /* ── 순서가 중요하다: **공급사 예산을 먼저 잡고, 그 다음에 사용자에게 청구한다.**
+     반대로 하면 "예산이 없어 아무것도 못 했는데 사용자 계량기만 깎인" 상태를 만들고,
+     그걸 되돌리려 무료 한도를 환불하게 된다 — 그 환불이 곧 **공용 예산을 지키는 유일한
+     사용자별 브레이크를 없애는 구멍**이었다(적대 검증 확정: 검색어만 바꿔 가며 무한 클릭 시
+     한 사람이 하루 420콜을 전부 태울 수 있었다). 이 순서면 그 환불 자체가 필요 없다. ── */
+  const need = picked.reduce((sum, t) => sum + CALLS_BY_KIND[kindOf(t)], 0);
+  const granted = await claimCalls(need);
+  const live: typeof picked = [];
+  let planned = 0;
+  for (const t of picked) {
+    const cost = CALLS_BY_KIND[kindOf(t)];
+    if (planned + cost > granted) break;
+    live.push(t);
+    planned += cost;
+  }
+  if (live.length === 0) {
+    if (granted > 0) await refundCalls(granted);
+    /* 검색만으로도 미적중 기록이 남아 플래너가 다음 회차 최우선으로 집어 간다(logSearch) —
+       "대기열에 올려두라"고 시키지 않고 이미 올라갔다고 알린다. */
+    return {
+      ok: false,
+      added: 0,
+      error: "오늘 실시간 수집 한도가 다 찼어요 — 이 검색어는 다음 자동 수집 회차에 올려뒀어요.",
+    };
+  }
+  // 청구했는데 안 쓰기로 한 몫은 즉시 반납한다 — 안 그러면 공용 예산이 조용히 샌다
+  if (granted > planned) await refundCalls(granted - planned);
 
   const charge = await chargeGeneration({
     metric: "reference_collect",
     creditCost: CREDIT_COSTS.collect,
     reason: "pool_collect_now",
   });
-  if (!charge.ok) return { ok: false, added: 0, error: charge.error };
-  const refund = async () => {
+  if (!charge.ok) {
+    await refundCalls(planned); // 아직 한 통도 안 걸었다
+    return { ok: false, added: 0, error: charge.error };
+  }
+  /**
+   * 사용자 부담 되돌리기 — **크레딧만** 돌려준다.
+   * 무료 월 한도(via:"quota")는 공급사를 실제로 호출한 뒤의 실패에서 복구하지 않는다:
+   * 돈은 이미 나갔고, 여기서 되돌리면 "0건 나는 검색어를 계속 눌러도 사용자 부담 0"이 되어
+   * 공용 하루 예산을 한 사람이 고갈시킬 수 있다(적대 검증 확정 결함).
+   */
+  const refundUser = async () => {
     if (charge.via === "credits") {
       await refundGenerationCredits(charge.userId, CREDIT_COSTS.collect, "pool_collect_now_fail_refund");
     }
   };
-
-  // 공급사 하루 상한에서 차감 — 소진이면 실시간 거부 (대기열 폴백은 호출측 안내)
-  const need = picked.length * 2;
-  const granted = await claimCalls(need);
-  if (granted < 2) {
-    if (granted > 0) await refundCalls(granted);
-    await refund();
-    return { ok: false, added: 0, error: "오늘 실시간 수집 한도가 소진됐어요 — 대기열에 올려두면 다음 회차에 수집됩니다." };
-  }
-  const live = picked.slice(0, Math.floor(granted / 2));
 
   try {
     const batches = await Promise.all(
       live.map(async (t) => {
         try {
           const posts = await collectFromSource(
-            {
-              channel: "instagram",
-              kind: t.kind === "account" || t.value.startsWith("@") ? "account" : "hashtag",
-              value: t.value,
-            },
+            { channel: "instagram", kind: kindOf(t), value: t.value },
             60,
             { period: "all", mediaFormat: "all" },
           );
@@ -607,19 +645,20 @@ export async function collectPoolNow(
     let added = 0;
     for (const { t, posts } of batches) {
       if (posts.length === 0) continue;
-      const industry = industryFromText(t.value);
-      const r = await upsertPosts(admin, posts, industry, t.value.replace(/^@/, ""));
+      const industry = industryFromText(t.bare);
+      const r = await upsertPosts(admin, posts, industry, t.bare);
       added += r.creatives;
     }
 
     if (added === 0) {
-      await refund();
-      return { ok: false, added: 0, error: "새로 수집된 게시물이 없어요 — 잠시 후 다시 시도하거나 다른 기준으로 해보세요." };
+      await refundUser();
+      return { ok: false, added: 0, error: "이 검색어로는 새로 모을 게시물이 없었어요 — 다른 말로 검색해 보세요." };
     }
     return { ok: true, added };
   } catch (e) {
-    await refund();
+    await refundUser();
     console.error("[pool] 실시간 풀 수집 실패:", e);
-    return { ok: false, added: 0, error: "수집에 실패했어요. 잠시 후 다시 시도해 주세요." };
+    // retriable — 우리 쪽 오류다. 호출측이 같은 검색어로 다시 시도할 수 있게 표시한다.
+    return { ok: false, added: 0, retriable: true, error: "수집에 실패했어요. 잠시 후 다시 시도해 주세요." };
   }
 }

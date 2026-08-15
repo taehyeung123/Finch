@@ -209,9 +209,33 @@ export async function searchPool(query: PoolQuery): Promise<PoolResult> {
 
   const q = (query.q ?? "").trim();
   if (q.length > 0) {
-    // body 의 trigram GIN 인덱스를 타는 경로. 제목·본문·매칭 키워드 어디에 걸려도 잡는다.
-    const safe = q.replace(/[%,()]/g, " ").trim();
-    if (safe) sel = sel.or(`body.ilike.%${safe}%,title.ilike.%${safe}%`);
+    /* body 의 trigram GIN 인덱스를 타는 경로.
+       **다단어는 통문장이 아니라 낱말 AND 다.** '여름 세일'을 통문장으로 걸면 캡션에
+       그 두 단어가 붙어 있어야만 잡혀 거의 항상 0건이 된다 — 화면 필터가 이미 같은
+       이유로 토큰 AND 를 쓴다(library-client.tsx). 통문장만 걸던 시절엔 방금 수집한
+       소재조차 재검색에서 안 보였다(리뷰 확정 결함).
+       .or() 를 여러 번 이으면 PostgREST 가 AND 로 묶는다 — 낱말마다 (본문 OR 제목). */
+    const tokens = [
+      ...new Set(
+        q
+          .replace(/[%,()"]/g, " ")
+          .split(/\s+/)
+          /* 1글자 토큰은 거의 모든 캡션에 걸려 AND 한 칸만 낭비한다. 다만 검색어 전체가
+             1글자면(단일어 검색) 그건 살려야 하므로 아래에서 되살린다. */
+          .filter((t) => t.length >= 2),
+      ),
+    ].slice(0, 4);
+    /* 낱말마다 (캡션 OR 수집 키워드).
+       title 은 뺐다 — body 첫 문장을 잘라 만든 값이라(lib/pool/upsert.ts) title 이 걸리면
+       body 도 반드시 걸린다. 결과를 못 늘리면서 술어만 늘린다.
+       matched_keywords 는 반대로 **반드시** 봐야 한다: 계정(@핸들) 수집분은 핸들이
+       캡션 어디에도 안 들어가서(브랜드 표와 이 배열에만 있다) 방금 돈 내고 수집한 소재가
+       재검색에서 영원히 0건이었다(적대 검증 확정 결함).
+       PostgREST or() 는 쉼표로 절을 가르므로, 배열 절은 파싱이 안전한 토큰에만 붙인다. */
+    const clausesFor = (t: string) =>
+      /^[\w가-힣._-]+$/.test(t) ? `body.ilike.%${t}%,matched_keywords.cs.{${t}}` : `body.ilike.%${t}%`;
+    const applied = tokens.length > 0 ? tokens : [q.replace(/[%,()"]/g, " ").trim()].filter(Boolean);
+    for (const t of applied) sel = sel.or(clausesFor(t));
   }
 
   switch (query.sort ?? "heat") {

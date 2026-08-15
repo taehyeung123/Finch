@@ -907,6 +907,7 @@ export function rememberQuery(q: string) {
 export function SearchConsole({
   query,
   onQueryChange,
+  onClearAll,
   filters,
   setFilters,
   resultCount,
@@ -921,7 +922,11 @@ export function SearchConsole({
   showCollectSettings = true,
 }: {
   query: string;
+  /** 확정 검색어 변경 — 제출(엔터·[검색]·칩 클릭)과 지우기에서만 불린다. 타이핑 중에는 안 불린다. */
   onQueryChange: (q: string) => void;
+  /** [전체 해제] 전용 — 검색어+필터를 부모가 한 번에 초기화한다. onQueryChange 뒤에
+      필터 초기화를 잇는 방식은 옛 검색어로 서버 재검색이 나가는 결함이 있었다. */
+  onClearAll: () => void;
   filters: LibraryFilters;
   setFilters: (next: LibraryFilters) => void;
   resultCount: number;
@@ -954,6 +959,36 @@ export function SearchConsole({
   const [scopeOpen, setScopeOpen] = useState(false);
   const [recentOpen, setRecentOpen] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
+
+  /* 입력칸은 **초안**이다 — 엔터·[검색]을 눌러야 확정 검색어(query)가 되고 결과가 바뀐다.
+     (2026-08-15 사장님 지시: 타이핑마다 결과가 갈아엎히는 즉시 필터링 금지)
+     바깥에서 확정 검색어가 바뀌면(딥링크·전체 해제·0건 화면의 검색어 지우기) 입력칸도
+     따라간다 — effect 가 아니라 렌더 중 조정(공식 파생 상태 패턴, 재렌더 1회로 수렴). */
+  const [input, setInput] = useState(query);
+  const [prevQuery, setPrevQuery] = useState(query);
+  if (query !== prevQuery) {
+    setPrevQuery(query);
+    setInput(query);
+  }
+
+  /** 검색 실행 — 초안을 확정하고 드롭다운을 닫는다. 빈 값 제출 = 검색 해제(탐색 화면 복귀). */
+  const submitQuery = useCallback(
+    (raw: string) => {
+      const v = raw.trim();
+      setInput(v);
+      setPanelOpen(false);
+      setScopeOpen(false);
+      setRecentOpen(false);
+      /* 빈 입력에서 엔터를 또 치는 경우만 막는다 — 탐색 화면에서 [더 보기]로 쌓아 둔
+         목록이 이유 없이 접혔다. 반대로 **같은 검색어 재제출은 허용**해야 한다:
+         "수집을 걸었으니 잠시 후 다시 확인하세요"의 그 '다시 확인'이 이 경로다
+         (막아 뒀더니 [검색]도 엔터도 무반응인 막다른 상태가 됐다 — 적대 검증 확정). */
+      if (v === "" && query === "") return;
+      onQueryChange(v);
+      rememberQuery(v);
+    },
+    [onQueryChange, query],
+  );
 
   const recent = useSyncExternalStore(subscribeRecent, getRecentSnapshot, () => RECENT_EMPTY);
   const activeCount = countActiveFilters(filters);
@@ -1176,21 +1211,38 @@ export function SearchConsole({
           <Search className="ml-4 size-5 shrink-0 text-fg-faint" aria-hidden />
           <input
             type="search"
-            value={query}
-            onChange={(e) => onQueryChange(e.target.value)}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
             onFocus={() => setPanelOpen(true)}
+            /* 엔터 제출이 패널을 닫는데 포커스는 입력칸에 남는다 — onFocus 만으로는
+               다시 눌러도 안 열린다(포커스가 이미 있어 focus 이벤트가 안 난다). */
+            onClick={() => setPanelOpen(true)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") rememberQuery(query);
+              if (e.key !== "Enter") return;
+              /* 한글 조합 **중**인 엔터는 글자 확정이지 검색 실행이 아니다(Chrome·FF).
+                 Safari 는 조합 확정 엔터를 isComposing=false 로 주는 대신 compositionend 가
+                 먼저 끝나 DOM value 에 마지막 글자가 이미 들어 있다 — 그래서 state(input)가
+                 아니라 currentTarget.value 로 제출하면 엔터 한 번에 올바른 값이 나간다.
+                 (시간 창 가드는 정상 엔터까지 삼켜서 폐기했다 — 리뷰 확정) */
+              if (e.nativeEvent.isComposing) return;
+              submitQuery(e.currentTarget.value);
             }}
+            maxLength={60}
             placeholder="브랜드·문구·계정·해시태그로 찾기"
             aria-label="레퍼런스 검색"
             className="h-full min-w-0 flex-1 bg-transparent px-3 text-[15px] font-medium text-fg outline-none placeholder:font-normal placeholder:text-fg-faint"
           />
 
-          {query ? (
+          {/* 확정 검색어가 걸려 있으면 입력칸을 비워도 X 를 남긴다 — 안 그러면 키보드로
+              다 지운 순간 "빈 입력칸 + 옛 결과"에서 검색을 풀 방법이 사라진다. */}
+          {input || query ? (
             <button
               type="button"
-              onClick={() => onQueryChange("")}
+              onClick={() => {
+                setInput("");
+                /* 확정 검색어가 없으면(제출 안 한 초안만 지움) 재검색·페이지 리셋을 부르지 않는다 */
+                if (query !== "") onQueryChange("");
+              }}
               aria-label="검색어 지우기"
               className="trans-state flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-card text-fg-faint hover:bg-surface hover:text-fg"
             >
@@ -1257,10 +1309,7 @@ export function SearchConsole({
                   <button
                     key={r}
                     type="button"
-                    onClick={() => {
-                      onQueryChange(r);
-                      setRecentOpen(false);
-                    }}
+                    onClick={() => submitQuery(r)}
                     className="trans-state flex w-full cursor-pointer items-center gap-2 rounded-card px-2.5 py-2 text-left text-[13px] text-fg-sub hover:bg-surface hover:text-fg"
                   >
                     <Clock className="size-3.5 shrink-0 text-fg-faint" aria-hidden />
@@ -1301,14 +1350,26 @@ export function SearchConsole({
         </button>
         ) : null}
 
-        <Button
-          onClick={onCollect}
-          disabled={collecting}
-          aria-busy={collecting}
-          className="h-14 shrink-0 px-4 md:px-5"
-        >
-          <Zap className="size-4" aria-hidden />
-          <span className="hidden md:inline">{collecting ? "수집 중…" : "지금 수집"}</span>
+        {/* [지금 수집] — 개인 수집 모드 전용(등록된 기준 일괄 수집). 풀·데모 모드에서는
+            수집이 검색어를 따라가므로(0건·미적중 상태의 '지금 수집하기') 별도 버튼이 없다. */}
+        {showCollectSettings ? (
+          <Button
+            variant="secondary"
+            onClick={onCollect}
+            disabled={collecting}
+            aria-busy={collecting}
+            className="h-14 shrink-0 px-4"
+          >
+            <Zap className="size-4" aria-hidden />
+            <span className="hidden md:inline">{collecting ? "수집 중…" : "지금 수집"}</span>
+          </Button>
+        ) : null}
+
+        {/* 검색 실행 — 입력은 여기(또는 엔터)를 눌러야 결과에 반영된다.
+            라벨이 md 미만에서 숨으므로 aria-label 로 이름을 보장한다. */}
+        <Button onClick={() => submitQuery(input)} aria-label="검색" className="h-14 shrink-0 px-4 md:px-6">
+          <Search className="size-4" aria-hidden />
+          <span className="hidden md:inline">검색</span>
         </Button>
       </div>
 
@@ -1329,16 +1390,13 @@ export function SearchConsole({
 
       {/* ── 추천 검색어 — 검색 줄 바로 아래, 뭘 칠지 모르는 손을 위한 입구.
           검색어가 있으면 치운다: 이미 찾는 중인 사람에게는 소음이다. ── */}
-      {!query.trim() ? (
+      {!input.trim() ? (
         <div className="mt-2.5 flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {SUGGESTED_QUERIES.map((sq) => (
             <button
               key={sq.label}
               type="button"
-              onClick={() => {
-                onQueryChange(sq.q);
-                rememberQuery(sq.q);
-              }}
+              onClick={() => submitQuery(sq.q)}
               className="trans-state inline-flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-chip border border-line bg-body px-3 text-[13.5px] font-medium text-fg hover:border-line-strong"
             >
               <SuggestIcon kind={sq.icon} />
@@ -1351,6 +1409,31 @@ export function SearchConsole({
       {/* ── 3행 — 상태 줄. 지금 무엇이 걸려 있는지 ── */}
       <div className="mt-2 flex h-9 items-center justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {/* 확정 검색어 칩 — 제출형이 되면서 "입력칸 = 지금 적용된 검색어"가 깨졌다.
+              입력칸을 고치다 만 상태에서 필터를 만지면 결과는 옛 검색어 기준으로 다시
+              도는데, 그걸 알 방법이 이 칩뿐이다(적대 검증 확정). */}
+          {query ? (
+            <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-card bg-primary-weak px-2.5 text-[13px] font-semibold text-primary">
+              검색: {query}
+              <button
+                type="button"
+                onClick={() => {
+                  setInput("");
+                  onQueryChange("");
+                }}
+                aria-label="검색어 해제"
+                className="cursor-pointer text-primary/70 transition-colors hover:text-primary"
+              >
+                <X className="size-3.5" aria-hidden />
+              </button>
+            </span>
+          ) : null}
+          {/* 아직 제출 안 한 초안이 있으면 알린다 — 안 그러면 "쳤는데 왜 그대로냐"가 된다 */}
+          {input.trim() !== query ? (
+            <span className="shrink-0 whitespace-nowrap text-[12px] font-medium text-fg-sub">
+              엔터를 눌러 검색하세요
+            </span>
+          ) : null}
           {activeChips.length > 0 ? (
             <>
               {activeChips.map((chip) => (
@@ -1372,8 +1455,9 @@ export function SearchConsole({
               <button
                 type="button"
                 onClick={() => {
-                  onQueryChange("");
-                  resetAll();
+                  setDraft(null);
+                  setInput("");
+                  onClearAll();
                 }}
                 className="shrink-0 cursor-pointer rounded-card px-2.5 text-[13px] font-semibold text-fg-sub transition-colors hover:bg-overlay hover:text-fg"
               >
