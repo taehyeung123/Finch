@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
-  Clapperboard,
   Flame,
   ImageDown,
   Info,
@@ -21,7 +20,6 @@ import { Badge, ChannelBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChipFilter } from "@/components/ui/chip-filter";
 import { InfoTip } from "@/components/ui/info-tip";
-import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/cn";
 import { formatCompact } from "@/lib/format";
 import { ideaSuggestions, referenceItems, TREND_CATEGORIES } from "@/lib/data";
@@ -40,11 +38,14 @@ import { BrandKitPanel } from "./_components/brand-kit";
 // Konva 편집기는 canvas/window에 의존해 서버 렌더 불가 — 클라이언트에서만 마운트
 const CardEditor = dynamic(() => import("./_components/card-editor"), { ssr: false });
 
-type StudioTab = "cards" | "video" | "ideas";
+/* 숏폼 영상 생성은 **추후 도입**으로 뺐다 (2026-08-15 사장님 결정).
+   외부 생성형 영상 API(Sora·Kling 등) 연동 전까지는 화면에 아무것도 두지 않는다 —
+   "준비 중" 자리표시 탭은 팔 수 없는 기능을 파는 것처럼 보이게 하고,
+   빈 탭을 눌러 본 사람에게 제품이 미완성이라는 인상만 남긴다. */
+type StudioTab = "cards" | "ideas";
 
 const STUDIO_TABS: { value: StudioTab; label: string }[] = [
   { value: "cards", label: "카드뉴스 생성" },
-  { value: "video", label: "숏폼 영상" },
   { value: "ideas", label: "아이디어 추천" },
 ];
 
@@ -888,68 +889,6 @@ export default function StudioPage() {
               }}
             />
           ) : null}
-        </div>
-      ) : null}
-
-      {tab === "video" ? (
-        <div className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader
-                title={
-                  <span className="inline-flex items-center gap-2">
-                    <LayoutTemplate className="size-5 text-fg-sub" aria-hidden />
-                    템플릿 기반 모션그래픽
-                  </span>
-                }
-                description="제품 사진과 카피를 검증된 템플릿에 자동 합성합니다."
-                action={<Badge tone="neutral">Phase 3 예정</Badge>}
-              />
-              <CardBody>
-                <ul className="space-y-1.5 text-[13px] text-fg-sub">
-                  <li className="flex items-center gap-2">
-                    <span className="size-1 rounded-full bg-current opacity-60" aria-hidden />
-                    브랜드 일관성이 높아 계정 톤을 유지하기 좋아요
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="size-1 rounded-full bg-current opacity-60" aria-hidden />
-                    템플릿 단가 기준이라 비용 예측이 가능해요
-                  </li>
-                </ul>
-              </CardBody>
-            </Card>
-
-            <Card>
-              <CardHeader
-                title={
-                  <span className="inline-flex items-center gap-2">
-                    <Clapperboard className="size-5 text-fg-sub" aria-hidden />
-                    생성형 AI 영상
-                  </span>
-                }
-                description="텍스트나 이미지를 입력해 영상을 생성합니다."
-                action={<Badge tone="neutral">Phase 3 예정</Badge>}
-              />
-              <CardBody>
-                <ul className="space-y-1.5 text-[13px] text-fg-sub">
-                  <li className="flex items-center gap-2">
-                    <span className="size-1 rounded-full bg-current opacity-60" aria-hidden />
-                    연출 자유도가 높아 새로운 포맷 실험에 적합해요
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="size-1 rounded-full bg-current opacity-60" aria-hidden />
-                    생성 결과에 변동이 있어 검수 과정이 필요해요
-                  </li>
-                </ul>
-              </CardBody>
-            </Card>
-          </div>
-
-          <EmptyState
-            icon={Video}
-            title="숏폼 영상 생성은 준비 중이에요"
-            description="외부 생성형 AI 영상 API 연동 후 제공됩니다."
-          />
         </div>
       ) : null}
 
