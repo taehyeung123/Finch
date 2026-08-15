@@ -148,6 +148,9 @@ export default function PricingPage() {
 
       {/* ── S1 플랜 카드 — 위 3 / 아래 2 (사장님 지시). 추천 플랜만 코랄 글로우 ── */}
       <section className="mx-auto max-w-6xl px-4 pt-12 md:px-6 md:pt-14">
+        {/* 카드 제목이 h3 라서 그 위 단계가 필요하다. 시각적으로는 히어로가
+            이미 그 역할을 하므로 화면에는 내지 않는다. */}
+        <h2 className="sr-only">플랜별 요금</h2>
         <PlanCardGrid>
           {PLAN_CARDS.map((plan) => (
             <PlanCard
@@ -157,7 +160,11 @@ export default function PricingPage() {
               badge={plan.key === "pro" ? "가장 인기" : undefined}
               action={
                 <PlanCta
-                  href="/signup"
+                  /* 고른 플랜을 가입까지 들고 간다. 앞서는 5장이 전부 파라미터 없는
+                     "/signup" 이라, 29,000원을 내겠다고 누른 사람과 무료로 누른 사람이
+                     똑같은 화면에 떨어졌다 — 결제 의사가 클릭 한 번에 증발했다.
+                     plan 은 signup 서버 컴포넌트에서 화이트리스트 검증 후 쓰인다. */
+                  href={plan.key === "free" ? "/signup" : `/signup?plan=${plan.key}`}
                   filled={plan.key === "pro"}
                   label={plan.key === "free" ? "무료로 시작하기" : `${plan.name} 시작하기`}
                 />
@@ -309,6 +316,18 @@ export default function PricingPage() {
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* 표를 끝까지 읽은 사람이 이 지면에서 구매 의사가 가장 높다. 그런데 여기서부터
+            페이지 끝까지 유료 버튼이 하나도 없어서(마지막 CTA도 무료 하나뿐), 설득이
+            끝난 자리에서 카드까지 되돌아 올라가야만 결제할 수 있었다. */}
+        <div className="mt-6 flex flex-col gap-2.5 sm:flex-row sm:justify-end">
+          <ButtonLink href="/signup" variant="secondary">
+            무료로 시작하기
+          </ButtonLink>
+          <ButtonLink href="/signup?plan=pro">
+            Pro 시작하기 <ArrowRight className="size-4" aria-hidden />
+          </ButtonLink>
         </div>
       </section>
 

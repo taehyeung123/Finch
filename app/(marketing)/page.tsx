@@ -17,6 +17,7 @@ import { FaqAccordion, type FaqItem } from "@/components/landing/faq";
 import { Reveal } from "@/components/landing/reveal";
 import { HeroVisual } from "@/components/landing/hero-visual";
 import { AppIconTile, type BrandApp } from "@/components/icons/brand";
+import { PLAN_CARDS } from "@/components/pricing/plan-cards";
 
 export const metadata: Metadata = {
   title: "핀치 (Finch) — 인스타그램·틱톡·쓰레드 SNS 통합 분석 & 메타광고 관리",
@@ -48,11 +49,11 @@ const FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: "무료로 사용할 수 있나요?",
-    a: "네. Free 플랜으로 채널 1개 연동, 월 10회 콘텐츠 분석, 카드뉴스 월 3회 생성을 체험할 수 있습니다. 신용카드 없이 시작할 수 있어요.",
+    a: "네. Free 플랜은 신용카드 없이 채널 1개를 연동하고 AI 챗 3회, 영상 분석 1회, 레퍼런스 수집 1회, 대본 추출 1회를 매달 써볼 수 있습니다. AI 카드뉴스·성장 진단은 유료 플랜 기능입니다.",
   },
   {
     q: "무료 인스타그램 분석 사이트가 있나요?",
-    a: "네, 핀치 Free 플랜에서 인스타그램 1채널 연동과 월 10회 콘텐츠 분석을 무료로 체험할 수 있습니다.",
+    a: "네, 핀치 Free 플랜에서 인스타그램 1채널을 연동해 대시보드·게시물 성과 분석을 신용카드 없이 무료로 쓸 수 있습니다.",
   },
   {
     q: "인스타그램 팔로워 나이대 분석도 되나요?",
@@ -506,21 +507,27 @@ export default function LandingPage() {
             <h2 className="text-center text-2xl font-bold md:text-3xl">요금제</h2>
             <p className="mt-3 text-center text-[15px] text-fg-sub">무료로 시작하고, 필요할 때 올리세요.</p>
           </Reveal>
-          <div className="mt-10 grid gap-4 md:grid-cols-4">
-            {[
-              { name: "Free", target: "체험", desc: "1채널 연동, 월 10회 분석" },
-              { name: "Creator", target: "개인 크리에이터", desc: "3채널, 경쟁사 3개, 카드뉴스 무제한" },
-              { name: "Pro", target: "광고주·마케터", desc: "광고 모니터링 + 캠페인 관리", highlight: true },
-              { name: "Agency", target: "대행사", desc: "멀티 클라이언트 + 화이트라벨" },
-            ].map((p, i) => (
-              <Reveal key={p.name} delay={0.05 * i} className="h-full">
+          {/* 이 미리보기는 **PLAN_CARDS 에서만** 값을 가져온다.
+              앞서는 손으로 적은 구 요금 모델이 남아 "Creator 카드뉴스 무제한"(실제
+              최대 23장)·"Free 카드뉴스 월 3회"(실제 유료 전용)를 광고하고 있었다.
+              랜딩이 약속한 걸 요금제 페이지가 부정하면 그건 그대로 환불 사유다. */}
+          <div className="mt-10 grid gap-4 md:grid-cols-3 lg:grid-cols-5">
+            {PLAN_CARDS.map((p, i) => (
+              <Reveal key={p.key} delay={0.05 * i} className="h-full">
                 <div
-                  className={`h-full rounded-card border p-6 transition-transform hover:-translate-y-1 ${p.highlight ? "border-primary bg-primary-weak" : "border-line bg-body"}`}
+                  className={`h-full rounded-card border p-5 transition-transform hover:-translate-y-1 ${
+                    p.key === "pro" ? "border-primary bg-primary-weak" : "border-line bg-body"
+                  }`}
                 >
-                  {p.highlight ? <Badge tone="primary">가장 인기</Badge> : null}
-                  <h3 className={`text-lg font-bold ${p.highlight ? "mt-2" : ""}`}>{p.name}</h3>
-                  <p className="mt-0.5 text-[13px] text-fg-faint">{p.target}</p>
-                  <p className="mt-3 text-[14px] leading-relaxed text-fg-sub">{p.desc}</p>
+                  <h3 className="text-[17px] font-bold">{p.name}</h3>
+                  <p className="tnum mt-1 text-[15px] font-semibold text-fg">
+                    {p.price === 0 ? "무료" : `${p.price.toLocaleString("ko-KR")}원 / 월`}
+                  </p>
+                  <p className="mt-2.5 text-[13.5px] leading-relaxed text-fg-sub">
+                    {p.credits !== null
+                      ? `월 ${p.credits.toLocaleString("ko-KR")} 크레딧 · ${p.perks[0]}`
+                      : `크레딧 없이 월 횟수 · ${p.perks[0]}`}
+                  </p>
                 </div>
               </Reveal>
             ))}

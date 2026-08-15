@@ -12,8 +12,14 @@ import { GoogleIcon, KakaoIcon } from "../_components/provider-icons";
 const socialButton =
   "flex h-12 w-full items-center justify-center gap-2.5 rounded-card text-[15px] font-semibold cursor-pointer transition-opacity hover:opacity-90 active:opacity-80 focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2";
 
-/** 회원가입 — OAuth는 가입=로그인. 완료 후 온보딩으로 이동, 미설정 시 데모 모드 폴백 */
-export function SignupForm() {
+/**
+ * 회원가입 — OAuth는 가입=로그인. 미설정 시 데모 모드 폴백.
+ *
+ * nextPath 는 서버 컴포넌트(page.tsx)가 화이트리스트로 만들어 넘긴 값만 받는다.
+ * 여기서 searchParams 를 직접 읽지 않는 이유: ① 검증을 클라이언트에 두면
+ * 우회된다 ② 정적 렌더 경로에서 useSearchParams 는 Suspense 경계를 요구한다.
+ */
+export function SignupForm({ nextPath = "/onboarding" }: { nextPath?: string }) {
   const configured = isSupabaseConfigured();
   const [configNotice, setConfigNotice] = useState(false);
 
@@ -24,7 +30,9 @@ export function SignupForm() {
     }
     void createClient().auth.signInWithOAuth({
       provider,
-      options: { redirectTo: `${location.origin}/auth/callback?next=/onboarding` },
+      options: {
+        redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
+      },
     });
   }
 
@@ -65,7 +73,7 @@ export function SignupForm() {
             <span className="text-xs text-fg-faint">또는</span>
             <span className="h-px flex-1 bg-line" />
           </div>
-          <ButtonLink href="/onboarding" variant="secondary" className="w-full">
+          <ButtonLink href={nextPath} variant="secondary" className="w-full">
             데모 모드로 둘러보기
           </ButtonLink>
         </>

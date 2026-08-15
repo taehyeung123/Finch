@@ -152,10 +152,12 @@ export function PlanCard({
         </span>
       ) : null}
 
-      <p className="flex items-baseline gap-2">
+      {/* 카드 제목은 h3 다 — p 로 두면 스크린리더 제목 탐색(H 키)에서 요금제가
+          존재하지 않는 페이지가 된다. 부모 섹션이 h2 를 갖는다는 전제. */}
+      <h3 className="flex items-baseline gap-2">
         <span className="text-[20px] font-bold tracking-[-0.01em] text-fg">{plan.name}</span>
         <span className="text-[14px] font-medium text-fg-sub">{plan.ko}</span>
-      </p>
+      </h3>
 
       <p className="mt-2.5 text-[13.5px] leading-[1.6] text-fg-sub">{plan.target}</p>
 
