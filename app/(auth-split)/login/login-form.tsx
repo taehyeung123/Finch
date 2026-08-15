@@ -4,13 +4,14 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ButtonLink } from "@/components/ui/button";
+import { FinchLogo } from "@/components/logo";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/client";
 import { GoogleIcon, KakaoIcon } from "../_components/provider-icons";
 
 /* 소셜 버튼 공통 — 브랜드 배경색 위 텍스트는 text-on-kakao(다크) 토큰 사용 */
 const socialButton =
-  "flex h-11 w-full items-center justify-center gap-2.5 rounded-card text-[15px] font-semibold transition-opacity hover:opacity-90 active:opacity-80 focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2";
+  "flex h-12 w-full items-center justify-center gap-2.5 rounded-card text-[15px] font-semibold cursor-pointer transition-opacity hover:opacity-90 active:opacity-80 focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2";
 
 /** 로그인 — Supabase OAuth(Google·Kakao). 환경변수 미설정 시 데모 모드 폴백 */
 export function LoginForm() {
@@ -47,7 +48,11 @@ function LoginCard() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-md rounded-card border border-line bg-body p-8">
+    <div className="w-full max-w-[360px]">
+      <Link href="/" aria-label="핀치 홈으로 이동" className="mb-8 inline-flex rounded-card lg:hidden">
+        <FinchLogo />
+      </Link>
+
       <h1 className="text-2xl font-bold leading-tight">로그인</h1>
       <p className="mt-1 text-[15px] text-fg-sub">핀치 계정으로 계속하세요.</p>
 
@@ -58,7 +63,11 @@ function LoginCard() {
       ) : null}
 
       <div className="mt-6 space-y-2">
-        <button type="button" onClick={() => signIn("google")} className={`${socialButton} bg-white text-on-kakao`}>
+        <button
+          type="button"
+          onClick={() => signIn("google")}
+          className={`${socialButton} border border-line bg-body text-fg`}
+        >
           <GoogleIcon className="size-5" />
           Google로 계속하기
         </button>

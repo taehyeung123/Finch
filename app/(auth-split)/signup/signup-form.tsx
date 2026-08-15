@@ -3,13 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button";
+import { FinchLogo } from "@/components/logo";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/client";
 import { GoogleIcon, KakaoIcon } from "../_components/provider-icons";
 
 /* 소셜 버튼 공통 — 브랜드 배경색 위 텍스트는 text-on-kakao(다크) 토큰 사용 */
 const socialButton =
-  "flex h-11 w-full items-center justify-center gap-2.5 rounded-card text-[15px] font-semibold transition-opacity hover:opacity-90 active:opacity-80 focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2";
+  "flex h-12 w-full items-center justify-center gap-2.5 rounded-card text-[15px] font-semibold cursor-pointer transition-opacity hover:opacity-90 active:opacity-80 focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2";
 
 /** 회원가입 — OAuth는 가입=로그인. 완료 후 온보딩으로 이동, 미설정 시 데모 모드 폴백 */
 export function SignupForm() {
@@ -28,12 +29,20 @@ export function SignupForm() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-md rounded-card border border-line bg-body p-8">
+    <div className="w-full max-w-[360px]">
+      <Link href="/" aria-label="핀치 홈으로 이동" className="mb-8 inline-flex rounded-card lg:hidden">
+        <FinchLogo />
+      </Link>
+
       <h1 className="text-2xl font-bold leading-tight">무료로 시작하기</h1>
       <p className="mt-1 text-[15px] text-fg-sub">소셜 계정으로 3초 만에 시작 — 신용카드가 필요 없어요</p>
 
       <div className="mt-6 space-y-2">
-        <button type="button" onClick={() => signUp("google")} className={`${socialButton} bg-white text-on-kakao`}>
+        <button
+          type="button"
+          onClick={() => signUp("google")}
+          className={`${socialButton} border border-line bg-body text-fg`}
+        >
           <GoogleIcon className="size-5" />
           Google로 시작하기
         </button>
@@ -63,7 +72,15 @@ export function SignupForm() {
       ) : null}
 
       <p className="mt-4 text-center text-xs text-fg-faint">
-        가입 시 이용약관과 개인정보처리방침에 동의하게 됩니다 (문서 준비 중)
+        가입 시{" "}
+        <Link href="/terms" className="underline underline-offset-2 hover:text-fg-sub">
+          이용약관
+        </Link>
+        과{" "}
+        <Link href="/privacy" className="underline underline-offset-2 hover:text-fg-sub">
+          개인정보처리방침
+        </Link>
+        에 동의하게 됩니다
       </p>
 
       <p className="mt-6 text-center text-[13px] text-fg-sub">

@@ -10,7 +10,7 @@ import { isDemoMode } from "@/lib/supabase/config";
   팀 초대 수락 (PART 4.10) — (app) 그룹 밖 최상위 라우트다.
   이유: (app)/layout.tsx의 인증 가드는 미로그인 시 next 파라미터 없이 무조건 /login으로
   보내 초대 토큰을 잃어버린다. 이 페이지는 자체적으로 로그인 여부를 확인해 토큰을 보존한 채
-  /login?next=/team/accept?token=... 로 보낸다(app/(auth)/login/login-form.tsx가 이 next를
+  /login?next=/team/accept?token=... 로 보낸다(app/(auth-split)/login/login-form.tsx가 이 next를
   OAuth 콜백까지 이어받는다).
 
   초대 토큰 조회·수락 처리는 admin client(RLS 우회)로만 한다 — 로그인 전이거나 이메일이
