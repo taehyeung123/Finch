@@ -23,6 +23,10 @@
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
   --color-primary-pressed: var(--primary-pressed);
+  /* 코랄을 **글자색으로** 쓸 때만 이걸 쓴다. 원색 #FF6B4A 는 흰 배경에서
+     대비 2.8:1 로 WCAG AA(4.5:1) 미달이라 본문·라벨에 쓰면 안 읽힌다.
+     면(배경·버튼)에는 계속 --color-primary 를 쓴다. */
+  --color-primary-ink: var(--primary-ink);
   --color-on-primary: var(--on-primary);
   --color-primary-weak: var(--primary-weak);
 
@@ -110,6 +114,8 @@
   --primary: #ff6b4a;
   --primary-hover: #e85a3b;
   --primary-pressed: #c4472c;
+  /* 글자용 코랄 — 흰 배경 대비 4.9:1 (AA 통과). 면에는 쓰지 않는다 */
+  --primary-ink: #c4472c;
   --on-primary: #0c0c11;
   --primary-weak: rgba(255, 107, 74, 0.12);
 
@@ -176,6 +182,8 @@
   --fg-faint: rgba(247, 248, 250, 0.4);
 
   --primary-weak: rgba(255, 107, 74, 0.14);
+  /* 다크 배경(#16161C) 위에서는 원색이 이미 6.4:1 — 별칭으로 둔다 */
+  --primary-ink: #ff6b4a;
 
   --positive: #22c55e;
   /* 다크는 원색이 이미 어두운 배경 위 대비 통과 — strong은 원색 별칭 */

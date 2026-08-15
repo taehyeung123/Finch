@@ -135,10 +135,10 @@ export default function PricingPage() {
 
       {/* ── S0 히어로 — 제미나이 문법: 흰 지면, 중앙 정렬, 큰 글씨, 장식 없음.
              앞선 안의 코랄 패널은 걷어냈다(강조는 버튼 색 하나뿐이라는 지시). ── */}
-      <section className="mx-auto max-w-6xl px-4 pt-20 text-center md:px-6 md:pt-28">
+      <section className="mx-auto max-w-6xl px-4 pt-16 text-center md:px-6 md:pt-20">
         <FinchMark className="mx-auto size-12 text-primary" />
         <h1 className="mt-8 text-[clamp(36px,5.2vw,56px)] font-medium leading-[1.15] tracking-[-0.03em]">
-          핀치를 <span className="text-primary">최대한</span> 활용하세요
+          핀치를 <span className="text-primary-ink">최대한</span> 활용하세요
         </h1>
         <p className="mx-auto mt-6 max-w-[52ch] text-[18px] leading-[1.5] text-fg-sub">
           유료 플랜은 기능별 횟수 제한 없이 매달 받는 크레딧 하나로 씁니다.
@@ -147,7 +147,7 @@ export default function PricingPage() {
       </section>
 
       {/* ── S1 플랜 카드 — 위 3 / 아래 2 (사장님 지시). 추천 플랜만 코랄 글로우 ── */}
-      <section className="mx-auto max-w-6xl px-4 pt-14 md:px-6 md:pt-20">
+      <section className="mx-auto max-w-6xl px-4 pt-12 md:px-6 md:pt-14">
         <PlanCardGrid>
           {PLAN_CARDS.map((plan) => (
             <PlanCard
@@ -168,11 +168,11 @@ export default function PricingPage() {
       </section>
 
       {/* ── S2 크레딧 소모표 — 밴드 교차(surface). 칩 그리드로 시각 밀도를 올린다 ── */}
-      <section className="mt-24 border-y border-line bg-surface md:mt-32">
-        <div className="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
+      <section className="mt-20 border-y border-line bg-surface md:mt-24">
+        <div className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20">
           <div className="grid gap-10 lg:grid-cols-12 lg:gap-x-10">
             <div className="lg:col-span-4">
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-primary">크레딧 소모표</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-primary-ink">크레딧 소모표</p>
               <h2 className="mt-3 text-[30px] font-bold leading-[1.2] tracking-[-0.02em] md:text-[36px]">
                 크레딧 하나로
                 <br />
@@ -197,12 +197,12 @@ export default function PricingPage() {
                     <p className="mt-1.5 flex items-baseline gap-1">
                       <span
                         className={`tnum text-[28px] font-bold leading-none tracking-[-0.02em] ${
-                          r.cost >= 20 ? "text-primary" : "text-fg"
+                          r.cost >= 20 ? "text-primary-ink" : "text-fg"
                         }`}
                       >
                         {r.cost}
                       </span>
-                      <span className="text-[11.5px] font-medium text-fg-faint">크레딧</span>
+                      <span className="text-[11.5px] font-medium text-fg-sub">크레딧</span>
                     </p>
                   </div>
                 ))}
@@ -213,9 +213,9 @@ export default function PricingPage() {
       </section>
 
       {/* ── S3 비교표 ── */}
-      <section className="mx-auto max-w-6xl px-4 py-24 md:px-6 md:py-32">
+      <section className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20">
         <div className="max-w-3xl">
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-fg-faint">플랜별 비교</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-fg-sub">플랜별 비교</p>
           <h2 className="mt-3 text-[30px] font-bold tracking-[-0.02em] md:text-[36px]">
             어떤 플랜이 맞을까요?
           </h2>
@@ -238,7 +238,7 @@ export default function PricingPage() {
               </colgroup>
               <thead>
                 <tr>
-                  <th scope="col" className="px-5 pb-4 pt-6 text-[11px] font-bold uppercase tracking-[0.1em] text-fg-faint">
+                  <th scope="col" className="px-5 pb-4 pt-6 text-[11px] font-bold uppercase tracking-[0.1em] text-fg-sub">
                     기능
                   </th>
                   {TABLE_COLS.map((c) => (
@@ -251,7 +251,7 @@ export default function PricingPage() {
                         <span aria-hidden className={`size-2 rounded-full ${c.rail}`} />
                         <span className="text-[14px] font-bold">{c.name}</span>
                       </span>
-                      <span className="tnum mt-1 block text-[12px] text-fg-faint">
+                      <span className="tnum mt-1 block text-[12px] text-fg-sub">
                         {c.price === 0 ? "무료" : `${won(c.price)}원`}
                       </span>
                     </th>
@@ -267,7 +267,7 @@ export default function PricingPage() {
                       <th
                         scope="colgroup"
                         colSpan={6}
-                        className="border-t border-line-strong bg-surface px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.1em] text-fg-faint"
+                        className="border-t border-line-strong bg-surface px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.1em] text-fg-sub"
                       >
                         {group.label}
                       </th>
@@ -283,7 +283,7 @@ export default function PricingPage() {
                         <tr key={label} className="border-b border-line last:border-0">
                           <th scope="row" className="px-5 py-3.5 text-[13.5px] font-medium text-fg">
                             {label}
-                            {isRate ? <span className="ml-1 text-[12px] text-fg-faint">(크레딧)</span> : null}
+                            {isRate ? <span className="ml-1 text-[12px] text-fg-sub">(크레딧)</span> : null}
                           </th>
                           {([row.free, row.creator, row.pro, row.agency, row.enterprise] as const).map(
                             (value, i) => (
@@ -293,7 +293,7 @@ export default function PricingPage() {
                                   TABLE_COLS[i].key === "pro"
                                     ? "bg-plan-pro-field font-bold text-fg"
                                     : value === "—"
-                                      ? "text-fg-faint"
+                                      ? "text-fg-sub"
                                       : "text-fg-sub"
                                 }`}
                               >
@@ -314,8 +314,8 @@ export default function PricingPage() {
 
       {/* ── S4 FAQ — 밴드 교차(surface) ── */}
       <section className="border-y border-line bg-surface">
-        <div className="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-fg-faint">자주 묻는 질문</p>
+        <div className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-fg-sub">자주 묻는 질문</p>
           <h2 className="mt-3 text-[30px] font-bold tracking-[-0.02em] md:text-[36px]">
             요금제, 무엇이 궁금하신가요?
           </h2>
@@ -323,7 +323,7 @@ export default function PricingPage() {
             {PRICING_FAQ.map((item, i) => (
               <div key={item.q} className="rounded-card border border-line bg-body p-6">
                 <dt className="flex gap-3">
-                  <span className="tnum shrink-0 pt-0.5 text-[12px] font-bold text-primary">
+                  <span className="tnum shrink-0 pt-0.5 text-[12px] font-bold text-primary-ink">
                     {String(i + 1).padStart(2, "0")}
                   </span>
                   <span className="text-[16px] font-bold leading-[1.5]">{item.q}</span>
@@ -336,7 +336,7 @@ export default function PricingPage() {
       </section>
 
       {/* ── S5 최종 CTA ── */}
-      <section className="mx-auto max-w-6xl px-4 py-24 md:px-6 md:py-32">
+      <section className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20">
         <div className="flex flex-col gap-7 rounded-card border border-line bg-body p-8 md:flex-row md:items-center md:justify-between md:p-12">
           <div>
             <h2 className="text-[30px] font-bold leading-[1.15] tracking-[-0.02em] md:text-[38px]">
