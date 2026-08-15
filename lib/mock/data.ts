@@ -883,16 +883,25 @@ export const usageStats: UsageStat[] = [
   { label: "경쟁사 등록", used: 3, limit: 10, unit: "개" },
 ];
 
+/**
+ * 플랜 비교표 — **통합 크레딧 모델**(2026-08-14 확정)에 맞춘 값이다.
+ * 무료는 기능별 월 횟수(lib/actions/credits.ts FREE_MONTHLY_LIMITS),
+ * 유료는 월 크레딧 하나로 전 기능을 쓴다(PLAN_CREDIT_ALLOWANCE).
+ * DM은 발송 건수가 아니라 **콘텐츠 개수**로 센다(lib/auto-dm/limits.ts).
+ * 이 표를 고칠 때는 위 세 상수와 반드시 함께 맞춘다 — 화면과 과금이 갈리면 그게 클레임이다.
+ */
 export const planFeatures: PlanFeature[] = [
+  { label: "월 크레딧", free: "—", creator: "460", pro: "1,260", agency: "4,260", enterprise: "10,550" },
   { label: "채널 연동", free: "1채널", creator: "3채널", pro: "3채널", agency: "클라이언트 10팀", enterprise: "클라이언트 무제한" },
-  { label: "콘텐츠 분석", free: "월 10회", creator: "월 100회", pro: "무제한", agency: "무제한", enterprise: "무제한" },
-  { label: "탐색/트렌드", free: "요약만", creator: "전체 열람", pro: "전체 열람", agency: "전체 열람", enterprise: "전체 열람" },
-  { label: "경쟁사 분석", free: "-", creator: "계정 3개", pro: "계정 10개", agency: "무제한", enterprise: "무제한" },
-  { label: "경쟁사 광고 모니터링", free: "-", creator: "-", pro: "제공", agency: "제공", enterprise: "제공" },
-  { label: "메타광고 관리", free: "조회만", creator: "조회만", pro: "생성·관리", agency: "멀티 클라이언트", enterprise: "멀티 클라이언트" },
+  { label: "AI 카드뉴스", free: "—", creator: "크레딧 20", pro: "크레딧 20", agency: "크레딧 20", enterprise: "크레딧 20" },
+  { label: "성장 진단", free: "—", creator: "크레딧 20", pro: "크레딧 20", agency: "크레딧 20", enterprise: "크레딧 20" },
+  { label: "아이디어 추천", free: "—", creator: "크레딧 20", pro: "크레딧 20", agency: "크레딧 20", enterprise: "크레딧 20" },
+  { label: "AI 챗", free: "월 3회", creator: "크레딧 4", pro: "크레딧 4", agency: "크레딧 4", enterprise: "크레딧 4" },
+  { label: "영상 분석", free: "월 1회", creator: "크레딧 5", pro: "크레딧 5", agency: "크레딧 5", enterprise: "크레딧 5" },
+  { label: "레퍼런스 수집", free: "월 1회", creator: "크레딧 10", pro: "크레딧 10", agency: "크레딧 10", enterprise: "크레딧 10" },
   { label: "인스타 댓글 자동 DM", free: "콘텐츠 1개", creator: "콘텐츠 5개", pro: "콘텐츠 20개", agency: "콘텐츠 100개", enterprise: "무제한" },
-  { label: "AI 카드뉴스/영상", free: "월 3회(워터마크)", creator: "카드뉴스 무제한", pro: "무제한", agency: "무제한 + 화이트라벨", enterprise: "무제한 + 화이트라벨" },
-  { label: "팀 기능", free: "-", creator: "-", pro: "최대 3인", agency: "최대 10인 + 권한 관리", enterprise: "무제한 + 권한 관리" },
+  { label: "메타광고 관리", free: "조회만", creator: "조회만", pro: "생성·관리", agency: "멀티 클라이언트", enterprise: "멀티 클라이언트" },
+  { label: "팀 기능", free: "—", creator: "—", pro: "최대 3인", agency: "최대 10인 + 권한 관리", enterprise: "무제한 + 권한 관리" },
   { label: "지원", free: "커뮤니티", creator: "이메일", pro: "이메일", agency: "이메일 우선 지원", enterprise: "전담 매니저" },
 ];
 

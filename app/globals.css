@@ -68,6 +68,28 @@
 
   /* 미디어 레터박스 판 — body와 surface 사이 정확히 한 칸 */
   --color-plate: var(--plate);
+
+  /* ── 요금제 플랜 잉크·색면 (마케팅 /pricing 전용) ────────────────
+     플랜 5개를 색으로 식별한다. 잉크(ink)는 **글자·선용**이라 배경 대비를 통과해야
+     하고, 색면(field)은 **배경용**이라 옅다 — 둘을 바꿔 쓰면 대비가 무너진다.
+     기존 시맨틱(positive 145 / warning 30 / negative 25 / 코랄 15)과 hue를 최소
+     40도 이상 벌려 "성공=초록" 같은 의미 충돌이 없다. Pro는 브랜드 코랄을 그대로 쓴다.
+     ⚠️ edge는 rgba로 정의되므로 Tailwind 알파 수정자(border-plan-*-edge/40)를 붙이면
+     색이 조용히 사라진다 — edge에 알파 금지, ink에만 허용. */
+  --color-plan-free-ink: var(--plan-free-ink);
+  --color-plan-free-field: var(--plan-free-field);
+  --color-plan-free-edge: var(--plan-free-edge);
+  --color-plan-creator-ink: var(--plan-creator-ink);
+  --color-plan-creator-field: var(--plan-creator-field);
+  --color-plan-creator-edge: var(--plan-creator-edge);
+  --color-plan-pro-field: var(--plan-pro-field);
+  --color-plan-pro-edge: var(--plan-pro-edge);
+  --color-plan-agency-ink: var(--plan-agency-ink);
+  --color-plan-agency-field: var(--plan-agency-field);
+  --color-plan-agency-edge: var(--plan-agency-edge);
+  --color-plan-ent-ink: var(--plan-ent-ink);
+  --color-plan-ent-field: var(--plan-ent-field);
+  --color-plan-ent-edge: var(--plan-ent-edge);
 }
 
 /* ── 라이트 팔레트 (기본) ─────────────────────────────── */
@@ -118,6 +140,23 @@
   /* object-contain 썸네일의 레터박스 — bg-surface(#F4F5F7)면 회색 구멍으로 읽힌다.
      카드 호버 시 이 판만 body로 한 칸 올라온다(요소는 1px도 안 움직인다). */
   --plate: #fafafb;
+
+  /* 요금제 플랜 색 — 라이트. ink는 흰 배경 대비 4.5:1 이상(본문 사용 가능),
+     field는 색지(色紙) 느낌의 옅은 면, edge는 그 면의 테두리. */
+  --plan-free-ink: #5b6472; /* 흑연 — 무료는 무채에 가깝게 */
+  --plan-free-field: #f2f3f5;
+  --plan-free-edge: rgba(91, 100, 114, 0.22);
+  --plan-creator-ink: #0e7c86; /* 틸 (hue 187) */
+  --plan-creator-field: #e7f4f4;
+  --plan-creator-edge: rgba(14, 124, 134, 0.28);
+  --plan-pro-field: #fff1ec; /* Pro = 브랜드 코랄. ink는 --primary 재사용 */
+  --plan-pro-edge: rgba(255, 107, 74, 0.34);
+  --plan-agency-ink: #3d4db7; /* 인디고 (hue 235) */
+  --plan-agency-field: #eceffa;
+  --plan-agency-edge: rgba(61, 77, 183, 0.26);
+  --plan-ent-ink: #7a3e8f; /* 플럼 (hue 290) */
+  --plan-ent-field: #f4ecf7;
+  --plan-ent-edge: rgba(122, 62, 143, 0.26);
 }
 
 /* ── 다크 팔레트 (토글) ─────────────────────────────── */
@@ -153,6 +192,25 @@
   /* 다크는 그림자 대신 반투명 테두리로 깊이 (PART 7.2) */
   --shadow-pop: none;
   --plate: #101015;
+
+  /* 요금제 플랜 색 — 다크는 라이트를 뒤집는 게 아니라 **따로 짠다**.
+     ink는 어두운 배경 위 대비를 위해 밝게 올리고, field는 body(#16161C)보다
+     겨우 한 톤 밝은 잉크 섞인 면 — 그림자가 없는 다크에서 층위를 만드는 건
+     이 면 명도와 edge 테두리뿐이다. */
+  --plan-free-ink: #99a2b2;
+  --plan-free-field: #1b1d23;
+  --plan-free-edge: rgba(153, 162, 178, 0.24);
+  --plan-creator-ink: #34d1dc;
+  --plan-creator-field: #122326;
+  --plan-creator-edge: rgba(52, 209, 220, 0.26);
+  --plan-pro-field: #26191a;
+  --plan-pro-edge: rgba(255, 107, 74, 0.4);
+  --plan-agency-ink: #8c97f5;
+  --plan-agency-field: #1a1c2c;
+  --plan-agency-edge: rgba(140, 151, 245, 0.28);
+  --plan-ent-ink: #c88fdb;
+  --plan-ent-field: #241a2a;
+  --plan-ent-edge: rgba(200, 143, 219, 0.28);
 }
 
 body {

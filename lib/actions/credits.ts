@@ -3,6 +3,11 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { PaidPlan } from "@/lib/toss/config";
+/* 값의 단일 출처는 lib/pricing/credit-config.ts — 마케팅 요금제 페이지가 server-only
+   의존 없이 같은 숫자를 읽을 수 있도록 순수 모듈로 분리했다. 여기서는 다시 export 해
+   기존 import 경로(@/lib/actions/credits)를 그대로 쓰게 한다. */
+import { CREDIT_COSTS, FREE_MONTHLY_LIMITS, PLAN_CREDIT_ALLOWANCE } from "@/lib/pricing/credit-config";
+export { CREDIT_COSTS, FREE_MONTHLY_LIMITS, PLAN_CREDIT_ALLOWANCE };
 
 /*
   AI 생성 과금 헬퍼 — 2026-08-14 4차 개편: "무료=기능별 횟수, 유료=통합 크레딧".
@@ -35,26 +40,7 @@ import type { PaidPlan } from "@/lib/toss/config";
  * 기능별 크레딧 가격 — 1크레딧 = 10원 고정 환율로 실측 원가를 올림(ceil)한 값.
  * 원가 자체가 바뀌면(공급사 단가 변동 등) 이 표만 다시 계산해서 고친다.
  */
-export const CREDIT_COSTS = {
-  /** AI 카드뉴스 생성 1회 — 실측 200원 */
-  cardnews: 20,
-  /** 성장 진단(실측 성과 분석 + AI) 1회 — 실측 200원 */
-  diagnosis: 20,
-  /** 레퍼런스 수집 1회(개인 수집 + 실시간 풀 수집 공용) — 실측 100원 */
-  collect: 10,
-  /** 메타광고 레퍼런스 수집 1회 — 실측 100원 */
-  adCollect: 10,
-  /** 릴스 대본 추출 1회 — 실측 2원(최소 단위 1크레딧) */
-  transcript: 1,
-  /** 아이디어 추천 1회 — 카드뉴스와 토큰·사고 설정이 같아 원가도 같다 */
-  ideas: 20,
-  /** 브랜드 톤 학습 1회 — 실측 100원 */
-  brandTone: 10,
-  /** AI 에이전트 메시지 1건 — 실측 35원 */
-  agentChat: 4,
-  /** 풀 영상 AI 분석 1회(새 분석만 — 캐시 히트는 무료) — Sonnet ~8원 + 대본 공급사 ~3원 */
-  videoAnalysis: 2,
-} as const;
+
 
 /**
  * 무료 플랜 전용 — 기능별 월 한도. 유료 플랜은 더 이상 이 표를 쓰지 않고
@@ -63,20 +49,7 @@ export const CREDIT_COSTS = {
  * board_saves는 실제로 chargeGeneration을 호출하는 곳이 코드에 없다 — 게이팅되지
  * 않는 예약 설정이다. 나중에 보드 저장에 상한을 붙일 때 값만 살려 쓴다.
  */
-export const FREE_MONTHLY_LIMITS: Record<string, number> = {
-  ai_cardnews: 0,
-  growth_diagnosis: 0,
-  // "개인 수집"(구형 runCollection)과 "실시간 풀 수집"(collectPoolNow)이 이 계량기를 공유한다.
-  reference_collect: 1,
-  ad_collect: 1,
-  reference_transcript: 1,
-  ai_ideas: 0,
-  ai_brand_tone: 0,
-  ai_agent_chat: 3,
-  // 2026-08-14 사장님 확정: 무료는 새 분석 월 1회 (캐시 히트는 횟수 미차감·무료)
-  ai_video_analysis: 1,
-  board_saves: 20, // 미사용(연결 안 됨) — 위 설명 참고
-};
+
 
 /**
  * 유료 플랜 월 크레딧 지급량 — 3차안(2026-08-14)에서 확정한 플랜별 기능 한도를
@@ -94,12 +67,7 @@ export const FREE_MONTHLY_LIMITS: Record<string, number> = {
  * 현실적(무료25%·유료40%) 마진 ~67.2% — ai_video_analysis를 원가 계산에서 뺀 만큼
  * 3차안(최악 3.5%/현실적 60.5%)보다 개선됐다.
  */
-export const PLAN_CREDIT_ALLOWANCE: Record<PaidPlan, number> = {
-  creator: 460,
-  pro: 1260,
-  agency: 4260,
-  enterprise: 10550,
-};
+
 
 export type ChargeResult =
   | { ok: true; via: "quota" | "credits"; userId: string; remainingCredits: number | null }
