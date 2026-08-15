@@ -42,3 +42,6 @@ next-env.d.ts
 
 # 사업계획서 등 비공개 문서 — 저장소가 public이라 추적하지 않는다
 BUSINESS_PLAN.md
+
+.vercel
+.env*
