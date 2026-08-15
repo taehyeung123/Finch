@@ -17,7 +17,7 @@ import { aggregateActive } from "@/lib/ads/metrics";
 import { CHANNEL_LABEL } from "@/lib/channels";
 import { ChannelProfilePanel } from "@/components/dashboard/channel-profile-panel";
 import { PerformanceTrend } from "@/components/dashboard/performance-trend";
-import { ArchiveStatus, DailyBriefChips, DailyBriefHero, NextActions } from "@/components/dashboard/daily-brief";
+import { ArchiveStatus, DailyBriefHero, HomeSearch, NextActions } from "@/components/dashboard/daily-brief";
 import type { PoolHomeStats } from "@/lib/pool/home-stats";
 import type {
   AdCampaign,
@@ -130,7 +130,7 @@ export function DashboardClient({
       />
 
       <DailyBriefHero stats={poolStats} />
-      <DailyBriefChips stats={poolStats} />
+      <HomeSearch stats={poolStats} />
       <ArchiveStatus stats={poolStats} />
 
       {disconnected.length > 0 ? (
