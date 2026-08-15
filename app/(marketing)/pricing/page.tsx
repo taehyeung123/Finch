@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import type { Metadata } from "next";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { FinchMark } from "@/components/logo";
 import { planFeatures } from "@/lib/data";
@@ -133,38 +133,26 @@ export default function PricingPage() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }} />
 
-      {/* ── S0 히어로 — 코랄 패널. 첫 화면부터 색이 꽉 찬 면이 존재해야 한다 ── */}
-      <section className="mx-auto max-w-6xl px-4 pt-10 md:px-6 md:pt-14">
-        <div className="relative overflow-hidden rounded-card bg-primary px-6 py-12 md:px-12 md:py-16">
-          <FinchMark
-            className="pointer-events-none absolute -right-10 -top-10 size-64 text-on-primary/10 md:-right-6 md:size-80"
-          />
-          <div className="relative max-w-2xl">
-            <p className="inline-flex items-center gap-1.5 rounded-chip bg-on-primary/10 px-3 py-1.5 text-[12px] font-bold text-on-primary">
-              <Sparkles className="size-3.5" aria-hidden />
-              통합 크레딧 · 기능별 횟수 제한 없음
-            </p>
-            <h1 className="mt-5 text-[clamp(38px,6vw,60px)] font-bold leading-[1.08] tracking-[-0.025em] text-on-primary">
-              쓰는 만큼만,
-              <br />
-              쓰고 싶은 곳에.
-            </h1>
-            <p className="mt-5 max-w-[46ch] text-[16px] leading-[1.7] text-on-primary/75 md:text-[18px]">
-              유료 플랜은 매달 받는 크레딧 하나로 카드뉴스·진단·영상 분석을 자유롭게 씁니다.
-              단가는 어느 플랜에서나 같고, 달라지는 건 크레딧의 양뿐입니다.
-            </p>
-          </div>
-        </div>
+      {/* ── S0 히어로 — 제미나이 문법: 흰 지면, 중앙 정렬, 큰 글씨, 장식 없음.
+             앞선 안의 코랄 패널은 걷어냈다(강조는 버튼 색 하나뿐이라는 지시). ── */}
+      <section className="mx-auto max-w-6xl px-4 pt-20 text-center md:px-6 md:pt-28">
+        <FinchMark className="mx-auto size-12 text-primary" />
+        <h1 className="mt-8 text-[clamp(36px,5.2vw,56px)] font-medium leading-[1.15] tracking-[-0.03em]">
+          핀치를 <span className="text-primary">최대한</span> 활용하세요
+        </h1>
+        <p className="mx-auto mt-6 max-w-[52ch] text-[18px] leading-[1.5] text-fg-sub">
+          유료 플랜은 기능별 횟수 제한 없이 매달 받는 크레딧 하나로 씁니다.
+          단가는 어느 플랜에서나 같고, 달라지는 건 크레딧의 양뿐입니다.
+        </p>
       </section>
 
       {/* ── S1 플랜 카드 — 위 3 / 아래 2 (사장님 지시). 추천 플랜만 코랄 글로우 ── */}
-      <section className="mx-auto max-w-6xl px-4 pt-14 md:px-6">
+      <section className="mx-auto max-w-6xl px-4 pt-14 md:px-6 md:pt-20">
         <PlanCardGrid>
-          {PLAN_CARDS.map((plan, i) => (
+          {PLAN_CARDS.map((plan) => (
             <PlanCard
               key={plan.key}
               plan={plan}
-              index={i}
               highlight={plan.key === "pro"}
               badge={plan.key === "pro" ? "가장 인기" : undefined}
               action={
