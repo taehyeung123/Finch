@@ -11,53 +11,59 @@ import {
   Sparkles,
   TrendingUp,
 } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/cn";
+import { FinchMark } from "@/components/logo";
 import { ButtonLink } from "@/components/ui/button";
 import { AppIconTile } from "@/components/icons/brand";
 import { formatCompact, formatDate } from "@/lib/format";
 import type { PoolHomeStats } from "@/lib/pool/home-stats";
 
 /*
-  홈 상단 — 스니핏 홈 실캡처 대조 3차 개편 (2026-08-15).
-  1·2차는 텍스트 구조만 옮겨 "밋밋한 회색 대시보드"였다(사장님 지적). 실화면 기준 차이:
-  스니핏은 ① 이미지/그라데이션 히어로 + 우측 소식 리스트 ② 중앙 대형 검색바(홈의 주인공)
-  ③ 아카이빙 현황에 플랫폼 아이콘·브랜드 아바타 등 시각 요소가 밀도 있게 배치된다.
-  전부 우리 토큰(코랄 계열)로 재구성 — hex 하드코딩 없음, 그라데이션은 토큰+투명도 조합.
+  홈 상단 — 스니핏 실캡처 대조 4차: "프리미엄 질감" 패스 (2026-08-15).
+  3차까지 구조는 맞췄지만 각진 라운드·테두리-온리 카드·풀채도 단색 히어로가
+  와이어프레임 인상을 만들었다(사장님 지적). 이번 패스:
+  - 전역 radius-card 8→12px(globals) + 홈 카드 전부 shadow-panel(스니핏 실측 그림자)
+    + 테두리 미미화(border-line/60) — "선으로 구분"에서 "빛으로 구분"으로
+  - 히어로: 딥 코랄 그라데이션(primary→pressed) + 유리 칩 + 대형 로고 워터마크
+  - 검색바·버튼·칩: rounded-chip 필 형태(스니핏의 둥근 검색바 대응), 칩은 채움형+컬러 아이콘
+  - 카드 hover 리프트, 숫자 40px 스케일, 자간 타이트닝
 */
 
-/** 핀치 소식 — 실제 릴리스 노트 기반 정적 큐레이션 (스니핏 '오늘의 스니핏' 공지 리스트 대응) */
 const FINCH_NEWS = [
   { date: "2026. 08. 15", title: "자동 DM이 새로워졌어요 — 5단계 자동화 위저드 출시" },
   { date: "2026. 08. 14", title: "다음에 올릴 게시물 예약 자동화가 추가됐어요" },
   { date: "2026. 08. 12", title: "레퍼런스 의미 검색 도입 — 문장으로 찾아보세요" },
 ];
 
-/** ① 히어로 — 그라데이션 브리핑 카드 + 핀치 소식 리스트 */
+/** 홈 공용 카드 스킨 — 부드러운 그림자 + 옅은 테두리 (스니핏 질감) */
+const panel = "rounded-card border border-line/60 bg-overlay shadow-panel";
+
+/** ① 히어로 — 딥 그라데이션 브리핑 + 핀치 소식 리스트 */
 export function DailyBriefHero({ stats }: { stats: PoolHomeStats }) {
   const hasNew = stats.newCreatives3d > 0;
 
   return (
     <section aria-label="오늘의 핀치" className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-      {/* 그라데이션 히어로 — 스니핏의 이미지 히어로 대응 (브랜드 코랄 그라데이션) */}
-      <div className="shadow-pop relative flex min-h-[220px] flex-col justify-end overflow-hidden rounded-card border border-line bg-gradient-to-br from-primary via-primary/80 to-warning/70 p-6">
-        {/* 장식 패턴 — 큰 원형 글로우 2개 (토큰 기반, 이미지 없이 깊이감) */}
-        <span
+      <div className="shadow-panel relative flex min-h-[228px] flex-col justify-end overflow-hidden rounded-card bg-gradient-to-br from-primary via-primary-hover to-primary-pressed p-7">
+        {/* 빛 번짐 + 대형 로고 워터마크 — 이미지 없이 깊이감 */}
+        <span aria-hidden className="absolute -right-14 -top-28 size-72 rounded-full bg-on-primary/[0.14] blur-3xl" />
+        <span aria-hidden className="absolute -left-12 bottom-2 size-44 rounded-full bg-warning/25 blur-2xl" />
+        <FinchMark
           aria-hidden
-          className="absolute -right-16 -top-24 size-64 rounded-full bg-on-primary/10 blur-2xl"
+          className="absolute -bottom-8 -right-6 size-44 rotate-[-8deg] text-on-primary opacity-[0.08]"
         />
-        <span aria-hidden className="absolute -left-10 top-6 size-40 rounded-full bg-on-primary/10 blur-xl" />
 
-        <span className="absolute left-5 top-5 inline-flex items-center gap-2">
-          <span className="rounded-chip bg-on-primary/90 px-2.5 py-1 text-[11px] font-bold text-primary">
+        <span className="absolute left-6 top-6 inline-flex items-center gap-2">
+          <span className="rounded-chip bg-on-primary/15 px-3 py-1 text-[11px] font-bold tracking-wide text-on-primary backdrop-blur-sm">
             오늘의 핀치
           </span>
-          <span className="tnum text-[12px] font-medium text-on-primary/80">
+          <span className="tnum text-[12px] font-medium text-on-primary/70">
             {formatDate(new Date().toISOString())}
           </span>
         </span>
 
         <div className="relative">
-          <h2 className="text-[26px] font-bold leading-tight text-on-primary">
+          <h2 className="text-[28px] font-bold leading-[1.25] tracking-[-0.02em] text-on-primary">
             {hasNew ? (
               <>
                 새 레퍼런스 <span className="tnum">{formatCompact(stats.newCreatives3d)}건</span>이<br />
@@ -71,34 +77,40 @@ export function DailyBriefHero({ stats }: { stats: PoolHomeStats }) {
               </>
             )}
           </h2>
-          <p className="mt-2 max-w-[420px] text-[13px] leading-relaxed text-on-primary/85">
+          <p className="mt-2.5 max-w-[400px] text-[13px] leading-relaxed text-on-primary/80">
             {hasNew
-              ? "최근 3일 동안 공용 풀에 새로 쌓인 소재예요. 우리 업종에서 뭐가 뜨는지 확인해 보세요."
+              ? "최근 3일 동안 공용 풀에 쌓인 소재예요. 우리 업종에서 뭐가 뜨는지 확인해 보세요."
               : "매일 자동 수집이 돌며 새 소재가 쌓입니다. 업종별 레퍼런스를 둘러보세요."}
           </p>
         </div>
       </div>
 
-      {/* 핀치 소식 리스트 — 스니핏 우측 공지 카드 대응 */}
-      <Card className="flex flex-col justify-center gap-1 p-2">
-        {FINCH_NEWS.map((n) => (
+      {/* 핀치 소식 — 옅은 구분선 리스트 */}
+      <div className={cn(panel, "flex flex-col justify-center p-3")}>
+        {FINCH_NEWS.map((n, i) => (
           <Link
             key={n.title}
             href="/notifications"
-            className="group rounded-card px-3.5 py-2.5 transition-colors hover:bg-body"
+            className={cn(
+              "group rounded-card px-3.5 py-3 transition-colors hover:bg-body",
+              i > 0 && "border-t border-line/50",
+            )}
           >
             <p className="tnum text-[11px] font-medium text-fg-faint">{n.date}</p>
-            <p className="mt-0.5 line-clamp-2 text-[13px] font-semibold leading-snug group-hover:text-primary">
+            <p className="mt-1 line-clamp-2 text-[13px] font-semibold leading-snug transition-colors group-hover:text-primary">
               {n.title}
             </p>
           </Link>
         ))}
-      </Card>
+      </div>
     </section>
   );
 }
 
-/** ② 중앙 대형 검색바 — 스니핏 홈의 주인공. 제출하면 탐색에 검색어가 채워진 채 열린다 */
+/** 추천 칩 아이콘 컬러 로테이션 — 컬러 밀도(스니핏의 컬러풀 칩 대응) */
+const CHIP_TONES = ["text-primary", "text-positive", "text-warning", "text-ig", "text-tiktok-cyan"];
+
+/** ② 중앙 대형 검색바 — 필 형태 + 부드러운 그림자 */
 export function HomeSearch({ stats }: { stats: PoolHomeStats }) {
   const router = useRouter();
   const [q, setQ] = useState("");
@@ -110,8 +122,11 @@ export function HomeSearch({ stats }: { stats: PoolHomeStats }) {
   }
 
   return (
-    <section aria-label="레퍼런스 검색" className="mx-auto w-full max-w-2xl py-2">
-      <form onSubmit={submit} className="shadow-pop flex h-14 items-center gap-2 rounded-card border border-line bg-overlay pl-5 pr-2 transition-colors focus-within:border-primary">
+    <section aria-label="레퍼런스 검색" className="mx-auto w-full max-w-2xl py-3">
+      <form
+        onSubmit={submit}
+        className="shadow-panel flex h-14 items-center gap-2 rounded-chip border border-line/60 bg-overlay pl-5 pr-2 transition-[border-color,box-shadow] focus-within:border-primary"
+      >
         <Search className="size-5 shrink-0 text-fg-faint" aria-hidden />
         <input
           value={q}
@@ -122,21 +137,21 @@ export function HomeSearch({ stats }: { stats: PoolHomeStats }) {
         />
         <button
           type="submit"
-          className="flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-card bg-primary px-4 text-[14px] font-semibold text-on-primary transition-colors hover:bg-primary-hover"
+          className="flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-chip bg-primary px-5 text-[14px] font-semibold text-on-primary transition-colors hover:bg-primary-hover"
         >
           검색
         </button>
       </form>
 
       {stats.searchChips.length > 0 ? (
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-          {stats.searchChips.map((chip) => (
+        <div className="mt-3.5 flex flex-wrap items-center justify-center gap-2">
+          {stats.searchChips.map((chip, i) => (
             <Link
               key={chip}
               href={`/library?q=${encodeURIComponent(chip)}`}
-              className="inline-flex items-center gap-1.5 rounded-chip border border-line bg-overlay px-3.5 py-2 text-[13px] font-medium text-fg-sub transition-colors hover:border-primary hover:text-primary"
+              className="shadow-panel inline-flex items-center gap-1.5 rounded-chip border border-line/50 bg-overlay px-3.5 py-2 text-[13px] font-medium text-fg-sub transition-all hover:-translate-y-0.5 hover:border-primary hover:text-primary"
             >
-              <Search className="size-3 text-fg-faint" aria-hidden />
+              <Search className={cn("size-3", CHIP_TONES[i % CHIP_TONES.length])} aria-hidden />
               {chip}
             </Link>
           ))}
@@ -146,12 +161,15 @@ export function HomeSearch({ stats }: { stats: PoolHomeStats }) {
   );
 }
 
-/** 브랜드 아바타 — 로고가 없어도 이니셜+브랜드 톤 원형으로 시각 밀도를 만든다 */
+/** 브랜드 아바타 — 이니셜 + 토큰 톤 로테이션 */
 function BrandAvatar({ name, index }: { name: string; index: number }) {
   const tones = ["bg-primary-weak text-primary", "bg-positive-weak text-positive", "bg-warning-weak text-warning"];
   return (
     <span
-      className={`flex size-8 shrink-0 items-center justify-center rounded-full text-[13px] font-bold ${tones[index % tones.length]}`}
+      className={cn(
+        "flex size-9 shrink-0 items-center justify-center rounded-full text-[14px] font-bold ring-1 ring-line/60",
+        tones[index % tones.length],
+      )}
       aria-hidden
     >
       {name.replace(/^@/, "").charAt(0)}
@@ -159,84 +177,88 @@ function BrandAvatar({ name, index }: { name: string; index: number }) {
   );
 }
 
-/** ③ 아카이빙 현황 — 채널 아이콘 + 큰 숫자 + 브랜드 아바타 리스트 (스니핏 BRAND ARCHIVE 대응) */
+/** ③ 아카이빙 현황 — BRAND ARCHIVE (스니핏 대응, 카드 리프트·그림자 질감) */
 export function ArchiveStatus({ stats }: { stats: PoolHomeStats }) {
   return (
     <section aria-label="아카이빙 현황">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[11px] font-bold tracking-wide text-primary">BRAND ARCHIVE</p>
-          <h2 className="mt-1 text-[19px] font-bold leading-snug">오늘의 아카이빙 현황</h2>
-          <p className="mt-0.5 text-[13px] text-fg-sub">최근 수집된 소재와 브랜드 흐름을 한눈에 확인하세요.</p>
+          <p className="text-[11px] font-bold tracking-[0.08em] text-primary">BRAND ARCHIVE</p>
+          <h2 className="mt-1 text-[20px] font-bold leading-snug tracking-[-0.01em]">오늘의 아카이빙 현황</h2>
+          <p className="mt-1 text-[13px] text-fg-sub">최근 수집된 소재와 브랜드 흐름을 한눈에 확인하세요.</p>
         </div>
-        <ButtonLink href="/library" size="sm">
+        <ButtonLink href="/library" size="sm" className="rounded-chip px-4">
           탐색으로 이동 <ArrowRight className="size-3.5" aria-hidden />
         </ButtonLink>
       </div>
 
-      {/* 지원 채널 아이콘 행 — 수집 대상 플랫폼 시각화 */}
-      <div className="mb-3 flex items-center gap-2">
-        <span className="rounded-chip border border-primary bg-primary-weak px-3 py-1 text-[12px] font-semibold text-primary">
+      <div className="mb-4 flex items-center gap-2">
+        <span className="shadow-panel rounded-chip border border-primary/60 bg-primary-weak px-3.5 py-1.5 text-[12px] font-semibold text-primary">
           전체
         </span>
-        <AppIconTile app="instagram" size={26} />
-        <AppIconTile app="tiktok" size={26} />
-        <AppIconTile app="threads" size={26} />
+        <AppIconTile app="instagram" size={28} />
+        <AppIconTile app="tiktok" size={28} />
+        <AppIconTile app="threads" size={28} />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Card className="p-5">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className={cn(panel, "p-6 transition-transform hover:-translate-y-0.5")}>
           <div className="flex items-center justify-between">
             <p className="text-[13px] font-semibold text-fg-sub">신규 수집 소재</p>
-            <span className="rounded-chip bg-primary-weak px-2 py-0.5 text-[11px] font-semibold text-primary">
+            <span className="rounded-chip bg-primary-weak px-2.5 py-1 text-[11px] font-semibold text-primary">
               최근 3일
             </span>
           </div>
-          <p className="tnum mt-3 text-[34px] font-bold leading-none">
+          <p className="tnum mt-4 text-[40px] font-bold leading-none tracking-[-0.02em]">
             {formatCompact(stats.newCreatives3d)}
-            <span className="ml-1 text-[15px] font-medium text-fg-sub">개</span>
+            <span className="ml-1.5 text-[15px] font-medium tracking-normal text-fg-sub">개</span>
           </p>
-          <p className="mt-2 text-[12px] text-fg-sub">공용 풀에 새로 수집된 소재예요</p>
-          <div className="mt-4 border-t border-line pt-3">
-            <p className="text-[13px] font-semibold text-fg-sub">수집 중인 브랜드</p>
-            <p className="tnum mt-1.5 text-[22px] font-bold leading-none">
-              {formatCompact(stats.totalBrands)}
-              <span className="ml-1 text-[13px] font-medium text-fg-sub">개</span>
-            </p>
+          <p className="mt-2.5 text-[12px] text-fg-sub">공용 풀에 새로 수집된 소재예요</p>
+          <div className="mt-5 border-t border-line/60 pt-4">
+            <div className="flex items-baseline justify-between">
+              <p className="text-[13px] font-semibold text-fg-sub">수집 중인 브랜드</p>
+              <p className="tnum text-[24px] font-bold leading-none tracking-[-0.01em]">
+                {formatCompact(stats.totalBrands)}
+                <span className="ml-1 text-[13px] font-medium tracking-normal text-fg-sub">개</span>
+              </p>
+            </div>
           </div>
-        </Card>
+        </div>
 
-        <Card className="p-5">
+        <div className={cn(panel, "p-6 transition-transform hover:-translate-y-0.5")}>
           <div className="flex items-center justify-between">
             <p className="flex items-center gap-1.5 text-[13px] font-semibold text-fg-sub">
               <TrendingUp className="size-3.5 text-primary" aria-hidden /> 콘텐츠가 많이 게재된 브랜드
             </p>
-            <span className="rounded-chip bg-primary-weak px-2 py-0.5 text-[11px] font-semibold text-primary">
+            <span className="rounded-chip bg-primary-weak px-2.5 py-1 text-[11px] font-semibold text-primary">
               최근 7일
             </span>
           </div>
           {stats.topBrands.length > 0 ? (
-            <ul className="mt-3 space-y-1">
+            <ul className="mt-3.5 space-y-0.5">
               {stats.topBrands.map((b, i) => (
                 <li key={b.name}>
                   <Link
                     href={`/library?q=${encodeURIComponent(b.name)}`}
-                    className="group flex items-center gap-3 rounded-card px-2 py-2 transition-colors hover:bg-body"
+                    className="group flex items-center gap-3 rounded-card px-2.5 py-2.5 transition-colors hover:bg-body"
                   >
                     <BrandAvatar name={b.name} index={i} />
-                    <span className="min-w-0 flex-1 truncate text-[14px] font-semibold group-hover:text-primary">
+                    <span className="min-w-0 flex-1 truncate text-[14px] font-semibold transition-colors group-hover:text-primary">
                       {b.name}
                     </span>
                     <span className="tnum shrink-0 text-[13px] font-semibold text-fg-sub">{b.count}개</span>
-                    <ChevronRight className="size-4 shrink-0 text-fg-faint" aria-hidden />
+                    <ChevronRight
+                      className="size-4 shrink-0 text-fg-faint transition-transform group-hover:translate-x-0.5"
+                      aria-hidden
+                    />
                   </Link>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="mt-3 text-[13px] text-fg-sub">이번 주 수집이 시작되면 브랜드가 표시돼요.</p>
+            <p className="mt-3.5 text-[13px] text-fg-sub">이번 주 수집이 시작되면 브랜드가 표시돼요.</p>
           )}
-        </Card>
+        </div>
       </div>
     </section>
   );
@@ -250,18 +272,18 @@ export function NextActions() {
     { href: "/growth", icon: TrendingUp, label: "성장 진단", desc: "내 계정 성과 분석" },
   ];
   return (
-    <section aria-label="바로가기" className="grid gap-3 sm:grid-cols-3">
+    <section aria-label="바로가기" className="grid gap-4 sm:grid-cols-3">
       {actions.map((a) => (
         <Link
           key={a.href}
           href={a.href}
-          className="group flex items-center gap-3 rounded-card border border-line bg-overlay p-4 transition-colors hover:border-primary"
+          className={cn(panel, "group flex items-center gap-3.5 p-5 transition-all hover:-translate-y-0.5 hover:border-primary/60")}
         >
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-card bg-primary-weak text-primary">
-            <a.icon className="size-4" aria-hidden />
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-card bg-gradient-to-br from-primary-weak to-warning-weak text-primary">
+            <a.icon className="size-[18px]" aria-hidden />
           </span>
           <span className="min-w-0">
-            <span className="block text-[14px] font-semibold group-hover:text-primary">{a.label}</span>
+            <span className="block text-[14px] font-semibold transition-colors group-hover:text-primary">{a.label}</span>
             <span className="mt-0.5 block truncate text-[12px] text-fg-sub">{a.desc}</span>
           </span>
         </Link>
