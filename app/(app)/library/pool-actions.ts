@@ -455,9 +455,16 @@ export async function analyzePoolCreative(creativeId: string): Promise<AnalyzeRe
             additionalProperties: false,
             required: ["opening", "flow", "hook_tags", "target", "improvement"],
             properties: {
-              opening: { type: "string", description: "첫 3초(대본 도입부)가 시청자를 붙잡는 방식 분석, 2문장 이내" },
-              flow: { type: "array", items: { type: "string" }, description: "영상 전개 구조 3~5단계, 각 한 문장" },
-              hook_tags: { type: "array", items: { enum: HOOK_VALUES }, description: "사용된 후킹 기법 0~3개" },
+              opening: { type: "string", description: "첫 3초(대본 도입부)가 시청자를 붙잡는 방식 분석, 2문장 이내. 대본을 그대로 옮기지 말고 왜 붙잡는지를 쓴다" },
+              /* 배열 개수 제약(minItems·maxItems)은 넣지 말 것 — Anthropic 구조화 출력이
+                 둘 다 400 으로 거부한다(2026-08-15 실측). 개수는 설명문으로 요구하고
+                 아래 파싱에서 slice 로 못 박는다. */
+              flow: { type: "array", items: { type: "string" }, description: "영상 전개 구조 3~5단계, 각 한 문장. 대본에 실제로 있는 구간만" },
+              hook_tags: {
+                type: "array",
+                items: { enum: HOOK_VALUES },
+                description: "대본에 **직접 근거가 있는** 후킹 기법만 최대 3개. 근거가 없으면 빈 배열",
+              },
               target: { type: "string", description: "타깃 시청자 추정 한 문장" },
               improvement: { type: "string", description: "이 구조를 내 콘텐츠에 적용할 때의 포인트 1~2문장" },
             },
@@ -467,7 +474,15 @@ export async function analyzePoolCreative(creativeId: string): Promise<AnalyzeRe
       system:
         "너는 숏폼 콘텐츠 구조 분석가다. 인스타그램 릴스의 대본(음성 받아쓰기)과 캡션, 반응 수치를 보고 " +
         "후킹 구조를 분석한다. 대본에 실제로 있는 내용만 근거로 삼고, 지어내지 마라. 이모지 금지. " +
-        "improvement 는 '이 영상을 베끼라'가 아니라 구조를 일반화해 적용하는 조언으로 쓴다.",
+        "improvement 는 '이 영상을 베끼라'가 아니라 구조를 일반화해 적용하는 조언으로 쓴다.\n" +
+        /* 실측으로 확인된 두 실패 유형을 명시로 막는다(2026-08-15 하이쿠·쏘넷 블라인드 비교):
+           ① 대본이 노래 가사뿐인 영상에서 '현관→거실 워크스루' 같은 **화면 장면을 창작**했다.
+              우리는 영상을 보지 않는다 — 대본과 캡션만 받는다.
+           ② 대본에 물음표도 2인칭도 없는데 '질문호명' 태그를 붙였다. */
+        "너는 영상 화면을 보지 못한다. 대본과 캡션 텍스트만 받는다 — 화면 구성·촬영·편집·장면 전환을 " +
+        "본 것처럼 서술하지 마라. 대본이 노래 가사뿐이거나 말이 거의 없으면, 없는 내레이션을 만들지 말고 " +
+        "'내레이션 없이 자막과 음악으로 끌고 간다'처럼 그 사실 자체를 분석하라. " +
+        "hook_tags 는 대본에서 근거 문장을 댈 수 있는 것만 골라라 — 애매하면 빼고, 없으면 빈 배열로 둔다.",
       messages: [
         {
           role: "user",
