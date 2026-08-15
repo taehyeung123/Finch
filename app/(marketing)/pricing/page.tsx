@@ -6,7 +6,7 @@ import { FinchMark } from "@/components/logo";
 import { planFeatures } from "@/lib/data";
 import { CREDIT_COSTS } from "@/lib/pricing/credit-config";
 import { PLAN_PRICES } from "@/lib/toss/config";
-import { PLAN_CARDS, PlanCard, PlanCardGrid } from "@/components/pricing/plan-cards";
+import { PLAN_CARDS, PlanCard, PlanCardGrid, PlanCta } from "@/components/pricing/plan-cards";
 
 /*
   요금제 지면 — 2차 전면 개편(2026-08-15).
@@ -158,22 +158,21 @@ export default function PricingPage() {
       </section>
 
       {/* ── S1 플랜 카드 — 위 3 / 아래 2 (사장님 지시). 추천 플랜만 코랄 글로우 ── */}
-      <section className="mx-auto max-w-6xl px-4 pt-12 md:px-6">
+      <section className="mx-auto max-w-6xl px-4 pt-14 md:px-6">
         <PlanCardGrid>
-          {PLAN_CARDS.map((plan) => (
+          {PLAN_CARDS.map((plan, i) => (
             <PlanCard
               key={plan.key}
               plan={plan}
+              index={i}
               highlight={plan.key === "pro"}
               badge={plan.key === "pro" ? "가장 인기" : undefined}
               action={
-                <ButtonLink
+                <PlanCta
                   href="/signup"
-                  variant={plan.key === "pro" ? "primary" : "secondary"}
-                  className="w-full"
-                >
-                  {plan.key === "free" ? "무료로 시작하기" : `${plan.name} 시작하기`}
-                </ButtonLink>
+                  filled={plan.key === "pro"}
+                  label={plan.key === "free" ? "무료로 시작하기" : `${plan.name} 시작하기`}
+                />
               }
             />
           ))}
@@ -181,8 +180,8 @@ export default function PricingPage() {
       </section>
 
       {/* ── S2 크레딧 소모표 — 밴드 교차(surface). 칩 그리드로 시각 밀도를 올린다 ── */}
-      <section className="mt-20 border-y border-line bg-surface">
-        <div className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20">
+      <section className="mt-24 border-y border-line bg-surface md:mt-32">
+        <div className="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
           <div className="grid gap-10 lg:grid-cols-12 lg:gap-x-10">
             <div className="lg:col-span-4">
               <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-primary">크레딧 소모표</p>
@@ -226,7 +225,7 @@ export default function PricingPage() {
       </section>
 
       {/* ── S3 비교표 ── */}
-      <section className="mx-auto max-w-6xl px-4 py-20 md:px-6">
+      <section className="mx-auto max-w-6xl px-4 py-24 md:px-6 md:py-32">
         <div className="max-w-3xl">
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-fg-faint">플랜별 비교</p>
           <h2 className="mt-3 text-[30px] font-bold tracking-[-0.02em] md:text-[36px]">
@@ -327,7 +326,7 @@ export default function PricingPage() {
 
       {/* ── S4 FAQ — 밴드 교차(surface) ── */}
       <section className="border-y border-line bg-surface">
-        <div className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20">
+        <div className="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-fg-faint">자주 묻는 질문</p>
           <h2 className="mt-3 text-[30px] font-bold tracking-[-0.02em] md:text-[36px]">
             요금제, 무엇이 궁금하신가요?
@@ -349,7 +348,7 @@ export default function PricingPage() {
       </section>
 
       {/* ── S5 최종 CTA ── */}
-      <section className="mx-auto max-w-6xl px-4 py-20 md:px-6">
+      <section className="mx-auto max-w-6xl px-4 py-24 md:px-6 md:py-32">
         <div className="flex flex-col gap-7 rounded-card border border-line bg-body p-8 md:flex-row md:items-center md:justify-between md:p-12">
           <div>
             <h2 className="text-[30px] font-bold leading-[1.15] tracking-[-0.02em] md:text-[38px]">
