@@ -1,26 +1,31 @@
+import { Fragment } from "react";
 import type { Metadata } from "next";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
+import { FinchMark } from "@/components/logo";
 import { planFeatures } from "@/lib/data";
 import { CREDIT_COSTS, PLAN_CREDIT_ALLOWANCE, creditsBuy } from "@/lib/pricing/credit-config";
 import { PLAN_PRICES } from "@/lib/toss/config";
+import { FreeBar, PaidCard, type PlanCard } from "./_components/plan-grid";
 
 /*
-  요금제 지면 — "요금표"가 아니라 **인쇄물의 구독 안내 지면**으로 조판한다.
-  (2026-08-15 전면 리뉴얼. 아트디렉션 3안 경합 + 3관점 심사 결과: 에디토리얼 골격 채택,
-   색면 팔레트는 부티크 안에서 이식 — 심사 전원이 "색이 너무 적다"를 지적했고
-   사장님 지시의 첫 항목이 "색감 다양하게"였다.)
+  요금제 지면 — 2차 전면 개편(2026-08-15).
 
-  이 페이지가 지키는 규칙 — 고치기 전에 읽을 것:
-  1. **5열 균등 카드 금지.** 1152 ÷ 5 = 230px에 가격·크레딧·CTA를 넣으면 활자가 눌려
-     "똑같이 생긴 좁은 기둥 5개"가 된다. 가로 5행 스트라이프라 가격·크레딧·CTA가
-     세로축으로 정렬되고, 눈이 위아래로 훑기만 하면 비교가 끝난다.
-  2. **CTA 버튼 5개 나열 금지.** Pro만 실버튼, 나머지는 밑줄 링크. 버튼이 세로로
-     5개 늘어서는 순간 인쇄물이 아니라 진열대가 된다.
-  3. **1크레딧 = 10원 환율 절대 비노출.** 노출되면 "460크레딧=4,600원인데 9,900원"이
-     즉시 계산된다(lib/pricing/credit-config.ts 주석).
-  4. **미확정 사실 금지** — 연간 할인, 부가세 문구, 프로모션 배지, 카운트다운.
-  5. 숫자는 전부 상수에서 파생한다. 하드코딩하면 화면과 과금이 갈린다.
+  1차(가로 5행 스트라이프 · 인쇄물 조판)는 반려됐다. 실캡처로 확인한 실패 원인:
+   ① 색면 알파가 5%라 스크린샷에서 흰 배경과 구분이 안 됨
+   ② 카드가 없어 물성·깊이가 0 — 얇은 괘선 문서로 읽힘
+   ③ 배치가 바뀐 티가 안 남
+  그래서 이번엔 배치부터 다시 짰다:
+   - 코랄 히어로 패널(브랜드 마크 워터마크) → 첫 화면부터 색이 꽉 찬 면이 존재
+   - Free는 가로 바로 분리, 유료 4장만 카드 그리드(264px 확보 → 42px 가격이 들어간다)
+   - Pro 카드는 헤더를 코랄로 꽉 채우고 잉크를 반전 + 위로 승격
+   - 섹션 배경을 surface/body 로 교차해 리듬을 만든다(1차는 전 구간 단색이었다)
+   - 크레딧 소모표를 칩 그리드로 — 점선 목록은 시각적으로 너무 약했다
+
+  유지되는 규칙:
+   - 1크레딧=10원 환율 비노출(노출되면 마진이 즉시 계산된다)
+   - 미확정 사실 금지(연간 할인·부가세·프로모션)
+   - 숫자는 전부 상수에서 파생 — 화면과 과금이 갈리면 그게 클레임이다
 */
 
 export const metadata: Metadata = {
@@ -30,47 +35,25 @@ export const metadata: Metadata = {
   alternates: { canonical: "/pricing" },
 };
 
-interface PlanRow {
-  key: string;
-  name: string;
-  target: string;
-  price: number;
-  /** 유료만 값이 있다. null = 크레딧을 쓰지 않는 무료 플랜(단위계가 다르다) */
-  credits: number | null;
-  /** 무료 전용 — 크레딧 대신 세는 월 횟수 */
-  counts: readonly string[] | null;
-  note: string;
-  field: string;
-  edge: string;
-  ink: string;
-  rail: string;
-  featured?: boolean;
-}
+const FREE_COUNTS = ["AI 챗 3회", "영상 분석 1회", "레퍼런스 수집 1회", "대본 추출 1회", "자동 DM 콘텐츠 1개"];
+const FREE_LOCKED = ["AI 카드뉴스", "성장 진단", "아이디어 추천", "브랜드 톤 학습"];
 
-/** 플랜 축 — 색 토큰 이름과 1:1. 행 러그 색 = 비교표 열 머리 점 색. */
-const PLANS: readonly PlanRow[] = [
-  {
-    key: "free",
-    name: "Free",
-    target: "체험",
-    price: 0,
-    credits: null,
-    /** 무료는 크레딧이 아니라 **횟수**로 센다 — 단위계가 다르다는 걸 형태로 보여준다 */
-    counts: ["AI 챗 3회", "영상 분석 1회", "레퍼런스 수집 1회", "대본 추출 1회"],
-    note: "자동 DM 콘텐츠 1개",
-    field: "bg-plan-free-field",
-    edge: "border-plan-free-edge",
-    ink: "text-plan-free-ink",
-    rail: "bg-plan-free-ink",
-  },
+/** 크레딧으로 무엇을 몇 개 사는가 — 전부 상수에서 파생한다 */
+const buysFor = (credits: number) => [
+  { label: "AI 카드뉴스", n: creditsBuy(credits, CREDIT_COSTS.cardnews), unit: "장" },
+  { label: "AI 챗", n: creditsBuy(credits, CREDIT_COSTS.agentChat), unit: "회" },
+  { label: "영상 분석", n: creditsBuy(credits, CREDIT_COSTS.videoAnalysis), unit: "편" },
+];
+
+const PAID: PlanCard[] = [
   {
     key: "creator",
     name: "Creator",
     target: "개인 크리에이터",
     price: PLAN_PRICES.creator,
     credits: PLAN_CREDIT_ALLOWANCE.creator,
-    counts: null,
-    note: "자동 DM 콘텐츠 5개 · 채널 3개",
+    buys: buysFor(PLAN_CREDIT_ALLOWANCE.creator),
+    perks: ["채널 3개 연동", "자동 DM 콘텐츠 5개", "레퍼런스 무제한 열람", "이메일 지원"],
     field: "bg-plan-creator-field",
     edge: "border-plan-creator-edge",
     ink: "text-plan-creator-ink",
@@ -82,13 +65,13 @@ const PLANS: readonly PlanRow[] = [
     target: "광고주·1인 마케터",
     price: PLAN_PRICES.pro,
     credits: PLAN_CREDIT_ALLOWANCE.pro,
-    counts: null,
-    note: "자동 DM 콘텐츠 20개 · 메타광고 생성·관리",
+    buys: buysFor(PLAN_CREDIT_ALLOWANCE.pro),
+    perks: ["메타광고 생성·관리", "자동 DM 콘텐츠 20개", "경쟁사 광고 모니터링", "팀 최대 3인"],
+    featured: true,
     field: "bg-plan-pro-field",
     edge: "border-plan-pro-edge",
     ink: "text-primary",
     rail: "bg-primary",
-    featured: true,
   },
   {
     key: "agency",
@@ -96,8 +79,8 @@ const PLANS: readonly PlanRow[] = [
     target: "대행사",
     price: PLAN_PRICES.agency,
     credits: PLAN_CREDIT_ALLOWANCE.agency,
-    counts: null,
-    note: "자동 DM 콘텐츠 100개 · 클라이언트 10팀 · 팀 10인",
+    buys: buysFor(PLAN_CREDIT_ALLOWANCE.agency),
+    perks: ["클라이언트 10팀 연동", "자동 DM 콘텐츠 100개", "멀티 클라이언트 광고 관리", "팀 10인 + 권한 관리"],
     field: "bg-plan-agency-field",
     edge: "border-plan-agency-edge",
     ink: "text-plan-agency-ink",
@@ -109,8 +92,8 @@ const PLANS: readonly PlanRow[] = [
     target: "대형 대행사·브랜드",
     price: PLAN_PRICES.enterprise,
     credits: PLAN_CREDIT_ALLOWANCE.enterprise,
-    counts: null,
-    note: "자동 DM 무제한 · 클라이언트 무제한 · 전담 매니저",
+    buys: buysFor(PLAN_CREDIT_ALLOWANCE.enterprise),
+    perks: ["클라이언트 무제한", "자동 DM 무제한", "무제한 팀 시트 + 권한 관리", "전담 매니저 지원"],
     field: "bg-plan-ent-field",
     edge: "border-plan-ent-edge",
     ink: "text-plan-ent-ink",
@@ -139,6 +122,14 @@ const TABLE_GROUPS = [
     rows: ["AI 카드뉴스", "성장 진단", "아이디어 추천", "AI 챗", "영상 분석", "레퍼런스 수집"],
   },
   { label: "운영", rows: ["인스타 댓글 자동 DM", "메타광고 관리", "팀 기능", "지원"] },
+];
+
+const TABLE_COLS = [
+  { key: "free", name: "Free", price: 0, rail: "bg-plan-free-ink" },
+  { key: "creator", name: "Creator", price: PLAN_PRICES.creator, rail: "bg-plan-creator-ink" },
+  { key: "pro", name: "Pro", price: PLAN_PRICES.pro, rail: "bg-primary" },
+  { key: "agency", name: "Agency", price: PLAN_PRICES.agency, rail: "bg-plan-agency-ink" },
+  { key: "enterprise", name: "Enterprise", price: PLAN_PRICES.enterprise, rail: "bg-plan-ent-ink" },
 ];
 
 const PRICING_FAQ = [
@@ -176,7 +167,7 @@ const JSON_LD = {
       description:
         "핀치는 무료 플랜과 유료 4단계(Creator·Pro·Agency·Enterprise) 요금제를 제공하는 SNS 통합 분석 도구입니다. 유료 플랜은 월 크레딧 하나로 모든 AI 기능을 씁니다.",
       brand: { "@type": "Brand", name: "핀치 (Finch)" },
-      offers: PLANS.filter((p) => p.price > 0).map((p) => ({
+      offers: PAID.map((p) => ({
         "@type": "Offer",
         name: p.name,
         price: String(p.price),
@@ -203,226 +194,132 @@ const JSON_LD = {
   ],
 };
 
-/** 어깨활자 — 11px 캡스에 넓은 자간. 76px 제호와의 극단 대비가 조판 인상을 만든다 */
-function Kicker({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return (
-    <p className={`text-[11px] font-bold uppercase tracking-[0.18em] text-fg-faint ${className}`}>
-      {children}
-    </p>
-  );
-}
-
 export default function PricingPage() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }} />
 
-      {/* ── S0 마스트헤드 — 좌 제호 / 우 리드문. 가운데 정렬하지 않는다 ── */}
-      <section className="mx-auto max-w-6xl px-4 pt-14 md:px-6 md:pt-20">
-        <div className="border-t-2 border-fg pt-4">
-          <Kicker>Finch — 요금 안내</Kicker>
-        </div>
-        <div className="mt-10 grid gap-8 lg:grid-cols-12 lg:gap-x-6">
-          <h1 className="text-[clamp(44px,7vw,72px)] font-bold leading-[0.98] tracking-[-0.02em] lg:col-span-5">
-            요금제
-          </h1>
-          <div className="lg:col-span-6 lg:col-start-7 lg:pt-3">
-            <p className="max-w-[44ch] text-[17px] leading-[1.7] text-fg-sub md:text-[19px]">
-              핀치는 무료 플랜과 유료 4단계 요금제를 제공하는 SNS 통합 분석 도구입니다.
-              유료 플랜은 기능별 횟수 제한이 없습니다 —{" "}
-              <strong className="font-bold text-fg">달라지는 건 매달 받는 크레딧의 양뿐입니다.</strong>
+      {/* ── S0 히어로 — 코랄 패널. 첫 화면부터 색이 꽉 찬 면이 존재해야 한다 ── */}
+      <section className="mx-auto max-w-6xl px-4 pt-10 md:px-6 md:pt-14">
+        <div className="relative overflow-hidden rounded-card bg-primary px-6 py-12 md:px-12 md:py-16">
+          <FinchMark
+            className="pointer-events-none absolute -right-10 -top-10 size-64 text-on-primary/10 md:-right-6 md:size-80"
+          />
+          <div className="relative max-w-2xl">
+            <p className="inline-flex items-center gap-1.5 rounded-chip bg-on-primary/10 px-3 py-1.5 text-[12px] font-bold text-on-primary">
+              <Sparkles className="size-3.5" aria-hidden />
+              통합 크레딧 · 기능별 횟수 제한 없음
+            </p>
+            <h1 className="mt-5 text-[clamp(38px,6vw,60px)] font-bold leading-[1.08] tracking-[-0.025em] text-on-primary">
+              쓰는 만큼만,
+              <br />
+              쓰고 싶은 곳에.
+            </h1>
+            <p className="mt-5 max-w-[46ch] text-[16px] leading-[1.7] text-on-primary/75 md:text-[18px]">
+              유료 플랜은 매달 받는 크레딧 하나로 카드뉴스·진단·영상 분석을 자유롭게 씁니다.
+              단가는 어느 플랜에서나 같고, 달라지는 건 크레딧의 양뿐입니다.
             </p>
           </div>
         </div>
       </section>
 
-      {/* ── S1 플랜 5행 스트라이프 ──
-          5열 균등 그리드를 버린 자리다. 행으로 흐르면 가격·크레딧·CTA가 세로로 정렬돼
-          위아래로 훑기만 해도 비교가 끝나고, 플랜이 5개든 7개든 폭 압박이 없다. */}
-      <section className="mx-auto mt-14 max-w-6xl px-4 md:px-6">
-        <div className="border-t-2 border-fg">
-          {PLANS.map((plan) => (
-            <div
-              key={plan.key}
-              className={`relative grid gap-x-6 gap-y-5 border-b border-line pl-5 pr-1 lg:grid-cols-12 lg:items-center ${plan.field} ${
-                plan.featured ? "py-9" : "py-7"
-              }`}
-            >
-              {/* 좌측 러그 — 색이 나타나는 첫 자리. Pro만 두 배 두껍다 */}
-              <span
-                aria-hidden
-                className={`absolute bottom-5 left-0 top-5 ${plan.rail} ${plan.featured ? "w-[6px]" : "w-[3px]"}`}
-              />
+      {/* ── S1 Free 바 + 유료 4장 카드 ── */}
+      <section className="mx-auto max-w-6xl px-4 pt-12 md:px-6">
+        <FreeBar price={0} counts={FREE_COUNTS} locked={FREE_LOCKED} />
 
-              {/* 1) 플랜명 · 대상 */}
-              <div className="lg:col-span-3">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-[23px] font-bold tracking-[-0.01em]">{plan.name}</h2>
-                  {plan.featured ? (
-                    <span className="rounded-chip bg-primary px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-on-primary">
-                      가장 인기
-                    </span>
-                  ) : null}
-                </div>
-                <p className={`mt-1 text-[12.5px] font-semibold ${plan.ink}`}>{plan.target}</p>
-              </div>
-
-              {/* 2) 가격 — 숫자만 크게, 단위는 3단 강등 */}
-              <div className="lg:col-span-2">
-                {plan.price === 0 ? (
-                  <p className="text-[34px] font-bold leading-none tracking-[-0.02em]">무료</p>
-                ) : (
-                  <p className="flex items-baseline gap-1">
-                    <span className="tnum text-[34px] font-bold leading-none tracking-[-0.03em]">
-                      {won(plan.price)}
-                    </span>
-                    <span className="text-[15px] font-semibold">원</span>
-                    <span className="text-[12px] text-fg-faint">/월</span>
-                  </p>
-                )}
-              </div>
-
-              {/* 3) 크레딧(유료) 또는 횟수 점(무료) — 단위계가 다르다는 걸 형태로 보여준다 */}
-              <div className="lg:col-span-4">
-                {plan.credits !== null ? (
-                  <>
-                    <p className="flex items-baseline gap-1.5">
-                      <span className="tnum text-[26px] font-bold leading-none">{won(plan.credits)}</span>
-                      <span className="text-[13px] font-semibold text-fg-sub">크레딧 / 월</span>
-                    </p>
-                    <p className="mt-2 text-[13px] text-fg-sub">
-                      카드뉴스{" "}
-                      <strong className="tnum font-bold text-fg">
-                        {won(creditsBuy(plan.credits, CREDIT_COSTS.cardnews))}
-                      </strong>
-                      장 · AI 챗{" "}
-                      <strong className="tnum font-bold text-fg">
-                        {won(creditsBuy(plan.credits, CREDIT_COSTS.agentChat))}
-                      </strong>
-                      회 · 영상 분석{" "}
-                      <strong className="tnum font-bold text-fg">
-                        {won(creditsBuy(plan.credits, CREDIT_COSTS.videoAnalysis))}
-                      </strong>
-                      편 <span className="text-fg-faint">중 택 1</span>
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-[13px] font-semibold text-fg-sub">크레딧 없이 월 횟수로 제공</p>
-                    <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
-                      {plan.counts?.map((c) => (
-                        <li key={c} className="flex items-center gap-1.5 text-[13px] text-fg-sub">
-                          <span aria-hidden className={`size-1.5 rounded-full ${plan.rail}`} />
-                          {c}
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </div>
-
-              {/* 4) 운영 한도 + CTA — 실버튼은 Pro 하나뿐 */}
-              <div className="lg:col-span-3 lg:pl-2">
-                <p className="text-[13px] leading-[1.65] text-fg-sub">{plan.note}</p>
-                <div className="mt-3">
-                  {plan.featured ? (
-                    <ButtonLink href="/signup" variant="primary">
-                      Pro로 시작하기
-                    </ButtonLink>
-                  ) : (
-                    <a
-                      href="/signup"
-                      className="inline-block text-[14px] font-bold underline decoration-line underline-offset-[6px] transition-colors hover:decoration-fg"
-                    >
-                      {plan.price === 0 ? "무료로 시작하기" : `${plan.name} 시작하기`}
-                    </a>
-                  )}
-                </div>
-              </div>
-            </div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:mt-8 lg:grid-cols-4">
+          {PAID.map((plan) => (
+            <PaidCard key={plan.key} plan={plan} />
           ))}
         </div>
-        <p className="mt-4 text-[12px] text-fg-faint">
-          위 환산 수치는 크레딧을 한 기능에만 몰아 썼을 때의 최대치입니다. 무료 플랜은 크레딧을 쓰지 않습니다.
-        </p>
       </section>
 
-      {/* ── S2 크레딧 소모 명세 — 좌 난외주 / 우 영수증. 막대그래프를 그리지 않는다:
-             20:1 범위를 선형 막대로 그리면 1크레딧이 3px가 되어 거짓말이 된다. ── */}
-      <section className="mx-auto mt-24 max-w-6xl px-4 md:px-6">
-        <div className="border-t-2 border-fg pt-4">
-          <Kicker>크레딧 소모표</Kicker>
-        </div>
-        <div className="mt-8 grid gap-10 lg:grid-cols-12 lg:gap-x-6">
-          <div className="lg:col-span-4">
-            <h2 className="text-[28px] font-bold leading-[1.25] tracking-[-0.02em] md:text-[32px]">
-              크레딧 하나로
-              <br />
-              전부 씁니다
-            </h2>
-            <p className="mt-4 max-w-[36ch] text-[15px] leading-[1.75] text-fg-sub">
-              기능마다 소모량이 정해져 있고, 무엇에 몰아 쓸지는 자유입니다. 단가는 어느 유료
-              플랜에서나 같습니다.
-            </p>
-          </div>
+      {/* ── S2 크레딧 소모표 — 밴드 교차(surface). 칩 그리드로 시각 밀도를 올린다 ── */}
+      <section className="mt-20 border-y border-line bg-surface">
+        <div className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20">
+          <div className="grid gap-10 lg:grid-cols-12 lg:gap-x-10">
+            <div className="lg:col-span-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-primary">크레딧 소모표</p>
+              <h2 className="mt-3 text-[30px] font-bold leading-[1.2] tracking-[-0.02em] md:text-[36px]">
+                크레딧 하나로
+                <br />
+                전부 씁니다
+              </h2>
+              <p className="mt-4 max-w-[34ch] text-[15px] leading-[1.75] text-fg-sub">
+                기능마다 소모량이 정해져 있고, 무엇에 몰아 쓸지는 자유입니다. 단가는 어느 유료
+                플랜에서나 같습니다.
+              </p>
+            </div>
 
-          <div className="lg:col-span-7 lg:col-start-6">
-            <ul className="border-t border-line">
-              {CREDIT_RATES.map((r) => (
-                <li key={r.label} className="flex items-baseline gap-3 border-b border-line py-3.5">
-                  <span className="text-[14px] font-medium text-fg">{r.label}</span>
-                  <span aria-hidden className="flex-1 border-b border-dashed border-line" />
-                  <span
-                    className={`tnum text-[15px] font-bold ${r.cost >= 20 ? "text-primary" : "text-fg"}`}
+            <div className="lg:col-span-8">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {CREDIT_RATES.map((r) => (
+                  <div
+                    key={r.label}
+                    className={`rounded-card border bg-body px-4 py-4 ${
+                      r.cost >= 20 ? "border-plan-pro-edge" : "border-line"
+                    }`}
                   >
-                    {r.cost}
-                  </span>
-                  <span className="text-[12px] text-fg-faint">크레딧</span>
-                </li>
-              ))}
-            </ul>
+                    <p className="text-[13px] font-semibold text-fg-sub">{r.label}</p>
+                    <p className="mt-1.5 flex items-baseline gap-1">
+                      <span
+                        className={`tnum text-[28px] font-bold leading-none tracking-[-0.02em] ${
+                          r.cost >= 20 ? "text-primary" : "text-fg"
+                        }`}
+                      >
+                        {r.cost}
+                      </span>
+                      <span className="text-[11.5px] font-medium text-fg-faint">크레딧</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ── S3 비교표 — 12행을 3구획으로. sticky는 overflow-hidden과 충돌하므로
-             테두리 래퍼와 스크롤 래퍼를 분리한다. ── */}
-      <section className="mx-auto mt-24 max-w-6xl px-4 md:px-6">
-        <div className="border-t-2 border-fg pt-4">
-          <Kicker>플랜별 비교</Kicker>
+      {/* ── S3 비교표 ── */}
+      <section className="mx-auto max-w-6xl px-4 py-20 md:px-6">
+        <div className="max-w-3xl">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-fg-faint">플랜별 비교</p>
+          <h2 className="mt-3 text-[30px] font-bold tracking-[-0.02em] md:text-[36px]">
+            어떤 플랜이 맞을까요?
+          </h2>
+          <p className="mt-4 text-[15px] leading-[1.75] text-fg-sub">
+            채널 하나만 가볍게 써본다면 Free, 내 채널을 키우는 개인 크리에이터라면 Creator, 광고까지
+            함께 관리한다면 Pro, 여러 클라이언트를 운영하는 대행사라면 Agency, 클라이언트 수 제한 없이
+            운영하는 조직이라면 Enterprise가 맞습니다.
+          </p>
         </div>
-        <h2 className="mt-8 text-[28px] font-bold tracking-[-0.02em] md:text-[32px]">
-          어떤 플랜이 맞을까요?
-        </h2>
-        <p className="mt-3 max-w-[62ch] text-[15px] leading-[1.75] text-fg-sub">
-          채널 하나만 가볍게 써본다면 Free, 내 채널을 키우는 개인 크리에이터라면 Creator, 광고까지
-          함께 관리한다면 Pro, 여러 클라이언트를 운영하는 대행사라면 Agency, 클라이언트 수 제한 없이
-          운영하는 조직이라면 Enterprise가 맞습니다.
-        </p>
 
         <div className="mt-8 rounded-card border border-line bg-body">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[880px] border-collapse text-left">
+            <table className="w-full min-w-[900px] border-collapse text-left">
               <caption className="sr-only">Free·Creator·Pro·Agency·Enterprise 플랜별 기능 비교</caption>
               <colgroup>
                 <col className="w-[26%]" />
-                {PLANS.map((p) => (
-                  <col key={p.key} className="w-[14.8%]" />
+                {TABLE_COLS.map((c) => (
+                  <col key={c.key} className="w-[14.8%]" />
                 ))}
               </colgroup>
               <thead>
                 <tr>
-                  <th scope="col" className="px-5 pb-3 pt-5 text-[12px] font-bold uppercase tracking-[0.08em] text-fg-faint">
+                  <th scope="col" className="px-5 pb-4 pt-6 text-[11px] font-bold uppercase tracking-[0.1em] text-fg-faint">
                     기능
                   </th>
-                  {PLANS.map((p) => (
-                    <th key={p.key} scope="col" className="px-4 pb-3 pt-5 align-bottom">
+                  {TABLE_COLS.map((c) => (
+                    <th
+                      key={c.key}
+                      scope="col"
+                      className={`px-4 pb-4 pt-6 align-bottom ${c.key === "pro" ? "bg-plan-pro-field" : ""}`}
+                    >
                       <span className="flex items-center gap-1.5">
-                        <span aria-hidden className={`size-2 rounded-full ${p.rail}`} />
-                        <span className="text-[13.5px] font-bold">{p.name}</span>
+                        <span aria-hidden className={`size-2 rounded-full ${c.rail}`} />
+                        <span className="text-[14px] font-bold">{c.name}</span>
                       </span>
-                      <span className="tnum mt-1 block text-[11.5px] text-fg-faint">
-                        {p.price === 0 ? "무료" : `${won(p.price)}원`}
+                      <span className="tnum mt-1 block text-[12px] text-fg-faint">
+                        {c.price === 0 ? "무료" : `${won(c.price)}원`}
                       </span>
                     </th>
                   ))}
@@ -430,12 +327,14 @@ export default function PricingPage() {
               </thead>
               <tbody>
                 {TABLE_GROUPS.map((group) => (
-                  <>
-                    <tr key={`g-${group.label}`}>
+                  /* Fragment 에 key 를 주지 않으면 React 가 "unique key" 경고를 낸다 —
+                     구획 머리행 + 본문행들을 한 덩어리로 반환하는 구조라 여기가 목록의 자식이다. */
+                  <Fragment key={group.label}>
+                    <tr>
                       <th
                         scope="colgroup"
                         colSpan={6}
-                        className="border-t border-line-strong px-5 pb-2 pt-7 text-[11px] font-bold uppercase tracking-[0.1em] text-fg-faint"
+                        className="border-t border-line-strong bg-surface px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.1em] text-fg-faint"
                       >
                         {group.label}
                       </th>
@@ -444,8 +343,7 @@ export default function PricingPage() {
                       const row = planFeatures.find((f) => f.label === label);
                       if (!row) return null;
                       /* 크레딧 단가 구획은 단위를 행 라벨이 진다 — 셀에 "크레딧 20"을
-                         24번 반복하면 표 절반이 같은 단어로 찬다. 숫자만 세로로
-                         정렬되는 모습 자체가 "플랜을 올려도 단가는 그대로"를 말한다. */
+                         24번 반복하면 표 절반이 같은 단어로 찬다. */
                       const isRate = group.label.startsWith("크레딧 단가");
                       const strip = (v: string) => (isRate ? v.replace(/^크레딧\s*/, "") : v);
                       return (
@@ -457,10 +355,14 @@ export default function PricingPage() {
                           {([row.free, row.creator, row.pro, row.agency, row.enterprise] as const).map(
                             (value, i) => (
                               <td
-                                key={PLANS[i].key}
+                                key={TABLE_COLS[i].key}
                                 className={`tnum px-4 py-3.5 text-[13.5px] ${
-                                  PLANS[i].key === "pro" ? "bg-plan-pro-field font-semibold text-fg" : ""
-                                } ${value === "—" ? "text-fg-faint" : "text-fg-sub"}`}
+                                  TABLE_COLS[i].key === "pro"
+                                    ? "bg-plan-pro-field font-bold text-fg"
+                                    : value === "—"
+                                      ? "text-fg-faint"
+                                      : "text-fg-sub"
+                                }`}
                               >
                                 {strip(value)}
                               </td>
@@ -469,7 +371,7 @@ export default function PricingPage() {
                         </tr>
                       );
                     })}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -477,36 +379,37 @@ export default function PricingPage() {
         </div>
       </section>
 
-      {/* ── S4 FAQ — 2단 조판. columns-2는 항목이 단 경계에서 잘려 쓰지 않는다 ── */}
-      <section className="mx-auto mt-24 max-w-6xl px-4 md:px-6">
-        <div className="border-t-2 border-fg pt-4">
-          <Kicker>자주 묻는 질문</Kicker>
+      {/* ── S4 FAQ — 밴드 교차(surface) ── */}
+      <section className="border-y border-line bg-surface">
+        <div className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-fg-faint">자주 묻는 질문</p>
+          <h2 className="mt-3 text-[30px] font-bold tracking-[-0.02em] md:text-[36px]">
+            요금제, 무엇이 궁금하신가요?
+          </h2>
+          <dl className="mt-10 grid gap-4 md:grid-cols-2">
+            {PRICING_FAQ.map((item, i) => (
+              <div key={item.q} className="rounded-card border border-line bg-body p-6">
+                <dt className="flex gap-3">
+                  <span className="tnum shrink-0 pt-0.5 text-[12px] font-bold text-primary">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span className="text-[16px] font-bold leading-[1.5]">{item.q}</span>
+                </dt>
+                <dd className="mt-2.5 pl-[27px] text-[14px] leading-[1.75] text-fg-sub">{item.a}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
-        <dl className="mt-10 grid gap-x-14 gap-y-9 md:grid-cols-2">
-          {PRICING_FAQ.map((item, i) => (
-            <div key={item.q}>
-              <dt className="flex gap-3">
-                <span className="tnum shrink-0 pt-0.5 text-[11px] font-bold text-fg-faint">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <span className="text-[16px] font-bold leading-[1.5]">{item.q}</span>
-              </dt>
-              <dd className="mt-2.5 pl-[26px] text-[14px] leading-[1.75] text-fg-sub">{item.a}</dd>
-            </div>
-          ))}
-        </dl>
       </section>
 
-      {/* ── S5 콜로폰 CTA — 좌 활자 / 우 버튼. 가운데 정렬 CTA 블록을 쓰지 않는다 ── */}
-      <section className="mx-auto mt-24 max-w-6xl px-4 pb-24 md:px-6">
-        <div className="flex flex-col gap-7 border-t-2 border-fg pt-10 md:flex-row md:items-end md:justify-between">
+      {/* ── S5 최종 CTA ── */}
+      <section className="mx-auto max-w-6xl px-4 py-20 md:px-6">
+        <div className="flex flex-col gap-7 rounded-card border border-line bg-body p-8 md:flex-row md:items-center md:justify-between md:p-12">
           <div>
-            <h2 className="text-[30px] font-bold leading-[1.15] tracking-[-0.02em] md:text-[40px]">
-              무료 플랜으로
-              <br />
-              지금 시작하세요
+            <h2 className="text-[30px] font-bold leading-[1.15] tracking-[-0.02em] md:text-[38px]">
+              무료 플랜으로 지금 시작하세요
             </h2>
-            <p className="mt-4 max-w-[38ch] text-[15px] leading-[1.7] text-fg-sub">
+            <p className="mt-3 max-w-[42ch] text-[15px] leading-[1.7] text-fg-sub">
               신용카드 없이 1분 만에 채널을 연동하고 첫 분석을 받아볼 수 있습니다.
             </p>
           </div>

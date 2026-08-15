@@ -141,22 +141,24 @@
      카드 호버 시 이 판만 body로 한 칸 올라온다(요소는 1px도 안 움직인다). */
   --plate: #fafafb;
 
-  /* 요금제 플랜 색 — 라이트. ink는 흰 배경 대비 4.5:1 이상(본문 사용 가능),
-     field는 색지(色紙) 느낌의 옅은 면, edge는 그 면의 테두리. */
-  --plan-free-ink: #5b6472; /* 흑연 — 무료는 무채에 가깝게 */
-  --plan-free-field: #f2f3f5;
-  --plan-free-edge: rgba(91, 100, 114, 0.22);
+  /* 요금제 플랜 색 — 라이트.
+     ink = 글자·선용(흰 배경 대비 4.5:1 이상). field = 카드 배경면.
+     field 는 **실제로 색으로 읽혀야** 한다 — 알파 5% 파스텔은 스크린샷에서
+     흰색과 구분이 안 가고, 그게 1차 리뉴얼이 반려된 이유다. */
+  --plan-free-ink: #5b6472; /* 흑연 — 무료는 무채 계열 */
+  --plan-free-field: #e9ebef;
+  --plan-free-edge: rgba(91, 100, 114, 0.3);
   --plan-creator-ink: #0e7c86; /* 틸 (hue 187) */
-  --plan-creator-field: #e7f4f4;
-  --plan-creator-edge: rgba(14, 124, 134, 0.28);
-  --plan-pro-field: #fff1ec; /* Pro = 브랜드 코랄. ink는 --primary 재사용 */
-  --plan-pro-edge: rgba(255, 107, 74, 0.34);
+  --plan-creator-field: #cfe9ea;
+  --plan-creator-edge: rgba(14, 124, 134, 0.42);
+  --plan-pro-field: #ffdfd4; /* Pro = 브랜드 코랄. ink는 --primary 재사용 */
+  --plan-pro-edge: rgba(255, 107, 74, 0.5);
   --plan-agency-ink: #3d4db7; /* 인디고 (hue 235) */
-  --plan-agency-field: #eceffa;
-  --plan-agency-edge: rgba(61, 77, 183, 0.26);
+  --plan-agency-field: #dbe1f7;
+  --plan-agency-edge: rgba(61, 77, 183, 0.4);
   --plan-ent-ink: #7a3e8f; /* 플럼 (hue 290) */
-  --plan-ent-field: #f4ecf7;
-  --plan-ent-edge: rgba(122, 62, 143, 0.26);
+  --plan-ent-field: #e8dcee;
+  --plan-ent-edge: rgba(122, 62, 143, 0.4);
 }
 
 /* ── 다크 팔레트 (토글) ─────────────────────────────── */
@@ -198,19 +200,19 @@
      겨우 한 톤 밝은 잉크 섞인 면 — 그림자가 없는 다크에서 층위를 만드는 건
      이 면 명도와 edge 테두리뿐이다. */
   --plan-free-ink: #99a2b2;
-  --plan-free-field: #1b1d23;
-  --plan-free-edge: rgba(153, 162, 178, 0.24);
+  --plan-free-field: #1e2128;
+  --plan-free-edge: rgba(153, 162, 178, 0.3);
   --plan-creator-ink: #34d1dc;
-  --plan-creator-field: #122326;
-  --plan-creator-edge: rgba(52, 209, 220, 0.26);
-  --plan-pro-field: #26191a;
-  --plan-pro-edge: rgba(255, 107, 74, 0.4);
+  --plan-creator-field: #142c30;
+  --plan-creator-edge: rgba(52, 209, 220, 0.38);
+  --plan-pro-field: #331b18;
+  --plan-pro-edge: rgba(255, 107, 74, 0.5);
   --plan-agency-ink: #8c97f5;
-  --plan-agency-field: #1a1c2c;
-  --plan-agency-edge: rgba(140, 151, 245, 0.28);
+  --plan-agency-field: #1e2038;
+  --plan-agency-edge: rgba(140, 151, 245, 0.4);
   --plan-ent-ink: #c88fdb;
-  --plan-ent-field: #241a2a;
-  --plan-ent-edge: rgba(200, 143, 219, 0.28);
+  --plan-ent-field: #2b1c33;
+  --plan-ent-edge: rgba(200, 143, 219, 0.4);
 }
 
 body {
