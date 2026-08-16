@@ -27,20 +27,25 @@ function dismiss() {
   listeners.forEach((l) => l());
 }
 
-/* 최상단 프로모션 배너 (마케팅 영역) — 닫으면 localStorage에 기억
-   TODO: 실제 프로모션 확정 시 문구·조건 교체 */
+/* 최상단 프로모션 배너 (마케팅 영역) — 닫으면 localStorage에 기억.
+
+   2026-08-15: **「Creator 3개월 무료」 문구를 철거했다.**
+   결제 코드 어디에도 무료 기간을 주는 경로가 없어서(가입 기본 플랜은 free,
+   구독 화면은 PLAN_PRICES 를 그대로 청구) 광고한 혜택을 이행할 수 없었다 —
+   그대로 두면 표시광고 문제이자 환불 사유다.
+   새 가입 이벤트가 확정되면 PROMO 를 채우고 배너가 다시 뜬다.
+   ⚠️ 여기 문구를 넣기 전에 **결제 흐름에 실제 이행 경로가 있는지 먼저 확인할 것.** */
+const PROMO: { text: string } | null = null;
+
 export function PromoBanner() {
   const visible = useSyncExternalStore(subscribe, getSnapshot, () => false);
 
-  if (!visible) return null;
+  if (!PROMO || !visible) return null;
 
   return (
     <div className="relative bg-primary text-on-primary">
       <div className="mx-auto flex h-10 max-w-6xl items-center justify-center gap-2 px-10 text-[13px] font-medium">
-        <p className="truncate">
-          <span className="hidden sm:inline">오픈 베타 기념 — </span>
-          지금 가입하면 Creator 플랜 3개월 무료
-        </p>
+        <p className="truncate">{PROMO.text}</p>
         <Link
           href="/signup"
           className="inline-flex shrink-0 items-center gap-1 font-bold underline underline-offset-2"

@@ -37,7 +37,8 @@ export interface PlanCardData {
   counts?: string[];
   perks: string[];
   /** 실제로 진행 중인 혜택만 적는다 — 없는 프로모션을 지어내지 않는다.
-      현재 유일한 혜택: 오픈 베타 Creator 3개월 무료(components/landing/promo-banner.tsx) */
+      2026-08-15 현재 진행 중인 혜택 없음(「3개월 무료」는 이행 경로가 없어 철거).
+      ⚠️ 값을 채우기 전에 결제 흐름에 실제 이행 경로가 있는지 먼저 확인할 것. */
   benefit?: string;
 }
 
@@ -65,7 +66,6 @@ export const PLAN_CARDS: PlanCardData[] = [
     target: "내 채널을 키우는 개인 크리에이터를 위한 플랜이에요.",
     price: PLAN_PRICES.creator,
     credits: PLAN_CREDIT_ALLOWANCE.creator,
-    benefit: "오픈 베타 — 3개월 무료",
     perks: ["채널 3개 연동", "자동 DM 콘텐츠 5개", "레퍼런스 무제한 열람", "이메일 지원"],
   },
   {
