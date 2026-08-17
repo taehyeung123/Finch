@@ -4,12 +4,22 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 
-/** 설정 서브탭 내비 — 칩 스타일 (PART 7.6 rounded-chip) */
+/*
+  설정 서브탭 — 칩 스타일 (PART 7.6 rounded-chip).
+
+  순서는 "내 것 → 연결한 것 → 돈 → 운영"이다. 앞서는 「계정 연동」이 첫 탭이라
+  설정에 들어오면 **내가 누구인지 보기 전에** 남의 플랫폼 연동부터 보였다.
+  프로필(내 정보·로그인 방식·테마)이 먼저다.
+
+  회원탈퇴는 여기 없다 — 탭이 아니라 프로필 화면 맨 아래 작은 링크다(사장님 지시).
+  평생 한 번, 되돌릴 수 없는 동작을 다른 설정과 같은 오클릭 거리에 두지 않는다.
+*/
 const TABS = [
-  { href: "/settings", label: "계정 연동" },
+  { href: "/settings/profile", label: "프로필" },
+  { href: "/settings", label: "채널 연동" },
   { href: "/settings/team", label: "팀" },
   { href: "/settings/billing", label: "요금제·결제" },
-  { href: "/settings/notifications", label: "알림 설정" },
+  { href: "/settings/notifications", label: "알림" },
 ];
 
 export function SettingsNav() {
