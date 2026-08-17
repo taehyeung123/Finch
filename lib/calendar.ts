@@ -27,6 +27,34 @@ export function kstToday(): string {
   return kstDayKey(new Date());
 }
 
+/**
+ * 발행 배치가 도는 시각(KST). vercel.json 의 "0 21 * * *"(UTC 21시) = KST 06시.
+ * ⚠️ 크론 스케줄을 바꾸면 이 값도 같이 바꿔야 한다 — 안 그러면 화면이 거짓말을 한다.
+ */
+export const PUBLISH_BATCH_HOUR_KST = 6;
+
+/**
+ * **지금 예약해서 실제로 나갈 수 있는 가장 이른 날짜**(KST).
+ *
+ * 배치는 하루 한 번, KST 06:00 에만 돈다. 그 시각이 지난 뒤 "오늘"로 예약하면
+ * 오늘은 아무 일도 안 일어나고 **내일 아침**에 나간다. 그런데 화면은 캘린더 오늘 칸에
+ * 점을 찍고 "예약일 아침 배치에서 자동 발행됩니다"라고 안내했다 — 오늘 쓰려던
+ * 콘텐츠가 하루 뒤에 조용히 발행되는 상태였다.
+ *
+ * 날짜 선택의 min 을 이 값으로 두면 고를 수 없는 날이 애초에 안 열린다.
+ */
+export function earliestPublishDate(): string {
+  const kst = new Date(Date.now() + KST_OFFSET_MS);
+  const beforeBatch = kst.getUTCHours() < PUBLISH_BATCH_HOUR_KST;
+  if (beforeBatch) return kstDayKey(new Date());
+  return kstDayKey(new Date(Date.now() + 24 * 60 * 60 * 1000));
+}
+
+/** 오늘 아침 배치가 이미 지났는가 — 화면이 "내일 아침에 나갑니다"를 안내할 때 쓴다 */
+export function batchPassedToday(): boolean {
+  return earliestPublishDate() !== kstToday();
+}
+
 export interface CalendarCell {
   /** "YYYY-MM-DD" (KST) */
   key: string;

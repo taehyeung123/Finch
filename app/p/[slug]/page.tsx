@@ -31,13 +31,21 @@ async function load(slug: string) {
      없게 되어, "일단 공개로 켜서 확인하고 마음에 안 들면 끄기"를 강요하게 된다. */
   const { data: page } = await supabase
     .from("link_pages")
-    .select("id, slug, title, bio, published, user_id")
+    .select("id, slug, title, bio, published")
     .eq("slug", slug)
     .maybeSingle();
   if (!page) return null;
 
+  /* 소유자 판정에 user_id 를 **가져오지 않는다.** 이 조회는 익명 세션으로도 도는데,
+     select 에 user_id 를 넣으면 공개 페이지를 여는 아무나 소유자의 auth.users.id 를
+     받아간다. 대신 "내 페이지의 id" 를 따로 읽어 비교한다 — RLS 가 자기 행만
+     내주므로 이 조회 자체가 소유 증명이 된다. */
   const me = await getAuthUser();
-  const isOwner = !!me && me.id === page.user_id;
+  let isOwner = false;
+  if (me) {
+    const { data: mine } = await supabase.from("link_pages").select("id").eq("user_id", me.id).maybeSingle();
+    isOwner = !!mine && mine.id === page.id;
+  }
   if (!page.published && !isOwner) return null;
 
   /* 소유자 미리보기에서는 꺼둔 항목도 보여준다 — 뭘 껐는지 확인하는 게 미리보기의

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
-import { kstToday } from "@/lib/calendar";
+import { earliestPublishDate } from "@/lib/calendar";
 
 /**
  * 카드뉴스 예약 발행 등록 — 이미지(FormData)를 Storage(cardnews 버킷, 본인 폴더)에 업로드하고
@@ -65,8 +65,13 @@ export async function POST(request: Request) {
     /* 과거 차단도 **KST 기준**이다. new Date() 를 서버 로컬(Vercel=UTC)로 자르면
        KST 00~09시에는 오늘이 어제로 잡혀 이미 지난 날짜가 통과한다.
        날짜 문자열끼리 비교하면 타임존이 개입할 여지가 없다. */
-    if (scheduledAt < kstToday()) {
-      return NextResponse.json({ error: "오늘보다 이전 날짜로는 예약할 수 없어요." }, { status: 400 });
+    /* 오늘 아침 배치가 이미 지났으면 오늘도 막는다 — 안 막으면 "오늘 발행"이라고
+       안내해 놓고 내일 아침에 나간다. */
+    if (scheduledAt < earliestPublishDate()) {
+      return NextResponse.json(
+        { error: "오늘 아침 발행 배치가 이미 지났어요. 내일 이후로 골라 주세요." },
+        { status: 400 },
+      );
     }
   }
 
@@ -76,12 +81,16 @@ export async function POST(request: Request) {
   const { data: account } = asDraft
     ? { data: { id: "draft" } }
     : await supabase
-    .from("connected_accounts")
-    .select("id")
-    .eq("channel", "instagram")
-    .eq("connected", true)
-    .limit(1)
-    .maybeSingle();
+        .from("connected_accounts")
+        .select("id")
+        /* user_id 로 반드시 좁힌다 — "team members read" 정책 때문에 안 좁히면
+           팀원이 소유자의 연동으로 게이트를 통과하고, 크론은 user_id 로 토큰을
+           찾으므로 그 예약은 반드시 실패한다. */
+        .eq("user_id", user.id)
+        .eq("channel", "instagram")
+        .eq("connected", true)
+        .limit(1)
+        .maybeSingle();
   if (!account) {
     return NextResponse.json({ error: "먼저 설정에서 인스타그램 계정을 연동해 주세요." }, { status: 400 });
   }

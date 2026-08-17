@@ -75,7 +75,7 @@ export default async function ProfileSettingsPage({
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <PageHeader title="설정" description="내 정보와 화면 설정을 관리하세요." />
       <SettingsNav />
 

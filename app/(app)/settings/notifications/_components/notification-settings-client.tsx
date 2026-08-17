@@ -88,7 +88,7 @@ export function NotificationSettingsClient({ initial }: { initial: NotificationS
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title="설정"
         description="알림 유형별로 수신 경로를 선택하세요."

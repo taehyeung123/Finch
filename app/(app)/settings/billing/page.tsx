@@ -184,7 +184,7 @@ export default async function BillingSettingsPage({
   const downgrades = PLAN_CARDS.filter((p) => PLAN_ORDER.indexOf(p.key) < currentIndex);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title="설정"
         description="현재 플랜과 결제 정보를 확인하고 요금제를 관리하세요."

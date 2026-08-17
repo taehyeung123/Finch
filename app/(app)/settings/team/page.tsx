@@ -63,7 +63,7 @@ export default async function TeamSettingsPage() {
   const { isOwner, rows } = await loadTeamData();
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title="설정"
         description="팀 멤버와 역할을 관리하고 클라이언트와 협업하세요."

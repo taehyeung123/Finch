@@ -186,7 +186,7 @@ export default async function SettingsPage({
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <PageHeader title="설정" description="채널 계정과 Meta 광고 계정의 연동 상태를 관리하세요." />
       <SettingsNav />
 

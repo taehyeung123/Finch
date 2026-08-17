@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { CalendarClock, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { kstToday } from "@/lib/calendar";
+import { batchPassedToday, earliestPublishDate } from "@/lib/calendar";
 import { buildFinalBlobs, type ExportSlide, type LoadedLogo } from "@/lib/studio/export-slides";
 import type { CardTemplate } from "@/lib/studio/templates";
 
@@ -37,9 +37,11 @@ export function SchedulePublish({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<"schedule" | "draft" | null>(null);
 
-  /* KST 기준 오늘. toISOString().slice(0,10) 은 UTC 라, KST 00~09시(=UTC 전날)에는
-     min 이 실제 오늘보다 하루 이르게 잡혀 "과거 날짜 차단"이 그 시간대만 느슨해진다. */
-  const today = kstToday();
+  /* 고를 수 있는 **가장 이른 날**. 단순히 "오늘"이 아니다 — 배치는 KST 06:00 에
+     하루 한 번만 돌아서, 06시가 지난 뒤 오늘을 고르면 내일 아침에 나간다.
+     고를 수 없는 날은 애초에 안 열리게 한다. */
+  const today = earliestPublishDate();
+  const batchPassed = batchPassedToday();
 
   /* mode="draft" 는 날짜 없이 저장한다. 크레딧을 써서 만든 결과물인데 날짜를 못
      정하면 저장 자체가 안 되던 것이 초안을 만든 이유다 — 화면을 떠나면 사라졌다. */
@@ -124,8 +126,9 @@ export function SchedulePublish({
             className="mt-1.5 h-10 rounded-card border border-line bg-body px-3 text-[15px] text-fg focus:border-primary focus:outline-none"
           />
           <p className="mt-1.5 text-[12px] text-fg-sub">
-            정확한 시각이 아니라 예약일 아침 배치(하루 1회)에서 자동 발행됩니다.
-            날짜를 아직 안 정했다면 초안으로 저장하세요.
+            정확한 시각이 아니라 예약일 아침 배치(하루 1회, 오전 6시)에서 자동 발행됩니다.
+            {batchPassed ? " 오늘 배치는 이미 지나서 내일부터 고를 수 있어요." : ""}
+            {" "}날짜를 아직 안 정했다면 초안으로 저장하세요.
           </p>
 
           {error ? <p className="mt-2 text-[14px] text-negative-strong">{error}</p> : null}

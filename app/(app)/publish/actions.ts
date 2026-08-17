@@ -2,7 +2,7 @@
 
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
-import { kstToday } from "@/lib/calendar";
+import { earliestPublishDate } from "@/lib/calendar";
 
 /*
   초안 관리 — 2026-08-16 신설.
@@ -20,9 +20,19 @@ import { kstToday } from "@/lib/calendar";
 export async function scheduleDraft(id: string, date: string): Promise<{ ok: boolean; error?: string }> {
   if (isDemoMode()) return { ok: false, error: "데모 모드에서는 저장할 수 없어요." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: "날짜 형식이 올바르지 않아요." };
-  /* 과거 차단은 **KST 기준**이다. UTC 로 비교하면 KST 00~09시에 오늘이 어제로 잡혀
-     이미 지난 날짜가 통과한다(그 시간대엔 UTC 가 전날이다). */
-  if (date < kstToday()) return { ok: false, error: "오늘보다 이전 날짜로는 예약할 수 없어요." };
+  /* 과거뿐 아니라 **오늘 아침 배치가 이미 지난 경우의 오늘**도 막는다.
+     배치는 KST 06:00 하루 1회라, 06시 이후에 오늘로 잡으면 오늘은 아무 일도
+     안 일어나고 내일 아침에 나간다 — 화면 안내와 어긋난다. */
+  const earliest = earliestPublishDate();
+  if (date < earliest) {
+    return {
+      ok: false,
+      error:
+        date < new Date().toISOString().slice(0, 10)
+          ? "지난 날짜로는 예약할 수 없어요."
+          : "오늘 아침 발행 배치가 이미 지났어요. 내일 이후로 골라 주세요.",
+    };
+  }
 
   const user = await getAuthUser();
   if (!user) return { ok: false, error: "로그인이 필요해요." };
@@ -30,9 +40,14 @@ export async function scheduleDraft(id: string, date: string): Promise<{ ok: boo
 
   /* 인스타그램 연동이 없으면 예약해도 배치가 실패로 끝난다 — 여기서 막는다.
      초안 저장 때는 연동을 요구하지 않지만(아직 발행이 아니다), 예약은 발행 약속이다. */
+  /* ⚠️ user_id 로 반드시 좁힌다. connected_accounts 에는 "team members read" 정책이
+     있어 팀원이 **소유자의** 연동 행을 읽는다 — 안 좁히면 자기 계정엔 연동이 없는데
+     게이트를 통과하고, 발행 크론은 user_id 로 토큰을 찾으므로 그 예약은 반드시
+     실패한다(설정 화면·크론이 이미 쓰는 패턴과 맞춘다). */
   const { data: account } = await supabase
     .from("connected_accounts")
     .select("id")
+    .eq("user_id", user.id)
     .eq("channel", "instagram")
     .eq("connected", true)
     .limit(1)

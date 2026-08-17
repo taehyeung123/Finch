@@ -123,7 +123,7 @@ export function DashboardClient({
   );
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title="홈"
         description="오늘의 브리핑과 채널 현황을 한눈에 확인하세요."

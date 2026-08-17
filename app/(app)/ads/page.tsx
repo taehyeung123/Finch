@@ -31,7 +31,7 @@ export default function AdsPage() {
   const organicWeeklyViews = dashboardSummaries.all.weeklyViews;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title="광고 관리"
         description="Meta 광고 계정 성과 리포트"

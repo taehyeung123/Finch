@@ -32,7 +32,7 @@ export default function CompetitorAdsPage() {
   const monitoredPages = Array.from(new Set(competitorAds.map((ad) => ad.pageName)));
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title="경쟁사 광고 모니터링"
         description="Meta 광고 라이브러리에 공개된 경쟁사 광고를 모니터링합니다. 아래 지역 제약 안내를 확인하세요."

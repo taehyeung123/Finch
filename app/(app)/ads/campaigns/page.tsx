@@ -349,7 +349,7 @@ export default function CampaignsPage() {
   const previewHeadline = creativeFormat === "single" ? headline : (carouselCards[0]?.headline ?? "");
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title="캠페인 관리"
         description="새 캠페인을 만들고 기존 캠페인을 관리하세요."

@@ -8,7 +8,15 @@ import { Button, ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { StatusPill, type PostStatus } from "@/components/ui/status-pill";
-import { WEEKDAYS, kstDayKey, kstToday, monthGrid, shiftMonth } from "@/lib/calendar";
+import {
+  WEEKDAYS,
+  batchPassedToday,
+  earliestPublishDate,
+  kstDayKey,
+  kstToday,
+  monthGrid,
+  shiftMonth,
+} from "@/lib/calendar";
 import { cancelScheduledPost } from "@/app/(app)/studio/actions";
 import { deleteDraft, scheduleDraft } from "../actions";
 
@@ -57,6 +65,10 @@ export function PublishList({
 
   const [view, setView] = useState<"calendar" | "list">("calendar");
   const today = kstToday();
+  /* 초안에 날짜를 붙일 때 고를 수 있는 가장 이른 날. 배치가 KST 06:00 하루 1회라
+     그 시각이 지나면 오늘은 이미 늦었다 — 고를 수 없는 날을 열어두지 않는다. */
+  const earliest = earliestPublishDate();
+  const batchPassed = batchPassedToday();
   const [cursor, setCursor] = useState(() => {
     const [y, m] = today.split("-");
     return { year: Number(y), month: Number(m) };
@@ -293,7 +305,8 @@ export function PublishList({
               </div>
 
               <p className="mt-4 text-[12px] text-fg-sub">
-                예약일 아침 배치에서 자동 발행됩니다(정시 발행이 아니에요).
+                예약일 오전 6시 배치에서 자동 발행됩니다(정시 발행이 아니에요).
+                {batchPassed ? " 오늘 배치는 이미 지났어요 — 내일부터 예약할 수 있어요." : ""}
                 {truncated ? " 최근 200건만 표시하고 있어요." : ""}
               </p>
             </CardBody>
@@ -404,7 +417,7 @@ export function PublishList({
                   <div className="flex items-center gap-2">
                     <input
                       type="date"
-                      min={today}
+                      min={earliest}
                       value={draftDate[post.id] ?? ""}
                       onChange={(e) => setDraftDate((d) => ({ ...d, [post.id]: e.target.value }))}
                       aria-label="발행 예정일"

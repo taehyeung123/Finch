@@ -16,7 +16,11 @@ export function PageHeader({
     <div className={cn("flex flex-wrap items-end justify-between gap-3", className)}>
       <div className="min-w-0">
         <h2 className="text-2xl font-bold leading-tight">{title}</h2>
-        {description ? <p className="mt-1 text-[15px] text-fg-sub">{description}</p> : null}
+        {/* 읽기 폭 제한은 **문단 단위**로 건다. 페이지 전체를 max-w-6xl 로 묶던 것을
+            2026-08-17 에 걷어냈다(1920 에서 콘텐츠 영역의 31% 가 빈 여백이었다) —
+            그 대신 실제로 길어지면 곤란한 것, 즉 문장에만 제한을 둔다.
+            카드·그리드·표는 넓을수록 좋다. */}
+        {description ? <p className="mt-1 max-w-[80ch] text-[15px] text-fg-sub">{description}</p> : null}
       </div>
       {action ? <div className="flex items-center gap-2">{action}</div> : null}
     </div>

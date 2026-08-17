@@ -42,7 +42,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
   // 연동 전(빈 데이터) — 계산·차트를 건너뛰고 안내만 표시
   if (!view || view.daily.length === 0) {
     return (
-      <div className="mx-auto max-w-6xl space-y-6">
+      <div className="space-y-6">
         <PageHeader title="팔로워 분석" description="내 프로필을 찾아오는 흐름을 공식 지표로 분석합니다." />
         <EmptyState
           icon={ShieldAlert}
@@ -64,7 +64,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
   const totals = period === 7 ? view.totals7 : view.totals14;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title="팔로워 분석"
         description="내 프로필을 찾아오는 흐름을 공식 지표로 분석합니다."

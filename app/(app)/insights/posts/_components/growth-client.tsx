@@ -58,7 +58,7 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
     "이 주제는 내 계정에서 성과(특히 저장률)가 좋았던 게시물이야. 핵심 메시지와 각도는 유지하되, 새로운 카드뉴스 5장 형식으로 다시 구성해줘.";
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title="성장 진단"
         description="내 계정의 실제 성과를 분석해 강점·약점을 짚고, 다음에 만들 콘텐츠를 제안해요."

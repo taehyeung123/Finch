@@ -98,7 +98,7 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title="리포트"
         description="광고주 보고용 리포트를 자동 생성하고 정기 발송합니다."

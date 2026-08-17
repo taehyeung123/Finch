@@ -82,7 +82,7 @@ export function NotificationsClient({ initial }: { initial: AppNotification[] })
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title="알림"
         description={

@@ -575,7 +575,7 @@ export default function StudioPage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title="AI 스튜디오"
         description="주제만 입력하면 카드뉴스와 콘텐츠 아이디어를 AI가 만들어드립니다."

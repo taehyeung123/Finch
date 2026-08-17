@@ -8,6 +8,37 @@ import { isDemoMode } from "@/lib/supabase/config";
 import { DELETE_PHRASE } from "./constants";
 
 /*
+  탈퇴 시 비우는 버킷 — **경로가 `<user.id>/...` 로 시작하는 것 전부**.
+
+  reference-thumbs 를 빠뜨리고 있었다(2026-08-17 발견). 레퍼런스 수집 썸네일이
+  `${userId}/${channel}-${externalId}.jpg` 로 저장되는데(lib/reference/engine.ts),
+  이 버킷은 public 이라 계정을 지운 뒤에도 공개 URL 이 계속 살아 있었다 —
+  화면은 "업로드한 이미지가 모두 삭제됩니다"라고 약속하고 있었다.
+  프로덕션 실측: 살아있는 계정 1명의 파일 52개가 그대로 존재.
+
+  ⚠️ 새 버킷에 사용자별 프리픽스로 파일을 쓰기 시작하면 **여기 추가할 것.**
+     (reference-thumbs 의 `pool/` 프리픽스는 공용 풀이라 대상이 아니다)
+*/
+const USER_BUCKETS = ["cardnews", "brand-logos", "reference-thumbs"] as const;
+
+/** Storage list 는 한 번에 최대 1000개다 — 넘으면 조용히 잘려 파일이 남는다. 끝까지 판다. */
+async function listAll(
+  admin: NonNullable<ReturnType<typeof createAdminClient>>,
+  bucket: string,
+  prefix: string,
+): Promise<string[]> {
+  const names: string[] = [];
+  const PAGE = 1000;
+  for (let offset = 0; ; offset += PAGE) {
+    const { data, error } = await admin.storage.from(bucket).list(prefix, { limit: PAGE, offset });
+    if (error || !data || data.length === 0) break;
+    names.push(...data.map((d) => d.name));
+    if (data.length < PAGE) break;
+  }
+  return names;
+}
+
+/*
   프로필 — 이름 변경 · 회원탈퇴.
 
   회원탈퇴는 이 제품에서 **가장 되돌릴 수 없는 동작**이라 3중 가드를 건다:
@@ -66,17 +97,20 @@ export async function deleteAccount(formData: FormData): Promise<void> {
      사용자 삭제 **앞에** 지운다 — 뒤로 미루면 계정이 사라진 뒤 실패했을 때
      그 파일들을 다시 찾아갈 주인이 없다(경로가 user.id 프리픽스다).
      실패해도 탈퇴 자체는 진행한다 — 파일이 남는 것보다 탈퇴가 막히는 게 더 나쁘다. */
-  for (const bucket of ["cardnews", "brand-logos"]) {
+  for (const bucket of USER_BUCKETS) {
     try {
-      const { data: files } = await admin.storage.from(bucket).list(user.id, { limit: 1000 });
       const paths: string[] = [];
-      for (const f of files ?? []) {
-        /* list 는 한 단계만 본다. cardnews 는 user/batch/01.png 구조라 하위를 한 번 더 판다. */
-        const { data: inner } = await admin.storage.from(bucket).list(`${user.id}/${f.name}`, { limit: 1000 });
-        if (inner && inner.length > 0) paths.push(...inner.map((c) => `${user.id}/${f.name}/${c.name}`));
-        else paths.push(`${user.id}/${f.name}`);
+      for (const entry of await listAll(admin, bucket, user.id)) {
+        /* list 는 한 단계만 본다. cardnews 는 user/batch/01.png 구조라 하위를 한 번 더 판다.
+           reference-thumbs·brand-logos 는 한 단계라 그대로 경로가 된다. */
+        const inner = await listAll(admin, bucket, `${user.id}/${entry}`);
+        if (inner.length > 0) paths.push(...inner.map((c) => `${user.id}/${entry}/${c}`));
+        else paths.push(`${user.id}/${entry}`);
       }
-      if (paths.length > 0) await admin.storage.from(bucket).remove(paths);
+      /* remove 는 한 번에 받는 개수에 상한이 있다 — 100개씩 끊어 보낸다. */
+      for (let i = 0; i < paths.length; i += 100) {
+        await admin.storage.from(bucket).remove(paths.slice(i, i + 100));
+      }
     } catch (e) {
       console.error(`[settings] 탈퇴 시 ${bucket} 정리 실패:`, e);
     }
