@@ -22,7 +22,7 @@ export function FaqAccordion({ items }: { items: FaqItem[] }) {
               type="button"
               aria-expanded={open}
               onClick={() => setOpenIndex(open ? null : i)}
-              className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left text-[15px] font-semibold hover:text-primary"
+              className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left text-[15px] font-semibold hover:text-primary-ink"
             >
               {item.q}
               <ChevronDown className={cn("size-4 shrink-0 text-fg-faint transition-transform", open && "rotate-180")} aria-hidden />

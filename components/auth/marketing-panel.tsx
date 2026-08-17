@@ -34,7 +34,7 @@ export function AuthMarketingPanel() {
           </p>
           <ul className="mt-12 flex flex-wrap gap-2.5">
             {FEATURES.map((f) => (
-              <li key={f} className="rounded-chip bg-body px-4 py-2 text-[15px] font-semibold text-primary">
+              <li key={f} className="rounded-chip bg-body px-4 py-2 text-[15px] font-semibold text-primary-ink">
                 {f}
               </li>
             ))}

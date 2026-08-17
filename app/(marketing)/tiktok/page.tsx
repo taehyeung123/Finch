@@ -66,7 +66,7 @@ export default function TiktokPage() {
       {/* 히어로 */}
       <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-16 md:grid-cols-[1fr_auto] md:px-6 md:pt-24">
         <div>
-          <p className="text-[13px] font-semibold text-primary">틱톡 계정 분석 &amp; 트렌드 탐색</p>
+          <p className="text-[13px] font-semibold text-primary-ink">틱톡 계정 분석 &amp; 트렌드 탐색</p>
           <h1 className="mt-3 text-4xl font-bold leading-[1.2] tracking-tight md:text-5xl md:leading-[1.15]">
             틱톡 분석
           </h1>
@@ -84,7 +84,7 @@ export default function TiktokPage() {
               자주 묻는 질문 보기
             </ButtonLink>
           </div>
-          <p className="mt-4 text-[13px] text-fg-faint">신용카드 없이 시작 · 틱톡 계정 진단 무료 체험</p>
+          <p className="mt-4 text-[13px] text-fg-sub">신용카드 없이 시작 · 틱톡 계정 진단 무료 체험</p>
         </div>
         <div className="justify-self-center md:justify-self-end">
           <AppIconTile app="tiktok" size={96} />
@@ -92,11 +92,11 @@ export default function TiktokPage() {
       </section>
 
       {/* 완전 지원: 내 계정 분석 */}
-      <section className="border-t border-line bg-body/40">
+      <section className="border-y border-line bg-plate">
         <div className="mx-auto max-w-6xl px-4 py-16 md:px-6">
           <Reveal>
             <div className="flex flex-wrap items-center gap-3">
-              <span className="flex size-11 items-center justify-center rounded-card bg-primary-weak text-primary">
+              <span className="flex size-11 items-center justify-center rounded-card bg-primary-weak text-primary-ink">
                 <BarChart3 className="size-5" aria-hidden />
               </span>
               <h2 className="text-2xl font-bold md:text-3xl">틱톡 계정 분석, 무엇을 볼 수 있나요?</h2>
@@ -127,7 +127,7 @@ export default function TiktokPage() {
       <section className="mx-auto max-w-6xl px-4 py-16 md:px-6">
         <Reveal>
           <div className="flex flex-wrap items-center gap-3">
-            <span className="flex size-11 items-center justify-center rounded-card bg-primary-weak text-primary">
+            <span className="flex size-11 items-center justify-center rounded-card bg-primary-weak text-primary-ink">
               <Hash className="size-5" aria-hidden />
             </span>
             <h2 className="text-2xl font-bold md:text-3xl">
@@ -155,11 +155,11 @@ export default function TiktokPage() {
       </section>
 
       {/* AI 콘텐츠 스튜디오 */}
-      <section className="border-t border-line bg-body/40">
+      <section className="border-y border-line bg-plate">
         <div className="mx-auto max-w-6xl px-4 py-16 md:px-6">
           <Reveal>
             <div className="flex flex-wrap items-center gap-3">
-              <span className="flex size-11 items-center justify-center rounded-card bg-primary-weak text-primary">
+              <span className="flex size-11 items-center justify-center rounded-card bg-primary-weak text-primary-ink">
                 <Sparkles className="size-5" aria-hidden />
               </span>
               <h2 className="text-2xl font-bold md:text-3xl">틱톡 콘텐츠 제작에 AI도 활용할 수 있나요?</h2>
@@ -214,11 +214,11 @@ export default function TiktokPage() {
       </section>
 
       {/* FAQ */}
-      <section id="faq" className="border-t border-line bg-body/40">
+      <section id="faq" className="border-y border-line bg-plate">
         <div className="mx-auto max-w-3xl scroll-mt-20 px-4 py-20 md:px-6">
           <Reveal>
             <h2 className="flex items-center justify-center gap-2 text-center text-2xl font-bold md:text-3xl">
-              <MessageCircleQuestion className="size-7 text-primary" aria-hidden />
+              <MessageCircleQuestion className="size-7 text-primary-ink" aria-hidden />
               틱톡 분석, 무엇이 궁금하신가요?
             </h2>
           </Reveal>

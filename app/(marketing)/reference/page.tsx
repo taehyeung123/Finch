@@ -144,7 +144,7 @@ export default function ReferencePage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }} />
 
       {/* 브레드크럼 */}
-      <nav aria-label="브레드크럼" className="mx-auto max-w-3xl px-4 pt-8 text-[13px] text-fg-faint md:px-6">
+      <nav aria-label="브레드크럼" className="mx-auto max-w-3xl px-4 pt-8 text-[13px] text-fg-sub md:px-6">
         <Link href="/" className="hover:text-fg-sub">
           홈
         </Link>
@@ -154,7 +154,7 @@ export default function ReferencePage() {
 
       {/* 히어로 */}
       <section className="mx-auto max-w-3xl px-4 pb-10 pt-6 md:px-6">
-        <div className="flex items-center gap-2 text-[13px] font-semibold text-primary">
+        <div className="flex items-center gap-2 text-[13px] font-semibold text-primary-ink">
           <Bookmark className="size-4" aria-hidden />
           3채널 레퍼런스 수집함
         </div>
@@ -175,12 +175,12 @@ export default function ReferencePage() {
             플랜별 수집 한도 보기
           </ButtonLink>
         </div>
-        <p className="mt-4 text-[13px] text-fg-faint">인스타그램 · 틱톡 · 스레드 3채널 · 공개 콘텐츠 기반</p>
+        <p className="mt-4 text-[13px] text-fg-sub">인스타그램 · 틱톡 · 스레드 3채널 · 공개 콘텐츠 기반</p>
       </section>
 
       {/* 질문형 섹션 */}
       {HOW_SECTIONS.map((section, i) => (
-        <section key={section.q} className={i % 2 === 1 ? "border-t border-line bg-body/40" : "border-t border-line"}>
+        <section key={section.q} className={i % 2 === 1 ? "border-y border-line bg-plate" : "border-t border-line"}>
           <div className="mx-auto max-w-3xl px-4 py-14 md:px-6">
             <Reveal>
               <h2 className="text-2xl font-bold md:text-3xl">{section.q}</h2>
@@ -206,7 +206,7 @@ export default function ReferencePage() {
       ))}
 
       {/* 후킹 기법 태그 8종 — 핀치 자체 분류 기준 */}
-      <section className="border-t border-line bg-body/40">
+      <section className="border-y border-line bg-plate">
         <div className="mx-auto max-w-3xl px-4 py-16 md:px-6">
           <Reveal>
             <h2 className="flex items-center gap-2 text-2xl font-bold md:text-3xl">
@@ -240,7 +240,7 @@ export default function ReferencePage() {
         <div className="mx-auto max-w-3xl px-4 py-16 md:px-6">
           <Reveal>
             <h2 className="flex items-center gap-2 text-2xl font-bold md:text-3xl">
-              <ShieldCheck className="size-6 text-primary" aria-hidden />
+              <ShieldCheck className="size-6 text-primary-ink" aria-hidden />
               데이터에 대해 솔직하게 말씀드립니다
             </h2>
             <p className="mt-4 text-[15px] leading-relaxed text-fg-sub">
@@ -281,10 +281,10 @@ export default function ReferencePage() {
       </section>
 
       {/* FAQ */}
-      <section className="border-t border-line bg-body/40">
+      <section className="border-y border-line bg-plate">
         <div className="mx-auto max-w-3xl px-4 py-20 md:px-6">
           <h2 className="flex items-center justify-center gap-2 text-center text-2xl font-bold md:text-3xl">
-            <MessageCircleQuestion className="size-7 text-primary" aria-hidden />
+            <MessageCircleQuestion className="size-7 text-primary-ink" aria-hidden />
             레퍼런스 수집, 더 궁금한 점이 있으신가요?
           </h2>
           <div className="mt-10">

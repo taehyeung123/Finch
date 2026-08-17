@@ -58,7 +58,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
               도구입니다.
             </p>
             {/* 지원 채널 미니 스트립 — 실제 브랜드 글리프 (PART 7.5) */}
-            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-semibold text-fg-faint">
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-semibold text-fg-sub">
               <span className="inline-flex items-center gap-1.5">
                 <InstagramGlyph className="size-3.5 text-ig" />
                 Instagram
@@ -79,7 +79,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           </div>
           {/* 기능 페이지 내부 링크 — 브랜드 검색 사이트링크 후보는 이런 명확한 앵커텍스트에서 나온다 (PART 13.2) */}
           <div>
-            <h3 className="text-[13px] font-bold text-fg-faint">기능</h3>
+            <h3 className="text-[13px] font-bold text-fg-sub">기능</h3>
             <ul className="mt-3 space-y-2 text-[14px] text-fg-sub">
               <li>
                 <Link href="/instagram" className="hover:text-fg">
@@ -109,7 +109,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             </ul>
           </div>
           <div>
-            <h3 className="text-[13px] font-bold text-fg-faint">제품</h3>
+            <h3 className="text-[13px] font-bold text-fg-sub">제품</h3>
             <ul className="mt-3 space-y-2 text-[14px] text-fg-sub">
               <li>
                 <Link href="/#features" className="hover:text-fg">
@@ -134,7 +134,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             </ul>
           </div>
           <div>
-            <h3 className="text-[13px] font-bold text-fg-faint">정책</h3>
+            <h3 className="text-[13px] font-bold text-fg-sub">정책</h3>
             <ul className="mt-3 space-y-2 text-[14px] text-fg-sub">
               {/* 초안 게시 — 정식 출시 전 법률 검토 후 확정 (PART 12) */}
               <li>
@@ -150,7 +150,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             </ul>
           </div>
         </div>
-        <div className="border-t border-line py-5 text-center text-xs text-fg-faint">
+        <div className="border-t border-line py-5 text-center text-xs text-fg-sub">
           © 2026 Finch. All rights reserved.
         </div>
       </footer>

@@ -136,6 +136,7 @@ export default function PricingPage() {
       {/* ── S0 히어로 — 제미나이 문법: 흰 지면, 중앙 정렬, 큰 글씨, 장식 없음.
              앞선 안의 코랄 패널은 걷어냈다(강조는 버튼 색 하나뿐이라는 지시). ── */}
       <section className="mx-auto max-w-6xl px-4 pt-16 text-center md:px-6 md:pt-20">
+        {/* 로고 마크는 브랜드 원색 그대로 — 글자가 아니라 아이덴티티다(앱 사이드바와 동일) */}
         <FinchMark className="mx-auto size-12 text-primary" />
         <h1 className="mt-8 text-[clamp(36px,5.2vw,56px)] font-medium leading-[1.15] tracking-[-0.03em]">
           핀치를 <span className="text-primary-ink">최대한</span> 활용하세요

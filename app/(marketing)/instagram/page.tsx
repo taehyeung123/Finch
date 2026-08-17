@@ -132,7 +132,7 @@ export default function InstagramAnalysisPage() {
           <AppIconTile app="instagram" size={56} />
         </div>
         <h1 className="mt-5 text-4xl font-bold tracking-tight md:text-5xl">
-          인스타그램 분석, <span className="text-primary">핀치</span> 하나로 끝냅니다
+          인스타그램 분석, <span className="text-primary-ink">핀치</span> 하나로 끝냅니다
         </h1>
         {/* GEO: 자기완결적 정의 문장 (PART 13.3) */}
         <p className="mx-auto mt-5 max-w-2xl text-[17px] leading-relaxed text-fg-sub">
@@ -152,12 +152,12 @@ export default function InstagramAnalysisPage() {
             자주 묻는 질문 보기
           </ButtonLink>
         </div>
-        <p className="mt-4 text-[13px] text-fg-faint">신용카드 없이 시작 · 1분 만에 연동</p>
+        <p className="mt-4 text-[13px] text-fg-sub">신용카드 없이 시작 · 1분 만에 연동</p>
       </section>
 
       {/* 질문형 섹션 — 인사이트 · 팔로워 · 인기게시물/릴스 · 경쟁사 · 계정진단/인플루언서 */}
       {INSIGHT_SECTIONS.map((section, i) => (
-        <section key={section.q} className={i % 2 === 1 ? "border-t border-line bg-body/40" : undefined}>
+        <section key={section.q} className={i % 2 === 1 ? "border-y border-line bg-plate" : undefined}>
           <div className="mx-auto max-w-4xl px-4 py-14 md:px-6">
             <Reveal>
               <h2 className="text-2xl font-bold md:text-3xl">{section.q}</h2>
@@ -167,7 +167,7 @@ export default function InstagramAnalysisPage() {
                 ))}
               </div>
               {section.badgeNote ? (
-                <p className="mt-4 text-[13px] text-fg-faint">{section.badgeNote}</p>
+                <p className="mt-4 text-[13px] text-fg-sub">{section.badgeNote}</p>
               ) : null}
               <ul className="mt-5 grid gap-2.5 sm:grid-cols-3">
                 {section.points.map((point) => (
@@ -216,11 +216,11 @@ export default function InstagramAnalysisPage() {
       </section>
 
       {/* FAQ */}
-      <section id="faq" className="border-t border-line bg-body/40">
+      <section id="faq" className="border-y border-line bg-plate">
         <div className="mx-auto max-w-3xl scroll-mt-20 px-4 py-20 md:px-6">
           <Reveal>
             <h2 className="flex items-center justify-center gap-2 text-center text-2xl font-bold md:text-3xl">
-              <MessageCircleQuestion className="size-7 text-primary" aria-hidden />
+              <MessageCircleQuestion className="size-7 text-primary-ink" aria-hidden />
               자주 묻는 질문
             </h2>
           </Reveal>

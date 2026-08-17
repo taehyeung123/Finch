@@ -207,7 +207,7 @@ function AdMonitorPanel() {
         {/* 앞 카드 — 방금 감지된 신규 광고 */}
         <div className="-mt-3 mr-8 rounded-card border border-line-strong bg-plate p-4">
           <div className="flex items-center justify-between gap-3">
-            <span className="anim-pulse rounded-chip bg-primary-weak px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+            <span className="anim-pulse rounded-chip bg-primary-weak px-2.5 py-0.5 text-[11px] font-semibold text-primary-ink">
               NEW 광고 감지
             </span>
             <Badge className="tnum shrink-0">오늘 시작</Badge>
@@ -242,12 +242,12 @@ function TrendPanel() {
             key={row.rank}
             className="flex items-center gap-3 rounded-card border border-transparent px-3 py-2.5 trans-state hover:border-line hover:bg-overlay"
           >
-            <span className={`tnum w-4 text-center text-[15px] font-bold ${row.rank === 1 ? "text-primary" : "text-fg-sub"}`}>
+            <span className={`tnum w-4 text-center text-[15px] font-bold ${row.rank === 1 ? "text-primary-ink" : "text-fg-sub"}`}>
               {row.rank}
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-[14px] font-semibold">{row.title}</p>
-              <p className="truncate text-xs text-fg-faint">{row.meta}</p>
+              <p className="truncate text-xs text-fg-sub">{row.meta}</p>
             </div>
             <Badge tone="positive" className="tnum shrink-0">
               {row.score}
@@ -264,7 +264,7 @@ function AiStudioPanel() {
     <div className={panelBase} aria-hidden>
       <div className="flex items-center justify-between gap-3">
         <p className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-fg-sub">
-          <Sparkles className="size-4 text-primary" aria-hidden />
+          <Sparkles className="size-4 text-primary-ink" aria-hidden />
           카드뉴스 초안 6장
         </p>
         <AppIconTile app="instagram" size={28} />
@@ -274,14 +274,14 @@ function AiStudioPanel() {
         <div className="absolute top-3 h-full w-40 -translate-x-14 -rotate-6 rounded-card border border-line bg-overlay opacity-50" />
         <div className="absolute top-1.5 h-full w-40 translate-x-14 rotate-3 rounded-card border border-line bg-overlay opacity-75" />
         <div className="relative w-44 rounded-card border border-line-strong bg-plate p-4">
-          <p className="tnum text-[11px] font-semibold text-primary">1 / 6</p>
+          <p className="tnum text-[11px] font-semibold text-primary-ink">1 / 6</p>
           <p className="mt-1.5 text-[14px] font-bold leading-snug">
             여름 수분 루틴,
             <br />
             순서가 전부예요
           </p>
           <div className="mt-3 h-1.5 w-10 rounded-chip bg-primary" />
-          <p className="mt-3 text-[11px] text-fg-faint">AI 생성 표시 자동 부착</p>
+          <p className="mt-3 text-[11px] text-fg-sub">AI 생성 표시 자동 부착</p>
         </div>
       </div>
     </div>
@@ -322,47 +322,55 @@ export default function LandingPage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }} />
 
       {/* Hero (PART 6.1-2) — 좌측 텍스트 스태거 진입 + 우측 플로팅 비주얼 */}
-      <section className="mx-auto grid max-w-6xl items-center gap-10 overflow-x-clip px-4 pb-20 pt-16 md:grid-cols-2 md:px-6 md:pt-24">
-        <div>
-          {/* GEO: 자기완결적 정의 문장 (PART 13.3) */}
-          <p className="anim-fade-up text-[13px] font-semibold text-primary">SNS 통합 분석 & 메타광고 관리</p>
-          <h1
-            className="anim-fade-up mt-3 text-4xl font-bold leading-[1.2] tracking-tight md:text-5xl md:leading-[1.15]"
-            style={{ animationDelay: "0.08s" }}
-          >
-            채널 분석부터
-            <br />
-            광고 관리까지,
-            <br />
-            <span className="text-primary">대시보드 하나로</span>
-          </h1>
-          <p
-            className="anim-fade-up mt-5 max-w-md text-[17px] leading-relaxed text-fg-sub"
-            style={{ animationDelay: "0.16s" }}
-          >
-            핀치는 인스타그램·틱톡·쓰레드를 한 곳에서 분석하고 메타광고 집행까지 관리하는 SNS 마케팅
-            도구입니다. 경쟁사 동향과 트렌드, AI 콘텐츠 제작까지 함께요.
-          </p>
-          <div className="anim-fade-up mt-8 flex flex-wrap items-center gap-3" style={{ animationDelay: "0.24s" }}>
-            <ButtonLink href="/signup" size="lg">
-              무료로 시작하기
-            </ButtonLink>
-            <ButtonLink href="/#features" variant="secondary" size="lg">
-              기능 둘러보기
-            </ButtonLink>
-          </div>
-          <p className="anim-fade-up mt-4 text-[13px] text-fg-faint" style={{ animationDelay: "0.32s" }}>
-            신용카드 없이 시작 · 1분 만에 연동
-          </p>
+      {/* ── 히어로 — 2026-08-15 재구성.
+             앞 버전은 좌: 글 / 우: 세로 목업 카드였다. 그래서 ① 제목이 화면 절반에
+             갇혀 3줄로 꺾였고 ② 우측 목업은 사이드바도 상단 바도 없어서 제품이
+             어떻게 생겼는지 전달하지 못했다.
+             벤치마크(스니핏·링크팜)는 둘 다 **중앙 정렬 글 → 그 아래 앱 화면 통짜**다.
+             글은 폭 전체를 쓰고, 화면은 넓게 깔린다. 그 구조로 바꿨다. ── */}
+      <section className="mx-auto max-w-6xl overflow-x-clip px-4 pb-16 pt-16 text-center md:px-6 md:pb-20 md:pt-24">
+        {/* GEO: 자기완결적 정의 문장 (PART 13.3) */}
+        <p className="anim-fade-up text-[13px] font-semibold tracking-[0.02em] text-primary-ink">
+          SNS 통합 분석 &amp; 메타광고 관리
+        </p>
+        <h1
+          className="anim-fade-up mx-auto mt-4 max-w-[19ch] text-[clamp(34px,5.6vw,60px)] font-bold leading-[1.12]"
+          style={{ animationDelay: "0.08s" }}
+        >
+          채널 분석부터 광고 관리까지,{" "}
+          <span className="text-primary-ink">대시보드 하나로</span>
+        </h1>
+        <p
+          className="anim-fade-up mx-auto mt-6 max-w-[54ch] text-[17px] leading-[1.6] text-fg-sub md:text-[18px]"
+          style={{ animationDelay: "0.16s" }}
+        >
+          핀치는 인스타그램·틱톡·쓰레드를 한 곳에서 분석하고 메타광고 집행까지 관리하는 SNS 마케팅
+          도구입니다. 경쟁사 동향과 트렌드, AI 콘텐츠 제작까지 함께요.
+        </p>
+        <div
+          className="anim-fade-up mt-8 flex flex-wrap items-center justify-center gap-3"
+          style={{ animationDelay: "0.24s" }}
+        >
+          <ButtonLink href="/signup" size="lg">
+            무료로 시작하기
+          </ButtonLink>
+          <ButtonLink href="/#features" variant="secondary" size="lg">
+            기능 둘러보기
+          </ButtonLink>
         </div>
+        <p className="anim-fade-up mt-4 text-[13px] text-fg-sub" style={{ animationDelay: "0.32s" }}>
+          신용카드 없이 시작 · 1분 만에 연동
+        </p>
 
-        <div className="anim-fade-up" style={{ animationDelay: "0.2s" }}>
+        {/* 제품 화면 — 글보다 아래, 폭은 더 넓게. 플로팅 아이콘이 프레임 밖으로
+            나오므로 위아래 여백을 따로 준다(px-2 는 좌우 아이콘용). */}
+        <div className="anim-fade-up mt-14 px-2 md:mt-16" style={{ animationDelay: "0.36s" }}>
           <HeroVisual />
         </div>
       </section>
 
       {/* 문제 제기 (PART 6.1-3) */}
-      <section className="border-t border-line bg-body/40">
+      <section className="border-y border-line bg-plate">
         <div className="mx-auto max-w-6xl px-4 py-20 md:px-6">
           <Reveal>
             <h2 className="text-center text-2xl font-bold md:text-3xl">이런 고민 있으신가요?</h2>
@@ -371,12 +379,12 @@ export default function LandingPage() {
             {PAIN_POINTS.map(({ icon: Icon, persona, pain, solution }, i) => (
               <Reveal key={persona} delay={0.05 * i} className="h-full">
                 <div className="h-full rounded-card border border-line bg-body p-6 transition-transform hover:-translate-y-1">
-                  <span className="flex size-10 items-center justify-center rounded-card bg-primary-weak text-primary">
+                  <span className="flex size-10 items-center justify-center rounded-card bg-primary-weak text-primary-ink">
                     <Icon className="size-5" aria-hidden />
                   </span>
                   <h3 className="mt-4 text-[15px] font-bold">{persona}</h3>
                   <p className="mt-2 text-[14px] leading-relaxed text-fg-sub">&ldquo;{pain}&rdquo;</p>
-                  <p className="mt-3 flex items-start gap-1.5 text-[14px] font-medium text-primary">
+                  <p className="mt-3 flex items-start gap-1.5 text-[14px] font-medium text-primary-ink">
                     <Check className="mt-0.5 size-4 shrink-0" aria-hidden />
                     {solution}
                   </p>
@@ -401,10 +409,14 @@ export default function LandingPage() {
             return (
               <Reveal key={title}>
                 <div
-                  className={`grid items-center gap-8 md:grid-cols-2 ${i % 2 === 1 ? "md:[&>*:first-child]:order-2" : ""}`}
+                  /* [&>*]:min-w-0 — 모바일(1열)에서 그리드 트랙이 auto 라 목업 패널의
+                     min-content(내부 고정폭·좌우 margin) 만큼 트랙이 부풀어 페이지 전체에
+                     가로 스크롤이 생겼다(375px 뷰포트에서 408px). 그리드 아이템의 기본
+                     min-width:auto 를 풀어 트랙이 컨테이너를 넘지 못하게 한다. */
+                  className={`grid items-center gap-8 [&>*]:min-w-0 md:grid-cols-2 ${i % 2 === 1 ? "md:[&>*:first-child]:order-2" : ""}`}
                 >
                   <div>
-                    <span className="flex size-11 items-center justify-center rounded-card bg-primary-weak text-primary">
+                    <span className="flex size-11 items-center justify-center rounded-card bg-primary-weak text-primary-ink">
                       <Icon className="size-5" aria-hidden />
                     </span>
                     <h3 className="mt-4 text-xl font-bold">{title}</h3>
@@ -427,7 +439,7 @@ export default function LandingPage() {
       </section>
 
       {/* 채널별 자세히 보기 진입 (PART 6.1-5) */}
-      <section id="channels" className="border-t border-line bg-body/40">
+      <section id="channels" className="border-y border-line bg-plate">
         <div className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20 md:px-6">
           <Reveal>
             <h2 className="text-center text-2xl font-bold md:text-3xl">
@@ -438,7 +450,7 @@ export default function LandingPage() {
             </p>
           </Reveal>
           <Reveal delay={0.15}>
-            <p className="mt-8 text-center text-[13px] font-semibold text-fg-faint">채널별로 더 자세히 보기</p>
+            <p className="mt-8 text-center text-[13px] font-semibold text-fg-sub">채널별로 더 자세히 보기</p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
               <ButtonLink href="/instagram" variant="ghost" size="sm">
                 인스타그램 분석 자세히 보기
@@ -481,7 +493,7 @@ export default function LandingPage() {
               <div className="max-w-[85%] rounded-card border border-line bg-overlay px-3.5 py-2.5 text-[14px] text-fg">
                 팔로워가 1,240명 늘었고 주간 조회수는 62만 회로 8.1% 상승했어요. 릴스 &lsquo;여름 신제품
                 언박싱&rsquo;이 성장을 이끌고 있습니다.
-                <span className="mt-2.5 flex items-center justify-between rounded-card border border-line bg-body px-3 py-2 text-[13px] font-semibold text-primary">
+                <span className="mt-2.5 flex items-center justify-between rounded-card border border-line bg-body px-3 py-2 text-[13px] font-semibold text-primary-ink">
                   대시보드에서 자세히 보기 <ArrowRight className="size-3.5" />
                 </span>
               </div>
@@ -501,7 +513,7 @@ export default function LandingPage() {
       </section>
 
       {/* 요금제 미리보기 (PART 6.1-7) */}
-      <section className="border-t border-line bg-body/40">
+      <section className="border-y border-line bg-plate">
         <div className="mx-auto max-w-6xl px-4 py-20 md:px-6">
           <Reveal>
             <h2 className="text-center text-2xl font-bold md:text-3xl">요금제</h2>
@@ -542,7 +554,7 @@ export default function LandingPage() {
 
       {/* 연동 채널 로고 스트립 (PART 6.1-8) — 앱 아이콘 무한 마퀴 */}
       <section className="mx-auto max-w-6xl px-4 py-14 md:px-6">
-        <p className="text-center text-[13px] font-semibold text-fg-faint">지원 채널</p>
+        <p className="text-center text-[13px] font-semibold text-fg-sub">지원 채널</p>
         <p className="sr-only">지원 채널: Instagram, TikTok, Threads, Meta 광고</p>
         <div
           className="mt-6 overflow-hidden"
@@ -560,11 +572,11 @@ export default function LandingPage() {
       </section>
 
       {/* FAQ (PART 6.1-9) */}
-      <section id="faq" className="border-t border-line bg-body/40">
+      <section id="faq" className="border-y border-line bg-plate">
         <div className="mx-auto max-w-3xl scroll-mt-20 px-4 py-20 md:px-6">
           <Reveal>
             <h2 className="flex items-center justify-center gap-2 text-center text-2xl font-bold md:text-3xl">
-              <MessageCircleQuestion className="size-7 text-primary" aria-hidden />
+              <MessageCircleQuestion className="size-7 text-primary-ink" aria-hidden />
               자주 묻는 질문
             </h2>
           </Reveal>

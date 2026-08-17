@@ -29,7 +29,7 @@ export default async function InstagramDataDeletionStatusPage({
       <p className="text-[14px] leading-relaxed text-fg-sub">
         Instagram 연동 해제에 따라 핀치에 저장돼 있던 관련 계정 정보(액세스 토큰 포함)가 삭제되었습니다.
       </p>
-      {id ? <p className="text-[12px] text-fg-faint">확인 코드: {id}</p> : null}
+      {id ? <p className="text-[12px] text-fg-sub">확인 코드: {id}</p> : null}
     </div>
   );
 }

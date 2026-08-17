@@ -135,8 +135,12 @@
   --primary: #ff6b4a;
   --primary-hover: #e85a3b;
   --primary-pressed: #c4472c;
-  /* 글자용 코랄 — 흰 배경 대비 4.9:1 (AA 통과). 면에는 쓰지 않는다 */
-  --primary-ink: #c4472c;
+  /* 글자용 코랄. 면(배경·버튼)에는 쓰지 않는다 — 거긴 --primary 다.
+     흰 배경만 보고 4.9:1 로 잡았더니 실제로 이 색이 가장 많이 얹히는 자리인
+     bg-primary-weak(흰 지면 합성 #FFEDE9)와 bg-plate 위에서 4.33·4.41:1 로
+     AA 를 못 넘었다. 배지·칩 안 글자가 대부분 그 위에 있다 — 한 칸 더 진하게.
+     흰 배경 5.7:1 / primary-weak 5.1:1 / plate 5.2:1 */
+  --primary-ink: #b33f26;
   --on-primary: #0c0c11;
   --primary-weak: rgba(255, 107, 74, 0.12);
 
@@ -173,8 +177,12 @@
   --scrim: rgba(12, 12, 17, 0.72);
   --on-scrim: #ffffff;
 
-  /* object-contain 썸네일의 레터박스 — 지면이 순백이 된 뒤에는 판이 한 칸 **아래**여야
-     한다(앞서는 지면이 회색이라 판이 위였다). 테두리와 같은 색을 써서 색 수를 늘리지 않는다. */
+  /* 지면(#FFF)보다 한 칸 **아래**인 면. 쓰임은 둘이다:
+      ① 카드 **안**의 중첩 면 · object-contain 썸네일 레터박스
+      ② 마케팅 지면의 교차 밴드 — 순백 지면에서 섹션 리듬을 만드는 유일한 수단
+         (bg-body/40 은 흰색 40% 라 아예 안 보인다)
+     ⚠️ ② 밴드 **안**의 카드는 반드시 bg-body 여야 한다. 밴드 위에 bg-plate 를
+     또 얹으면 같은 색이라 조용히 사라진다. */
   --plate: #f1f3f5;
 
   /* 요금제 플랜 색 — 라이트.
@@ -293,6 +301,19 @@ body {
   background: var(--color-body);
   border: 1px solid var(--color-line);
   box-shadow: var(--shadow-card);
+}
+
+/*
+  card-float — 카드보다 **한 단계 더 뜬 표면**(히어로 제품 화면, 큰 목업 등).
+
+  `card-face shadow-pop` 을 겹쳐 쓰면 어느 쪽이 이길지가 Tailwind 의 유틸 방출
+  순서에 달린다 — 소스 선언 순서와 반대로 재배치되며, 지금 우연히 맞을 뿐이다.
+  한 클래스로 못박아 그 의존을 없앤다.
+*/
+@utility card-float {
+  background: var(--color-body);
+  border: 1px solid var(--color-line);
+  box-shadow: var(--shadow-pop);
 }
 
 /* 호버 — 선이 진해지고 그림자가 한 칸 뜬다. 요소는 1px도 안 움직인다.

@@ -98,7 +98,7 @@ export default function VisitorCheckPage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }} />
 
       {/* 브레드크럼 — 상단 인스타그램 허브 링크 겸용 */}
-      <nav aria-label="브레드크럼" className="mx-auto max-w-3xl px-4 pt-8 text-[13px] text-fg-faint md:px-6">
+      <nav aria-label="브레드크럼" className="mx-auto max-w-3xl px-4 pt-8 text-[13px] text-fg-sub md:px-6">
         <Link href="/instagram" className="hover:text-fg-sub">
           인스타그램 분석
         </Link>
@@ -108,7 +108,7 @@ export default function VisitorCheckPage() {
 
       {/* 히어로 */}
       <section className="mx-auto max-w-3xl px-4 pb-10 pt-6 md:px-6">
-        <p className="text-[13px] font-semibold text-primary">인스타그램 방문자·언팔로우 분석</p>
+        <p className="text-[13px] font-semibold text-primary-ink">인스타그램 방문자·언팔로우 분석</p>
         <h1 className="mt-3 text-3xl font-bold leading-[1.25] tracking-tight md:text-4xl">
           인스타 방문자 분석, 어디까지 가능한가요?
         </h1>
@@ -125,7 +125,7 @@ export default function VisitorCheckPage() {
       </section>
 
       {/* 방문자 확인 앱의 정체 */}
-      <section className="border-t border-line bg-body/40">
+      <section className="border-y border-line bg-plate">
         <div className="mx-auto max-w-3xl space-y-16 px-4 py-16 md:px-6">
           <div>
             <h2 className="text-xl font-bold md:text-2xl">인스타 방문자 보는법이라는 앱들, 정체가 뭔가요?</h2>
@@ -208,15 +208,15 @@ export default function VisitorCheckPage() {
           <ButtonLink href="/signup" size="lg">
             무료로 시작하고 팬 반응 확인하기 <ArrowRight className="size-4" aria-hidden />
           </ButtonLink>
-          <p className="mt-3 text-[13px] text-fg-faint">신용카드 없이 무료로 체험할 수 있어요.</p>
+          <p className="mt-3 text-[13px] text-fg-sub">신용카드 없이 무료로 체험할 수 있어요.</p>
         </div>
       </section>
 
       {/* FAQ */}
-      <section className="border-t border-line bg-body/40">
+      <section className="border-y border-line bg-plate">
         <div className="mx-auto max-w-3xl px-4 py-20 md:px-6">
           <h2 className="flex items-center justify-center gap-2 text-center text-2xl font-bold md:text-3xl">
-            <MessageCircleQuestion className="size-7 text-primary" aria-hidden />
+            <MessageCircleQuestion className="size-7 text-primary-ink" aria-hidden />
             인스타 방문자 확인, 더 궁금한 점이 있으신가요?
           </h2>
           <div className="mt-10">

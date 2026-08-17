@@ -78,7 +78,7 @@ export default function ThreadsPage() {
 
       {/* 히어로 */}
       <section className="mx-auto max-w-3xl px-4 pb-14 pt-16 text-center md:px-6 md:pt-24">
-        <p className="inline-flex items-center gap-2 text-[13px] font-semibold text-primary">
+        <p className="inline-flex items-center gap-2 text-[13px] font-semibold text-primary-ink">
           <AppIconTile app="threads" size={22} />
           Threads 계정 분석
         </p>
@@ -97,7 +97,7 @@ export default function ThreadsPage() {
       </section>
 
       {/* 계정 분석 — 무엇을 볼 수 있나요 (내 계정 범위 명시) */}
-      <section className="border-t border-line bg-body/40">
+      <section className="border-y border-line bg-plate">
         <div className="mx-auto max-w-4xl px-4 py-20 md:px-6">
           <Reveal>
             <h2 className="text-center text-2xl font-bold md:text-3xl">쓰레드 계정 분석, 무엇을 볼 수 있나요?</h2>
@@ -110,7 +110,7 @@ export default function ThreadsPage() {
             {FEATURES.map(({ icon: Icon, title, description }, i) => (
               <Reveal key={title} delay={0.05 * i} className="h-full">
                 <div className="h-full rounded-card border border-line bg-body p-6">
-                  <span className="flex size-10 items-center justify-center rounded-card bg-primary-weak text-primary">
+                  <span className="flex size-10 items-center justify-center rounded-card bg-primary-weak text-primary-ink">
                     <Icon className="size-5" aria-hidden />
                   </span>
                   <h3 className="mt-4 text-[15px] font-bold">{title}</h3>
@@ -133,7 +133,7 @@ export default function ThreadsPage() {
           </p>
         </Reveal>
         <Reveal delay={0.1}>
-          <p className="mt-8 text-center text-[13px] font-semibold text-fg-faint">다른 채널도 함께 분석하기</p>
+          <p className="mt-8 text-center text-[13px] font-semibold text-fg-sub">다른 채널도 함께 분석하기</p>
           <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
             <ButtonLink href="/instagram" variant="ghost" size="sm">
               인스타그램 분석 자세히 보기
@@ -146,11 +146,11 @@ export default function ThreadsPage() {
       </section>
 
       {/* FAQ */}
-      <section className="border-t border-line bg-body/40">
+      <section className="border-y border-line bg-plate">
         <div className="mx-auto max-w-3xl px-4 py-20 md:px-6">
           <Reveal>
             <h2 className="flex items-center justify-center gap-2 text-center text-2xl font-bold md:text-3xl">
-              <MessageCircleQuestion className="size-7 text-primary" aria-hidden />
+              <MessageCircleQuestion className="size-7 text-primary-ink" aria-hidden />
               쓰레드 분석, 무엇이 궁금하신가요?
             </h2>
           </Reveal>
