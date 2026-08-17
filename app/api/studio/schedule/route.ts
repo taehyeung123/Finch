@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
+import { kstToday } from "@/lib/calendar";
 
 /**
  * 카드뉴스 예약 발행 등록 — 이미지(FormData)를 Storage(cardnews 버킷, 본인 폴더)에 업로드하고
@@ -46,15 +47,25 @@ export async function POST(request: Request) {
   /* scheduled_at 은 not null 이다. 초안은 날짜가 "미정"이라는 뜻이므로 값이 필요하면
      지금 시각을 넣는다 — 화면은 status 로 판단해 "날짜 미정"으로 표시하고, 캘린더에도
      찍지 않는다. 초안에 과거 날짜 검증을 걸면 저장 자체가 막힌다. */
-  const scheduledDate = asDraft && !scheduledAt ? new Date() : new Date(scheduledAt);
+
+  /* ⚠️ **KST 자정으로 못박는다.** new Date("2026-08-20") 은 ISO 날짜만 있는 문자열이라
+     JS 가 UTC 자정으로 파싱한다 = KST 09:00. 그런데 발행 배치는 KST 06:00 에 돌고
+     (vercel.json "0 21 * * *" = UTC 21시) 조건이 scheduled_at <= now 다.
+     그래서 09:00 로 저장된 건 그날 아침 배치에 안 걸리고 **다음 날 아침**에 걸렸다 —
+     화면은 "예약일 아침 배치에서 자동 발행됩니다"라고 안내하는데 하루 늦게 나갔다.
+     2026-08-17 실측: 8/20 예약 → 8/21 06:00 KST 발행.
+     초안→예약 경로(app/(app)/publish/actions.ts)는 처음부터 KST 자정을 썼기 때문에
+     같은 날짜를 골라도 두 경로의 발행일이 하루 달랐다. 여기를 그쪽에 맞춘다. */
+  const scheduledDate =
+    asDraft && !scheduledAt ? new Date() : new Date(`${scheduledAt}T00:00:00+09:00`);
   if (Number.isNaN(scheduledDate.getTime())) {
     return NextResponse.json({ error: "발행 예정일이 올바르지 않습니다." }, { status: 400 });
   }
   if (!asDraft) {
-    // 날짜만 비교(당일 새벽 배치가 이미 지났을 수 있어 '오늘'까지는 허용, 과거 날짜만 차단)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (scheduledDate < today) {
+    /* 과거 차단도 **KST 기준**이다. new Date() 를 서버 로컬(Vercel=UTC)로 자르면
+       KST 00~09시에는 오늘이 어제로 잡혀 이미 지난 날짜가 통과한다.
+       날짜 문자열끼리 비교하면 타임존이 개입할 여지가 없다. */
+    if (scheduledAt < kstToday()) {
       return NextResponse.json({ error: "오늘보다 이전 날짜로는 예약할 수 없어요." }, { status: 400 });
     }
   }
