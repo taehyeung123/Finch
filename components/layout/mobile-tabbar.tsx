@@ -3,16 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Bell, FileSearch, LayoutDashboard, Library, Megaphone, MoreHorizontal, X } from "lucide-react";
+import { Bell, CalendarClock, LayoutDashboard, Search, Sparkles, MoreHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { NAV_FOOTER_ITEMS, NAV_GROUPS, type NavItem } from "./sidebar";
+import { NAV_FOOTER_ITEMS, NAV_GROUPS, isNavActive, type NavItem } from "./sidebar";
 
 /** 모바일: 사이드바 대신 하단 탭바 — 핵심 4개 + 더보기 (PART 6.2 반응형 기준) */
 const TABS: readonly NavItem[] = [
   { href: "/dashboard", label: "홈", icon: LayoutDashboard },
-  { href: "/analyze", label: "분석", icon: FileSearch },
-  { href: "/library", label: "레퍼런스", icon: Library },
-  { href: "/ads", label: "광고", icon: Megaphone },
+  { href: "/publish", label: "발행", icon: CalendarClock },
+  { href: "/library", label: "탐색", icon: Search },
+  { href: "/studio", label: "만들기", icon: Sparkles },
 ];
 
 const TAB_HREFS = new Set(TABS.map((tab) => tab.href));
@@ -43,7 +43,7 @@ export function MobileTabbar() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [sheetOpen]);
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const isActive = (href: string) => isNavActive(pathname, href);
 
   function renderSheetItem({ href, label, icon: Icon }: NavItem) {
     const active = isActive(href);

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useState } from "react";
 import { CalendarClock, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,14 +19,12 @@ export function SchedulePublish({
   edits,
   template,
   logo,
-  onScheduled,
 }: {
   slides: ExportSlide[];
   aiGenerated: boolean;
   edits: Record<number, string>;
   template?: CardTemplate;
   logo?: LoadedLogo;
-  onScheduled: () => void;
 }) {
   const [open, setOpen] = useState(false);
   // 캡션 기본값 — 표지 헤드라인 + 부연으로 초안을 만든다 (사용자가 수정 가능)
@@ -56,7 +56,6 @@ export function SchedulePublish({
         return;
       }
       setDone(true);
-      onScheduled();
     } catch {
       setError("이미지 생성 중 오류가 발생했어요.");
     } finally {
@@ -89,7 +88,12 @@ export function SchedulePublish({
 
       {done ? (
         <p className="mt-3 text-[13px] text-positive">
-          예약이 등록됐어요. 예약일 아침 배치에서 자동으로 발행됩니다. 아래 목록에서 확인·취소할 수 있어요.
+          예약이 등록됐어요. 예약일 아침 배치에서 자동으로 발행됩니다.{" "}
+          {/* 목록이 스튜디오 밖(/publish)으로 나갔으므로 "아래 목록" 대신 링크로 안내한다 */}
+          <Link href="/publish" className="font-semibold underline underline-offset-2">
+            발행에서 확인·취소
+          </Link>
+          할 수 있어요.
         </p>
       ) : (
         <>

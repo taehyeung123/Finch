@@ -7,19 +7,25 @@ import type { MetadataRoute } from "next";
  */
 const APP_ROUTES = [
   "/dashboard",
-  "/analyze",
-  "/audience",
-  "/discover",
-  "/library",
-  "/competitors",
-  "/ads",
+  "/publish",
   "/auto-dm",
-  "/studio",
+  "/links",
+  "/insights",
   "/reports",
+  "/library",
+  "/scrap",
+  "/competitors",
+  "/studio",
+  "/ads",
   "/notifications",
   "/settings",
   "/support",
   "/onboarding",
+  // 구 경로 — 리다이렉트 스텁이지만 크롤 대상은 아니다
+  "/analyze",
+  "/audience",
+  "/growth",
+  "/discover",
 ];
 
 const AI_CRAWLERS = [

@@ -4,20 +4,22 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import {
+  Bookmark,
+  CalendarClock,
   ChevronDown,
   ChevronsLeft,
-  Eye,
-  FileSearch,
   FileText,
   LayoutDashboard,
-  Library,
-  Megaphone,
+  LineChart,
+  Link2,
   MessageCircleQuestion,
   MessageSquareReply,
-  Rocket,
+  Palette,
+  Search,
   Settings,
   Sparkles,
   Users,
+  Wand2,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -29,49 +31,84 @@ export type NavItem = { href: string; label: string; icon: LucideIcon };
 /** 홈은 어느 그룹에도 속하지 않는 단독 진입점 */
 export const NAV_HOME: NavItem = { href: "/dashboard", label: "홈", icon: LayoutDashboard };
 
-/** 목적별 3그룹 — 내 채널(분석) / 시장 조사(외부) / 제작·집행(액션) */
+/*
+  제품 도메인 3그룹 (2026-08-15 개편).
+
+  앞선 그룹명 「내 채널 / 시장 조사 / 제작·집행」은 **데이터 출처 분류**였다 —
+  내 계정(공식 API) 대 타계정(3rd party). CLAUDE.md 가 "데이터 출처는 고객 화면에
+  노출하지 않는다"고 못박은 바로 그 구분이 최상위 내비게이션에 남아 있었다.
+  게다가 9개 중 6개가 "보는 것"이라 제품이 분석 도구로 읽혔고, 정작 돈이 되는
+  **발행이 메뉴에 없었다**(예약 발행이 스튜디오 하단에 묻혀 있었고, 예약이 0건이면
+  그 패널이 null 을 반환해 화면에서 통째로 사라졌다).
+
+  이 상수가 **IA의 유일한 출처**다. 기획 문서가 아니라 여기가 기준이다 —
+  문서 두 벌을 손으로 맞추다 실제로 어긋난 적이 있다.
+*/
 export const NAV_GROUPS = [
   {
-    key: "mine",
-    label: "내 채널",
+    key: "sns",
+    label: "SNS",
     items: [
-      { href: "/analyze", label: "콘텐츠 분석", icon: FileSearch },
-      { href: "/audience", label: "팔로워 분석", icon: Eye },
-      { href: "/growth", label: "성장 진단", icon: Rocket },
+      { href: "/publish", label: "발행", icon: CalendarClock },
+      { href: "/auto-dm", label: "자동 DM", icon: MessageSquareReply },
+      { href: "/links", label: "프로필 링크", icon: Link2 },
+      { href: "/insights", label: "성과 분석", icon: LineChart },
       { href: "/reports", label: "리포트", icon: FileText },
     ],
   },
   {
-    key: "market",
-    label: "시장 조사",
+    key: "reference",
+    label: "레퍼런스",
     items: [
-      { href: "/library", label: "탐색·레퍼런스", icon: Library },
-      { href: "/competitors", label: "경쟁사 비교", icon: Users },
+      { href: "/library", label: "탐색", icon: Search },
+      { href: "/scrap", label: "스크랩", icon: Bookmark },
+      { href: "/competitors", label: "경쟁사", icon: Users },
     ],
   },
   {
-    key: "make",
-    label: "제작·집행",
+    key: "studio",
+    label: "AI 스튜디오",
     items: [
-      { href: "/studio", label: "AI 스튜디오", icon: Sparkles },
-      { href: "/ads", label: "광고 관리", icon: Megaphone },
-      { href: "/auto-dm", label: "자동 DM", icon: MessageSquareReply },
+      { href: "/studio", label: "만들기", icon: Wand2 },
+      { href: "/studio/brand", label: "브랜드", icon: Palette },
+      { href: "/studio/works", label: "내 콘텐츠", icon: Sparkles },
     ],
   },
 ] as const satisfies readonly { key: string; label: string; items: readonly NavItem[] }[];
 
 /** 하단 고정 — 목적 그룹과 층위가 다른 상시 메뉴 */
 export const NAV_FOOTER_ITEMS: readonly NavItem[] = [
-  { href: "/settings", label: "설정", icon: Settings },
+  { href: "/settings", label: "계정 및 설정", icon: Settings },
   { href: "/support", label: "고객센터", icon: MessageCircleQuestion },
 ];
+
+/** 활성 판정에서 "더 구체적인 경로"를 가리기 위한 전체 목록 */
+export const ALL_NAV_HREFS: readonly string[] = [
+  NAV_HOME.href,
+  ...NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href)),
+  ...NAV_FOOTER_ITEMS.map((i) => i.href),
+];
+
+/**
+ * 활성 판정 — **가장 구체적인 매치 하나만** 활성이다. 사이드바·모바일 탭바 공용.
+ *
+ * 2026-08-15 개편으로 /studio 아래 /studio/brand·/studio/works 가 생기면서
+ * 단순 prefix 매치는 부모(만들기)와 자식(브랜드)을 동시에 칠했다.
+ */
+export function isNavActive(pathname: string, href: string): boolean {
+  if (pathname === href) return true;
+  if (!pathname.startsWith(`${href}/`)) return false;
+  return !ALL_NAV_HREFS.some(
+    (other) => other.length > href.length && (pathname === other || pathname.startsWith(`${other}/`)),
+  );
+}
 
 type GroupKey = (typeof NAV_GROUPS)[number]["key"];
 type GroupState = Record<GroupKey, boolean>;
 
 /** 사용자가 접어둔 그룹 — 첫 페인트(서버 스냅샷)는 항상 전부 펼침 */
 const GROUPS_STORAGE_KEY = "finch:sidebar:groups";
-const GROUPS_ALL_OPEN: GroupState = { mine: true, market: true, make: true };
+const GROUPS_ALL_OPEN: GroupState = { sns: true, reference: true, studio: true };
 
 /*
   localStorage 기반 외부 스토어 — useSyncExternalStore로 구독한다.
@@ -128,7 +165,7 @@ export function Sidebar() {
     writeGroups({ ...groupOpen, [key]: value });
   }
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const isActive = (href: string) => isNavActive(pathname, href);
 
   /* 접기·펼치기 공용 이징 — 랜딩 진입 애니메이션(globals.css .anim-fade-up/.reveal)과 같은
      커브를 써서 앱 전체 모션 리듬을 통일한다. 폭은 레이아웃 속성이라 GPU 가속 대상이 아니지만

@@ -178,8 +178,8 @@ export function DashboardClient({
             title="최근 게시물"
             description="게시물별 핵심 지표"
             action={
-              <Link href="/analyze" className="inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:text-primary-hover">
-                콘텐츠 분석 <ArrowRight className="size-3.5" aria-hidden />
+              <Link href="/insights/link" className="inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:text-primary-hover">
+                링크 분석 <ArrowRight className="size-3.5" aria-hidden />
               </Link>
             }
           />

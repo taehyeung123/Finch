@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
+  CalendarClock,
   ChevronRight,
   MessageSquareReply,
   Search,
@@ -306,7 +307,7 @@ export function NextActions() {
   const actions = [
     { href: "/auto-dm", icon: MessageSquareReply, label: "자동 DM 만들기", desc: "댓글에 자동으로 DM 발송" },
     { href: "/studio", icon: Sparkles, label: "AI 스튜디오", desc: "카드뉴스·아이디어 생성" },
-    { href: "/growth", icon: TrendingUp, label: "성장 진단", desc: "내 계정 성과 분석" },
+    { href: "/publish", icon: CalendarClock, label: "발행", desc: "예약한 게시물 확인" },
   ];
   return (
     <section aria-label="바로가기" className="grid gap-4 sm:grid-cols-3">

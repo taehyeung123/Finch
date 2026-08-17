@@ -21,13 +21,17 @@ export type ChannelScope =
 /** 경로별 규칙 — 구체적인 prefix가 먼저 오도록 정렬 유지 */
 const SCOPES: { prefix: string; scope: ChannelScope }[] = [
   { prefix: "/dashboard", scope: { mode: "switch" } },
+  /* /insights/link(구 콘텐츠 분석)는 URL만 넣으면 되는 멀티채널 화면이라
+     "Instagram 기준" 안내가 붙으면 거짓말이 된다 — 더 구체적인 prefix 가 위에 와야
+     아래 /insights 규칙에 먹히지 않는다(SCOPES 는 위에서부터 첫 매치를 쓴다). */
+  { prefix: "/insights/link", scope: { mode: "hidden" } },
   {
-    prefix: "/audience",
+    prefix: "/insights",
     scope: {
       mode: "indicator",
       icon: "instagram",
       label: "Instagram 기준",
-      hint: "팔로워 분석은 현재 인스타그램 기준으로 제공됩니다. 틱톡·쓰레드는 순차적으로 확장될 예정입니다.",
+      hint: "성과 분석은 현재 인스타그램 기준으로 제공됩니다. 틱톡·쓰레드는 순차적으로 확장될 예정입니다.",
     },
   },
   {

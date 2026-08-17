@@ -1,17 +1,11 @@
-import type { Metadata } from "next";
-import { getPostPerformance } from "@/lib/data/growth";
-import { GrowthClient } from "./_components/growth-client";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "성장 진단",
-  robots: { index: false, follow: false },
-};
-
-/*
-  성장 진단 (킬러 기능 "성장 루프" 1단계) — 서버에서 실제 게시물 성과를 집계해 전달.
-  실측 성과 표는 즉시 렌더하고, AI 진단(강점·약점·아이디어)은 클라이언트에서 버튼으로 호출한다.
-*/
-export default async function GrowthPage() {
-  const performance = await getPostPerformance();
-  return <GrowthClient performance={performance} />;
+/**
+ * 구 「성장 진단」 — 「성과 분석 · 내 게시물」로 이동.
+ * 2026-08-15 IA 개편: 분석 3개(콘텐츠 분석·팔로워 분석·성장 진단)를 「성과 분석」 하나로
+ * 합쳤다. 사용자에게 3개일 이유가 없었고 셋 다 같은 인사이트 API 위에 있었다.
+ * 북마크·기존 세션 링크를 위해 라우트는 남긴다.
+ */
+export default function Page() {
+  redirect("/insights/posts");
 }

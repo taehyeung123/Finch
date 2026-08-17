@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   Flame,
@@ -31,9 +33,6 @@ import type { EditorScene } from "@/lib/studio/editor-model";
 import { TEMPLATES, DEFAULT_TEMPLATE, getTemplate, customTemplate, type CardTemplate } from "@/lib/studio/templates";
 import { getBrandKit, type BrandKit } from "./brand-kit-actions";
 import { SchedulePublish } from "./_components/schedule-publish";
-import { ScheduledPostsPanel, type ScheduledPostsPanelHandle } from "./_components/scheduled-posts-panel";
-import { BrandTone } from "./_components/brand-tone";
-import { BrandKitPanel } from "./_components/brand-kit";
 
 // Konva 편집기는 canvas/window에 의존해 서버 렌더 불가 — 클라이언트에서만 마운트
 const CardEditor = dynamic(() => import("./_components/card-editor"), { ssr: false });
@@ -290,7 +289,6 @@ function buildIdeas(keyword: string, category: string, related: ReferenceItem[])
 }
 
 export default function StudioPage() {
-  const scheduledPanelRef = useRef<ScheduledPostsPanelHandle>(null);
   const [tab, setTab] = useState<StudioTab>("cards");
   const [topic, setTopic] = useState("");
   const [tone, setTone] = useState<BrandTone>("friendly");
@@ -587,11 +585,15 @@ export default function StudioPage() {
 
       {tab === "cards" ? (
         <div className="space-y-6">
-          {/* 준비 도구 — 톤·브랜드킷은 접이식이라 평소엔 한 줄 (화면 정리) */}
-          <div className="grid gap-3 md:grid-cols-2">
-            <BrandTone />
-            <BrandKitPanel kit={brandKit} onChange={setBrandKit} />
-          </div>
+          {/* 브랜드 톤·킷은 /studio/brand 로 옮겼다(2026-08-15 IA 개편) — 한 번 정하고
+              계속 쓰는 설정이 만들러 들어올 때마다 첫 두 블록을 차지하고 있었다.
+              여기서는 "지금 무엇이 적용 중인지" 한 줄만 알린다. */}
+          <p className="text-[13px] text-fg-sub">
+            내 브랜드 톤·색이 결과에 반영됩니다.{" "}
+            <Link href="/studio/brand" className="font-semibold text-primary-ink hover:underline">
+              브랜드 설정
+            </Link>
+          </p>
 
           <Card className="border-primary/20 ring-1 ring-primary/10">
             <CardHeader
@@ -854,7 +856,6 @@ export default function StudioPage() {
                     edits={editPngs}
                     template={template}
                     logo={logo}
-                    onScheduled={() => scheduledPanelRef.current?.refresh()}
                   />
                 </div>
               </CardBody>
@@ -872,7 +873,6 @@ export default function StudioPage() {
             </div>
           )}
 
-          <ScheduledPostsPanel ref={scheduledPanelRef} />
 
           {slides && editingIndex !== null && slides[editingIndex] ? (
             <CardEditor
