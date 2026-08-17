@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient, getAuthUser } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -46,7 +46,11 @@ export async function GET(_request: Request, ctx: { params: Promise<{ slug: stri
   /* 비공개·꺼진 링크는 방문자에게 열지 않는다. 단 **소유자는 통과** — 공개 전에
      링크가 제대로 걸리는지 눌러볼 수 있어야 한다. 소유자 클릭은 집계하지 않는다
      (자기 테스트가 성과로 잡히면 숫자가 거짓말이 된다). */
-  const me = await getAuthUser();
+  /* 라우트 핸들러는 React 렌더 트리 밖이라 cache() 메모이제이션이 걸리지 않는다
+     (lib/supabase/server.ts 규약: 여기서는 getUser() 를 직접 부른다). */
+  const {
+    data: { user: me },
+  } = await supabase.auth.getUser();
   const isOwner = !!me && me.id === page.user_id;
   if ((!page.published || !row.active) && !isOwner) {
     return NextResponse.redirect(new URL(`/p/${slug}`, _request.url));

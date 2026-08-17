@@ -1,6 +1,7 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
+import { isDemoMode } from "@/lib/supabase/config";
 import { kstToday } from "@/lib/calendar";
 
 /*
@@ -17,16 +18,15 @@ import { kstToday } from "@/lib/calendar";
 
 /** 초안 → 예약. date 는 "YYYY-MM-DD"(KST). */
 export async function scheduleDraft(id: string, date: string): Promise<{ ok: boolean; error?: string }> {
+  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 저장할 수 없어요." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: "날짜 형식이 올바르지 않아요." };
   /* 과거 차단은 **KST 기준**이다. UTC 로 비교하면 KST 00~09시에 오늘이 어제로 잡혀
      이미 지난 날짜가 통과한다(그 시간대엔 UTC 가 전날이다). */
   if (date < kstToday()) return { ok: false, error: "오늘보다 이전 날짜로는 예약할 수 없어요." };
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return { ok: false, error: "로그인이 필요해요." };
+  const supabase = await createClient();
 
   /* 인스타그램 연동이 없으면 예약해도 배치가 실패로 끝난다 — 여기서 막는다.
      초안 저장 때는 연동을 요구하지 않지만(아직 발행이 아니다), 예약은 발행 약속이다. */
@@ -59,11 +59,10 @@ export async function scheduleDraft(id: string, date: string): Promise<{ ok: boo
 
 /** 초안 삭제. 발행된 글은 지울 수 없다 — 이력이다. */
 export async function deleteDraft(id: string): Promise<{ ok: boolean; error?: string }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 저장할 수 없어요." };
+  const user = await getAuthUser();
   if (!user) return { ok: false, error: "로그인이 필요해요." };
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("scheduled_posts")

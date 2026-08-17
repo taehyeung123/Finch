@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/ui/section-header";
-import { createClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
+import { isDemoMode } from "@/lib/supabase/config";
 import { PublishList, type ScheduledPost } from "./_components/publish-list";
 
 export const metadata: Metadata = {
@@ -34,12 +34,15 @@ export const metadata: Metadata = {
 const PAGE_LIMIT = 200;
 
 async function loadScheduled(): Promise<{ items: ScheduledPost[]; truncated: boolean }> {
-  if (!isSupabaseConfigured()) return { items: [], truncated: false };
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  /* isDemoMode + getAuthUser — 이 배치의 다른 화면들과 같은 조합이다.
+     · isSupabaseConfigured 만 보면 NEXT_PUBLIC_DEMO_MODE(프로젝트가 죽었을 때의
+       탈출구)를 못 잡아, 죽은 DB 에 쿼리를 던지고 렌더가 통째로 깨진다.
+     · createClient().auth.getUser() 를 직접 부르면 레이아웃 가드와 합쳐 Auth 서버를
+       요청당 2회 왕복한다(lib/supabase/server.ts 가 측정해서 고친 패턴). */
+  if (isDemoMode()) return { items: [], truncated: false };
+  const user = await getAuthUser();
   if (!user) return { items: [], truncated: false };
+  const supabase = await createClient();
 
   /* 캘린더가 생기면서 조회 범위를 넓혔다. 20건 오름차순이면 **과거만 20건** 나와서
      달력에 이번 달이 통째로 비어 보인다(가장 오래된 20건이 먼저 잡힌다).
