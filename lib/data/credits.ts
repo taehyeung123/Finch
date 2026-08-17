@@ -58,8 +58,18 @@ const BASE_LABELS: Record<string, string> = {
   pool_video_analysis: "영상 분석",
   // 지급 (lib/actions/credits.ts grantPlanCredits)
   plan_credits: "플랜 크레딧 지급",
+  /* admin_gift 는 **이 레포가 만드는 값이 아니다** — 관리자 콘솔(딥레드 HQ)이
+     add_credits 로 넣는다. 그래서 코드를 아무리 grep 해도 안 나오고, 실제로
+     2026-08-17 프로덕션 조회로 확인하기 전까지 "admin_gift: 기능 테스트 지급"이
+     화면에 원문 그대로 뜨고 있었다.
+     ⚠️ 라벨 표를 코드만 보고 만들면 이 부류를 놓친다 — 반드시 실제 값을 확인할 것:
+        select distinct reason from credit_transactions; */
+  admin_gift: "관리자 지급",
   admin_grant: "관리자 지급",
 };
+
+/** 콜론 뒤 꼬리가 **사용자에게 의미 있는** 접두어들 (플랜명·관리자 사유) */
+const TAIL_IS_MEANINGFUL = new Set(["plan_credits", "admin_gift", "admin_grant"]);
 
 /** "generate_fail_refund" 처럼 기능명이 접두에 없고 꼬리에만 있는 예외 */
 const TAIL_ONLY = new Set(["generate_fail_refund", "generate_refund"]);
@@ -90,8 +100,9 @@ export function labelFor(reason: string): string {
   if (!label) return raw; // 모르는 키는 감추지 않고 그대로 — 원문이 디버깅 단서다
 
   /* 콜론 꼬리가 사유(refund why)면 굳이 안 붙인다 — 사용자에게 의미 없는 내부 코드다.
-     단 플랜 지급의 꼬리는 플랜명이라 정보가 된다. */
-  if (base === "plan_credits" && tail) return `${label} (${tail})`;
+     단 플랜 지급의 꼬리는 플랜명이고, 관리자 지급의 꼬리는 관리자가 적은 사유라
+     둘 다 사용자에게 정보가 된다. */
+  if (TAIL_IS_MEANINGFUL.has(base) && tail) return `${label} (${tail})`;
   return refunded ? `${label} 환불` : label;
 }
 
