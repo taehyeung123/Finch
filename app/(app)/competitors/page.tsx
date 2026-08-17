@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { Plus, Search } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -9,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/ui/info-tip";
 import { cn } from "@/lib/cn";
 import { formatCompact, formatPercent } from "@/lib/format";
-import { competitors, usageStats } from "@/lib/data";
+import { competitors } from "@/lib/data";
 import type { Competitor } from "@/lib/types";
 import { CompetitorTabs } from "./tabs";
 
@@ -36,7 +37,6 @@ export default function CompetitorsPage() {
   const [selected, setSelected] = useState<string[]>(competitors.map((c) => c.id));
 
   const compared = competitors.filter((c) => selected.includes(c.id));
-  const usage = usageStats.find((u) => u.label === "경쟁사 등록");
 
   function toggleCompare(id: string) {
     setSelected((prev) => {
@@ -66,12 +66,14 @@ export default function CompetitorsPage() {
 
       {/* 계정 검색·등록 (PART 4.5) */}
       <Card className="p-5">
+        {/* 2026-08-15: 이 폼은 **저장 경로가 없다.**
+            supabase/migrations 에 competitors 테이블이 없고 insert 코드도 0건이라,
+            앞서는 제출하면 입력창만 비우고 끝났다 — 사용자는 등록됐다고 믿는다.
+            연동 전까지 입력을 막고 이유를 밝힌다(개편 계획: 경쟁사는 C 패턴으로 재구성). */}
         <form
           className="flex flex-col gap-2 sm:flex-row"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setQuery("");
-          }}
+          aria-describedby="competitor-add-notice"
+          onSubmit={(e) => e.preventDefault()}
         >
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-faint" aria-hidden />
@@ -80,16 +82,24 @@ export default function CompetitorsPage() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              disabled
               placeholder="정확한 사용자명(@handle)을 입력하세요"
               aria-label="경쟁사 계정 사용자명"
               className="h-10 w-full rounded-card border border-line bg-overlay pl-9 pr-3 text-[14px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary"
             />
           </div>
-          <Button type="submit">
+          <Button type="submit" disabled>
             <Plus className="size-4" aria-hidden />
             등록
           </Button>
         </form>
+        <p id="competitor-add-notice" className="mt-2 text-[13px] text-fg-sub">
+          경쟁사 직접 등록은 채널 연동 이후 제공됩니다. 지금은{" "}
+          <Link href="/competitors/ads" className="font-semibold text-primary-ink hover:underline">
+            경쟁사 광고 모니터링
+          </Link>
+          에서 실제 집행 중인 광고를 확인할 수 있어요.
+        </p>
         <p className="mt-2 text-xs text-fg-faint">
           유사 검색은 지원되지 않아 정확한 사용자명(핸들)이 필요합니다. Instagram은 공개 비즈니스·크리에이터
           계정만 분석할 수 있습니다.
@@ -101,12 +111,9 @@ export default function CompetitorsPage() {
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <h3 className="text-[19px] font-bold leading-snug">등록된 경쟁사</h3>
-            {usage ? (
-              <p className="tnum mt-0.5 text-[13px] text-fg-sub">
-                {usage.used}/{usage.limit}
-                {usage.unit} 사용 중
-              </p>
-            ) : null}
+            {/* 2026-08-15: 「0/10개 사용 중」 게이지를 걷어냈다.
+                lib/data/empty.ts 하드코딩이었고 "경쟁사 등록 상한 10개"는
+                credit-config.ts 어디에도 없는 숫자였다. 통합 크레딧 모델과 무관하다. */}
           </div>
         </div>
 

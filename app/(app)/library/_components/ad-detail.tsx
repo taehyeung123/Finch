@@ -22,8 +22,8 @@ import { Button } from "@/components/ui/button";
     [왼쪽 480px]                     [오른쪽 1248px]
     · 플랫폼 칩 (Meta 광고 ↗)        · "유사한 미디어" 제목 + 닫기 X
     · 미디어 (contain)               · 유사 카드 **그리드가 열 전체** (스크롤)
-    · [이미지] [공유하기] [보드에 저장]     각 카드: 이미지 + [Meta 광고↗ 칩]
-    · 광고주 이름 · 날짜                    + [보드에 저장] + 이름 + 날짜
+    · [이미지] [공유하기] [스크랩]     각 카드: 이미지 + [Meta 광고↗ 칩]
+    · 광고주 이름 · 날짜                    + [스크랩] + 이름 + 날짜
     · 게재 상태 · N일간 게재                + ●게재상태 · N일간 게재
     · 본문 전문
 
@@ -88,7 +88,7 @@ function RunRow({ ad, size = "md" }: { ad: ReferenceAd; size?: "md" | "sm" }) {
   );
 }
 
-/** 유사한 미디어 카드 — 스니핏 실측: 이미지 + [Meta 광고↗][보드에 저장] + 이름 + 날짜 + 게재정보 */
+/** 유사한 미디어 카드 — 스니핏 실측: 이미지 + [Meta 광고↗][스크랩] + 이름 + 날짜 + 게재정보 */
 function SimilarCard({
   ad,
   saved,
@@ -138,7 +138,7 @@ function SimilarCard({
             )}
           >
             <Bookmark className="size-3" fill={saved ? "currentColor" : "none"} aria-hidden />
-            {saved ? "저장됨" : "보드에 저장"}
+            {saved ? "스크랩됨" : "스크랩"}
           </button>
         </div>
         <p className="truncate text-[13px] font-semibold text-fg">{ad.pageName}</p>
@@ -281,7 +281,7 @@ export function AdDetailModal({
             )}
           </div>
 
-          {/* 행동 줄 — 스니핏 배치: [이미지] 왼쪽, [공유하기][보드에 저장] 오른쪽 */}
+          {/* 행동 줄 — 스니핏 배치: [이미지] 왼쪽, [공유하기][스크랩] 오른쪽 */}
           <div className="flex shrink-0 items-center justify-between gap-2 px-4">
             <Button size="sm" variant="secondary" onClick={downloadImage}>
               <Download className="size-4" aria-hidden />
@@ -294,7 +294,7 @@ export function AdDetailModal({
               </Button>
               <Button size="sm" variant={favorite ? "secondary" : "primary"} onClick={onToggleFavorite}>
                 <Bookmark className="size-4" fill={favorite ? "currentColor" : "none"} aria-hidden />
-                {favorite ? "저장됨" : "보드에 저장"}
+                {favorite ? "스크랩됨" : "스크랩"}
               </Button>
             </div>
           </div>

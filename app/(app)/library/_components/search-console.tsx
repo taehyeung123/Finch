@@ -265,7 +265,7 @@ function describeFilters(f: LibraryFilters): string {
   if (f.target !== "all") parts.push(TARGET_OPTIONS.find((o) => o.value === f.target)?.label ?? f.target);
   if (f.within !== "all") parts.push(WITHIN_OPTIONS.find((o) => o.value === f.within)?.label ?? f.within);
   parts.push(...f.industries.map(industryLabelById), ...f.categories, ...f.hooks, ...f.sources);
-  if (f.favOnly) parts.push("즐겨찾기만");
+  if (f.favOnly) parts.push("스크랩만");
   if (f.overOnly) parts.push("잘 나온 것만");
   return parts.slice(0, 4).join(" · ") || "기본 조합";
 }
@@ -329,7 +329,7 @@ function buildActiveChips(f: LibraryFilters): ActiveChip[] {
       clear: (p) => ({ ...p, [key]: null }),
     });
   }
-  if (f.favOnly) chips.push({ key: "fav", label: "즐겨찾기만", clear: (p) => ({ ...p, favOnly: false }) });
+  if (f.favOnly) chips.push({ key: "fav", label: "스크랩만", clear: (p) => ({ ...p, favOnly: false }) });
   if (f.overOnly) chips.push({ key: "over", label: "잘 나온 것만", clear: (p) => ({ ...p, overOnly: false }) });
   return chips;
 }
@@ -718,7 +718,7 @@ function FilterPanelBody({
 
               <Row label="보기 옵션">
                 <Chip on={filters.favOnly} onClick={() => setFilters({ ...filters, favOnly: !filters.favOnly })}>
-                  즐겨찾기만
+                  스크랩만
                 </Chip>
                 <Chip on={filters.overOnly} onClick={() => setFilters({ ...filters, overOnly: !filters.overOnly })}>
                   잘 나온 것만

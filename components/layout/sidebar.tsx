@@ -21,9 +21,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { usageStats } from "@/lib/data";
 import { FinchMark } from "@/components/logo";
-import { UsageGauge } from "@/components/ui/charts";
 import { ButtonLink } from "@/components/ui/button";
 
 export type NavItem = { href: string; label: string; icon: LucideIcon };
@@ -255,8 +253,14 @@ export function Sidebar() {
         <ul className="space-y-0.5">{NAV_FOOTER_ITEMS.map((item) => renderItem(item))}</ul>
       </nav>
 
-      {/* 사용량 게이지 미니 위젯 + 업그레이드 (PART 6.2) — grid-rows 0fr↔1fr 트릭으로 높이를
-          부드럽게 접는다. 항상 DOM에 남겨 접힘 중에도 순간적으로 사라지지 않게 한다. */}
+      {/* 업그레이드 안내 (PART 6.2) — grid-rows 0fr↔1fr 트릭으로 높이를 부드럽게 접는다.
+          항상 DOM에 남겨 접힘 중에도 순간적으로 사라지지 않게 한다.
+
+          2026-08-15: **가짜 사용량 게이지를 걷어냈다.**
+          usageStats 는 실제 모드에서 lib/data/empty.ts 의 하드코딩(콘텐츠 분석 0/100회,
+          AI 카드뉴스 0/30회)이었다 — 어느 플랜에도 없는 한도이고 used 가 0 고정이라
+          기능을 써도 영원히 0이었다. 유료 사용자가 매일 보는 자리에 존재하지 않는 숫자가
+          박혀 있던 셈이다. 진짜 크레딧 미터는 /credits 화면과 함께 붙인다(개편 3단계). */}
       <div
         className={cn(
           "grid transition-[grid-template-rows,opacity] duration-300",
@@ -266,10 +270,7 @@ export function Sidebar() {
       >
         <div className="overflow-hidden">
           <div className="space-y-3 p-4">
-            {usageStats.slice(0, 2).map((u) => (
-              <UsageGauge key={u.label} {...u} compact />
-            ))}
-            <ButtonLink href="/settings/billing" size="sm" className="mt-4 w-full">
+            <ButtonLink href="/settings/billing" size="sm" className="w-full">
               플랜 업그레이드
             </ButtonLink>
           </div>

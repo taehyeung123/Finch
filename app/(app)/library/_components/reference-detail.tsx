@@ -556,13 +556,13 @@ export function ReferenceDetailModal({
               /* 풀에서는 저장이 주 행동이다 — 아이콘이 아니라 광고 상세와 같은 라벨 버튼으로 */
               <Button size="sm" variant={favorite ? "secondary" : "primary"} onClick={onToggleFavorite}>
                 <Bookmark className="size-4" fill={favorite ? "currentColor" : "none"} aria-hidden />
-                {favorite ? "보드에서 빼기" : "보드에 저장"}
+                {favorite ? "스크랩 해제" : "스크랩"}
               </Button>
             ) : (
               <button
                 type="button"
                 aria-pressed={favorite}
-                aria-label={favorite ? "즐겨찾기 해제" : "즐겨찾기"}
+                aria-label={favorite ? "스크랩 해제" : "스크랩"}
                 onClick={onToggleFavorite}
                 className={cn(
                   "rounded-card p-1.5 transition-colors",

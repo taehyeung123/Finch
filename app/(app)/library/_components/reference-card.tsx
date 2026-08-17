@@ -34,7 +34,7 @@ function SaveToggle({ on, onClick }: { on: boolean; onClick: () => void }) {
     <button
       type="button"
       aria-pressed={on}
-      aria-label={on ? "저장 해제" : "저장"}
+      aria-label={on ? "스크랩 해제" : "스크랩"}
       onClick={(e) => {
         e.stopPropagation();
         onClick();
