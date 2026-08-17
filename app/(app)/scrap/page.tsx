@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import { Bookmark } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
-import { Card, CardBody } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
-import { ButtonLink } from "@/components/ui/button";
+import { isDemoMode } from "@/lib/supabase/config";
+import { loadScrapPage } from "./actions";
+import { ScrapClient } from "./_components/scrap-client";
 
 export const metadata: Metadata = {
   title: "스크랩",
@@ -11,25 +10,29 @@ export const metadata: Metadata = {
 };
 
 /*
-  스크랩 — 2026-08-15 IA 개편으로 메뉴에 신설.
-  백엔드는 이미 있다 — 0029_personal_saves 의 saved_creatives·boards·saved_brands.
-  화면만 없어서 "저장은 되는데 다시 볼 곳이 없는" 상태였다(저장할수록 손해).
-  목록·보드·메모 연결은 개편 3단계에서 붙인다.
+  스크랩 — 2026-08-15 IA 개편으로 메뉴에 신설, 3단계에서 배선.
+
+  저장 자체는 원래 됐다(togglePoolSave → saved_creatives, 0029). 없던 건
+  **다시 볼 곳**이었다. 저장 버튼이 눌리면 카드의 북마크만 채워지고 그걸로 끝이라,
+  담을수록 어디 갔는지 모르는 상태였다.
+
+  목록은 서버에서 조회한다. saved_creatives(개인, own-row RLS)에서 시작해 creatives 로
+  조인한다 — 반대로 풀에서 시작해 필터하면 수백만 행을 훑는다(lib/pool/search.ts).
+  첫 장과 "더 보기"가 같은 loadScrapPage 를 쓴다 — 두 경로가 갈리면 정렬·변환이
+  조용히 어긋난다.
+
+  보드(폴더)·메모는 표는 있지만 화면을 더 쪼갤 만큼 저장 건수가 쌓이기 전이라 뒤로 미룬다.
 */
-export default function Page() {
+export default async function Page() {
+  const { entries, hasMore } = await loadScrapPage(0);
+
   return (
     <div className="space-y-5">
-      <PageHeader title="스크랩" description="탐색에서 스크랩한 콘텐츠를 모아 봅니다." />
-      <Card>
-        <CardBody>
-          <EmptyState
-            icon={Bookmark}
-            title="아직 스크랩한 콘텐츠가 없어요"
-            description="탐색에서 마음에 드는 레퍼런스를 스크랩하면 여기에 모입니다."
-            action={<ButtonLink href="/library">탐색으로 가기</ButtonLink>}
-          />
-        </CardBody>
-      </Card>
+      <PageHeader
+        title="스크랩"
+        description="탐색에서 저장한 레퍼런스를 모아 봅니다. 저장한 순서대로 쌓입니다."
+      />
+      <ScrapClient initialEntries={entries} initialHasMore={hasMore} isDemo={isDemoMode()} />
     </div>
   );
 }

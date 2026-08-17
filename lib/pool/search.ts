@@ -325,6 +325,63 @@ export async function searchPool(query: PoolQuery): Promise<PoolResult> {
 }
 
 /**
+ * 내가 저장한 소재 — 스크랩 화면의 데이터 원천.
+ *
+ * saved_creatives 에서 시작해 creatives 로 조인한다(반대 방향이 아니다).
+ * creatives 는 공용 풀이라 수백만 행이고 "내가 저장했는가"는 개인 표에만 있다.
+ * 풀에서 시작해 필터하면 인덱스를 못 타고 페이지네이션도 개인 순서를 못 지킨다.
+ *
+ * 정렬은 saved_at desc 고정 — 저장 화면에서 사용자가 기대하는 순서는 "방금 담은 것"
+ * 하나뿐이다. 풀 검색의 heat 정렬을 여기 끌고 오면 내가 담은 순서가 사라진다.
+ *
+ * 삭제된 소재는 FK on delete cascade 로 저장 행도 함께 사라지므로 유령 행은 없다.
+ */
+export async function listSavedPool(
+  page = 0,
+  pageSize = DEFAULT_PAGE_SIZE,
+): Promise<{ items: PoolItem[]; total: number; hasMore: boolean }> {
+  const supabase = await createClient();
+  if (!supabase) return { items: [], total: 0, hasMore: false };
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { items: [], total: 0, hasMore: false };
+
+  const size = Math.min(60, Math.max(10, pageSize));
+  const from = Math.max(0, page) * size;
+  const withTags = await hasTagColumns(supabase);
+  const sel = withTags ? SELECT_TAGS : SELECT_BASE;
+
+  const { data, error, count } = await supabase
+    .from("saved_creatives")
+    .select(`saved_at, creatives!inner(${sel})`, { count: "exact" })
+    .eq("user_id", user.id)
+    .order("saved_at", { ascending: false })
+    .range(from, from + size - 1);
+
+  if (error) {
+    console.error("[pool] 저장 목록 조회 실패", error.message);
+    return { items: [], total: 0, hasMore: false };
+  }
+
+  /* PostgREST 는 to-one 조인도 배열로 줄 때가 있다 — one() 으로 평탄화한다.
+     조인 대상이 없으면(경합 중 삭제) 그 행은 버린다.
+
+     select 문자열을 런타임에 조립하므로(withTags) 타입 파서가 형태를 못 읽는다 —
+     unknown 을 거쳐 캐스팅한다. 컬럼 목록은 SELECT_BASE/SELECT_TAGS 가 소유하고
+     Row 가 그 계약이다. */
+  const rows = (data ?? []) as unknown as Array<{ creatives: Row | Row[] | null }>;
+  const items = rows
+    .map((r) => one(r.creatives))
+    .filter((r): r is Row => r !== null)
+    .map(toItem);
+
+  const total = count ?? items.length;
+  return { items, total, hasMore: from + items.length < total };
+}
+
+/**
  * 검색을 기록한다. 결과 0건이면 플래너가 이 검색어를 최우선 수집 대상으로 올린다.
  * 실패해도 검색 결과에는 영향을 주지 않는다 — 로그 실패로 화면이 깨지면 안 된다.
  */

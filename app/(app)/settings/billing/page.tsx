@@ -19,6 +19,8 @@ import {
 } from "@/lib/data/internal";
 import { SettingsNav } from "../_components/settings-nav";
 import { BillingBanner } from "./_components/billing-banner";
+import { CreditPanel } from "./_components/credit-panel";
+import { getCreditSummary } from "@/lib/data/credits";
 import { cancelPlanChange, cancelSubscription, changePlan, resumeSubscription } from "./actions";
 
 /*
@@ -160,10 +162,11 @@ export default async function BillingSettingsPage({
               ? "플랜 변경 예약을 취소했어요."
               : null;
 
-  const [currentPlan, orders, subscription] = await Promise.all([
+  const [currentPlan, orders, subscription, credits] = await Promise.all([
     getCurrentPlan(),
     getPaymentOrders(),
     getSubscription(),
+    getCreditSummary(),
   ]);
   const currentName = PLAN_DEFS.find((p) => p.key === currentPlan)?.name ?? "Free";
   const lastPaid = orders.find((o) => o.status === "paid");
@@ -287,6 +290,12 @@ export default async function BillingSettingsPage({
               ) : null}
         </div>
       </div>
+
+      {/* 크레딧 — 백엔드(0016·0037·0039)는 처음부터 있었는데 화면이 없어서
+          "깎이는 건 보이는데 얼마 남았는지는 모르는" 상태였다.
+          플랜 목록보다 위다: 이 화면에 들어온 사람의 첫 질문은 "얼마 남았지"지
+          "뭘 살까"가 아니다. */}
+      <CreditPanel summary={credits} />
 
       {/* 플랜 변경 — **마케팅 카드를 쓰지 않는다**(2026-08-15 사장님 지적).
           숫자(PLAN_CARDS)는 /pricing 과 계속 공유한다. 그 공유를 깨는 순간
