@@ -265,7 +265,7 @@ export function Sidebar() {
                       aria-expanded={open}
                       aria-controls={`navgroup-${group.key}`}
                       tabIndex={collapsed ? -1 : undefined}
-                      className="flex w-full items-center justify-between gap-2 rounded-card px-3 py-1.5 text-[12px] font-semibold tracking-wide text-fg-faint trans-state hover:text-fg-sub"
+                      className="flex w-full items-center justify-between gap-2 rounded-card px-3 py-1.5 text-[12px] font-semibold tracking-wide text-fg-sub trans-state hover:text-fg"
                     >
                       {group.label}
                       <ChevronDown
@@ -320,7 +320,7 @@ export function Sidebar() {
           type="button"
           onClick={() => setCollapsed((v) => !v)}
           aria-label={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
-          className="flex w-full items-center justify-center rounded-card p-2 text-fg-faint trans-state hover:bg-overlay hover:text-fg"
+          className="flex w-full items-center justify-center rounded-card p-2 text-fg-sub trans-state hover:bg-tint-hover hover:text-fg"
         >
           <ChevronsLeft className={cn("size-4 transition-transform duration-300", EASE, collapsed && "rotate-180")} />
         </button>

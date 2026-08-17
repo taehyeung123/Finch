@@ -15,7 +15,7 @@ export default async function SubscribeSuccessPage({
   const customerKey = typeof sp.customerKey === "string" ? sp.customerKey : null;
 
   return (
-    <div className="mx-auto max-w-lg space-y-6">
+    <div className="max-w-lg space-y-6">
       <PageHeader title="구독 등록" description="정기결제 등록 처리 결과입니다." />
       {authKey && customerKey ? (
         <IssueClient authKey={authKey} customerKey={customerKey} />

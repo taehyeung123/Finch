@@ -86,7 +86,7 @@ export function MobileTabbar() {
                 type="button"
                 aria-label="닫기"
                 onClick={() => setSheetOpen(false)}
-                className="rounded-card p-1.5 text-fg-faint trans-state hover:bg-body hover:text-fg"
+                className="rounded-card p-1.5 text-fg-sub trans-state hover:bg-body hover:text-fg"
               >
                 <X className="size-5" aria-hidden />
               </button>
@@ -95,7 +95,7 @@ export function MobileTabbar() {
             <div className="px-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
               {SHEET_GROUPS.map((group) => (
                 <section key={group.key} className="pt-2">
-                  <h2 className="px-3 py-1.5 text-[12px] font-semibold tracking-wide text-fg-faint">{group.label}</h2>
+                  <h2 className="px-3 py-1.5 text-[12px] font-semibold tracking-wide text-fg-sub">{group.label}</h2>
                   <ul className="space-y-0.5">{group.items.map(renderSheetItem)}</ul>
                 </section>
               ))}
@@ -121,7 +121,8 @@ export function MobileTabbar() {
               onClick={() => setSheetOpen(false)}
               className={cn(
                 "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium",
-                active ? "text-primary" : "text-fg-faint",
+                /* 1차 내비 라벨은 fg-faint(4.0:1) 금지 — AA 미달이고, 탭바는 앱에서 가장 자주 읽는 글자다 */
+            active ? "text-primary-ink" : "text-fg-sub",
               )}
             >
               <Icon className="size-5" aria-hidden />
@@ -138,7 +139,7 @@ export function MobileTabbar() {
           aria-haspopup="dialog"
           className={cn(
             "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium",
-            sheetOpen ? "text-primary" : "text-fg-faint",
+            sheetOpen ? "text-primary-ink" : "text-fg-sub",
           )}
         >
           <MoreHorizontal className="size-5" aria-hidden />

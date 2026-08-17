@@ -94,7 +94,7 @@ export default async function BillingSuccessPage({
   const outcome = await processConfirmation(sp);
 
   return (
-    <div className="mx-auto max-w-lg space-y-6">
+    <div className="max-w-lg space-y-6">
       <PageHeader title="결제 결과" description="요금제 결제 처리 결과입니다." />
       <Card className="flex flex-col items-center gap-4 p-8 text-center">
         {outcome.ok ? (

@@ -36,17 +36,21 @@ export function StatCard({
         {label}
         {hint}
       </div>
-      <div className="mt-1.5 flex items-end justify-between gap-2">
-        <div>
-          <div className={cn("tnum font-bold leading-none", hero ? "text-3xl" : "text-2xl")}>{value}</div>
+      <div className="mt-1.5 flex items-end justify-between gap-3">
+        <div className="shrink-0">
+          {/* 타입 7단계 준수 — text-3xl(30px)·text-2xl(24px)은 스케일 밖이었다 */}
+          <div className={cn("tnum font-bold leading-none", hero ? "text-[28px]" : "text-[20px]")}>{value}</div>
           {delta !== undefined ? (
             <div className="mt-1.5 text-[14px]">
               <DeltaText value={delta} unit={deltaUnit} />
-              <span className="ml-1 text-fg-faint">지난주 대비</span>
+              <span className="ml-1 text-fg-sub">지난주 대비</span>
             </div>
           ) : null}
         </div>
-        {trend && trend.length >= 2 ? <Sparkline data={trend} stroke="var(--color-primary)" /> : null}
+        {/* 남은 폭을 차트가 먹는다. 최소 96px 은 보장(좁은 카드에서 뭉개지지 않게) */}
+        {trend && trend.length >= 2 ? (
+          <Sparkline data={trend} stroke="var(--color-primary)" className="min-w-[96px] flex-1" />
+        ) : null}
       </div>
     </Card>
   );

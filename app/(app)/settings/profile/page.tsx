@@ -90,11 +90,15 @@ export default async function ProfileSettingsPage({
         </p>
       ) : null}
 
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start">
       <Card>
         <CardHeader title="내 정보" description="화면과 리포트에 표시되는 이름이에요" />
         <CardBody className="space-y-5">
+          {/* flex-1 을 빼서 저장 버튼이 입력창 바로 옆에 붙는다.
+              앞서는 래퍼가 남은 폭을 전부 먹어, 넓은 화면에서 입력창(max-w-sm)과
+              버튼이 1000px 넘게 벌어졌다 — 한 벌로 안 읽힌다. */}
           <form action={updateDisplayName} className="flex flex-wrap items-end gap-3">
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0">
               <label htmlFor="displayName" className="block text-[12px] font-medium text-fg-sub">
                 이름
               </label>
@@ -104,7 +108,7 @@ export default async function ProfileSettingsPage({
                 defaultValue={displayName}
                 maxLength={40}
                 placeholder="핀치"
-                className="mt-1.5 h-10 w-full max-w-sm rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
+                className="mt-1.5 h-10 w-[min(100%,24rem)] rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
               />
             </div>
             <SubmitButton variant="secondary" pendingLabel="저장 중…" disabled={isDemoMode()}>
@@ -112,6 +116,9 @@ export default async function ProfileSettingsPage({
             </SubmitButton>
           </form>
 
+          {/* 이메일·로그인 방식을 나란히. 각각 값이 한 줄뿐인데 전폭을 쓰면
+              카드 오른쪽 2/3 가 통째로 빈다. */}
+          <div className="grid gap-5 sm:grid-cols-2">
           <div>
             <p className="text-[12px] font-medium text-fg-sub">이메일</p>
             <p className="mt-1.5 flex items-center gap-2 text-[15px]">
@@ -138,15 +145,19 @@ export default async function ProfileSettingsPage({
               )}
             </div>
           </div>
+          </div>
         </CardBody>
       </Card>
 
+      {/* 화면 설정 — 테마 버튼 2개를 담자고 카드 한 장이 전폭을 쓰던 것을
+          내 정보 카드 옆으로 붙였다(2단). 넓은 화면에서 두 카드가 한 눈에 들어온다. */}
       <Card>
         <CardHeader title="화면" description="라이트와 다크 중에 고르세요" />
         <CardBody>
           <ThemeChoice />
         </CardBody>
       </Card>
+      </div>
 
       {/* 탈퇴는 카드 밖, 화면 맨 아래 작은 링크다 — 설정 항목과 같은 무게로 두지 않는다 */}
       {!isDemoMode() ? <DangerZone email={email} /> : null}

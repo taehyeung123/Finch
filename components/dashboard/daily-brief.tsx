@@ -138,11 +138,14 @@ export function HomeSearch({ stats }: { stats: PoolHomeStats }) {
     push(q.trim());
   }
 
+  /* 폭을 채운다. 앞서는 mx-auto max-w-2xl(672px) 중앙 정렬이라 위아래 풀폭 밴드
+     사이에서 허리만 잘록한 모래시계가 됐다 — 사장님이 지적한 "가운데 몰고 양옆
+     빈 공간" 그 자체다. 페이지 폭 캡을 걷어낸 뒤 오히려 더 도드라졌다. */
   return (
-    <section aria-label="레퍼런스 검색" className="mx-auto w-full max-w-2xl py-3">
+    <section aria-label="레퍼런스 검색" className="w-full py-3">
       <form
         onSubmit={submit}
-        className="shadow-panel flex h-16 items-center rounded-chip border border-line/60 bg-overlay pl-2.5 pr-2 transition-[border-color,box-shadow] focus-within:border-primary focus-within:shadow-[0_0_0_4px_var(--color-primary-weak),0_0_16px_rgba(107,110,116,0.16)]"
+        className="shadow-panel flex h-16 items-center rounded-chip border border-line/60 bg-overlay pl-2.5 pr-2 transition-[border-color,box-shadow] focus-within:border-primary focus-within:shadow-[0_0_0_4px_var(--color-primary-weak)]"
       >
         {/* 검색 대상 세그먼트 — 스니핏의 드롭다운 자리 */}
         <label className="relative flex h-11 shrink-0 cursor-pointer items-center gap-1 rounded-chip bg-body pl-4 pr-8 text-[15px] font-semibold text-fg-sub trans-state hover:text-fg">
@@ -181,8 +184,9 @@ export function HomeSearch({ stats }: { stats: PoolHomeStats }) {
         </button>
       </form>
 
+      {/* 칩도 좌측 정렬 — 가운데 정렬은 좌우 빈 공간을 더 도드라지게 한다 */}
       {stats.searchChips.length > 0 ? (
-        <div className="mt-3.5 flex flex-wrap items-center justify-center gap-2">
+        <div className="mt-3.5 flex flex-wrap items-center gap-2">
           {stats.searchChips.map((chip, i) => (
             <Link
               key={chip}

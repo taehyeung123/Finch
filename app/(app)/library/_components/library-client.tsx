@@ -847,8 +847,11 @@ export function LibraryClient({
      하드코딩 컬럼 수를 화면마다 두면 loading.tsx와 어긋나 로딩→콘텐츠에서 시프트가 난다. */
   const gridCls = "grid-refs";
 
+  /* 폭 캡 제거(2026-08-17). 탐색은 앱에서 **가장 넓게 써야 할 화면**인데
+     1400px 로 묶여 있어, grid-refs 의 컨테이너 쿼리가 6·7열까지 열려 있어도
+     5열에서 멈추고 좌우가 비었다. */
   return (
-    <div className="mx-auto w-full max-w-[1400px]">
+    <div className="w-full">
       <h1 className="sr-only">레퍼런스</h1>
 
       {/* ── 블록 1 — 검색 콘솔 ── */}

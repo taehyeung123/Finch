@@ -159,7 +159,9 @@ function CreateForm({
           title="프로필 링크를 만들어 보세요"
           description="SNS 프로필에 거는 링크 한 장이에요. 주소를 정하면 바로 만들 수 있어요."
         />
-        <div className="mx-auto mt-6 max-w-md space-y-3">
+        {/* 좌측 정렬. 폼 자체는 좁아야 맞지만(입력 하나에 1300px 은 못 읽는다)
+            가운데로 몰면 양옆이 통째로 빈다 — 좁게 두되 왼쪽에 붙인다. */}
+        <div className="mt-6 max-w-md space-y-3">
           <div>
             <label htmlFor="slug" className="block text-[12px] font-medium text-fg-sub">
               주소

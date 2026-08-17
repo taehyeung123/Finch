@@ -27,11 +27,17 @@ export function Sparkline({
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(" ");
+  /* width·height 는 이제 **좌표계**일 뿐이고 실제 크기는 CSS 가 정한다.
+     앞서는 style={{ width }} 로 96px 에 못박혀 있어서, 폭 캡을 걷어낸 뒤
+     560px 짜리 카드 안에서도 차트가 96px(카드의 17%)에 머물렀다 —
+     넓힌 폭이 정보로 전환되지 않는 전형적인 자리였다.
+     preserveAspectRatio="none" 이라 세로 비율은 height 가 지킨다. */
   return (
     <svg
       viewBox={`0 0 ${width} ${height}`}
       className={className}
-      style={{ width, height }}
+      style={{ height }}
+      preserveAspectRatio="none"
       aria-hidden
     >
       <polyline points={points} fill="none" stroke={stroke} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />

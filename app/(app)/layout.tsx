@@ -49,7 +49,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar />
           {IS_SAMPLE_DATA ? (
-            <p className="border-b border-line bg-overlay px-4 py-2 text-center text-xs text-fg-sub md:px-6">
+            /* 좌측 정렬 — text-center 라 1632px 띠 한가운데 한 줄이 떠 있었고,
+               그게 모든 페이지 최상단에서 매번 반복됐다. */
+            <p className="border-b border-line bg-plate px-4 py-2 text-[12px] text-fg-sub md:px-6">
               지금 보이는 수치는 <span className="font-semibold text-warning">예시 데이터</span>입니다 —
               채널 연동이 완료되면 실제 데이터로 교체됩니다
             </p>

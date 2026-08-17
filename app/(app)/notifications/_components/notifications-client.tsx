@@ -63,6 +63,9 @@ const TYPE_ICON_TONE: Partial<Record<NotificationType, string>> = {
   account_drop: "text-negative",
 };
 
+/* 알림 목록은 읽기 대상이라 **목록에만** 폭을 제한한다 — 1600px 한 줄이면 제목은
+   왼쪽 끝, 시각은 오른쪽 끝으로 갈라져 시선이 매 행 화면을 가로지른다.
+   페이지 전체를 묶는 것과는 다르다(그건 좌우 빈 여백을 만든다). */
 export function NotificationsClient({ initial }: { initial: AppNotification[] }) {
   const [items, setItems] = useState(initial);
   const [filter, setFilter] = useState<FilterValue>("all");
@@ -82,7 +85,7 @@ export function NotificationsClient({ initial }: { initial: AppNotification[] })
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 [&_ul]:max-w-[64rem]">
       <PageHeader
         title="알림"
         description={

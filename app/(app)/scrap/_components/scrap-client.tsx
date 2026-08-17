@@ -174,7 +174,12 @@ export function ScrapClient({
               )}
             >
               {t.label}
-              <span className="tnum ml-1.5 opacity-70">{counts[t.key]}</span>
+              {/* 총계가 아니라 "지금 불러온 수"다. hasMore 면 + 를 붙여 총계로 오독되지 않게 —
+                  200건 저장한 사람에게 "전체 40"이라고 말하면 저장이 사라진 것처럼 보인다. */}
+              <span className="tnum ml-1.5 opacity-70">
+                {counts[t.key]}
+                {hasMore ? "+" : ""}
+              </span>
             </button>
           );
         })}
@@ -215,7 +220,10 @@ export function ScrapClient({
         </div>
       )}
 
-      {hasMore && tab === "all" ? (
+      {/* 탭과 무관하게 노출한다. 앞서는 전체 탭에서만 떠서, 게시물·광고로 거르면
+          뒷장 저장분에 도달할 방법이 사라졌다 — 필터를 걸수록 볼 수 있는 게 줄어드는
+          막다른 화면이었다(더 받아온 뒤 현재 탭 필터가 다시 적용된다). */}
+      {hasMore ? (
         <div className="mt-5 flex justify-center">
           <Button variant="secondary" onClick={loadMore} disabled={loadingMore}>
             {loadingMore ? "불러오는 중…" : "더 보기"}

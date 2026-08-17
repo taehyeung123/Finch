@@ -27,7 +27,7 @@ export default async function SubscribePage({
   const planName = PLAN_NAMES[plan];
 
   return (
-    <div className="mx-auto max-w-xl space-y-6">
+    <div className="max-w-xl space-y-6">
       <PageHeader title={`${planName} 플랜 구독`} description="카드를 한 번 등록하면 매월 자동으로 결제됩니다." />
 
       <Card className="p-5">

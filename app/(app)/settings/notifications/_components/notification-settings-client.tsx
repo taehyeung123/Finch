@@ -135,7 +135,10 @@ export function NotificationSettingsClient({ initial }: { initial: NotificationS
         <CardBody>
           <div>
             {/* 헤더 행 */}
-            <div className="grid grid-cols-[1fr_56px_56px] gap-x-6 pb-3 text-xs font-medium text-fg-sub">
+            {/* 라벨 열을 minmax(0,32rem) 으로 묶는다. 1fr 이면 1600px 화면에서
+                라벨이 1400px 까지 늘어나 토글 2개만 오른쪽 끝에 고립되고, 행마다
+                시선이 화면 전체를 가로질러야 어느 알림의 토글인지 확인된다. */}
+            <div className="grid grid-cols-[minmax(0,32rem)_56px_56px] gap-x-6 pb-3 text-xs font-medium text-fg-sub">
               <span>알림 유형</span>
               <span className="text-center">인앱</span>
               <span className="text-center">이메일</span>
@@ -144,7 +147,7 @@ export function NotificationSettingsClient({ initial }: { initial: NotificationS
             {NOTIFICATION_ROWS.map((row) => (
               <div
                 key={row.key}
-                className="grid grid-cols-[1fr_56px_56px] items-center gap-x-6 border-t border-line py-3.5"
+                className="grid grid-cols-[minmax(0,32rem)_56px_56px] items-center gap-x-6 border-t border-line py-3.5"
               >
                 <div className="min-w-0 pr-3">
                   <p className="text-[15px] font-semibold">{row.label}</p>

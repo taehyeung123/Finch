@@ -132,22 +132,13 @@ export function PublishList({
     });
   }
 
-  /* 0건일 때 null 을 반환하던 것이 이 기능이 메뉴에서 사라져 보이던 원인이었다.
-     빈 상태는 "없음"을 알리는 자리가 아니라 다음 행동을 주는 자리다. */
-  if (items.length === 0) {
-    return (
-      <Card>
-        <CardBody>
-          <EmptyState
-            icon={CalendarClock}
-            title="아직 예약한 게시물이 없어요"
-            description="스튜디오에서 카드뉴스를 만들면 여기서 발행 일정을 잡을 수 있어요."
-            action={<ButtonLink href="/studio">스튜디오에서 만들기</ButtonLink>}
-          />
-        </CardBody>
-      </Card>
-    );
-  }
+  /* ⚠️ 앞서 여기서 **화면 전체를 EmptyState 한 장으로 바꿔치기**했다.
+     0건이면 캘린더도 탭도 초안도 전부 사라져서, 이 화면의 핵심(달력을 보고 빈 날을
+     고르는 것)이 "예약이 하나도 없는 사람"에게만 안 보이는 상태가 됐다 —
+     예약이 없을 때야말로 달력이 가장 필요하다.
+     (같은 파일 위 주석이 "0건에 null 반환해서 기능이 사라져 보였다"고 스스로
+      적어놓고 한 단계 약하게 반복한 것이다.)
+     이제 달력은 항상 그린다. 빈 상태는 달력 **옆 레일**이 안내한다. */
 
   return (
     <div className="space-y-5">
@@ -258,7 +249,10 @@ export function PublishList({
                         .filter(Boolean)
                         .join(" ")}
                       className={cn(
-                        "trans-state flex aspect-square flex-col items-center justify-start gap-1 rounded-card border p-1.5",
+                        /* aspect-square 를 걷었다. 폭 캡을 없앤 뒤 1300px 짜리 캘린더에서
+                           칸 하나가 175×175px 이 되는데 안에 든 건 12px 숫자와 1.5px 점 셋뿐이라
+                           거대한 빈 상자가 됐다. 높이는 내용 기준 최소치로 고정한다. */
+                        "trans-state flex min-h-[4.5rem] flex-col items-center justify-start gap-1 rounded-card border p-1.5 md:min-h-[5.5rem]",
                         isSel ? "border-primary bg-primary-weak" : "border-transparent hover:bg-tint-hover",
                         /* 실패는 색 말고 **형태**로도 구분한다 — 색각 이상에서 코랄과 빨강 점은
                            1.5px 크기로 갈리지 않는다. 칸 자체에 테두리를 준다. */
@@ -319,7 +313,20 @@ export function PublishList({
             />
             <CardBody>
               {selectedPosts.length === 0 ? (
-                <p className="text-[14px] text-fg-sub">이 날은 예약이 없어요.</p>
+                items.length === 0 ? (
+                  <EmptyState
+                    icon={CalendarClock}
+                    title="아직 예약이 없어요"
+                    description="스튜디오에서 카드뉴스를 만들면 여기서 날짜를 잡을 수 있어요."
+                    action={
+                      <ButtonLink href="/studio" size="sm">
+                        만들러 가기
+                      </ButtonLink>
+                    }
+                  />
+                ) : (
+                  <p className="text-[14px] text-fg-sub">이 날은 예약이 없어요.</p>
+                )
               ) : (
                 <ul className="space-y-3">
                   {selectedPosts.map((post) => (

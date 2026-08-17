@@ -34,7 +34,7 @@ export default async function CheckoutPage({
   }
 
   return (
-    <div className="mx-auto max-w-xl space-y-6">
+    <div className="max-w-xl space-y-6">
       <PageHeader title={`${planName} 플랜 결제`} description="결제 수단을 선택하고 결제를 완료하세요." />
 
       <Card className="p-5">

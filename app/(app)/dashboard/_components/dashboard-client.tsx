@@ -129,9 +129,13 @@ export function DashboardClient({
         description="오늘의 브리핑과 채널 현황을 한눈에 확인하세요."
       />
 
+      {/* 레퍼런스 진입부 — 히어로 + 검색.
+          ⚠️ 아카이빙 현황(358px)이 여기 세 번째 밴드로 있었다. 그 탓에 PageHeader
+          + 히어로 + 검색 + 아카이빙 = 약 900px 이 되어, **1080p 첫 화면에 내 계정
+          숫자가 하나도 안 보였다** — SNS 분석 도구의 홈인데. 아카이빙은 "내 성과"가
+          아니라 공용 풀 안내라 아래 레일로 내렸다. */}
       <DailyBriefHero stats={poolStats} />
       <HomeSearch stats={poolStats} />
-      <ArchiveStatus stats={poolStats} />
 
       {disconnected.length > 0 ? (
         <Card className="flex flex-wrap items-center justify-between gap-3 border-warning/40 p-4">
@@ -166,12 +170,12 @@ export function DashboardClient({
           />
         </div>
       ) : (
-        <section aria-label="요약 지표" className="grid grid-cols-2 gap-3 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
+        <section aria-label="요약 지표" className="grid grid-cols-2 gap-3 lg:grid-cols-[1.5fr_1fr_1fr_1fr] 2xl:grid-cols-[1.4fr_1fr_1fr_1fr_1fr]">
           {summaryCards}
         </section>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3 lg:items-start">
         {/* 최근 게시물 (PART 4.1) */}
         <Card className="lg:col-span-2">
           <CardHeader
@@ -230,7 +234,10 @@ export function DashboardClient({
           </CardBody>
         </Card>
 
-        <div className="space-y-6">
+        {/* 우측 레일 — 앞서는 광고 카드 한 장(약 190px)만 있어서 좌측 표(500~700px)
+            옆으로 300~500px 가 통째로 비었다. 아카이빙·바로가기를 여기로 모아
+            채우고, 넓은 화면에서는 표를 따라 붙게 sticky 를 건다. */}
+        <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
           {/* 광고 요약 — 오가닉과 나란히 (PART 4.1) */}
           <Card>
             <CardHeader
@@ -259,11 +266,11 @@ export function DashboardClient({
               </div>
             </CardBody>
           </Card>
+
+          <ArchiveStatus stats={poolStats} />
+          <NextActions />
         </div>
       </div>
-
-      {/* 다음에 할 것 — 홈 종결부 바로가기 */}
-      <NextActions />
 
       {/* 내 계정 — 전체 보기일 때만 3채널 카드 (개별 선택 시엔 위 프로필 패널이 대체) */}
       {channel === "all" ? (
@@ -279,7 +286,7 @@ export function DashboardClient({
         </div>
 
         {accounts.length > 0 ? (
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {accounts.map((a) => (
               <Card key={a.channel} hover className="flex flex-col p-5">
                 {/* 프로필 — 실 연동 시 프로필 사진, 없으면 이니셜 아바타 + 채널 뱃지 */}
