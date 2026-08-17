@@ -197,7 +197,7 @@ export default function AutoDmPage() {
 
       {/* 질문형 섹션 */}
       {HOW_SECTIONS.map((section, i) => (
-        <section key={section.q} className={i % 2 === 1 ? "border-y border-line bg-plate" : "border-t border-line"}>
+        <section key={section.q} className={i % 2 === 1 ? "border-y border-line bg-body" : "border-t border-line"}>
           <div className="mx-auto max-w-3xl px-4 py-14 md:px-6">
             <Reveal>
               <h2 className="text-2xl font-bold md:text-3xl">{section.q}</h2>
@@ -223,7 +223,7 @@ export default function AutoDmPage() {
       ))}
 
       {/* 채널 범위 — 인스타 전용 이유 (differentiator, 정직 고지) */}
-      <section className="border-y border-line bg-plate">
+      <section className="border-y border-line bg-body">
         <div className="mx-auto max-w-3xl px-4 py-16 md:px-6">
           <Reveal>
             <h2 className="text-2xl font-bold md:text-3xl">스레드·틱톡에서도 자동 DM이 되나요?</h2>
@@ -304,7 +304,7 @@ export default function AutoDmPage() {
       </section>
 
       {/* FAQ */}
-      <section className="border-y border-line bg-plate">
+      <section className="border-y border-line bg-body">
         <div className="mx-auto max-w-3xl px-4 py-20 md:px-6">
           <h2 className="flex items-center justify-center gap-2 text-center text-2xl font-bold md:text-3xl">
             <MessageCircleQuestion className="size-7 text-primary-ink" aria-hidden />

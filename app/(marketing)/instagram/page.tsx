@@ -157,7 +157,7 @@ export default function InstagramAnalysisPage() {
 
       {/* 질문형 섹션 — 인사이트 · 팔로워 · 인기게시물/릴스 · 경쟁사 · 계정진단/인플루언서 */}
       {INSIGHT_SECTIONS.map((section, i) => (
-        <section key={section.q} className={i % 2 === 1 ? "border-y border-line bg-plate" : undefined}>
+        <section key={section.q} className={i % 2 === 1 ? "border-y border-line bg-body" : undefined}>
           <div className="mx-auto max-w-4xl px-4 py-14 md:px-6">
             <Reveal>
               <h2 className="text-2xl font-bold md:text-3xl">{section.q}</h2>
@@ -216,7 +216,7 @@ export default function InstagramAnalysisPage() {
       </section>
 
       {/* FAQ */}
-      <section id="faq" className="border-y border-line bg-plate">
+      <section id="faq" className="border-y border-line bg-body">
         <div className="mx-auto max-w-3xl scroll-mt-20 px-4 py-20 md:px-6">
           <Reveal>
             <h2 className="flex items-center justify-center gap-2 text-center text-2xl font-bold md:text-3xl">

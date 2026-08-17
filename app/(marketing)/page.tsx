@@ -370,7 +370,7 @@ export default function LandingPage() {
       </section>
 
       {/* 문제 제기 (PART 6.1-3) */}
-      <section className="border-y border-line bg-plate">
+      <section className="border-y border-line bg-body">
         <div className="mx-auto max-w-6xl px-4 py-20 md:px-6">
           <Reveal>
             <h2 className="text-center text-2xl font-bold md:text-3xl">이런 고민 있으신가요?</h2>
@@ -439,7 +439,7 @@ export default function LandingPage() {
       </section>
 
       {/* 채널별 자세히 보기 진입 (PART 6.1-5) */}
-      <section id="channels" className="border-y border-line bg-plate">
+      <section id="channels" className="border-y border-line bg-body">
         <div className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20 md:px-6">
           <Reveal>
             <h2 className="text-center text-2xl font-bold md:text-3xl">
@@ -513,7 +513,7 @@ export default function LandingPage() {
       </section>
 
       {/* 요금제 미리보기 (PART 6.1-7) */}
-      <section className="border-y border-line bg-plate">
+      <section className="border-y border-line bg-body">
         <div className="mx-auto max-w-6xl px-4 py-20 md:px-6">
           <Reveal>
             <h2 className="text-center text-2xl font-bold md:text-3xl">요금제</h2>
@@ -572,7 +572,7 @@ export default function LandingPage() {
       </section>
 
       {/* FAQ (PART 6.1-9) */}
-      <section id="faq" className="border-y border-line bg-plate">
+      <section id="faq" className="border-y border-line bg-body">
         <div className="mx-auto max-w-3xl scroll-mt-20 px-4 py-20 md:px-6">
           <Reveal>
             <h2 className="flex items-center justify-center gap-2 text-center text-2xl font-bold md:text-3xl">

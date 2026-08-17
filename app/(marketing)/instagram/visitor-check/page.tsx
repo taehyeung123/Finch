@@ -125,7 +125,7 @@ export default function VisitorCheckPage() {
       </section>
 
       {/* 방문자 확인 앱의 정체 */}
-      <section className="border-y border-line bg-plate">
+      <section className="border-y border-line bg-body">
         <div className="mx-auto max-w-3xl space-y-16 px-4 py-16 md:px-6">
           <div>
             <h2 className="text-xl font-bold md:text-2xl">인스타 방문자 보는법이라는 앱들, 정체가 뭔가요?</h2>
@@ -213,7 +213,7 @@ export default function VisitorCheckPage() {
       </section>
 
       {/* FAQ */}
-      <section className="border-y border-line bg-plate">
+      <section className="border-y border-line bg-body">
         <div className="mx-auto max-w-3xl px-4 py-20 md:px-6">
           <h2 className="flex items-center justify-center gap-2 text-center text-2xl font-bold md:text-3xl">
             <MessageCircleQuestion className="size-7 text-primary-ink" aria-hidden />

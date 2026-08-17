@@ -31,6 +31,10 @@ export async function POST(request: Request) {
   }
   const caption = String(form.get("caption") ?? "").trim();
   const scheduledAt = String(form.get("scheduledAt") ?? "").trim();
+  /* 초안 = 날짜 미정. 크론은 status='scheduled' 만 조회하므로 초안은 절대 발행되지
+     않는다(0043). 앞서는 날짜를 정해야만 저장할 수 있어서, 오늘 만들었지만 언제
+     올릴지 안 정한 콘텐츠는 화면을 떠나는 순간 사라졌다 — 크레딧을 쓴 결과물인데도. */
+  const asDraft = String(form.get("draft") ?? "") === "1";
   const images = form.getAll("images").filter((v): v is File => v instanceof File);
 
   if (!caption) {
@@ -39,19 +43,28 @@ export async function POST(request: Request) {
   if (images.length === 0 || images.length > MAX_IMAGES) {
     return NextResponse.json({ error: "이미지가 없거나 너무 많아요 (최대 10장)." }, { status: 400 });
   }
-  const scheduledDate = new Date(scheduledAt);
+  /* scheduled_at 은 not null 이다. 초안은 날짜가 "미정"이라는 뜻이므로 값이 필요하면
+     지금 시각을 넣는다 — 화면은 status 로 판단해 "날짜 미정"으로 표시하고, 캘린더에도
+     찍지 않는다. 초안에 과거 날짜 검증을 걸면 저장 자체가 막힌다. */
+  const scheduledDate = asDraft && !scheduledAt ? new Date() : new Date(scheduledAt);
   if (Number.isNaN(scheduledDate.getTime())) {
     return NextResponse.json({ error: "발행 예정일이 올바르지 않습니다." }, { status: 400 });
   }
-  // 날짜만 비교(당일 새벽 배치가 이미 지났을 수 있어 '오늘'까지는 허용, 과거 날짜만 차단)
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (scheduledDate < today) {
-    return NextResponse.json({ error: "오늘보다 이전 날짜로는 예약할 수 없어요." }, { status: 400 });
+  if (!asDraft) {
+    // 날짜만 비교(당일 새벽 배치가 이미 지났을 수 있어 '오늘'까지는 허용, 과거 날짜만 차단)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (scheduledDate < today) {
+      return NextResponse.json({ error: "오늘보다 이전 날짜로는 예약할 수 없어요." }, { status: 400 });
+    }
   }
 
-  // 연동 계정 확인 — 없으면 업로드 전에 즉시 차단(불필요한 스토리지 사용 방지)
-  const { data: account } = await supabase
+  /* 연동 계정 확인 — 없으면 업로드 전에 즉시 차단(불필요한 스토리지 사용 방지).
+     **초안은 검사하지 않는다** — 아직 발행이 아니고, 연동은 예약을 잡을 때 필요하다.
+     여기서 막으면 계정을 안 붙인 사람은 만든 것을 저장조차 못 한다. */
+  const { data: account } = asDraft
+    ? { data: { id: "draft" } }
+    : await supabase
     .from("connected_accounts")
     .select("id")
     .eq("channel", "instagram")
@@ -85,7 +98,7 @@ export async function POST(request: Request) {
     caption,
     image_urls: imageUrls,
     scheduled_at: scheduledDate.toISOString(),
-    status: "scheduled",
+    status: asDraft ? "draft" : "scheduled",
   });
   if (insertErr) {
     console.error("[studio:schedule] 예약 등록 실패:", insertErr.message);

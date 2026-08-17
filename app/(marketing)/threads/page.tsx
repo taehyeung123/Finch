@@ -97,7 +97,7 @@ export default function ThreadsPage() {
       </section>
 
       {/* 계정 분석 — 무엇을 볼 수 있나요 (내 계정 범위 명시) */}
-      <section className="border-y border-line bg-plate">
+      <section className="border-y border-line bg-body">
         <div className="mx-auto max-w-4xl px-4 py-20 md:px-6">
           <Reveal>
             <h2 className="text-center text-2xl font-bold md:text-3xl">쓰레드 계정 분석, 무엇을 볼 수 있나요?</h2>
@@ -146,7 +146,7 @@ export default function ThreadsPage() {
       </section>
 
       {/* FAQ */}
-      <section className="border-y border-line bg-plate">
+      <section className="border-y border-line bg-body">
         <div className="mx-auto max-w-3xl px-4 py-20 md:px-6">
           <Reveal>
             <h2 className="flex items-center justify-center gap-2 text-center text-2xl font-bold md:text-3xl">

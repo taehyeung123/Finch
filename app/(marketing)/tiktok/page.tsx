@@ -92,7 +92,7 @@ export default function TiktokPage() {
       </section>
 
       {/* 완전 지원: 내 계정 분석 */}
-      <section className="border-y border-line bg-plate">
+      <section className="border-y border-line bg-body">
         <div className="mx-auto max-w-6xl px-4 py-16 md:px-6">
           <Reveal>
             <div className="flex flex-wrap items-center gap-3">
@@ -155,7 +155,7 @@ export default function TiktokPage() {
       </section>
 
       {/* AI 콘텐츠 스튜디오 */}
-      <section className="border-y border-line bg-plate">
+      <section className="border-y border-line bg-body">
         <div className="mx-auto max-w-6xl px-4 py-16 md:px-6">
           <Reveal>
             <div className="flex flex-wrap items-center gap-3">
@@ -214,7 +214,7 @@ export default function TiktokPage() {
       </section>
 
       {/* FAQ */}
-      <section id="faq" className="border-y border-line bg-plate">
+      <section id="faq" className="border-y border-line bg-body">
         <div className="mx-auto max-w-3xl scroll-mt-20 px-4 py-20 md:px-6">
           <Reveal>
             <h2 className="flex items-center justify-center gap-2 text-center text-2xl font-bold md:text-3xl">
