@@ -156,7 +156,7 @@ const FEATURES = [
 /* 지그재그 기능별 미니 목업 패널 — FEATURES 배열과 같은 순서 */
 
 const panelBase =
-  "rounded-card border border-line bg-body p-5 transition-colors hover:border-line-strong md:p-6";
+  "rounded-card border border-line bg-body p-5 trans-state hover:border-line-strong md:p-6";
 
 function DashboardPanel() {
   return (
@@ -174,14 +174,14 @@ function DashboardPanel() {
           { label: "참여율", value: "4.8%", delta: "+0.6%p" },
           { label: "주간 도달", value: "42.1만", delta: "+8.9%" },
         ].map((s) => (
-          <div key={s.label} className="rounded-card border border-line bg-surface p-3.5">
+          <div key={s.label} className="rounded-card border border-line bg-plate p-3.5">
             <p className="text-xs text-fg-sub">{s.label}</p>
             <p className="tnum mt-1 text-lg font-bold">{s.value}</p>
             <p className="tnum mt-0.5 text-xs font-semibold text-positive">{s.delta}</p>
           </div>
         ))}
       </div>
-      <div className="mt-3 rounded-card border border-line bg-surface p-3.5">
+      <div className="mt-3 rounded-card border border-line bg-plate p-3.5">
         <p className="text-xs text-fg-sub">최근 30일 조회수</p>
         <Sparkline data={[18, 26, 24, 39, 33, 52, 47, 68, 74, 88]} width={320} height={44} className="mt-1.5 w-full" />
       </div>
@@ -205,7 +205,7 @@ function AdMonitorPanel() {
           </div>
         </div>
         {/* 앞 카드 — 방금 감지된 신규 광고 */}
-        <div className="-mt-3 mr-8 rounded-card border border-line-strong bg-surface p-4">
+        <div className="-mt-3 mr-8 rounded-card border border-line-strong bg-plate p-4">
           <div className="flex items-center justify-between gap-3">
             <span className="anim-pulse rounded-chip bg-primary-weak px-2.5 py-0.5 text-[11px] font-semibold text-primary">
               NEW 광고 감지
@@ -240,9 +240,9 @@ function TrendPanel() {
         {TREND_ROWS.map((row) => (
           <li
             key={row.rank}
-            className="flex items-center gap-3 rounded-card border border-transparent px-3 py-2.5 transition-colors hover:border-line hover:bg-overlay"
+            className="flex items-center gap-3 rounded-card border border-transparent px-3 py-2.5 trans-state hover:border-line hover:bg-overlay"
           >
-            <span className={`tnum w-4 text-center text-[15px] font-bold ${row.rank === 1 ? "text-primary" : "text-fg-faint"}`}>
+            <span className={`tnum w-4 text-center text-[15px] font-bold ${row.rank === 1 ? "text-primary" : "text-fg-sub"}`}>
               {row.rank}
             </span>
             <div className="min-w-0 flex-1">
@@ -273,7 +273,7 @@ function AiStudioPanel() {
       <div className="relative mt-5 flex justify-center pb-3">
         <div className="absolute top-3 h-full w-40 -translate-x-14 -rotate-6 rounded-card border border-line bg-overlay opacity-50" />
         <div className="absolute top-1.5 h-full w-40 translate-x-14 rotate-3 rounded-card border border-line bg-overlay opacity-75" />
-        <div className="relative w-44 rounded-card border border-line-strong bg-surface p-4">
+        <div className="relative w-44 rounded-card border border-line-strong bg-plate p-4">
           <p className="tnum text-[11px] font-semibold text-primary">1 / 6</p>
           <p className="mt-1.5 text-[14px] font-bold leading-snug">
             여름 수분 루틴,

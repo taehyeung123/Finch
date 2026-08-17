@@ -135,7 +135,7 @@ export function DashboardClient({
 
       {disconnected.length > 0 ? (
         <Card className="flex flex-wrap items-center justify-between gap-3 border-warning/40 p-4">
-          <p className="flex items-center gap-2 text-[14px] text-fg-sub">
+          <p className="flex items-center gap-2 text-[15px] text-fg-sub">
             <Link2 className="size-4 text-warning" aria-hidden />
             {disconnected.map((a) => CHANNEL_LABEL[a.channel]).join(", ")} 계정이 아직 연동되지
             않았어요. 연동하면 3채널을 함께 볼 수 있습니다.
@@ -178,14 +178,14 @@ export function DashboardClient({
             title="최근 게시물"
             description="게시물별 핵심 지표"
             action={
-              <Link href="/insights/link" className="inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:text-primary-hover">
+              <Link href="/insights/link" className="inline-flex items-center gap-1 text-[14px] font-semibold text-primary hover:text-primary-hover">
                 링크 분석 <ArrowRight className="size-3.5" aria-hidden />
               </Link>
             }
           />
           <CardBody className="overflow-x-auto">
             {posts.length > 0 ? (
-              <table className="w-full min-w-[540px] text-[14px]">
+              <table className="w-full min-w-[540px] text-[15px]">
                 <thead>
                   <tr className="border-b border-line text-left text-xs text-fg-faint">
                     <th className="pb-2 font-medium">게시물</th>
@@ -223,7 +223,7 @@ export function DashboardClient({
                 </tbody>
               </table>
             ) : (
-              <p className="py-6 text-center text-[14px] text-fg-faint">
+              <p className="py-6 text-center text-[15px] text-fg-sub">
                 아직 표시할 게시물이 없어요. 계정을 연동하면 최근 게시물 지표가 표시됩니다.
               </p>
             )}
@@ -237,22 +237,22 @@ export function DashboardClient({
               title="광고 현황"
               description="진행 중 캠페인 기준"
               action={
-                <Link href="/ads" className="inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:text-primary-hover">
+                <Link href="/ads" className="inline-flex items-center gap-1 text-[14px] font-semibold text-primary hover:text-primary-hover">
                   광고 관리 <ArrowRight className="size-3.5" aria-hidden />
                 </Link>
               }
             />
             <CardBody className="space-y-3">
               <div className="flex items-baseline justify-between">
-                <span className="text-[13px] text-fg-sub">집행 금액</span>
+                <span className="text-[14px] text-fg-sub">집행 금액</span>
                 <span className="tnum text-lg font-bold">{formatKRW(activeTotals.spend)}</span>
               </div>
               <div className="flex items-baseline justify-between">
-                <span className="text-[13px] text-fg-sub">진행 중 캠페인</span>
+                <span className="text-[14px] text-fg-sub">진행 중 캠페인</span>
                 <span className="tnum font-semibold">{activeTotals.count}개</span>
               </div>
               <div className="flex items-baseline justify-between">
-                <span className="text-[13px] text-fg-sub">평균 ROAS</span>
+                <span className="text-[14px] text-fg-sub">평균 ROAS</span>
                 <span className="tnum font-semibold text-positive">
                   {activeTotals.count > 0 ? `${activeTotals.roas.toFixed(1)}배` : "-"}
                 </span>
@@ -269,10 +269,10 @@ export function DashboardClient({
       {channel === "all" ? (
       <section aria-label="내 계정">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-[19px] font-bold leading-snug">내 계정</h2>
+          <h2 className="text-[20px] font-bold leading-snug">내 계정</h2>
           <Link
             href="/settings"
-            className="inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:text-primary-hover"
+            className="inline-flex items-center gap-1 text-[14px] font-semibold text-primary hover:text-primary-hover"
           >
             설정에서 관리 <ArrowRight className="size-3.5" aria-hidden />
           </Link>
@@ -311,7 +311,7 @@ export function DashboardClient({
                         <Badge tone="neutral">미연동</Badge>
                       )}
                     </div>
-                    <p className="mt-0.5 truncate text-[13px] text-fg-faint">{a.handle || "—"}</p>
+                    <p className="mt-0.5 truncate text-[14px] text-fg-sub">{a.handle || "—"}</p>
                   </div>
                 </div>
 

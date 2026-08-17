@@ -26,7 +26,7 @@ export function CampaignTable({
 
   return (
     <>
-      <table className="w-full min-w-[960px] text-[14px]">
+      <table className="w-full min-w-[960px] text-[15px]">
         <thead>
           <tr className="border-b border-line text-left text-xs text-fg-faint">
             <th className="pb-2 font-medium">캠페인</th>
@@ -51,7 +51,7 @@ export function CampaignTable({
                 key={c.id}
                 className={
                   clickable
-                    ? "cursor-pointer border-b border-line transition-colors last:border-0 hover:bg-body focus-visible:bg-body focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+                    ? "cursor-pointer border-b border-line trans-state last:border-0 hover:bg-body focus-visible:bg-body focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
                     : "border-b border-line last:border-0"
                 }
                 tabIndex={clickable ? 0 : undefined}
@@ -84,7 +84,7 @@ export function CampaignTable({
                       <div className="flex items-center gap-1.5">
                         <p className="truncate font-medium">{c.name}</p>
                         {c.creative.format === "video" ? (
-                          <Badge className="shrink-0 px-1.5 py-0 text-[10px] leading-4">영상</Badge>
+                          <Badge className="shrink-0 px-1.5 py-0 text-[11px] leading-4">영상</Badge>
                         ) : null}
                       </div>
                       <p className="mt-0.5 truncate text-xs text-fg-faint">{c.creative.headline}</p>

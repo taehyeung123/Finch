@@ -78,7 +78,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
                   type="button"
                   onClick={() => setPeriod(p)}
                   className={cn(
-                    "rounded-chip px-3 py-1 text-[13px] font-semibold transition-colors",
+                    "rounded-chip px-3 py-1 text-[14px] font-semibold trans-state",
                     period === p ? "bg-primary text-on-primary" : "text-fg-sub hover:text-fg",
                   )}
                 >
@@ -93,7 +93,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
       {/* 정직 고지 — 이 기능의 신뢰 기반 (PRD PART 2) */}
       <Card className="flex items-start gap-3 p-4">
         <ShieldAlert className="mt-0.5 size-5 shrink-0 text-warning" aria-hidden />
-        <p className="text-[13px] leading-relaxed text-fg-sub">
+        <p className="text-[14px] leading-relaxed text-fg-sub">
           <span className="font-semibold text-fg">
             &ldquo;누가 내 프로필을 봤는지&rdquo;의 개인 식별은 인스타그램이 어떤 앱에도 제공하지 않는
             데이터입니다.
@@ -162,7 +162,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
               <span>{days[0]?.date.slice(5).replace("-", ".")}</span>
               <span>{days[days.length - 1]?.date.slice(5).replace("-", ".")}</span>
             </div>
-            <p className="mt-3 text-[13px] text-fg-sub">
+            <p className="mt-3 text-[14px] text-fg-sub">
               도달이 커진 날 팔로워 증가가 함께 뛰는 패턴이면, 콘텐츠가 새 오디언스를 프로필까지
               데려오고 있다는 신호예요.
             </p>
@@ -197,7 +197,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
               <span>{days[0]?.date.slice(5).replace("-", ".")}</span>
               <span>{days[days.length - 1]?.date.slice(5).replace("-", ".")}</span>
             </div>
-            <p className="mt-3 text-[13px] text-fg-sub">
+            <p className="mt-3 text-[14px] text-fg-sub">
               이 기간 순증감 합계는{" "}
               <span className={cn("tnum font-semibold", followerNet >= 0 ? "text-positive" : "text-negative")}>
                 {formatDeltaCompact(followerNet)}명
@@ -229,7 +229,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
         <CardBody className="overflow-x-auto">
           {view.topEngagers.length > 0 ? (
             <>
-              <table className="w-full min-w-[560px] text-[14px]">
+              <table className="w-full min-w-[560px] text-[15px]">
                 <thead>
                   <tr className="border-b border-line text-left text-xs text-fg-faint">
                     <th className="pb-2 font-medium">순위</th>
@@ -256,7 +256,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
                       <td className="tnum py-3 pr-3 font-bold text-fg-sub">{i + 1}</td>
                       <td className="py-3 pr-3">
                         <div className="flex items-center gap-2.5">
-                          <span className="flex size-8 shrink-0 items-center justify-center rounded-chip bg-primary-weak text-[13px] font-bold text-primary">
+                          <span className="flex size-8 shrink-0 items-center justify-center rounded-chip bg-primary-weak text-[14px] font-bold text-primary">
                             {e.displayName[0]}
                           </span>
                           <span className="min-w-0">
@@ -270,7 +270,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
                       <td className="py-3 pl-4">
                         {e.isFollower ? <Badge tone="positive">팔로워</Badge> : <Badge>미팔로우</Badge>}
                       </td>
-                      <td className="py-3 pl-4 text-[13px] text-fg-faint">{formatAgo(e.lastEngagedAt)}</td>
+                      <td className="py-3 pl-4 text-[14px] text-fg-sub">{formatAgo(e.lastEngagedAt)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -280,7 +280,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
               </p>
             </>
           ) : (
-            <p className="py-6 text-center text-[14px] text-fg-faint">
+            <p className="py-6 text-center text-[15px] text-fg-sub">
               댓글·좋아요 반응 데이터가 쌓이면 랭킹이 표시됩니다. (자동 DM 웹훅이 켜져 있으면 댓글이
               수집되기 시작해요.)
             </p>

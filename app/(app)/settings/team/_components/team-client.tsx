@@ -28,7 +28,7 @@ const STATUS_LABEL: Record<TeamStatus, string> = { active: "참여중", invited:
 /* 인풋·셀렉트 공통 스타일 — 포커스는 공용 Button과 동일한 outline 링으로 통일
    (2026-08 감사: focus:outline-none + 1px 보더 색 변경만 남기던 약한 포커스 표시 수리). */
 const fieldClass =
-  "h-10 rounded-card border border-line bg-body px-3 text-[14px] focus:border-primary focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:opacity-60";
+  "h-10 rounded-card border border-line bg-body px-3 text-[15px] focus:border-primary focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:opacity-60";
 
 /* 초대 폼 필드 — <form action> 컨텍스트의 useFormStatus로 제출 중에만 비활성.
    행 액션과 pending 상태를 분리해, 초대 전송이 멤버 행 조작을 막지 않는다. */
@@ -151,7 +151,7 @@ export function TeamClient({
             />
           </form>
           {demoMode ? (
-            <p className="text-[13px] text-fg-sub">
+            <p className="text-[14px] text-fg-sub">
               데모 모드에서는 팀 초대·관리 기능을 사용할 수 없어요. 실제 워크스페이스에서 이용할 수
               있습니다.
             </p>
@@ -160,7 +160,7 @@ export function TeamClient({
       ) : null}
 
       {error ? (
-        <p role="alert" className="rounded-card bg-negative-weak p-3 text-[13px] text-negative-strong">
+        <p role="alert" className="rounded-card bg-negative-weak p-3 text-[14px] text-negative-strong">
           {error}
         </p>
       ) : null}
@@ -170,13 +170,13 @@ export function TeamClient({
           <li key={member.id} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
             <div className="flex min-w-0 items-center gap-3">
               <span
-                className="flex size-9 shrink-0 items-center justify-center rounded-chip bg-primary-weak text-[13px] font-bold text-primary"
+                className="flex size-9 shrink-0 items-center justify-center rounded-chip bg-primary-weak text-[14px] font-bold text-primary"
                 aria-hidden
               >
                 {member.email.slice(0, 1).toUpperCase()}
               </span>
               <div className="min-w-0">
-                <p className="truncate text-[14px] font-semibold">
+                <p className="truncate text-[15px] font-semibold">
                   {member.email}
                   {member.isSelf ? <span className="ml-1.5 font-normal text-fg-sub">(나)</span> : null}
                 </p>

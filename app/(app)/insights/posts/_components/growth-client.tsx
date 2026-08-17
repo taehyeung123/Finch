@@ -132,7 +132,7 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
                           <Card key={i} className="flex flex-col p-4">
                             <Badge tone="neutral">{idea.basedOn}</Badge>
                             <p className="mt-2 text-[15px] font-semibold leading-snug">{idea.topic}</p>
-                            <p className="mt-1 flex items-start gap-1.5 text-[13px] leading-relaxed text-fg-sub">
+                            <p className="mt-1 flex items-start gap-1.5 text-[14px] leading-relaxed text-fg-sub">
                               <TrendingUp className="mt-0.5 size-3.5 shrink-0 text-positive" aria-hidden />
                               {idea.reason}
                             </p>
@@ -153,7 +153,7 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
                     </p>
                   </div>
                 ) : (
-                  <p className="rounded-card bg-warning-weak px-3 py-2.5 text-[13px] text-warning">
+                  <p className="rounded-card bg-warning-weak px-3 py-2.5 text-[14px] text-warning">
                     {diag.reason === "fallback"
                       ? "AI 진단은 현재 준비 중이에요(크레딧/설정 확인 필요). 위 실제 성과 표는 그대로 확인할 수 있어요."
                       : diag.reason === "not_connected"
@@ -174,7 +174,7 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
               description="저장률이 높은 순서. 공식 인사이트(저장·도달)에서 직접 계산한 실제 값이에요."
             />
             <CardBody className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-[14px]">
+              <table className="w-full min-w-[640px] text-[15px]">
                 <thead>
                   <tr className="border-b border-line text-left text-xs text-fg-faint">
                     <th className="pb-2 pr-3 font-medium">게시물</th>
@@ -215,7 +215,7 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
                             <button
                               type="button"
                               onClick={() => sendToStudio(p.caption, REPURPOSE_NOTE)}
-                              className="inline-flex items-center gap-1 whitespace-nowrap rounded-card border border-line px-2 py-1 text-[12px] font-semibold text-fg-sub transition-colors hover:border-primary hover:text-primary"
+                              className="inline-flex items-center gap-1 whitespace-nowrap rounded-card border border-line px-2 py-1 text-[12px] font-semibold text-fg-sub trans-state hover:border-primary hover:text-primary"
                             >
                               <Sparkles className="size-3" aria-hidden />
                               재가공
@@ -250,7 +250,7 @@ function SummaryCard({
     <Card className="p-5">
       <div className="flex items-center gap-2 text-fg-sub">
         <Icon className="size-4" aria-hidden />
-        <span className="text-[13px] font-medium">{label}</span>
+        <span className="text-[14px] font-medium">{label}</span>
         <InfoTip>{hint}</InfoTip>
       </div>
       <p className="tnum mt-2 text-3xl font-bold">{value}</p>
@@ -271,13 +271,13 @@ function DiagList({
 }) {
   return (
     <div className={`rounded-card border p-4 ${tone === "positive" ? "border-positive/30 bg-positive-weak" : "border-warning/30 bg-warning-weak"}`}>
-      <div className={`mb-2 flex items-center gap-2 text-[14px] font-bold ${tone === "positive" ? "text-positive" : "text-warning"}`}>
+      <div className={`mb-2 flex items-center gap-2 text-[15px] font-bold ${tone === "positive" ? "text-positive" : "text-warning"}`}>
         <Icon className="size-4" aria-hidden />
         {title}
       </div>
       <ul className="space-y-1.5">
         {items.map((it, i) => (
-          <li key={i} className="text-[13px] leading-relaxed text-fg-sub">
+          <li key={i} className="text-[14px] leading-relaxed text-fg-sub">
             {it}
           </li>
         ))}

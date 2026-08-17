@@ -32,7 +32,7 @@ export function StatCard({
 }) {
   return (
     <Card className={cn(hero ? "p-6" : "p-5", className)}>
-      <div className="flex items-center gap-1.5 text-[13px] text-fg-sub">
+      <div className="flex items-center gap-1.5 text-[14px] text-fg-sub">
         {label}
         {hint}
       </div>
@@ -40,7 +40,7 @@ export function StatCard({
         <div>
           <div className={cn("tnum font-bold leading-none", hero ? "text-3xl" : "text-2xl")}>{value}</div>
           {delta !== undefined ? (
-            <div className="mt-1.5 text-[13px]">
+            <div className="mt-1.5 text-[14px]">
               <DeltaText value={delta} unit={deltaUnit} />
               <span className="ml-1 text-fg-faint">지난주 대비</span>
             </div>

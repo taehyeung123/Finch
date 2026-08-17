@@ -113,10 +113,10 @@ export function PlanCta({
     <Link
       href={href}
       className={cn(
-        "flex h-11 w-full items-center justify-center rounded-card px-5 text-[15px] font-semibold transition-colors",
+        "flex h-11 w-full items-center justify-center rounded-card px-5 text-[15px] font-semibold trans-state",
         filled
           ? "bg-primary text-on-primary hover:bg-primary-hover"
-          : "border border-line-strong text-fg hover:bg-surface",
+          : "border border-line-strong text-fg hover:bg-tint-hover",
       )}
     >
       {label}

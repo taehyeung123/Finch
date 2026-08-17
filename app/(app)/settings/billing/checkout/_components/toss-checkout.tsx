@@ -87,7 +87,7 @@ export function TossCheckout({
   return (
     <div className="space-y-5">
       {error ? (
-        <div className="rounded-card border border-negative/40 bg-negative-weak p-4 text-[14px] text-negative" role="alert">
+        <div className="rounded-card border border-negative/40 bg-negative-weak p-4 text-[15px] text-negative" role="alert">
           {error}
         </div>
       ) : null}

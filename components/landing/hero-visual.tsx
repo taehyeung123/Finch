@@ -66,7 +66,7 @@ export function HeroVisual() {
 
         <div className="mt-4 grid grid-cols-2 gap-3">
           {HERO_STATS.map((s) => (
-            <div key={s.label} className="rounded-card border border-line bg-surface p-4">
+            <div key={s.label} className="rounded-card border border-line bg-plate p-4">
               <p className="text-xs text-fg-sub">{s.label}</p>
               <p className="tnum mt-1 text-xl font-bold">{s.value}</p>
               <p className="tnum mt-0.5 text-xs font-semibold text-positive">{s.delta}</p>
@@ -74,7 +74,7 @@ export function HeroVisual() {
           ))}
         </div>
 
-        <div className="mt-3 rounded-card border border-line bg-surface p-4">
+        <div className="mt-3 rounded-card border border-line bg-plate p-4">
           <div className="flex items-center justify-between">
             <p className="text-xs text-fg-sub">최근 게시물 추이</p>
             <span className="anim-pulse rounded-chip bg-primary-weak px-2 py-0.5 text-[11px] font-semibold text-primary">

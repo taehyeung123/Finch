@@ -35,7 +35,7 @@ import {
 */
 
 const chipBase =
-  "inline-flex items-center gap-1.5 rounded-chip border px-3.5 py-1.5 text-[13px] font-semibold transition-colors";
+  "inline-flex items-center gap-1.5 rounded-chip border px-3.5 py-1.5 text-[14px] font-semibold trans-state";
 const chipOff = "border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg";
 const chipOn = "border-primary bg-primary text-on-primary";
 
@@ -152,8 +152,8 @@ export function PlacementSelector({
               aria-checked={on}
               onClick={() => chooseMode(mode)}
               className={cn(
-                "flex items-start gap-3 rounded-card border p-3.5 text-left transition-colors",
-                on ? "border-primary bg-primary-weak" : "border-line bg-surface hover:border-line-strong",
+                "flex items-start gap-3 rounded-card border p-3.5 text-left trans-state",
+                on ? "border-primary bg-primary-weak" : "border-line bg-plate hover:border-line-strong",
               )}
             >
               <Icon
@@ -161,7 +161,7 @@ export function PlacementSelector({
                 aria-hidden
               />
               <span className="min-w-0">
-                <span className="flex items-center gap-1.5 text-[14px] font-semibold text-fg">
+                <span className="flex items-center gap-1.5 text-[15px] font-semibold text-fg">
                   {title}
                   {recommended ? <Badge tone="primary">추천</Badge> : null}
                 </span>
@@ -177,7 +177,7 @@ export function PlacementSelector({
         <div className="space-y-4">
           {/* a. 플랫폼 */}
           <div className="space-y-2">
-            <p className="text-[13px] font-semibold text-fg-sub">플랫폼</p>
+            <p className="text-[14px] font-semibold text-fg-sub">플랫폼</p>
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="플랫폼 선택">
               {AD_PLATFORMS.map((p) => {
                 const on = platformSelected(p);
@@ -200,10 +200,10 @@ export function PlacementSelector({
 
           {/* b. 노출 위치 (그룹 아코디언) */}
           <div className="space-y-2">
-            <p className="text-[13px] font-semibold text-fg-sub">노출 위치</p>
-            <div className="overflow-hidden rounded-card border border-line bg-surface">
+            <p className="text-[14px] font-semibold text-fg-sub">노출 위치</p>
+            <div className="overflow-hidden rounded-card border border-line bg-plate">
               {value.platforms.length === 0 ? (
-                <p className="px-3 py-4 text-[13px] text-fg-faint">
+                <p className="px-3 py-4 text-[14px] text-fg-sub">
                   플랫폼을 먼저 선택하면 노출 위치가 표시됩니다.
                 </p>
               ) : (
@@ -231,7 +231,7 @@ export function PlacementSelector({
                             )}
                             aria-hidden
                           />
-                          <span className="truncate text-[14px] font-semibold text-fg">
+                          <span className="truncate text-[15px] font-semibold text-fg">
                             {group.label}
                           </span>
                           {sel > 0 ? (
@@ -246,11 +246,11 @@ export function PlacementSelector({
                           aria-checked={allOn ? true : someOn ? "mixed" : false}
                           aria-label={`${group.label} 전체 선택`}
                           onClick={() => toggleGroup(group)}
-                          className="inline-flex shrink-0 items-center gap-1.5 rounded-chip border border-line px-2.5 py-1 text-xs font-semibold text-fg-sub transition-colors hover:border-line-strong hover:text-fg"
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-chip border border-line px-2.5 py-1 text-xs font-semibold text-fg-sub trans-state hover:border-line-strong hover:text-fg"
                         >
                           <span
                             className={cn(
-                              "flex size-4 items-center justify-center rounded-[5px] border transition-colors",
+                              "flex size-4 items-center justify-center rounded-[5px] border trans-state",
                               allOn
                                 ? "border-primary bg-primary text-on-primary"
                                 : someOn
@@ -285,7 +285,7 @@ export function PlacementSelector({
                                 aria-checked={on}
                                 onClick={() => togglePosition(pos.key)}
                                 className={cn(
-                                  "inline-flex items-center gap-1.5 rounded-chip border px-3 py-1 text-xs font-medium transition-colors",
+                                  "inline-flex items-center gap-1.5 rounded-chip border px-3 py-1 text-xs font-medium trans-state",
                                   on ? chipOn : chipOff,
                                 )}
                               >
@@ -310,7 +310,7 @@ export function PlacementSelector({
               className="flex items-start gap-2 rounded-card bg-warning-weak px-3.5 py-3 text-warning"
             >
               <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
-              <p className="text-[13px] font-medium">
+              <p className="text-[14px] font-medium">
                 노출 위치를 6개 이상 포함하면 성과를 개선할 수 있습니다 (현재{" "}
                 <span className="tnum">{count}</span>개)
               </p>

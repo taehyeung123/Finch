@@ -51,7 +51,7 @@ export function OnboardingForm() {
               key={n}
               aria-current={n === step ? "step" : undefined}
               className={cn(
-                "flex size-7 items-center justify-center rounded-chip text-xs font-semibold transition-colors",
+                "flex size-7 items-center justify-center rounded-chip text-xs font-semibold trans-state",
                 n === step
                   ? "bg-primary text-on-primary"
                   : n < step
@@ -65,7 +65,7 @@ export function OnboardingForm() {
         </ol>
         <Link
           href="/dashboard"
-          className="text-[13px] text-fg-faint transition-colors hover:text-fg-sub"
+          className="text-[14px] text-fg-sub trans-state hover:text-fg-sub"
         >
           건너뛰기
         </Link>
@@ -88,7 +88,7 @@ export function OnboardingForm() {
                     aria-pressed={selected}
                     onClick={() => setPurpose(value)}
                     className={cn(
-                      "flex w-full items-start gap-3 rounded-card border p-4 text-left transition-colors",
+                      "flex w-full items-start gap-3 rounded-card border p-4 text-left trans-state",
                       selected
                         ? "border-primary bg-primary-weak"
                         : "border-line bg-overlay hover:border-line-strong",
@@ -100,7 +100,7 @@ export function OnboardingForm() {
                     />
                     <span className="min-w-0">
                       <span className="block text-[15px] font-semibold">{label}</span>
-                      <span className="mt-0.5 block text-[13px] text-fg-sub">{description}</span>
+                      <span className="mt-0.5 block text-[14px] text-fg-sub">{description}</span>
                     </span>
                   </button>
                 );
@@ -148,7 +148,7 @@ export function OnboardingForm() {
             {/* 인스타그램 비즈니스/크리에이터 계정 필수 안내 (PRD 2.2) */}
             <div className="mt-3 flex items-start gap-2.5 rounded-card bg-warning-weak p-3.5">
               <Info className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
-              <p className="text-[13px] leading-relaxed text-fg-sub">
+              <p className="text-[14px] leading-relaxed text-fg-sub">
                 인스타그램은 비즈니스/크리에이터 계정만 연동할 수 있어요. 개인 계정이라면 앱에서 전환 후
                 진행해주세요
               </p>

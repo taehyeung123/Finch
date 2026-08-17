@@ -66,7 +66,7 @@ export function PerformanceTrend({
               aria-pressed={metric === m.key}
               onClick={() => setMetric(m.key)}
               className={cn(
-                "rounded-chip px-3 py-1 text-[13px] font-semibold transition-colors",
+                "rounded-chip px-3 py-1 text-[14px] font-semibold trans-state",
                 metric === m.key ? "bg-primary text-on-primary" : "text-fg-sub hover:text-fg",
               )}
             >
@@ -87,7 +87,7 @@ export function PerformanceTrend({
         {header}
         <CardBody>
           <div key={metric} className="anim-swap flex min-h-[232px] items-center justify-center">
-            <p className="max-w-md text-center text-[13px] leading-relaxed text-fg-faint">
+            <p className="max-w-md text-center text-[14px] leading-relaxed text-fg-sub">
               {metric === "engagement"
                 ? "일별 참여율은 공식 API가 제공하지 않아 추이를 그릴 수 없어요. 기간 합산 참여율은 위 요약 카드에서 확인하세요."
                 : "이 지표의 추이 데이터가 아직 없어요. 데이터가 쌓이면 자동으로 표시됩니다."}
@@ -116,7 +116,7 @@ export function PerformanceTrend({
               <p className="tnum text-2xl font-bold leading-none">{format(last)}</p>
               <p
                 className={cn(
-                  "tnum mt-1.5 text-[13px] font-semibold",
+                  "tnum mt-1.5 text-[14px] font-semibold",
                   up ? "text-positive" : "text-negative",
                 )}
               >

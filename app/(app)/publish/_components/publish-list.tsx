@@ -98,7 +98,7 @@ export function PublishList({ initialItems }: { initialItems: ScheduledPost[] })
                   )}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-medium">{post.caption.split("\n")[0] || "(캡션 없음)"}</p>
+                  <p className="truncate text-[15px] font-medium">{post.caption.split("\n")[0] || "(캡션 없음)"}</p>
                   <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-fg-faint">
                     <CalendarClock className="size-3" aria-hidden />
                     {post.scheduled_at.slice(0, 10)}

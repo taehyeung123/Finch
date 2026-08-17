@@ -121,7 +121,7 @@ export function ReferenceCard({
 
         {/* 호버 오버레이 — 제목 + AI 요약 */}
         <span className="media-veil pointer-events-none block">
-          <span className="line-clamp-2 text-[13px] font-semibold leading-snug text-white">{item.title}</span>
+          <span className="line-clamp-2 text-[14px] font-semibold leading-snug text-white">{item.title}</span>
           {item.summary ? (
             <span className="mt-1 line-clamp-3 block text-[12px] leading-relaxed text-white/80">{item.summary}</span>
           ) : null}
@@ -195,7 +195,7 @@ export function AdCard({
         </span>
 
         <span className="media-veil pointer-events-none block">
-          <span className="line-clamp-3 text-[13px] font-semibold leading-snug text-white">
+          <span className="line-clamp-3 text-[14px] font-semibold leading-snug text-white">
             {ad.body || "문구 없는 이미지·영상 소재"}
           </span>
           {ad.ctaText ? (

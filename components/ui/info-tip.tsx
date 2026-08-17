@@ -18,7 +18,7 @@ export function InfoTip({ children, className }: { children: React.ReactNode; cl
         aria-expanded={open}
         aria-controls={id}
         aria-label="지표 설명 보기"
-        className="text-fg-faint hover:text-fg-sub transition-colors"
+        className="text-fg-faint hover:text-fg-sub trans-state"
         onClick={() => setOpen((v) => !v)}
         onBlur={() => setOpen(false)}
       >

@@ -103,7 +103,7 @@ export function ChannelSwitcher({
             aria-selected={active}
             onClick={() => onChange(opt.value)}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-chip px-3.5 py-1.5 text-[13px] font-semibold transition-colors",
+              "inline-flex items-center gap-1.5 rounded-chip px-3.5 py-1.5 text-[14px] font-semibold trans-state",
               active
                 ? "bg-primary text-on-primary"
                 : "bg-overlay text-fg-sub border border-line hover:border-line-strong hover:text-fg",
@@ -125,7 +125,7 @@ export function ChannelSwitcher({
 /** 채널 전용 기능 표시 — 스위처 대신 뜨는 정적 안내 */
 export function ChannelIndicator({ scope }: { scope: Extract<ChannelScope, { mode: "indicator" }> }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-chip border border-line bg-overlay px-3.5 py-1.5 text-[13px] font-semibold text-fg-sub">
+    <span className="inline-flex items-center gap-2 rounded-chip border border-line bg-overlay px-3.5 py-1.5 text-[14px] font-semibold text-fg-sub">
       <span className={scope.icon === "instagram" ? "text-ig" : "text-meta"} aria-hidden>
         {scope.icon === "instagram" ? (
           <InstagramGlyph className="size-3.5" />

@@ -88,13 +88,13 @@ export interface SourceBaseline {
 function Message({ msg }: { msg: FormMessage }) {
   if (msg.tone === "error") {
     return (
-      <p role="alert" className="text-[13px] text-negative">
+      <p role="alert" className="text-[14px] text-negative">
         {msg.text}
       </p>
     );
   }
   return (
-    <p role="status" className="flex items-start gap-1.5 text-[13px] text-fg-sub">
+    <p role="status" className="flex items-start gap-1.5 text-[14px] text-fg-sub">
       <Info className="mt-0.5 size-3.5 shrink-0 text-fg-faint" aria-hidden />
       {msg.text}
     </p>
@@ -234,9 +234,9 @@ export function LibrarySettingsDrawer({
   }
 
   const inputCls =
-    "h-10 min-w-0 flex-1 rounded-card border border-line bg-body px-3 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none";
+    "h-10 min-w-0 flex-1 rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none";
   const selectCls =
-    "h-10 shrink-0 cursor-pointer rounded-card border border-line bg-body px-2.5 text-[13px] font-medium text-fg outline-none transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary";
+    "h-10 shrink-0 cursor-pointer rounded-card border border-line bg-body px-2.5 text-[14px] font-medium text-fg outline-none trans-state hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary";
 
   return (
     <>
@@ -255,7 +255,7 @@ export function LibrarySettingsDrawer({
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            className="flex size-9 cursor-pointer items-center justify-center rounded-card text-fg-faint transition-colors hover:bg-body hover:text-fg"
+            className="flex size-9 cursor-pointer items-center justify-center rounded-card text-fg-faint trans-state hover:bg-body hover:text-fg"
           >
             <X className="size-5" aria-hidden />
           </button>
@@ -270,7 +270,7 @@ export function LibrarySettingsDrawer({
               aria-selected={tab === t.key}
               onClick={() => onTabChange(t.key)}
               className={cn(
-                "cursor-pointer rounded-chip px-3 py-1.5 text-[13px] font-semibold transition-colors",
+                "cursor-pointer rounded-chip px-3 py-1.5 text-[14px] font-semibold trans-state",
                 tab === t.key ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-body hover:text-fg",
               )}
             >
@@ -283,7 +283,7 @@ export function LibrarySettingsDrawer({
           {/* ── 수집 기준 ── */}
           {tab === "sources" ? (
             <div className="space-y-4">
-              <p className="text-[13px] text-fg-sub">
+              <p className="text-[14px] text-fg-sub">
                 등록한 기준에 걸리는 콘텐츠를 매일 아침 자동으로 모아드려요.
               </p>
               <form onSubmit={submitSource} className="space-y-2">
@@ -344,7 +344,7 @@ export function LibrarySettingsDrawer({
                           <KindGlyph kind={s.kind} />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[14px] font-medium text-fg">{s.value}</span>
+                          <span className="block truncate text-[15px] font-medium text-fg">{s.value}</span>
                           {/* 기준별 수집 성적 — 데이터가 없으면 줄 자체를 렌더하지 않는다 */}
                           {b && b.count > 0 ? (
                             <span className="tnum mt-0.5 block text-[12px] text-fg-faint">
@@ -358,7 +358,7 @@ export function LibrarySettingsDrawer({
                           type="button"
                           aria-label={`${s.value} 기준 삭제`}
                           onClick={() => onRemoveSource(s.id)}
-                          className="mt-0.5 shrink-0 cursor-pointer text-fg-faint transition-colors hover:text-negative"
+                          className="mt-0.5 shrink-0 cursor-pointer text-fg-faint trans-state hover:text-negative"
                         >
                           <X className="size-4" aria-hidden />
                         </button>
@@ -367,7 +367,7 @@ export function LibrarySettingsDrawer({
                   })}
                 </ul>
               ) : (
-                <p className="text-[13px] text-fg-faint">아직 등록한 기준이 없어요 — 위에서 첫 기준을 추가해보세요.</p>
+                <p className="text-[14px] text-fg-sub">아직 등록한 기준이 없어요 — 위에서 첫 기준을 추가해보세요.</p>
               )}
             </div>
           ) : null}
@@ -375,7 +375,7 @@ export function LibrarySettingsDrawer({
           {/* ── 메타광고 검색어 ── */}
           {tab === "ads" ? (
             <div className="space-y-4">
-              <p className="text-[13px] text-fg-sub">
+              <p className="text-[14px] text-fg-sub">
                 Meta 광고 라이브러리에서 이 검색어로 걸리는 국내 게재 중인 광고를 함께 모아드려요.
               </p>
               <form onSubmit={submitAdSource} className="flex gap-2">
@@ -402,12 +402,12 @@ export function LibrarySettingsDrawer({
                       className="flex items-center gap-2 rounded-card border border-line bg-body px-3 py-2.5"
                     >
                       <Megaphone className="size-3.5 shrink-0 text-fg-faint" aria-hidden />
-                      <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-fg">{s.value}</span>
+                      <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-fg">{s.value}</span>
                       <button
                         type="button"
                         aria-label={`${s.value} 검색어 삭제`}
                         onClick={() => onRemoveAdSource(s.id)}
-                        className="shrink-0 cursor-pointer text-fg-faint transition-colors hover:text-negative"
+                        className="shrink-0 cursor-pointer text-fg-faint trans-state hover:text-negative"
                       >
                         <X className="size-4" aria-hidden />
                       </button>
@@ -415,7 +415,7 @@ export function LibrarySettingsDrawer({
                   ))}
                 </ul>
               ) : (
-                <p className="text-[13px] text-fg-faint">아직 등록한 검색어가 없어요.</p>
+                <p className="text-[14px] text-fg-sub">아직 등록한 검색어가 없어요.</p>
               )}
             </div>
           ) : null}
@@ -423,12 +423,12 @@ export function LibrarySettingsDrawer({
           {/* ── 수집 옵션 ── (이름이 "수집 필터"가 아닌 이유: 검색 필터와 어휘를 분리해야 혼동이 없다) */}
           {tab === "options" ? (
             <div className="space-y-4">
-              <p className="text-[13px] text-fg-sub">
+              <p className="text-[14px] text-fg-sub">
                 다음 수집부터 적용돼요. 이미 모인 레퍼런스에는 영향을 주지 않습니다.
               </p>
 
               <div className="space-y-2">
-                <label className="block text-[13px] font-semibold text-fg-sub" htmlFor="collect-period">
+                <label className="block text-[14px] font-semibold text-fg-sub" htmlFor="collect-period">
                   발행 기간
                 </label>
                 <select
@@ -446,7 +446,7 @@ export function LibrarySettingsDrawer({
               </div>
 
               <div className="space-y-2">
-                <label className="block text-[13px] font-semibold text-fg-sub" htmlFor="collect-format">
+                <label className="block text-[14px] font-semibold text-fg-sub" htmlFor="collect-format">
                   콘텐츠 형식
                 </label>
                 <select
@@ -471,7 +471,7 @@ export function LibrarySettingsDrawer({
                   aria-pressed={settings.krOnly}
                   onClick={() => onUpdateSettings({ ...settings, krOnly: !settings.krOnly })}
                   className={cn(
-                    "inline-flex cursor-pointer items-center rounded-chip px-3.5 py-1.5 text-[13px] font-semibold transition-colors",
+                    "inline-flex cursor-pointer items-center rounded-chip px-3.5 py-1.5 text-[14px] font-semibold trans-state",
                     settings.krOnly
                       ? "bg-primary text-on-primary"
                       : "border border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg",
@@ -487,7 +487,7 @@ export function LibrarySettingsDrawer({
               </div>
 
               <div className="space-y-2">
-                <span className="block text-[13px] font-semibold text-fg-sub">제외 키워드</span>
+                <span className="block text-[14px] font-semibold text-fg-sub">제외 키워드</span>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -512,7 +512,7 @@ export function LibrarySettingsDrawer({
                     {settings.excludeKeywords.map((k) => (
                       <span
                         key={k}
-                        className="inline-flex items-center gap-1.5 rounded-chip border border-line bg-body px-3 py-1 text-[13px] text-fg-sub"
+                        className="inline-flex items-center gap-1.5 rounded-chip border border-line bg-body px-3 py-1 text-[14px] text-fg-sub"
                       >
                         {k}
                         <button
@@ -524,7 +524,7 @@ export function LibrarySettingsDrawer({
                               excludeKeywords: settings.excludeKeywords.filter((x) => x !== k),
                             })
                           }
-                          className="cursor-pointer text-fg-faint transition-colors hover:text-negative"
+                          className="cursor-pointer text-fg-faint trans-state hover:text-negative"
                         >
                           <X className="size-3" aria-hidden />
                         </button>
@@ -535,7 +535,7 @@ export function LibrarySettingsDrawer({
               </div>
 
               {settingsMsg ? (
-                <p role="alert" className="text-[13px] text-negative">
+                <p role="alert" className="text-[14px] text-negative">
                   {settingsMsg}
                 </p>
               ) : null}

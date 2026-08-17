@@ -15,7 +15,7 @@ import { EmptyState } from "@/components/ui/empty-state";
   5) 자동 답글 → 저장. 버튼 0개면 4단계를 건너뛴다.
 
   모션: 모달 등장 modal-card-in, 단계 전환 wizard-step-in(key 교체, 오른쪽에서 스르륵),
-  진행바 width transition, 라디오·선택 상태 transition-colors. 미리보기 아바타는 연동
+  진행바 width transition, 라디오·선택 상태 trans-state. 미리보기 아바타는 연동
   인스타 프로필 사진(accountAvatar), 없으면 이니셜 폴백. 광고성 토글은 2026-08-14
   사장님 지시로 제거(isAdvertising 필드는 파이프라인 호환용으로만 유지).
 */
@@ -333,15 +333,15 @@ export function RuleWizard({
             {(accountHandle ?? "핀치").replace(/^@/, "").slice(0, 2)}
           </span>
         )}
-        <div className="min-w-0 max-w-[75%] space-y-2 rounded-card bg-surface p-[15px]">
-          <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-fg">
+        <div className="min-w-0 max-w-[75%] space-y-2 rounded-card bg-plate p-[15px]">
+          <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-fg">
             {previewMessage.trim() || <span className="text-fg-faint">메시지를 입력해주세요</span>}
           </p>
           {buttonCount > 0
             ? Array.from({ length: buttonCount }, (_, i) => activeButtons[i] ?? { label: "", url: "" }).map((b, i) => (
                 <div
                   key={i}
-                  className="flex h-[46px] items-center justify-center rounded-card bg-overlay px-3.5 text-[14px] font-medium"
+                  className="flex h-[46px] items-center justify-center rounded-card bg-overlay px-3.5 text-[15px] font-medium"
                 >
                   {b.label.trim() ? (
                     <span className="text-fg">{b.label}</span>
@@ -391,7 +391,7 @@ export function RuleWizard({
           )}
         />
       </span>
-      <span className={cn("text-[14px] font-medium", opts.disabled ? "text-fg-faint" : "text-fg")}>
+      <span className={cn("text-[15px] font-medium", opts.disabled ? "text-fg-sub" : "text-fg")}>
         {opts.label}
         {opts.hint ? <span className="ml-1 text-fg-faint">{opts.hint}</span> : null}
       </span>
@@ -428,7 +428,7 @@ export function RuleWizard({
               <ChevronLeft className="size-5" />
             </button>
           ) : null}
-          <h2 className="flex-1 text-[18px] font-semibold">{initial ? "자동화 수정" : "자동화 만들기"}</h2>
+          <h2 className="flex-1 text-[20px] font-semibold">{initial ? "자동화 수정" : "자동화 만들기"}</h2>
           <button
             type="button"
             aria-label="닫기"
@@ -447,16 +447,16 @@ export function RuleWizard({
               style={{ width: `${(stepNo / steps.length) * 100}%` }}
             />
           </div>
-          <p className="mt-2 text-[14px] font-medium text-fg">
+          <p className="mt-2 text-[15px] font-medium text-fg">
             {steps.length}단계 중 {stepNo}단계
           </p>
         </div>
 
         {/* 단계 본문 — key 교체로 오른쪽에서 스르륵 전환. 리틀리 실측: 본문만 연회색(surface) */}
-        <div key={step} className="wizard-step-in mt-3 min-h-0 flex-1 overflow-y-auto bg-surface px-5 py-4">
+        <div key={step} className="wizard-step-in mt-3 min-h-0 flex-1 overflow-y-auto bg-plate px-5 py-4">
           {step === "post" ? (
             <div>
-              <p className="text-[14px] font-medium">
+              <p className="text-[15px] font-medium">
                 어떤 게시물을 자동화할까요?
                 <InfoTip>이 게시물에 달리는 새 댓글에만 자동 DM이 나갑니다.</InfoTip>
               </p>
@@ -477,8 +477,8 @@ export function RuleWizard({
 
               {postMode === "next" ? (
                 <div className="anim-swap mt-3 rounded-card bg-overlay p-4">
-                  <p className="text-[14px] font-medium">다음 게시물에 자동으로 연결돼요</p>
-                  <p className="mt-1.5 text-[13px] leading-relaxed text-fg-sub">
+                  <p className="text-[15px] font-medium">다음 게시물에 자동으로 연결돼요</p>
+                  <p className="mt-1.5 text-[14px] leading-relaxed text-fg-sub">
                     지금 규칙을 만들어두면, 이 규칙을 만든 뒤 새로 올린 게시물에 첫 댓글이 달리는 순간 자동으로 그
                     게시물에 연결됩니다. 이전에 올린 게시물에는 적용되지 않아요.
                   </p>
@@ -491,7 +491,7 @@ export function RuleWizard({
               ) : null}
 
               {contentLimit < 1000000 ? (
-                <p className="mt-2 text-[13px] text-fg-sub">
+                <p className="mt-2 text-[14px] text-fg-sub">
                   자동화 콘텐츠 {contentUsed}/{contentLimit}개 사용 중
                   {atContentLimit && !initial ? " — 한도에 도달했어요. 기존 자동화 게시물만 선택할 수 있습니다." : ""}
                 </p>
@@ -539,13 +539,13 @@ export function RuleWizard({
                           </span>
                         )}
                         <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 pt-5">
-                          <span className="line-clamp-2 text-[10px] leading-tight text-white">{p.caption}</span>
+                          <span className="line-clamp-2 text-[11px] leading-tight text-white">{p.caption}</span>
                         </span>
-                        <span className="absolute left-1 top-1 rounded-chip bg-black/55 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                        <span className="absolute left-1 top-1 rounded-chip bg-black/55 px-1.5 py-0.5 text-[11px] font-semibold text-white">
                           {POST_TYPE_LABEL[p.type]}
                         </span>
                         {otherRulePosts.has(p.id) ? (
-                          <span className="absolute right-1 top-1 rounded-chip bg-primary px-1.5 py-0.5 text-[9px] font-semibold text-on-primary">
+                          <span className="absolute right-1 top-1 rounded-chip bg-primary px-1.5 py-0.5 text-[11px] font-semibold text-on-primary">
                             자동화 중
                           </span>
                         ) : locked ? (
@@ -563,7 +563,7 @@ export function RuleWizard({
 
           {step === "trigger" ? (
             <div>
-              <p className="text-[14px] font-medium">어떤 댓글에 DM을 보낼까요?</p>
+              <p className="text-[15px] font-medium">어떤 댓글에 DM을 보낼까요?</p>
               <div className="mt-2" role="radiogroup" aria-label="발송 트리거">
                 {radioRow({
                   checked: trigger === "all",
@@ -597,7 +597,7 @@ export function RuleWizard({
                     <button
                       type="button"
                       onClick={addKeyword}
-                      className="flex h-11 items-center gap-1 rounded-card border border-line-strong bg-overlay px-3 text-[14px] font-medium hover:border-fg"
+                      className="flex h-11 items-center gap-1 rounded-card border border-line-strong bg-overlay px-3 text-[15px] font-medium hover:border-fg"
                     >
                       <Plus className="size-4" aria-hidden /> 추가
                     </button>
@@ -607,7 +607,7 @@ export function RuleWizard({
                       {keywords.map((k) => (
                         <span
                           key={k}
-                          className="inline-flex items-center gap-1 rounded-chip border border-line bg-overlay px-2.5 py-1 text-[13px] font-medium"
+                          className="inline-flex items-center gap-1 rounded-chip border border-line bg-overlay px-2.5 py-1 text-[14px] font-medium"
                         >
                           {k}
                           <button
@@ -629,7 +629,7 @@ export function RuleWizard({
 
           {step === "message" ? (
             <div>
-              <p className="text-[14px] font-medium">
+              <p className="text-[15px] font-medium">
                 DM 메시지를 작성해주세요
                 <InfoTip>댓글 작성자에게 1회 발송되는 비공개 메시지입니다. 아래 미리보기로 실제 모습이 보여요.</InfoTip>
               </p>
@@ -638,7 +638,7 @@ export function RuleWizard({
 
               <div className="mt-4">
                 <div className="flex items-center justify-between">
-                  <label htmlFor="wizard-dm-msg" className="text-[14px] font-medium text-fg-sub">
+                  <label htmlFor="wizard-dm-msg" className="text-[15px] font-medium text-fg-sub">
                     메시지 입력 <span className="text-negative">*</span>
                   </label>
                   <span className={cn("tnum text-[12px]", dmMessage.length > DM_MAX ? "text-negative" : "text-fg-sub")}>
@@ -657,7 +657,7 @@ export function RuleWizard({
               </div>
 
               <div className="mt-3">
-                <span className="text-[14px] font-medium text-fg-sub">
+                <span className="text-[15px] font-medium text-fg-sub">
                   메시지 버튼 <span className="text-negative">*</span>
                 </span>
                 <div className="mt-1.5 grid grid-cols-4 gap-1.5">
@@ -670,7 +670,7 @@ export function RuleWizard({
                         onClick={() => setButtonCount(n)}
                         aria-pressed={active}
                         className={cn(
-                          "h-9 rounded-card border text-[14px] font-medium transition-colors",
+                          "h-9 rounded-card border text-[15px] font-medium trans-state",
                           active
                             ? "border-fg bg-fg text-body"
                             : "border-line-strong bg-transparent text-fg-faint hover:border-fg-faint",
@@ -696,11 +696,11 @@ export function RuleWizard({
                   return (
                     <div key={i}>
                       {/* 리틀리 실측: 섹션 제목 "N번째 버튼 링크 설정" 14px/500 */}
-                      <p className="text-[14px] font-medium">{i + 1}번째 버튼 링크 설정</p>
+                      <p className="text-[15px] font-medium">{i + 1}번째 버튼 링크 설정</p>
                       {i === 0 ? <div className="mt-3">{preview}</div> : null}
                       <div className="mt-3 space-y-3">
                         <div>
-                          <label htmlFor={`dm-btn-label-${i}`} className="text-[14px] font-medium text-fg-sub">
+                          <label htmlFor={`dm-btn-label-${i}`} className="text-[15px] font-medium text-fg-sub">
                             버튼 입력 <span className="text-negative">*</span>
                           </label>
                           <input
@@ -713,7 +713,7 @@ export function RuleWizard({
                           />
                         </div>
                         <div>
-                          <label htmlFor={`dm-btn-url-${i}`} className="text-[14px] font-medium text-fg-sub">
+                          <label htmlFor={`dm-btn-url-${i}`} className="text-[15px] font-medium text-fg-sub">
                             URL 입력 <span className="text-negative">*</span>
                           </label>
                           {/* 리틀리 실측: URL 입력 방식 탭 — 직접 입력(활성) / 링크 불러오기(리틀리는 자사
@@ -722,14 +722,14 @@ export function RuleWizard({
                             <button
                               type="button"
                               aria-pressed="true"
-                              className="h-9 rounded-card border border-fg bg-fg text-[14px] font-medium text-body"
+                              className="h-9 rounded-card border border-fg bg-fg text-[15px] font-medium text-body"
                             >
                               직접 입력
                             </button>
                             <button
                               type="button"
                               disabled
-                              className="h-9 cursor-not-allowed rounded-card border border-line-strong bg-transparent text-[14px] font-medium text-fg-faint"
+                              className="h-9 cursor-not-allowed rounded-card border border-line-strong bg-transparent text-[15px] font-medium text-fg-sub"
                             >
                               내 링크 불러오기 (준비 중)
                             </button>
@@ -761,7 +761,7 @@ export function RuleWizard({
 
           {step === "reply" ? (
             <div>
-              <p className="text-[14px] font-medium">게시물 댓글에 대하여, 자동 답글을 남길까요?</p>
+              <p className="text-[15px] font-medium">게시물 댓글에 대하여, 자동 답글을 남길까요?</p>
               <div className="mt-2" role="radiogroup" aria-label="자동 답글 여부">
                 {radioRow({ checked: !wantReply, label: "아니요, 괜찮아요!", onClick: () => setWantReply(false) })}
                 {radioRow({
@@ -774,7 +774,7 @@ export function RuleWizard({
               {wantReply ? (
                 <div className="anim-swap mt-3">
                   {/* 리틀리 실측 문구 그대로 — 랜덤 발송이 스팸 도배를 피해 계정을 지킨다 */}
-                  <p className="text-[13px] text-fg-sub">준비된 답글이 랜덤으로 달리며, 계정을 보호합니다</p>
+                  <p className="text-[14px] text-fg-sub">준비된 답글이 랜덤으로 달리며, 계정을 보호합니다</p>
 
                   <div className="mt-2 space-y-2">
                     {publicReplies.map((reply, i) => (
@@ -794,7 +794,7 @@ export function RuleWizard({
                           aria-label={`답글 ${i + 1} 삭제`}
                           onClick={() => setPublicReplies((prev) => prev.filter((_, j) => j !== i))}
                           disabled={publicReplies.length <= 1}
-                          className="rounded-card p-2 text-fg-faint transition-colors hover:bg-overlay hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
+                          className="rounded-card p-2 text-fg-faint trans-state hover:bg-overlay hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           <X className="size-4" />
                         </button>
@@ -807,14 +807,14 @@ export function RuleWizard({
                       type="button"
                       onClick={() => setPublicReplies((prev) => (prev.length >= 10 ? prev : [...prev, ""]))}
                       disabled={publicReplies.length >= 10}
-                      className="flex h-9 items-center gap-1 rounded-card border border-line-strong bg-overlay px-3 text-[14px] font-medium transition-colors hover:border-fg disabled:cursor-not-allowed disabled:opacity-40"
+                      className="flex h-9 items-center gap-1 rounded-card border border-line-strong bg-overlay px-3 text-[15px] font-medium trans-state hover:border-fg disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <Plus className="size-4" aria-hidden /> 답글 추가
                     </button>
                     <button
                       type="button"
                       onClick={() => setPublicReplies((prev) => pickRandomReplies(3, prev))}
-                      className="flex h-9 items-center gap-1 rounded-card border border-line-strong bg-overlay px-3 text-[14px] font-medium transition-colors hover:border-fg"
+                      className="flex h-9 items-center gap-1 rounded-card border border-line-strong bg-overlay px-3 text-[15px] font-medium trans-state hover:border-fg"
                     >
                       <RotateCcw className="size-4" aria-hidden /> 새로고침
                     </button>
@@ -822,7 +822,7 @@ export function RuleWizard({
                 </div>
               ) : null}
 
-              <p className="mt-3 text-[13px] text-fg-sub">
+              <p className="mt-3 text-[14px] text-fg-sub">
                 DM은 댓글당 1회만 보낼 수 있어, 공개 답글로 안내를 보완할 수 있어요.
               </p>
             </div>
@@ -836,7 +836,7 @@ export function RuleWizard({
             onClick={next}
             disabled={!canNext || saving}
             className={cn(
-              "h-[54px] w-full rounded-card text-[16px] font-medium transition-colors",
+              "h-[54px] w-full rounded-card text-[17px] font-medium trans-state",
               canNext && !saving
                 ? "bg-fg text-body hover:opacity-90"
                 : "cursor-not-allowed bg-line-strong text-body/60",

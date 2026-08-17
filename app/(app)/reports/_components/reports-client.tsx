@@ -29,7 +29,7 @@ const FORMAT_LABEL: Record<ReportItem["format"], string> = {
 };
 
 const inputClass =
-  "h-10 w-full rounded-card border border-line bg-overlay px-3 text-[14px] text-fg focus:outline-2 focus:outline-primary focus:outline-offset-2";
+  "h-10 w-full rounded-card border border-line bg-overlay px-3 text-[15px] text-fg focus:outline-2 focus:outline-primary focus:outline-offset-2";
 
 function addDays(base: Date, days: number): Date {
   const d = new Date(base);
@@ -120,7 +120,7 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
           <CardBody>
             <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
               <div>
-                <label htmlFor="report-period" className="text-[13px] font-medium text-fg-sub">
+                <label htmlFor="report-period" className="text-[14px] font-medium text-fg-sub">
                   기간
                 </label>
                 <select
@@ -156,10 +156,10 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
               </div>
 
               <fieldset>
-                <legend className="text-[13px] font-medium text-fg-sub">채널</legend>
+                <legend className="text-[14px] font-medium text-fg-sub">채널</legend>
                 <div className="mt-1.5 space-y-2">
                   {CHANNEL_ORDER.map((ch) => (
-                    <label key={ch} className="flex items-center gap-2 text-[14px] text-fg">
+                    <label key={ch} className="flex items-center gap-2 text-[15px] text-fg">
                       <input
                         type="checkbox"
                         checked={channels.includes(ch)}
@@ -173,9 +173,9 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
               </fieldset>
 
               <fieldset>
-                <legend className="text-[13px] font-medium text-fg-sub">형식</legend>
+                <legend className="text-[14px] font-medium text-fg-sub">형식</legend>
                 <div className="mt-1.5 space-y-2">
-                  <label className="flex items-center gap-2 text-[14px] text-fg">
+                  <label className="flex items-center gap-2 text-[15px] text-fg">
                     <input
                       type="radio"
                       name="report-format"
@@ -185,7 +185,7 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
                     />
                     {FORMAT_LABEL.excel} (CSV)
                   </label>
-                  <label className="flex items-center gap-2 text-[14px] text-fg">
+                  <label className="flex items-center gap-2 text-[15px] text-fg">
                     <input
                       type="radio"
                       name="report-format"
@@ -205,9 +205,9 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
               </div>
             </div>
             {channels.length === 0 ? (
-              <p className="mt-3 text-[13px] text-warning">채널을 1개 이상 선택해주세요.</p>
+              <p className="mt-3 text-[14px] text-warning">채널을 1개 이상 선택해주세요.</p>
             ) : null}
-            {error ? <p className="mt-3 text-[13px] text-negative">{error}</p> : null}
+            {error ? <p className="mt-3 text-[14px] text-negative">{error}</p> : null}
           </CardBody>
         </Card>
       ) : null}
@@ -232,7 +232,7 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
                       <p className="text-[15px] font-semibold">{r.title}</p>
                       {r.scheduled ? <Badge tone="primary">정기 발송</Badge> : null}
                     </div>
-                    <p className="tnum mt-0.5 text-[13px] text-fg-sub">
+                    <p className="tnum mt-0.5 text-[14px] text-fg-sub">
                       {r.period} <span className="text-fg-faint">· 생성일 {formatDate(r.createdAt)}</span>
                     </p>
                   </div>
@@ -257,7 +257,7 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
               ))}
             </div>
           ) : (
-            <p className="py-6 text-center text-[14px] text-fg-faint">
+            <p className="py-6 text-center text-[15px] text-fg-sub">
               아직 생성된 리포트가 없습니다. 위에서 기간·채널을 선택해 첫 리포트를 만들어보세요.
             </p>
           )}
@@ -268,7 +268,7 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
       <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
         <div className="min-w-0">
           <p className="text-[15px] font-semibold">화이트라벨 리포트</p>
-          <p className="mt-1 text-[13px] text-fg-sub">
+          <p className="mt-1 text-[14px] text-fg-sub">
             대행사 로고를 넣은 화이트라벨 리포트는 Agency 플랜에서 제공됩니다.
           </p>
         </div>

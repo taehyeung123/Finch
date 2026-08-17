@@ -194,10 +194,10 @@ export default async function SettingsPage({
         <div
           className={
             banner.tone === "positive"
-              ? "rounded-card border border-positive/40 bg-positive-weak p-4 text-[14px] text-positive-strong"
+              ? "rounded-card border border-positive/40 bg-positive-weak p-4 text-[15px] text-positive-strong"
               : banner.tone === "negative"
-                ? "rounded-card border border-negative/40 bg-negative-weak p-4 text-[14px] text-negative-strong"
-                : "rounded-card border border-warning/40 bg-warning-weak p-4 text-[14px] text-warning-strong"
+                ? "rounded-card border border-negative/40 bg-negative-weak p-4 text-[15px] text-negative-strong"
+                : "rounded-card border border-warning/40 bg-warning-weak p-4 text-[15px] text-warning-strong"
           }
           role="status"
         >
@@ -231,22 +231,22 @@ export default async function SettingsPage({
                     {card.connected ? <Badge tone="positive">연동됨</Badge> : <Badge tone="neutral">미연동</Badge>}
                   </div>
                   {card.connected ? (
-                    <p className="mt-2 text-[14px] text-fg-sub">
+                    <p className="mt-2 text-[15px] text-fg-sub">
                       {card.handle}
                       {card.displayName ? <span className="ml-2 text-fg-sub">{card.displayName}</span> : null}
                     </p>
                   ) : (
-                    <p className="mt-2 text-[14px] text-fg-sub">
+                    <p className="mt-2 text-[15px] text-fg-sub">
                       {OAUTH_READY[card.channel] ? "연동하면 분석 데이터를 불러옵니다." : "공식 연동 준비중입니다."}
                     </p>
                   )}
                   {card.tokenExpiresInDays !== null ? (
                     card.tokenExpiresInDays <= 14 ? (
-                      <p className="mt-1 text-[13px] font-semibold text-warning">
+                      <p className="mt-1 text-[14px] font-semibold text-warning">
                         토큰 <span className="tnum">{card.tokenExpiresInDays}</span>일 후 만료 — 재연동 필요
                       </p>
                     ) : (
-                      <p className="mt-1 text-[13px] text-fg-sub">
+                      <p className="mt-1 text-[14px] text-fg-sub">
                         토큰 <span className="tnum">{card.tokenExpiresInDays}</span>일 후 만료
                       </p>
                     )
@@ -257,7 +257,7 @@ export default async function SettingsPage({
             </div>
 
             {card.channel === "instagram" ? (
-              <div className="mt-4 rounded-card bg-warning-weak p-3 text-[13px] leading-relaxed text-warning-strong">
+              <div className="mt-4 rounded-card bg-warning-weak p-3 text-[14px] leading-relaxed text-warning-strong">
                 개인 계정은 연동할 수 없어요. 비즈니스/크리에이터 계정 전환이 필요합니다.
                 <a
                   href="https://help.instagram.com/502981923235522"
@@ -272,7 +272,7 @@ export default async function SettingsPage({
             ) : null}
 
             {card.channel === "tiktok" ? (
-              <div className="mt-4 rounded-card bg-warning-weak p-3 text-[13px] leading-relaxed text-warning-strong">
+              <div className="mt-4 rounded-card bg-warning-weak p-3 text-[14px] leading-relaxed text-warning-strong">
                 팔로워·좋아요·영상 수 등 기본 정보만 표시돼요 — 조회수·참여율 등 상세 분석은
                 TikTok 앱 심사 완료 후 제공됩니다.
               </div>
@@ -297,7 +297,7 @@ export default async function SettingsPage({
                   {/* 상태 배지는 카드당 1개, 채널 카드와 동일하게 연동됨=positive */}
                   {isDemoMode() ? <Badge tone="positive">연동됨</Badge> : <Badge tone="neutral">연동 준비중</Badge>}
                 </div>
-                <p className="mt-2 text-[14px] text-fg-sub">
+                <p className="mt-2 text-[15px] text-fg-sub">
                   {isDemoMode() ? "핀치 마케팅 · 광고 계정 act-2048" : "Marketing API 연동 준비중입니다."}
                 </p>
               </div>
@@ -308,16 +308,16 @@ export default async function SettingsPage({
 
       {/* 권한(scope) 투명성 (PART 4.2) */}
       <Card className="p-5">
-        <h3 className="flex items-center gap-2 text-[19px] font-bold leading-snug">
+        <h3 className="flex items-center gap-2 text-[20px] font-bold leading-snug">
           <ShieldCheck className="size-5 text-fg-sub" aria-hidden />
           핀치가 접근하는 권한
         </h3>
         <div className="mt-3 space-y-4">
           <div>
-            <h4 className="text-[13px] font-semibold text-fg-sub">인스타그램</h4>
+            <h4 className="text-[14px] font-semibold text-fg-sub">인스타그램</h4>
             <ul className="mt-1.5 space-y-2">
               {INSTAGRAM_SCOPE_LABELS.map((scope) => (
-                <li key={scope} className="flex items-center gap-2 text-[14px] text-fg-sub">
+                <li key={scope} className="flex items-center gap-2 text-[15px] text-fg-sub">
                   <Check className="size-4 text-positive" aria-hidden />
                   {scope}
                 </li>
@@ -326,10 +326,10 @@ export default async function SettingsPage({
           </div>
           {threadsOAuthConfigured ? (
             <div>
-              <h4 className="text-[13px] font-semibold text-fg-sub">Threads</h4>
+              <h4 className="text-[14px] font-semibold text-fg-sub">Threads</h4>
               <ul className="mt-1.5 space-y-2">
                 {THREADS_SCOPE_LABELS.map((scope) => (
-                  <li key={scope} className="flex items-center gap-2 text-[14px] text-fg-sub">
+                  <li key={scope} className="flex items-center gap-2 text-[15px] text-fg-sub">
                     <Check className="size-4 text-positive" aria-hidden />
                     {scope}
                   </li>
@@ -339,10 +339,10 @@ export default async function SettingsPage({
           ) : null}
           {tiktokOAuthConfigured ? (
             <div>
-              <h4 className="text-[13px] font-semibold text-fg-sub">TikTok</h4>
+              <h4 className="text-[14px] font-semibold text-fg-sub">TikTok</h4>
               <ul className="mt-1.5 space-y-2">
                 {TIKTOK_SCOPE_LABELS.map((scope) => (
-                  <li key={scope} className="flex items-center gap-2 text-[14px] text-fg-sub">
+                  <li key={scope} className="flex items-center gap-2 text-[15px] text-fg-sub">
                     <Check className="size-4 text-positive" aria-hidden />
                     {scope}
                   </li>
@@ -351,25 +351,25 @@ export default async function SettingsPage({
             </div>
           ) : null}
         </div>
-        <p className="mt-3 text-[13px] text-fg-sub">핀치는 기능에 필요한 최소 권한만 요청합니다.</p>
+        <p className="mt-3 text-[14px] text-fg-sub">핀치는 기능에 필요한 최소 권한만 요청합니다.</p>
       </Card>
 
       {/* 모바일은 하단 탭바가 5개로 고정돼 사이드바의 문의하기가 안 보인다 — 여기서도 갈 수 있게 둔다 */}
       <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
-        <p className="text-[14px] text-fg-sub">
+        <p className="text-[15px] text-fg-sub">
           연동이나 결제에 문제가 있나요? 문의를 남기시면 답변을 화면에서 확인할 수 있어요.
         </p>
-        <Link href="/support" className="text-[14px] font-semibold text-primary underline underline-offset-2">
+        <Link href="/support" className="text-[15px] font-semibold text-primary underline underline-offset-2">
           문의하기
         </Link>
       </Card>
 
       {isDemoMode() ? (
         <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
-          <p className="text-[14px] text-fg-sub">
+          <p className="text-[15px] text-fg-sub">
             지금은 예시 데이터로 화면을 미리 보고 있어요. 로그인 후 실제 계정을 연동하면 내 데이터가 표시됩니다.
           </p>
-          <Link href="/login" className="text-[14px] font-semibold text-primary underline underline-offset-2">
+          <Link href="/login" className="text-[15px] font-semibold text-primary underline underline-offset-2">
             로그인
           </Link>
         </Card>

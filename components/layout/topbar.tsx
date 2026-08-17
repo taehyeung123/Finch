@@ -13,7 +13,7 @@ import { useChannel } from "./channel-context";
 import { ChannelIndicator, ChannelSwitcher, getChannelScope } from "./channel-switcher";
 
 const menuItem =
-  "flex w-full items-center gap-2 rounded-card px-2.5 py-2 text-left text-[14px] text-fg-sub transition-colors hover:bg-body hover:text-fg";
+  "flex w-full items-center gap-2 rounded-card px-2.5 py-2 text-left text-[15px] text-fg-sub trans-state hover:bg-body hover:text-fg";
 
 /** 상단바 — 채널 스위처 / 전역 검색 / 알림 벨 / 계정 드롭다운 (PART 6.2) */
 export function Topbar() {
@@ -61,7 +61,7 @@ export function Topbar() {
   }, [menuOpen]);
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line bg-surface/90 px-4 backdrop-blur md:px-6">
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line bg-body/90 px-4 backdrop-blur md:px-6">
       {/* 페이지 성격별 채널 영역 — 스위처(필터 동작) / 전용 표시 / 숨김 (channel-switcher.tsx) */}
       {scope.mode === "switch" ? (
         <ChannelSwitcher value={channel} onChange={setChannel} />
@@ -93,7 +93,7 @@ export function Topbar() {
         <Bell className="size-5" aria-hidden />
         {/* 알림이 사이드바에서 빠져 이 벨이 유일한 상시 진입점 — 점 대신 미읽음 개수를 노출한다 */}
         {unread > 0 ? (
-          <span className="absolute right-0.5 top-0.5 min-w-4 rounded-chip bg-primary px-1 text-[10px] font-bold leading-4 text-on-primary tnum">
+          <span className="absolute right-0.5 top-0.5 min-w-4 rounded-chip bg-primary px-1 text-[11px] font-bold leading-4 text-on-primary tnum">
             {unread > 99 ? "99+" : unread}
           </span>
         ) : null}
@@ -118,7 +118,7 @@ export function Topbar() {
           >
             {email ? (
               <>
-                <p className="truncate px-2.5 py-2 text-[13px] text-fg-faint" title={email}>
+                <p className="truncate px-2.5 py-2 text-[14px] text-fg-sub" title={email}>
                   {email}
                 </p>
                 <div className="mx-2.5 my-1 h-px bg-line" aria-hidden />

@@ -110,12 +110,12 @@ export default function AdsPage() {
                 </span>
                 <div className="min-w-0">
                   <Badge tone="warning">{alert.label}</Badge>
-                  <p className="mt-1.5 text-[14px] leading-relaxed text-fg-sub">{alert.text}</p>
+                  <p className="mt-1.5 text-[15px] leading-relaxed text-fg-sub">{alert.text}</p>
                 </div>
               </div>
             ))}
             {!IS_SAMPLE_DATA ? (
-              <p className="text-[13px] text-fg-faint">
+              <p className="text-[14px] text-fg-sub">
                 광고 계정을 연동하고 캠페인 데이터가 쌓이면 지표 이상 감지 알림이 여기에 표시됩니다.
               </p>
             ) : null}
@@ -131,14 +131,14 @@ export default function AdsPage() {
           <CardBody>
             <div className="grid grid-cols-2 divide-x divide-line rounded-card border border-line">
               <div className="p-5">
-                <p className="text-[13px] text-fg-sub">오가닉 조회수</p>
+                <p className="text-[14px] text-fg-sub">오가닉 조회수</p>
                 <p className="tnum mt-1.5 text-2xl font-bold leading-none">
                   {formatCompact(organicWeeklyViews)}
                 </p>
                 <p className="mt-2 text-xs text-fg-faint">이번 주 · 연동 채널 합산</p>
               </div>
               <div className="p-5">
-                <p className="text-[13px] text-fg-sub">광고 노출수</p>
+                <p className="text-[14px] text-fg-sub">광고 노출수</p>
                 <p className="tnum mt-1.5 text-2xl font-bold leading-none">
                   {formatCompact(totals.impressions)}
                 </p>

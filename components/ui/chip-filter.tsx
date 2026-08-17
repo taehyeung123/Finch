@@ -26,7 +26,7 @@ export function ChipFilter<T extends string>({
             aria-selected={active}
             onClick={() => onChange(opt.value)}
             className={cn(
-              "cursor-pointer rounded-chip px-3.5 py-1.5 text-[13px] font-semibold transition-colors",
+              "cursor-pointer rounded-chip px-3.5 py-1.5 text-[14px] font-semibold trans-state",
               active
                 ? "bg-primary text-on-primary"
                 : "bg-overlay text-fg-sub border border-line hover:border-line-strong hover:text-fg",

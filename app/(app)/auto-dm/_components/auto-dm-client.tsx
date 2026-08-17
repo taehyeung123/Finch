@@ -150,7 +150,7 @@ export function AutoDmClient({
       />
 
       {contentLimit < 1000000 ? (
-        <p className="-mt-3 text-[13px] text-fg-sub">
+        <p className="-mt-3 text-[14px] text-fg-sub">
           자동화 콘텐츠{" "}
           <span className="tnum font-semibold text-fg">
             {contentUsed}/{contentLimit}
@@ -167,7 +167,7 @@ export function AutoDmClient({
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {stats.map((s) => (
           <Card key={s.label} className="p-4">
-            <p className="text-[13px] text-fg-sub">{s.label}</p>
+            <p className="text-[14px] text-fg-sub">{s.label}</p>
             <p className="tnum mt-1 text-2xl font-bold leading-none">{s.value}</p>
           </Card>
         ))}
@@ -225,7 +225,7 @@ export function AutoDmClient({
                       <p className="mt-2 line-clamp-1 text-[15px] font-semibold">{rule.postCaption}</p>
 
                       {/* 트리거 */}
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[13px] text-fg-sub">
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[14px] text-fg-sub">
                         <span className="text-fg-faint">트리거</span>
                         {rule.trigger === "all" ? (
                           <span>모든 댓글</span>
@@ -244,7 +244,7 @@ export function AutoDmClient({
                       </div>
 
                       {/* DM 미리보기 */}
-                      <p className="mt-2 line-clamp-2 text-[13px] leading-relaxed text-fg-sub">{rule.dmMessage}</p>
+                      <p className="mt-2 line-clamp-2 text-[14px] leading-relaxed text-fg-sub">{rule.dmMessage}</p>
 
                       {/* 발송 통계 */}
                       <div className="tnum mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-fg-faint">

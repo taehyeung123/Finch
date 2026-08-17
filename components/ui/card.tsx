@@ -1,6 +1,14 @@
 import { cn } from "@/lib/cn";
 
-/* 그림자 미사용 — 반투명 테두리로 깊이 표현 (PART 7.2) */
+/*
+  카드 표면 — 2026-08-15 개편. 지면이 순백이 되면서 "테두리만"으로는 카드가
+  지면에서 안 떨어진다(흰 판 위 흰 판). 그래서 헤어라인 + 미세 2겹 그림자를
+  묶은 .card-face 로 간다. 다크는 --shadow-card 가 none 이라 테두리만 남는다
+  — 밝기 단차가 이미 깊이를 만들기 때문이고, 이건 PART 7.2 그대로다.
+
+  호버는 여전히 **요소를 움직이지 않는다**(translate/scale 금지). 선이 진해지고
+  그림자가 한 칸 뜬다.
+*/
 export function Card({
   className,
   hover = false,
@@ -9,8 +17,8 @@ export function Card({
   return (
     <div
       className={cn(
-        "bg-body border border-line rounded-card",
-        hover && "trans-state hover:border-line-strong",
+        "card-face rounded-card",
+        hover && "card-hover",
         className,
       )}
       {...props}
@@ -32,8 +40,8 @@ export function CardHeader({
   return (
     <div className={cn("flex items-start justify-between gap-3 p-5 pb-0", className)}>
       <div className="min-w-0">
-        <h3 className="text-[19px] font-bold leading-snug">{title}</h3>
-        {description ? <p className="mt-0.5 text-[13px] text-fg-sub">{description}</p> : null}
+        <h3 className="text-[20px] font-bold leading-snug">{title}</h3>
+        {description ? <p className="mt-0.5 text-[14px] text-fg-sub">{description}</p> : null}
       </div>
       {action}
     </div>

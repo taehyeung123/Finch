@@ -10,7 +10,7 @@ type Size = "sm" | "md" | "lg";
    - after 의사요소로 히트 영역을 상하좌우 6px 확장 — sm(32px) 버튼도 44px 터치 타깃을 채운다.
      시각 크기는 그대로, 클릭 판정만 넓어진다. */
 const base =
-  "relative inline-flex items-center justify-center gap-1.5 font-medium rounded-card transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap after:absolute after:-inset-1.5 after:content-['']";
+  "relative inline-flex items-center justify-center gap-1.5 font-medium rounded-card trans-state cursor-pointer focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap after:absolute after:-inset-1.5 after:content-['']";
 
 /* 코랄 배경 위 텍스트는 항상 다크 (PART 7.3 확정) */
 const variants: Record<Variant, string> = {
@@ -21,7 +21,7 @@ const variants: Record<Variant, string> = {
 };
 
 const sizes: Record<Size, string> = {
-  sm: "h-8 px-3 text-[13px]",
+  sm: "h-8 px-3 text-[14px]",
   md: "h-10 px-4 text-[15px]",
   lg: "h-12 px-6 text-base",
 };

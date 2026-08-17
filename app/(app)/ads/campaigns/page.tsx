@@ -91,9 +91,9 @@ const STATUS_BADGE: Record<AdCampaign["status"], { tone: "positive" | "warning" 
   ended: { tone: "neutral", label: "종료" },
 };
 
-const fieldLabel = "block text-[13px] font-medium text-fg-sub";
+const fieldLabel = "block text-[14px] font-medium text-fg-sub";
 const fieldInput =
-  "mt-1.5 h-10 w-full rounded-card border border-line bg-overlay px-3 text-[14px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:opacity-40";
+  "mt-1.5 h-10 w-full rounded-card border border-line bg-overlay px-3 text-[15px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:opacity-40";
 
 /* ------------------------------ 로컬 UI 조각 ------------------------------ */
 
@@ -114,7 +114,7 @@ function RadioPill({
   return (
     <label
       className={cn(
-        "flex items-center gap-2 rounded-card border px-4 py-2.5 text-[14px] transition-colors",
+        "flex items-center gap-2 rounded-card border px-4 py-2.5 text-[15px] trans-state",
         checked ? "border-primary bg-primary-weak font-semibold text-primary" : "border-line bg-overlay text-fg-sub",
         disabled ? "pointer-events-none opacity-40" : "cursor-pointer hover:border-line-strong",
       )}
@@ -167,13 +167,13 @@ function FormatOption({
       disabled={disabled}
       aria-pressed={active}
       className={cn(
-        "flex flex-col items-start gap-1 rounded-card border p-3 text-left transition-colors",
+        "flex flex-col items-start gap-1 rounded-card border p-3 text-left trans-state",
         active ? "border-primary bg-primary-weak" : "border-line bg-overlay hover:border-line-strong",
         disabled && "cursor-not-allowed opacity-50 hover:border-line",
       )}
     >
       <Icon className={cn("size-5", active ? "text-primary" : "text-fg-sub")} aria-hidden />
-      <span className="text-[14px] font-semibold">{title}</span>
+      <span className="text-[15px] font-semibold">{title}</span>
       <span className="text-xs text-fg-faint">{desc}</span>
     </button>
   );
@@ -378,7 +378,7 @@ export default function CampaignsPage() {
                       onClick={() => visited && setStep(i)}
                       aria-current={i === step ? "step" : undefined}
                       className={cn(
-                        "inline-flex items-center gap-1.5 rounded-chip px-3 py-1.5 text-[13px] font-semibold transition-colors",
+                        "inline-flex items-center gap-1.5 rounded-chip px-3 py-1.5 text-[14px] font-semibold trans-state",
                         i === step
                           ? "bg-primary text-on-primary"
                           : visited
@@ -415,7 +415,7 @@ export default function CampaignsPage() {
                         aria-checked={active}
                         onClick={() => setObjective(o.value)}
                         className={cn(
-                          "rounded-card border p-4 text-left transition-colors",
+                          "rounded-card border p-4 text-left trans-state",
                           active ? "border-primary bg-primary-weak" : "border-line bg-overlay hover:border-line-strong",
                         )}
                       >
@@ -430,7 +430,7 @@ export default function CampaignsPage() {
                         <p className={cn("mt-3 text-[15px] font-semibold", active ? "text-primary" : "text-fg")}>
                           {o.label}
                         </p>
-                        <p className="mt-1 text-[13px] text-fg-sub">{o.description}</p>
+                        <p className="mt-1 text-[14px] text-fg-sub">{o.description}</p>
                       </button>
                     );
                   })}
@@ -452,7 +452,7 @@ export default function CampaignsPage() {
                         setAgeMin(v);
                         if (v > ageMax) setAgeMax(v);
                       }}
-                      className="tnum h-10 rounded-card border border-line bg-overlay px-3 text-[14px] font-medium text-fg outline-none transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
+                      className="tnum h-10 rounded-card border border-line bg-overlay px-3 text-[15px] font-medium text-fg outline-none trans-state hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
                     >
                       {AGE_OPTIONS.map((a) => (
                         <option key={a} value={a}>
@@ -465,7 +465,7 @@ export default function CampaignsPage() {
                       aria-label="최대 연령"
                       value={ageMax}
                       onChange={(e) => setAgeMax(Number(e.target.value))}
-                      className="tnum h-10 rounded-card border border-line bg-overlay px-3 text-[14px] font-medium text-fg outline-none transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
+                      className="tnum h-10 rounded-card border border-line bg-overlay px-3 text-[15px] font-medium text-fg outline-none trans-state hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
                     >
                       {AGE_OPTIONS.filter((a) => a >= ageMin).map((a) => (
                         <option key={a} value={a}>
@@ -478,7 +478,7 @@ export default function CampaignsPage() {
                     Meta와 동일한 연속 범위 방식이에요 — 입력한 그대로 광고세트에 적용됩니다.
                   </p>
                   {includesMinors ? (
-                    <p className="mt-2 rounded-card bg-warning-weak p-3 text-[13px] leading-relaxed text-warning">
+                    <p className="mt-2 rounded-card bg-warning-weak p-3 text-[14px] leading-relaxed text-warning">
                       18세 미만이 포함되면 Meta 정책에 따라 성별·관심사 타겟팅이 잠기고 나이와
                       위치로만 타겟팅됩니다.
                     </p>
@@ -488,7 +488,7 @@ export default function CampaignsPage() {
                 <div>
                   <p className={fieldLabel}>성별</p>
                   {includesMinors ? (
-                    <p className="mt-2 inline-flex items-center gap-2 rounded-card border border-line bg-overlay px-3.5 py-2 text-[14px] text-fg-faint">
+                    <p className="mt-2 inline-flex items-center gap-2 rounded-card border border-line bg-overlay px-3.5 py-2 text-[15px] text-fg-sub">
                       <Lock className="size-3.5" aria-hidden />
                       전체 — 18세 미만 포함 시 고정 (Meta 정책)
                     </p>
@@ -512,7 +512,7 @@ export default function CampaignsPage() {
                 <div>
                   <p className={fieldLabel}>상세 타겟팅 (관심사)</p>
                   {includesMinors ? (
-                    <p className="mt-2 inline-flex items-center gap-2 rounded-card border border-line bg-overlay px-3.5 py-2 text-[14px] text-fg-faint">
+                    <p className="mt-2 inline-flex items-center gap-2 rounded-card border border-line bg-overlay px-3.5 py-2 text-[15px] text-fg-sub">
                       <Lock className="size-3.5" aria-hidden />
                       18세 미만 포함 시 사용할 수 없어요 (Meta 정책 — 나이·위치만 허용)
                     </p>
@@ -536,7 +536,7 @@ export default function CampaignsPage() {
                     <Users className="size-4.5" aria-hidden />
                   </span>
                   <div className="min-w-0">
-                    <p className="flex items-center gap-1.5 text-[13px] font-medium text-fg-sub">
+                    <p className="flex items-center gap-1.5 text-[14px] font-medium text-fg-sub">
                       예상 도달 규모
                       <InfoTip>
                         선택한 타겟 조건 기반 핀치 자체 추정치이며 실제 도달과 다를 수 있습니다.
@@ -548,7 +548,7 @@ export default function CampaignsPage() {
                         {formatCompact(Math.round(estimatedReach * 1.25))}명
                       </p>
                     ) : (
-                      <p className="mt-0.5 text-[14px] text-fg-faint">
+                      <p className="mt-0.5 text-[15px] text-fg-sub">
                         연령대·지역·노출 위치를 선택하면 예상 도달이 표시됩니다.
                       </p>
                     )}
@@ -586,7 +586,7 @@ export default function CampaignsPage() {
                       placeholder="50,000"
                       className={cn(fieldInput, "tnum pr-10")}
                     />
-                    <span className="absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[13px] text-fg-faint">
+                    <span className="absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[14px] text-fg-sub">
                       원
                     </span>
                   </div>
@@ -623,7 +623,7 @@ export default function CampaignsPage() {
                     />
                     <label
                       className={cn(
-                        "mt-2 flex items-center gap-2 text-[13px]",
+                        "mt-2 flex items-center gap-2 text-[14px]",
                         budgetType === "total" ? "cursor-not-allowed text-fg-faint" : "cursor-pointer text-fg-sub",
                       )}
                     >
@@ -684,7 +684,7 @@ export default function CampaignsPage() {
                           </option>
                         ))}
                       </select>
-                      <span className="shrink-0 text-[13px] text-fg-faint">부터</span>
+                      <span className="shrink-0 text-[14px] text-fg-sub">부터</span>
                       <label htmlFor="schedule-end" className="sr-only">
                         종료 시간
                       </label>
@@ -700,7 +700,7 @@ export default function CampaignsPage() {
                           </option>
                         ))}
                       </select>
-                      <span className="shrink-0 text-[13px] text-fg-faint">까지</span>
+                      <span className="shrink-0 text-[14px] text-fg-sub">까지</span>
                     </div>
                   ) : null}
                 </fieldset>
@@ -744,7 +744,7 @@ export default function CampaignsPage() {
                       <div className="flex flex-col items-center justify-center gap-2 rounded-card border border-dashed border-line px-6 py-10 text-center">
                         <Upload className="size-8 text-fg-faint" aria-hidden />
                         <p className="text-[15px] font-semibold text-fg-sub">이미지 또는 영상을 끌어다 놓으세요</p>
-                        <p className="text-[13px] text-fg-faint">1:1 또는 4:5 비율 · JPG · PNG · MP4 · 최대 30MB</p>
+                        <p className="text-[14px] text-fg-sub">1:1 또는 4:5 비율 · JPG · PNG · MP4 · 최대 30MB</p>
                         <Button variant="secondary" size="sm" className="mt-2">
                           파일 선택
                         </Button>
@@ -752,7 +752,7 @@ export default function CampaignsPage() {
                       <div className="mt-3 flex items-center gap-3 rounded-card border border-dashed border-line px-4 py-3">
                         <ImagePlus className="size-5 shrink-0 text-fg-faint" aria-hidden />
                         <div className="min-w-0">
-                          <p className="text-[13px] font-semibold text-fg-sub">영상 썸네일 업로드</p>
+                          <p className="text-[14px] font-semibold text-fg-sub">영상 썸네일 업로드</p>
                           <p className="text-xs text-fg-faint">영상 소재는 썸네일을 함께 올려주세요 (JPG · PNG)</p>
                         </div>
                       </div>
@@ -795,14 +795,14 @@ export default function CampaignsPage() {
                             value={card.headline}
                             onChange={(e) => updateCard(card.id, e.target.value)}
                             placeholder={`${i + 1}번째 카드 제목`}
-                            className="h-9 min-w-0 flex-1 rounded-card border border-line bg-overlay px-3 text-[14px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+                            className="h-9 min-w-0 flex-1 rounded-card border border-line bg-overlay px-3 text-[15px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
                           />
                           {carouselCards.length > 2 ? (
                             <button
                               type="button"
                               aria-label={`${i + 1}번째 카드 삭제`}
                               onClick={() => removeCard(card.id)}
-                              className="shrink-0 rounded-card p-1.5 text-fg-faint transition-colors hover:bg-overlay hover:text-fg"
+                              className="shrink-0 rounded-card p-1.5 text-fg-faint trans-state hover:bg-overlay hover:text-fg"
                             >
                               <X className="size-4" aria-hidden />
                             </button>
@@ -883,7 +883,7 @@ export default function CampaignsPage() {
                       <div className="min-w-0">
                         <p className="text-xs font-medium text-fg-faint">{section.title}</p>
                         {section.lines.map((line) => (
-                          <p key={line} className="mt-1 break-words text-[14px] text-fg">
+                          <p key={line} className="mt-1 break-words text-[15px] text-fg">
                             {line}
                           </p>
                         ))}
@@ -900,9 +900,9 @@ export default function CampaignsPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge tone="primary">Phase 3 예정</Badge>
-                      <p className="text-[14px] font-semibold">게재는 아직 준비 중입니다</p>
+                      <p className="text-[15px] font-semibold">게재는 아직 준비 중입니다</p>
                     </div>
-                    <p className="mt-1 text-[13px] leading-relaxed text-fg-sub">
+                    <p className="mt-1 text-[14px] leading-relaxed text-fg-sub">
                       캠페인 생성·수정은 Meta Advanced Access 심사 완료 후 활성화됩니다.
                     </p>
                   </div>
@@ -919,7 +919,7 @@ export default function CampaignsPage() {
 
             {/* 필수값 인라인 안내 — 다음 버튼이 잠긴 이유를 그 자리에서 보여준다 */}
             {stepIssues.length > 0 ? (
-              <ul className="space-y-1 rounded-card bg-warning-weak p-3 text-[13px] text-warning" role="alert">
+              <ul className="space-y-1 rounded-card bg-warning-weak p-3 text-[14px] text-warning" role="alert">
                 {stepIssues.map((issue) => (
                   <li key={issue}>· {issue}</li>
                 ))}
@@ -978,7 +978,7 @@ export default function CampaignsPage() {
                     <Bird className="size-4" aria-hidden />
                   </span>
                   <div className="min-w-0">
-                    <p className="truncate text-[13px] font-semibold">핀치 공식</p>
+                    <p className="truncate text-[14px] font-semibold">핀치 공식</p>
                     <p className="text-xs text-fg-faint">광고</p>
                   </div>
                 </div>
@@ -1012,19 +1012,19 @@ export default function CampaignsPage() {
 
                 {/* CTA 버튼 — 4단계 선택값 실시간 반영 */}
                 <div className="flex items-center justify-between border-y border-line px-3 py-2.5">
-                  <span className="text-[13px] font-semibold text-primary">{cta}</span>
+                  <span className="text-[14px] font-semibold text-primary">{cta}</span>
                   <ChevronRight className="size-4 text-primary" aria-hidden />
                 </div>
 
                 {/* 하단 — 제목·본문 실시간 반영, 미입력 시 스켈레톤 */}
                 <div className="space-y-1.5 p-3">
                   {previewHeadline ? (
-                    <p className="break-words text-[14px] font-semibold">{previewHeadline}</p>
+                    <p className="break-words text-[15px] font-semibold">{previewHeadline}</p>
                   ) : (
                     <SkeletonBar className="h-3.5 w-2/3" />
                   )}
                   {description ? (
-                    <p className="break-words text-[13px] leading-relaxed text-fg-sub">
+                    <p className="break-words text-[14px] leading-relaxed text-fg-sub">
                       {previewBody}
                       {description.length > 125 ? <span className="text-fg-faint">… 더보기</span> : null}
                     </p>
@@ -1074,12 +1074,12 @@ export default function CampaignsPage() {
                       className="size-10 shrink-0 rounded-card border border-line object-cover"
                     />
                     <div className="min-w-0">
-                      <p className="truncate text-[14px] font-semibold">{c.name}</p>
+                      <p className="truncate text-[15px] font-semibold">{c.name}</p>
                       <p className="mt-0.5 truncate text-xs text-fg-faint">{c.creative.headline}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="tnum text-[13px] text-fg-sub">일 예산 {formatKRW(c.dailyBudget)}</span>
+                    <span className="tnum text-[14px] text-fg-sub">일 예산 {formatKRW(c.dailyBudget)}</span>
                     <Badge tone={status.tone}>
                       <span className="size-1.5 rounded-full bg-current" aria-hidden />
                       {status.label}

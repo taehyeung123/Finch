@@ -44,7 +44,7 @@ export default async function CheckoutPage({
               <span className="text-lg font-bold">핀치 {planName}</span>
               <Badge tone="primary">월 구독</Badge>
             </div>
-            <p className="mt-1 text-[13px] text-fg-sub">
+            <p className="mt-1 text-[14px] text-fg-sub">
               가격은 정식 출시 전 잠정값입니다. (테스트 결제)
             </p>
           </div>
@@ -54,19 +54,19 @@ export default async function CheckoutPage({
 
       {isDemoMode() || !clientKey ? (
         <Card className="p-5">
-          <p className="text-[14px] text-fg-sub">
+          <p className="text-[15px] text-fg-sub">
             {isDemoMode()
               ? "데모 모드에서는 결제할 수 없어요."
               : "결제 연동이 아직 설정되지 않았습니다. (NEXT_PUBLIC_TOSS_CLIENT_KEY 미설정)"}
           </p>
           {!isDemoMode() ? (
-            <p className="mt-1 text-[13px] text-fg-sub">
+            <p className="mt-1 text-[14px] text-fg-sub">
               테스트 클라이언트 키를 환경변수에 추가하면 결제 위젯이 활성화됩니다.
             </p>
           ) : null}
           <Link
             href="/settings/billing"
-            className="mt-3 inline-block text-[14px] font-semibold text-primary underline underline-offset-2"
+            className="mt-3 inline-block text-[15px] font-semibold text-primary underline underline-offset-2"
           >
             요금제로 돌아가기
           </Link>

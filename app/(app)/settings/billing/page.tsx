@@ -119,21 +119,21 @@ function PlanRow({ plan, action }: { plan: PlanCardData; action: React.ReactNode
     <div className="flex flex-wrap items-center gap-x-5 gap-y-3 px-5 py-4">
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="text-[16px] font-bold">{plan.name}</span>
-          <span className="text-[13px] text-fg-sub">{plan.ko}</span>
+          <span className="text-[17px] font-bold">{plan.name}</span>
+          <span className="text-[14px] text-fg-sub">{plan.ko}</span>
           <span className="tnum text-[15px] font-semibold">
             {plan.price === 0 ? "무료" : `${plan.price.toLocaleString("ko-KR")}원 / 월`}
           </span>
           {plan.credits !== null ? (
-            <span className="tnum text-[13px] text-fg-sub">
+            <span className="tnum text-[14px] text-fg-sub">
               · 월 {plan.credits.toLocaleString("ko-KR")} 크레딧
             </span>
           ) : (
-            <span className="text-[13px] text-fg-sub">· 크레딧 없이 월 횟수</span>
+            <span className="text-[14px] text-fg-sub">· 크레딧 없이 월 횟수</span>
           )}
         </p>
         {/* 차이를 만드는 항목 둘만 — 전체 목록은 /pricing 이 진다 */}
-        <p className="mt-1 text-[13px] leading-[1.5] text-fg-sub">{plan.perks.slice(0, 2).join(" · ")}</p>
+        <p className="mt-1 text-[14px] leading-[1.5] text-fg-sub">{plan.perks.slice(0, 2).join(" · ")}</p>
       </div>
       <div className="shrink-0">{action}</div>
     </div>
@@ -197,14 +197,14 @@ export default async function BillingSettingsPage({
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-fg-faint">현재 플랜</span>
-            <span className="text-[18px] font-bold leading-none">{currentName}</span>
+            <span className="text-[17px] font-bold leading-none">{currentName}</span>
             {subscription?.status === "active" ? <Badge tone="positive">자동갱신 중</Badge> : null}
             {subscription?.status === "past_due" ? <Badge tone="warning">결제 재시도 중</Badge> : null}
             {subscription?.status === "canceled" ? <Badge tone="neutral">해지 예약됨</Badge> : null}
           </div>
 
           {subscription ? (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-sub">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[14px] text-fg-sub">
               {subscription.nextBillingAt ? (
                 <span>
                   {subscription.status === "canceled" ? "이용 종료일" : "다음 결제일"}{" "}
@@ -225,13 +225,13 @@ export default async function BillingSettingsPage({
               ) : null}
             </div>
           ) : lastPaid ? (
-            <p className="text-[13px] text-fg-sub">
+            <p className="text-[14px] text-fg-sub">
               최근 결제{" "}
               <span className="tnum font-semibold text-fg">{formatDate(lastPaid.approvedAt ?? lastPaid.createdAt)}</span>
               <span className="tnum ml-2 text-fg-sub">{formatKRW(lastPaid.amount)}</span>
             </p>
           ) : (
-            <p className="text-[13px] text-fg-sub">
+            <p className="text-[14px] text-fg-sub">
               {currentPlan === "free" ? "무료 플랜을 이용 중입니다." : "결제 내역이 없습니다."}
             </p>
           )}
@@ -298,7 +298,7 @@ export default async function BillingSettingsPage({
           있었다. */}
       <div>
         <h2 className="text-[20px] font-bold">플랜 변경</h2>
-        <p className="mt-1 text-[14px] text-fg-sub">
+        <p className="mt-1 text-[15px] text-fg-sub">
           {upgrades.length > 0
             ? `지금 ${currentName}보다 위 단계입니다`
             : "최상위 플랜을 이용 중입니다"}
@@ -320,7 +320,7 @@ export default async function BillingSettingsPage({
 
         {downgrades.length > 0 ? (
           <details className="group mt-3">
-            <summary className="cursor-pointer list-none rounded-card px-1 py-2 text-[13.5px] font-medium text-fg-sub hover:text-fg">
+            <summary className="cursor-pointer list-none rounded-card px-1 py-2 text-[14px] font-medium text-fg-sub hover:text-fg">
               낮은 플랜으로 내리기 ({downgrades.length}개) ▾
             </summary>
             <div className="mt-2 divide-y divide-line overflow-hidden rounded-card border border-line bg-body">
@@ -337,7 +337,7 @@ export default async function BillingSettingsPage({
           </details>
         ) : null}
 
-        <p className="mt-3 text-[13.5px]">
+        <p className="mt-3 text-[14px]">
           <Link href="/pricing" className="font-medium text-primary-ink hover:underline">
             전체 요금제·기능 비교 보기 →
           </Link>
@@ -368,7 +368,7 @@ export default async function BillingSettingsPage({
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-[15px] font-semibold">{o.orderName}</p>
-                      <p className="tnum mt-0.5 text-[13px] text-fg-sub">
+                      <p className="tnum mt-0.5 text-[14px] text-fg-sub">
                         {formatDate(o.approvedAt ?? o.createdAt)}
                       </p>
                     </div>
@@ -389,13 +389,13 @@ export default async function BillingSettingsPage({
           action={hasActiveSub ? <Badge tone="positive">자동결제 등록됨</Badge> : <Badge tone="neutral">미등록</Badge>}
         />
         <CardBody className="space-y-1.5">
-          <p className="flex items-center gap-2 text-[14px] text-fg-sub">
+          <p className="flex items-center gap-2 text-[15px] text-fg-sub">
             <CreditCard className="size-4 text-fg-faint" aria-hidden />
             {subscription?.cardSummary
               ? `등록된 카드 ${subscription.cardSummary}`
               : "구독 시작 시 카드를 한 번 등록하면 매월 자동으로 결제됩니다"}
           </p>
-          <p className="text-[13px] text-fg-sub">
+          <p className="text-[14px] text-fg-sub">
             매월 결제 예정일 3일 전에 알림으로 미리 알려드리며, 언제든 이 화면에서 해지할 수 있어요.
             {" "}(현재 테스트 모드 — 실제 청구 없음)
           </p>

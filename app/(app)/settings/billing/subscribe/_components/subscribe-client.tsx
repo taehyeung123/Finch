@@ -58,12 +58,12 @@ export function SubscribeClient({
   return (
     <div className="space-y-4">
       {error ? (
-        <div className="rounded-card border border-negative/40 bg-negative-weak p-4 text-[14px] text-negative" role="alert">
+        <div className="rounded-card border border-negative/40 bg-negative-weak p-4 text-[15px] text-negative" role="alert">
           {error}
         </div>
       ) : null}
 
-      <label className="flex items-start gap-2.5 rounded-card border border-line bg-overlay p-4 text-[13px] leading-relaxed text-fg-sub">
+      <label className="flex items-start gap-2.5 rounded-card border border-line bg-overlay p-4 text-[14px] leading-relaxed text-fg-sub">
         <input
           type="checkbox"
           checked={agreed}

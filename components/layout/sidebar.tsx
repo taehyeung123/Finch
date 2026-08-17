@@ -183,7 +183,7 @@ export function Sidebar() {
           aria-current={active ? "page" : undefined}
           title={collapsed ? (groupLabel ? `${groupLabel} · ${label}` : label) : undefined}
           className={cn(
-            "flex items-center gap-3 rounded-card px-3 py-2.5 text-[15px] font-medium transition-colors",
+            "flex items-center gap-3 rounded-card px-3 py-2.5 text-[15px] font-medium trans-state",
             active ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-overlay hover:text-fg",
           )}
         >
@@ -205,7 +205,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "sticky top-0 hidden h-screen shrink-0 flex-col overflow-hidden border-r border-line bg-body transition-[width] duration-300 md:flex",
+        "sticky top-0 hidden h-screen shrink-0 flex-col overflow-hidden border-r border-line bg-rail transition-[width] duration-300 md:flex",
         EASE,
         collapsed ? "w-[72px]" : "w-60",
       )}
@@ -265,7 +265,7 @@ export function Sidebar() {
                       aria-expanded={open}
                       aria-controls={`navgroup-${group.key}`}
                       tabIndex={collapsed ? -1 : undefined}
-                      className="flex w-full items-center justify-between gap-2 rounded-card px-3 py-1.5 text-[12px] font-semibold tracking-wide text-fg-faint transition-colors hover:text-fg-sub"
+                      className="flex w-full items-center justify-between gap-2 rounded-card px-3 py-1.5 text-[12px] font-semibold tracking-wide text-fg-faint trans-state hover:text-fg-sub"
                     >
                       {group.label}
                       <ChevronDown
@@ -320,7 +320,7 @@ export function Sidebar() {
           type="button"
           onClick={() => setCollapsed((v) => !v)}
           aria-label={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
-          className="flex w-full items-center justify-center rounded-card p-2 text-fg-faint transition-colors hover:bg-overlay hover:text-fg"
+          className="flex w-full items-center justify-center rounded-card p-2 text-fg-faint trans-state hover:bg-overlay hover:text-fg"
         >
           <ChevronsLeft className={cn("size-4 transition-transform duration-300", EASE, collapsed && "rotate-180")} />
         </button>

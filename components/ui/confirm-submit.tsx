@@ -85,7 +85,7 @@ export function ConfirmSubmit({
             className="modal-card-in shadow-pop w-full max-w-sm rounded-card border border-line bg-overlay p-5 outline-none"
           >
             <div className="flex items-start justify-between gap-3">
-              <h2 className="text-[16px] font-bold leading-snug">{title}</h2>
+              <h2 className="text-[17px] font-bold leading-snug">{title}</h2>
               <button
                 type="button"
                 aria-label="닫기"
@@ -95,7 +95,7 @@ export function ConfirmSubmit({
                 <X className="size-4" />
               </button>
             </div>
-            <p className="mt-2 text-[14px] leading-relaxed text-fg-sub">{description}</p>
+            <p className="mt-2 text-[15px] leading-relaxed text-fg-sub">{description}</p>
             <form action={action} className="mt-5 flex justify-end gap-2">
               {Object.entries(hiddenFields ?? {}).map(([k, v]) => (
                 <input key={k} type="hidden" name={k} value={v} />

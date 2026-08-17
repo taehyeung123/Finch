@@ -46,7 +46,7 @@ export function ChannelProfilePanel({
     <Card className={cn("overflow-hidden p-0", className)}>
       {/* 헤더 — 핸들 + 채널 아이콘 */}
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
-        <span className="truncate text-[14px] font-semibold">{account.handle}</span>
+        <span className="truncate text-[15px] font-semibold">{account.handle}</span>
         <AppIconTile app={account.channel} size={24} />
       </div>
 
@@ -103,7 +103,7 @@ export function ChannelProfilePanel({
               팔로워 {formatDeltaCompact(account.followersDelta7d)} <span className="font-normal text-fg-faint">· 최근 7일</span>
             </p>
           ) : null}
-          <p className="mt-1.5 text-[13px] leading-relaxed text-fg-sub">{account.bio}</p>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-fg-sub">{account.bio}</p>
         </div>
 
         {/* 토큰 만료 경고 */}
@@ -122,7 +122,7 @@ export function ChannelProfilePanel({
             return (
               <div
                 key={post.id}
-                className="group relative flex aspect-square items-center justify-center overflow-hidden bg-overlay transition-colors hover:bg-surface"
+                className="group relative flex aspect-square items-center justify-center overflow-hidden bg-overlay trans-state hover:bg-plate"
               >
                 {post.thumbnailUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- 서명 만료되는 IG CDN URL이라 이미지 최적화 프록시를 거치지 않는다
@@ -136,7 +136,7 @@ export function ChannelProfilePanel({
                 ) : (
                   <Icon className="size-5 text-fg-faint" />
                 )}
-                <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-surface/80 py-1 text-[11px] font-semibold text-fg opacity-0 transition-opacity group-hover:opacity-100">
+                <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-scrim py-1 text-[11px] font-semibold text-on-scrim opacity-0 transition-opacity group-hover:opacity-100">
                   <Play className="size-3" aria-hidden />
                   <span className="tnum">{formatCompact(post.views)}</span>
                 </span>
@@ -150,7 +150,7 @@ export function ChannelProfilePanel({
           <span className="flex size-10 items-center justify-center rounded-chip bg-overlay text-fg-faint">
             {connected ? <ImageIcon className="size-5" aria-hidden /> : <Lock className="size-5" aria-hidden />}
           </span>
-          <p className="text-[13px] text-fg-sub">
+          <p className="text-[14px] text-fg-sub">
             {connected
               ? "표시할 게시물이 아직 없어요."
               : `${CHANNEL_LABEL[account.channel]} 계정을 연동하면 프로필과 게시물을 볼 수 있어요.`}

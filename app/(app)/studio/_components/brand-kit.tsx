@@ -131,7 +131,7 @@ export function BrandKitPanel({ kit, onChange }: { kit: BrandKit | null; onChang
                 )}
               </div>
               <div className="space-y-1.5">
-                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-card border border-line px-2.5 py-1.5 text-[13px] font-medium text-fg-sub hover:border-primary hover:text-primary">
+                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-card border border-line px-2.5 py-1.5 text-[14px] font-medium text-fg-sub hover:border-primary hover:text-primary">
                   <ImagePlus className="size-4" aria-hidden />
                   로고 업로드
                   <input type="file" accept="image/png,image/svg+xml,image/webp,image/jpeg" hidden onChange={pickLogo} />
@@ -155,7 +155,7 @@ export function BrandKitPanel({ kit, onChange }: { kit: BrandKit | null; onChang
                 <select
                   value={placement}
                   onChange={(e) => setPlacement(e.target.value as LogoPlacement)}
-                  className="h-8 rounded-card border border-line bg-body px-2 text-[13px] text-fg focus:border-primary focus:outline-none"
+                  className="h-8 rounded-card border border-line bg-body px-2 text-[14px] text-fg focus:border-primary focus:outline-none"
                 >
                   {PLACEMENTS.map((p) => (
                     <option key={p.value} value={p.value}>
@@ -166,7 +166,7 @@ export function BrandKitPanel({ kit, onChange }: { kit: BrandKit | null; onChang
               </label>
             </div>
 
-            {error ? <p className="text-[13px] text-negative">{error}</p> : null}
+            {error ? <p className="text-[14px] text-negative">{error}</p> : null}
 
             <div className="flex items-center gap-2">
               <Button size="sm" onClick={save} disabled={busy}>

@@ -117,7 +117,7 @@ export function NotificationsClient({ initial }: { initial: AppNotification[] })
                     type="button"
                     onClick={() => markRead(n.id)}
                     className={cn(
-                      "flex w-full items-start gap-3 p-4 text-left transition-colors",
+                      "flex w-full items-start gap-3 p-4 text-left trans-state",
                       n.read ? "hover:bg-overlay" : "bg-primary-weak hover:bg-overlay",
                     )}
                     aria-label={n.read ? n.title : `읽지 않음: ${n.title}`}
@@ -144,7 +144,7 @@ export function NotificationsClient({ initial }: { initial: AppNotification[] })
                         </span>
                         <span className="tnum shrink-0 text-xs text-fg-faint">{formatAgo(n.createdAt)}</span>
                       </span>
-                      <span className="mt-0.5 block text-[13px] text-fg-sub">{n.body}</span>
+                      <span className="mt-0.5 block text-[14px] text-fg-sub">{n.body}</span>
                     </span>
                   </button>
                 </li>

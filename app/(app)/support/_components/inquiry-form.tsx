@@ -40,7 +40,7 @@ export function InquiryForm() {
       <input type="hidden" name="type" value={type} />
 
       <div className="flex flex-col gap-2">
-        <span className="text-[13px] font-semibold text-fg-sub">문의 유형</span>
+        <span className="text-[14px] font-semibold text-fg-sub">문의 유형</span>
         <div className="flex flex-wrap gap-1.5">
           {INQUIRY_TYPES.map((t) => (
             <button
@@ -49,7 +49,7 @@ export function InquiryForm() {
               onClick={() => setType(t)}
               aria-pressed={type === t}
               className={cn(
-                "rounded-chip px-3.5 py-1.5 text-[13px] font-semibold transition-colors",
+                "rounded-chip px-3.5 py-1.5 text-[14px] font-semibold trans-state",
                 type === t
                   ? "bg-primary text-on-primary"
                   : "bg-overlay text-fg-sub border border-line hover:border-line-strong hover:text-fg",
@@ -62,19 +62,19 @@ export function InquiryForm() {
       </div>
 
       <label className="flex flex-col gap-2">
-        <span className="text-[13px] font-semibold text-fg-sub">제목</span>
+        <span className="text-[14px] font-semibold text-fg-sub">제목</span>
         <input
           name="subject"
           required
           minLength={2}
           maxLength={120}
           placeholder="무엇이 궁금하신가요?"
-          className="h-10 rounded-card border border-line bg-body px-3 text-[14px] placeholder:text-fg-faint focus:border-primary focus:outline-none"
+          className="h-10 rounded-card border border-line bg-body px-3 text-[15px] placeholder:text-fg-faint focus:border-primary focus:outline-none"
         />
       </label>
 
       <label className="flex flex-col gap-2">
-        <span className="text-[13px] font-semibold text-fg-sub">내용</span>
+        <span className="text-[14px] font-semibold text-fg-sub">내용</span>
         <textarea
           name="message"
           required
@@ -82,13 +82,13 @@ export function InquiryForm() {
           maxLength={4000}
           rows={7}
           placeholder="상황을 자세히 적어주시면 더 빠르게 도와드릴 수 있어요."
-          className="resize-y rounded-card border border-line bg-body px-3 py-2.5 text-[14px] leading-relaxed placeholder:text-fg-faint focus:border-primary focus:outline-none"
+          className="resize-y rounded-card border border-line bg-body px-3 py-2.5 text-[15px] leading-relaxed placeholder:text-fg-faint focus:border-primary focus:outline-none"
         />
       </label>
 
-      {error ? <p className="text-[13px] text-negative">{error}</p> : null}
+      {error ? <p className="text-[14px] text-negative">{error}</p> : null}
       {done ? (
-        <p className="text-[13px] text-positive">
+        <p className="text-[14px] text-positive">
           문의가 접수됐습니다. 답변이 등록되면 아래 목록에서 확인하실 수 있어요.
         </p>
       ) : null}

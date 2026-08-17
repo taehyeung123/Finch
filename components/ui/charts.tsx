@@ -255,7 +255,7 @@ export function RatioBar({
       </div>
       <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1">
         {segments.map((s) => (
-          <span key={s.label} className="inline-flex items-center gap-1.5 text-[13px] text-fg-sub">
+          <span key={s.label} className="inline-flex items-center gap-1.5 text-[14px] text-fg-sub">
             <span className="size-1.5 rounded-full" style={{ background: s.color }} aria-hidden />
             {s.label}
             <span className="tnum text-fg-faint">{s.ratio}%</span>
@@ -284,7 +284,7 @@ export function UsageGauge({
   const nearLimit = pct >= 80;
   return (
     <div>
-      <div className={cn("flex items-baseline justify-between", compact ? "text-xs" : "text-[13px]")}>
+      <div className={cn("flex items-baseline justify-between", compact ? "text-xs" : "text-[14px]")}>
         <span className="text-fg-sub">{label}</span>
         <span className="tnum text-fg-faint">
           <span className={nearLimit ? "text-warning" : "text-fg-sub"}>{used}</span>/{limit}

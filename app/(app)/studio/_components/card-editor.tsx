@@ -455,7 +455,7 @@ export default function CardEditor({
         {/* 캔버스 */}
         <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-overlay p-4">
           <div className="flex w-full items-center justify-between px-1" style={{ maxWidth: DISPLAY }}>
-            <p className="text-[13px] font-semibold text-fg-sub">카드 편집</p>
+            <p className="text-[14px] font-semibold text-fg-sub">카드 편집</p>
             <div className="flex gap-1">
               <button type="button" onClick={undo} disabled={!canUndo} aria-label="실행취소" className="flex size-8 items-center justify-center rounded-card border border-line text-fg-sub disabled:opacity-40 enabled:hover:border-primary enabled:hover:text-primary">
                 <Undo2 className="size-4" />
@@ -697,10 +697,10 @@ export default function CardEditor({
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPickImage} />
             </div>
             <div>
-              <p className="mb-1.5 text-[13px] font-medium text-fg-sub">도형·요소</p>
+              <p className="mb-1.5 text-[14px] font-medium text-fg-sub">도형·요소</p>
               <div className="grid grid-cols-4 gap-1.5">
                 {SHAPES.map((s) => (
-                  <button key={s.key} type="button" title={s.label} aria-label={s.label} onClick={() => addElement(s.make())} className="flex h-9 items-center justify-center rounded-card border border-line text-fg-sub transition-colors hover:border-primary hover:text-primary">
+                  <button key={s.key} type="button" title={s.label} aria-label={s.label} onClick={() => addElement(s.make())} className="flex h-9 items-center justify-center rounded-card border border-line text-fg-sub trans-state hover:border-primary hover:text-primary">
                     {s.icon}
                   </button>
                 ))}
@@ -709,7 +709,7 @@ export default function CardEditor({
           </div>
 
           <div>
-            <p className="mb-1.5 text-[13px] font-medium text-fg-sub">배경색</p>
+            <p className="mb-1.5 text-[14px] font-medium text-fg-sub">배경색</p>
             <div className="flex flex-wrap items-center gap-2">
               {SWATCHES.map((sw) => (
                 <button key={sw.value} type="button" aria-label={`배경 ${sw.label}`} onClick={() => changeBackground(sw.value)} className={`size-7 rounded-full border ${background === sw.value ? "ring-2 ring-primary ring-offset-1" : "border-line"}`} style={{ backgroundColor: sw.value }} />
@@ -723,12 +723,12 @@ export default function CardEditor({
               {isText ? (
                 <>
                   <div>
-                    <p className="mb-1.5 text-[13px] font-medium text-fg-sub">텍스트</p>
-                    <textarea value={(selected as TextEl).text} onChange={(e) => patchSelected({ text: e.target.value }, `text:${selected.id}`)} rows={3} className="w-full rounded-card border border-line bg-body px-2.5 py-2 text-[13px] focus:border-primary focus:outline-none" />
+                    <p className="mb-1.5 text-[14px] font-medium text-fg-sub">텍스트</p>
+                    <textarea value={(selected as TextEl).text} onChange={(e) => patchSelected({ text: e.target.value }, `text:${selected.id}`)} rows={3} className="w-full rounded-card border border-line bg-body px-2.5 py-2 text-[14px] focus:border-primary focus:outline-none" />
                   </div>
                   <div>
-                    <p className="mb-1.5 text-[13px] font-medium text-fg-sub">폰트</p>
-                    <select value={(selected as TextEl).fontFamily} onChange={(e) => patchSelected({ fontFamily: e.target.value }, `font:${selected.id}`)} className="h-9 w-full rounded-card border border-line bg-body px-2 text-[13px] focus:border-primary focus:outline-none">
+                    <p className="mb-1.5 text-[14px] font-medium text-fg-sub">폰트</p>
+                    <select value={(selected as TextEl).fontFamily} onChange={(e) => patchSelected({ fontFamily: e.target.value }, `font:${selected.id}`)} className="h-9 w-full rounded-card border border-line bg-body px-2 text-[14px] focus:border-primary focus:outline-none">
                       {FONT_OPTIONS.map((f) => (
                         <option key={f.label} value={f.family}>
                           {f.label}
@@ -738,7 +738,7 @@ export default function CardEditor({
                     {!fontsReady ? <p className="mt-1 text-[11px] text-fg-faint">폰트 불러오는 중…</p> : null}
                   </div>
                   <div>
-                    <p className="mb-1.5 text-[13px] font-medium text-fg-sub">굵기</p>
+                    <p className="mb-1.5 text-[14px] font-medium text-fg-sub">굵기</p>
                     <div className="grid grid-cols-5 gap-1">
                       {WEIGHT_OPTIONS.map((w) => (
                         <button key={w.value} type="button" onClick={() => patchSelected({ fontStyle: w.value }, `weight:${selected.id}`)} className={`rounded-card border px-1 py-1.5 text-[11px] ${(selected as TextEl).fontStyle === w.value ? "border-primary bg-primary-weak font-bold text-primary" : "border-line text-fg-sub"}`} style={{ fontWeight: Number(w.value) }}>
@@ -748,7 +748,7 @@ export default function CardEditor({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <label className="text-[13px] text-fg-sub">크기</label>
+                    <label className="text-[14px] text-fg-sub">크기</label>
                     <input type="range" min={18} max={160} value={(selected as TextEl).fontSize} onChange={(e) => patchSelected({ fontSize: Number(e.target.value) }, `size:${selected.id}`)} className="flex-1 accent-primary" />
                     <span className="tnum w-8 text-right text-[12px] text-fg-faint">{(selected as TextEl).fontSize}</span>
                   </div>
@@ -764,7 +764,7 @@ export default function CardEditor({
 
               {selColor !== null ? (
                 <div>
-                  <p className="mb-1.5 text-[13px] font-medium text-fg-sub">색상</p>
+                  <p className="mb-1.5 text-[14px] font-medium text-fg-sub">색상</p>
                   <div className="flex flex-wrap items-center gap-2">
                     {SWATCHES.map((sw) => (
                       <button key={sw.value} type="button" aria-label={`색 ${sw.label}`} onClick={() => applyColor(sw.value)} className={`size-7 rounded-full border ${selColor === sw.value ? "ring-2 ring-primary ring-offset-1" : "border-line"}`} style={{ backgroundColor: sw.value }} />
@@ -775,7 +775,7 @@ export default function CardEditor({
               ) : null}
 
               <div className="flex items-center gap-2">
-                <label className="text-[13px] text-fg-sub">투명도</label>
+                <label className="text-[14px] text-fg-sub">투명도</label>
                 <input type="range" min={10} max={100} value={Math.round(selected.opacity * 100)} onChange={(e) => patchSelected({ opacity: Number(e.target.value) / 100 }, `opacity:${selected.id}`)} className="flex-1 accent-primary" />
                 <span className="tnum w-9 text-right text-[12px] text-fg-faint">{Math.round(selected.opacity * 100)}%</span>
               </div>
@@ -800,7 +800,7 @@ export default function CardEditor({
               </div>
             </div>
           ) : (
-            <p className="rounded-card border border-dashed border-line p-3 text-center text-[13px] text-fg-faint">
+            <p className="rounded-card border border-dashed border-line p-3 text-center text-[14px] text-fg-sub">
               요소를 클릭해서 수정하거나,
               <br />
               위에서 텍스트·이미지·도형을 추가하세요.

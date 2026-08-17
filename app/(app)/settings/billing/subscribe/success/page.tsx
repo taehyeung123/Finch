@@ -21,7 +21,7 @@ export default async function SubscribeSuccessPage({
         <IssueClient authKey={authKey} customerKey={customerKey} />
       ) : (
         <Card className="p-8 text-center">
-          <p className="text-[14px] text-fg-sub">등록 정보가 올바르지 않아요. 처음부터 다시 시도해 주세요.</p>
+          <p className="text-[15px] text-fg-sub">등록 정보가 올바르지 않아요. 처음부터 다시 시도해 주세요.</p>
           <Link href="/settings/billing" className={`${buttonClasses("primary", "md")} mt-4`}>
             요금제로 돌아가기
           </Link>

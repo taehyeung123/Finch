@@ -588,7 +588,7 @@ export default function StudioPage() {
           {/* 브랜드 톤·킷은 /studio/brand 로 옮겼다(2026-08-15 IA 개편) — 한 번 정하고
               계속 쓰는 설정이 만들러 들어올 때마다 첫 두 블록을 차지하고 있었다.
               여기서는 "지금 무엇이 적용 중인지" 한 줄만 알린다. */}
-          <p className="text-[13px] text-fg-sub">
+          <p className="text-[14px] text-fg-sub">
             내 브랜드 톤·색이 결과에 반영됩니다.{" "}
             <Link href="/studio/brand" className="font-semibold text-primary-ink hover:underline">
               브랜드 설정
@@ -603,7 +603,7 @@ export default function StudioPage() {
             <CardBody className="space-y-4">
               {/* 템플릿 선택 (생성기 안으로 통합) */}
               <div className="space-y-2">
-                <p className="text-[13px] font-medium text-fg-sub">템플릿</p>
+                <p className="text-[14px] font-medium text-fg-sub">템플릿</p>
                 <div className="flex flex-wrap gap-2.5">
                   {TEMPLATES.map((t) => (
                     <button
@@ -642,7 +642,7 @@ export default function StudioPage() {
               </div>
               <div className="flex flex-col gap-3 md:flex-row">
                 <div className="flex-1">
-                  <label htmlFor="studio-topic" className="mb-1.5 flex items-center gap-2 text-[13px] font-medium text-fg-sub">
+                  <label htmlFor="studio-topic" className="mb-1.5 flex items-center gap-2 text-[14px] font-medium text-fg-sub">
                     주제
                     {pendingNote ? (
                       <span className="inline-flex items-center gap-1 rounded-chip bg-primary-weak px-2 py-0.5 text-[11px] font-semibold text-primary">
@@ -666,7 +666,7 @@ export default function StudioPage() {
                   />
                 </div>
                 <div className="md:w-44">
-                  <label htmlFor="studio-tone" className="mb-1.5 block text-[13px] font-medium text-fg-sub">
+                  <label htmlFor="studio-tone" className="mb-1.5 block text-[14px] font-medium text-fg-sub">
                     브랜드 톤
                   </label>
                   <select
@@ -695,12 +695,12 @@ export default function StudioPage() {
                 </div>
               </div>
               {genError ? (
-                <p role="alert" className="rounded-card bg-negative-weak px-3 py-2 text-[13px] text-negative">
+                <p role="alert" className="rounded-card bg-negative-weak px-3 py-2 text-[14px] text-negative">
                   {genError}
                 </p>
               ) : null}
               {restored ? (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-line bg-overlay px-3 py-2.5 text-[13px] text-fg-sub">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-line bg-overlay px-3 py-2.5 text-[14px] text-fg-sub">
                   <span>이전에 작업하던 카드뉴스를 불러왔어요. (이 브라우저에 임시저장됨)</span>
                   <button type="button" onClick={clearDraft} className="font-semibold text-primary underline underline-offset-2">
                     새로 시작
@@ -721,7 +721,7 @@ export default function StudioPage() {
                 title="생성 결과"
                 description="AI가 카드뉴스를 만들고 있어요"
                 action={
-                  <span className="inline-flex items-center gap-2 text-[13px] font-medium text-primary">
+                  <span className="inline-flex items-center gap-2 text-[14px] font-medium text-primary">
                     <span
                       className="size-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent"
                       aria-hidden
@@ -753,7 +753,7 @@ export default function StudioPage() {
                 <div className="h-1 w-full overflow-hidden rounded-full bg-overlay">
                   <div className="shimmer h-full w-1/3 rounded-full bg-primary/30" />
                 </div>
-                <p className="text-center text-[13px] text-fg-sub">
+                <p className="text-center text-[14px] text-fg-sub">
                   보통 <span className="font-semibold text-fg">10~20초</span> 걸려요 · 표지 · 본문 3장 · 마무리를 구성하는 중입니다
                 </p>
               </CardBody>
@@ -775,7 +775,7 @@ export default function StudioPage() {
                         type="button"
                         onClick={() => selectVariant(i)}
                         className={cn(
-                          "rounded-card border px-3 py-1.5 text-[13px] font-semibold transition-colors",
+                          "rounded-card border px-3 py-1.5 text-[14px] font-semibold trans-state",
                           i === activeVariant
                             ? "border-primary bg-primary-weak text-primary"
                             : "border-line text-fg-sub hover:border-line-strong hover:text-fg",
@@ -805,7 +805,7 @@ export default function StudioPage() {
                             <span className="tnum text-xs font-semibold text-fg-faint">
                               {String(s.no).padStart(2, "0")} / {String(slides.length).padStart(2, "0")}
                             </span>
-                            <p className="text-[13px] font-bold leading-snug">{s.headline}</p>
+                            <p className="text-[14px] font-bold leading-snug">{s.headline}</p>
                             <p className="line-clamp-2 text-[11px] text-fg-sub">{slideCaption(s)}</p>
                           </div>
                         )}
@@ -818,7 +818,7 @@ export default function StudioPage() {
                           편집
                         </button>
                         {edits[i] ? (
-                          <span className="absolute left-1.5 top-1.5 rounded-chip bg-primary px-1.5 py-0.5 text-[10px] font-bold text-white">
+                          <span className="absolute left-1.5 top-1.5 rounded-chip bg-primary px-1.5 py-0.5 text-[11px] font-bold text-white">
                             편집됨
                           </span>
                         ) : null}
@@ -831,7 +831,7 @@ export default function StudioPage() {
                   {videoSupported ? " · ‘영상으로 저장’은 카드가 넘어가는 릴스형 영상(webm)으로 내려받아요." : ""}
                 </p>
 
-                <p className="flex items-center gap-1.5 rounded-card border border-line bg-overlay px-3 py-2.5 text-[13px] text-fg-sub">
+                <p className="flex items-center gap-1.5 rounded-card border border-line bg-overlay px-3 py-2.5 text-[14px] text-fg-sub">
                   <Sparkles className="size-4 shrink-0 text-primary" aria-hidden />
                   AI 생성 표시가 자동으로 부착됩니다 (플랫폼 정책 준수)
                 </p>
@@ -865,8 +865,8 @@ export default function StudioPage() {
               <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-primary-weak text-primary">
                 <LayoutTemplate className="size-7" aria-hidden />
               </span>
-              <p className="mt-4 text-[16px] font-bold">주제 한 줄이면 카드뉴스가 완성돼요</p>
-              <p className="mx-auto mt-1.5 max-w-md text-[13px] leading-relaxed text-fg-sub">
+              <p className="mt-4 text-[17px] font-bold">주제 한 줄이면 카드뉴스가 완성돼요</p>
+              <p className="mx-auto mt-1.5 max-w-md text-[14px] leading-relaxed text-fg-sub">
                 템플릿을 고르고 주제를 입력해 생성하면, 내 톤으로 서로 다른 각도의 5장 카드뉴스 2안이 만들어집니다.
                 마음에 드는 안을 골라 바로 편집·발행하세요.
               </p>
@@ -930,7 +930,7 @@ export default function StudioPage() {
                 </Button>
               </div>
               {ideaError ? (
-                <p role="alert" className="rounded-card bg-negative-weak px-3 py-2 text-[13px] text-negative">
+                <p role="alert" className="rounded-card bg-negative-weak px-3 py-2 text-[14px] text-negative">
                   {ideaError}
                 </p>
               ) : null}
@@ -946,7 +946,7 @@ export default function StudioPage() {
             <>
               {/* 검색 결과 헤더 */}
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[13px] text-fg-sub">
+                <p className="text-[14px] text-fg-sub">
                   <span className="font-semibold text-fg">
                     &lsquo;{ideaResult.keyword}&rsquo;
                   </span>
@@ -976,11 +976,11 @@ export default function StudioPage() {
                           <ChannelBadge channel={item.channel} />
                           <span className="text-xs text-fg-faint">{item.category}</span>
                         </div>
-                        <p className="mt-2 line-clamp-2 text-[14px] font-semibold leading-snug">
+                        <p className="mt-2 line-clamp-2 text-[15px] font-semibold leading-snug">
                           {item.title}
                         </p>
-                        <p className="mt-1 text-[13px] text-fg-sub">{item.creatorHandle}</p>
-                        <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-3 text-[13px] text-fg-sub">
+                        <p className="mt-1 text-[14px] text-fg-sub">{item.creatorHandle}</p>
+                        <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-3 text-[14px] text-fg-sub">
                           <span>
                             조회수{" "}
                             <span className="tnum font-semibold text-fg">
@@ -1023,11 +1023,11 @@ export default function StudioPage() {
                         ))}
                       </div>
 
-                      <h4 className="mt-3 text-[16px] font-semibold leading-snug">
+                      <h4 className="mt-3 text-[17px] font-semibold leading-snug">
                         {idea.title}
                       </h4>
 
-                      <p className="mt-2 flex items-start gap-1.5 text-[13px] leading-relaxed text-fg-sub">
+                      <p className="mt-2 flex items-start gap-1.5 text-[14px] leading-relaxed text-fg-sub">
                         <TrendingUp
                           className="mt-0.5 size-3.5 shrink-0 text-positive"
                           aria-hidden
@@ -1035,7 +1035,7 @@ export default function StudioPage() {
                         {idea.reason}
                       </p>
 
-                      <div className="mt-3 flex items-center gap-1.5 text-[13px] text-fg-sub">
+                      <div className="mt-3 flex items-center gap-1.5 text-[14px] text-fg-sub">
                         예상 반응
                         <Badge tone={idea.engagement === "high" ? "positive" : "warning"}>
                           {idea.engagement === "high" ? "높음" : "중간"}
@@ -1067,7 +1067,7 @@ export default function StudioPage() {
           ) : (
             <>
               {/* 3. 검색 전 초기 상태 — 오늘의 추천 아이디어 */}
-              <p className="flex items-center gap-1.5 text-[13px] text-fg-sub">
+              <p className="flex items-center gap-1.5 text-[14px] text-fg-sub">
                 <Lightbulb className="size-4 shrink-0 text-primary" aria-hidden />
                 키워드로 검색하면 맞춤 아이디어를 만들어드려요. 그 전에 오늘의 추천 아이디어를
                 둘러보세요.
@@ -1094,7 +1094,7 @@ export default function StudioPage() {
                             {idea.topic}
                           </h4>
 
-                          <p className="mt-2 flex items-start gap-1.5 text-[13px] leading-relaxed text-fg-sub">
+                          <p className="mt-2 flex items-start gap-1.5 text-[14px] leading-relaxed text-fg-sub">
                             <TrendingUp
                               className="mt-0.5 size-3.5 shrink-0 text-positive"
                               aria-hidden
@@ -1102,7 +1102,7 @@ export default function StudioPage() {
                             {idea.reason}
                           </p>
 
-                          <div className="mt-3 flex items-center gap-1.5 text-[13px] text-fg-sub">
+                          <div className="mt-3 flex items-center gap-1.5 text-[14px] text-fg-sub">
                             예상 반응
                             <Badge tone={engage.tone}>{engage.label}</Badge>
                             <InfoTip>
@@ -1135,7 +1135,7 @@ export default function StudioPage() {
 
           {/* 4. 하단 고지 */}
           <Card className="flex flex-wrap items-start justify-between gap-3 p-4">
-            <p className="flex items-start gap-1.5 text-[13px] leading-relaxed text-fg-sub">
+            <p className="flex items-start gap-1.5 text-[14px] leading-relaxed text-fg-sub">
               <Info className="mt-0.5 size-4 shrink-0 text-fg-faint" aria-hidden />
               아이디어 추천은 최근 트렌드 데이터를 기반으로 한 핀치 자체 생성 결과입니다. 실제
               반응은 계정 상황에 따라 달라질 수 있어요.

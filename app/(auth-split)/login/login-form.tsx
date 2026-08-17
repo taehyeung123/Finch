@@ -57,7 +57,7 @@ function LoginCard() {
       <p className="mt-1 text-[15px] text-fg-sub">핀치 계정으로 계속하세요.</p>
 
       {authError ? (
-        <p role="alert" className="mt-4 rounded-card bg-negative-weak p-3 text-[13px] text-negative">
+        <p role="alert" className="mt-4 rounded-card bg-negative-weak p-3 text-[14px] text-negative">
           로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.
         </p>
       ) : null}
@@ -78,7 +78,7 @@ function LoginCard() {
       </div>
 
       {configNotice ? (
-        <p role="status" className="mt-3 rounded-card bg-warning-weak p-3 text-[13px] text-warning">
+        <p role="status" className="mt-3 rounded-card bg-warning-weak p-3 text-[14px] text-warning">
           Supabase 키 설정 후 사용 가능 — docs/AUTH_SETUP.md 참고
         </p>
       ) : null}
@@ -93,7 +93,7 @@ function LoginCard() {
         로그인 없이 둘러보기
       </ButtonLink>
 
-      <p className="mt-6 text-center text-[13px] text-fg-sub">
+      <p className="mt-6 text-center text-[14px] text-fg-sub">
         아직 계정이 없나요?{" "}
         <Link href="/signup" className="font-semibold text-primary hover:text-primary-hover">
           회원가입

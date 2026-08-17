@@ -103,7 +103,7 @@ export function BrandTone() {
 
         {/* 학습된 프로필 요약 */}
         {profile && !open ? (
-          <div className="space-y-2 rounded-card bg-overlay p-3 text-[13px]">
+          <div className="space-y-2 rounded-card bg-overlay p-3 text-[14px]">
             <p className="text-fg-sub">
               <span className="font-semibold text-fg">말투</span> · {profile.tone}
             </p>
@@ -135,9 +135,9 @@ export function BrandTone() {
               onChange={(e) => setInput(e.target.value)}
               rows={4}
               placeholder="잘 나온 게시물 캡션 2~3개를 붙여넣거나, 브랜드 말투를 설명해 주세요. (예: 20대 여성 타깃, 친근한 반말체, 이모지 없이 담백하게)"
-              className="w-full rounded-card border border-line bg-overlay px-3 py-2.5 text-[14px] placeholder:text-fg-faint focus:border-primary focus:outline-none"
+              className="w-full rounded-card border border-line bg-overlay px-3 py-2.5 text-[15px] placeholder:text-fg-faint focus:border-primary focus:outline-none"
             />
-            {error ? <p className="text-[13px] text-negative">{error}</p> : null}
+            {error ? <p className="text-[14px] text-negative">{error}</p> : null}
             <div className="flex items-center gap-2">
               <Button size="sm" onClick={learn} disabled={busy || input.trim().length < 20}>
                 <Wand2 className="size-4" aria-hidden />

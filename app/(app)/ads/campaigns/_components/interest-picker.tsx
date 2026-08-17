@@ -69,7 +69,7 @@ export function InterestPicker({
           }}
           placeholder="관심사 검색 — 예: 뷰티, 캠핑, 재테크"
           aria-label="관심사 검색"
-          className="h-10 w-full rounded-card border border-line bg-body pl-9 pr-3 text-[14px] placeholder:text-fg-faint focus:border-primary focus:outline-none"
+          className="h-10 w-full rounded-card border border-line bg-body pl-9 pr-3 text-[15px] placeholder:text-fg-faint focus:border-primary focus:outline-none"
         />
         {query.trim() !== "" ? (
           <ul
@@ -85,7 +85,7 @@ export function InterestPicker({
                     role="option"
                     aria-selected={false}
                     onClick={() => add(s.name)}
-                    className="flex w-full items-center justify-between gap-2 px-3.5 py-2.5 text-left text-[14px] text-fg-sub transition-colors hover:bg-body hover:text-fg"
+                    className="flex w-full items-center justify-between gap-2 px-3.5 py-2.5 text-left text-[15px] text-fg-sub trans-state hover:bg-body hover:text-fg"
                   >
                     <span className="inline-flex min-w-0 items-center gap-2">
                       <Tag className="size-3.5 shrink-0 text-fg-faint" aria-hidden />
@@ -97,7 +97,7 @@ export function InterestPicker({
                 </li>
               ))
             ) : (
-              <li className="px-3.5 py-2.5 text-[13px] text-fg-faint">
+              <li className="px-3.5 py-2.5 text-[14px] text-fg-sub">
                 일치하는 관심사가 없어요 — Meta 관심사 체계에 있는 항목만 선택할 수 있습니다
               </li>
             )}
@@ -112,7 +112,7 @@ export function InterestPicker({
             return (
               <span
                 key={name}
-                className="inline-flex items-center gap-1 rounded-chip bg-primary-weak px-3 py-1 text-[13px] font-semibold text-primary"
+                className="inline-flex items-center gap-1 rounded-chip bg-primary-weak px-3 py-1 text-[14px] font-semibold text-primary"
               >
                 {name}
                 {meta ? <span className="tnum text-[11px] opacity-70">약 {meta.audience}만</span> : null}
@@ -120,7 +120,7 @@ export function InterestPicker({
                   type="button"
                   aria-label={`${name} 삭제`}
                   onClick={() => onChange(value.filter((v) => v !== name))}
-                  className="transition-colors hover:text-fg"
+                  className="trans-state hover:text-fg"
                 >
                   <X className="size-3.5" aria-hidden />
                 </button>

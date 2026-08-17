@@ -180,11 +180,11 @@ export function CampaignDetailModal({
                     {detail.adCopy.brandName.slice(0, 1)}
                   </span>
                   <div className="min-w-0">
-                    <p className="truncate text-[13px] font-semibold">{detail.adCopy.brandName}</p>
+                    <p className="truncate text-[14px] font-semibold">{detail.adCopy.brandName}</p>
                     <p className="text-[11px] text-fg-faint">Sponsored</p>
                   </div>
                 </div>
-                <p className="px-3.5 pb-3 text-[13px] leading-relaxed text-fg-sub">{detail.adCopy.body}</p>
+                <p className="px-3.5 pb-3 text-[14px] leading-relaxed text-fg-sub">{detail.adCopy.body}</p>
                 <Image
                   src={campaign.creative.imageUrl}
                   alt={campaign.creative.headline}
@@ -196,12 +196,12 @@ export function CampaignDetailModal({
                 <div className="flex items-center justify-between gap-3 px-3.5 py-3">
                   <div className="min-w-0">
                     <p className="text-[11px] uppercase tracking-wide text-fg-faint">{detail.adCopy.linkLabel}</p>
-                    <p className="truncate text-[13px] font-semibold">{campaign.creative.headline}</p>
+                    <p className="truncate text-[14px] font-semibold">{campaign.creative.headline}</p>
                   </div>
                   {/* 미리보기 목업 — 실제 동작 버튼 아님 */}
                   <span
                     aria-hidden
-                    className="shrink-0 rounded-card border border-line bg-overlay px-3 py-1.5 text-[13px] font-semibold"
+                    className="shrink-0 rounded-card border border-line bg-overlay px-3 py-1.5 text-[14px] font-semibold"
                   >
                     {detail.adCopy.cta}
                   </span>
@@ -238,7 +238,7 @@ export function CampaignDetailModal({
                 <SectionTitle
                   title="성과 추이"
                   right={
-                    <span className="flex items-center gap-4 text-[13px] text-fg-sub">
+                    <span className="flex items-center gap-4 text-[14px] text-fg-sub">
                       <span className="inline-flex items-center gap-1.5">
                         <span className="size-1.5 rounded-full" style={{ background: "var(--color-positive)" }} aria-hidden />
                         ROAS
@@ -274,7 +274,7 @@ export function CampaignDetailModal({
                   const pct = funnelBase > 0 ? (f.value / funnelBase) * 100 : 0;
                   return (
                     <div key={f.label}>
-                      <div className="flex items-baseline justify-between text-[13px]">
+                      <div className="flex items-baseline justify-between text-[14px]">
                         <span className="text-fg-sub">{f.label}</span>
                         <span className="tnum">
                           <span className="font-semibold">{formatCompact(f.value)}</span>
@@ -313,7 +313,7 @@ export function CampaignDetailModal({
                 </div>
                 <ul className="min-w-0 flex-1 space-y-1.5">
                   {detail.placements.map((p, i) => (
-                    <li key={p.label} className="flex items-center justify-between gap-2 text-[13px]">
+                    <li key={p.label} className="flex items-center justify-between gap-2 text-[14px]">
                       <span className="inline-flex min-w-0 items-center gap-1.5 text-fg-sub">
                         <span
                           className="size-1.5 shrink-0 rounded-full"
@@ -335,7 +335,7 @@ export function CampaignDetailModal({
             <section className="rounded-card border border-line p-4">
               <SectionTitle title="세부 성과" right={<span className="text-xs text-fg-faint">{detail.periodLabel}</span>} />
               <div className="mt-2 overflow-x-auto">
-                <table className="w-full min-w-[380px] text-[13px]">
+                <table className="w-full min-w-[380px] text-[14px]">
                   <thead>
                     <tr className="border-b border-line text-left text-xs text-fg-faint">
                       <th className="py-2 font-medium">지표</th>

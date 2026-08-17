@@ -102,7 +102,7 @@ export default async function BillingSuccessPage({
             <CheckCircle2 className="size-12 text-positive" aria-hidden />
             <div>
               <p className="text-lg font-bold">결제가 완료되었어요</p>
-              <p className="mt-1 text-[14px] text-fg-sub">
+              <p className="mt-1 text-[15px] text-fg-sub">
                 {outcome.planName} 플랜 · <span className="tnum">{formatKRW(outcome.amount)}</span>
               </p>
             </div>
@@ -112,7 +112,7 @@ export default async function BillingSuccessPage({
             <XCircle className="size-12 text-negative" aria-hidden />
             <div>
               <p className="text-lg font-bold">결제를 완료하지 못했어요</p>
-              <p className="mt-1 text-[14px] text-fg-sub">{outcome.message}</p>
+              <p className="mt-1 text-[15px] text-fg-sub">{outcome.message}</p>
             </div>
           </>
         )}

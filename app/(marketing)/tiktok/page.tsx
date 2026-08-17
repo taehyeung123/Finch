@@ -191,7 +191,7 @@ export default function TiktokPage() {
           <div className="mt-8 grid gap-4 md:grid-cols-2">
             <Link
               href="/instagram"
-              className="flex items-center gap-4 rounded-card border border-line bg-body p-6 transition-colors hover:border-line-strong"
+              className="flex items-center gap-4 rounded-card border border-line bg-body p-6 trans-state hover:border-line-strong"
             >
               <AppIconTile app="instagram" size={48} />
               <div>
@@ -201,7 +201,7 @@ export default function TiktokPage() {
             </Link>
             <Link
               href="/threads"
-              className="flex items-center gap-4 rounded-card border border-line bg-body p-6 transition-colors hover:border-line-strong"
+              className="flex items-center gap-4 rounded-card border border-line bg-body p-6 trans-state hover:border-line-strong"
             >
               <AppIconTile app="threads" size={48} />
               <div>

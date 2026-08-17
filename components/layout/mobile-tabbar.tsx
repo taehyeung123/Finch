@@ -54,7 +54,7 @@ export function MobileTabbar() {
           aria-current={active ? "page" : undefined}
           onClick={() => setSheetOpen(false)}
           className={cn(
-            "flex items-center gap-3 rounded-card px-3 py-2.5 text-[15px] font-medium transition-colors",
+            "flex items-center gap-3 rounded-card px-3 py-2.5 text-[15px] font-medium trans-state",
             active ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-body hover:text-fg",
           )}
         >
@@ -81,12 +81,12 @@ export function MobileTabbar() {
             className="sheet-in-up shadow-pop fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] overflow-y-auto rounded-t-card border-t border-line-strong bg-overlay md:hidden"
           >
             <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-3">
-              <p className="text-[13px] font-semibold text-fg-faint">전체 메뉴</p>
+              <p className="text-[14px] font-semibold text-fg-sub">전체 메뉴</p>
               <button
                 type="button"
                 aria-label="닫기"
                 onClick={() => setSheetOpen(false)}
-                className="rounded-card p-1.5 text-fg-faint transition-colors hover:bg-body hover:text-fg"
+                className="rounded-card p-1.5 text-fg-faint trans-state hover:bg-body hover:text-fg"
               >
                 <X className="size-5" aria-hidden />
               </button>

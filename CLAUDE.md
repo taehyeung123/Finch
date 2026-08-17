@@ -15,11 +15,25 @@
 ## 디자인 규칙 (PRD PART 7)
 
 - **라이트 기본 + 다크 토글, 듀얼 테마 정식 지원** (2026-08 결정 — 과거 "다크모드 전용" 방침 폐기).
-  라이트 surface `#F4F5F7` → body `#FFFFFF` → overlay `#FFFFFF`, 다크 surface `#0C0C11` → body `#16161C` → overlay `#212128`
-  (토큰: `bg-surface`/`bg-body`/`bg-overlay`, 실제 값은 `app/globals.css`의 `:root`/`:root[data-theme="dark"]`가 정한다)
-- 깊이 표현은 테마별로 다르다: **다크는 반투명 테두리(`border-line`)만**, **라이트는 테두리 + 떠있는 요소에 한해 `shadow-pop` 토큰**(미세 그림자) 허용.
-  임의 Tailwind `shadow-*` 유틸(`shadow-sm`/`shadow-lg` 등) 직접 사용 금지 — 항상 `shadow-pop` 토큰으로.
-- 라운드 2단계만: 카드/버튼/인풋 `rounded-card`(8px), 칩/뱃지 `rounded-chip`(32px)
+- **라이트 지면은 순백이다** (2026-08-15 개편). 라이트 surface `#FFFFFF` = body `#FFFFFF` = overlay `#FFFFFF`,
+  다크 surface `#0C0C11` → body `#16161C` → overlay `#212128`.
+  실제 값은 `app/globals.css`의 `:root`/`:root[data-theme="dark"]`가 정한다.
+- **면(surface) 역할 7개 — 이 밖의 배경색을 새로 만들지 않는다.**
+  `bg-surface` 지면 · `bg-body` 카드 · `bg-overlay` 모달/시트 · `bg-rail` 사이드바(0.8% 단차) ·
+  `bg-plate` 카드 **안**의 중첩 면·썸네일 레터박스 · `bg-tint-hover` 호버 틴트 · `bg-scrim` 사진 위 스크림(테마 무관 항상 어둡다).
+  ⚠️ 라이트에서 surface=body=흰색이라 **"회색 지면"을 전제한 코드는 전부 틀린다** — 카드 안 중첩 면은 `bg-plate`로.
+- 깊이 표현은 테마별로 다르다:
+  **라이트 = 헤어라인(`--line: #EBEEF1`) + 2겹 미세 그림자.** 정적 카드는 `card-face`(배경+테두리+그림자) 한 클래스로 쓰고,
+  호버로 뜨는 카드는 `card-hover`를 함께 건다(요소는 1px도 움직이지 않는다 — 선과 그림자만 반응).
+  **다크 = 밝기 단차 + 반투명 테두리만.** `--shadow-card`/`--shadow-pop`이 다크에서 `none`이라 같은 클래스가 자동으로 테두리만 남긴다.
+  임의 Tailwind `shadow-*` 유틸(`shadow-sm`/`shadow-lg` 등) 직접 사용 금지 — `card-face` 또는 `shadow-pop` 토큰으로.
+- 라운드 2단계만: 카드/버튼/인풋 `rounded-card`(12px), 칩/뱃지 `rounded-chip`(32px)
+- **앱 화면 타입 스케일 7단계**: 11(라벨·뱃지) · 12(메타) · 14(보조 본문) · 15(본문) · 17(강조·소제목) · 20(카드 제목) · 28(페이지 제목).
+  이 밖의 px 값을 새로 만들지 않는다. 마케팅(`app/(marketing)`)은 디스플레이 스케일을 따로 쓴다.
+  제목 색(`--fg-strong`)·자간은 `@layer base`가 h1~h4에 일괄로 건다 — 화면에서 손으로 붙이지 않는다.
+- **글자색은 3단계**: `text-fg`(본문) · `text-fg-sub`(보조 본문, 흰 지면 5.0:1) · `text-fg-faint`.
+  ⚠️ `fg-faint`는 4.0:1이라 **본문 텍스트 금지** — 플레이스홀더·아이콘·비활성 UI 전용이다.
+- 모션은 `trans-state` 등 프리셋으로 — `transition-*` 유틸 직접 사용은 duration/ease를 의도적으로 오버라이드할 때만.
 - 브랜드 컬러 시그널 코랄(`bg-primary`) 위 텍스트는 **항상 다크**(`text-on-primary`) — 흰색 금지(WCAG 대비 미달)
 - 상승=초록(`positive`), 하락=빨강(`negative`) — 주식 관행(빨강=상승) 금지
 - 숫자 지표에는 `.tnum`(tabular-nums) 클래스 적용

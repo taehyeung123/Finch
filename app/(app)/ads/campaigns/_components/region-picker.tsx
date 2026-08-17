@@ -21,7 +21,7 @@ import {
 */
 
 const chipBase =
-  "inline-flex items-center gap-1.5 rounded-chip border px-3.5 py-1.5 text-[13px] font-semibold transition-colors";
+  "inline-flex items-center gap-1.5 rounded-chip border px-3.5 py-1.5 text-[14px] font-semibold trans-state";
 const chipOff = "border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg";
 const chipOn = "border-primary bg-primary text-on-primary";
 
@@ -104,7 +104,7 @@ export function RegionPicker({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="지역 검색 — 예: 성남, 해운대, 강원"
-            className="h-10 w-full rounded-card border border-line bg-body pl-9 pr-3 text-[14px] placeholder:text-fg-faint focus:border-primary focus:outline-none"
+            className="h-10 w-full rounded-card border border-line bg-body pl-9 pr-3 text-[15px] placeholder:text-fg-faint focus:border-primary focus:outline-none"
           />
           {query.trim() !== "" ? (
             <ul
@@ -126,7 +126,7 @@ export function RegionPicker({
                           setQuery("");
                           searchRef.current?.focus();
                         }}
-                        className="flex w-full items-center justify-between gap-2 px-3.5 py-2.5 text-left text-[14px] text-fg-sub transition-colors hover:bg-body hover:text-fg"
+                        className="flex w-full items-center justify-between gap-2 px-3.5 py-2.5 text-left text-[15px] text-fg-sub trans-state hover:bg-body hover:text-fg"
                       >
                         <span className="inline-flex items-center gap-2">
                           <MapPin className="size-3.5 text-fg-faint" aria-hidden />
@@ -138,7 +138,7 @@ export function RegionPicker({
                   );
                 })
               ) : (
-                <li className="px-3.5 py-2.5 text-[13px] text-fg-faint">일치하는 지역이 없어요</li>
+                <li className="px-3.5 py-2.5 text-[14px] text-fg-sub">일치하는 지역이 없어요</li>
               )}
             </ul>
           ) : null}
@@ -151,14 +151,14 @@ export function RegionPicker({
           {value.map((p) => (
             <span
               key={`${p.province}-${p.district ?? "전체"}`}
-              className="inline-flex items-center gap-1 rounded-chip bg-primary-weak px-2.5 py-1 text-[13px] font-semibold text-primary"
+              className="inline-flex items-center gap-1 rounded-chip bg-primary-weak px-2.5 py-1 text-[14px] font-semibold text-primary"
             >
               {formatRegionPick(p)}
               <button
                 type="button"
                 aria-label={`${formatRegionPick(p)} 삭제`}
                 onClick={() => remove(p)}
-                className="rounded-chip p-0.5 transition-colors hover:bg-overlay"
+                className="rounded-chip p-0.5 trans-state hover:bg-overlay"
               >
                 <X className="size-3" aria-hidden />
               </button>
@@ -168,7 +168,7 @@ export function RegionPicker({
       ) : null}
 
       {/* 시·도 브라우즈 — 클릭 시 시·군·구 펼침 */}
-      <div className="rounded-card border border-line bg-surface p-3">
+      <div className="rounded-card border border-line bg-plate p-3">
         <div className="flex flex-wrap gap-1.5">
           {KR_PROVINCES.map((province) => {
             const count = countFor(province.name);
@@ -199,12 +199,12 @@ export function RegionPicker({
         {openedProvince ? (
           <div className="mt-3 border-t border-line pt-3">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-[13px] font-semibold text-fg-sub">{openedProvince.fullName}</p>
+              <p className="text-[14px] font-semibold text-fg-sub">{openedProvince.fullName}</p>
               <button
                 type="button"
                 onClick={() => toggle({ province: openedProvince.name })}
                 className={cn(
-                  "rounded-chip border px-3 py-1 text-xs font-semibold transition-colors",
+                  "rounded-chip border px-3 py-1 text-xs font-semibold trans-state",
                   has({ province: openedProvince.name }) ? chipOn : chipOff,
                 )}
               >
@@ -221,7 +221,7 @@ export function RegionPicker({
                     aria-pressed={has(pick)}
                     onClick={() => toggle(pick)}
                     className={cn(
-                      "rounded-chip border px-3 py-1 text-xs font-medium transition-colors",
+                      "rounded-chip border px-3 py-1 text-xs font-medium trans-state",
                       has(pick) ? chipOn : chipOff,
                     )}
                   >

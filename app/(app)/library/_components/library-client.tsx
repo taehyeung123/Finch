@@ -98,13 +98,13 @@ function SectionHead({
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-        <h2 className="text-[18px] font-bold text-fg">{title}</h2>
+        <h2 className="text-[20px] font-bold text-fg">{title}</h2>
         <p className="text-[12px] text-fg-sub">{subtitle}</p>
       </div>
       <button
         type="button"
         onClick={onMore}
-        className="trans-state inline-flex shrink-0 cursor-pointer items-center gap-1.5 text-[13.5px] font-semibold text-fg-faint hover:text-fg"
+        className="trans-state inline-flex shrink-0 cursor-pointer items-center gap-1.5 text-[14px] font-semibold text-fg-sub hover:text-fg"
       >
         <RefreshCw className="size-3.5" aria-hidden />
         {moreLabel}
@@ -883,7 +883,7 @@ export function LibraryClient({
           data-open={toast ? "true" : "false"}
           role={toast?.tone === "error" ? "alert" : "status"}
           className={cn(
-            "toast-pop pointer-events-auto flex max-w-xl items-start gap-1.5 rounded-card border border-line-strong bg-overlay px-4 py-2.5 text-[13px] shadow-pop",
+            "toast-pop pointer-events-auto flex max-w-xl items-start gap-1.5 rounded-card border border-line-strong bg-overlay px-4 py-2.5 text-[14px] shadow-pop",
             toast?.tone === "error" ? "text-negative" : "text-fg-sub",
           )}
         >
@@ -907,11 +907,11 @@ export function LibraryClient({
         {!poolReady && !isDemo && totalSources === 0 && totalCollected === 0 ? (
           /* ① 신규 — 온보딩으로 결과 영역을 대체한다(추가가 아니라 대체) */
           <Card className="p-8 text-center">
-            <p className="text-[19px] font-bold text-fg">1분이면 첫 레퍼런스가 도착해요</p>
-            <p className="mt-1.5 text-[14px] text-fg-sub">
+            <p className="text-[20px] font-bold text-fg">1분이면 첫 레퍼런스가 도착해요</p>
+            <p className="mt-1.5 text-[15px] text-fg-sub">
               관심 키워드나 계정을 등록하면 매일 아침 자동으로 모아드려요.
             </p>
-            <p className="mt-1 text-[13px] text-fg-faint">① 주제·계정 등록 → ② 채널 선택 → ③ 매일 자동 수집</p>
+            <p className="mt-1 text-[14px] text-fg-sub">① 주제·계정 등록 → ② 채널 선택 → ③ 매일 자동 수집</p>
             <div className="mt-5">
               <Button onClick={() => openDrawer("sources")}>수집 기준 등록하기</Button>
             </div>
@@ -923,7 +923,7 @@ export function LibraryClient({
                     key={c}
                     type="button"
                     onClick={() => openDrawer("sources", c)}
-                    className="cursor-pointer rounded-chip bg-overlay px-3 py-1 text-[13px] text-fg-sub transition-colors hover:text-fg"
+                    className="cursor-pointer rounded-chip bg-overlay px-3 py-1 text-[14px] text-fg-sub trans-state hover:text-fg"
                   >
                     {c}
                   </button>
@@ -978,7 +978,7 @@ export function LibraryClient({
 
             {!hasQuery ? (
               <div className="mb-3 flex items-baseline gap-2.5">
-                <h2 className="text-[18px] font-bold text-fg">전체 레퍼런스</h2>
+                <h2 className="text-[20px] font-bold text-fg">전체 레퍼런스</h2>
                 <span className="tnum text-[12px] text-fg-sub">{displayEntries.length}건</span>
               </div>
             ) : null}
@@ -987,7 +987,7 @@ export function LibraryClient({
                 이미 이 검색어로 수집했으면 숨긴다(재과금 루프 차단). */}
             {poolResult?.isGap && canCollectQuery ? (
               <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-card border border-line bg-overlay px-4 py-3">
-                <p className="text-[13px] text-fg-sub">
+                <p className="text-[14px] text-fg-sub">
                   &lsquo;{query.trim()}&rsquo;와 정확히 일치하는 소재는 아직 없어서 비슷한 소재를 보여드리고 있어요.
                 </p>
                 <Button
@@ -1009,7 +1009,7 @@ export function LibraryClient({
                   더 보기
                 </Button>
               ) : displayEntries.length > PAGE_SIZE ? (
-                <p className="text-[13px] text-fg-faint">모두 불러왔어요</p>
+                <p className="text-[14px] text-fg-sub">모두 불러왔어요</p>
               ) : null}
             </div>
           </>
@@ -1116,14 +1116,14 @@ export function LibraryClient({
         <div
           role="status"
           aria-live="polite"
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-surface/85 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-body/85 backdrop-blur-sm"
         >
           <div className="collect-orbit">
             <FinchMark className="size-12 text-primary" />
           </div>
           <div className="text-center">
             <p className="text-[17px] font-bold">레퍼런스를 모으는 중이에요</p>
-            <p className="mt-1.5 text-[14px] text-fg-sub">{collectOverlay}</p>
+            <p className="mt-1.5 text-[15px] text-fg-sub">{collectOverlay}</p>
           </div>
         </div>
       ) : null}

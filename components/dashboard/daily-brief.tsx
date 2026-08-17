@@ -78,7 +78,7 @@ export function DailyBriefHero({ stats }: { stats: PoolHomeStats }) {
               </>
             )}
           </h2>
-          <p className="mt-2.5 max-w-[400px] text-[13px] leading-relaxed text-on-primary/80">
+          <p className="mt-2.5 max-w-[400px] text-[14px] leading-relaxed text-on-primary/80">
             {hasNew
               ? "최근 3일 동안 공용 풀에 쌓인 소재예요. 우리 업종에서 뭐가 뜨는지 확인해 보세요."
               : "매일 자동 수집이 돌며 새 소재가 쌓입니다. 업종별 레퍼런스를 둘러보세요."}
@@ -93,12 +93,12 @@ export function DailyBriefHero({ stats }: { stats: PoolHomeStats }) {
             key={n.title}
             href="/notifications"
             className={cn(
-              "group rounded-card px-3.5 py-3 transition-colors hover:bg-body",
+              "group rounded-card px-3.5 py-3 trans-state hover:bg-body",
               i > 0 && "border-t border-line/50",
             )}
           >
             <p className="tnum text-[11px] font-medium text-fg-faint">{n.date}</p>
-            <p className="mt-1 line-clamp-2 text-[13px] font-semibold leading-snug transition-colors group-hover:text-primary">
+            <p className="mt-1 line-clamp-2 text-[14px] font-semibold leading-snug trans-state group-hover:text-primary">
               {n.title}
             </p>
           </Link>
@@ -145,7 +145,7 @@ export function HomeSearch({ stats }: { stats: PoolHomeStats }) {
         className="shadow-panel flex h-16 items-center rounded-chip border border-line/60 bg-overlay pl-2.5 pr-2 transition-[border-color,box-shadow] focus-within:border-primary focus-within:shadow-[0_0_0_4px_var(--color-primary-weak),0_0_16px_rgba(107,110,116,0.16)]"
       >
         {/* 검색 대상 세그먼트 — 스니핏의 드롭다운 자리 */}
-        <label className="relative flex h-11 shrink-0 cursor-pointer items-center gap-1 rounded-chip bg-body pl-4 pr-8 text-[14px] font-semibold text-fg-sub transition-colors hover:text-fg">
+        <label className="relative flex h-11 shrink-0 cursor-pointer items-center gap-1 rounded-chip bg-body pl-4 pr-8 text-[15px] font-semibold text-fg-sub trans-state hover:text-fg">
           <span className="sr-only">검색 대상</span>
           <select
             value={target}
@@ -174,7 +174,7 @@ export function HomeSearch({ stats }: { stats: PoolHomeStats }) {
         />
         <button
           type="submit"
-          className="flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-chip bg-primary px-6 text-[15px] font-semibold text-on-primary transition-colors hover:bg-primary-hover"
+          className="flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-chip bg-primary px-6 text-[15px] font-semibold text-on-primary trans-state hover:bg-primary-hover"
         >
           <Search className="size-4" aria-hidden />
           검색
@@ -187,7 +187,7 @@ export function HomeSearch({ stats }: { stats: PoolHomeStats }) {
             <Link
               key={chip}
               href={`/library?q=${encodeURIComponent(chip)}`}
-              className="shadow-panel inline-flex items-center gap-1.5 rounded-chip border border-line/50 bg-overlay px-3.5 py-2 text-[13px] font-medium text-fg-sub transition-all hover:-translate-y-0.5 hover:border-primary hover:text-primary"
+              className="shadow-panel inline-flex items-center gap-1.5 rounded-chip border border-line/50 bg-overlay px-3.5 py-2 text-[14px] font-medium text-fg-sub transition-all hover:-translate-y-0.5 hover:border-primary hover:text-primary"
             >
               <Search className={cn("size-3", CHIP_TONES[i % CHIP_TONES.length])} aria-hidden />
               {chip}
@@ -205,7 +205,7 @@ function BrandAvatar({ name, index }: { name: string; index: number }) {
   return (
     <span
       className={cn(
-        "flex size-9 shrink-0 items-center justify-center rounded-full text-[14px] font-bold ring-1 ring-line/60",
+        "flex size-9 shrink-0 items-center justify-center rounded-full text-[15px] font-bold ring-1 ring-line/60",
         tones[index % tones.length],
       )}
       aria-hidden
@@ -223,7 +223,7 @@ export function ArchiveStatus({ stats }: { stats: PoolHomeStats }) {
         <div>
           <p className="text-[11px] font-bold tracking-[0.08em] text-primary">BRAND ARCHIVE</p>
           <h2 className="mt-1 text-[20px] font-bold leading-snug tracking-[-0.01em]">오늘의 아카이빙 현황</h2>
-          <p className="mt-1 text-[13px] text-fg-sub">최근 수집된 소재와 브랜드 흐름을 한눈에 확인하세요.</p>
+          <p className="mt-1 text-[14px] text-fg-sub">최근 수집된 소재와 브랜드 흐름을 한눈에 확인하세요.</p>
         </div>
         <ButtonLink href="/library" size="sm" className="rounded-chip px-4">
           탐색으로 이동 <ArrowRight className="size-3.5" aria-hidden />
@@ -242,7 +242,7 @@ export function ArchiveStatus({ stats }: { stats: PoolHomeStats }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <div className={cn(panel, "p-6 transition-transform hover:-translate-y-0.5")}>
           <div className="flex items-center justify-between">
-            <p className="text-[13px] font-semibold text-fg-sub">신규 수집 소재</p>
+            <p className="text-[14px] font-semibold text-fg-sub">신규 수집 소재</p>
             <span className="rounded-chip bg-primary-weak px-2.5 py-1 text-[11px] font-semibold text-primary">
               최근 3일
             </span>
@@ -254,10 +254,10 @@ export function ArchiveStatus({ stats }: { stats: PoolHomeStats }) {
           <p className="mt-2.5 text-[12px] text-fg-sub">공용 풀에 새로 수집된 소재예요</p>
           <div className="mt-5 border-t border-line/60 pt-4">
             <div className="flex items-baseline justify-between">
-              <p className="text-[13px] font-semibold text-fg-sub">수집 중인 브랜드</p>
-              <p className="tnum text-[24px] font-bold leading-none tracking-[-0.01em]">
+              <p className="text-[14px] font-semibold text-fg-sub">수집 중인 브랜드</p>
+              <p className="tnum text-[28px] font-bold leading-none tracking-[-0.01em]">
                 {formatCompact(stats.totalBrands)}
-                <span className="ml-1 text-[13px] font-medium tracking-normal text-fg-sub">개</span>
+                <span className="ml-1 text-[14px] font-medium tracking-normal text-fg-sub">개</span>
               </p>
             </div>
           </div>
@@ -265,7 +265,7 @@ export function ArchiveStatus({ stats }: { stats: PoolHomeStats }) {
 
         <div className={cn(panel, "p-6 transition-transform hover:-translate-y-0.5")}>
           <div className="flex items-center justify-between">
-            <p className="flex items-center gap-1.5 text-[13px] font-semibold text-fg-sub">
+            <p className="flex items-center gap-1.5 text-[14px] font-semibold text-fg-sub">
               <TrendingUp className="size-3.5 text-primary" aria-hidden /> 콘텐츠가 많이 게재된 브랜드
             </p>
             <span className="rounded-chip bg-primary-weak px-2.5 py-1 text-[11px] font-semibold text-primary">
@@ -278,13 +278,13 @@ export function ArchiveStatus({ stats }: { stats: PoolHomeStats }) {
                 <li key={b.name}>
                   <Link
                     href={`/library?q=${encodeURIComponent(b.name)}`}
-                    className="group flex items-center gap-3 rounded-card px-2.5 py-2.5 transition-colors hover:bg-body"
+                    className="group flex items-center gap-3 rounded-card px-2.5 py-2.5 trans-state hover:bg-body"
                   >
                     <BrandAvatar name={b.name} index={i} />
-                    <span className="min-w-0 flex-1 truncate text-[14px] font-semibold transition-colors group-hover:text-primary">
+                    <span className="min-w-0 flex-1 truncate text-[15px] font-semibold trans-state group-hover:text-primary">
                       {b.name}
                     </span>
-                    <span className="tnum shrink-0 text-[13px] font-semibold text-fg-sub">{b.count}개</span>
+                    <span className="tnum shrink-0 text-[14px] font-semibold text-fg-sub">{b.count}개</span>
                     <ChevronRight
                       className="size-4 shrink-0 text-fg-faint transition-transform group-hover:translate-x-0.5"
                       aria-hidden
@@ -294,7 +294,7 @@ export function ArchiveStatus({ stats }: { stats: PoolHomeStats }) {
               ))}
             </ul>
           ) : (
-            <p className="mt-3.5 text-[13px] text-fg-sub">이번 주 수집이 시작되면 브랜드가 표시돼요.</p>
+            <p className="mt-3.5 text-[14px] text-fg-sub">이번 주 수집이 시작되면 브랜드가 표시돼요.</p>
           )}
         </div>
       </div>
@@ -321,7 +321,7 @@ export function NextActions() {
             <a.icon className="size-[18px]" aria-hidden />
           </span>
           <span className="min-w-0">
-            <span className="block text-[14px] font-semibold transition-colors group-hover:text-primary">{a.label}</span>
+            <span className="block text-[15px] font-semibold trans-state group-hover:text-primary">{a.label}</span>
             <span className="mt-0.5 block truncate text-[12px] text-fg-sub">{a.desc}</span>
           </span>
         </Link>

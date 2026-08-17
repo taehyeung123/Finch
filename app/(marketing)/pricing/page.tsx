@@ -175,7 +175,7 @@ export default function PricingPage() {
       </section>
 
       {/* ── S2 크레딧 소모표 — 밴드 교차(surface). 칩 그리드로 시각 밀도를 올린다 ── */}
-      <section className="mt-20 border-y border-line bg-surface md:mt-24">
+      <section className="mt-20 border-y border-line md:mt-24">
         <div className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20">
           <div className="grid gap-10 lg:grid-cols-12 lg:gap-x-10">
             <div className="lg:col-span-4">
@@ -274,7 +274,7 @@ export default function PricingPage() {
                       <th
                         scope="colgroup"
                         colSpan={6}
-                        className="border-t border-line-strong bg-surface px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.1em] text-fg-sub"
+                        className="border-t border-line-strong bg-plate px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.1em] text-fg-sub"
                       >
                         {group.label}
                       </th>
@@ -332,7 +332,7 @@ export default function PricingPage() {
       </section>
 
       {/* ── S4 FAQ — 밴드 교차(surface) ── */}
-      <section className="border-y border-line bg-surface">
+      <section className="border-y border-line">
         <div className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20">
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-fg-sub">자주 묻는 질문</p>
           <h2 className="mt-3 text-[30px] font-bold tracking-[-0.02em] md:text-[36px]">

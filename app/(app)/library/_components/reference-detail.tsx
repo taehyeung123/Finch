@@ -49,7 +49,7 @@ const STATUS_OPTIONS: { value: NonNullable<ReferenceItem["status"]>; label: stri
 function WorkingBlock({ label }: { label: string }) {
   return (
     <div role="status" aria-live="polite" className="anim-swap mt-1.5 space-y-2.5 rounded-card border border-line bg-body px-3 py-3">
-      <p className="flex items-center gap-2 text-[13px] font-medium text-fg-sub">
+      <p className="flex items-center gap-2 text-[14px] font-medium text-fg-sub">
         <Loader2 className="size-4 animate-spin text-primary" aria-hidden />
         {label}
       </p>
@@ -235,12 +235,12 @@ export function ReferenceDetailModal({
             <ChannelBadge channel={item.channel} />
             <Badge>{item.category}</Badge>
             {item.matchedSource ? (
-              <span className="text-[13px] text-fg-faint">
+              <span className="text-[14px] text-fg-sub">
                 &lsquo;{item.matchedSource}&rsquo; 기준 · {item.collectedAgoHours}시간 전 수집
               </span>
             ) : (
               /* 공용 풀 소재에는 개인 "수집 기준"이 없다 — 빈 따옴표만 남기지 않는다 */
-              <span className="text-[13px] text-fg-faint">{item.collectedAgoHours}시간 전 수집</span>
+              <span className="text-[14px] text-fg-sub">{item.collectedAgoHours}시간 전 수집</span>
             )}
           </div>
           <button
@@ -278,7 +278,7 @@ export function ReferenceDetailModal({
                   href={item.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex h-9 w-full items-center justify-center gap-1.5 rounded-card border border-line bg-body text-[13px] font-semibold text-fg transition-colors hover:border-primary hover:text-primary"
+                  className="flex h-9 w-full items-center justify-center gap-1.5 rounded-card border border-line bg-body text-[14px] font-semibold text-fg trans-state hover:border-primary hover:text-primary"
                 >
                   원본 새 탭으로 열기
                   <ExternalLink className="size-3.5" aria-hidden />
@@ -296,7 +296,7 @@ export function ReferenceDetailModal({
                 </Button>
               </div>
               {actionMsg ? (
-                <p role="status" className="text-[12.5px] text-fg-sub">
+                <p role="status" className="text-[12px] text-fg-sub">
                   {actionMsg}
                 </p>
               ) : null}
@@ -306,11 +306,11 @@ export function ReferenceDetailModal({
             <div className="min-w-0 space-y-4">
               <div>
                 <h2 className="text-[17px] font-bold leading-snug">{item.title}</h2>
-                <p className="mt-1 text-[13px] text-fg-sub">{item.creatorHandle}</p>
+                <p className="mt-1 text-[14px] text-fg-sub">{item.creatorHandle}</p>
               </div>
 
               {/* 지표 */}
-              <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[13px]">
+              <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[14px]">
                 {item.views > 0 ? (
                   <span className="inline-flex items-center gap-1 text-fg-sub">
                     <Eye className="size-3.5 text-fg-faint" aria-hidden />
@@ -337,9 +337,9 @@ export function ReferenceDetailModal({
 
               {/* AI 요약·코멘트 */}
               <div className="space-y-2">
-                <p className="text-[13px] leading-relaxed text-fg-sub">{item.summary}</p>
+                <p className="text-[14px] leading-relaxed text-fg-sub">{item.summary}</p>
                 {item.aiComment ? (
-                  <p className="flex items-start gap-1.5 rounded-card bg-body px-3 py-2.5 text-[13px] leading-relaxed text-fg-sub">
+                  <p className="flex items-start gap-1.5 rounded-card bg-body px-3 py-2.5 text-[14px] leading-relaxed text-fg-sub">
                     <Sparkles className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden />
                     <span>
                       {item.aiComment}
@@ -371,8 +371,8 @@ export function ReferenceDetailModal({
               {/* 원본 캡션 전문 */}
               {item.caption ? (
                 <div>
-                  <p className="text-[13px] font-semibold">원본 캡션</p>
-                  <div className="mt-1.5 max-h-36 overflow-y-auto whitespace-pre-wrap rounded-card border border-line bg-body px-3 py-2.5 text-[13px] leading-relaxed text-fg-sub">
+                  <p className="text-[14px] font-semibold">원본 캡션</p>
+                  <div className="mt-1.5 max-h-36 overflow-y-auto whitespace-pre-wrap rounded-card border border-line bg-body px-3 py-2.5 text-[14px] leading-relaxed text-fg-sub">
                     {item.caption}
                   </div>
                 </div>
@@ -381,7 +381,7 @@ export function ReferenceDetailModal({
               {/* 릴스 대본 — 음성 받아쓰기 (인스타 전용).
                   풀 소재는 extractPoolTranscript(공용 캐시 우선) 경로로 동작한다. */}
               <div>
-                <p className="flex items-center gap-1.5 text-[13px] font-semibold">
+                <p className="flex items-center gap-1.5 text-[14px] font-semibold">
                   <Captions className="size-3.5 text-fg-faint" aria-hidden />
                   릴스 대본
                   <InfoTip>
@@ -391,7 +391,7 @@ export function ReferenceDetailModal({
                   </InfoTip>
                 </p>
                 {transcript ? (
-                  <div className="anim-swap mt-1.5 max-h-36 overflow-y-auto whitespace-pre-wrap rounded-card border border-line bg-body px-3 py-2.5 text-[13px] leading-relaxed text-fg-sub">
+                  <div className="anim-swap mt-1.5 max-h-36 overflow-y-auto whitespace-pre-wrap rounded-card border border-line bg-body px-3 py-2.5 text-[14px] leading-relaxed text-fg-sub">
                     {transcript}
                   </div>
                 ) : extracting ? (
@@ -410,7 +410,7 @@ export function ReferenceDetailModal({
                       <span className="ml-2 text-[12px] text-fg-faint">인스타그램 릴스만 지원</span>
                     ) : null}
                     {transcriptMsg ? (
-                      <p role="alert" className="mt-1.5 text-[13px] text-negative">
+                      <p role="alert" className="mt-1.5 text-[14px] text-negative">
                         {transcriptMsg}
                       </p>
                     ) : null}
@@ -421,7 +421,7 @@ export function ReferenceDetailModal({
               {/* AI 영상 분석 — 풀 전용. 대본 기반 후킹 구조 분석, creative_analyses 공용 캐시 */}
               {poolMode ? (
                 <div>
-                  <p className="flex items-center gap-1.5 text-[13px] font-semibold">
+                  <p className="flex items-center gap-1.5 text-[14px] font-semibold">
                     <Sparkles className="size-3.5 text-fg-faint" aria-hidden />
                     AI 영상 분석
                     <InfoTip>
@@ -446,13 +446,13 @@ export function ReferenceDetailModal({
                       {analysis.opening ? (
                         <div>
                           <p className="text-[12px] font-semibold text-fg-sub">첫 3초</p>
-                          <p className="mt-0.5 text-[13px] leading-relaxed">{analysis.opening}</p>
+                          <p className="mt-0.5 text-[14px] leading-relaxed">{analysis.opening}</p>
                         </div>
                       ) : null}
                       {analysis.flow.length > 0 ? (
                         <div>
                           <p className="text-[12px] font-semibold text-fg-sub">전개 구조</p>
-                          <ol className="mt-0.5 list-decimal space-y-0.5 pl-4 text-[13px] leading-relaxed">
+                          <ol className="mt-0.5 list-decimal space-y-0.5 pl-4 text-[14px] leading-relaxed">
                             {analysis.flow.map((step, i) => (
                               <li key={i}>{step}</li>
                             ))}
@@ -462,13 +462,13 @@ export function ReferenceDetailModal({
                       {analysis.target ? (
                         <div>
                           <p className="text-[12px] font-semibold text-fg-sub">타깃 추정</p>
-                          <p className="mt-0.5 text-[13px] leading-relaxed">{analysis.target}</p>
+                          <p className="mt-0.5 text-[14px] leading-relaxed">{analysis.target}</p>
                         </div>
                       ) : null}
                       {analysis.improvement ? (
                         <div>
                           <p className="text-[12px] font-semibold text-fg-sub">적용 포인트</p>
-                          <p className="mt-0.5 text-[13px] leading-relaxed">{analysis.improvement}</p>
+                          <p className="mt-0.5 text-[14px] leading-relaxed">{analysis.improvement}</p>
                         </div>
                       ) : null}
                     </div>
@@ -488,7 +488,7 @@ export function ReferenceDetailModal({
                         <span className="ml-2 text-[12px] text-fg-faint">인스타그램 릴스만 지원</span>
                       ) : null}
                       {analysisMsg ? (
-                        <p role="alert" className="mt-1.5 text-[13px] text-negative">
+                        <p role="alert" className="mt-1.5 text-[14px] text-negative">
                           {analysisMsg}
                         </p>
                       ) : null}
@@ -499,29 +499,29 @@ export function ReferenceDetailModal({
 
               {/* 내 메모 */}
               <div hidden={poolMode}>
-                <p className="text-[13px] font-semibold">내 메모</p>
+                <p className="text-[14px] font-semibold">내 메모</p>
                 <textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   placeholder="이 레퍼런스에서 배울 점, 적용 아이디어…"
                   rows={3}
-                  className="mt-1.5 w-full resize-y rounded-card border border-line bg-body px-3 py-2.5 text-[13px] leading-relaxed placeholder:text-fg-faint focus:border-primary focus:outline-none"
+                  className="mt-1.5 w-full resize-y rounded-card border border-line bg-body px-3 py-2.5 text-[14px] leading-relaxed placeholder:text-fg-faint focus:border-primary focus:outline-none"
                 />
                 <div className="mt-1.5 flex items-center gap-2">
                   <Button variant="secondary" size="sm" onClick={handleSaveNote} disabled={noteSaving}>
                     메모 저장
                   </Button>
-                  {noteMsg ? <span className="text-[13px] text-fg-sub">{noteMsg}</span> : null}
+                  {noteMsg ? <span className="text-[14px] text-fg-sub">{noteMsg}</span> : null}
                 </div>
               </div>
 
               {/* 확인 상태 */}
-              <label hidden={poolMode} className="flex items-center gap-2 text-[13px] text-fg-sub">
+              <label hidden={poolMode} className="flex items-center gap-2 text-[14px] text-fg-sub">
                 확인 상태
                 <select
                   value={status}
                   onChange={(e) => void handleStatus(e.target.value as NonNullable<ReferenceItem["status"]>)}
-                  className="h-8 rounded-card border border-line bg-body px-2.5 text-[13px] font-medium text-fg outline-none transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
+                  className="h-8 rounded-card border border-line bg-body px-2.5 text-[14px] font-medium text-fg outline-none trans-state hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
                 >
                   {STATUS_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -565,7 +565,7 @@ export function ReferenceDetailModal({
                 aria-label={favorite ? "스크랩 해제" : "스크랩"}
                 onClick={onToggleFavorite}
                 className={cn(
-                  "rounded-card p-1.5 transition-colors",
+                  "rounded-card p-1.5 trans-state",
                   favorite ? "text-primary" : "text-fg-faint hover:bg-body hover:text-fg-sub",
                 )}
               >

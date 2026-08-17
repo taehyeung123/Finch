@@ -11,12 +11,17 @@
 @theme {
   /* 색상은 전부 런타임 CSS 변수 참조 (라이트/다크 전환용) */
   --color-surface: var(--surface);
+  --color-rail: var(--rail);
+  --color-tint-hover: var(--tint-hover);
+  --color-scrim: var(--scrim);
+  --color-on-scrim: var(--on-scrim);
   --color-body: var(--body);
   --color-overlay: var(--overlay);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
 
   --color-fg: var(--fg);
+  --color-fg-strong: var(--fg-strong);
   --color-fg-sub: var(--fg-sub);
   --color-fg-faint: var(--fg-faint);
 
@@ -100,15 +105,31 @@
 :root {
   color-scheme: light;
 
-  --surface: #f4f5f7; /* 페이지 최하단 배경 — 카드보다 살짝 회색 */
+  /* 2026-08-15: 지면을 **순백**으로 바꿨다(사장님 확정 + 스니핏 실측).
+     앞서는 회색 지면(#F4F5F7) + 흰 카드 + 테두리 + 그림자 없음이라, 단차와 선이
+     이중으로 구획하면서 정작 뜨는 느낌이 없어 화면이 서류처럼 읽혔다.
+     이제 깊이는 **헤어라인 + 2겹 그림자**가 진다(--shadow-card). */
+  --surface: #ffffff; /* 페이지 지면 — 순백 */
   --body: #ffffff; /* 본문 카드·패널 */
   --overlay: #ffffff; /* 모달·시트·드롭다운 (그림자로 띄움) */
-  --line: rgba(17, 20, 26, 0.1); /* 어두운 테두리 */
-  --line-strong: rgba(17, 20, 26, 0.18);
+  /* 사이드바 등 "지면과 갈라야 하는 큰 면" 전용 — 0.8% 단차. 거의 안 보이지만 경계가 생긴다 */
+  --rail: #fdfdfe;
+  /* 흰 지면에서 rgba(17,20,26,.10)은 너무 진하다 — 스니핏 실측(#EBEEF1) 급으로 */
+  --line: #ebeef1;
+  --line-strong: #dbe0e6;
 
-  --fg: #16161c;
-  --fg-sub: rgba(22, 22, 28, 0.64);
-  --fg-faint: rgba(22, 22, 28, 0.44);
+  /* 본문을 순검정에서 살짝 물렸다 — 스니핏 본문이 #434855 이고 그게 페이지에서 가장
+     많이 쓰인 색이다. 오래 읽기 편하고 흰 지면에서 눈이 덜 아프다.
+     제목(--fg-strong)은 진하게 남겨 위계를 만든다. */
+  --fg-strong: #16161c;
+  --fg: #2a2d36;
+  --fg-sub: rgba(22, 22, 28, 0.62); /* 흰 지면 대비 5.0:1 — AA 통과 */
+  /* 0.44 는 흰 지면에서 2.88:1 로 AA(4.5)는 물론 큰 글자 기준(3:1)도 미달이었다.
+     지면이 회색(#F4F5F7)일 땐 그나마 덜 티가 났지만 순백에서는 그냥 안 보인다.
+     0.55 로 올려 4.0:1(아이콘·플레이스홀더·비활성 UI 기준 통과)을 확보하고,
+     **본문 텍스트에는 이 토큰을 쓰지 않는다** — 본문은 --fg-sub 가 맡는다.
+     흰 지면 위에서 AA 를 통과하는 회색을 셋이나 만들 수는 없다. */
+  --fg-faint: rgba(22, 22, 28, 0.55);
 
   /* 브랜드 코랄 — 라이트/다크 공통 */
   --primary: #ff6b4a;
@@ -142,10 +163,19 @@
 
   /* 떠있는 요소용 그림자 (라이트 전용) — 다크에서는 none */
   --shadow-pop: 0 6px 20px -4px rgba(17, 20, 26, 0.14), 0 2px 6px -2px rgba(17, 20, 26, 0.08);
+  /* 정적 카드 — 스니핏 실측 2겹. 가까운 겹이 가장자리를 앉히고, 먼 겹이 공중에 띄운다.
+     헤어라인(--line)과 **함께** 쓴다. 흰 카드가 흰 지면 위에 있으니 둘 다 필요하다. */
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.08), 0 6px 14px rgba(15, 23, 42, 0.04);
+  --tint-hover: rgba(16, 16, 20, 0.045);
+  /* 사진·썸네일 위 캡션 스크림. **테마와 무관하게 항상 어둡다** — 그 위에 얹히는
+     건 지면이 아니라 이미지이기 때문이다. fg/body 로 대신하면 다크에서 밝은
+     띠가 썸네일 위로 튀어나온다. */
+  --scrim: rgba(12, 12, 17, 0.72);
+  --on-scrim: #ffffff;
 
-  /* object-contain 썸네일의 레터박스 — bg-surface(#F4F5F7)면 회색 구멍으로 읽힌다.
-     카드 호버 시 이 판만 body로 한 칸 올라온다(요소는 1px도 안 움직인다). */
-  --plate: #fafafb;
+  /* object-contain 썸네일의 레터박스 — 지면이 순백이 된 뒤에는 판이 한 칸 **아래**여야
+     한다(앞서는 지면이 회색이라 판이 위였다). 테두리와 같은 색을 써서 색 수를 늘리지 않는다. */
+  --plate: #f1f3f5;
 
   /* 요금제 플랜 색 — 라이트.
      ink = 글자·선용(흰 배경 대비 4.5:1 이상). field = 카드 배경면.
@@ -174,11 +204,15 @@
   --surface: #0c0c11;
   --body: #16161c;
   --overlay: #212128;
+  --rail: #101015; /* 다크는 지면이 이미 어두워 사이드바를 한 칸 밝게 */
   --line: rgba(255, 255, 255, 0.08);
   --line-strong: rgba(255, 255, 255, 0.16);
+  --tint-hover: rgba(255, 255, 255, 0.06);
 
-  --fg: #f7f8fa;
-  --fg-sub: rgba(247, 248, 250, 0.64);
+  /* 다크는 지면이 어두워 본문을 물릴 이유가 없다 — strong 은 별칭 */
+  --fg-strong: #f7f8fa;
+  --fg: #e8e9ee;
+  --fg-sub: rgba(247, 248, 250, 0.62);
   --fg-faint: rgba(247, 248, 250, 0.4);
 
   --primary-weak: rgba(255, 107, 74, 0.14);
@@ -201,6 +235,8 @@
 
   /* 다크는 그림자 대신 반투명 테두리로 깊이 (PART 7.2) */
   --shadow-pop: none;
+  /* 다크는 밝기 단차가 이미 깊이를 만든다 — 그림자는 안 쓴다 */
+  --shadow-card: none;
   --plate: #101015;
 
   /* 요금제 플랜 색 — 다크는 라이트를 뒤집는 게 아니라 **따로 짠다**.
@@ -244,6 +280,35 @@ body {
 */
 @utility shadow-pop {
   box-shadow: var(--shadow-pop);
+}
+
+/*
+  .card-face — 정적 카드 표면. **헤어라인 + 그림자를 함께** 쓴다.
+
+  흰 지면 위 흰 카드라 둘 중 하나만으로는 안 선다: 그림자가 띄우고 헤어라인이
+  가장자리를 또렷하게 한다(스니핏 실측 구조). 다크는 밝기 단차가 그 일을 하므로
+  --shadow-card 가 none 이고 테두리만 남는다.
+*/
+@utility card-face {
+  background: var(--color-body);
+  border: 1px solid var(--color-line);
+  box-shadow: var(--shadow-card);
+}
+
+/* 호버 — 선이 진해지고 그림자가 한 칸 뜬다. 요소는 1px도 안 움직인다.
+   다크는 --shadow-card·--shadow-pop 이 none 이라 자동으로 테두리만 반응한다. */
+@utility card-hover {
+  transition-property: border-color, box-shadow;
+  transition-duration: var(--dur-1);
+  transition-timing-function: var(--ease-state);
+  transition-delay: 40ms;
+}
+@media (hover: hover) and (pointer: fine) {
+  .card-hover:hover {
+    border-color: var(--color-line-strong);
+    box-shadow: var(--shadow-pop);
+    transition-delay: 0ms;
+  }
 }
 
 ::selection {
@@ -546,6 +611,27 @@ body {
   --dur-3: 240ms;  /*  6τ 표면 이동 — 필터 패널, 시트, 드로어, 사이드바 폭 */
   --dur-4: 380ms;
   --dur-morph: 380ms;
+}
+
+/* ───────────────────────────────────────────────────────────────
+   제목 자간 — 한글·라틴 혼용 제목은 기본 자간이 뜬다. 벤치마크(스니핏)는
+   디스플레이에 -0.04em, 소제목에 -0.02em 을 준다. 화면 100여 곳에 tracking
+   유틸을 손으로 붙이는 대신 base 레이어에서 한 번에 정한다 — 개별
+   tracking-[...] 은 유틸리티 레이어라 그대로 이 규칙을 덮는다.
+
+   본문에는 절대 안 건다. 한글 본문 자간을 좁히면 받침이 붙어 가독이 떨어진다.
+─────────────────────────────────────────────────────────────── */
+@layer base {
+  /* 본문(--fg)을 #2A2D36 으로 물렸으니 제목은 되돌려 진하게 — 이게 위계를 만든다.
+     각 화면에 text-fg-strong 을 100곳 붙이는 대신 여기서 한 번에 정한다. */
+  h1,
+  h2,
+  h3,
+  h4 { color: var(--color-fg-strong); }
+  h1 { letter-spacing: -0.035em; }
+  h2 { letter-spacing: -0.025em; }
+  h3,
+  h4 { letter-spacing: -0.015em; }
 }
 
 /* ───────────────────────────────────────────────────────────────

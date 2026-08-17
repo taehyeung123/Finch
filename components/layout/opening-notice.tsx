@@ -75,8 +75,8 @@ export function OpeningNotice() {
         </div>
 
         <div className="space-y-2 px-5 py-5">
-          <h2 className="text-[16px] font-bold">지금은 임시오픈 기간입니다</h2>
-          <p className="text-[14px] leading-relaxed text-fg-sub">
+          <h2 className="text-[17px] font-bold">지금은 임시오픈 기간입니다</h2>
+          <p className="text-[15px] leading-relaxed text-fg-sub">
             핀치 SNS 통합관리 플랫폼은 현재 임시오픈 상태이며, 정식 런칭은 9월 중으로 예정되어 있습니다. 그
             전까지 일부 기능은 계속 다듬어질 수 있습니다. 먼저 가입해 주셔서 감사합니다 — 정식 런칭 소식은
             가장 먼저 안내드리겠습니다.
@@ -87,7 +87,7 @@ export function OpeningNotice() {
           <button
             type="button"
             onClick={dismissToday}
-            className="text-[13px] text-fg-faint underline-offset-2 hover:text-fg-sub hover:underline"
+            className="text-[14px] text-fg-sub underline-offset-2 hover:text-fg-sub hover:underline"
           >
             오늘 하루 종일 보지 않기
           </button>

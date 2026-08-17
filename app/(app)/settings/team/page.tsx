@@ -82,7 +82,7 @@ export default async function TeamSettingsPage() {
         <CardBody>
           <TeamClient initialRows={rows} isOwner={isOwner} demoMode={isDemoMode()} />
           {!isOwner && !isDemoMode() ? (
-            <p className="mt-4 text-[13px] text-fg-sub">
+            <p className="mt-4 text-[14px] text-fg-sub">
               멤버 초대·역할 관리는 워크스페이스 소유자만 할 수 있어요.
             </p>
           ) : null}
@@ -99,7 +99,7 @@ export default async function TeamSettingsPage() {
             <Badge tone="neutral">Pro·Agency 플랜 예정</Badge>
           </div>
           <h3 className="mt-3 text-[15px] font-bold">클라이언트별 프로젝트 분리</h3>
-          <p className="mt-1 text-[13px] leading-relaxed text-fg-sub">
+          <p className="mt-1 text-[14px] leading-relaxed text-fg-sub">
             클라이언트마다 채널·경쟁사·리포트를 독립된 프로젝트로 나눠 관리하고, 멤버별 접근 권한을
             프로젝트 단위로 지정할 수 있어요.
           </p>
@@ -113,7 +113,7 @@ export default async function TeamSettingsPage() {
             <Badge tone="neutral">Pro·Agency 플랜 예정</Badge>
           </div>
           <h3 className="mt-3 text-[15px] font-bold">클라이언트 공유용 뷰어 링크</h3>
-          <p className="mt-1 text-[13px] leading-relaxed text-fg-sub">
+          <p className="mt-1 text-[14px] leading-relaxed text-fg-sub">
             로그인 없이 성과를 열람할 수 있는 만료시간 있는 보안 URL을 발급해 클라이언트에게
             리포트 화면을 그대로 공유할 수 있어요.
           </p>

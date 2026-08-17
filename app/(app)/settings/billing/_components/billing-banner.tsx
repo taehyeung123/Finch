@@ -29,7 +29,7 @@ export function BillingBanner({ error, notice }: { error?: string | null; notice
     <>
       {current.error ? (
         <div
-          className="rounded-card border border-negative/40 bg-negative-weak p-4 text-[14px] text-negative-strong"
+          className="rounded-card border border-negative/40 bg-negative-weak p-4 text-[15px] text-negative-strong"
           role="alert"
         >
           {current.error}
@@ -37,7 +37,7 @@ export function BillingBanner({ error, notice }: { error?: string | null; notice
       ) : null}
       {current.notice ? (
         <div
-          className="rounded-card border border-positive/40 bg-positive-weak p-4 text-[14px] text-positive-strong"
+          className="rounded-card border border-positive/40 bg-positive-weak p-4 text-[15px] text-positive-strong"
           role="status"
         >
           {current.notice}

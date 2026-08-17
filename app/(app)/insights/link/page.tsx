@@ -54,7 +54,7 @@ export default function AnalyzePage() {
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://www.instagram.com/reel/... 또는 TikTok·Threads 게시물 URL"
             aria-label="분석할 게시물 URL"
-            className="h-10 flex-1 rounded-card border border-line bg-overlay px-3 text-[15px] text-fg placeholder:text-fg-faint transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+            className="h-10 flex-1 rounded-card border border-line bg-overlay px-3 text-[15px] text-fg placeholder:text-fg-faint trans-state hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
           />
           <Button type="submit" disabled={!url.trim() || pending}>
             <Search className="size-4" aria-hidden />
@@ -64,7 +64,7 @@ export default function AnalyzePage() {
       </Card>
 
       {error ? (
-        <div className="rounded-card border border-warning/40 bg-warning-weak p-4 text-[14px] text-fg-sub" role="alert">
+        <div className="rounded-card border border-warning/40 bg-warning-weak p-4 text-[15px] text-fg-sub" role="alert">
           {error}
         </div>
       ) : null}
@@ -84,7 +84,7 @@ export default function AnalyzePage() {
               </div>
               <div className="min-w-0">
                 <p className="text-[17px] font-bold leading-snug">{result.caption}</p>
-                <p className="mt-1 text-[13px] text-fg-sub">
+                <p className="mt-1 text-[14px] text-fg-sub">
                   {formatAgo(result.publishedAt)} 게시 ·{" "}
                   <span className="break-all text-fg-faint">{result.url}</span>
                 </p>
@@ -120,7 +120,7 @@ export default function AnalyzePage() {
                     </div>
                   </>
                 ) : (
-                  <p className="py-8 text-center text-[13px] leading-relaxed text-fg-faint">
+                  <p className="py-8 text-center text-[14px] leading-relaxed text-fg-sub">
                     시간대별 누적 조회는 인스타그램 공식 API가 제공하지 않는 데이터예요.
                     <br />
                     현재 누적 지표(조회·좋아요·댓글·공유)는 위 카드에서 확인할 수 있습니다.
@@ -144,7 +144,7 @@ export default function AnalyzePage() {
                       </span>
                     ))
                   ) : (
-                    <p className="text-[13px] text-fg-faint">게시물에 해시태그가 없어요.</p>
+                    <p className="text-[14px] text-fg-sub">게시물에 해시태그가 없어요.</p>
                   )}
                 </CardBody>
               </Card>
@@ -173,7 +173,7 @@ export default function AnalyzePage() {
                       ]}
                     />
                   ) : (
-                    <p className="text-[13px] text-fg-faint">
+                    <p className="text-[14px] text-fg-sub">
                       분석할 댓글이 충분하지 않습니다.
                     </p>
                   )}
@@ -195,7 +195,7 @@ export default function AnalyzePage() {
       <Card>
         <CardHeader title="분석 히스토리" description="최근에 분석한 게시물" />
         <CardBody className="overflow-x-auto">
-          <table className="w-full min-w-[520px] text-[14px]">
+          <table className="w-full min-w-[520px] text-[15px]">
             <thead>
               <tr className="border-b border-line text-left text-xs text-fg-faint">
                 <th className="pb-2 font-medium">URL</th>
@@ -214,13 +214,13 @@ export default function AnalyzePage() {
                     <td className="py-3 pr-3">
                       <ChannelBadge channel={h.channel} />
                     </td>
-                    <td className="py-3 pr-3 text-[13px] text-fg-sub">{formatAgo(h.analyzedAt)}</td>
+                    <td className="py-3 pr-3 text-[14px] text-fg-sub">{formatAgo(h.analyzedAt)}</td>
                     <td className="tnum py-3 text-right">{formatCompact(h.views)}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={4} className="py-6 text-center text-[13px] text-fg-faint">
+                  <td colSpan={4} className="py-6 text-center text-[14px] text-fg-sub">
                     아직 분석 기록이 없어요. 위에서 첫 게시물을 분석해 보세요.
                   </td>
                 </tr>

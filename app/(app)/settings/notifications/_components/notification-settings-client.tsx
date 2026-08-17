@@ -147,8 +147,8 @@ export function NotificationSettingsClient({ initial }: { initial: NotificationS
                 className="grid grid-cols-[1fr_56px_56px] items-center gap-x-6 border-t border-line py-3.5"
               >
                 <div className="min-w-0 pr-3">
-                  <p className="text-[14px] font-semibold">{row.label}</p>
-                  <p className="mt-0.5 text-[13px] text-fg-sub">{row.description}</p>
+                  <p className="text-[15px] font-semibold">{row.label}</p>
+                  <p className="mt-0.5 text-[14px] text-fg-sub">{row.description}</p>
                 </div>
                 <div className="flex justify-center">
                   <Switch
@@ -167,7 +167,7 @@ export function NotificationSettingsClient({ initial }: { initial: NotificationS
               </div>
             ))}
           </div>
-          <p className="mt-4 text-[13px] text-fg-sub">
+          <p className="mt-4 text-[14px] text-fg-sub">
             이메일 발송은 알림 발송 인프라 오픈과 함께 순차 적용됩니다. 설정은 지금 저장돼요.
           </p>
         </CardBody>

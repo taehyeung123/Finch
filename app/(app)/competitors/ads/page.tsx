@@ -46,8 +46,8 @@ export default function CompetitorAdsPage() {
           <AlertTriangle className="size-4" aria-hidden />
         </span>
         <div className="min-w-0">
-          <p className="text-[14px] font-semibold">한국 상업 광고는 Meta 광고 라이브러리 API로 자동 수집되지 않습니다</p>
-          <p className="mt-1 text-[13px] leading-relaxed text-fg-sub">
+          <p className="text-[15px] font-semibold">한국 상업 광고는 Meta 광고 라이브러리 API로 자동 수집되지 않습니다</p>
+          <p className="mt-1 text-[14px] leading-relaxed text-fg-sub">
             Meta는 2023년 DSA 이후 상업(비정치) 광고를 EU·영국 노출 광고에 한해서만 API로 제공합니다. 한국을 포함한
             그 외 지역은 정치·사회 이슈 광고만 조회할 수 있어, 한국 브랜드의 광고는 자동 수집 대상이 아닙니다. 아래 피드는
             기능 예시이며, 한국 경쟁사는{" "}
@@ -74,7 +74,7 @@ export default function CompetitorAdsPage() {
           {monitoredPages.map((page) => (
             <span
               key={page}
-              className="rounded-chip border border-line bg-overlay px-3.5 py-1.5 text-[13px] font-semibold text-fg-sub"
+              className="rounded-chip border border-line bg-overlay px-3.5 py-1.5 text-[14px] font-semibold text-fg-sub"
             >
               {page}
             </span>
@@ -85,8 +85,8 @@ export default function CompetitorAdsPage() {
       {/* 광고 피드 */}
       <section aria-label="경쟁사 광고 피드" className="space-y-3">
         <div>
-          <h3 className="text-[19px] font-bold leading-snug">광고 피드</h3>
-          <p className="mt-0.5 text-[13px] text-fg-sub">
+          <h3 className="text-[20px] font-bold leading-snug">광고 피드</h3>
+          <p className="mt-0.5 text-[14px] text-fg-sub">
             게재 기간이 길수록 성과가 검증된 소재일 가능성이 높습니다.
           </p>
         </div>
@@ -106,7 +106,7 @@ export default function CompetitorAdsPage() {
 
                 <div className="flex flex-1 flex-col gap-2 p-5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-[13px] font-semibold text-fg-sub">{ad.pageName}</span>
+                    <span className="truncate text-[14px] font-semibold text-fg-sub">{ad.pageName}</span>
                     <span className="flex shrink-0 items-center gap-1.5">
                       {ad.isNew ? <Badge tone="primary">NEW</Badge> : null}
                       <span className="text-xs text-fg-faint">{formatAgo(ad.detectedAt)} 감지</span>
@@ -114,7 +114,7 @@ export default function CompetitorAdsPage() {
                   </div>
 
                   <p className="text-[15px] font-semibold leading-snug">{ad.headline}</p>
-                  <p className="text-[13px] leading-relaxed text-fg-sub">{ad.bodyPreview}</p>
+                  <p className="text-[14px] leading-relaxed text-fg-sub">{ad.bodyPreview}</p>
 
                   <div className="mt-auto space-y-3 pt-2">
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -151,8 +151,8 @@ export default function CompetitorAdsPage() {
             <Info className="size-4" aria-hidden />
           </span>
           <div>
-            <p className="text-[14px] font-semibold">광고비(스펜드)·노출수는 상업 광고에 제공되지 않습니다</p>
-            <p className="mt-1 text-[13px] leading-relaxed text-fg-sub">
+            <p className="text-[15px] font-semibold">광고비(스펜드)·노출수는 상업 광고에 제공되지 않습니다</p>
+            <p className="mt-1 text-[14px] leading-relaxed text-fg-sub">
               Meta 광고 라이브러리 API는 집행 금액·노출수를 정치·사회 이슈 광고에만 범위값으로 제공합니다. 상업
               광고는 소재·게재 기간·노출 플랫폼 등 공개 항목만 확인할 수 있습니다.
             </p>
@@ -163,8 +163,8 @@ export default function CompetitorAdsPage() {
             <BellRing className="size-4" aria-hidden />
           </span>
           <div>
-            <p className="text-[14px] font-semibold">하루 4회 새 광고를 감지합니다</p>
-            <p className="mt-1 text-[13px] leading-relaxed text-fg-sub">
+            <p className="text-[15px] font-semibold">하루 4회 새 광고를 감지합니다</p>
+            <p className="mt-1 text-[14px] leading-relaxed text-fg-sub">
               등록된 페이지를 하루 4회 확인해 새로 시작된 광고를 감지합니다. 새 광고가 감지되면 인앱·이메일
               알림으로 바로 알려드립니다.
             </p>

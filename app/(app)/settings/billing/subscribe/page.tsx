@@ -37,22 +37,22 @@ export default async function SubscribePage({
               <span className="text-lg font-bold">핀치 {planName}</span>
               <Badge tone="primary">월 자동결제</Badge>
             </div>
-            <p className="mt-1 text-[13px] text-fg-sub">가격은 정식 출시 전 잠정값입니다. (테스트 결제)</p>
+            <p className="mt-1 text-[14px] text-fg-sub">가격은 정식 출시 전 잠정값입니다. (테스트 결제)</p>
           </div>
-          <span className="shrink-0 text-xl font-bold tnum">{formatKRW(amount)}<span className="text-[13px] font-normal text-fg-sub">/월</span></span>
+          <span className="shrink-0 text-xl font-bold tnum">{formatKRW(amount)}<span className="text-[14px] font-normal text-fg-sub">/월</span></span>
         </div>
       </Card>
 
       {isDemoMode() || !clientKey ? (
         <Card className="p-5">
-          <p className="text-[14px] text-fg-sub">
+          <p className="text-[15px] text-fg-sub">
             {isDemoMode()
               ? "데모 모드에서는 구독할 수 없어요."
               : "정기결제 설정이 아직 완료되지 않았습니다. (NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY 미설정)"}
           </p>
           <Link
             href="/settings/billing"
-            className="mt-3 inline-block text-[14px] font-semibold text-primary underline underline-offset-2"
+            className="mt-3 inline-block text-[15px] font-semibold text-primary underline underline-offset-2"
           >
             요금제로 돌아가기
           </Link>

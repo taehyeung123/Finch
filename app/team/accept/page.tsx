@@ -49,7 +49,7 @@ export default async function TeamAcceptPage({
     return (
       <Shell>
         <h1 className="text-xl font-bold">잘못된 초대 링크예요</h1>
-        <p className="mt-2 text-[14px] text-fg-sub">
+        <p className="mt-2 text-[15px] text-fg-sub">
           초대 링크에 토큰이 없습니다. 받으신 메일의 링크를 다시 확인해 주세요.
         </p>
       </Shell>
@@ -60,7 +60,7 @@ export default async function TeamAcceptPage({
     return (
       <Shell>
         <h1 className="text-xl font-bold">데모 모드예요</h1>
-        <p className="mt-2 text-[14px] text-fg-sub">팀 초대 수락은 실 서비스 환경에서만 동작합니다.</p>
+        <p className="mt-2 text-[15px] text-fg-sub">팀 초대 수락은 실 서비스 환경에서만 동작합니다.</p>
       </Shell>
     );
   }
@@ -70,7 +70,7 @@ export default async function TeamAcceptPage({
     return (
       <Shell>
         <h1 className="text-xl font-bold">잠시 후 다시 시도해 주세요</h1>
-        <p className="mt-2 text-[14px] text-fg-sub">서버 설정 문제로 초대를 처리할 수 없어요.</p>
+        <p className="mt-2 text-[15px] text-fg-sub">서버 설정 문제로 초대를 처리할 수 없어요.</p>
       </Shell>
     );
   }
@@ -89,7 +89,7 @@ export default async function TeamAcceptPage({
     return (
       <Shell>
         <h1 className="text-xl font-bold">유효하지 않은 초대예요</h1>
-        <p className="mt-2 text-[14px] text-fg-sub">
+        <p className="mt-2 text-[15px] text-fg-sub">
           링크가 취소됐거나 잘못됐어요. 워크스페이스 소유자에게 새 초대를 요청해 주세요.
         </p>
       </Shell>
@@ -112,12 +112,12 @@ export default async function TeamAcceptPage({
     return (
       <Shell>
         <h1 className="text-xl font-bold">계정이 일치하지 않아요</h1>
-        <p className="mt-2 text-[14px] leading-relaxed text-fg-sub">
+        <p className="mt-2 text-[15px] leading-relaxed text-fg-sub">
           이 초대는 <span className="font-semibold text-fg">{invite.email}</span> 주소로만 수락할 수 있어요.
           지금은 <span className="font-semibold text-fg">{user.email}</span>(으)로 로그인돼 있어요.
         </p>
         <form action="/auth/signout" method="post" className="mt-5">
-          <button type="submit" className="text-[14px] font-semibold text-primary underline underline-offset-2">
+          <button type="submit" className="text-[15px] font-semibold text-primary underline underline-offset-2">
             로그아웃하고 다른 계정으로 로그인
           </button>
         </form>
@@ -136,7 +136,7 @@ export default async function TeamAcceptPage({
       return (
         <Shell>
           <h1 className="text-xl font-bold">처리 중 오류가 발생했어요</h1>
-          <p className="mt-2 text-[14px] text-fg-sub">잠시 후 다시 시도해 주세요.</p>
+          <p className="mt-2 text-[15px] text-fg-sub">잠시 후 다시 시도해 주세요.</p>
         </Shell>
       );
     }

@@ -401,14 +401,14 @@ function Field({
   return (
     <div>
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-        <p className="flex items-center gap-1.5 text-[14px] font-bold text-fg">
+        <p className="flex items-center gap-1.5 text-[15px] font-bold text-fg">
           {label}
           {info ? <InfoTip>{info}</InfoTip> : null}
         </p>
         {/* 힌트는 회색 잔글씨가 아니라 **포인트 컬러**다(스니핏 실측 — 강조색 14px).
             "여기서 뭔가 달라진다"는 안내는 눈에 띄어야 안내다. */}
         {hint ? (
-          <p className="flex items-center gap-1 text-[12.5px] font-medium text-primary">
+          <p className="flex items-center gap-1 text-[12px] font-medium text-primary">
             <Sparkles className="size-3 shrink-0" aria-hidden />
             {hint}
           </p>
@@ -443,7 +443,7 @@ function Chip({
       aria-pressed={on}
       onClick={onClick}
       className={cn(
-        "trans-state inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-card border px-5 text-[14px]",
+        "trans-state inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-card border px-5 text-[15px]",
         on
           ? "border-primary bg-primary-weak font-semibold text-primary"
           : tint
@@ -502,7 +502,7 @@ function TargetSegmented({
       ref={trackRef}
       role="tablist"
       aria-label="플랫폼 필터"
-      className="relative flex w-full items-center gap-0.5 overflow-x-auto rounded-t-card bg-surface p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="relative flex w-full items-center gap-0.5 overflow-x-auto rounded-t-card bg-plate p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       <span ref={thumbRef} className="seg-thumb" aria-hidden />
       {TARGET_OPTIONS.map((o) => {
@@ -518,7 +518,7 @@ function TargetSegmented({
             aria-selected={on}
             onClick={() => onChange(o.value)}
             className={cn(
-              "relative z-10 inline-flex h-8 flex-1 shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-card px-2.5 text-[13.5px] transition-colors duration-200",
+              "relative z-10 inline-flex h-8 flex-1 shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-card px-2.5 text-[14px] transition-colors duration-200",
               on ? "font-bold text-fg" : "font-medium text-fg-sub hover:text-fg",
             )}
           >
@@ -571,7 +571,7 @@ function MetricRow({
         placeholder="0"
         onChange={(e) => commit({ min: Math.max(0, Number(e.target.value) || 0) })}
         aria-label={`${label} 최소`}
-        className="tnum h-8 w-24 rounded-card border border-line bg-body px-2.5 text-[13px] text-fg outline-none transition-colors placeholder:text-fg-faint focus:border-primary"
+        className="tnum h-8 w-24 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg outline-none trans-state placeholder:text-fg-faint focus:border-primary"
       />
       {mode === "between" ? (
         <>
@@ -586,7 +586,7 @@ function MetricRow({
             placeholder="0"
             onChange={(e) => commit({ max: Math.max(0, Number(e.target.value) || 0) })}
             aria-label={`${label} 최대`}
-            className="tnum h-8 w-24 rounded-card border border-line bg-body px-2.5 text-[13px] text-fg outline-none transition-colors placeholder:text-fg-faint focus:border-primary"
+            className="tnum h-8 w-24 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg outline-none trans-state placeholder:text-fg-faint focus:border-primary"
           />
         </>
       ) : null}
@@ -651,7 +651,7 @@ function FilterPanelBody({
         <Field label="플랫폼" hint="플랫폼을 고르면 아래 조건이 달라져요">
           {/* 트랙과 종속 조건을 하나의 회색 덩어리로 붙인다 — 떨어뜨리면
               아래 조건이 위 선택에 딸린 것이라는 관계가 안 보인다 */}
-          <div className="overflow-hidden rounded-card bg-surface">
+          <div className="overflow-hidden rounded-card bg-plate">
             <TargetSegmented
               value={filters.target}
               onChange={(v) => setFilters({ ...filters, target: v })}
@@ -703,7 +703,7 @@ function FilterPanelBody({
                     <button
                       type="button"
                       onClick={() => setShowAllSources((v) => !v)}
-                      className="h-8 cursor-pointer px-1.5 text-[12px] font-semibold text-fg-sub transition-colors hover:text-fg"
+                      className="h-8 cursor-pointer px-1.5 text-[12px] font-semibold text-fg-sub trans-state hover:text-fg"
                     >
                       {showAllSources ? "접기" : `+${sourceFacets.length - 6}`}
                     </button>
@@ -834,7 +834,7 @@ function SavedCombosRow({
             type="button"
             onClick={() => setFilters({ ...combo.filters })}
             title={combo.name}
-            className="trans-state max-w-40 cursor-pointer truncate px-2.5 text-[12px] text-fg-sub hover:bg-surface hover:text-fg"
+            className="trans-state max-w-40 cursor-pointer truncate px-2.5 text-[12px] text-fg-sub hover:bg-tint-hover hover:text-fg"
           >
             {combo.name}
           </button>
@@ -842,7 +842,7 @@ function SavedCombosRow({
             type="button"
             onClick={() => writeSaved(saved.filter((_, i) => i !== index))}
             aria-label={`저장된 조합 삭제: ${combo.name}`}
-            className="trans-state cursor-pointer self-stretch border-l border-line px-1.5 text-fg-faint hover:bg-surface hover:text-negative"
+            className="trans-state cursor-pointer self-stretch border-l border-line px-1.5 text-fg-faint hover:bg-tint-hover hover:text-negative"
           >
             <X className="size-3" aria-hidden />
           </button>
@@ -852,7 +852,7 @@ function SavedCombosRow({
         type="button"
         onClick={saveCurrent}
         disabled={active === 0}
-        className="trans-state inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-chip px-2.5 text-[12px] font-semibold text-fg-sub hover:bg-surface hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
+        className="trans-state inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-chip px-2.5 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
       >
         <Bookmark className="size-3.5" aria-hidden />
         조합 저장
@@ -1047,7 +1047,7 @@ export function SearchConsole({
         <div className="flex min-w-0 items-center gap-2">
           {/* 본문은 진하게, 핵심 단어 하나만 포인트 컬러 — 스니핏 실측 구조.
               전부 연회색이면 안내문이 아니라 배경 무늬가 된다. */}
-          <p className="truncate text-[14px] text-fg">
+          <p className="truncate text-[15px] text-fg">
             다양한 <span className="font-semibold text-primary">필터</span>를 조합해 정확한
             레퍼런스를 찾아보세요
           </p>
@@ -1059,7 +1059,7 @@ export function SearchConsole({
               <button
                 type="button"
                 onClick={resetAll}
-                className="trans-state inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-card px-2 py-1 text-[12px] font-semibold text-fg-sub hover:bg-surface hover:text-fg"
+                className="trans-state inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-card px-2 py-1 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg"
               >
                 <RotateCcw className="size-3.5" aria-hidden />
                 필터 초기화
@@ -1072,7 +1072,7 @@ export function SearchConsole({
           <button
             type="button"
             onClick={() => setPanelOpen(false)}
-            className="trans-state hidden shrink-0 cursor-pointer items-center gap-1 rounded-card px-2 py-1 text-[12px] font-semibold text-fg-sub hover:bg-surface hover:text-fg lg:inline-flex"
+            className="trans-state hidden shrink-0 cursor-pointer items-center gap-1 rounded-card px-2 py-1 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg lg:inline-flex"
           >
             닫기
           </button>
@@ -1100,7 +1100,7 @@ export function SearchConsole({
             <button
               type="button"
               onClick={() => setDraft(null)}
-              className="trans-state h-9 cursor-pointer rounded-card px-3 text-[13px] font-semibold text-fg-sub hover:bg-surface hover:text-fg"
+              className="trans-state h-9 cursor-pointer rounded-card px-3 text-[14px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg"
             >
               되돌리기
             </button>
@@ -1129,7 +1129,7 @@ export function SearchConsole({
          z-40 인 이유: 스크림(z-30)이 상단바까지 덮는 동안 이 헤더와 그 안의 패널은
          밝게 남아야 한다. 상단바(top-0 h-16)와 이 헤더(top-16)는 화면에서 절대 겹치지
          않으므로 z 가 더 커도 시각적 충돌이 없다. */}
-      <header className="sticky top-16 z-40 -mx-4 -mt-6 border-b border-line bg-surface/95 px-4 pb-3 pt-4 backdrop-blur md:-mx-6 md:px-6">
+      <header className="sticky top-16 z-40 -mx-4 -mt-6 border-b border-line bg-body/95 px-4 pb-3 pt-4 backdrop-blur md:-mx-6 md:px-6">
       <h2 className="sr-only">레퍼런스 검색</h2>
 
       {/* ── 1행 — 검색 줄.
@@ -1148,7 +1148,7 @@ export function SearchConsole({
               setRecentOpen(false);
             }}
             className={cn(
-              "trans-state flex h-14 w-48 cursor-pointer items-center gap-2 rounded-card border px-4 text-[14px] font-bold",
+              "trans-state flex h-14 w-48 cursor-pointer items-center gap-2 rounded-card border px-4 text-[15px] font-bold",
               scopeOpen
                 ? "border-primary bg-primary-weak text-primary"
                 : "border-line bg-body text-fg hover:border-line-strong",
@@ -1186,7 +1186,7 @@ export function SearchConsole({
                     }}
                     className={cn(
                       "trans-state flex w-full cursor-pointer items-start gap-2 rounded-card px-2.5 py-2 text-left",
-                      on ? "bg-primary-weak" : "hover:bg-surface",
+                      on ? "bg-primary-weak" : "hover:bg-tint-hover",
                     )}
                   >
                     <Check
@@ -1194,7 +1194,7 @@ export function SearchConsole({
                       aria-hidden
                     />
                     <span className="min-w-0">
-                      <span className={cn("block text-[13px] font-semibold", on ? "text-primary" : "text-fg")}>
+                      <span className={cn("block text-[14px] font-semibold", on ? "text-primary" : "text-fg")}>
                         {o.label}
                       </span>
                       <span className="block text-[12px] text-fg-faint">{o.desc}</span>
@@ -1207,7 +1207,7 @@ export function SearchConsole({
         </div>
 
         {/* (2) 검색 입력 박스 — 필터 카드가 이 박스의 왼쪽 모서리에 맞춰 열린다 */}
-        <div className="relative flex h-14 min-w-0 flex-1 items-center rounded-card border border-line bg-body transition-colors focus-within:border-line-strong">
+        <div className="relative flex h-14 min-w-0 flex-1 items-center rounded-card border border-line bg-body trans-state focus-within:border-line-strong">
           <Search className="ml-4 size-5 shrink-0 text-fg-faint" aria-hidden />
           <input
             type="search"
@@ -1244,7 +1244,7 @@ export function SearchConsole({
                 if (query !== "") onQueryChange("");
               }}
               aria-label="검색어 지우기"
-              className="trans-state flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-card text-fg-faint hover:bg-surface hover:text-fg"
+              className="trans-state flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-card text-fg-faint hover:bg-tint-hover hover:text-fg"
             >
               <X className="size-4" aria-hidden />
             </button>
@@ -1262,8 +1262,8 @@ export function SearchConsole({
               setRecentOpen(false);
             }}
             className={cn(
-              "trans-state mr-1 inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-card px-3 text-[14px] font-semibold",
-              panelOpen ? "bg-surface text-fg" : "text-fg-sub hover:bg-surface hover:text-fg",
+              "trans-state mr-1 inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-card px-3 text-[15px] font-semibold",
+              panelOpen ? "bg-plate text-fg" : "text-fg-sub hover:bg-tint-hover hover:text-fg",
             )}
           >
             <SlidersHorizontal className="size-4" aria-hidden />
@@ -1290,7 +1290,7 @@ export function SearchConsole({
             }}
             className={cn(
               "trans-state mr-1.5 flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-card",
-              recentOpen ? "bg-surface text-fg" : "text-fg-faint hover:bg-surface hover:text-fg",
+              recentOpen ? "bg-plate text-fg" : "text-fg-faint hover:bg-tint-hover hover:text-fg",
             )}
           >
             <Clock className="size-[18px]" aria-hidden />
@@ -1303,14 +1303,14 @@ export function SearchConsole({
               aria-label="최근 검색어"
             >
               {recent.length === 0 ? (
-                <p className="px-2.5 py-3 text-[13px] text-fg-faint">아직 검색 기록이 없어요</p>
+                <p className="px-2.5 py-3 text-[14px] text-fg-sub">아직 검색 기록이 없어요</p>
               ) : (
                 recent.map((r) => (
                   <button
                     key={r}
                     type="button"
                     onClick={() => submitQuery(r)}
-                    className="trans-state flex w-full cursor-pointer items-center gap-2 rounded-card px-2.5 py-2 text-left text-[13px] text-fg-sub hover:bg-surface hover:text-fg"
+                    className="trans-state flex w-full cursor-pointer items-center gap-2 rounded-card px-2.5 py-2 text-left text-[14px] text-fg-sub hover:bg-tint-hover hover:text-fg"
                   >
                     <Clock className="size-3.5 shrink-0 text-fg-faint" aria-hidden />
                     <span className="min-w-0 flex-1 truncate">{r}</span>
@@ -1377,7 +1377,7 @@ export function SearchConsole({
       <button
         type="button"
         onClick={() => setSheetOpen(true)}
-        className="trans-state mt-2 flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-card border border-line bg-body text-[13px] font-semibold text-fg-sub lg:hidden"
+        className="trans-state mt-2 flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-card border border-line bg-body text-[14px] font-semibold text-fg-sub lg:hidden"
       >
         <SlidersHorizontal className="size-4" aria-hidden />
         필터
@@ -1397,7 +1397,7 @@ export function SearchConsole({
               key={sq.label}
               type="button"
               onClick={() => submitQuery(sq.q)}
-              className="trans-state inline-flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-chip border border-line bg-body px-3 text-[13.5px] font-medium text-fg hover:border-line-strong"
+              className="trans-state inline-flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-chip border border-line bg-body px-3 text-[14px] font-medium text-fg hover:border-line-strong"
             >
               <SuggestIcon kind={sq.icon} />
               {sq.label}
@@ -1413,7 +1413,7 @@ export function SearchConsole({
               입력칸을 고치다 만 상태에서 필터를 만지면 결과는 옛 검색어 기준으로 다시
               도는데, 그걸 알 방법이 이 칩뿐이다(적대 검증 확정). */}
           {query ? (
-            <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-card bg-primary-weak px-2.5 text-[13px] font-semibold text-primary">
+            <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-card bg-primary-weak px-2.5 text-[14px] font-semibold text-primary">
               검색: {query}
               <button
                 type="button"
@@ -1422,7 +1422,7 @@ export function SearchConsole({
                   onQueryChange("");
                 }}
                 aria-label="검색어 해제"
-                className="cursor-pointer text-primary/70 transition-colors hover:text-primary"
+                className="cursor-pointer text-primary/70 trans-state hover:text-primary"
               >
                 <X className="size-3.5" aria-hidden />
               </button>
@@ -1439,14 +1439,14 @@ export function SearchConsole({
               {activeChips.map((chip) => (
                 <span
                   key={chip.key}
-                  className="inline-flex h-7 shrink-0 items-center gap-1 rounded-card bg-primary-weak px-2.5 text-[13px] font-semibold text-primary"
+                  className="inline-flex h-7 shrink-0 items-center gap-1 rounded-card bg-primary-weak px-2.5 text-[14px] font-semibold text-primary"
                 >
                   {chip.label}
                   <button
                     type="button"
                     onClick={() => commit(chip.clear(filters))}
                     aria-label={`${chip.label} 조건 해제`}
-                    className="cursor-pointer text-primary/70 transition-colors hover:text-primary"
+                    className="cursor-pointer text-primary/70 trans-state hover:text-primary"
                   >
                     <X className="size-3.5" aria-hidden />
                   </button>
@@ -1459,7 +1459,7 @@ export function SearchConsole({
                   setInput("");
                   onClearAll();
                 }}
-                className="shrink-0 cursor-pointer rounded-card px-2.5 text-[13px] font-semibold text-fg-sub transition-colors hover:bg-overlay hover:text-fg"
+                className="shrink-0 cursor-pointer rounded-card px-2.5 text-[14px] font-semibold text-fg-sub trans-state hover:bg-overlay hover:text-fg"
               >
                 전체 해제
               </button>
@@ -1470,7 +1470,7 @@ export function SearchConsole({
                 key={s.id}
                 type="button"
                 onClick={() => commit({ ...filters, sources: toggleIn(filters.sources, s.value) })}
-                className="inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-card border border-line bg-body px-2.5 text-[13px] font-medium text-fg-sub transition-colors hover:border-line-strong hover:text-fg"
+                className="inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-card border border-line bg-body px-2.5 text-[14px] font-medium text-fg-sub trans-state hover:border-line-strong hover:text-fg"
               >
                 <SourceGlyph kind={s.kind} />
                 {s.value}
@@ -1481,7 +1481,7 @@ export function SearchConsole({
             <button
               type="button"
               onClick={onOpenSettings}
-              className="inline-flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-card px-2.5 text-[13px] font-medium text-fg-faint transition-colors hover:bg-overlay hover:text-fg"
+              className="inline-flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-card px-2.5 text-[14px] font-medium text-fg-sub trans-state hover:bg-overlay hover:text-fg"
             >
               <Plus className="size-3" aria-hidden />
               기준 추가
@@ -1491,7 +1491,7 @@ export function SearchConsole({
 
         <div className="flex shrink-0 items-center gap-3">
           {hasQuery ? (
-            <span className="tnum text-[13px] text-fg-sub" aria-live="polite">
+            <span className="tnum text-[14px] text-fg-sub" aria-live="polite">
               {resultCount}건
             </span>
           ) : null}
@@ -1499,7 +1499,7 @@ export function SearchConsole({
             value={filters.sort}
             onChange={(e) => commit({ ...filters, sort: e.target.value as ItemSort })}
             aria-label="정렬"
-            className="h-8 cursor-pointer border-0 bg-transparent text-[13px] font-semibold text-fg-sub outline-none transition-colors hover:text-fg"
+            className="h-8 cursor-pointer border-0 bg-transparent text-[14px] font-semibold text-fg-sub outline-none trans-state hover:text-fg"
           >
             {SORT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>

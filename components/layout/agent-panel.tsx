@@ -107,7 +107,7 @@ export function AgentPanel() {
         onClick={() => setOpen(true)}
         aria-label="AI 에이전트 열기"
         className={cn(
-          "fixed bottom-20 right-4 z-40 flex size-13 items-center justify-center rounded-chip bg-primary text-on-primary transition-colors hover:bg-primary-hover md:bottom-6 md:right-6",
+          "fixed bottom-20 right-4 z-40 flex size-13 items-center justify-center rounded-chip bg-primary text-on-primary trans-state hover:bg-primary-hover md:bottom-6 md:right-6",
           open && "hidden",
         )}
       >
@@ -137,7 +137,7 @@ export function AgentPanel() {
               <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
                 <div
                   className={cn(
-                    "max-w-[85%] rounded-card px-3.5 py-2.5 text-[14px] leading-relaxed",
+                    "max-w-[85%] rounded-card px-3.5 py-2.5 text-[15px] leading-relaxed",
                     m.role === "user" ? "bg-primary text-on-primary" : "bg-body border border-line text-fg",
                   )}
                 >
@@ -146,7 +146,7 @@ export function AgentPanel() {
                     <Link
                       href={m.linkCard.href}
                       onClick={() => setOpen(false)}
-                      className="mt-2.5 flex items-center justify-between gap-2 rounded-card border border-line bg-overlay px-3 py-2 text-[13px] font-semibold text-primary hover:border-primary"
+                      className="mt-2.5 flex items-center justify-between gap-2 rounded-card border border-line bg-overlay px-3 py-2 text-[14px] font-semibold text-primary hover:border-primary"
                     >
                       {m.linkCard.label}
                       <ArrowRight className="size-3.5" aria-hidden />
@@ -157,7 +157,7 @@ export function AgentPanel() {
             ))}
             {thinking ? (
               <div className="flex justify-start">
-                <div className="max-w-[85%] rounded-card border border-line bg-body px-3.5 py-2.5 text-[14px] text-fg-faint">
+                <div className="max-w-[85%] rounded-card border border-line bg-body px-3.5 py-2.5 text-[15px] text-fg-sub">
                   생각 중…
                 </div>
               </div>

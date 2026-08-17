@@ -31,7 +31,7 @@ export function PageLoading({ label = "불러오는 중" }: { label?: string }) 
       <div className="collect-orbit" aria-hidden>
         <FinchMark className="size-9 text-primary" />
       </div>
-      <p className="text-[13px] font-medium text-fg-faint">{label}</p>
+      <p className="text-[14px] font-medium text-fg-sub">{label}</p>
     </div>
   );
 }

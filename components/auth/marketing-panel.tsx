@@ -23,12 +23,12 @@ export function AuthMarketingPanel() {
         </div>
 
         <div className="mt-12">
-          <h1 className="text-[28px] font-semibold leading-[1.4] tracking-tight xl:text-[32px] xl:leading-[44px]">
+          <h1 className="text-[28px] font-semibold leading-[1.4] tracking-tight xl:text-[34px] xl:leading-[1.35]">
             채널 분석부터 광고 관리까지, 브랜드의 성장.
             <br />
             핀치에서는 대시보드 하나로 끝나요.
           </h1>
-          <p className="mt-4 text-[18px] leading-relaxed text-on-primary/80 xl:text-[22px]">
+          <p className="mt-4 text-[17px] leading-relaxed text-on-primary/80 xl:text-[20px]">
             인스타그램·틱톡·쓰레드를 AI 기반으로 분석하고, 잘되는 레퍼런스 수집부터 콘텐츠 제작까지 자동으로
             이어집니다.
           </p>
@@ -51,7 +51,7 @@ export function AuthMarketingPanel() {
               <AppIconTile key={c} app={c} size={40} />
             ))}
           </div>
-          <p className="mt-4 text-center text-[13px] text-on-primary/70">
+          <p className="mt-4 text-center text-[14px] text-on-primary/70">
             인스타그램 · 틱톡 · 쓰레드 · 메타 광고를 하나의 대시보드에서 관리합니다.
           </p>
         </div>

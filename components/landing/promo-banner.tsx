@@ -58,7 +58,7 @@ export function PromoBanner() {
         type="button"
         onClick={dismiss}
         aria-label="배너 닫기"
-        className="absolute top-1/2 right-2 -translate-y-1/2 rounded-card p-1.5 transition-colors hover:bg-primary-hover"
+        className="absolute top-1/2 right-2 -translate-y-1/2 rounded-card p-1.5 trans-state hover:bg-primary-hover"
       >
         <X className="size-4" aria-hidden />
       </button>

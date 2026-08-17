@@ -75,7 +75,7 @@ export function SchedulePublish({
   return (
     <div className="w-full rounded-card border border-line bg-overlay p-4">
       <div className="flex items-center justify-between">
-        <p className="text-[14px] font-semibold">인스타그램 예약 발행</p>
+        <p className="text-[15px] font-semibold">인스타그램 예약 발행</p>
         <button
           type="button"
           onClick={() => setOpen(false)}
@@ -87,7 +87,7 @@ export function SchedulePublish({
       </div>
 
       {done ? (
-        <p className="mt-3 text-[13px] text-positive">
+        <p className="mt-3 text-[14px] text-positive">
           예약이 등록됐어요. 예약일 아침 배치에서 자동으로 발행됩니다.{" "}
           {/* 목록이 스튜디오 밖(/publish)으로 나갔으므로 "아래 목록" 대신 링크로 안내한다 */}
           <Link href="/publish" className="font-semibold underline underline-offset-2">
@@ -97,28 +97,28 @@ export function SchedulePublish({
         </p>
       ) : (
         <>
-          <label className="mt-3 block text-[13px] font-medium text-fg-sub">캡션</label>
+          <label className="mt-3 block text-[14px] font-medium text-fg-sub">캡션</label>
           <textarea
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
             rows={3}
-            className="mt-1.5 w-full rounded-card border border-line bg-body px-3 py-2 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
+            className="mt-1.5 w-full rounded-card border border-line bg-body px-3 py-2 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
             placeholder="게시물에 들어갈 캡션을 입력하세요"
           />
 
-          <label className="mt-3 block text-[13px] font-medium text-fg-sub">발행 예정일</label>
+          <label className="mt-3 block text-[14px] font-medium text-fg-sub">발행 예정일</label>
           <input
             type="date"
             min={today}
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="mt-1.5 h-10 rounded-card border border-line bg-body px-3 text-[14px] text-fg focus:border-primary focus:outline-none"
+            className="mt-1.5 h-10 rounded-card border border-line bg-body px-3 text-[15px] text-fg focus:border-primary focus:outline-none"
           />
           <p className="mt-1.5 text-[12px] text-fg-faint">
             정확한 시각이 아니라 예약일 아침 배치(하루 1회)에서 자동 발행됩니다.
           </p>
 
-          {error ? <p className="mt-2 text-[13px] text-negative">{error}</p> : null}
+          {error ? <p className="mt-2 text-[14px] text-negative">{error}</p> : null}
 
           <Button className="mt-3" onClick={submit} disabled={!date || !caption.trim() || busy}>
             {busy ? "이미지 준비 중…" : "예약하기"}

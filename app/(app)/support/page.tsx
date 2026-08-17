@@ -85,12 +85,12 @@ export default async function SupportPage() {
       </Card>
 
       <section className="flex flex-col gap-3">
-        <h3 className="text-[19px] font-bold leading-snug">내 문의 내역</h3>
+        <h3 className="text-[20px] font-bold leading-snug">내 문의 내역</h3>
 
         {notice ? (
           <Card>
             <CardBody>
-              <p className="text-[14px] text-fg-sub">{notice}</p>
+              <p className="text-[15px] text-fg-sub">{notice}</p>
             </CardBody>
           </Card>
         ) : rows.length === 0 ? (
@@ -113,7 +113,7 @@ export default async function SupportPage() {
 
                   <div className="min-w-0">
                     <p className="text-[15px] font-bold leading-snug">{q.subject}</p>
-                    <p className="mt-1 whitespace-pre-wrap text-[14px] leading-relaxed text-fg-sub">
+                    <p className="mt-1 whitespace-pre-wrap text-[15px] leading-relaxed text-fg-sub">
                       {q.message}
                     </p>
                   </div>
@@ -121,12 +121,12 @@ export default async function SupportPage() {
                   {q.reply_body ? (
                     <div className="rounded-card border border-line bg-overlay p-4">
                       <div className="flex items-center gap-2">
-                        <span className="text-[13px] font-bold text-primary">핀치 답변</span>
+                        <span className="text-[14px] font-bold text-primary">핀치 답변</span>
                         {q.replied_at ? (
                           <span className="text-[12px] text-fg-faint">{fmtDate(q.replied_at)}</span>
                         ) : null}
                       </div>
-                      <p className="mt-1.5 whitespace-pre-wrap text-[14px] leading-relaxed">
+                      <p className="mt-1.5 whitespace-pre-wrap text-[15px] leading-relaxed">
                         {q.reply_body}
                       </p>
                     </div>

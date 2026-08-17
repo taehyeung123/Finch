@@ -85,7 +85,7 @@ export default function CompetitorsPage() {
               disabled
               placeholder="정확한 사용자명(@handle)을 입력하세요"
               aria-label="경쟁사 계정 사용자명"
-              className="h-10 w-full rounded-card border border-line bg-overlay pl-9 pr-3 text-[14px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary"
+              className="h-10 w-full rounded-card border border-line bg-overlay pl-9 pr-3 text-[15px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary"
             />
           </div>
           <Button type="submit" disabled>
@@ -93,7 +93,7 @@ export default function CompetitorsPage() {
             등록
           </Button>
         </form>
-        <p id="competitor-add-notice" className="mt-2 text-[13px] text-fg-sub">
+        <p id="competitor-add-notice" className="mt-2 text-[14px] text-fg-sub">
           경쟁사 직접 등록은 채널 연동 이후 제공됩니다. 지금은{" "}
           <Link href="/competitors/ads" className="font-semibold text-primary-ink hover:underline">
             경쟁사 광고 모니터링
@@ -110,7 +110,7 @@ export default function CompetitorsPage() {
       <section aria-label="등록된 경쟁사" className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h3 className="text-[19px] font-bold leading-snug">등록된 경쟁사</h3>
+            <h3 className="text-[20px] font-bold leading-snug">등록된 경쟁사</h3>
             {/* 2026-08-15: 「0/10개 사용 중」 게이지를 걷어냈다.
                 lib/data/empty.ts 하드코딩이었고 "경쟁사 등록 상한 10개"는
                 credit-config.ts 어디에도 없는 숫자였다. 통합 크레딧 모델과 무관하다. */}
@@ -122,7 +122,7 @@ export default function CompetitorsPage() {
             <Card key={c.id} hover className="p-5">
               <div className="min-w-0">
                 <p className="truncate text-[15px] font-bold">{c.displayName}</p>
-                <p className="mt-0.5 truncate text-[13px] text-fg-sub">{c.handle}</p>
+                <p className="mt-0.5 truncate text-[14px] text-fg-sub">{c.handle}</p>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-1.5">
                 <ChannelBadge channel={c.channel} />
@@ -173,7 +173,7 @@ export default function CompetitorsPage() {
                   aria-pressed={active}
                   onClick={() => toggleCompare(c.id)}
                   className={cn(
-                    "rounded-chip px-3.5 py-1.5 text-[13px] font-semibold transition-colors",
+                    "rounded-chip px-3.5 py-1.5 text-[14px] font-semibold trans-state",
                     active
                       ? "bg-primary text-on-primary"
                       : "border border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg",
@@ -186,13 +186,13 @@ export default function CompetitorsPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-[14px]">
+            <table className="w-full min-w-[520px] text-[15px]">
               <thead>
                 <tr className="border-b border-line text-left text-xs text-fg-faint">
                   <th className="w-32 pb-2 font-medium">지표</th>
                   {compared.map((c) => (
                     <th key={c.id} className="pb-2 pr-3 font-medium">
-                      <span className="block text-[14px] font-semibold text-fg">{c.displayName}</span>
+                      <span className="block text-[15px] font-semibold text-fg">{c.displayName}</span>
                       <span className="mt-1 inline-block">
                         <ChannelBadge channel={c.channel} />
                       </span>
@@ -205,7 +205,7 @@ export default function CompetitorsPage() {
                   const best = Math.max(...compared.map(row.get));
                   return (
                     <tr key={row.label} className="border-b border-line last:border-0">
-                      <th scope="row" className="py-3 pr-3 text-left text-[13px] font-medium text-fg-sub">
+                      <th scope="row" className="py-3 pr-3 text-left text-[14px] font-medium text-fg-sub">
                         <span className="inline-flex items-center gap-1">
                           {row.label}
                           {row.tip ? <InfoTip>{row.tip}</InfoTip> : null}

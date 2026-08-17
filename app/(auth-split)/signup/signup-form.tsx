@@ -61,7 +61,7 @@ export function SignupForm({ nextPath = "/onboarding" }: { nextPath?: string }) 
       </div>
 
       {configNotice ? (
-        <p role="status" className="mt-3 rounded-card bg-warning-weak p-3 text-[13px] text-warning">
+        <p role="status" className="mt-3 rounded-card bg-warning-weak p-3 text-[14px] text-warning">
           Supabase 키 설정 후 사용 가능 — docs/AUTH_SETUP.md 참고
         </p>
       ) : null}
@@ -91,7 +91,7 @@ export function SignupForm({ nextPath = "/onboarding" }: { nextPath?: string }) 
         에 동의하게 됩니다
       </p>
 
-      <p className="mt-6 text-center text-[13px] text-fg-sub">
+      <p className="mt-6 text-center text-[14px] text-fg-sub">
         이미 계정이 있나요?{" "}
         <Link href="/login" className="font-semibold text-primary hover:text-primary-hover">
           로그인

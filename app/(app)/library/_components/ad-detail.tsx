@@ -63,7 +63,7 @@ function RunRow({ ad, size = "md" }: { ad: ReferenceAd; size?: "md" | "sm" }) {
     <span
       className={cn(
         "flex flex-wrap items-center gap-x-2.5 gap-y-1",
-        size === "md" ? "text-[13px]" : "text-[12px]",
+        size === "md" ? "text-[14px]" : "text-[12px]",
       )}
     >
       <span
@@ -141,7 +141,7 @@ function SimilarCard({
             {saved ? "스크랩됨" : "스크랩"}
           </button>
         </div>
-        <p className="truncate text-[13px] font-semibold text-fg">{ad.pageName}</p>
+        <p className="truncate text-[14px] font-semibold text-fg">{ad.pageName}</p>
         {ad.startDate ? (
           <p className="tnum text-[12px] text-fg-faint">
             {new Date(ad.startDate).toLocaleDateString("ko-KR")}
@@ -299,7 +299,7 @@ export function AdDetailModal({
             </div>
           </div>
           {msg ? (
-            <p role="status" className="px-4 pt-2 text-[12.5px] text-fg-sub">
+            <p role="status" className="px-4 pt-2 text-[12px] text-fg-sub">
               {msg}
             </p>
           ) : null}
@@ -312,7 +312,7 @@ export function AdDetailModal({
                 <p className="mt-0.5 text-[12px] text-fg-faint">메타광고 레퍼런스</p>
               </div>
               {ad.startDate ? (
-                <span className="tnum shrink-0 text-[12.5px] text-fg-faint">
+                <span className="tnum shrink-0 text-[12px] text-fg-faint">
                   {new Date(ad.startDate).toLocaleDateString("ko-KR")}
                 </span>
               ) : null}
@@ -337,16 +337,16 @@ export function AdDetailModal({
             ) : null}
 
             {ad.ctaText ? (
-              <p className="text-[13px] text-fg-sub">
+              <p className="text-[14px] text-fg-sub">
                 행동 유도 버튼 · <span className="font-semibold text-fg">{ad.ctaText}</span>
               </p>
             ) : null}
 
             {/* 광고 문구 전문 — 스니핏처럼 왼쪽 열 본문으로. 열 스크롤에 함께 흐른다 */}
             {ad.body ? (
-              <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-fg">{ad.body}</p>
+              <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-fg">{ad.body}</p>
             ) : (
-              <p className="text-[13px] text-fg-faint">문구 없는 이미지·영상 소재예요.</p>
+              <p className="text-[14px] text-fg-sub">문구 없는 이미지·영상 소재예요.</p>
             )}
           </div>
         </div>
@@ -380,7 +380,7 @@ export function AdDetailModal({
                 ))}
               </div>
             ) : (
-              <p className="py-10 text-center text-[13px] text-fg-faint">
+              <p className="py-10 text-center text-[14px] text-fg-sub">
                 아직 비슷한 광고가 모이지 않았어요 — 수집이 쌓이면 여기서 함께 보여드려요.
               </p>
             )}
