@@ -5,7 +5,7 @@ import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { linkWorkspace } from "@/lib/data";
 import { blockSummary, type LinkBlock } from "@/lib/links/blocks";
-import type { LinkLead, LinkStats, LinkWorkspace } from "@/lib/links/types";
+import type { LinkLead, LinkSnapshotView, LinkStats, LinkWorkspace } from "@/lib/links/types";
 import { LinksClient } from "./_components/links-client";
 
 export const metadata: Metadata = {
@@ -43,7 +43,7 @@ const EMPTY_STATS: LinkStats = {
   regions: [],
 };
 
-const EMPTY: Loaded = { page: null, blocks: [], stats: EMPTY_STATS, leads: [] };
+const EMPTY: Loaded = { page: null, blocks: [], snapshot: null, stats: EMPTY_STATS, leads: [] };
 
 /** link_page_stats 가 돌려주는 원형 */
 interface RawStats {
@@ -68,13 +68,20 @@ async function load(days: number): Promise<Loaded> {
   if (!user) return { ...EMPTY, stats: { ...EMPTY_STATS, days } };
 
   const supabase = await createClient();
-  const { data: page } = await supabase
+  const BASE_COLS =
+    "id, slug, title, bio, published, layout, theme, align, avatar_path, cover_path, sns_links, seo_title, seo_desc, published_at, published_snapshot, updated_at";
+  /* sns_placement·title_size 는 0051 컬럼이다. 마이그레이션보다 배포가 먼저 나가는
+     순서를 견뎌야 하므로, 컬럼 없음(42703)이면 없는 셈 치고 다시 읽는다.
+     0051 적용 후 이 폴백은 죽은 코드가 된다 — 다음 정리 때 걷어낼 것. */
+  let pageRes = await supabase
     .from("link_pages")
-    .select(
-      "id, slug, title, bio, published, layout, theme, align, avatar_path, cover_path, sns_links, seo_title, seo_desc, published_at, published_snapshot, updated_at",
-    )
+    .select(`${BASE_COLS}, sns_placement, title_size`)
     .eq("user_id", user.id)
     .maybeSingle();
+  if (pageRes.error?.code === "42703") {
+    pageRes = await supabase.from("link_pages").select(BASE_COLS).eq("user_id", user.id).maybeSingle();
+  }
+  const page = pageRes.data as (Record<string, unknown> & { id: string }) | null;
   if (!page) return { ...EMPTY, stats: { ...EMPTY_STATS, days } };
 
   const [{ data: rows }, statsRes, leadRows] = await Promise.all([
@@ -199,6 +206,26 @@ async function load(days: number): Promise<Loaded> {
     createdAt: r.created_at,
   }));
 
+  /* 발행본을 「라이브」 미리보기용으로 파싱한다. 스냅샷은 우리 서버만 쓰는 값이지만
+     jsonb 라 형태를 강제할 수 없으므로 방어적으로 읽는다 — 필드가 깨져 있으면
+     그 필드만 기본값으로 떨어지고 화면은 산다. */
+  const rawSnap = page.published_snapshot as Partial<LinkSnapshotView> | null;
+  const snapshot: LinkSnapshotView | null = rawSnap
+    ? {
+        title: typeof rawSnap.title === "string" ? rawSnap.title : "",
+        bio: typeof rawSnap.bio === "string" ? rawSnap.bio : "",
+        layout: typeof rawSnap.layout === "string" ? rawSnap.layout : "profile",
+        theme: typeof rawSnap.theme === "string" ? rawSnap.theme : "basic",
+        align: typeof rawSnap.align === "string" ? rawSnap.align : "center",
+        avatarPath: typeof rawSnap.avatarPath === "string" ? rawSnap.avatarPath : null,
+        coverPath: typeof rawSnap.coverPath === "string" ? rawSnap.coverPath : null,
+        snsLinks: Array.isArray(rawSnap.snsLinks) ? rawSnap.snsLinks : [],
+        snsPlacement: typeof rawSnap.snsPlacement === "string" ? rawSnap.snsPlacement : "profile",
+        titleSize: typeof rawSnap.titleSize === "string" ? rawSnap.titleSize : "md",
+        blocks: Array.isArray(rawSnap.blocks) ? rawSnap.blocks : [],
+      }
+    : null;
+
   return {
     page: {
       id: page.id as string,
@@ -214,10 +241,14 @@ async function load(days: number): Promise<Loaded> {
       snsLinks: Array.isArray(page.sns_links) ? (page.sns_links as Array<{ kind: string; url: string }>) : [],
       seoTitle: (page.seo_title as string | null) ?? "",
       seoDesc: (page.seo_desc as string | null) ?? "",
+      /* 0051 이전에는 컬럼이 없어 undefined — 기본값으로 */
+      snsPlacement: (page.sns_placement as string) ?? "profile",
+      titleSize: (page.title_size as string) ?? "md",
       publishedAt,
       dirty,
     },
     blocks,
+    snapshot,
     stats,
     leads,
   };
@@ -228,7 +259,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
   const asked = Number(sp.days);
   const days = (STATS_RANGES as readonly number[]).includes(asked) ? asked : DEFAULT_DAYS;
 
-  const { page, blocks, stats, leads } = await load(days);
+  const { page, blocks, snapshot, stats, leads } = await load(days);
 
   /* 복사 버튼이 주는 주소는 **지금 접속한 도메인** 기준이어야 한다.
      프로덕션 도메인을 하드코딩하면 로컬·프리뷰에서 복사한 주소가 안 열린다. */
@@ -245,6 +276,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
       <LinksClient
         page={page}
         blocks={blocks}
+        snapshot={snapshot}
         stats={stats}
         leads={leads}
         origin={`${proto}://${host}`}

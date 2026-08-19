@@ -22,10 +22,37 @@ export interface LinkPageView {
   snsLinks: Array<{ kind: string; url: string }>;
   seoTitle: string;
   seoDesc: string;
+  /** SNS 줄 위치: profile(소개 아래) | links(블록 목록 위). 0051 이후 저장된다 */
+  snsPlacement: string;
+  /** 프로필 타이틀 크기: sm | md | lg. 0051 이후 저장된다 */
+  titleSize: string;
   /** 마지막 라이브 반영 시각. null 이면 한 번도 발행 안 함 */
   publishedAt: string | null;
   /** 초안이 마지막 발행본과 다른가 — "라이브 반영" 버튼의 상태를 정한다 */
   dirty: boolean;
+}
+
+/**
+ * 발행본(published_snapshot)의 화면 모델 — 「라이브」 미리보기가 그린다.
+ *
+ * 초안(LinkPageView + LinkBlock[])과 **따로** 내려보내는 이유: 초안과 발행본은
+ * 프로필·테마까지 전부 다를 수 있다. 발행본 미리보기가 초안의 테마로 그려지면
+ * "라이브에 지금 뭐가 걸려 있나"라는 질문에 거짓으로 답하게 된다.
+ */
+export interface LinkSnapshotView {
+  title: string;
+  bio: string;
+  layout: string;
+  theme: string;
+  align: string;
+  avatarPath: string | null;
+  coverPath: string | null;
+  snsLinks: Array<{ kind: string; url: string }>;
+  /** SNS 줄 위치 — 0051 이후. 없으면 profile */
+  snsPlacement?: string;
+  /** 프로필 타이틀 크기 — 0051 이후. 없으면 md */
+  titleSize?: string;
+  blocks: Array<{ id: string; type: string; data: Record<string, unknown> }>;
 }
 
 export interface LinkStats {
@@ -64,6 +91,8 @@ export interface LinkLead {
 export interface LinkWorkspace {
   page: LinkPageView | null;
   blocks: LinkBlock[];
+  /** 마지막 발행본. null 이면 한 번도 발행 안 함 */
+  snapshot: LinkSnapshotView | null;
   stats: LinkStats;
   leads: LinkLead[];
 }

@@ -1099,6 +1099,8 @@ export const linkWorkspace: LinkWorkspace = {
     ],
     seoTitle: "",
     seoDesc: "",
+    snsPlacement: "profile",
+    titleSize: "md",
     publishedAt: "2026-08-18T21:00:00+09:00",
     dirty: false,
   },
@@ -1110,6 +1112,31 @@ export const linkWorkspace: LinkWorkspace = {
     { id: "demo-b5", type: "grid", sortOrder: 4, active: true, data: { columns: 2, items: [{ title: "인스타그램", url: "https://instagram.com/finch" }, { title: "유튜브", url: "https://youtube.com/@finch" }] } },
     { id: "demo-b6", type: "contact", sortOrder: 5, active: true, data: { title: "협업 문의", description: "브랜드 협업은 여기로 남겨주세요.", fields: ["name", "email", "message"] } },
   ],
+  /* 발행본 — 데모는 초안=발행본(dirty:false)이므로 같은 내용을 담는다.
+     「라이브」 미리보기 토글이 이걸 그린다. */
+  snapshot: {
+    title: "핀치 데모",
+    bio: "예시 프로필 링크예요. 블록을 눌러 편집 화면을 둘러보세요.",
+    layout: "profile",
+    theme: "basic",
+    align: "center",
+    avatarPath: null,
+    coverPath: null,
+    snsLinks: [
+      { kind: "instagram", url: "https://instagram.com/finch" },
+      { kind: "youtube", url: "https://youtube.com/@finch" },
+    ],
+    snsPlacement: "profile",
+    titleSize: "md",
+    blocks: [
+      { id: "demo-b1", type: "notice", data: { text: "이번 주 공구 진행 중이에요!", tone: "primary" } },
+      { id: "demo-b2", type: "link", data: { label: "공구 바로가기", url: "https://example.com/order", emoji: "🛒", emphasis: "primary" } },
+      { id: "demo-b3", type: "image_card", data: { title: "베스트 상품", subtitle: "재구매율 1위", price: "29,000원", ctaLabel: "구매하기", url: "https://example.com/best" } },
+      { id: "demo-b4", type: "heading", data: { text: "채널" } },
+      { id: "demo-b5", type: "grid", data: { columns: 2, items: [{ title: "인스타그램", url: "https://instagram.com/finch" }, { title: "유튜브", url: "https://youtube.com/@finch" }] } },
+      { id: "demo-b6", type: "contact", data: { title: "협업 문의", description: "브랜드 협업은 여기로 남겨주세요.", fields: ["name", "email", "message"] } },
+    ],
+  },
   stats: {
     days: 30,
     failed: false,

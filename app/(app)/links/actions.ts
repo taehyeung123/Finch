@@ -150,6 +150,10 @@ export async function updateLinkProfile(input: {
   layout: string;
   align: string;
   snsLinks: Array<{ kind: string; url: string }>;
+  /** SNS 줄 위치 — profile(소개 아래) | links(블록 위). 0051 */
+  snsPlacement: string;
+  /** 프로필 타이틀 크기 — sm | md | lg. 0051 */
+  titleSize: string;
   seoTitle: string;
   seoDesc: string;
 }): Promise<Result> {
@@ -174,19 +178,30 @@ export async function updateLinkProfile(input: {
     return { ok: false, error: "최근까지 다른 사람이 쓰던 주소예요. 다른 주소를 입력해 주세요." };
   }
 
-  const { error } = await supabase
+  const base = {
+    slug: clean,
+    title: sliceChars(input.title.trim(), 40),
+    bio: sliceChars(input.bio.trim(), 160),
+    layout: input.layout,
+    align: input.align,
+    sns_links: sns,
+    seo_title: sliceChars(input.seoTitle.trim(), 60) || null,
+    seo_desc: sliceChars(input.seoDesc.trim(), 160) || null,
+  };
+  /* 열거값 검증 — DB check 가 최후 방어지만 여기서 걸러야 사용자가 이유를 안다 */
+  const placement = input.snsPlacement === "links" ? "links" : "profile";
+  const titleSize = ["sm", "md", "lg"].includes(input.titleSize) ? input.titleSize : "md";
+
+  /* sns_placement·title_size 는 0051 컬럼 — 마이그레이션보다 배포가 먼저 나가도
+     저장이 깨지면 안 된다. 컬럼 없음(42703)이면 그 둘만 빼고 다시 저장한다.
+     0051 적용 후 이 폴백은 죽은 코드 — 다음 정리 때 걷어낼 것. */
+  let { error } = await supabase
     .from("link_pages")
-    .update({
-      slug: clean,
-      title: sliceChars(input.title.trim(), 40),
-      bio: sliceChars(input.bio.trim(), 160),
-      layout: input.layout,
-      align: input.align,
-      sns_links: sns,
-      seo_title: sliceChars(input.seoTitle.trim(), 60) || null,
-      seo_desc: sliceChars(input.seoDesc.trim(), 160) || null,
-    })
+    .update({ ...base, sns_placement: placement, title_size: titleSize })
     .eq("user_id", user.id);
+  if (error?.code === "42703") {
+    ({ error } = await supabase.from("link_pages").update(base).eq("user_id", user.id));
+  }
   if (error) {
     if (error.code === "23505") return { ok: false, error: "이미 사용 중인 주소예요." };
     console.error("[links] 프로필 저장 실패:", error.message);
@@ -589,11 +604,17 @@ export async function publishLinkPage(): Promise<Result> {
   if (!user) return AUTH;
 
   const supabase = await createClient();
-  const { data: page } = await supabase
+  const PUB_COLS = "id, slug, title, bio, layout, theme, align, avatar_path, cover_path, sns_links, seo_title, seo_desc";
+  /* 0051 컬럼 폴백 — links/page.tsx 의 load() 와 같은 이유·같은 수명 */
+  let pageRes = await supabase
     .from("link_pages")
-    .select("id, slug, title, bio, layout, theme, align, avatar_path, cover_path, sns_links, seo_title, seo_desc")
+    .select(`${PUB_COLS}, sns_placement, title_size`)
     .eq("user_id", user.id)
     .maybeSingle();
+  if (pageRes.error?.code === "42703") {
+    pageRes = await supabase.from("link_pages").select(PUB_COLS).eq("user_id", user.id).maybeSingle();
+  }
+  const page = pageRes.data as Record<string, unknown> & { id: string } | null;
   if (!page) return { ok: false, error: "프로필 링크가 없어요." };
 
   /* ⚠️ **error 를 반드시 본다.** 앞서는 꺼내지도 않아서, 조회가 실패해 blocks 가 null 이면
@@ -655,6 +676,8 @@ export async function publishLinkPage(): Promise<Result> {
     avatarPath: page.avatar_path ?? null,
     coverPath: page.cover_path ?? null,
     snsLinks: Array.isArray(page.sns_links) ? page.sns_links : [],
+    snsPlacement: (page.sns_placement as string) ?? "profile",
+    titleSize: (page.title_size as string) ?? "md",
     seoTitle: page.seo_title ?? null,
     seoDesc: page.seo_desc ?? null,
     blocks: rawBlocks.map((b) => ({

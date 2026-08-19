@@ -39,6 +39,10 @@ interface Snapshot {
   avatarPath: string | null;
   coverPath: string | null;
   snsLinks: Array<{ kind: string; url: string }>;
+  /** SNS 줄 위치 — 0051 이후 스냅샷에 담긴다. 없으면 profile */
+  snsPlacement?: string;
+  /** 타이틀 크기 — 0051 이후. 없으면 md */
+  titleSize?: string;
   seoTitle: string | null;
   seoDesc: string | null;
   blocks: SnapshotBlock[];
@@ -68,6 +72,8 @@ function demoSnapshot(slug: string): { pageId: string; published: boolean; isOwn
       avatarPath: p.avatarPath,
       coverPath: p.coverPath,
       snsLinks: p.snsLinks,
+      snsPlacement: p.snsPlacement,
+      titleSize: p.titleSize,
       seoTitle: p.seoTitle || null,
       seoDesc: p.seoDesc || null,
       blocks: linkWorkspace.blocks
@@ -176,6 +182,28 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
 
   const theme = themeByKey(snap.theme);
   const align = snap.align === "left" ? "text-left items-start" : snap.align === "right" ? "text-right items-end" : "text-center items-center";
+  const titlePx = snap.titleSize === "sm" ? "text-[20px]" : snap.titleSize === "lg" ? "text-[30px]" : "text-[24px]";
+  const snsNav =
+    snap.snsLinks.length > 0 ? (
+      <nav
+        aria-label="SNS"
+        className={
+          snap.snsPlacement === "links" ? "mb-4 flex flex-wrap justify-center gap-2" : "mt-3.5 flex flex-wrap gap-2"
+        }
+      >
+        {snap.snsLinks.map((s, i) => (
+          <a
+            key={i}
+            href={s.url}
+            target="_blank"
+            rel="noopener noreferrer nofollow"
+            className="rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-3 py-1.5 text-[13px] font-medium"
+          >
+            {SNS_LABEL.get(s.kind) ?? s.kind}
+          </a>
+        ))}
+      </nav>
+    ) : null;
 
   return (
     <main
@@ -224,26 +252,12 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
               </span>
             )
           ) : null}
-          <h1 className="text-[24px] font-bold leading-[1.3]">{snap.title || slug}</h1>
+          <h1 className={`${titlePx} font-bold leading-[1.3]`}>{snap.title || slug}</h1>
           {snap.bio ? (
             <p className="mt-2 whitespace-pre-wrap text-[15px] leading-[1.6] text-[var(--lp-muted)]">{snap.bio}</p>
           ) : null}
 
-          {snap.snsLinks.length > 0 ? (
-            <nav aria-label="SNS" className="mt-3.5 flex flex-wrap gap-2">
-              {snap.snsLinks.map((s, i) => (
-                <a
-                  key={i}
-                  href={s.url}
-                  target="_blank"
-                  rel="noopener noreferrer nofollow"
-                  className="rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-3 py-1.5 text-[13px] font-medium"
-                >
-                  {SNS_LABEL.get(s.kind) ?? s.kind}
-                </a>
-              ))}
-            </nav>
-          ) : null}
+          {snap.snsPlacement !== "links" ? snsNav : null}
         </header>
 
         {/* 블록.
@@ -255,6 +269,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
             1:1 이 아니라(social_feed 등), 판정이 갈리는 순간 "문구 누락"이
             "정상 블록이 통째로 사라짐"으로 악화된다. 여기서는 문구만 결정한다. */}
         <div className="mt-8 space-y-3">
+          {snap.snsPlacement === "links" ? snsNav : null}
           {snap.blocks.every((b) => hiddenReason(b.type as BlockType, b.data)) ? (
             <p className="text-center text-[15px] text-[var(--lp-muted)]">아직 등록된 링크가 없어요.</p>
           ) : null}

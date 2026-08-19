@@ -45,7 +45,7 @@ import {
   updateLinkProfile,
   updateLinkTheme,
 } from "../actions";
-import type { LinkLead, LinkPageView, LinkStats } from "@/lib/links/types";
+import type { LinkLead, LinkPageView, LinkSnapshotView, LinkStats } from "@/lib/links/types";
 import { BlockEditor, EDITOR_TITLE_ID } from "./block-editor";
 import { ImageField } from "./image-field";
 import { ImportLinks } from "./import-links";
@@ -84,6 +84,7 @@ const LEAVE_WARNING = "저장하지 않은 편집 내용이 사라져요. 그래
 export function LinksClient({
   page,
   blocks,
+  snapshot,
   origin,
   stats,
   leads,
@@ -91,6 +92,7 @@ export function LinksClient({
 }: {
   page: LinkPageView | null;
   blocks: LinkBlock[];
+  snapshot: LinkSnapshotView | null;
   origin: string;
   stats: LinkStats;
   leads: LinkLead[];
@@ -103,6 +105,10 @@ export function LinksClient({
   const [tab, setTab] = useState<Tab>("blocks");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
+  /* 미리보기가 그리는 것: 초안(편집 중) / 라이브(마지막 발행본).
+     링크팜은 이 둘을 나란히 두 판으로 보여주는데, 우리 지면에는 한 판 자리라
+     토글로 간다 — 목적(초안과 라이브를 눈으로 비교)은 같다. */
+  const [previewMode, setPreviewMode] = useState<"draft" | "live">("draft");
 
   /* 편집 중인 블록 값은 **여기서** 들고 있다 — 편집기 안에 가둬 두면 탭을 누르는
      시점에 부모가 "미저장인가"를 알 수 없다. baseline 은 마지막으로 서버에 반영된 값. */
@@ -204,28 +210,85 @@ export function LinksClient({
       </p>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_26rem] xl:items-start">
-        {/* 좌 — 라이브 미리보기 */}
+        {/* 좌 — 미리보기. 초안/라이브를 토글로 오간다(링크팜은 두 판을 나란히 두는데,
+            우리 지면은 한 판 자리다 — 목적은 같다: 초안과 발행본을 눈으로 비교). */}
         <Card className="xl:sticky xl:top-6">
           <CardHeader
             title="미리보기"
             description={
-              page.publishedAt
-                ? page.dirty
-                  ? "지금 화면은 초안이에요. 「라이브 반영」을 눌러야 공개 주소에 나갑니다."
-                  : "공개 주소와 같은 상태예요."
-                : "아직 발행하지 않았어요. 「라이브 반영」을 누르면 공개 주소가 살아납니다."
+              previewMode === "live"
+                ? "지금 공개 주소에 걸려 있는 모습이에요."
+                : page.publishedAt
+                  ? page.dirty
+                    ? "지금 화면은 초안이에요. 「라이브 반영」을 눌러야 공개 주소에 나갑니다."
+                    : "공개 주소와 같은 상태예요."
+                  : "아직 발행하지 않았어요. 「라이브 반영」을 누르면 공개 주소가 살아납니다."
             }
           />
-          <CardBody>
-            <PhonePreview
-              page={page}
-              blocks={blocks.filter((b) => b.active)}
-              selectedId={editingId}
-              onPick={(id) => {
-                setTab("blocks");
-                openEditor(id);
-              }}
-            />
+          <CardBody className="space-y-3">
+            <div role="group" aria-label="미리보기 대상" className="flex justify-center gap-1">
+              {(
+                [
+                  { key: "draft", label: "초안" },
+                  { key: "live", label: "라이브" },
+                ] as const
+              ).map((m) => (
+                <button
+                  key={m.key}
+                  type="button"
+                  aria-pressed={previewMode === m.key}
+                  disabled={m.key === "live" && !snapshot}
+                  onClick={() => setPreviewMode(m.key)}
+                  className={cn(
+                    "trans-state rounded-chip px-3 py-1 text-[12px] font-semibold disabled:opacity-40",
+                    previewMode === m.key
+                      ? "bg-primary text-on-primary"
+                      : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
+                  )}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+
+            {previewMode === "live" && snapshot ? (
+              <PhonePreview
+                /* 발행본은 프로필·테마까지 초안과 다를 수 있다 — 스냅샷의 값으로 통째로
+                   바꿔 그린다. 초안 테마로 그리면 "라이브 모습"이라는 약속이 거짓이 된다. */
+                page={{
+                  ...page,
+                  title: snapshot.title,
+                  bio: snapshot.bio,
+                  layout: snapshot.layout,
+                  theme: snapshot.theme,
+                  align: snapshot.align,
+                  avatarPath: snapshot.avatarPath,
+                  coverPath: snapshot.coverPath,
+                  snsLinks: snapshot.snsLinks,
+                  snsPlacement: snapshot.snsPlacement ?? "profile",
+                  titleSize: snapshot.titleSize ?? "md",
+                }}
+                blocks={snapshot.blocks.map((b, i) => ({
+                  id: b.id,
+                  type: b.type as LinkBlock["type"],
+                  data: b.data ?? {},
+                  sortOrder: i,
+                  active: true,
+                }))}
+                mode="live"
+                selectedId={null}
+              />
+            ) : (
+              <PhonePreview
+                page={page}
+                blocks={blocks.filter((b) => b.active)}
+                selectedId={editingId}
+                onPick={(id) => {
+                  setTab("blocks");
+                  openEditor(id);
+                }}
+              />
+            )}
           </CardBody>
         </Card>
 
@@ -390,10 +453,35 @@ function TopBar({
         열기
       </Button>
 
+      {/* 발행 상태는 **버튼 라벨이 아니라 칩**으로 보여준다(링크팜 실측 반영).
+          버튼 글자가 「반영됨」으로 바뀌는 방식은 상태와 액션이 한 몸이라,
+          "지금 라이브가 최신인가"를 버튼이 비활성화된 이유에서 역산해야 했다. */}
+      <span
+        className={cn(
+          "inline-flex shrink-0 items-center gap-1 rounded-chip px-2.5 py-1 text-[12px] font-semibold",
+          !page.publishedAt
+            ? "bg-plate text-fg-sub"
+            : page.dirty
+              ? "bg-warning-weak text-warning-strong"
+              : "bg-positive-weak text-positive-strong",
+        )}
+      >
+        {!page.publishedAt ? (
+          "발행 전"
+        ) : page.dirty ? (
+          "초안 수정됨"
+        ) : (
+          <>
+            <Check className="size-3" aria-hidden />
+            최신
+          </>
+        )}
+      </span>
+
       {/* 라이브 반영 — 초안을 공개 스냅샷으로. 바뀐 게 없으면 눌러도 의미가 없다 */}
       <Button size="sm" onClick={onPublish} disabled={busy || (!page.dirty && !!page.publishedAt)}>
         <Rocket className="size-3.5" aria-hidden />
-        {busy ? "반영 중…" : page.dirty || !page.publishedAt ? "라이브 반영" : "반영됨"}
+        {busy ? "반영 중…" : "라이브 반영"}
       </Button>
     </div>
   );
@@ -621,6 +709,8 @@ function ProfilePanel({
     layout: string;
     align: string;
     snsLinks: Array<{ kind: string; url: string }>;
+    snsPlacement: string;
+    titleSize: string;
     seoTitle: string;
     seoDesc: string;
   }) => void;
@@ -631,6 +721,8 @@ function ProfilePanel({
   const [layout, setLayout] = useState(page.layout);
   const [align, setAlign] = useState(page.align);
   const [sns, setSns] = useState(page.snsLinks);
+  const [snsPlacement, setSnsPlacement] = useState(page.snsPlacement);
+  const [titleSize, setTitleSize] = useState(page.titleSize);
   const [seoTitle, setSeoTitle] = useState(page.seoTitle);
   const [seoDesc, setSeoDesc] = useState(page.seoDesc);
 
@@ -652,6 +744,8 @@ function ProfilePanel({
     layout: page.layout,
     align: page.align,
     snsLinks: page.snsLinks,
+    snsPlacement: page.snsPlacement,
+    titleSize: page.titleSize,
     seoTitle: page.seoTitle,
     seoDesc: page.seoDesc,
   });
@@ -664,6 +758,8 @@ function ProfilePanel({
     setLayout(page.layout);
     setAlign(page.align);
     setSns(page.snsLinks);
+    setSnsPlacement(page.snsPlacement);
+    setTitleSize(page.titleSize);
     setSeoTitle(page.seoTitle);
     setSeoDesc(page.seoDesc);
   }
@@ -677,18 +773,34 @@ function ProfilePanel({
 
       <div>
         <p className="text-[12px] font-medium text-fg-sub">레이아웃</p>
+        {/* 글자 대신 **그림**으로 고른다(링크팜 실측 반영) — "커버+프로필"이라는 말보다
+            배너 위에 원이 얹힌 그림이 한눈에 들어온다. 그림은 순수 CSS. */}
         <div className="mt-1.5 grid grid-cols-3 gap-2">
           {LAYOUTS.map((l) => (
             <button
               key={l.key}
               type="button"
               onClick={() => setLayout(l.key)}
+              aria-pressed={layout === l.key}
               className={cn(
-                "trans-state rounded-card border px-2 py-2 text-[12px] font-semibold",
+                "trans-state rounded-card border p-2 text-[12px] font-semibold",
                 layout === l.key ? "border-2 border-primary" : "border border-line hover:bg-tint-hover",
               )}
             >
-              {l.label}
+              <span
+                className="relative flex h-12 flex-col items-center overflow-hidden rounded-[8px] bg-plate pt-1.5"
+                aria-hidden
+              >
+                {l.key !== "profile" ? <span className="absolute inset-x-0 top-0 h-4 bg-fg/20" /> : null}
+                {l.key !== "cover" ? (
+                  <span className={cn("relative z-10 size-4 rounded-full bg-fg/40", l.key === "cover_profile" && "mt-1")} />
+                ) : (
+                  <span className="mt-4 h-1.5 w-8 rounded-full bg-fg/30" />
+                )}
+                <span className="mt-1 h-1 w-10 rounded-full bg-fg/20" />
+                <span className="mt-0.5 h-1 w-7 rounded-full bg-fg/15" />
+              </span>
+              <span className="mt-1 block">{l.label}</span>
             </button>
           ))}
         </div>
@@ -750,12 +862,67 @@ function ProfilePanel({
               key={a}
               type="button"
               onClick={() => setAlign(a)}
+              aria-pressed={align === a}
               className={cn(
                 "trans-state rounded-card border px-2 py-1.5 text-[12px] font-semibold",
                 align === a ? "border-2 border-primary" : "border border-line hover:bg-tint-hover",
               )}
             >
               {a === "left" ? "왼쪽" : a === "center" ? "가운데" : "오른쪽"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 타이틀 크기·SNS 위치 — 링크팜 프로필 설정 실측(2026-08-19)에서 가져온 둘.
+          링크팜의 「드래그」 배치는 안 가져온다 — 우리는 드래그 정렬 자체를 뺐다. */}
+      <div>
+        <p className="text-[12px] font-medium text-fg-sub">타이틀 크기</p>
+        <div className="mt-1.5 grid grid-cols-3 gap-2">
+          {(
+            [
+              { key: "sm", label: "작게" },
+              { key: "md", label: "보통" },
+              { key: "lg", label: "크게" },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTitleSize(t.key)}
+              aria-pressed={titleSize === t.key}
+              className={cn(
+                "trans-state rounded-card border px-2 py-1.5 font-semibold",
+                t.key === "sm" ? "text-[12px]" : t.key === "md" ? "text-[14px]" : "text-[17px]",
+                titleSize === t.key ? "border-2 border-primary" : "border border-line hover:bg-tint-hover",
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className="text-[12px] font-medium text-fg-sub">SNS 아이콘 위치</p>
+        <div className="mt-1.5 grid grid-cols-2 gap-2">
+          {(
+            [
+              { key: "profile", label: "소개 아래" },
+              { key: "links", label: "링크 위" },
+            ] as const
+          ).map((o) => (
+            <button
+              key={o.key}
+              type="button"
+              onClick={() => setSnsPlacement(o.key)}
+              aria-pressed={snsPlacement === o.key}
+              className={cn(
+                "trans-state rounded-card border px-2 py-1.5 text-[12px] font-semibold",
+                snsPlacement === o.key ? "border-2 border-primary" : "border border-line hover:bg-tint-hover",
+              )}
+            >
+              {o.label}
             </button>
           ))}
         </div>
@@ -846,7 +1013,9 @@ function ProfilePanel({
       <Button
         variant="secondary"
         disabled={busy}
-        onClick={() => onSave({ slug, title, bio, layout, align, snsLinks: sns, seoTitle, seoDesc })}
+        onClick={() =>
+          onSave({ slug, title, bio, layout, align, snsLinks: sns, snsPlacement, titleSize, seoTitle, seoDesc })
+        }
       >
         {busy ? "저장 중…" : "저장"}
       </Button>

@@ -41,15 +41,42 @@ export function PhonePreview({
   blocks,
   selectedId,
   onPick,
+  mode = "draft",
 }: {
   page: LinkPageView;
   blocks: LinkBlock[];
   selectedId: string | null;
-  onPick: (id: string) => void;
+  onPick?: (id: string) => void;
+  /**
+   * draft: 편집 중인 초안 — 숨김 블록은 "공개 안 됨" 유령칸으로, 클릭하면 편집.
+   * live: 마지막 발행본 — 공개 페이지와 똑같이 숨김 블록을 **아예 안 그리고**,
+   *       클릭도 없다(발행본은 여기서 고칠 수 있는 것이 아니다).
+   */
+  mode?: "draft" | "live";
 }) {
   const theme = themeByKey(page.theme);
   const align =
     page.align === "left" ? "items-start text-left" : page.align === "right" ? "items-end text-right" : "items-center text-center";
+  /* live 는 공개 렌더러가 숨기는 블록을 **여기서도 뺀다** — 유령칸을 그리면
+     "라이브 모습"이 아니라 또 하나의 초안 화면이 된다. draft 는 전부 그린다(유령 포함). */
+  const visible = mode === "live" ? blocks.filter((b) => !hiddenReason(b.type, b.data)) : blocks;
+  /* 공개 페이지의 20/24/30px 를 380px 프레임 비율로 줄인 값 */
+  const titlePx = page.titleSize === "sm" ? "text-[16px]" : page.titleSize === "lg" ? "text-[24px]" : "text-[19px]";
+  const snsChips =
+    page.snsLinks.length > 0 ? (
+      <div className={cn("flex flex-wrap gap-1.5", page.snsPlacement === "links" ? "mb-2.5 justify-center" : "mt-2.5")}>
+        {page.snsLinks.map((x, i) => (
+          <span
+            key={i}
+            className="rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-2.5 py-1 text-[11px] font-medium"
+          >
+            {/* 공개 페이지는 한글 라벨을 쓴다 — 여기서 영문 키를 그대로 찍으면
+                미리보기와 실제가 대놓고 다르다 */}
+            {SNS_LABEL.get(x.kind) ?? x.kind}
+          </span>
+        ))}
+      </div>
+    ) : null;
 
   return (
     <div className="mx-auto w-full max-w-[380px]">
@@ -83,36 +110,28 @@ export function PhonePreview({
                 </span>
               )
             ) : null}
-            <p className="text-[19px] font-bold leading-[1.3]">{page.title || page.slug}</p>
+            <p className={cn("font-bold leading-[1.3]", titlePx)}>{page.title || page.slug}</p>
             {page.bio ? (
               <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-[1.6] text-[var(--lp-muted)]">{page.bio}</p>
             ) : null}
-            {page.snsLinks.length > 0 ? (
-              <div className="mt-2.5 flex flex-wrap gap-1.5">
-                {page.snsLinks.map((x, i) => (
-                  <span
-                    key={i}
-                    className="rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-2.5 py-1 text-[11px] font-medium"
-                  >
-                    {/* 공개 페이지는 한글 라벨을 쓴다 — 여기서 영문 키를 그대로 찍으면
-                        미리보기와 실제가 대놓고 다르다 */}
-                    {SNS_LABEL.get(x.kind) ?? x.kind}
-                  </span>
-                ))}
-              </div>
-            ) : null}
+            {page.snsPlacement !== "links" ? snsChips : null}
           </div>
 
-          {/* 블록 */}
+          {/* 블록 — snsPlacement=links 면 SNS 줄이 블록 목록 맨 위로 온다 */}
           <div className="mt-6 space-y-2.5">
-            {blocks.length === 0 ? (
-              <p className="text-center text-[13px] text-[var(--lp-muted)]">블록을 추가하면 여기에 보여요.</p>
+            {page.snsPlacement === "links" ? snsChips : null}
+            {visible.length === 0 ? (
+              <p className="text-center text-[13px] text-[var(--lp-muted)]">
+                {mode === "live" ? "라이브에 보이는 블록이 없어요." : "블록을 추가하면 여기에 보여요."}
+              </p>
+            ) : mode === "live" ? (
+              visible.map((b) => <PreviewBlock key={b.id} block={b} mode="live" />)
             ) : (
-              blocks.map((b) => (
+              visible.map((b) => (
                 <button
                   key={b.id}
                   type="button"
-                  onClick={() => onPick(b.id)}
+                  onClick={() => onPick?.(b.id)}
                   aria-label={`${BLOCK_CATALOG.find((c) => c.type === b.type)?.label ?? b.type} · ${blockSummary(b.type, b.data)} 편집`}
                   className={cn(
                     "trans-state block w-full rounded-[calc(var(--lp-radius)+4px)] text-left outline-offset-2",
@@ -126,7 +145,9 @@ export function PhonePreview({
           </div>
         </div>
       </div>
-      <p className="mt-2 text-center text-[12px] text-fg-sub">블록을 누르면 바로 편집할 수 있어요.</p>
+      <p className="mt-2 text-center text-[12px] text-fg-sub">
+        {mode === "live" ? "마지막 「라이브 반영」 시점의 모습이에요." : "블록을 누르면 바로 편집할 수 있어요."}
+      </p>
     </div>
   );
 }
@@ -140,12 +161,13 @@ function Ghost({ reason }: { reason: string }) {
   );
 }
 
-function PreviewBlock({ block }: { block: LinkBlock }) {
+function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "draft" | "live" }) {
   const d = block.data ?? {};
 
-  /* 공개 렌더러가 숨기는 조건과 **같은 함수**를 쓴다 */
+  /* 공개 렌더러가 숨기는 조건과 **같은 함수**를 쓴다. live 는 부모가 이미 걸렀지만
+     혹시 새 숨김 조건이 부모 필터를 놓쳐도 유령칸이 라이브에 새지 않게 한 번 더 막는다. */
   const hidden = hiddenReason(block.type, d);
-  if (hidden) return <Ghost reason={hidden} />;
+  if (hidden) return mode === "live" ? null : <Ghost reason={hidden} />;
 
   switch (block.type) {
     case "link": {
