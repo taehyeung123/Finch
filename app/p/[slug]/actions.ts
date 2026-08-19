@@ -3,7 +3,7 @@
 import { cookies, headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
 
 /*
   공개 페이지의 방문자 액션 — 방문 기록 / 리드 제출.
@@ -76,6 +76,15 @@ async function publicPageId(slug: string): Promise<string | null> {
 
 /** 같은 방문자의 방문을 이 간격 안에서는 1건으로 본다 */
 const VIEW_WINDOW_MS = 30 * 60 * 1000;
+/**
+ * 해시를 못 만든(쿠키를 안 보낸) 방문의 페이지 단위 천장 — 분당.
+ *
+ * 해시 기반 30분 병합은 **쿠키를 보내는 브라우저에만** 걸린다. curl 로 반복하면
+ * 매번 새 해시가 나와 한 번도 발동하지 않았다. 진짜 방문자는 거의 다 쿠키를
+ * 받으므로 이 천장에 닿지 않고, 스크립트만 걸린다.
+ * 실제 방문을 깎지 않도록 넉넉하게 잡았다 — 목적은 정밀 차단이 아니라 폭주 차단이다.
+ */
+const VIEW_ANON_PER_MIN = 60;
 /** 리드: 같은 방문자 10분 5건 / 한 페이지 1시간 30건 */
 const LEAD_VISITOR_WINDOW_MS = 10 * 60 * 1000;
 const LEAD_VISITOR_MAX = 5;
@@ -94,7 +103,7 @@ export async function recordView(slug: string): Promise<void> {
   const hash = await visitorHash();
 
   /* 같은 방문자가 30분 안에 다시 왔으면 안 센다. 새로고침 한 번에 방문 1건씩
-     쌓이면 클릭률 분모가 부풀어 지표가 통째로 거짓말이 된다. */
+     쌓이면 조회수 분모가 부풀어 지표가 통째로 거짓말이 된다. */
   if (hash) {
     const { data: last } = await admin
       .from("link_views")
@@ -105,6 +114,16 @@ export async function recordView(slug: string): Promise<void> {
       .limit(1)
       .maybeSingle();
     if (last) return;
+  } else {
+    /* 해시가 없으면 위 병합이 아예 안 걸린다 — 쿠키를 안 보내는 스크립트가
+       조회수를 무한히 부풀릴 수 있는 구멍이 여기였다. 해시 없는 방문만 따로 센다. */
+    const { count } = await admin
+      .from("link_views")
+      .select("id", { count: "exact", head: true })
+      .eq("page_id", pageId)
+      .is("visitor_hash", null)
+      .gte("created_at", new Date(Date.now() - 60 * 1000).toISOString());
+    if ((count ?? 0) >= VIEW_ANON_PER_MIN) return;
   }
 
   const h = await headers();
@@ -128,6 +147,10 @@ export async function submitLead(input: {
   phone?: string;
   message?: string;
 }): Promise<{ ok: boolean; error?: string }> {
+  /* 데모 페이지의 폼은 **누르기 전에** 예시라고 말한다(lead-form.tsx). 여기까지
+     오는 건 폼을 우회한 호출뿐이므로 그대로 거절한다 — ok:true 로 위장하면
+     "접수됐어요"를 보여주고 아무 데도 저장하지 않는 더 나쁜 거짓말이 된다. */
+  if (isDemoMode()) return { ok: false, error: "예시 페이지라 접수되지 않아요." };
   if (!isSupabaseConfigured()) return { ok: false, error: "지금은 접수할 수 없어요." };
 
   const pageId = await publicPageId(input.slug);

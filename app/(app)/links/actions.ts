@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
-import { SLUG_MESSAGES, normalizeUrl, validateSlug } from "@/lib/links";
+import { SLUG_MESSAGES, normalizeUrl, sliceChars, validateSlug } from "@/lib/links";
 import { defaultBlockData, type BlockType } from "@/lib/links/blocks";
 import { DEFAULT_THEME_KEY, themeByKey } from "@/lib/links/themes";
 import { LINK_TEMPLATES } from "@/lib/links/templates";
@@ -42,23 +42,43 @@ const SLUG_HOLD_DAYS = 90;
  * 옛 주소로 유입이 계속 온다. 그 slug 를 남이 즉시 가져가면 트래픽뿐 아니라
  * **방문자가 남기는 문의(이름·이메일·전화)** 까지 선점자에게 들어간다.
  *
- * 원래 주인은 언제든 되찾을 수 있다(page_id 로 판별). 조회는 service_role 로 한다 —
- * link_slug_history 는 정책이 없어 사용자 세션으로는 못 읽는다(그 자체가 명부라서).
- * service_role 키가 없는 환경이면 검사를 건너뛴다(선점 방지는 있으면 좋은 것이지,
- * 없다고 주소 변경 자체를 막을 일은 아니다).
+ * ⚠️ 되찾기 판별은 **owner_id(사람)** 으로 한다(0050). page_id 로 했더니
+ * `on delete set null` 때문에 페이지를 지우는 순간 근거가 사라져서, 본인이 자기
+ * 옛 주소를 다시 쓰려 할 때 "다른 사람이 쓰던 주소"라는 거짓말을 들었다.
+ *
+ * 조회는 service_role 로 한다 — link_slug_history 는 정책이 없어 사용자 세션으로는
+ * 못 읽는다(그 자체가 명부라서). 키가 없는 환경이면 검사를 건너뛴다
+ * (선점 방지는 있으면 좋은 것이지, 없다고 주소 변경 자체를 막을 일은 아니다).
  */
-async function slugHeldByOther(slug: string, myPageId: string | null): Promise<boolean> {
+async function slugHeldByOther(slug: string, myUserId: string): Promise<boolean> {
   const admin = createAdminClient();
   if (!admin) return false;
   const { data } = await admin
     .from("link_slug_history")
-    .select("page_id, released_at")
+    .select("owner_id, released_at")
     .eq("slug", slug)
     .maybeSingle();
   if (!data) return false;
-  if (myPageId && data.page_id === myPageId) return false; // 내가 버린 내 주소 — 되찾기 허용
+  if (data.owner_id === myUserId) return false; // 내가 놓은 내 주소 — 되찾기 허용
   const age = Date.now() - new Date(data.released_at as string).getTime();
   return age < SLUG_HOLD_DAYS * 24 * 60 * 60 * 1000;
+}
+
+/**
+ * 주소를 무덤에 넣는다 — 90일간 남이 못 가져간다.
+ *
+ * 실패해도 부르는 쪽의 결과를 바꾸지 않는다: 선점 방지는 부가 보호지 저장 조건이 아니다.
+ */
+async function releaseSlug(slug: string, pageId: string | null, userId: string): Promise<void> {
+  const admin = createAdminClient();
+  if (!admin) return;
+  const { error } = await admin
+    .from("link_slug_history")
+    .upsert(
+      { slug, page_id: pageId, owner_id: userId, released_at: new Date().toISOString() },
+      { onConflict: "slug" },
+    );
+  if (error) console.error("[links] 옛 주소 기록 실패:", error.message);
 }
 
 /** 내 페이지 id·slug — 거의 모든 액션이 먼저 필요로 한다 */
@@ -86,14 +106,14 @@ export async function createLinkPage(slug: string, title: string): Promise<Resul
   const clean = slug.trim().toLowerCase();
   const err = validateSlug(clean);
   if (err) return { ok: false, error: SLUG_MESSAGES[err] };
-  if (await slugHeldByOther(clean, null)) {
+  if (await slugHeldByOther(clean, user.id)) {
     return { ok: false, error: "최근까지 다른 사람이 쓰던 주소예요. 다른 주소를 입력해 주세요." };
   }
 
   const supabase = await createClient();
   const { data: created, error } = await supabase
     .from("link_pages")
-    .insert({ user_id: user.id, slug: clean, title: title.trim().slice(0, 40), theme: DEFAULT_THEME_KEY })
+    .insert({ user_id: user.id, slug: clean, title: sliceChars(title.trim(), 40), theme: DEFAULT_THEME_KEY })
     .select("id")
     .maybeSingle();
   if (error) {
@@ -150,7 +170,7 @@ export async function updateLinkProfile(input: {
 
   const supabase = await createClient();
   const { data: before } = await supabase.from("link_pages").select("id, slug").eq("user_id", user.id).maybeSingle();
-  if (before?.slug !== clean && (await slugHeldByOther(clean, (before?.id as string) ?? null))) {
+  if (before?.slug !== clean && (await slugHeldByOther(clean, user.id))) {
     return { ok: false, error: "최근까지 다른 사람이 쓰던 주소예요. 다른 주소를 입력해 주세요." };
   }
 
@@ -158,13 +178,13 @@ export async function updateLinkProfile(input: {
     .from("link_pages")
     .update({
       slug: clean,
-      title: input.title.trim().slice(0, 40),
-      bio: input.bio.trim().slice(0, 160),
+      title: sliceChars(input.title.trim(), 40),
+      bio: sliceChars(input.bio.trim(), 160),
       layout: input.layout,
       align: input.align,
       sns_links: sns,
-      seo_title: input.seoTitle.trim().slice(0, 60) || null,
-      seo_desc: input.seoDesc.trim().slice(0, 160) || null,
+      seo_title: sliceChars(input.seoTitle.trim(), 60) || null,
+      seo_desc: sliceChars(input.seoDesc.trim(), 160) || null,
     })
     .eq("user_id", user.id);
   if (error) {
@@ -178,15 +198,7 @@ export async function updateLinkProfile(input: {
   /* 주소를 바꾸면 **옛 경로도** 무효화한다 — 안 하면 옛 주소가 캐시된 채로 계속 열린다 */
   if (before?.slug && before.slug !== clean) {
     revalidatePath(`/p/${before.slug}`);
-    /* 옛 주소를 무덤에 넣는다 — 90일간 남이 못 가져간다(본인은 언제든 되찾는다).
-       실패해도 주소 변경 자체는 성공이다: 선점 방지는 부가 보호지 저장 조건이 아니다. */
-    const admin = createAdminClient();
-    if (admin) {
-      const { error: histErr } = await admin
-        .from("link_slug_history")
-        .upsert({ slug: before.slug, page_id: before.id, released_at: new Date().toISOString() }, { onConflict: "slug" });
-      if (histErr) console.error("[links] 옛 주소 기록 실패:", histErr.message);
-    }
+    await releaseSlug(before.slug, (before.id as string) ?? null, user.id);
   }
   return { ok: true };
 }
@@ -251,14 +263,21 @@ export async function deleteLinkPage(): Promise<Result> {
   if (!user) return AUTH;
 
   const supabase = await createClient();
-  const { data: page } = await supabase.from("link_pages").select("slug").eq("user_id", user.id).maybeSingle();
+  const { data: page } = await supabase.from("link_pages").select("id, slug").eq("user_id", user.id).maybeSingle();
   const { error } = await supabase.from("link_pages").delete().eq("user_id", user.id);
   if (error) {
     console.error("[links] 페이지 삭제 실패:", error.message);
     return { ok: false, error: "삭제하지 못했어요." };
   }
   revalidatePath("/links");
-  if (page?.slug) revalidatePath(`/p/${page.slug}`);
+  if (page?.slug) {
+    revalidatePath(`/p/${page.slug}`);
+    /* 삭제도 주소를 **놓는** 것이다 — 여기서 무덤에 안 넣으면, 홧김에 지웠다가
+       마음이 바뀐 사이에 남이 그 주소를 즉시 가져간다. 주소 변경 때만 막고
+       삭제 때는 열어두면 방어에 큰 구멍이 남는다.
+       page_id 는 곧 사라지므로(cascade) 소유권 근거는 owner_id 다(0050). */
+    await releaseSlug(page.slug as string, null, user.id);
+  }
   return { ok: true };
 }
 
@@ -513,13 +532,22 @@ export async function publishLinkPage(): Promise<Result> {
     .maybeSingle();
   if (!page) return { ok: false, error: "프로필 링크가 없어요." };
 
-  const { data: blocks } = await supabase
+  /* ⚠️ **error 를 반드시 본다.** 앞서는 꺼내지도 않아서, 조회가 실패해 blocks 가 null 이면
+     빈 배열로 스냅샷을 구워 **라이브를 통째로 비우고 ok 를 반환**했다. 화면은 「반영됨」,
+     방문자는 "아직 등록된 링크가 없어요". 바로 위 link_pages 조회는 이미 막고 있었다.
+     (반대로 "0행이면 차단"은 하지 않는다 — active=true 필터라, 블록을 전부 꺼둔
+      정당한 사용자의 발행까지 막힌다.) */
+  const { data: blocks, error: blockErr } = await supabase
     .from("link_blocks")
     .select("id, type, data, sort_order, active")
     .eq("page_id", page.id)
     .eq("active", true) // 꺼둔 블록은 발행하지 않는다
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
+  if (blockErr) {
+    console.error("[links] 발행용 블록 조회 실패:", blockErr.message);
+    return { ok: false, error: "반영하지 못했어요. 잠시 후 다시 시도해 주세요." };
+  }
 
   /* 「최근 게시물」 블록을 여기서 **실제로 채운다.** 편집기가 "라이브 반영할 때
      채워집니다"라고 약속하므로, 안 채우면 발행해도 블록이 안 보이는 거짓말이 된다.
@@ -547,6 +575,14 @@ export async function publishLinkPage(): Promise<Result> {
      여기서 한 번 정리해 두면 방문자 경로에서 변환·검증이 필요 없다. */
   const snapshot = {
     v: 1,
+    /* 발행 도장. **없으면 발행이 조용히 실패한다** — 0049 의 트리거는
+       `published_snapshot is distinct from old` 일 때만 published_at 을 찍는데,
+       스냅샷에 없는 것(slug)만 바꾸거나 꺼둔 블록만 고치거나 고쳤다 되돌린 뒤
+       발행하면 스냅샷이 **글자 하나 안 달라져서** 트리거가 안 탄다. 그동안
+       updated_at 은 전진하므로 dirty 가 영원히 참 = 「반영됨」에 도달할 수 없다.
+       (트리거를 `is not null` 기준으로 바꾸는 건 안 된다 — 그러면 프로필·테마 저장까지
+        published_at 을 찍어 진짜 초안 변경이 묻힌다. 반대 방향으로 같은 거짓말이다.) */
+    at: new Date().toISOString(),
     title: page.title ?? "",
     bio: page.bio ?? "",
     layout: page.layout ?? "profile",
@@ -600,6 +636,10 @@ export async function publishLinkPage(): Promise<Result> {
  * 모르는 키는 **버리지 않고** 문자열 상한만 건다 — 블록 종류가 늘 때마다 이 목록을
  * 고쳐야 하면 반드시 빠뜨린다. 대신 서버가 만드는 값(cached)만 명시적으로 떨군다.
  */
+/* 상한은 **코드포인트 수**다(sliceChars). emoji 가 2가 아니라 4인 이유:
+   🛍️ 는 코드포인트 2개(기본 문자 + 변형 선택자), 🇰🇷 는 2개(지역 표시 문자 두 개),
+   👍🏻 는 2개(기본 + 피부톤)다. 2로 두면 우리가 템플릿에 깔아준 🛍️ 조차
+   저장 한 번에 🛍 로 바뀐다. 4면 국기·피부톤·ZWJ 없는 조합까지 온전히 통과한다. */
 const TEXT_CAPS: Record<string, number> = {
   label: 40,
   title: 60,
@@ -609,7 +649,7 @@ const TEXT_CAPS: Record<string, number> = {
   buttonLabel: 20,
   alt: 100,
   address: 200,
-  emoji: 2,
+  emoji: 4,
 };
 const ENUMS: Record<string, readonly string[]> = {
   emphasis: ["normal", "primary", "outline"],
@@ -658,7 +698,7 @@ function sanitizeBlockData(input: Record<string, unknown>): { data?: Record<stri
             if (!href) return { error: URL_ERROR };
             it[ik] = href;
           } else if (typeof iv === "string") {
-            it[ik] = iv.slice(0, TEXT_CAPS[ik] ?? 200);
+            it[ik] = sliceChars(iv, Object.hasOwn(TEXT_CAPS, ik) ? TEXT_CAPS[ik] : 200);
           } else if (typeof iv === "number" || typeof iv === "boolean") {
             it[ik] = iv;
           }
@@ -677,19 +717,22 @@ function sanitizeBlockData(input: Record<string, unknown>): { data?: Record<stri
       continue;
     }
 
-    if (k in NUM_ENUMS) {
+    /* `k in X` 가 아니라 Object.hasOwn 이다 — `in` 은 프로토타입 키까지 참이라
+       "constructor" 같은 키가 오면 NUM_ENUMS["constructor"].includes 에서 터진다.
+       UI 로는 못 만들지만 서버 액션은 폼 없이도 직접 부를 수 있다. */
+    if (Object.hasOwn(NUM_ENUMS, k)) {
       const num = typeof v === "number" ? v : Number(v);
       if (NUM_ENUMS[k].includes(num)) out[k] = num;
       continue; // 목록 밖이면 통째로 뺀다 — 렌더러가 각자의 기본값을 쓴다
     }
 
-    if (k in ENUMS) {
+    if (Object.hasOwn(ENUMS, k)) {
       if (typeof v === "string" && ENUMS[k].includes(v)) out[k] = v;
       continue;
     }
 
     if (typeof v === "string") {
-      out[k] = v.slice(0, TEXT_CAPS[k] ?? 500);
+      out[k] = sliceChars(v, Object.hasOwn(TEXT_CAPS, k) ? TEXT_CAPS[k] : 500);
     } else if (typeof v === "number" || typeof v === "boolean") {
       out[k] = v;
     }

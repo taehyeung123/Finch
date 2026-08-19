@@ -109,7 +109,13 @@ export function LinksClient({
   const editorDirty = editingId !== null && stableJson(draft) !== baseline;
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>, onOk?: () => void) {
-    if (busy) return;
+    if (busy) {
+      /* 앞선 작업이 끝날 때까지 조용히 삼킨다. **삼켰다는 사실은 알려야 한다** —
+         ↑↓ 는 포커스가 튀지 않게 일부러 비활성화하지 않으므로, 눌렀는데 아무 일도
+         안 일어나는 게 화면상 구분되지 않는다. */
+      setNotice("앞선 작업을 처리하는 중이에요. 잠시 후 다시 눌러 주세요.");
+      return;
+    }
     setBusy(true);
     setError(null);
     startTransition(async () => {
@@ -129,6 +135,8 @@ export function LinksClient({
     setDraft(data);
     setBaseline(stableJson(data));
     setEditingId(id);
+    /* 앞선 조작의 실패 문구를 들고 들어가지 않는다 — 안 누른 폼이 실패한 것처럼 읽힌다 */
+    setError(null);
     /* 새로 열린 패널의 제목으로 포커스를 옮긴다 — 목록에 남겨두면 키보드·스크린리더
        사용자는 화면이 바뀐 걸 모른다. 닫을 때 closeEditor 가 원래 행으로 되돌린다. */
     requestAnimationFrame(() => document.getElementById(EDITOR_TITLE_ID)?.focus());
@@ -149,6 +157,7 @@ export function LinksClient({
   function closeEditor(focusBackTo?: string | null) {
     if (!leaveEditor()) return;
     setEditingId(null);
+    setError(null);
     if (focusBackTo) {
       requestAnimationFrame(() => document.getElementById(`blk-${focusBackTo}`)?.focus());
     }
@@ -171,7 +180,7 @@ export function LinksClient({
     <div className="space-y-4">
       {/* 데모 모드는 **눌러보기 전에** 알린다 — 저장은 서버 액션이 막는다 */}
       {isDemo ? (
-        <p className="rounded-card border border-line bg-plate px-4 py-3 text-[14px] leading-[1.6] text-fg-sub">
+        <p className="card-face px-4 py-3 text-[14px] leading-[1.6] text-fg-sub">
           <strong className="font-semibold text-fg">예시 페이지</strong>예요. 편집기를 둘러볼 수 있지만 저장은 되지
           않아요. 로그인하면 내 프로필 링크를 만들 수 있습니다.
         </p>
@@ -234,6 +243,10 @@ export function LinksClient({
                       if (!leaveEditor()) return;
                       setTab(t.key);
                       setEditingId(null);
+                      /* 오류는 그 조작에 붙은 것이다 — 탭을 옮기면 함께 사라져야 한다.
+                         안 그러면 프로필 「저장」 버튼 위에 방금 블록에서 난 URL 오류가
+                         role="alert" 로 떠서, 누른 적도 없는 폼이 실패한 것처럼 읽힌다. */
+                      setError(null);
                     }}
                     className={cn(
                       "trans-state flex flex-col items-center gap-1 rounded-card px-1.5 py-2 text-[11px] font-semibold",
@@ -283,10 +296,15 @@ export function LinksClient({
                 onApplyTemplate={(k) => run(() => applyTemplate(k))}
                 onEdit={openEditor}
                 onToggle={(id, active) => run(() => updateBlock(id, { active }))}
-                onMove={(id, dir, label) => {
-                  run(() => moveBlock(id, dir));
-                  setNotice(`${label} 블록을 ${dir === "up" ? "위로" : "아래로"} 옮겼어요.`);
-                }}
+                /* 안내는 **성공했을 때만** 나간다. 앞서는 run() 밖에서 동기로 불러서,
+                   연타로 무시된 클릭이나 서버 실패에도 「옮겼어요」가 읽혔다 —
+                   목록을 눈으로 못 보는 사용자에게는 그게 확정이다. */
+                onMove={(id, dir, label) =>
+                  run(
+                    () => moveBlock(id, dir),
+                    () => setNotice(`${label} 블록을 ${dir === "up" ? "위로" : "아래로"} 옮겼어요.`),
+                  )
+                }
                 onDelete={(id) => run(() => deleteBlock(id))}
               />
             ) : tab === "stats" ? (
@@ -532,7 +550,10 @@ function BlocksPanel({
                   ) : null}
                 </button>
 
-                <Switch checked={b.active} onChange={(v) => onToggle(b.id, v)} label="노출" disabled={busy} />
+                {/* 접근성 이름에 블록 요약을 넣는다 — "노출" 고정이면 6개가 전부 같은 이름이다.
+                    disabled={busy} 는 안 건다: 누르는 순간 비활성화되면 포커스가 문서 맨 위로
+                    튄다(↑↓ 와 같은 이유). 연타는 run() 의 busy 가드가 막는다. */}
+                <Switch checked={b.active} onChange={(v) => onToggle(b.id, v)} label={`${label} 노출`} />
 
                 {/* 삭제는 되돌릴 수 없다(DB 물리 삭제). 항목 8개를 손으로 채운 그리드를
                     잘못 누르면 끝이다 — 덜 파괴적인 템플릿 적용에도 확인이 있다. */}
@@ -601,10 +622,28 @@ function ProfilePanel({
 
   /* 서버가 새 값을 주면 입력창을 맞춘다 — 저장 시 서버가 slug 를 소문자화하고
      제목·소개를 자른다. 동기화가 없으면 저장 후에도 옛 값이 남아 되돌려 쓴다.
-     effect 대신 렌더 시점 조정(레포 관례). */
-  const [prev, setPrev] = useState(page);
-  if (page !== prev) {
-    setPrev(page);
+     effect 대신 렌더 시점 조정(레포 관례).
+
+     ⚠️ **객체 동일성(page !== prev)으로 판정하면 안 된다.** page 는 서버 렌더마다
+     새로 만들어지는 객체 리터럴이라(links/page.tsx) 값이 하나도 안 바뀌어도 항상 다르다.
+     그러면 이 패널이 떠 있는 동안 일어나는 **아무 서버 액션**(상단 「라이브 반영」,
+     프로필 사진 업로드 — 이건 설계상 즉시 저장이다)이 revalidatePath 로 새 props 를
+     내려보내는 순간, 아직 저장 안 한 설명·주소·SNS 가 경고 없이 서버 값으로 덮인다.
+     블록 편집기는 draft/baseline 으로 막아뒀는데 이 폼만 무방비였다.
+     값으로 비교하면 서버가 **실제로 정규화했을 때만** 입력창을 맞춘다. */
+  const serverKey = stableJson({
+    slug: page.slug,
+    title: page.title,
+    bio: page.bio,
+    layout: page.layout,
+    align: page.align,
+    snsLinks: page.snsLinks,
+    seoTitle: page.seoTitle,
+    seoDesc: page.seoDesc,
+  });
+  const [prevKey, setPrevKey] = useState(serverKey);
+  if (serverKey !== prevKey) {
+    setPrevKey(serverKey);
     setSlug(page.slug);
     setTitle(page.title);
     setBio(page.bio);
@@ -894,12 +933,23 @@ function StatsPanel({
         </div>
       </div>
 
+      {/* 집계 실패를 0 으로 뭉개면 "성과 0" 으로 읽힌다 — 멀쩡한 페이지를 갈아엎게 만든다 */}
+      {stats.failed ? (
+        <p role="alert" className="rounded-card border border-negative/40 bg-negative-weak p-3 text-[14px] text-negative-strong">
+          통계를 불러오지 못했어요. 아래 숫자는 실제 성과가 아닙니다 — 잠시 후 다시 열어 주세요.
+        </p>
+      ) : null}
+
       <div className="grid grid-cols-2 gap-2">
         {[
           { label: "조회수", value: stats.views.toLocaleString("ko-KR") },
           { label: "방문자", value: stats.uniques.toLocaleString("ko-KR") },
           { label: "클릭", value: stats.clicks.toLocaleString("ko-KR") },
-          { label: "클릭률", value: ratio(stats.ctr, stats.views) },
+          /* 「클릭률」이 아니라 「조회당 클릭」이다. 분자·분모의 세는 규칙이 다르다 —
+             같은 사람이 30분 안에 다시 오면 조회는 1로 묶지만 클릭은 전부 센다.
+             그래서 100% 를 넘을 수 있고, 실제로 주인이 자기 페이지를 열어 블록마다
+             눌러보면 첫 화면이 800% 가 된다. 「클릭률」이라는 이름이 그걸 오류로 보이게 한다. */
+          { label: "조회당 클릭", value: ratio(stats.ctr, stats.views) },
         ].map((s) => (
           <div key={s.label} className="rounded-card border border-line bg-plate px-3 py-2.5">
             <p className="text-[12px] text-fg-sub">{s.label}</p>
@@ -907,9 +957,10 @@ function StatsPanel({
           </div>
         ))}
       </div>
-      <p className="text-[12px] text-fg-sub">
-        재방문율 <span className="tnum font-semibold text-fg">{ratio(stats.returning, stats.uniques)}</span> · 쿠키를
-        지운 방문은 사람 수를 셀 수 없어 방문자 집계에서 빠져요.
+      <p className="text-[12px] leading-relaxed text-fg-sub">
+        재방문율 <span className="tnum font-semibold text-fg">{ratio(stats.returning, stats.uniques)}</span> · 같은
+        사람이 30분 안에 다시 와도 조회는 1로 세고 클릭은 전부 세요 — 그래서 「조회당 클릭」은 100%를 넘을 수 있어요.
+        쿠키를 지운 방문은 사람 수를 셀 수 없어 방문자 집계에서 빠집니다.
       </p>
 
       {/* 추이 */}
@@ -927,7 +978,10 @@ function StatsPanel({
             </span>
           </span>
         </div>
-        {stats.daily.length >= 2 ? (
+        {/* daily 는 항상 days+1 행이라 length 만 보면 빈 상태에 도달하지 못한다 —
+            "아직 데이터가 없어요" 자리에 바닥 직선 한 줄이 그려지고 그 밑에
+            "모양(추세)을 보세요" 가 붙었다. 값의 합으로 판정한다. */}
+        {stats.daily.some((d) => d.views > 0 || d.clicks > 0) ? (
           <>
             <DualLineChart
               className="mt-2"
@@ -938,7 +992,7 @@ function StatsPanel({
               ]}
             />
             {/* 두 계열을 각자 min/max 로 정규화해 그린다 — 높이를 서로 비교하면 안 된다 */}
-            <p className="mt-1 text-[12px] text-fg-faint">두 선은 각자의 범위로 그려요. 모양(추세)을 보세요.</p>
+            <p className="mt-1 text-[12px] text-fg-sub">두 선은 각자의 범위로 그려요. 모양(추세)을 보세요.</p>
           </>
         ) : (
           <p className="mt-2 text-[14px] text-fg-sub">아직 데이터가 없어요.</p>

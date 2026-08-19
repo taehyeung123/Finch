@@ -30,6 +30,13 @@ export interface LinkPageView {
 
 export interface LinkStats {
   days: number;
+  /**
+   * 집계 자체가 실패했는가.
+   *
+   * 없으면 0 이 "성과 0" 과 구분되지 않는다 — 클릭 수천 건이 쌓인 사장님이
+   * 조회 0·클릭 0·"아직 데이터가 없어요"를 보고 멀쩡한 페이지를 갈아엎는다.
+   */
+  failed: boolean;
   /** 페이지가 열린 횟수 */
   views: number;
   /** 사람 수(쿠키를 지운 방문은 셀 수 없어 빠진다) */

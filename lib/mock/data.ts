@@ -1112,6 +1112,7 @@ export const linkWorkspace: LinkWorkspace = {
   ],
   stats: {
     days: 30,
+    failed: false,
     views: 4820,
     uniques: 3140,
     clicks: 1268,

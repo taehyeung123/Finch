@@ -83,6 +83,34 @@ export function stableJson(v: unknown): string {
 }
 
 /**
+ * 글자 수를 **코드포인트 기준**으로 자른다.
+ *
+ * `String.prototype.slice` 는 UTF-16 코드유닛을 센다. 이모지는 대부분 2유닛이고
+ * 🛍️(변형 선택자 포함) 3유닛, 🇰🇷(국기) 4유닛, 👍🏻(피부톤) 4유닛이다.
+ * slice(0,2) 를 그대로 쓰면 🛍️ → 🛍(흑백), 🇰🇷 → 🇰 가 되고, 최악은
+ * **짝 없는 서로게이트**가 남아 그 값이 DB·JSON 을 오가며 손상된다.
+ */
+export function sliceChars(raw: string, max: number): string {
+  const chars = [...raw];
+  return chars.length <= max ? raw : chars.slice(0, max).join("");
+}
+
+/**
+ * 이니셜 원에 쓸 첫 글자.
+ *
+ * `charAt(0)` 은 UTF-16 코드유닛 한 개라 "🍰케이크공방" 이면 **서로게이트 반쪽**이
+ * 남는다. 그 반쪽은 SSR 직렬화 단계에서 U+FFFD(�)로 확정 변환돼, 브랜드 페이지
+ * 머리에 검은 마름모가 박힌다. 코드포인트로 잘라야 한다.
+ */
+export function initialOf(raw: string): string {
+  const first = [...(raw ?? "").trim()][0];
+  return first ? first.toUpperCase() : "?";
+}
+
+/** 임베드 주소에 그대로 실어도 되는 유튜브 파라미터 — 재생목록·시작 위치 */
+const YT_KEEP = ["list", "start", "t"] as const;
+
+/**
  * 유튜브 URL → 임베드 주소. 임베드할 수 없으면 null.
  *
  * 유튜브만 다룬다. 틱톡·인스타는 임베드 정책이 자주 바뀌어 깨진 iframe 이 남는데,
@@ -90,28 +118,59 @@ export function stableJson(v: unknown): string {
  *
  * ⚠️ **공개 렌더러와 미리보기가 같은 판정을 써야 한다.** 앞서는 미리보기가 무조건
  * ▶ 상자를 그려서, 임베드가 안 되는 주소도 작성자에게는 재생될 것처럼 보였다.
- * (CSP frame-src 에 youtube 오리진이 있어야 실제로 뜬다 — proxy.ts.)
+ *
+ * ⚠️ 주소를 **처음부터 다시 조립한다.** 앞서 `/embed/` 경로만 원본을 그대로
+ * 돌려줬는데, 그러면 ① 비-www 호스트가 CSP frame-src 에 막혀 빈 카드가 되고
+ * ② 원본 쿼리스트링이 통째로 iframe src 에 실린다. 화이트리스트한 파라미터만 옮긴다.
+ *
+ * 호스트는 항상 **youtube-nocookie.com** 이다 — 방문자는 이 페이지 주인의 손님이지
+ * 구글에 쿠키를 받으러 온 사람이 아니다. CSP frame-src 도 이 오리진만 연다(proxy.ts).
  */
 export function youtubeEmbed(raw: string): string | null {
   if (!raw) return null;
+  let u: URL;
   try {
-    const u = new URL(raw);
-    const host = u.hostname.replace(/^www\./, "");
-    if (host === "youtu.be") {
-      const id = u.pathname.slice(1);
-      return id ? `https://www.youtube.com/embed/${id}` : null;
-    }
-    if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com") {
-      const v = u.searchParams.get("v");
-      if (v) return `https://www.youtube.com/embed/${v}`;
-      if (u.pathname.startsWith("/shorts/")) {
-        const id = u.pathname.split("/")[2];
-        return id ? `https://www.youtube.com/embed/${id}` : null;
-      }
-      if (u.pathname.startsWith("/embed/")) return u.toString();
-    }
-    return null;
+    u = new URL(raw);
   } catch {
     return null;
   }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+
+  const host = u.hostname.replace(/^www\./, "");
+  let id: string | null = null;
+  let series = false;
+
+  if (host === "youtu.be") {
+    id = u.pathname.split("/").filter(Boolean)[0] ?? null;
+  } else if (
+    host === "youtube.com" ||
+    host === "m.youtube.com" ||
+    host === "music.youtube.com" ||
+    host === "youtube-nocookie.com"
+  ) {
+    const seg = u.pathname.split("/").filter(Boolean);
+    if (seg[0] === "shorts" || seg[0] === "live" || seg[0] === "v") id = seg[1] ?? null;
+    else if (seg[0] === "embed") {
+      /* 재생목록 임베드는 영상 id 가 없다 — list 파라미터가 본체다 */
+      if (seg[1] === "videoseries") series = true;
+      else id = seg[1] ?? null;
+    } else id = u.searchParams.get("v");
+  } else {
+    return null;
+  }
+
+  if (series) {
+    const list = u.searchParams.get("list");
+    if (!list || !/^[A-Za-z0-9_-]{2,64}$/.test(list)) return null;
+    return `https://www.youtube-nocookie.com/embed/videoseries?list=${list}`;
+  }
+
+  if (!id || !/^[A-Za-z0-9_-]{6,20}$/.test(id)) return null;
+
+  const out = new URL(`https://www.youtube-nocookie.com/embed/${id}`);
+  for (const k of YT_KEEP) {
+    const v = u.searchParams.get(k);
+    if (v && /^[A-Za-z0-9_-]{1,64}$/.test(v)) out.searchParams.set(k, v);
+  }
+  return out.toString();
 }

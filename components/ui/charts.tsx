@@ -146,9 +146,14 @@ export function DualLineChart({
       {drawable.map((s, si) => {
         const max = Math.max(...s.data);
         const min = Math.min(...s.data);
-        const range = max - min || 1;
+        /* 값이 전부 같으면(신규 페이지의 0 행렬 등) range 가 0 이다. 1 로 대체하면
+           (v-min)/1 = 0 이라 선이 **맨 위**에 붙어 "최고치가 계속 유지 중"처럼 보인다.
+           변화가 없다는 뜻이므로 세로 가운데에 그린다. */
+        const flat = max === min;
+        const range = flat ? 1 : max - min;
         const x = (i: number) => padX + (i / (s.data.length - 1)) * (W - padX * 2);
-        const y = (v: number) => padY + (1 - (v - min) / range) * (H - padY * 2);
+        const y = (v: number) =>
+          flat ? padY + (H - padY * 2) / 2 : padY + (1 - (v - min) / range) * (H - padY * 2);
         const line = s.data.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
         return (
           <g key={si}>

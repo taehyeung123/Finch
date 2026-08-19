@@ -32,6 +32,7 @@ type Loaded = LinkWorkspace;
 
 const EMPTY_STATS: LinkStats = {
   days: DEFAULT_DAYS,
+  failed: false,
   views: 0,
   uniques: 0,
   clicks: 0,
@@ -140,9 +141,15 @@ async function load(days: number): Promise<Loaded> {
 
   const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10 : 0);
   const byId = new Map(blocks.map((b) => [b.id, b]));
+  const snapById = new Map(
+    (((page.published_snapshot as { blocks?: Array<{ id: string; type: string; data: Record<string, unknown> }> } | null)
+      ?.blocks ?? [])).map((b) => [b.id, b]),
+  );
 
   const stats: LinkStats = {
     days,
+    /* 실패를 0 으로 뭉개지 않는다 — 화면이 "성과 0" 으로 읽고 사장님이 오판한다 */
+    failed: !!statsRes.error,
     views: raw?.views ?? 0,
     uniques: raw?.uniques ?? 0,
     clicks: raw?.clicks ?? 0,
@@ -156,10 +163,17 @@ async function load(days: number): Promise<Loaded> {
        지금 초안에 없는 id 는 "지운 블록"으로 표시한다. */
     blocks: (raw?.blocks ?? []).map((x) => {
       const b = byId.get(x.id);
+      if (b) return { id: x.id, label: blockSummary(b.type, b.data), removed: false, clicks: x.n };
+      /* 초안에 없는 id 는 **발행본에서** 이름을 찾는다. "지운 블록" 한 문구로
+         뭉개면 「템플릿 적용」 한 번에 목록 전 줄이 "지운 블록"이 된다(적용이 블록을
+         전부 지우고 새 id 로 다시 깔기 때문에). 스냅샷은 이미 select 중이라 추가 쿼리 0회. */
+      const snapBlock = snapById.get(x.id);
       return {
         id: x.id,
-        label: b ? blockSummary(b.type, b.data) : "지운 블록",
-        removed: !b,
+        label: snapBlock
+          ? blockSummary(snapBlock.type as LinkBlock["type"], snapBlock.data ?? {})
+          : `블록 ${x.id.slice(0, 6)}`,
+        removed: true,
         clicks: x.n,
       };
     }),

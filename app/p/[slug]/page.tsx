@@ -5,6 +5,8 @@ import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
 import { linkWorkspace } from "@/lib/data";
 import { FinchMark } from "@/components/logo";
+import { initialOf } from "@/lib/links";
+import { hiddenReason, type BlockType } from "@/lib/links/blocks";
 import { themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
 import { BlockRenderer, type SnapshotBlock } from "./_components/block-renderer";
 import { LeadForm } from "./_components/lead-form";
@@ -218,7 +220,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
                 className="mb-3 flex size-20 items-center justify-center rounded-full border-2 border-[var(--lp-card)] bg-[var(--lp-card)] text-[24px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)]"
                 aria-hidden
               >
-                {(snap.title || slug).charAt(0).toUpperCase()}
+                {initialOf(snap.title || slug)}
               </span>
             )
           ) : null}
@@ -244,18 +246,24 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
           ) : null}
         </header>
 
-        {/* 블록 */}
+        {/* 블록.
+            빈 상태 문구는 **배열 길이가 아니라 그려질 게 있는지**로 정한다.
+            createLinkPage 가 주소 없는 「새 링크」를 하나 깔아주므로, 그대로 발행하면
+            블록은 1개인데 렌더러가 null 을 돌려줘 방문자는 프로필 아래 공백만 본다.
+
+            ⚠️ hiddenReason 으로 **렌더 목록 자체를 거르지는 않는다.** 이 함수와 렌더러가
+            1:1 이 아니라(social_feed 등), 판정이 갈리는 순간 "문구 누락"이
+            "정상 블록이 통째로 사라짐"으로 악화된다. 여기서는 문구만 결정한다. */}
         <div className="mt-8 space-y-3">
-          {snap.blocks.length === 0 ? (
+          {snap.blocks.every((b) => hiddenReason(b.type as BlockType, b.data)) ? (
             <p className="text-center text-[15px] text-[var(--lp-muted)]">아직 등록된 링크가 없어요.</p>
-          ) : (
-            snap.blocks.map((b) =>
-              b.type === "contact" || b.type === "subscribe" ? (
-                <LeadForm key={b.id} slug={slug} blockId={b.id} kind={b.type} data={b.data} />
-              ) : (
-                <BlockRenderer key={b.id} block={b} slug={slug} />
-              ),
-            )
+          ) : null}
+          {snap.blocks.map((b) =>
+            b.type === "contact" || b.type === "subscribe" ? (
+              <LeadForm key={b.id} slug={slug} blockId={b.id} kind={b.type} data={b.data} isDemo={isDemoMode()} />
+            ) : (
+              <BlockRenderer key={b.id} block={b} slug={slug} />
+            ),
           )}
         </div>
 

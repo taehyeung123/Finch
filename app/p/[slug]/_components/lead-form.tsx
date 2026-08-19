@@ -24,11 +24,14 @@ export function LeadForm({
   blockId,
   kind,
   data,
+  isDemo = false,
 }: {
   slug: string;
   blockId: string;
   kind: "contact" | "subscribe";
   data: Record<string, unknown>;
+  /** 예시 페이지인가 — 제출이 저장되지 않는다는 걸 **채워 넣기 전에** 알린다 */
+  isDemo?: boolean;
 }) {
   const s = (k: string) => (typeof data[k] === "string" ? (data[k] as string) : "");
   /* 표시 순서는 **항상 이름·이메일·연락처·내용**이다. 저장된 배열 순서는 사장님이
@@ -117,10 +120,16 @@ export function LeadForm({
         </p>
       ) : null}
 
+      {isDemo ? (
+        <p className="text-[13px] leading-[1.6] text-[var(--lp-muted)]">
+          예시 폼이에요 — 실제로 접수되지는 않습니다.
+        </p>
+      ) : null}
+
       <button
         type="submit"
-        disabled={busy}
-        className="min-h-11 w-full rounded-[var(--lp-radius)] bg-[var(--lp-accent)] px-5 text-[15px] font-semibold text-[var(--lp-on-accent)] transition-opacity hover:opacity-85 disabled:opacity-50"
+        disabled={busy || isDemo}
+        className="min-h-11 w-full rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-5 text-[15px] font-semibold text-[var(--lp-on-accent)] transition-opacity hover:opacity-85 disabled:opacity-50"
       >
         {busy ? "보내는 중…" : s("buttonLabel") || (kind === "subscribe" ? "구독하기" : "보내기")}
       </button>

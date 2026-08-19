@@ -1,9 +1,9 @@
 "use client";
 
 import { cn } from "@/lib/cn";
-import { youtubeEmbed } from "@/lib/links";
+import { initialOf, youtubeEmbed } from "@/lib/links";
 import { themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
-import { hiddenReason, type LinkBlock } from "@/lib/links/blocks";
+import { BLOCK_CATALOG, blockSummary, hiddenReason, type LinkBlock } from "@/lib/links/blocks";
 import type { LinkPageView } from "@/lib/links/types";
 
 /*
@@ -79,7 +79,7 @@ export function PhonePreview({
                   style={{ background: theme.card, color: theme.muted }}
                   aria-hidden
                 >
-                  {(page.title || page.slug || "?").charAt(0).toUpperCase()}
+                  {initialOf(page.title || page.slug)}
                 </span>
               )
             ) : null}
@@ -113,7 +113,7 @@ export function PhonePreview({
                   key={b.id}
                   type="button"
                   onClick={() => onPick(b.id)}
-                  aria-label={`${b.type} 블록 편집`}
+                  aria-label={`${BLOCK_CATALOG.find((c) => c.type === b.type)?.label ?? b.type} · ${blockSummary(b.type, b.data)} 편집`}
                   className={cn(
                     "trans-state block w-full rounded-[calc(var(--lp-radius)+4px)] text-left outline-offset-2",
                     selectedId === b.id && "outline outline-2 outline-primary",
@@ -153,7 +153,7 @@ function PreviewBlock({ block }: { block: LinkBlock }) {
       return (
         <div
           className={[
-            "flex min-h-[44px] items-center justify-center gap-1.5 rounded-[var(--lp-radius)] px-4 py-2.5 text-center text-[13px] font-semibold",
+            "flex min-h-[44px] items-center justify-center gap-1.5 rounded-[var(--lp-radius-btn)] px-4 py-2.5 text-center text-[13px] font-semibold",
             emphasis === "primary"
               ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]"
               : emphasis === "outline"
@@ -198,11 +198,11 @@ function PreviewBlock({ block }: { block: LinkBlock }) {
             <img src={s(d, "imagePath")} alt="" className="aspect-[16/9] w-full object-cover" />
           ) : null}
           <div className="px-3 py-2.5">
-            <p className="text-[13px] font-semibold">{s(d, "title") || "카드 제목"}</p>
+            <p className="text-[13px] font-semibold">{s(d, "title")}</p>
             {s(d, "subtitle") ? <p className="mt-0.5 text-[12px] text-[var(--lp-muted)]">{s(d, "subtitle")}</p> : null}
             {s(d, "price") ? <p className="tnum mt-1.5 text-[15px] font-bold">{s(d, "price")}</p> : null}
             {s(d, "ctaLabel") && s(d, "url") ? (
-              <span className="mt-2 flex min-h-[32px] items-center justify-center rounded-[var(--lp-radius)] bg-[var(--lp-accent)] px-3 text-[12px] font-semibold text-[var(--lp-on-accent)]">
+              <span className="mt-2 flex min-h-[32px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-3 text-[12px] font-semibold text-[var(--lp-on-accent)]">
                 {s(d, "ctaLabel")}
               </span>
             ) : null}
@@ -240,7 +240,7 @@ function PreviewBlock({ block }: { block: LinkBlock }) {
                   />
                 ) : null}
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-semibold">{s(it, "title") || "제목"}</span>
+                  <span className="block truncate text-[13px] font-semibold">{s(it, "title")}</span>
                   {s(it, "subtitle") ? (
                     <span className="block truncate text-[12px] text-[var(--lp-muted)]">{s(it, "subtitle")}</span>
                   ) : null}
@@ -260,7 +260,7 @@ function PreviewBlock({ block }: { block: LinkBlock }) {
                   // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
                   <img src={s(it, "imagePath")} alt="" className="aspect-square w-full object-cover" />
                 ) : null}
-                <span className="block px-2 py-1.5 text-center text-[12px] font-medium">{s(it, "title") || "제목"}</span>
+                <span className="block px-2 py-1.5 text-center text-[12px] font-medium">{s(it, "title")}</span>
               </div>
             ))}
         </div>
@@ -321,7 +321,7 @@ function PreviewBlock({ block }: { block: LinkBlock }) {
               aria-hidden
             />
           ))}
-          <span className="block h-9 rounded-[var(--lp-radius)] bg-[var(--lp-accent)]" aria-hidden />
+          <span className="block h-9 rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)]" aria-hidden />
         </div>
       );
     }

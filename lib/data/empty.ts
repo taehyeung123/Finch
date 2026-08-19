@@ -133,6 +133,6 @@ export const autoDmSummary: AutoDmSummary = {
 export const linkWorkspace: LinkWorkspace = {
   page: null,
   blocks: [],
-  stats: { days: 30, views: 0, uniques: 0, clicks: 0, ctr: 0, returning: 0, daily: [], blocks: [], regions: [] },
+  stats: { days: 30, failed: false, views: 0, uniques: 0, clicks: 0, ctr: 0, returning: 0, daily: [], blocks: [], regions: [] },
   leads: [],
 };

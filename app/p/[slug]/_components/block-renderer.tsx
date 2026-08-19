@@ -55,7 +55,7 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
           href={goHref(slug, block.id)}
           rel="noopener noreferrer nofollow"
           className={[
-            "flex min-h-[52px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius)] px-5 py-3 text-center text-[15px] font-semibold transition-opacity hover:opacity-85",
+            "flex min-h-[52px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] px-5 py-3 text-center text-[15px] font-semibold transition-opacity hover:opacity-85",
             primary
               ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]"
               : outline
@@ -138,7 +138,7 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
             {/* 카드 전체가 이미 링크다 — 버튼은 <span> 이어야 한다(<a> 중첩은 무효 HTML).
                 url 이 없으면 누를 수 없으므로 버튼도 안 그린다. */}
             {cta && url ? (
-              <span className="mt-3 flex min-h-[40px] items-center justify-center rounded-[var(--lp-radius)] bg-[var(--lp-accent)] px-4 text-[14px] font-semibold text-[var(--lp-on-accent)]">
+              <span className="mt-3 flex min-h-[40px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-4 text-[14px] font-semibold text-[var(--lp-on-accent)]">
                 {cta}
               </span>
             ) : null}

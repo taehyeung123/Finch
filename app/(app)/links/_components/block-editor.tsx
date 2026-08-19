@@ -2,6 +2,7 @@
 
 import { Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { sliceChars } from "@/lib/links";
 import { BLOCK_CATALOG, CONTACT_FIELDS, type LinkBlock } from "@/lib/links/blocks";
 import { ImageField } from "./image-field";
 
@@ -111,7 +112,7 @@ export function BlockEditor({
               <label className={label} htmlFor="b-emoji">
                 아이콘 (선택)
               </label>
-              <input id="b-emoji" value={str("emoji")} onChange={(e) => set("emoji", e.target.value.slice(0, 2))} placeholder="🔔" className={`mt-1.5 ${input}`} />
+              <input id="b-emoji" value={str("emoji")} onChange={(e) => set("emoji", sliceChars(e.target.value, 4))} placeholder="🔔" className={`mt-1.5 ${input}`} />
             </div>
             <div>
               <label className={label} htmlFor="b-emph">
@@ -206,6 +207,25 @@ export function BlockEditor({
         <ImageField label="이미지" value={str("imagePath")} onChange={(v) => set("imagePath", v)} />
       ) : null}
 
+      {/* 대체 텍스트 — 공개 렌더러가 alt 로 내보낸다(block-renderer.tsx). 입력칸이 없어서
+          값이 영원히 비어 있었다: 스크린리더 사용자에게 배너·포스터가 통째로 침묵한다.
+          목록 요약에도 쓰여, 이미지 블록 3개가 전부 「이미지」로 보이던 것도 같이 풀린다. */}
+      {block.type === "image" ? (
+        <div>
+          <label className={label} htmlFor="b-alt">
+            대체 텍스트 (선택)
+          </label>
+          <input
+            id="b-alt"
+            value={str("alt")}
+            onChange={(e) => set("alt", e.target.value)}
+            placeholder="이미지 내용을 한 줄로 — 화면을 못 보는 방문자에게 읽힙니다"
+            maxLength={100}
+            className={`mt-1.5 ${input}`}
+          />
+        </div>
+      ) : null}
+
       {block.type === "image_card" ? (
         <>
           <div>
@@ -248,9 +268,30 @@ export function BlockEditor({
             id="b-url2"
             value={str("url")}
             onChange={(e) => set("url", e.target.value)}
-            placeholder={block.type === "video" ? "https://youtube.com/watch?v=…" : "https://…"}
+            placeholder={block.type === "video" ? "https://www.youtube.com/watch?v=…" : "https://…"}
             className={`mt-1.5 ${input}`}
           />
+        </div>
+      ) : null}
+
+      {/* 영상 제목 — 임베드의 title(스크린리더가 읽는 이름)이자, 임베드가 안 되는 주소일 때
+          「▶ …」 링크 버튼의 문구다(block-renderer.tsx). 이것도 입력칸이 없었다. */}
+      {block.type === "video" ? (
+        <div>
+          <label className={label} htmlFor="b-vtitle">
+            영상 제목 (선택)
+          </label>
+          <input
+            id="b-vtitle"
+            value={str("title")}
+            onChange={(e) => set("title", e.target.value)}
+            placeholder="영상 보러 가기"
+            maxLength={60}
+            className={`mt-1.5 ${input}`}
+          />
+          <p className="mt-1 text-[12px] leading-snug text-fg-sub">
+            유튜브 주소면 바로 재생돼요. 그 밖의 영상은 이 제목이 붙은 링크 버튼으로 나갑니다.
+          </p>
         </div>
       ) : null}
 
@@ -288,6 +329,7 @@ export function BlockEditor({
                   onChange={(e) => setItem(i, "title", e.target.value)}
                   placeholder="제목"
                   aria-label={`항목 ${i + 1} 제목`}
+                  maxLength={60}
                   className={input}
                 />
                 {block.type === "card_row" ? (
@@ -296,6 +338,7 @@ export function BlockEditor({
                     onChange={(e) => setItem(i, "subtitle", e.target.value)}
                     placeholder="부제목"
                     aria-label={`항목 ${i + 1} 부제목`}
+                    maxLength={80}
                     className={input}
                   />
                 ) : null}
@@ -380,6 +423,24 @@ export function BlockEditor({
             <textarea id="b-fdesc" value={str("description")} onChange={(e) => set("description", e.target.value)} rows={2} maxLength={160} className={`mt-1.5 ${area}`} />
           </div>
 
+          {/* 구독 버튼 문구 — 공개 폼(lead-form.tsx)이 이 값을 쓰는데 입력칸이 없어서
+              누구나 「구독하기」로 고정돼 있었다. */}
+          {block.type === "subscribe" ? (
+            <div>
+              <label className={label} htmlFor="b-btn">
+                버튼 문구
+              </label>
+              <input
+                id="b-btn"
+                value={str("buttonLabel")}
+                onChange={(e) => set("buttonLabel", e.target.value)}
+                placeholder="구독하기"
+                maxLength={20}
+                className={`mt-1.5 ${input}`}
+              />
+            </div>
+          ) : null}
+
           {block.type === "contact" ? (
             <div>
               <p className={label}>받을 항목</p>
@@ -425,7 +486,7 @@ export function BlockEditor({
             <label className={label} htmlFor="b-addr">
               주소
             </label>
-            <input id="b-addr" value={str("address")} onChange={(e) => set("address", e.target.value)} placeholder="서울시 강남구 …" className={`mt-1.5 ${input}`} />
+            <input id="b-addr" value={str("address")} onChange={(e) => set("address", e.target.value)} placeholder="서울시 강남구 …" maxLength={200} className={`mt-1.5 ${input}`} />
           </div>
           <div>
             <label className={label} htmlFor="b-mlabel">

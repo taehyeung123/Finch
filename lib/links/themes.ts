@@ -168,7 +168,15 @@ export function themeVars(t: LinkTheme): Record<string, string> {
     "--lp-border": t.border,
     "--lp-accent": t.accent,
     "--lp-on-accent": t.onAccent,
-    "--lp-radius": t.radius === "full" ? "999px" : t.radius === "sm" ? "8px" : "14px",
+    /* 모서리는 **두 갈래**다.
+       radius 의 이름이 「버튼 모서리」인데(위 인터페이스 주석), 값 하나를 이미지·카드·
+       그리드·커버까지 전부 먹였더니 full 테마(모노크롬·코랄)에서 **사진이 알약으로
+       잘렸다.** 999px 를 /1.6 으로 나눠도 624px 라 아무 소용이 없었고, 미리보기도
+       똑같이 뭉개져서 발행 전에 눈치챌 수도 없었다.
+         --lp-radius-btn : 링크 버튼·CTA 처럼 알약이어도 되는 것
+         --lp-radius     : 면(카드·이미지·썸네일·커버) — full 이어도 16px 로 눌러둔다 */
+    "--lp-radius-btn": t.radius === "full" ? "999px" : t.radius === "sm" ? "8px" : "14px",
+    "--lp-radius": t.radius === "full" ? "16px" : t.radius === "sm" ? "8px" : "14px",
     "--lp-shadow": t.shadow ? "0 1px 3px rgba(15,23,42,.08), 0 6px 14px rgba(15,23,42,.04)" : "none",
   };
 }

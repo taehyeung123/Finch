@@ -75,7 +75,11 @@ function applySecurityHeaders(response: NextResponse) {
   // 주소는 링크 버튼으로 빠져 멀쩡하다. 편집기 미리보기도 항상 ▶ 상자를 그려서
   // 작성자는 발행 전에 눈치챌 수 없었다. (틱톡은 임베드하지 않는다 —
   //  block-renderer.tsx 가 링크 버튼으로 폴백한다.)
-  const youtube = "https://www.youtube.com https://www.youtube-nocookie.com";
+  //
+  // **nocookie 오리진만 연다.** lib/links 의 youtubeEmbed 가 주소를 항상 이쪽으로
+  // 다시 조립하므로 www.youtube.com 은 쓰이지 않는다. 방문자는 이 페이지 주인의
+  // 손님이지 구글에 쿠키를 받으러 온 사람이 아니다.
+  const youtube = "https://www.youtube-nocookie.com";
 
   // CSP — Pretendard 웹폰트(jsdelivr CDN)만 외부 허용. 개발 모드는 HMR 때문에 unsafe-eval 필요
   const csp = [
