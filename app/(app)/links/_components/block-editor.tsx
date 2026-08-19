@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { BLOCK_CATALOG, type LinkBlock } from "@/lib/links/blocks";
+import { BLOCK_CATALOG, CONTACT_FIELDS, type LinkBlock } from "@/lib/links/blocks";
 import { ImageField } from "./image-field";
 
 /*
@@ -22,30 +21,43 @@ const area =
   "w-full rounded-card border border-line bg-body px-3 py-2 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none";
 const label = "block text-[12px] font-medium text-fg-sub";
 
+/**
+ * 편집 중인 값(`value`)은 **부모가 들고 있다.**
+ *
+ * 이유: 탭 버튼이 편집 필드 바로 위에 있어서, "테마가 뭐였지" 하고 한 번 누르면 항목
+ * 12개의 제목·주소·업로드까지 끝낸 이미지 경로가 경고 없이 날아갔다. 부모가 탭 전환·
+ * 닫기 전에 "미저장인가"를 알아야 확인을 받을 수 있는데, 그 값이 여기 state 로 갇혀
+ * 있으면 알 방법이 없다(렌더 중 부모 state 를 건드릴 수도, ref 를 읽을 수도 없다).
+ * 값을 위로 올리면 미저장 판정이 **순수 파생값**이 된다.
+ */
 export function BlockEditor({
   block,
+  value,
+  onChange,
   busy,
+  error,
+  dirty,
   onSave,
+  onRevert,
   onClose,
 }: {
   block: LinkBlock;
+  value: Record<string, unknown>;
+  onChange: (next: Record<string, unknown>) => void;
   busy: boolean;
+  /** 저장 실패 사유 — 화면 맨 위 배너만으로는 여기까지 스크롤한 사용자가 못 본다 */
+  error: string | null;
+  dirty: boolean;
   onSave: (data: Record<string, unknown>) => void;
+  onRevert: () => void;
   onClose: () => void;
 }) {
-  const [d, setD] = useState<Record<string, unknown>>(block.data ?? {});
-
-  /* 다른 블록을 고르면 편집 대상이 바뀐다 — 렌더 시점에 맞춘다(레포 관례) */
-  const [prevId, setPrevId] = useState(block.id);
-  if (block.id !== prevId) {
-    setPrevId(block.id);
-    setD(block.data ?? {});
-  }
-
-  const set = (k: string, v: unknown) => setD((p) => ({ ...p, [k]: v }));
+  const d = value;
+  const set = (k: string, v: unknown) => onChange({ ...d, [k]: v });
   const str = (k: string) => (typeof d[k] === "string" ? (d[k] as string) : "");
   const num = (k: string, fb: number) => (typeof d[k] === "number" ? (d[k] as number) : fb);
   const items = Array.isArray(d.items) ? (d.items as Record<string, unknown>[]) : [];
+  const fields = Array.isArray(d.fields) ? (d.fields as string[]) : [];
 
   const setItem = (i: number, k: string, v: unknown) =>
     set(
@@ -58,7 +70,12 @@ export function BlockEditor({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-[15px] font-bold">{meta?.label ?? block.type}</h3>
+        {/* 편집기가 열리면 포커스를 여기로 옮긴다 — 목록에서 엔터를 눌렀는데 포커스가
+            그 자리에 남아 있으면 키보드·스크린리더 사용자는 화면이 바뀐 걸 모른다.
+            닫을 때는 부모(links-client)가 원래 행으로 되돌린다. */}
+        <h3 tabIndex={-1} autoFocus className="text-[15px] font-bold outline-none">
+          {meta?.label ?? block.type}
+        </h3>
         <button
           type="button"
           onClick={onClose}
@@ -198,6 +215,22 @@ export function BlockEditor({
             </label>
             <input id="b-sub" value={str("subtitle")} onChange={(e) => set("subtitle", e.target.value)} maxLength={80} className={`mt-1.5 ${input}`} />
           </div>
+          {/* 공구·판매 셀러가 카드에 넣어야 하는 건 사진·상품명·**가격**·「구매하기」다.
+              가격을 부제목에 욱여넣으면 스타일을 다르게 줄 수 없다. */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className={label} htmlFor="b-price">
+                가격 (선택)
+              </label>
+              <input id="b-price" value={str("price")} onChange={(e) => set("price", e.target.value)} placeholder="29,000원" maxLength={40} className={`mt-1.5 ${input}`} />
+            </div>
+            <div>
+              <label className={label} htmlFor="b-cta">
+                버튼 문구 (선택)
+              </label>
+              <input id="b-cta" value={str("ctaLabel")} onChange={(e) => set("ctaLabel", e.target.value)} placeholder="구매하기" maxLength={20} className={`mt-1.5 ${input}`} />
+            </div>
+          </div>
         </>
       ) : null}
 
@@ -293,10 +326,17 @@ export function BlockEditor({
             <label className={label} htmlFor="b-ch">
               채널
             </label>
+            {/* 틱톡·스레드는 **고를 수 없다.** 고르면 발행 시 빈 배열이 구워지고
+                (actions.ts publishLinkPage), 공개 렌더러가 빈 배열이면 블록을 통째로
+                숨긴다 — 편집기에는 멀쩡히 보이는데 공개 페이지에서 사라졌다. */}
             <select id="b-ch" value={str("channel") || "instagram"} onChange={(e) => set("channel", e.target.value)} className={`mt-1.5 ${input}`}>
               <option value="instagram">인스타그램</option>
-              <option value="tiktok">틱톡</option>
-              <option value="threads">스레드</option>
+              <option value="tiktok" disabled>
+                틱톡 (준비 중)
+              </option>
+              <option value="threads" disabled>
+                스레드 (준비 중)
+              </option>
             </select>
           </div>
           <div>
@@ -312,8 +352,9 @@ export function BlockEditor({
             </select>
           </div>
           <p className="text-[12px] leading-snug text-fg-sub">
-            연동한 채널의 최근 게시물이 <strong className="font-semibold">라이브 반영할 때</strong> 채워집니다.
-            방문자마다 플랫폼을 조회하면 요청 제한에 걸려서, 발행 시점에 한 번만 가져와요.
+            <strong className="font-semibold">인스타그램을 연동해 두면</strong> 최근 게시물이
+            「라이브 반영」할 때 채워집니다. 방문자마다 플랫폼을 조회하면 요청 제한에 걸려서,
+            발행 시점에 한 번만 가져와요. 연동 전이면 이 블록은 공개 페이지에 나오지 않아요.
           </p>
         </>
       ) : null}
@@ -333,8 +374,41 @@ export function BlockEditor({
             </label>
             <textarea id="b-fdesc" value={str("description")} onChange={(e) => set("description", e.target.value)} rows={2} maxLength={160} className={`mt-1.5 ${area}`} />
           </div>
+
+          {block.type === "contact" ? (
+            <div>
+              <p className={label}>받을 항목</p>
+              <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                {CONTACT_FIELDS.map((f) => {
+                  const on = fields.includes(f.key);
+                  return (
+                    <label
+                      key={f.key}
+                      className="flex cursor-pointer items-center gap-2 rounded-card border border-line px-3 py-2 text-[14px] hover:bg-tint-hover has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        /* 연락 가능한 값이 하나도 없으면 제출이 전부 막힌다
+                           (p/[slug]/actions.ts 가 이메일·연락처 중 하나를 요구한다).
+                           마지막 하나는 못 끄게 한다. */
+                        disabled={on && fields.filter((k) => k === "email" || k === "phone").length === 1 && (f.key === "email" || f.key === "phone")}
+                        onChange={(e) =>
+                          set("fields", e.target.checked ? [...fields, f.key] : fields.filter((k) => k !== f.key))
+                        }
+                        className="size-4 accent-[var(--color-primary)]"
+                      />
+                      {f.label}
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[12px] text-fg-sub">이메일·연락처 중 하나는 반드시 받아야 해요.</p>
+            </div>
+          ) : null}
+
           <p className="text-[12px] leading-snug text-fg-sub">
-            받은 내용은 이 화면 아래 「받은 내용」에서 확인할 수 있어요.
+            받은 내용은 <strong className="font-semibold">「설정」 탭</strong>의 「받은 내용」에서 확인할 수 있어요.
           </p>
         </>
       ) : null}
@@ -357,13 +431,22 @@ export function BlockEditor({
         </>
       ) : null}
 
-      <div className="flex gap-2 pt-1">
+      {error ? (
+        <p role="alert" className="text-[14px] text-negative-strong">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="flex items-center gap-2 pt-1">
         <Button size="sm" disabled={busy} onClick={() => onSave(d)}>
           {busy ? "저장 중…" : "저장"}
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => setD(block.data ?? {})}>
-          되돌리기
+        {/* 「되돌리기」는 **이 폼만** 원래대로 돌린다 — 삭제·순서는 못 되돌린다.
+            이름만 보고 undo 로 오해하지 않게 옆에 적어둔다. */}
+        <Button size="sm" variant="ghost" onClick={onRevert}>
+          입력 되돌리기
         </Button>
+        {dirty ? <span className="text-[12px] text-fg-sub">저장 안 됨</span> : null}
       </div>
     </div>
   );

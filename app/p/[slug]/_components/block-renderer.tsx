@@ -1,3 +1,4 @@
+import { youtubeEmbed } from "@/lib/links";
 import type { BlockType } from "@/lib/links/blocks";
 
 /*
@@ -29,23 +30,6 @@ function goHref(slug: string, blockId: string, idx?: number): string {
   return idx === undefined ? `/p/${slug}/go/${blockId}` : `/p/${slug}/go/${blockId}?i=${idx}`;
 }
 
-/** 유튜브·틱톡 URL → 임베드 주소. 모르는 주소면 null(링크 버튼으로 대체) */
-function embedUrl(raw: string): string | null {
-  try {
-    const u = new URL(raw);
-    const host = u.hostname.replace(/^www\./, "");
-    if (host === "youtu.be") return `https://www.youtube.com/embed/${u.pathname.slice(1)}`;
-    if (host.endsWith("youtube.com")) {
-      const v = u.searchParams.get("v");
-      if (v) return `https://www.youtube.com/embed/${v}`;
-      if (u.pathname.startsWith("/shorts/")) return `https://www.youtube.com/embed/${u.pathname.split("/")[2]}`;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 const cardCls =
   "block rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-card)] shadow-[var(--lp-shadow)]";
 
@@ -56,6 +40,11 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
   switch (type) {
     /* ── 링크 버튼 ─────────────────────────────────────────── */
     case "link": {
+      /* 주소가 비면 **아예 그리지 않는다.** <a> 로 그리면 /p/{slug}/go/{id} 가
+         목적지를 못 찾고 같은 페이지로 되던져서, 방문자에게는 "눌렀는데 새로고침만
+         된" 것으로 보인다. 새 페이지에 기본으로 깔리는 빈 「새 링크」가 그대로
+         발행되는 게 가장 흔한 경로다. */
+      if (!s(d, "url")) return null;
       const label = s(d, "label") || "링크";
       const emoji = s(d, "emoji");
       const emphasis = s(d, "emphasis") || "normal";
@@ -134,6 +123,8 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
       const title = s(d, "title");
       const sub = s(d, "subtitle");
       const url = s(d, "url");
+      const price = s(d, "price");
+      const cta = s(d, "ctaLabel");
       const inner = (
         <div className={`${cardCls} overflow-hidden`}>
           {src ? (
@@ -143,6 +134,14 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
           <div className="px-4 py-3.5">
             <p className="text-[15px] font-semibold text-[var(--lp-fg)]">{title}</p>
             {sub ? <p className="mt-1 text-[14px] text-[var(--lp-muted)]">{sub}</p> : null}
+            {price ? <p className="tnum mt-2 text-[17px] font-bold text-[var(--lp-fg)]">{price}</p> : null}
+            {/* 카드 전체가 이미 링크다 — 버튼은 <span> 이어야 한다(<a> 중첩은 무효 HTML).
+                url 이 없으면 누를 수 없으므로 버튼도 안 그린다. */}
+            {cta && url ? (
+              <span className="mt-3 flex min-h-[40px] items-center justify-center rounded-[var(--lp-radius)] bg-[var(--lp-accent)] px-4 text-[14px] font-semibold text-[var(--lp-on-accent)]">
+                {cta}
+              </span>
+            ) : null}
           </div>
         </div>
       );
@@ -158,7 +157,7 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
     case "video": {
       const url = s(d, "url");
       if (!url) return null;
-      const embed = embedUrl(url);
+      const embed = youtubeEmbed(url);
       /* 임베드를 못 만들면 **링크 버튼으로 대체한다** — 깨진 iframe 을 보여주는 것보다
          "영상 보러 가기"가 낫다(틱톡·인스타는 임베드 정책이 자주 바뀐다). */
       if (!embed) {
@@ -187,11 +186,14 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
     }
 
     case "card_row": {
-      const items = arr(d, "items");
+      /* 주소 없는 항목은 뺀다 — 그 자리를 <a> 로 그리면 방문자를 같은 페이지로 되던진다.
+         ⚠️ 인덱스는 **원본 배열 기준**을 유지한다. 걸러낸 뒤 다시 매기면
+         /go/{id}?i=N 이 스냅샷의 엉뚱한 항목을 가리킨다. */
+      const items = arr(d, "items").map((it, i) => ({ it, i })).filter(({ it }) => s(it, "url"));
       if (items.length === 0) return null;
       return (
         <div className="space-y-2.5">
-          {items.map((it, i) => (
+          {items.map(({ it, i }) => (
             <a
               key={i}
               href={goHref(slug, block.id, i)}
@@ -224,12 +226,13 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
     }
 
     case "grid": {
-      const items = arr(d, "items");
+      /* card_row 와 같은 이유·같은 규칙 — 원본 인덱스를 유지한 채 주소 없는 항목만 뺀다 */
+      const items = arr(d, "items").map((it, i) => ({ it, i })).filter(({ it }) => s(it, "url"));
       if (items.length === 0) return null;
       const cols = n(d, "columns", 2) === 3 ? "grid-cols-3" : "grid-cols-2";
       return (
         <div className={`grid gap-2.5 ${cols}`}>
-          {items.map((it, i) => (
+          {items.map(({ it, i }) => (
             <a
               key={i}
               href={goHref(slug, block.id, i)}

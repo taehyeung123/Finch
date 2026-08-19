@@ -3,8 +3,8 @@ import { headers } from "next/headers";
 import { PageHeader } from "@/components/ui/section-header";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
-import type { LinkBlock } from "@/lib/links/blocks";
-import { LinksClient, type LinkPageView } from "./_components/links-client";
+import { blockSummary, type LinkBlock } from "@/lib/links/blocks";
+import { LinksClient, type LinkPageView, type LinkStats } from "./_components/links-client";
 
 export const metadata: Metadata = {
   title: "프로필 링크",
@@ -12,17 +12,19 @@ export const metadata: Metadata = {
 };
 
 /*
-  프로필 링크 편집 — 블록 빌더(2026-08-17 재구성).
+  프로필 링크 편집 — 블록 빌더(2026-08-17 재구성, 2026-08-19 점검 반영).
 
   링크팜(app.linkfarm.ai) 빌더를 실측 조사해 구조를 맞췄다: 프로필·테마·블록·설정
   4탭 + 라이브 미리보기 + draft→라이브 반영 분리.
 
-  통계는 **여기서 집계해 넘긴다.** 클라이언트가 항목마다 조회하면 N+1 이 되고,
-  RLS 를 통과한 뒤에도 블록 10개면 요청 10번이다.
+  통계는 **DB 함수 하나로 집계해 넘긴다**(0049 link_page_stats). 앞서는 방문 행을
+  통째로 끌어와 JS 로 셌는데, PostgREST 가 응답을 db-max-rows(기본 1000)에서 자르는
+  바람에 방문이 1000건을 넘으면 분모가 거기서 멈춰 **클릭률이 100% 를 넘었다.**
 */
 
-/** 통계 조회 창 — 링크팜 기본값과 같은 30일 */
-const STATS_DAYS = 30;
+/** 통계 조회 창 — 링크팜과 같은 3단 */
+const STATS_RANGES = [7, 30, 90] as const;
+const DEFAULT_DAYS = 30;
 
 export interface LinkLead {
   id: number;
@@ -37,17 +39,40 @@ export interface LinkLead {
 interface Loaded {
   page: LinkPageView | null;
   blocks: LinkBlock[];
-  stats: { views: number; clicks: number; ctr: number; returning: number };
+  stats: LinkStats;
   leads: LinkLead[];
 }
 
-const EMPTY: Loaded = { page: null, blocks: [], stats: { views: 0, clicks: 0, ctr: 0, returning: 0 }, leads: [] };
+const EMPTY_STATS: LinkStats = {
+  days: DEFAULT_DAYS,
+  views: 0,
+  uniques: 0,
+  clicks: 0,
+  ctr: 0,
+  returning: 0,
+  daily: [],
+  blocks: [],
+  regions: [],
+};
 
-async function load(): Promise<Loaded> {
-  if (isDemoMode()) return EMPTY;
+const EMPTY: Loaded = { page: null, blocks: [], stats: EMPTY_STATS, leads: [] };
+
+/** link_page_stats 가 돌려주는 원형 */
+interface RawStats {
+  views: number;
+  uniques: number;
+  repeats: number;
+  clicks: number;
+  daily: Array<{ d: string; v: number; c: number }>;
+  blocks: Array<{ id: string; n: number }>;
+  regions: Array<{ country: string | null; region: string | null; n: number }>;
+}
+
+async function load(days: number): Promise<Loaded> {
+  if (isDemoMode()) return { ...EMPTY, stats: { ...EMPTY_STATS, days } };
 
   const user = await getAuthUser();
-  if (!user) return EMPTY;
+  if (!user) return { ...EMPTY, stats: { ...EMPTY_STATS, days } };
 
   const supabase = await createClient();
   const { data: page } = await supabase
@@ -57,28 +82,19 @@ async function load(): Promise<Loaded> {
     )
     .eq("user_id", user.id)
     .maybeSingle();
-  if (!page) return EMPTY;
+  if (!page) return { ...EMPTY, stats: { ...EMPTY_STATS, days } };
 
-  const since = new Date(Date.now() - STATS_DAYS * 24 * 60 * 60 * 1000).toISOString();
-
-  const [{ data: rows }, views, clicks, leadRows] = await Promise.all([
+  const [{ data: rows }, statsRes, leadRows] = await Promise.all([
     supabase
       .from("link_blocks")
       .select("id, type, data, sort_order, active, updated_at")
       .eq("page_id", page.id)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true }),
-    supabase
-      .from("link_views")
-      .select("visitor_hash")
-      .eq("page_id", page.id)
-      .gte("created_at", since)
-      .limit(50_000),
-    supabase
-      .from("link_clicks")
-      .select("id", { count: "exact", head: true })
-      .eq("page_id", page.id)
-      .gte("created_at", since),
+    /* 집계는 전부 SQL 에서. 행을 끌어오지 않으므로 상한에 걸리지 않고,
+       country/region·block_id 도 여기서 함께 나온다(0048 이 쌓기만 하고 아무도
+       안 읽던 값들이다). */
+    supabase.rpc("link_page_stats", { p_page: page.id, p_days: days }),
     /* 받은 리드 — 문의받기·구독신청 블록이 약속한 "받은 내용"의 실체.
        최근 50건만. 그보다 많이 쌓이면 전용 화면이 필요하고, 그건 그때 만든다. */
     supabase
@@ -102,26 +118,15 @@ async function load(): Promise<Loaded> {
     active: r.active,
   }));
 
-  /* 재방문율 = (2회 이상 방문한 방문자 수 / 전체 방문자 수). visitor_hash 가 null 인
-     방문(쿠키 불가)은 사람 수를 셀 수 없으므로 분모에서 뺀다 — 넣으면 재방문율이
-     실제보다 낮게 나온다. */
-  const viewRows = (views.data ?? []) as Array<{ visitor_hash: string | null }>;
-  const totalViews = viewRows.length;
-  const counts = new Map<string, number>();
-  for (const v of viewRows) {
-    if (!v.visitor_hash) continue;
-    counts.set(v.visitor_hash, (counts.get(v.visitor_hash) ?? 0) + 1);
-  }
-  const uniques = counts.size;
-  const repeats = [...counts.values()].filter((c) => c > 1).length;
-
-  const totalClicks = clicks.count ?? 0;
-  const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10 : 0);
-
   /* 초안이 마지막 발행본과 다른가 — "라이브 반영" 버튼의 상태를 정한다.
      ⚠️ **블록의 updated_at 을 반드시 본다.** link_blocks 수정은 link_pages 를 건드리지
      않으므로, 페이지 updated_at 만 보면 "블록 내용만 고친" 경우가 dirty 로 안 잡혀
-     버튼이 「반영됨」인 채로 남고 사용자는 발행할 방법이 없다(가장 흔한 편집이 그건데). */
+     버튼이 「반영됨」인 채로 남고 사용자는 발행할 방법이 없다(가장 흔한 편집이 그건데).
+
+     반대 방향의 함정도 있었다: publishLinkPage 가 published_at 을 **앱 시각**으로
+     보내는 바람에 DB 시각으로 찍히는 updated_at 이 언제나 더 늦어, 발행 직후에도
+     dirty 가 참이었다 — 「반영됨」에 도달할 수 없었다. 0049 의
+     trg_link_pages_zz_publish 가 두 값을 같은 트랜잭션 시각으로 맞춘다. */
   const publishedAt = page.published_at as string | null;
   const pageUpdated = page.updated_at as string | null;
   const newest = (
@@ -137,6 +142,41 @@ async function load(): Promise<Loaded> {
     newest > pubMs ||
     /* 발행은 active=true 만 담는다 — 켜진 블록 수로 비교해야 맞다 */
     activeCount !== snapBlocks;
+
+  const raw = (statsRes.data ?? null) as RawStats | null;
+  if (statsRes.error) console.error("[links] 통계 집계 실패:", statsRes.error.message);
+
+  const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10 : 0);
+  const byId = new Map(blocks.map((b) => [b.id, b]));
+
+  const stats: LinkStats = {
+    days,
+    views: raw?.views ?? 0,
+    uniques: raw?.uniques ?? 0,
+    clicks: raw?.clicks ?? 0,
+    ctr: pct(raw?.clicks ?? 0, raw?.views ?? 0),
+    /* 재방문율 = 2회 이상 온 방문자 / 사람 수를 셀 수 있었던 방문자.
+       visitor_hash 가 null 인 방문(쿠키 불가)은 분모에서 빠진다 — 넣으면 낮게 나온다. */
+    returning: pct(raw?.repeats ?? 0, raw?.uniques ?? 0),
+    daily: (raw?.daily ?? []).map((x) => ({ date: x.d, views: x.v, clicks: x.c })),
+    /* 클릭은 **스냅샷에 굳은 블록 id** 를 가리킨다. 초안에서 지운 블록의 클릭도
+       남아 있어야 성과를 되짚을 수 있다(0049 에서 FK 를 뗀 이유) — 그래서
+       지금 초안에 없는 id 는 "지운 블록"으로 표시한다. */
+    blocks: (raw?.blocks ?? []).map((x) => {
+      const b = byId.get(x.id);
+      return {
+        id: x.id,
+        label: b ? blockSummary(b.type, b.data) : "지운 블록",
+        removed: !b,
+        clicks: x.n,
+      };
+    }),
+    regions: (raw?.regions ?? []).map((x) => ({
+      country: x.country ?? "",
+      region: x.region ?? "",
+      views: x.n,
+    })),
+  };
 
   const leads: LinkLead[] = (
     (leadRows.data ?? []) as Array<{
@@ -172,18 +212,17 @@ async function load(): Promise<Loaded> {
       dirty,
     },
     blocks,
-    stats: {
-      views: totalViews,
-      clicks: totalClicks,
-      ctr: pct(totalClicks, totalViews),
-      returning: pct(repeats, uniques),
-    },
+    stats,
     leads,
   };
 }
 
-export default async function Page() {
-  const { page, blocks, stats, leads } = await load();
+export default async function Page({ searchParams }: { searchParams: Promise<{ days?: string }> }) {
+  const sp = await searchParams;
+  const asked = Number(sp.days);
+  const days = (STATS_RANGES as readonly number[]).includes(asked) ? asked : DEFAULT_DAYS;
+
+  const { page, blocks, stats, leads } = await load(days);
 
   /* 복사 버튼이 주는 주소는 **지금 접속한 도메인** 기준이어야 한다.
      프로덕션 도메인을 하드코딩하면 로컬·프리뷰에서 복사한 주소가 안 열린다. */
@@ -197,7 +236,14 @@ export default async function Page() {
         title="프로필 링크"
         description="SNS 프로필에 거는 링크 페이지를 만들고 클릭 성과를 봅니다."
       />
-      <LinksClient page={page} blocks={blocks} stats={stats} leads={leads} origin={`${proto}://${host}`} />
+      <LinksClient
+        page={page}
+        blocks={blocks}
+        stats={stats}
+        leads={leads}
+        origin={`${proto}://${host}`}
+        isDemo={isDemoMode()}
+      />
     </div>
   );
 }

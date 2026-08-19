@@ -62,6 +62,26 @@ async function publicPageId(slug: string): Promise<string | null> {
   return (data?.id as string | undefined) ?? null;
 }
 
+/* ── 유입 제한 ──────────────────────────────────────────────────────
+   세 경로(방문·클릭·리드)가 전부 인증 없이 service_role 로 INSERT 한다. 0048 이
+   익명 INSERT 정책을 안 준 건 "스팸 창구가 된다"는 이유였는데, 서버 액션이 그
+   자리를 그대로 대신하고 있었다 — 정책만 없고 창구는 열려 있었다.
+
+   카운터는 반드시 **DB 로** 센다. Vercel 서버리스는 인스턴스가 여러 개라
+   메모리 카운터는 공유되지 않는다(있으나 마나다).
+
+   한계를 분명히 해 둔다: 방문자 해시는 쿠키에서 오므로 쿠키를 지우면 새 해시다.
+   그래서 리드에는 **페이지 단위 상한**을 함께 건다 — 이쪽이 진짜 방어선이고,
+   해시 단위는 실수·연타를 거르는 용도다. IP 는 저장하지 않는 방침이라 안 쓴다. */
+
+/** 같은 방문자의 방문을 이 간격 안에서는 1건으로 본다 */
+const VIEW_WINDOW_MS = 30 * 60 * 1000;
+/** 리드: 같은 방문자 10분 5건 / 한 페이지 1시간 30건 */
+const LEAD_VISITOR_WINDOW_MS = 10 * 60 * 1000;
+const LEAD_VISITOR_MAX = 5;
+const LEAD_PAGE_WINDOW_MS = 60 * 60 * 1000;
+const LEAD_PAGE_MAX = 30;
+
 /** 방문 1건 기록. 실패해도 조용히 넘어간다 — 통계 때문에 페이지가 깨지면 안 된다 */
 export async function recordView(slug: string): Promise<void> {
   if (!isSupabaseConfigured()) return;
@@ -71,10 +91,26 @@ export async function recordView(slug: string): Promise<void> {
   const admin = createAdminClient();
   if (!admin) return;
 
+  const hash = await visitorHash();
+
+  /* 같은 방문자가 30분 안에 다시 왔으면 안 센다. 새로고침 한 번에 방문 1건씩
+     쌓이면 클릭률 분모가 부풀어 지표가 통째로 거짓말이 된다. */
+  if (hash) {
+    const { data: last } = await admin
+      .from("link_views")
+      .select("created_at")
+      .eq("page_id", pageId)
+      .eq("visitor_hash", hash)
+      .gte("created_at", new Date(Date.now() - VIEW_WINDOW_MS).toISOString())
+      .limit(1)
+      .maybeSingle();
+    if (last) return;
+  }
+
   const h = await headers();
   const { error } = await admin.from("link_views").insert({
     page_id: pageId,
-    visitor_hash: await visitorHash(),
+    visitor_hash: hash,
     /* Vercel 이 주는 국가/도시 코드만 — 좌표·상세주소는 받지 않는다 */
     country: h.get("x-vercel-ip-country") ?? null,
     region: h.get("x-vercel-ip-city") ?? null,
@@ -111,7 +147,32 @@ export async function submitLead(input: {
   const admin = createAdminClient();
   if (!admin) return { ok: false, error: "지금은 접수할 수 없어요." };
 
+  /* 스팸이 들어오면 진짜 문의가 묻힌다 — 편집 화면은 최근 50건만 보여주고
+     지우는 방법도 없다. 페이지 단위 상한이 실질 방어선이다. */
+  const { count: pageCount } = await admin
+    .from("link_leads")
+    .select("id", { count: "exact", head: true })
+    .eq("page_id", pageId)
+    .gte("created_at", new Date(Date.now() - LEAD_PAGE_WINDOW_MS).toISOString());
+  if ((pageCount ?? 0) >= LEAD_PAGE_MAX) {
+    return { ok: false, error: "지금은 접수가 몰려 있어요. 잠시 후 다시 시도해 주세요." };
+  }
+
+  const hash = await visitorHash();
+  if (hash) {
+    const { count: mine } = await admin
+      .from("link_leads")
+      .select("id", { count: "exact", head: true })
+      .eq("page_id", pageId)
+      .eq("visitor_hash", hash)
+      .gte("created_at", new Date(Date.now() - LEAD_VISITOR_WINDOW_MS).toISOString());
+    if ((mine ?? 0) >= LEAD_VISITOR_MAX) {
+      return { ok: false, error: "너무 자주 보냈어요. 잠시 후 다시 시도해 주세요." };
+    }
+  }
+
   const { error } = await admin.from("link_leads").insert({
+    visitor_hash: hash,
     page_id: pageId,
     block_id: input.blockId,
     kind: input.kind,

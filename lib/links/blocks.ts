@@ -72,11 +72,23 @@ export interface ImageBlockData {
   url?: string;
 }
 
-/** 이미지 + 제목/부제 카드 — 링크팜 "이미지 카드" */
+/**
+ * 이미지 + 제목/부제 카드 — 링크팜 "이미지 카드".
+ *
+ * price·ctaLabel 은 **제품 카드**를 겸하기 위한 것이다(2026-08-19). 링크팜에는
+ * 별도 「제품 카드」 블록이 있는데, 새 타입을 만드는 대신 여기에 두 필드를 얹었다 —
+ * 공구 셀러에게 필요한 건 사진·상품명·가격·「구매하기」이고, 그건 이 카드의
+ * 변형이지 다른 블록이 아니다. 새 타입을 늘리면 DB check 제약·렌더러·미리보기가
+ * 전부 따라 늘어난다.
+ */
 export interface ImageCardBlockData {
   imagePath?: string;
   title: string;
   subtitle?: string;
+  /** 표시용 문자열 그대로 — 통화·단위가 나라마다 다르고 계산에 쓰지 않는다 */
+  price?: string;
+  /** 기본은 버튼 없음. 값이 있으면 카드 아래 채움 버튼이 붙는다 */
+  ctaLabel?: string;
   url?: string;
 }
 
@@ -117,13 +129,21 @@ export interface SocialFeedBlockData {
   cached?: Array<{ thumbUrl: string | null; permalink: string | null }>;
 }
 
-/** 문의받기 — 이름·연락처를 받아 inquiries 로 넣는다(이미 있는 표를 쓴다) */
+/** 문의받기 — 이름·연락처를 받아 link_leads 로 넣는다 */
 export interface ContactBlockData {
   title?: string;
   description?: string;
   /** 어떤 필드를 받을지 */
   fields?: Array<"name" | "email" | "phone" | "message">;
 }
+
+/** 문의받기가 받을 수 있는 항목 — 편집기 체크박스와 공개 폼이 같은 목록을 쓴다 */
+export const CONTACT_FIELDS: ReadonlyArray<{ key: "name" | "email" | "phone" | "message"; label: string }> = [
+  { key: "name", label: "이름" },
+  { key: "email", label: "이메일" },
+  { key: "phone", label: "연락처" },
+  { key: "message", label: "내용" },
+];
 
 /** 구독신청 — 이메일만 받는다. 자동 DM·뉴스레터로 이어붙일 자리 */
 export interface SubscribeBlockData {
@@ -171,12 +191,14 @@ export const BLOCK_CATALOG: Array<{
   group: "기본" | "콘텐츠" | "레이아웃" | "받기";
 }> = [
   { type: "link", label: "링크 버튼", hint: "가장 기본. 어디로든 보냅니다", group: "기본" },
-  { type: "image_card", label: "이미지 카드", hint: "썸네일 + 제목으로 눈에 띄게", group: "기본" },
+  { type: "image_card", label: "이미지·제품 카드", hint: "썸네일·가격·구매 버튼까지", group: "기본" },
   { type: "card_row", label: "가로 카드", hint: "썸네일과 설명을 나란히", group: "기본" },
   { type: "grid", label: "그리드", hint: "2·3열로 여러 개를 한눈에", group: "기본" },
 
   { type: "image", label: "이미지", hint: "배너·포스터 한 장", group: "콘텐츠" },
-  { type: "video", label: "동영상", hint: "유튜브·틱톡을 바로 재생", group: "콘텐츠" },
+  /* 임베드는 유튜브만 된다 — 틱톡·인스타는 임베드 정책이 자주 바뀌어
+     block-renderer 가 링크 버튼으로 폴백한다. 힌트가 그걸 그대로 말한다. */
+  { type: "video", label: "동영상", hint: "유튜브는 바로 재생, 나머지는 링크로", group: "콘텐츠" },
   { type: "social_feed", label: "최근 게시물", hint: "연동한 채널의 최신 글을 자동으로", group: "콘텐츠" },
   { type: "notice", label: "공지·배너", hint: "지금 알릴 것을 맨 위에", group: "콘텐츠" },
 
@@ -228,6 +250,40 @@ export function defaultBlockData(type: BlockType): Record<string, unknown> {
   }
 }
 
+/**
+ * 이 블록이 지금 상태로 발행되면 공개 페이지에 **안 나오는가.** 이유 문자열 또는 null.
+ *
+ * ⚠️ 이 판정은 `app/p/[slug]/_components/block-renderer.tsx` 의 "null 을 돌려주는
+ * 조건"과 **한 몸이어야 한다.** 두 곳이 갈리면 미리보기가 "공개 페이지와 같은 렌더"라는
+ * 약속을 어긴다 — 편집기에는 멀쩡히 보이는데 발행하면 사라지는 블록이 생긴다.
+ * 그래서 렌더러가 아니라 여기에 둔다. 목록 뱃지·미리보기 유령칸이 같은 함수를 쓴다.
+ */
+export function hiddenReason(type: BlockType, data: Record<string, unknown>): string | null {
+  const s = (k: string) => (typeof data[k] === "string" ? (data[k] as string) : "");
+  const items = Array.isArray(data.items) ? (data.items as Record<string, unknown>[]) : [];
+  const withUrl = items.filter((it) => typeof it.url === "string" && it.url.trim()).length;
+  switch (type) {
+    case "link":
+      return s("url") ? null : "주소가 비어 공개되지 않아요";
+    case "image":
+      return s("imagePath") ? null : "이미지가 없어 공개되지 않아요";
+    case "video":
+      return s("url") ? null : "영상 주소가 없어 공개되지 않아요";
+    case "map":
+      return s("address") ? null : "주소가 비어 공개되지 않아요";
+    case "card_row":
+    case "grid":
+      return withUrl > 0 ? null : "링크가 있는 항목이 없어 공개되지 않아요";
+    case "social_feed":
+      /* 발행 시 인스타그램이 아니면 빈 배열이 구워지고, 렌더러가 그 블록을 통째로 숨긴다 */
+      return s("channel") && s("channel") !== "instagram"
+        ? "인스타그램만 채워져요 — 지금은 공개되지 않아요"
+        : null;
+    default:
+      return null;
+  }
+}
+
 /** 블록 목록을 한 줄 요약으로 — 편집 화면 목록에서 무슨 블록인지 알아야 한다 */
 export function blockSummary(type: BlockType, data: Record<string, unknown>): string {
   const s = (k: string) => (typeof data[k] === "string" ? (data[k] as string) : "");
@@ -254,10 +310,14 @@ export function blockSummary(type: BlockType, data: Record<string, unknown>): st
       return s("title") || "구독신청";
     case "map":
       return s("address") || "(주소 없음)";
+    /* 고정 문자열로 두면 구분선 3개가 목록에서 **글자까지 똑같아진다** —
+       어느 걸 지우는지 알 수 없다. 설정값을 붙여 서로 구분되게 한다. */
     case "divider":
-      return "구분선";
+      return `구분선 · ${s("style") === "dot" ? "점" : "선"}`;
     case "spacer":
-      return "빈 공간";
+      return `빈 공간 · ${typeof data.size === "number" ? data.size : 24}px`;
+    case "image":
+      return s("alt") || (s("imagePath") ? "이미지" : "(이미지 없음)");
     default:
       return "";
   }

@@ -63,3 +63,55 @@ export function publicLinkUrl(slug: string, origin?: string): string {
   const base = origin ?? "https://finch.ai.kr";
   return `${base.replace(/\/$/, "")}/p/${slug}`;
 }
+
+/**
+ * 키 순서에 흔들리지 않는 비교용 직렬화.
+ *
+ * "편집기에 미저장 내용이 있는가"를 판정하는 데 쓴다. JSON.stringify 를 그냥 쓰면
+ * 서버가 돌려준 객체와 화면 객체의 **키 순서**가 달라 내용이 같은데도 다르다고 나온다.
+ */
+export function stableJson(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(stableJson).join(",")}]`;
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return `{${Object.keys(o)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${stableJson(o[k])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(v ?? null);
+}
+
+/**
+ * 유튜브 URL → 임베드 주소. 임베드할 수 없으면 null.
+ *
+ * 유튜브만 다룬다. 틱톡·인스타는 임베드 정책이 자주 바뀌어 깨진 iframe 이 남는데,
+ * 그럴 바에는 "▶ 영상 보러 가기" 링크가 낫다(공개 렌더러가 그렇게 떨어뜨린다).
+ *
+ * ⚠️ **공개 렌더러와 미리보기가 같은 판정을 써야 한다.** 앞서는 미리보기가 무조건
+ * ▶ 상자를 그려서, 임베드가 안 되는 주소도 작성자에게는 재생될 것처럼 보였다.
+ * (CSP frame-src 에 youtube 오리진이 있어야 실제로 뜬다 — proxy.ts.)
+ */
+export function youtubeEmbed(raw: string): string | null {
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    const host = u.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") {
+      const id = u.pathname.slice(1);
+      return id ? `https://www.youtube.com/embed/${id}` : null;
+    }
+    if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com") {
+      const v = u.searchParams.get("v");
+      if (v) return `https://www.youtube.com/embed/${v}`;
+      if (u.pathname.startsWith("/shorts/")) {
+        const id = u.pathname.split("/")[2];
+        return id ? `https://www.youtube.com/embed/${id}` : null;
+      }
+      if (u.pathname.startsWith("/embed/")) return u.toString();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}

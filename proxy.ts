@@ -70,15 +70,25 @@ function applySecurityHeaders(response: NextResponse) {
     ? " https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com"
     : "";
 
+  // 공개 프로필 링크(/p/{slug}) 의 「동영상」 블록이 유튜브를 iframe 으로 띄운다.
+  // 이게 없으면 **제대로 인식된 유튜브 URL 만** 빈 상자가 된다 — 임베드를 못 만드는
+  // 주소는 링크 버튼으로 빠져 멀쩡하다. 편집기 미리보기도 항상 ▶ 상자를 그려서
+  // 작성자는 발행 전에 눈치챌 수 없었다. (틱톡은 임베드하지 않는다 —
+  //  block-renderer.tsx 가 링크 버튼으로 폴백한다.)
+  const youtube = "https://www.youtube.com https://www.youtube-nocookie.com";
+
   // CSP — Pretendard 웹폰트(jsdelivr CDN)만 외부 허용. 개발 모드는 HMR 때문에 unsafe-eval 필요
   const csp = [
     "default-src 'self'",
     `script-src 'self' 'unsafe-inline' ${toss}${gaScript}${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
     "font-src 'self' https://cdn.jsdelivr.net",
-    `img-src 'self' data: blob: ${toss} ${igCdn} ${tiktokCdn}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
+    // https: 를 통째로 여는 유일한 지시어다. 프로필 링크는 사용자가 **자기 이미지 주소를
+    // 붙여넣는** 제품이고(노션·드롭박스·기존 홈페이지에 이미 올려둔 것), 호스트를
+    // 열거할 방법이 없다. 이미지는 실행되지 않으므로 여는 대가가 가장 작다.
+    `img-src 'self' data: blob: https: ${toss} ${igCdn} ${tiktokCdn}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
     `connect-src 'self' ${toss}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}${gaConnect}`,
-    `frame-src ${toss}`,
+    `frame-src ${toss} ${youtube}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",

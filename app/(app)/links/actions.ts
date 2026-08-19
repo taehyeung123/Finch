@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
 import { SLUG_MESSAGES, normalizeUrl, validateSlug } from "@/lib/links";
 import { defaultBlockData, type BlockType } from "@/lib/links/blocks";
@@ -28,6 +29,38 @@ type Result = { ok: boolean; error?: string };
 const DEMO: Result = { ok: false, error: "데모 모드에서는 저장할 수 없어요." };
 const AUTH: Result = { ok: false, error: "로그인이 필요해요." };
 
+/** 페이지당 블록 상한. 이 이상이면 편집 화면도 공개 페이지도 스크롤만 남는다 */
+const MAX_BLOCKS = 50;
+
+/** 풀린 slug 를 남이 못 가져가는 기간 */
+const SLUG_HOLD_DAYS = 90;
+
+/**
+ * 최근에 풀린 주소인가 — 남이 선점하려는 것이면 막는다.
+ *
+ * 왜 필요한가: 인플루언서가 /p/old → /p/new 로 바꾸면 인스타 프로필·DM·명함에 남은
+ * 옛 주소로 유입이 계속 온다. 그 slug 를 남이 즉시 가져가면 트래픽뿐 아니라
+ * **방문자가 남기는 문의(이름·이메일·전화)** 까지 선점자에게 들어간다.
+ *
+ * 원래 주인은 언제든 되찾을 수 있다(page_id 로 판별). 조회는 service_role 로 한다 —
+ * link_slug_history 는 정책이 없어 사용자 세션으로는 못 읽는다(그 자체가 명부라서).
+ * service_role 키가 없는 환경이면 검사를 건너뛴다(선점 방지는 있으면 좋은 것이지,
+ * 없다고 주소 변경 자체를 막을 일은 아니다).
+ */
+async function slugHeldByOther(slug: string, myPageId: string | null): Promise<boolean> {
+  const admin = createAdminClient();
+  if (!admin) return false;
+  const { data } = await admin
+    .from("link_slug_history")
+    .select("page_id, released_at")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (!data) return false;
+  if (myPageId && data.page_id === myPageId) return false; // 내가 버린 내 주소 — 되찾기 허용
+  const age = Date.now() - new Date(data.released_at as string).getTime();
+  return age < SLUG_HOLD_DAYS * 24 * 60 * 60 * 1000;
+}
+
 /** 내 페이지 id·slug — 거의 모든 액션이 먼저 필요로 한다 */
 async function myPage(): Promise<{ id: string; slug: string } | null> {
   const user = await getAuthUser();
@@ -53,6 +86,9 @@ export async function createLinkPage(slug: string, title: string): Promise<Resul
   const clean = slug.trim().toLowerCase();
   const err = validateSlug(clean);
   if (err) return { ok: false, error: SLUG_MESSAGES[err] };
+  if (await slugHeldByOther(clean, null)) {
+    return { ok: false, error: "최근까지 다른 사람이 쓰던 주소예요. 다른 주소를 입력해 주세요." };
+  }
 
   const supabase = await createClient();
   const { data: created, error } = await supabase
@@ -113,7 +149,10 @@ export async function updateLinkProfile(input: {
   }
 
   const supabase = await createClient();
-  const { data: before } = await supabase.from("link_pages").select("slug").eq("user_id", user.id).maybeSingle();
+  const { data: before } = await supabase.from("link_pages").select("id, slug").eq("user_id", user.id).maybeSingle();
+  if (before?.slug !== clean && (await slugHeldByOther(clean, (before?.id as string) ?? null))) {
+    return { ok: false, error: "최근까지 다른 사람이 쓰던 주소예요. 다른 주소를 입력해 주세요." };
+  }
 
   const { error } = await supabase
     .from("link_pages")
@@ -137,7 +176,18 @@ export async function updateLinkProfile(input: {
   revalidatePath("/links");
   revalidatePath(`/p/${clean}`);
   /* 주소를 바꾸면 **옛 경로도** 무효화한다 — 안 하면 옛 주소가 캐시된 채로 계속 열린다 */
-  if (before?.slug && before.slug !== clean) revalidatePath(`/p/${before.slug}`);
+  if (before?.slug && before.slug !== clean) {
+    revalidatePath(`/p/${before.slug}`);
+    /* 옛 주소를 무덤에 넣는다 — 90일간 남이 못 가져간다(본인은 언제든 되찾는다).
+       실패해도 주소 변경 자체는 성공이다: 선점 방지는 부가 보호지 저장 조건이 아니다. */
+    const admin = createAdminClient();
+    if (admin) {
+      const { error: histErr } = await admin
+        .from("link_slug_history")
+        .upsert({ slug: before.slug, page_id: before.id, released_at: new Date().toISOString() }, { onConflict: "slug" });
+      if (histErr) console.error("[links] 옛 주소 기록 실패:", histErr.message);
+    }
+  }
   return { ok: true };
 }
 
@@ -287,6 +337,15 @@ export async function addBlock(type: BlockType): Promise<Result> {
   if (!page) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
 
   const supabase = await createClient();
+
+  const { count } = await supabase
+    .from("link_blocks")
+    .select("id", { count: "exact", head: true })
+    .eq("page_id", page.id);
+  if ((count ?? 0) >= MAX_BLOCKS) {
+    return { ok: false, error: `블록은 ${MAX_BLOCKS}개까지 넣을 수 있어요. 안 쓰는 블록을 지워 주세요.` };
+  }
+
   /* 맨 아래로. max+1 을 읽는다 — count 를 쓰면 중간 삭제 후 기존 블록과 겹친다 */
   const { data: last } = await supabase
     .from("link_blocks")
@@ -505,9 +564,14 @@ export async function publishLinkPage(): Promise<Result> {
     })),
   };
 
+  /* ⚠️ published_at 을 **여기서 만들지 않는다.** 앱 시각으로 보내면 같은 UPDATE 가
+     태우는 set_updated_at 트리거의 DB 시각(now())보다 항상 왕복지연만큼 이르다.
+     그러면 `updated_at > published_at` 이 발행 직후에도 참이라 화면이 영원히
+     "초안"으로 남는다 — 「반영됨」에 도달할 수 없었다. 0049 의
+     trg_link_pages_zz_publish 가 두 값을 같은 트랜잭션 시각으로 맞춘다. */
   const { error } = await supabase
     .from("link_pages")
-    .update({ published_snapshot: snapshot, published_at: new Date().toISOString() })
+    .update({ published_snapshot: snapshot })
     .eq("user_id", user.id);
   if (error) {
     console.error("[links] 라이브 반영 실패:", error.message);
@@ -524,33 +588,116 @@ export async function publishLinkPage(): Promise<Result> {
    ══════════════════════════════════════════════════════════════════ */
 
 /**
- * 블록 안의 모든 URL 을 http(s) 로 강제한다.
+ * 블록 데이터의 **유일한 관문.**
  *
- * 블록은 jsonb 라 DB check 로 걸 수 없다 — 그래서 **여기가 유일한 관문**이다.
- * url / items[].url 두 자리를 본다(현재 스키마에서 URL 이 들어가는 곳 전부).
+ * 블록은 jsonb 라 DB check 로 컬럼별 제약을 걸 수 없다. 그래서 여기서 세 가지를 한다:
+ *  ① URL 은 전부 http(s) 로 강제 — javascript: 를 그대로 두면 공개 페이지의
+ *     <a href> 가 방문자 브라우저에서 그걸 실행한다(저장형 XSS)
+ *  ② 길이·개수·열거값 상한 — 화면의 maxLength 는 편의지 경계가 아니다.
+ *     서버 액션은 폼 없이도 직접 호출할 수 있으므로 여기서 자른다
+ *  ③ 전체 크기 상한 — 블록 하나가 스냅샷을 통째로 부풀리면 공개 페이지가 느려진다
+ *
+ * 모르는 키는 **버리지 않고** 문자열 상한만 건다 — 블록 종류가 늘 때마다 이 목록을
+ * 고쳐야 하면 반드시 빠뜨린다. 대신 서버가 만드는 값(cached)만 명시적으로 떨군다.
  */
-function sanitizeBlockData(input: Record<string, unknown>): { data?: Record<string, unknown>; error?: string } {
-  const out: Record<string, unknown> = { ...input };
+const TEXT_CAPS: Record<string, number> = {
+  label: 40,
+  title: 60,
+  subtitle: 80,
+  text: 500,
+  description: 160,
+  buttonLabel: 20,
+  alt: 100,
+  address: 200,
+  emoji: 2,
+};
+const ENUMS: Record<string, readonly string[]> = {
+  emphasis: ["normal", "primary", "outline"],
+  align: ["left", "center"],
+  style: ["line", "dot"],
+  tone: ["info", "primary", "warning"],
+  channel: ["instagram", "tiktok", "threads"],
+};
+/** 숫자 필드는 화이트리스트다 — spacer.size 는 렌더러가 그 값을 그대로 px 높이로 쓴다 */
+const NUM_ENUMS: Record<string, readonly number[]> = {
+  size: [8, 16, 24, 40],
+  columns: [2, 3],
+  count: [3, 6, 9],
+};
+/** 스냅샷 한 블록의 상한(문자 수). 넘으면 공개 페이지 첫 바이트가 눈에 띄게 느려진다 */
+const MAX_BLOCK_CHARS = 8192;
 
-  if (typeof out.url === "string" && out.url.trim()) {
-    const href = normalizeUrl(out.url);
-    if (!href) return { error: "http 또는 https 로 시작하는 주소만 넣을 수 있어요." };
-    out.url = href;
+const URL_ERROR = "http 또는 https 로 시작하는 주소만 넣을 수 있어요.";
+
+function sanitizeBlockData(input: Record<string, unknown>): { data?: Record<string, unknown>; error?: string } {
+  const out: Record<string, unknown> = {};
+
+  for (const [k, v] of Object.entries(input)) {
+    /* cached 는 「라이브 반영」이 채우는 서버 생성 값이다. 클라이언트가 보낸 걸 그대로
+       두면 연동하지 않은 계정의 썸네일·링크를 스냅샷에 심을 수 있다 — 발행 때 다시 채운다. */
+    if (k === "cached") continue;
+
+    if (k === "url" || k === "imagePath") {
+      if (typeof v !== "string" || !v.trim()) continue;
+      const href = normalizeUrl(v);
+      if (!href) return { error: URL_ERROR };
+      out[k] = href;
+      continue;
+    }
+
+    if (k === "items") {
+      if (!Array.isArray(v)) continue;
+      const items: unknown[] = [];
+      for (const raw of v.slice(0, 12)) {
+        if (!raw || typeof raw !== "object") continue;
+        const it: Record<string, unknown> = {};
+        for (const [ik, iv] of Object.entries(raw as Record<string, unknown>)) {
+          if (ik === "url" || ik === "imagePath") {
+            if (typeof iv !== "string" || !iv.trim()) continue;
+            const href = normalizeUrl(iv);
+            if (!href) return { error: URL_ERROR };
+            it[ik] = href;
+          } else if (typeof iv === "string") {
+            it[ik] = iv.slice(0, TEXT_CAPS[ik] ?? 200);
+          } else if (typeof iv === "number" || typeof iv === "boolean") {
+            it[ik] = iv;
+          }
+        }
+        items.push(it);
+      }
+      out.items = items;
+      continue;
+    }
+
+    if (k === "fields") {
+      /* 문의받기가 받을 항목 — 공개 폼(lead-form.tsx)이 이 배열을 그대로 그린다 */
+      const allowed = ["name", "email", "phone", "message"];
+      const picked = Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && allowed.includes(x)) : [];
+      out.fields = [...new Set(picked)];
+      continue;
+    }
+
+    if (k in NUM_ENUMS) {
+      const num = typeof v === "number" ? v : Number(v);
+      if (NUM_ENUMS[k].includes(num)) out[k] = num;
+      continue; // 목록 밖이면 통째로 뺀다 — 렌더러가 각자의 기본값을 쓴다
+    }
+
+    if (k in ENUMS) {
+      if (typeof v === "string" && ENUMS[k].includes(v)) out[k] = v;
+      continue;
+    }
+
+    if (typeof v === "string") {
+      out[k] = v.slice(0, TEXT_CAPS[k] ?? 500);
+    } else if (typeof v === "number" || typeof v === "boolean") {
+      out[k] = v;
+    }
+    /* 그 밖(객체·중첩 배열)은 떨군다 — 지금 스키마에 그런 필드가 없다 */
   }
 
-  if (Array.isArray(out.items)) {
-    const items: unknown[] = [];
-    for (const raw of out.items.slice(0, 12)) {
-      if (!raw || typeof raw !== "object") continue;
-      const it = { ...(raw as Record<string, unknown>) };
-      if (typeof it.url === "string" && it.url.trim()) {
-        const href = normalizeUrl(it.url);
-        if (!href) return { error: "http 또는 https 로 시작하는 주소만 넣을 수 있어요." };
-        it.url = href;
-      }
-      items.push(it);
-    }
-    out.items = items;
+  if (JSON.stringify(out).length > MAX_BLOCK_CHARS) {
+    return { error: "내용이 너무 길어요. 항목을 줄이거나 나눠 주세요." };
   }
 
   return { data: out };

@@ -31,11 +31,14 @@ export function LeadForm({
   data: Record<string, unknown>;
 }) {
   const s = (k: string) => (typeof data[k] === "string" ? (data[k] as string) : "");
+  /* 표시 순서는 **항상 이름·이메일·연락처·내용**이다. 저장된 배열 순서는 사장님이
+     체크박스를 누른 순서라, 그대로 쓰면 폼 순서가 페이지마다 제멋대로가 된다. */
+  const ORDER = ["name", "email", "phone", "message"];
   const fields =
     kind === "subscribe"
       ? ["email"]
       : Array.isArray(data.fields) && data.fields.length > 0
-        ? (data.fields as string[]).filter((f) => f in FIELD_LABEL)
+        ? ORDER.filter((f) => (data.fields as string[]).includes(f))
         : ["name", "email", "message"];
 
   const [values, setValues] = useState<Record<string, string>>({});

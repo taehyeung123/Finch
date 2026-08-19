@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { FinchMark } from "@/components/logo";
-import { themeByKey, themeVars } from "@/lib/links/themes";
+import { themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
 import { BlockRenderer, type SnapshotBlock } from "./_components/block-renderer";
 import { LeadForm } from "./_components/lead-form";
 import { ViewBeacon } from "./_components/view-beacon";
@@ -81,10 +81,35 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const data = await load(slug);
   if (!data?.snap) return { title: "페이지를 찾을 수 없어요", robots: { index: false, follow: false } };
   const s = data.snap;
+
+  const title = s.seoTitle || s.title || slug;
+  const description = s.seoDesc || s.bio || undefined;
+  /* 커버가 있으면 커버, 없으면 프로필 사진. 둘 다 없으면 이미지를 **명시적으로 비운다** */
+  const image = s.coverPath || s.avatarPath || null;
+
   return {
-    title: s.seoTitle || s.title || slug,
-    description: s.seoDesc || s.bio || undefined,
+    /* absolute 로 루트 레이아웃의 `%s | 핀치 (Finch)` 접미사를 끊는다.
+       링크인바이오의 주 유입은 카카오톡·인스타 DM 붙여넣기다 — 사용자 브랜드 페이지
+       공유 카드에 우리 이름이 붙으면 그건 우리 홍보지 그 사람의 페이지가 아니다. */
+    title: { absolute: title },
+    description,
     alternates: { canonical: `/p/${slug}` },
+    /* openGraph 를 정의하지 않으면 루트 레이아웃의 핀치 OG 이미지·siteName 을 그대로
+       물려받는다. 남의 브랜드 페이지에 우리 로고가 걸리는 게 그 경로였다. */
+    openGraph: {
+      type: "profile",
+      siteName: s.title || slug,
+      title,
+      description,
+      url: `/p/${slug}`,
+      images: image ? [image] : [],
+    },
+    twitter: {
+      card: image ? "summary_large_image" : "summary",
+      title,
+      description,
+      images: image ? [image] : [],
+    },
     /* 비공개 페이지(소유자 미리보기)는 색인되면 안 된다 */
     robots: data.published ? undefined : { index: false, follow: false },
   };
@@ -143,13 +168,24 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
 
         {/* 프로필 */}
         <header className={`flex flex-col ${align}`}>
-          {snap.layout !== "cover" && snap.avatarPath ? (
-            // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
-            <img
-              src={snap.avatarPath}
-              alt=""
-              className="mb-3 size-20 rounded-full border-2 border-[var(--lp-card)] object-cover shadow-[var(--lp-shadow)]"
-            />
+          {snap.layout !== "cover" ? (
+            snap.avatarPath ? (
+              // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
+              <img
+                src={snap.avatarPath}
+                alt=""
+                className="mb-3 size-20 rounded-full border-2 border-[var(--lp-card)] object-cover shadow-[var(--lp-shadow)]"
+              />
+            ) : (
+              /* 사진이 없으면 이니셜 원. 아무것도 안 그리면 브랜드 페이지 머리가 통째로
+                 비어 허전하다 — 편집 미리보기도 같은 것을 그린다(두 화면이 어긋나면 안 된다). */
+              <span
+                className="mb-3 flex size-20 items-center justify-center rounded-full border-2 border-[var(--lp-card)] bg-[var(--lp-card)] text-[24px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)]"
+                aria-hidden
+              >
+                {(snap.title || slug).charAt(0).toUpperCase()}
+              </span>
+            )
           ) : null}
           <h1 className="text-[24px] font-bold leading-[1.3]">{snap.title || slug}</h1>
           {snap.bio ? (
@@ -166,7 +202,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
                   rel="noopener noreferrer nofollow"
                   className="rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-3 py-1.5 text-[13px] font-medium"
                 >
-                  {SNS_LABEL[s.kind] ?? s.kind}
+                  {SNS_LABEL.get(s.kind) ?? s.kind}
                 </a>
               ))}
             </nav>
@@ -202,12 +238,6 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
   );
 }
 
-const SNS_LABEL: Record<string, string> = {
-  website: "웹사이트",
-  instagram: "Instagram",
-  youtube: "YouTube",
-  tiktok: "TikTok",
-  threads: "Threads",
-  x: "X",
-  kakao: "카카오톡",
-};
+/* 라벨은 SNS_KINDS 한 곳에서 온다 — 여기 따로 두면 편집 화면·미리보기와 갈린다
+   (실제로 갈려 있었다: 편집기는 "인스타그램", 공개 페이지는 "Instagram") */
+const SNS_LABEL = new Map<string, string>(SNS_KINDS.map((k) => [k.key, k.label]));
