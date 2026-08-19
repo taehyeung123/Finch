@@ -8,6 +8,7 @@ import {
   BarChart3,
   Check,
   Copy,
+  Download,
   ExternalLink,
   Eye,
   EyeOff,
@@ -17,6 +18,7 @@ import {
   Plus,
   Rocket,
   Settings,
+  Sparkles,
   Trash2,
   User,
 } from "lucide-react";
@@ -35,6 +37,7 @@ import {
   addBlocksBulk,
   applyTemplate,
   createLinkPage,
+  createLinkPageWithStart,
   deleteBlock,
   deleteLinkPage,
   moveBlock,
@@ -49,7 +52,7 @@ import {
 import type { LinkLead, LinkPageView, LinkSnapshotView, LinkStats } from "@/lib/links/types";
 import { BlockEditor, EDITOR_TITLE_ID } from "./block-editor";
 import { ImageField } from "./image-field";
-import { ImportLinks } from "./import-links";
+import { ImportLinks, ImportLinksBody } from "./import-links";
 import { PhonePreview } from "./phone-preview";
 
 /*
@@ -210,6 +213,12 @@ export function LinksClient({
     return (
       <CreateForm
         onCreate={(slug, title) => run(() => createLinkPage(slug, title))}
+        onStart={(input) =>
+          run(
+            () => createLinkPageWithStart(input),
+            () => setNotice("페이지를 만들었어요. 주소는 「프로필」 탭에서 바꿀 수 있어요."),
+          )
+        }
         error={error}
         busy={busy}
         isDemo={isDemo}
@@ -1486,82 +1495,160 @@ function SettingsPanel({
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   생성 폼
+   생성 폼 — 링크팜 첫 화면 문법(2026-08-19 재실측 반영)
    ══════════════════════════════════════════════════════════════════ */
 
 function CreateForm({
   onCreate,
+  onStart,
   error,
   busy,
   isDemo,
 }: {
   onCreate: (slug: string, title: string) => void;
+  onStart: (input: { template?: string; links?: Array<{ label: string; url: string }> }) => void;
   error: string | null;
   busy: boolean;
   isDemo: boolean;
 }) {
+  /*
+    앞서는 주소·제목 폼 하나였다 — 템플릿·가져오기는 페이지를 만든 **다음** 블록 탭
+    안에 접혀 있어서, 정작 제일 필요한 순간(빈손으로 온 첫 화면)에 안 보였다.
+    링크팜은 반대다: 첫 화면이 「템플릿으로 시작」과 「기존 링크 가져오기」 두 CTA 고,
+    주소는 자동 생성이다. 그 문법을 따른다 — 주소 고민은 시작을 막는 첫 이탈 지점이다.
+  */
+  const [mode, setMode] = useState<null | "template" | "import" | "blank">(null);
   const [slug, setSlug] = useState("");
   const [title, setTitle] = useState("");
+
+  const cta =
+    "trans-state flex w-full items-center justify-center gap-2 rounded-card px-4 py-3 text-[15px] font-semibold disabled:opacity-50";
 
   return (
     <Card>
       <CardBody>
         <EmptyState
           icon={Link2}
-          title="프로필 링크를 만들어 보세요"
-          description="SNS 프로필에 거는 링크 한 장이에요. 주소를 정하면 바로 만들 수 있어요."
+          title="아직 프로필 링크가 없어요"
+          description="템플릿을 고르거나, 쓰던 서비스의 링크를 가져와서 시작하세요. 주소는 자동으로 만들어져요."
         />
 
-        {/* 데모 모드는 **누르기 전에** 알린다. 앞서는 주소·제목을 다 채워 누른 뒤에야
-            "데모 모드에서는 저장할 수 없어요"가 떴다 — 항상 실패하는 폼 하나였다. */}
+        {/* 데모 모드는 **누르기 전에** 알린다 — 저장은 서버 액션이 막는다 */}
         {isDemo ? (
-          <p className="mt-6 max-w-md rounded-card border border-line bg-plate px-4 py-3 text-[14px] leading-[1.6] text-fg-sub">
+          <p className="mx-auto mt-6 max-w-md rounded-card border border-line bg-plate px-4 py-3 text-[14px] leading-[1.6] text-fg-sub">
             지금은 <strong className="font-semibold text-fg">데모 모드</strong>예요. 화면은 둘러볼 수 있지만
             저장은 되지 않아요. 로그인하면 실제 프로필 링크를 만들 수 있습니다.
           </p>
         ) : null}
 
-        {/* 좌측 정렬 — 폼은 좁아야 맞지만 가운데로 몰면 양옆이 통째로 빈다 */}
-        <div className="mt-6 max-w-md space-y-3">
-          <div>
-            <label htmlFor="slug" className="block text-[12px] font-medium text-fg-sub">
-              주소
-            </label>
-            <div className="mt-1.5 flex items-center gap-1.5">
-              <span className="shrink-0 text-[14px] text-fg-sub">/p/</span>
-              <input
-                id="slug"
-                value={slug}
-                onChange={(e) => setSlug(e.target.value.toLowerCase())}
-                placeholder="my-brand"
-                maxLength={30}
-                disabled={isDemo}
-                className="h-10 min-w-0 flex-1 rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none disabled:opacity-50"
+        <div className="mx-auto mt-6 max-w-md space-y-2.5">
+          <button
+            type="button"
+            disabled={isDemo || busy}
+            aria-expanded={mode === "template"}
+            onClick={() => setMode(mode === "template" ? null : "template")}
+            className={cn(cta, "bg-primary text-on-primary")}
+          >
+            <Sparkles className="size-4" aria-hidden />
+            템플릿으로 시작
+          </button>
+
+          {mode === "template" ? (
+            <div className="grid grid-cols-2 gap-2">
+              {LINK_TEMPLATES.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onStart({ template: t.key })}
+                  className="trans-state rounded-card border border-line px-3 py-2.5 text-left hover:border-primary hover:bg-tint-hover disabled:opacity-50"
+                >
+                  <span className="block text-[14px] font-semibold">
+                    {t.name} <span className="tnum font-normal text-fg-sub">{t.blocks.length}블록</span>
+                  </span>
+                  <span className="mt-0.5 block text-[12px] leading-snug text-fg-sub">{t.hint}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <button
+            type="button"
+            disabled={isDemo || busy}
+            aria-expanded={mode === "import"}
+            onClick={() => setMode(mode === "import" ? null : "import")}
+            className={cn(cta, "border border-line text-fg hover:bg-tint-hover")}
+          >
+            <Download className="size-4" aria-hidden />
+            기존 링크 가져오기
+          </button>
+
+          {mode === "import" ? (
+            <div className="rounded-card border border-line p-3">
+              <ImportLinksBody
+                busy={busy}
+                actionLabel="담아서 시작하기"
+                onImport={(items) => onStart({ links: items })}
               />
             </div>
-          </div>
-          <div>
-            <label htmlFor="title" className="block text-[12px] font-medium text-fg-sub">
-              제목
-            </label>
-            <input
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="브랜드 이름"
-              maxLength={40}
-              disabled={isDemo}
-              className="mt-1.5 h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none disabled:opacity-50"
-            />
-          </div>
+          ) : null}
+
+          <button
+            type="button"
+            disabled={isDemo || busy}
+            aria-expanded={mode === "blank"}
+            onClick={() => setMode(mode === "blank" ? null : "blank")}
+            className="trans-state mx-auto block text-[13px] text-fg-sub underline underline-offset-2 hover:text-fg disabled:opacity-50"
+          >
+            빈 페이지로 시작 (주소 직접 정하기)
+          </button>
+
+          {mode === "blank" ? (
+            <div className="space-y-3 rounded-card border border-line p-3">
+              <div>
+                <label htmlFor="slug" className="block text-[12px] font-medium text-fg-sub">
+                  주소
+                </label>
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  <span className="shrink-0 text-[14px] text-fg-sub">/p/</span>
+                  <input
+                    id="slug"
+                    value={slug}
+                    onChange={(e) => setSlug(e.target.value.toLowerCase())}
+                    placeholder="my-brand"
+                    maxLength={30}
+                    className="h-10 min-w-0 flex-1 rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="title" className="block text-[12px] font-medium text-fg-sub">
+                  제목
+                </label>
+                <input
+                  id="title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="브랜드 이름"
+                  maxLength={40}
+                  className="mt-1.5 h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
+                />
+              </div>
+              <Button onClick={() => onCreate(slug, title)} disabled={!slug.trim() || busy} className="w-full">
+                {busy ? "만드는 중…" : "만들기"}
+              </Button>
+            </div>
+          ) : null}
+
           {error ? (
             <p role="alert" className="text-[14px] text-negative-strong">
               {error}
             </p>
           ) : null}
-          <Button onClick={() => onCreate(slug, title)} disabled={isDemo || !slug.trim() || busy} className="w-full">
-            {busy ? "만드는 중…" : "프로필 링크 만들기"}
-          </Button>
+
+          <p className="pt-1 text-center text-[12px] text-fg-sub">
+            주소·제목·테마는 만든 뒤 언제든 바꿀 수 있어요.
+          </p>
         </div>
       </CardBody>
     </Card>

@@ -144,6 +144,96 @@ export async function createLinkPage(slug: string, title: string): Promise<Resul
   return { ok: true };
 }
 
+/**
+ * 무작위 주소 8자 — 링크팜도 이렇게 시작한다(실측: 사장님 계정이 1vq0uqji 였다).
+ *
+ * 첫 화면에서 "주소를 뭘로 하지"로 멈추는 게 가장 큰 이탈 지점이다. 자동으로 만들어
+ * 주고, 바꾸는 건 프로필 탭에서 언제든 된다(옛 주소는 slug 무덤이 지킨다).
+ */
+function randomSlug(): string {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  return Array.from(bytes)
+    .map((v) => chars[v % 36])
+    .join("");
+}
+
+/**
+ * 템플릿 또는 가져온 링크로 **한 번에 시작**한다 — 링크팜 첫 화면의
+ * 「템플릿으로 시작」·「기존 링크 가져오기」에 해당.
+ *
+ * createLinkPage(주소·제목 입력형)와 따로 두는 이유: 이 경로는 주소를 묻지 않는다.
+ * 주소·제목·블록이 전부 자동으로 깔린 채 빌더에 떨어져야 "시작"이라는 말이 맞다.
+ */
+export async function createLinkPageWithStart(input: {
+  template?: string;
+  links?: Array<{ label: string; url: string }>;
+}): Promise<Result> {
+  if (isDemoMode()) return DEMO;
+  const user = await getAuthUser();
+  if (!user) return AUTH;
+
+  /* 실패할 것부터 먼저 검증한다 — 페이지를 만들어 놓고 블록에서 실패하면 반쪽 상태다 */
+  const tpl = input.template ? LINK_TEMPLATES.find((t) => t.key === input.template) : null;
+  if (input.template && !tpl) return { ok: false, error: "없는 템플릿이에요." };
+
+  const linkRows: Array<{ type: BlockType; data: Record<string, unknown> }> = [];
+  if (!tpl) {
+    for (const it of (input.links ?? []).slice(0, MAX_BLOCKS)) {
+      const cleaned = sanitizeBlockData({ label: it.label || "링크", url: it.url, emphasis: "normal" });
+      if (cleaned.error) return { ok: false, error: cleaned.error };
+      if (cleaned.data?.url) linkRows.push({ type: "link", data: cleaned.data });
+    }
+    if (linkRows.length === 0) return { ok: false, error: "넣을 수 있는 링크가 없어요." };
+  }
+
+  const supabase = await createClient();
+
+  /* 제목 기본값은 계정 이름 — 빈 제목이면 공개 페이지 머리가 무작위 주소 문자열이 된다 */
+  const { data: prof } = await supabase.from("users_profile").select("display_name").eq("id", user.id).maybeSingle();
+  const title = sliceChars(((prof?.display_name as string) ?? "").trim(), 40);
+
+  /* 무작위 주소는 충돌할 수 있다(36^8 이라 사실상 없지만 공짜 재시도다) */
+  let pageId: string | null = null;
+  for (let attempt = 0; attempt < 5 && !pageId; attempt++) {
+    const slug = randomSlug();
+    if (validateSlug(slug)) continue; // 예약어(8자 무작위가 걸릴 일은 없지만 규칙은 규칙이다)
+    const { data: created, error } = await supabase
+      .from("link_pages")
+      .insert({ user_id: user.id, slug, title, theme: tpl?.theme ?? DEFAULT_THEME_KEY })
+      .select("id")
+      .maybeSingle();
+    if (!error) {
+      pageId = (created?.id as string) ?? null;
+      break;
+    }
+    if (error.code === "23505") {
+      if (error.message.includes("user_id")) {
+        return { ok: false, error: "이미 프로필 링크가 있어요. 새로고침해 주세요." };
+      }
+      continue; // slug 충돌 — 새 주소로 재시도
+    }
+    console.error("[links] 페이지 생성 실패:", error.message);
+    return { ok: false, error: "만들지 못했어요. 잠시 후 다시 시도해 주세요." };
+  }
+  if (!pageId) return { ok: false, error: "만들지 못했어요. 잠시 후 다시 시도해 주세요." };
+
+  const rows = (tpl ? tpl.blocks : linkRows).map((b, i) => ({
+    page_id: pageId,
+    type: b.type,
+    data: b.data,
+    sort_order: i,
+  }));
+  const { error: blockErr } = await supabase.from("link_blocks").insert(rows);
+  revalidatePath("/links");
+  if (blockErr) {
+    console.error("[links] 시작 블록 깔기 실패:", blockErr.message);
+    /* 페이지는 이미 만들어졌다 — 빈 빌더가 뜨므로 뭘 하면 되는지 말해준다 */
+    return { ok: false, error: "페이지는 만들어졌는데 블록을 채우지 못했어요. 블록 탭에서 다시 추가해 주세요." };
+  }
+  return { ok: true };
+}
+
 export async function updateLinkProfile(input: {
   slug: string;
   title: string;

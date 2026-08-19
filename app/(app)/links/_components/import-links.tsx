@@ -23,12 +23,21 @@ import { importFromLittly } from "../actions";
   두 경로 모두 **같은 검증 관문**(parsePastedLinks)과 같은 선택 표를 쓴다.
 */
 
-export function ImportLinks({
+/**
+ * 가져오기 본체 — 두 자리에서 쓴다:
+ *  · 첫 화면(페이지 없음): 「기존 링크 가져오기」로 펼쳐진 채 — 가져온 링크로 페이지를 만든다
+ *  · 빌더 블록 탭: 접이식(ImportLinks)으로 — 기존 페이지에 뒤에 붙인다
+ * actionLabel 만 다르고 검증·표·경고는 완전히 같다.
+ */
+export function ImportLinksBody({
   busy,
   onImport,
+  actionLabel = "추가하기",
 }: {
   busy: boolean;
   onImport: (items: Array<{ label: string; url: string }>) => void;
+  /** 적용 버튼 문구 — "{n}개 " 뒤에 붙는다 */
+  actionLabel?: string;
 }) {
   const [found, setFound] = useState<HarvestedLink[] | null>(null);
   const [picked, setPicked] = useState<Set<number>>(new Set());
@@ -121,13 +130,7 @@ export function ImportLinks({
   const chosen = (found ?? []).filter((_, i) => picked.has(i));
 
   return (
-    <details className="rounded-card border border-line">
-      <summary className="cursor-pointer px-3 py-2 text-[14px] font-semibold">
-        <Download className="mr-1 inline size-3.5" aria-hidden />
-        링크 여러 개 한 번에
-      </summary>
-
-      <div className="space-y-3 px-3 pb-3">
+    <div className="space-y-3">
         <p className="text-[12px] leading-relaxed text-fg-sub">
           쓰던 링크 페이지를 열어 <strong className="font-semibold text-fg">전체 선택(Ctrl+A) → 복사</strong> 한 뒤
           아래에 붙여넣으세요. 한 줄에 하나씩 <code className="text-[12px]">이름 | 주소</code> 로 적어도 됩니다.
@@ -248,10 +251,30 @@ export function ImportLinks({
               }}
               className={cn(chosen.length === 0 && "opacity-60")}
             >
-              {busy ? "추가 중…" : `${chosen.length}개 추가하기`}
+              {busy ? "처리 중…" : `${chosen.length}개 ${actionLabel}`}
             </Button>
           </>
         ) : null}
+    </div>
+  );
+}
+
+/** 빌더 블록 탭용 접이식 래퍼 */
+export function ImportLinks({
+  busy,
+  onImport,
+}: {
+  busy: boolean;
+  onImport: (items: Array<{ label: string; url: string }>) => void;
+}) {
+  return (
+    <details className="rounded-card border border-line">
+      <summary className="cursor-pointer px-3 py-2 text-[14px] font-semibold">
+        <Download className="mr-1 inline size-3.5" aria-hidden />
+        링크 여러 개 한 번에
+      </summary>
+      <div className="px-3 pb-3">
+        <ImportLinksBody busy={busy} onImport={onImport} />
       </div>
     </details>
   );
