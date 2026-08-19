@@ -105,7 +105,9 @@ export async function deleteDraft(id: string): Promise<{ ok: boolean; error?: st
 const CAPTION_MAX = 2200;
 /** 캐러셀 상한 — 0010 의 image_urls check 와 동일 */
 const MAX_IMAGES = 10;
-/** 장당 업로드 상한 — 인스타 발행 이미지가 8MB 를 넘을 일은 없다 */
+/** 장당 업로드 상한(2차 방어) — 정상 경로는 컴포저가 1440px JPEG 로 축소해
+    장당 ~1.5MB 다. 이 8MB 는 축소를 우회한 직접 호출을 막는 서버측 가드이고,
+    요청 전체는 그 전에 next.config.ts 의 bodySizeLimit(25mb)이 자른다. */
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 /**

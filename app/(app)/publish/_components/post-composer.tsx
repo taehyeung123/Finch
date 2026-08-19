@@ -85,15 +85,53 @@ export function PostComposer({
     requestCloseRef.current = requestClose;
   });
 
-  function pickFiles(e: React.ChangeEvent<HTMLInputElement>) {
+  /* 업로드 전 클라이언트 축소 — 이유가 둘 겹친다.
+     ① 서버 액션 바디 상한: 원본 사진(1~8MB)을 base64(+33%)로 통째 넘기면
+        next.config.ts 의 bodySizeLimit(25mb)에 캐러셀이 못 든다. 여기서 줄여야
+        10장이 안전하게 들어간다 — 상한을 올리는 쪽만 하면 100MB 급 요청을
+        서버가 받아주는 꼴이 된다.
+     ② 인스타그램 발행 API 는 JPEG 만 받는다 — 어차피 변환할 것, 지금 한다.
+     1440px 는 인스타 권장 최대 해상도라 화질 손해가 아니다. */
+  const MAX_DIMENSION = 1440;
+
+  async function toJpegDataUrl(file: File): Promise<string> {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = () => reject(new Error("decode"));
+        el.src = url;
+      });
+      const scale = Math.min(1, MAX_DIMENSION / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("canvas");
+      /* JPEG 엔 알파가 없다 — PNG 투명 영역이 검게 구워지지 않게 흰 바탕을 먼저 깐다 */
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/jpeg", 0.85);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  async function pickFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = [...(e.target.files ?? [])];
     e.target.value = ""; // 같은 파일 재선택 허용
     const room = MAX_IMAGES - images.length;
-    if (files.length > room) setError(`이미지는 ${MAX_IMAGES}장까지예요.`);
+    /* 정상 선택이면 이전 경고를 지운다 — 안 지우면 상한 경고가 해소된 뒤에도 남는다 */
+    setError(files.length > room ? `이미지는 ${MAX_IMAGES}장까지예요.` : null);
     for (const f of files.slice(0, Math.max(0, room))) {
-      const r = new FileReader();
-      r.onload = () => setImages((prev) => (prev.length >= MAX_IMAGES ? prev : [...prev, String(r.result)]));
-      r.readAsDataURL(f);
+      try {
+        const dataUrl = await toJpegDataUrl(f);
+        setImages((prev) => (prev.length >= MAX_IMAGES ? prev : [...prev, dataUrl]));
+      } catch {
+        setError("이미지를 읽지 못했어요. 다른 파일로 시도해 주세요.");
+      }
     }
   }
 
@@ -115,6 +153,10 @@ export function PostComposer({
         return;
       }
       onSaved(mode === "draft" ? "초안으로 저장했어요." : `${date} 발행으로 예약했어요.`);
+    } catch {
+      /* {ok:false} 정상 반환이 아니라 호출 자체가 던진 경우(바디 상한 초과·네트워크) —
+         잡지 않으면 에러 오버레이가 뜨고 작성 내용이 통째로 위험해진다 */
+      setError("저장하지 못했어요. 이미지 수를 줄이거나 잠시 후 다시 시도해 주세요.");
     } finally {
       setSaving(false);
     }

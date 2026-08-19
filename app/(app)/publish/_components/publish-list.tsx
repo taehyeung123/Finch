@@ -187,7 +187,9 @@ export function PublishList({
               </span>
               <span className="min-w-0">
                 <span className="block text-[12px] font-semibold">{label}</span>
-                <span className={cn("block truncate text-[11px]", connected ? "text-fg-sub" : "text-fg-faint")}>
+                {/* "연결하기"는 눌러야 하는 활성 CTA 다 — fg-faint(4.0:1)는 본문 금지 규칙에
+                    걸리고, 11px 소형 텍스트라 대비가 더 아쉽다. 양쪽 다 fg-sub. */}
+                <span className="block truncate text-[11px] text-fg-sub">
                   {connected ? (meta?.handle ?? "연결됨") : "연결하기"}
                 </span>
               </span>
@@ -198,7 +200,8 @@ export function PublishList({
               {inner}
             </span>
           ) : (
-            <ButtonLink key={ch} href="/settings" variant="ghost" size="sm" className="flex items-center gap-2 !px-1.5">
+            /* size="sm"(h-8=32px)은 안의 아바타(36px)보다 낮아 위아래로 삐져나온다 — md(40px) */
+            <ButtonLink key={ch} href="/settings" variant="ghost" size="md" className="flex items-center gap-2 !px-1.5">
               {inner}
             </ButtonLink>
           );
@@ -430,7 +433,10 @@ export function PublishList({
                     title="아직 예약이 없어요"
                     description="새 게시물을 쓰거나 스튜디오에서 카드뉴스를 만들면 여기서 날짜를 잡을 수 있어요."
                     action={
-                      <Button size="sm" onClick={() => setComposer({ date: selected })}>
+                      <Button
+                        size="sm"
+                        onClick={() => setComposer({ date: selected && selected >= earliest ? selected : null })}
+                      >
                         새 게시물 포스팅
                       </Button>
                     }
