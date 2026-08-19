@@ -6,6 +6,7 @@ import { isDemoMode } from "@/lib/supabase/config";
 import { SLUG_MESSAGES, normalizeUrl, validateSlug } from "@/lib/links";
 import { defaultBlockData, type BlockType } from "@/lib/links/blocks";
 import { DEFAULT_THEME_KEY, themeByKey } from "@/lib/links/themes";
+import { getLinkFeedItems } from "@/lib/data/live";
 
 /*
   프로필 링크 편집 — 블록 빌더(2026-08-17 재작성).
@@ -163,11 +164,26 @@ export async function setLinkPublished(published: boolean): Promise<Result> {
   if (!user) return AUTH;
 
   const supabase = await createClient();
+
+  /* ⚠️ **먼저 확인하고 나서 바꾼다.** 앞서는 UPDATE 를 하고 나서 스냅샷 없음을
+     감지해 에러를 돌려줬는데, 그러면 published 는 이미 true 로 바뀐 뒤라
+     "에러가 떴는데 공개는 켜진" 상태가 남았다(그 주소는 방문자에게 404 다). */
+  if (published) {
+    const { data: cur } = await supabase
+      .from("link_pages")
+      .select("published_snapshot")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!cur?.published_snapshot) {
+      return { ok: false, error: "먼저 「라이브 반영」을 눌러 지금 편집본을 발행해 주세요." };
+    }
+  }
+
   const { data, error } = await supabase
     .from("link_pages")
     .update({ published })
     .eq("user_id", user.id)
-    .select("slug, published_snapshot")
+    .select("slug")
     .maybeSingle();
   if (error) {
     console.error("[links] 공개 상태 변경 실패:", error.message);
@@ -175,10 +191,6 @@ export async function setLinkPublished(published: boolean): Promise<Result> {
   }
   revalidatePath("/links");
   if (data?.slug) revalidatePath(`/p/${data.slug}`);
-  /* 한 번도 발행 안 한 채로 공개하면 방문자에게 404 가 뜬다 — 그 전에 알린다 */
-  if (published && !data?.published_snapshot) {
-    return { ok: false, error: "먼저 「라이브 반영」을 눌러 지금 편집본을 발행해 주세요." };
-  }
   return { ok: true };
 }
 
@@ -341,6 +353,28 @@ export async function publishLinkPage(): Promise<Result> {
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
 
+  /* 「최근 게시물」 블록을 여기서 **실제로 채운다.** 편집기가 "라이브 반영할 때
+     채워집니다"라고 약속하므로, 안 채우면 발행해도 블록이 안 보이는 거짓말이 된다.
+     연동이 없거나 실패하면 빈 배열 → 렌더러가 그 블록을 숨긴다(깨진 자리 대신 없음). */
+  const rawBlocks = (blocks ?? []) as Array<{ id: string; type: string; data: Record<string, unknown> }>;
+  const feedBlocks = rawBlocks.filter((b) => b.type === "social_feed");
+  const feedCache = new Map<string, Array<{ thumbUrl: string | null; permalink: string | null }>>();
+  for (const b of feedBlocks) {
+    const channel = typeof b.data?.channel === "string" ? b.data.channel : "instagram";
+    /* 인스타그램만 공개 미디어 목록 API 가 있다. 나머지는 빈 배열 */
+    if (channel !== "instagram") {
+      feedCache.set(b.id, []);
+      continue;
+    }
+    const count = typeof b.data?.count === "number" ? b.data.count : 6;
+    try {
+      feedCache.set(b.id, await getLinkFeedItems(count));
+    } catch (e) {
+      console.error("[links] 최근 게시물 조회 실패:", e);
+      feedCache.set(b.id, []);
+    }
+  }
+
   /* 스냅샷은 공개 페이지가 **그대로 렌더할 수 있는 형태**로 굽는다.
      여기서 한 번 정리해 두면 방문자 경로에서 변환·검증이 필요 없다. */
   const snapshot = {
@@ -355,10 +389,10 @@ export async function publishLinkPage(): Promise<Result> {
     snsLinks: Array.isArray(page.sns_links) ? page.sns_links : [],
     seoTitle: page.seo_title ?? null,
     seoDesc: page.seo_desc ?? null,
-    blocks: ((blocks ?? []) as Array<{ id: string; type: string; data: Record<string, unknown> }>).map((b) => ({
+    blocks: rawBlocks.map((b) => ({
       id: b.id,
       type: b.type,
-      data: b.data ?? {},
+      data: b.type === "social_feed" ? { ...(b.data ?? {}), cached: feedCache.get(b.id) ?? [] } : (b.data ?? {}),
     })),
   };
 

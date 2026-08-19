@@ -39,6 +39,7 @@ import {
   updateLinkProfile,
   updateLinkTheme,
 } from "../actions";
+import type { LinkLead } from "../page";
 import { BlockEditor } from "./block-editor";
 import { PhonePreview } from "./phone-preview";
 
@@ -93,11 +94,13 @@ export function LinksClient({
   blocks,
   origin,
   stats,
+  leads,
 }: {
   page: LinkPageView | null;
   blocks: LinkBlock[];
   origin: string;
   stats: { views: number; clicks: number; ctr: number; returning: number };
+  leads: LinkLead[];
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -214,6 +217,7 @@ export function LinksClient({
               <SettingsPanel
                 page={page}
                 stats={stats}
+                leads={leads}
                 busy={busy}
                 onPublishToggle={(v) => run(() => setLinkPublished(v))}
                 onDelete={() => run(() => deleteLinkPage())}
@@ -660,12 +664,14 @@ function ThemePanel({ current, busy, onPick }: { current: string; busy: boolean;
 function SettingsPanel({
   page,
   stats,
+  leads,
   busy,
   onPublishToggle,
   onDelete,
 }: {
   page: LinkPageView;
   stats: { views: number; clicks: number; ctr: number; returning: number };
+  leads: LinkLead[];
   busy: boolean;
   onPublishToggle: (v: boolean) => void;
   onDelete: () => void;
@@ -702,6 +708,35 @@ function SettingsPanel({
             </div>
           ))}
         </div>
+      </div>
+
+      {/* 받은 내용 — 문의받기·구독신청 블록이 약속한 자리.
+          이게 없으면 방문자가 남긴 게 어디로 갔는지 알 수 없다(편집기가 여기를 가리킨다). */}
+      <div>
+        <p className="text-[12px] font-medium text-fg-sub">받은 내용</p>
+        {leads.length === 0 ? (
+          <p className="mt-1.5 text-[14px] text-fg-sub">
+            문의받기·구독신청 블록으로 들어온 내용이 여기에 쌓여요.
+          </p>
+        ) : (
+          <ul className="mt-1.5 max-h-64 divide-y divide-line overflow-y-auto">
+            {leads.map((l) => (
+              <li key={l.id} className="py-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-chip bg-plate px-2 py-0.5 text-[11px] font-semibold text-fg-sub">
+                    {l.kind === "subscribe" ? "구독" : "문의"}
+                  </span>
+                  <span className="text-[14px] font-semibold">{l.name || l.email || l.phone || "(이름 없음)"}</span>
+                  <span className="tnum ml-auto text-[12px] text-fg-sub">{l.createdAt.slice(0, 10)}</span>
+                </div>
+                {l.email || l.phone ? (
+                  <p className="mt-0.5 text-[12px] text-fg-sub">{[l.email, l.phone].filter(Boolean).join(" · ")}</p>
+                ) : null}
+                {l.message ? <p className="mt-1 line-clamp-2 text-[14px]">{l.message}</p> : null}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 pt-2">

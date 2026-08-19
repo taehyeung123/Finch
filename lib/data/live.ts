@@ -931,6 +931,31 @@ export async function getRecentPostsForPicker(): Promise<Post[]> {
   }));
 }
 
+/**
+ * 프로필 링크의 「최근 게시물」 블록용 — 썸네일 + 원본 링크만.
+ *
+ * 발행(publishLinkPage) 시점에 **한 번만** 부른다. 공개 페이지가 방문자마다 플랫폼을
+ * 조회하면 레이트리밋에 즉시 걸리고, 방문자 한 명이 우리 쿼터를 태우는 구조가 된다.
+ * 그래서 결과를 스냅샷에 구워 넣는다.
+ *
+ * 인스타그램 전용이다 — 틱톡·스레드는 공개 미디어 목록 API 가 아직 없다.
+ * (블록 편집기가 채널을 고르게 해두었으므로, 그 둘은 빈 배열이 나가고 렌더러가 숨긴다.)
+ */
+export async function getLinkFeedItems(
+  limit: number,
+): Promise<Array<{ thumbUrl: string | null; permalink: string | null }>> {
+  const row = await loadInstagramRow();
+  if (!row || !row.platform_user_id) return [];
+  const token = await ensureFreshToken(row);
+  if (!token) return [];
+
+  const media = await fetchRecentMedia(row.platform_user_id, token, Math.min(25, Math.max(1, limit)));
+  return media.slice(0, limit).map((m) => ({
+    thumbUrl: m.thumbnailUrl ?? m.mediaUrl ?? null,
+    permalink: m.permalink ?? null,
+  }));
+}
+
 export interface LiveAudience {
   /** 최근 14일 일별 — reach·팔로워 순증감 (100팔로워 미만이면 follower 계열 결측 가능) */
   daily: { date: string; reach: number; followerNet: number }[];

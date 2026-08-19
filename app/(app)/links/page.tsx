@@ -24,13 +24,24 @@ export const metadata: Metadata = {
 /** 통계 조회 창 — 링크팜 기본값과 같은 30일 */
 const STATS_DAYS = 30;
 
+export interface LinkLead {
+  id: number;
+  kind: "contact" | "subscribe";
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  message: string | null;
+  createdAt: string;
+}
+
 interface Loaded {
   page: LinkPageView | null;
   blocks: LinkBlock[];
   stats: { views: number; clicks: number; ctr: number; returning: number };
+  leads: LinkLead[];
 }
 
-const EMPTY: Loaded = { page: null, blocks: [], stats: { views: 0, clicks: 0, ctr: 0, returning: 0 } };
+const EMPTY: Loaded = { page: null, blocks: [], stats: { views: 0, clicks: 0, ctr: 0, returning: 0 }, leads: [] };
 
 async function load(): Promise<Loaded> {
   if (isDemoMode()) return EMPTY;
@@ -50,10 +61,10 @@ async function load(): Promise<Loaded> {
 
   const since = new Date(Date.now() - STATS_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  const [{ data: rows }, views, clicks] = await Promise.all([
+  const [{ data: rows }, views, clicks, leadRows] = await Promise.all([
     supabase
       .from("link_blocks")
-      .select("id, type, data, sort_order, active")
+      .select("id, type, data, sort_order, active, updated_at")
       .eq("page_id", page.id)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true }),
@@ -68,10 +79,21 @@ async function load(): Promise<Loaded> {
       .select("id", { count: "exact", head: true })
       .eq("page_id", page.id)
       .gte("created_at", since),
+    /* 받은 리드 — 문의받기·구독신청 블록이 약속한 "받은 내용"의 실체.
+       최근 50건만. 그보다 많이 쌓이면 전용 화면이 필요하고, 그건 그때 만든다. */
+    supabase
+      .from("link_leads")
+      .select("id, kind, name, email, phone, message, created_at")
+      .eq("page_id", page.id)
+      .order("created_at", { ascending: false })
+      .limit(50),
   ]);
 
   const blocks: LinkBlock[] = (
-    (rows ?? []) as Array<{ id: string; type: string; data: Record<string, unknown>; sort_order: number; active: boolean }>
+    (rows ?? []) as Array<{
+      id: string; type: string; data: Record<string, unknown>;
+      sort_order: number; active: boolean; updated_at: string;
+    }>
   ).map((r) => ({
     id: r.id,
     type: r.type as LinkBlock["type"],
@@ -97,14 +119,39 @@ async function load(): Promise<Loaded> {
   const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10 : 0);
 
   /* 초안이 마지막 발행본과 다른가 — "라이브 반영" 버튼의 상태를 정한다.
-     블록 내용까지 비교하면 정확하지만 매 요청 JSON 비교가 붙는다. 발행 이후
-     페이지·블록이 한 번이라도 수정됐는지(updated_at)로 판정한다 — 실무상 충분하다. */
+     ⚠️ **블록의 updated_at 을 반드시 본다.** link_blocks 수정은 link_pages 를 건드리지
+     않으므로, 페이지 updated_at 만 보면 "블록 내용만 고친" 경우가 dirty 로 안 잡혀
+     버튼이 「반영됨」인 채로 남고 사용자는 발행할 방법이 없다(가장 흔한 편집이 그건데). */
   const publishedAt = page.published_at as string | null;
   const pageUpdated = page.updated_at as string | null;
+  const newest = (
+    (rows ?? []) as Array<{ updated_at: string }>
+  ).reduce<number>((max, r) => Math.max(max, new Date(r.updated_at).getTime() || 0), 0);
+  const pubMs = publishedAt ? new Date(publishedAt).getTime() : 0;
+  const snapBlocks = ((page.published_snapshot as { blocks?: unknown[] } | null)?.blocks ?? []).length;
+  const activeCount = blocks.filter((b) => b.active).length;
+
   const dirty =
     !publishedAt ||
-    (!!pageUpdated && new Date(pageUpdated).getTime() > new Date(publishedAt).getTime()) ||
-    blocks.length !== (((page.published_snapshot as { blocks?: unknown[] } | null)?.blocks ?? []).length ?? 0);
+    (!!pageUpdated && new Date(pageUpdated).getTime() > pubMs) ||
+    newest > pubMs ||
+    /* 발행은 active=true 만 담는다 — 켜진 블록 수로 비교해야 맞다 */
+    activeCount !== snapBlocks;
+
+  const leads: LinkLead[] = (
+    (leadRows.data ?? []) as Array<{
+      id: number; kind: string; name: string | null; email: string | null;
+      phone: string | null; message: string | null; created_at: string;
+    }>
+  ).map((r) => ({
+    id: r.id,
+    kind: r.kind === "subscribe" ? "subscribe" : "contact",
+    name: r.name,
+    email: r.email,
+    phone: r.phone,
+    message: r.message,
+    createdAt: r.created_at,
+  }));
 
   return {
     page: {
@@ -131,11 +178,12 @@ async function load(): Promise<Loaded> {
       ctr: pct(totalClicks, totalViews),
       returning: pct(repeats, uniques),
     },
+    leads,
   };
 }
 
 export default async function Page() {
-  const { page, blocks, stats } = await load();
+  const { page, blocks, stats, leads } = await load();
 
   /* 복사 버튼이 주는 주소는 **지금 접속한 도메인** 기준이어야 한다.
      프로덕션 도메인을 하드코딩하면 로컬·프리뷰에서 복사한 주소가 안 열린다. */
@@ -149,7 +197,7 @@ export default async function Page() {
         title="프로필 링크"
         description="SNS 프로필에 거는 링크 페이지를 만들고 클릭 성과를 봅니다."
       />
-      <LinksClient page={page} blocks={blocks} stats={stats} origin={`${proto}://${host}`} />
+      <LinksClient page={page} blocks={blocks} stats={stats} leads={leads} origin={`${proto}://${host}`} />
     </div>
   );
 }
