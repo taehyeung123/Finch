@@ -28,6 +28,7 @@ import type {
   TopEngager,
   UsageStat,
 } from "../types";
+import type { LinkWorkspace } from "@/lib/links/types";
 
 export const MOCK_SYNCED_AT = "";
 
@@ -126,4 +127,12 @@ export const autoDmSummary: AutoDmSummary = {
   sent30d: 0,
   deliveryRate: 0,
   replyRate: 0,
+};
+
+/** 실제 모드에서는 /links 가 DB(link_pages)를 직접 읽는다 — 샘플이 끼면 안 된다 */
+export const linkWorkspace: LinkWorkspace = {
+  page: null,
+  blocks: [],
+  stats: { days: 30, views: 0, uniques: 0, clicks: 0, ctr: 0, returning: 0, daily: [], blocks: [], regions: [] },
+  leads: [],
 };

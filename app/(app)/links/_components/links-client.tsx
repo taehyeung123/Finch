@@ -44,42 +44,10 @@ import {
   updateLinkProfile,
   updateLinkTheme,
 } from "../actions";
-import type { LinkLead } from "../page";
-import { BlockEditor } from "./block-editor";
+import type { LinkLead, LinkPageView, LinkStats } from "@/lib/links/types";
+import { BlockEditor, EDITOR_TITLE_ID } from "./block-editor";
 import { ImageField } from "./image-field";
 import { PhonePreview } from "./phone-preview";
-
-export interface LinkPageView {
-  id: string;
-  slug: string;
-  title: string;
-  bio: string;
-  published: boolean;
-  layout: string;
-  theme: string;
-  align: string;
-  avatarPath: string | null;
-  coverPath: string | null;
-  snsLinks: Array<{ kind: string; url: string }>;
-  seoTitle: string;
-  seoDesc: string;
-  /** 마지막 라이브 반영 시각. null 이면 한 번도 발행 안 함 */
-  publishedAt: string | null;
-  /** 초안이 마지막 발행본과 다른가 — "라이브 반영" 버튼의 상태를 정한다 */
-  dirty: boolean;
-}
-
-export interface LinkStats {
-  days: number;
-  views: number;
-  uniques: number;
-  clicks: number;
-  ctr: number;
-  returning: number;
-  daily: Array<{ date: string; views: number; clicks: number }>;
-  blocks: Array<{ id: string; label: string; removed: boolean; clicks: number }>;
-  regions: Array<{ country: string; region: string; views: number }>;
-}
 
 /*
   프로필 링크 편집기 — 링크팜 빌더 구조를 실측 조사해 재구성(2026-08-17),
@@ -161,6 +129,9 @@ export function LinksClient({
     setDraft(data);
     setBaseline(stableJson(data));
     setEditingId(id);
+    /* 새로 열린 패널의 제목으로 포커스를 옮긴다 — 목록에 남겨두면 키보드·스크린리더
+       사용자는 화면이 바뀐 걸 모른다. 닫을 때 closeEditor 가 원래 행으로 되돌린다. */
+    requestAnimationFrame(() => document.getElementById(EDITOR_TITLE_ID)?.focus());
   }
 
   /**
@@ -198,6 +169,14 @@ export function LinksClient({
 
   return (
     <div className="space-y-4">
+      {/* 데모 모드는 **눌러보기 전에** 알린다 — 저장은 서버 액션이 막는다 */}
+      {isDemo ? (
+        <p className="rounded-card border border-line bg-plate px-4 py-3 text-[14px] leading-[1.6] text-fg-sub">
+          <strong className="font-semibold text-fg">예시 페이지</strong>예요. 편집기를 둘러볼 수 있지만 저장은 되지
+          않아요. 로그인하면 내 프로필 링크를 만들 수 있습니다.
+        </p>
+      ) : null}
+
       {/* 상단 바 — 주소·복사·열기 + 라이브 반영 */}
       <TopBar page={page} origin={origin} busy={busy} onPublish={() => run(() => publishLinkPage())} />
 

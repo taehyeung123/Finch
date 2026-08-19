@@ -3,8 +3,10 @@ import { headers } from "next/headers";
 import { PageHeader } from "@/components/ui/section-header";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
+import { linkWorkspace } from "@/lib/data";
 import { blockSummary, type LinkBlock } from "@/lib/links/blocks";
-import { LinksClient, type LinkPageView, type LinkStats } from "./_components/links-client";
+import type { LinkLead, LinkStats, LinkWorkspace } from "@/lib/links/types";
+import { LinksClient } from "./_components/links-client";
 
 export const metadata: Metadata = {
   title: "프로필 링크",
@@ -26,22 +28,7 @@ export const metadata: Metadata = {
 const STATS_RANGES = [7, 30, 90] as const;
 const DEFAULT_DAYS = 30;
 
-export interface LinkLead {
-  id: number;
-  kind: "contact" | "subscribe";
-  name: string | null;
-  email: string | null;
-  phone: string | null;
-  message: string | null;
-  createdAt: string;
-}
-
-interface Loaded {
-  page: LinkPageView | null;
-  blocks: LinkBlock[];
-  stats: LinkStats;
-  leads: LinkLead[];
-}
+type Loaded = LinkWorkspace;
 
 const EMPTY_STATS: LinkStats = {
   days: DEFAULT_DAYS,
@@ -69,7 +56,12 @@ interface RawStats {
 }
 
 async function load(days: number): Promise<Loaded> {
-  if (isDemoMode()) return { ...EMPTY, stats: { ...EMPTY_STATS, days } };
+  /* 데모 모드는 **샘플 페이지**를 보여준다. 앞서는 빈 값을 돌려줘 생성 폼만 나왔고,
+     주소·제목을 다 채워 누른 뒤에야 "데모 모드에서는 저장할 수 없어요"가 떴다 —
+     항상 실패하는 폼 하나가 이 화면의 전부였다. 저장은 서버 액션이 막는다. */
+  /* days 를 그대로 되비춘다 — 샘플 수치는 그대로여도 기간 토글이 눌린 상태는 맞아야
+     한다. 안 그러면 7일을 눌렀는데 30일이 선택된 채로 남아 고장난 것처럼 보인다. */
+  if (isDemoMode()) return { ...linkWorkspace, stats: { ...linkWorkspace.stats, days } };
 
   const user = await getAuthUser();
   if (!user) return { ...EMPTY, stats: { ...EMPTY_STATS, days } };

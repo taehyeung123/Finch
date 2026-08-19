@@ -29,6 +29,7 @@ import type {
   TopEngager,
   UsageStat,
 } from "../types";
+import type { LinkWorkspace } from "@/lib/links/types";
 import type { Channel } from "../types";
 
 /** 목데이터 기준 수집 시각 */
@@ -1071,4 +1072,72 @@ export const autoDmSummary: AutoDmSummary = {
   sent30d: 2587,
   deliveryRate: 97.3,
   replyRate: 41.6,
+};
+
+/* ── 프로필 링크 ────────────────────────────────────────────────────
+   데모 모드에서 /links 가 빌더를 보여주려면 페이지가 하나 있어야 한다.
+   앞서는 데모에서 page=null 을 돌려줘 **항상 실패하는 생성 폼** 하나만 나왔다 —
+   주소·제목을 다 채워 누른 뒤에야 "데모 모드에서는 저장할 수 없어요"가 떴다.
+   레포의 다른 화면(settings/team 등)은 전부 샘플을 준다. 여기만 빠져 있었다.
+
+   저장은 서버 액션이 막는다(actions.ts 의 DEMO 가드) — 여기서는 읽기만 시켜준다. */
+export const linkWorkspace: LinkWorkspace = {
+  page: {
+    id: "demo-link-page",
+    slug: "finch-demo",
+    title: "핀치 데모",
+    bio: "예시 프로필 링크예요. 블록을 눌러 편집 화면을 둘러보세요.",
+    published: true,
+    layout: "profile",
+    theme: "basic",
+    align: "center",
+    avatarPath: null,
+    coverPath: null,
+    snsLinks: [
+      { kind: "instagram", url: "https://instagram.com/finch" },
+      { kind: "youtube", url: "https://youtube.com/@finch" },
+    ],
+    seoTitle: "",
+    seoDesc: "",
+    publishedAt: "2026-08-18T21:00:00+09:00",
+    dirty: false,
+  },
+  blocks: [
+    { id: "demo-b1", type: "notice", sortOrder: 0, active: true, data: { text: "이번 주 공구 진행 중이에요!", tone: "primary" } },
+    { id: "demo-b2", type: "link", sortOrder: 1, active: true, data: { label: "공구 바로가기", url: "https://example.com/order", emoji: "🛒", emphasis: "primary" } },
+    { id: "demo-b3", type: "image_card", sortOrder: 2, active: true, data: { title: "베스트 상품", subtitle: "재구매율 1위", price: "29,000원", ctaLabel: "구매하기", url: "https://example.com/best" } },
+    { id: "demo-b4", type: "heading", sortOrder: 3, active: true, data: { text: "채널" } },
+    { id: "demo-b5", type: "grid", sortOrder: 4, active: true, data: { columns: 2, items: [{ title: "인스타그램", url: "https://instagram.com/finch" }, { title: "유튜브", url: "https://youtube.com/@finch" }] } },
+    { id: "demo-b6", type: "contact", sortOrder: 5, active: true, data: { title: "협업 문의", description: "브랜드 협업은 여기로 남겨주세요.", fields: ["name", "email", "message"] } },
+  ],
+  stats: {
+    days: 30,
+    views: 4820,
+    uniques: 3140,
+    clicks: 1268,
+    ctr: 26.3,
+    returning: 31.5,
+    daily: Array.from({ length: 30 }, (_, i) => ({
+      date: `2026-07-${String(21 + i).padStart(2, "0")}`,
+      views: 120 + Math.round(Math.sin(i / 3) * 45) + i * 2,
+      clicks: 32 + Math.round(Math.cos(i / 4) * 12) + i,
+    })),
+    blocks: [
+      { id: "demo-b2", label: "공구 바로가기", removed: false, clicks: 641 },
+      { id: "demo-b3", label: "베스트 상품", removed: false, clicks: 402 },
+      { id: "demo-b5", label: "항목 2개", removed: false, clicks: 188 },
+      { id: "demo-gone", label: "지운 블록", removed: true, clicks: 37 },
+    ],
+    regions: [
+      { country: "KR", region: "Seoul", views: 2610 },
+      { country: "KR", region: "Busan", views: 731 },
+      { country: "KR", region: "Incheon", views: 402 },
+      { country: "US", region: "Los Angeles", views: 188 },
+    ],
+  },
+  leads: [
+    { id: 1, kind: "contact", name: "김서연", email: "seoyeon@example.com", phone: null, message: "뷰티 브랜드 협업 제안드립니다. 상세 자료 보내드릴게요.", createdAt: "2026-08-18T14:22:00+09:00" },
+    { id: 2, kind: "subscribe", name: null, email: "reader@example.com", phone: null, message: null, createdAt: "2026-08-17T09:05:00+09:00" },
+    { id: 3, kind: "contact", name: "박지훈", email: null, phone: "010-1234-5678", message: "공구 재입고 문의드려요.", createdAt: "2026-08-16T20:41:00+09:00" },
+  ],
 };

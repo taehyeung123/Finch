@@ -61,3 +61,7 @@ export const autoDmSummary = src.autoDmSummary;
 /** 카테고리 어휘 — /library 빈 상태 씨앗 칩, 스튜디오 아이디어 카테고리 필터 */
 export const TREND_CATEGORIES = sample.TREND_CATEGORIES;
 export const planFeatures = sample.planFeatures;
+
+/* ---- 프로필 링크 (Supabase 0045·0048·0049 — 실제 모드는 page.tsx 가 DB 를 직접 읽는다) ----
+   데모 모드에서만 쓰인다: 샘플 페이지가 없으면 /links 는 "항상 실패하는 생성 폼" 하나뿐이다. */
+export const linkWorkspace = src.linkWorkspace;

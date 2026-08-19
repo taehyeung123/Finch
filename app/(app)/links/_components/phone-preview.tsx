@@ -4,7 +4,7 @@ import { cn } from "@/lib/cn";
 import { youtubeEmbed } from "@/lib/links";
 import { themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
 import { hiddenReason, type LinkBlock } from "@/lib/links/blocks";
-import type { LinkPageView } from "./links-client";
+import type { LinkPageView } from "@/lib/links/types";
 
 /*
   라이브 미리보기 — 링크팜의 우측 폰 프레임에 해당.

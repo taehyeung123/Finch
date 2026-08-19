@@ -21,6 +21,9 @@ const area =
   "w-full rounded-card border border-line bg-body px-3 py-2 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none";
 const label = "block text-[12px] font-medium text-fg-sub";
 
+/** 편집기가 열릴 때 부모가 포커스를 옮길 자리 */
+export const EDITOR_TITLE_ID = "block-editor-title";
+
 /**
  * 편집 중인 값(`value`)은 **부모가 들고 있다.**
  *
@@ -70,10 +73,12 @@ export function BlockEditor({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        {/* 편집기가 열리면 포커스를 여기로 옮긴다 — 목록에서 엔터를 눌렀는데 포커스가
-            그 자리에 남아 있으면 키보드·스크린리더 사용자는 화면이 바뀐 걸 모른다.
-            닫을 때는 부모(links-client)가 원래 행으로 되돌린다. */}
-        <h3 tabIndex={-1} autoFocus className="text-[15px] font-bold outline-none">
+        {/* 편집기가 열리면 부모가 이 제목으로 포커스를 옮긴다(id 로 찾는다) — 목록에서
+            엔터를 눌렀는데 포커스가 그 자리에 남아 있으면 키보드·스크린리더 사용자는
+            화면이 바뀐 걸 모른다. 닫을 때는 부모가 원래 행으로 되돌린다.
+            autoFocus 는 안 된다: 그 속성은 파싱 시점에만 동작해서, 클라이언트에서
+            새로 끼워 넣은 비폼 요소에는 적용되지 않는다(실제로 포커스가 body 에 남았다). */}
+        <h3 id={EDITOR_TITLE_ID} tabIndex={-1} className="text-[15px] font-bold outline-none">
           {meta?.label ?? block.type}
         </h3>
         <button
