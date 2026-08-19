@@ -193,7 +193,9 @@ export function AutoDmClient({
           }
         />
       ) : (
-        <ul className="space-y-3">
+        /* 규칙 카드 2열(xl+) — 세로 1열이라 카드 하나가 폭 1600px 을 쓰고 캡션이
+           한 줄로 길게 뻗었다. 카드마다 ~600px 는 필요해 xl 부터 2열로. */
+        <ul className="grid gap-3 xl:grid-cols-2">
           {rules.map((rule) => {
             const status = STATUS_META[rule.status];
             const capPct = rule.dailyCap > 0 ? Math.min(100, Math.round((rule.sentToday / rule.dailyCap) * 100)) : 0;

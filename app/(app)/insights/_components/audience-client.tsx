@@ -90,19 +90,6 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
         }
       />
 
-      {/* 정직 고지 — 이 기능의 신뢰 기반 (PRD PART 2) */}
-      <Card className="flex items-start gap-3 p-4">
-        <ShieldAlert className="mt-0.5 size-5 shrink-0 text-warning" aria-hidden />
-        <p className="text-[14px] leading-relaxed text-fg-sub">
-          <span className="font-semibold text-fg">
-            &ldquo;누가 내 프로필을 봤는지&rdquo;의 개인 식별은 인스타그램이 어떤 앱에도 제공하지 않는
-            데이터입니다.
-          </span>{" "}
-          이를 알려준다고 주장하는 서비스는 모두 허위이며 계정 정지 위험이 있습니다. 핀치는 공식 API가
-          제공하는 집계 지표(도달·참여 계정·팔로워 증감)와 공개 상호작용(댓글·좋아요)만 분석합니다.
-        </p>
-      </Card>
-
       {/* 요약 지표 */}
       <section aria-label="팔로워 분석 요약" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
@@ -148,6 +135,19 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
           value={formatCompact(totals.profileLinksTaps)}
         />
       </section>
+
+      {/* 정직 고지 — 지표 뒤로 내렸다(위계: 숫자가 먼저다). 읽기 폭도 제한한다. */}
+      <Card className="flex items-start gap-3 p-4">
+        <ShieldAlert className="mt-0.5 size-5 shrink-0 text-warning" aria-hidden />
+        <p className="max-w-[80ch] text-[14px] leading-relaxed text-fg-sub">
+          <span className="font-semibold text-fg">
+            &ldquo;누가 내 프로필을 봤는지&rdquo;의 개인 식별은 인스타그램이 어떤 앱에도 제공하지 않는
+            데이터입니다.
+          </span>{" "}
+          이를 알려준다고 주장하는 서비스는 모두 허위이며 계정 정지 위험이 있습니다. 핀치는 공식 API가
+          제공하는 집계 지표(도달·참여 계정·팔로워 증감)와 공개 상호작용(댓글·좋아요)만 분석합니다.
+        </p>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* 일별 도달 */}
@@ -215,7 +215,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
               </span>
               입니다.
               {view.isLive && followerNet === 0 ? (
-                <span className="text-fg-faint"> (팔로워 100명 미만 계정은 이 지표가 제공되지 않을 수 있어요.)</span>
+                <span className="text-fg-sub"> (팔로워 100명 미만 계정은 이 지표가 제공되지 않을 수 있어요.)</span>
               ) : null}
             </p>
           </CardBody>

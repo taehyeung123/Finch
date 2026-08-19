@@ -234,7 +234,7 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
           {items.length > 0 ? (
             <div className="divide-y divide-line">
               {items.map((r) => (
-                <div key={r.id} className="flex flex-wrap items-center gap-3 py-4 first:pt-0 last:pb-0">
+                <div key={r.id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 py-4 first:pt-0 last:pb-0">
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-card border border-line bg-plate text-fg-sub">
                     {r.format === "pdf" ? (
                       <FileText className="size-4" aria-hidden />
@@ -251,12 +251,15 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
                       {r.period} <span className="text-fg-faint">· 생성일 {formatDate(r.createdAt)}</span>
                     </p>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    {r.channels.map((ch) => (
-                      <ChannelBadge key={ch} channel={ch} />
-                    ))}
-                  </div>
-                  <Badge tone="neutral">{r.format === "pdf" ? "PDF" : "EXCEL"}</Badge>
+                  {/* 트레일링을 한 묶음으로 — 채널·형식·다운로드가 행마다 같은 x 에
+                      정렬돼 세로로 스캔된다(앞서는 flex-wrap 이라 열이 안 맞았다). */}
+                  <div className="flex items-center gap-2">
+                    <div className="hidden items-center gap-1.5 sm:flex">
+                      {r.channels.map((ch) => (
+                        <ChannelBadge key={ch} channel={ch} />
+                      ))}
+                    </div>
+                    <Badge tone="neutral">{r.format === "pdf" ? "PDF" : "EXCEL"}</Badge>
                   {r.id.startsWith("local-") || IS_SAMPLE_DATA ? (
                     <Button variant="secondary" size="sm" disabled title="데모 미리보기 행은 다운로드할 수 없어요">
                       <Download className="size-3.5" aria-hidden />
@@ -268,6 +271,7 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
                       다운로드
                     </a>
                   )}
+                  </div>
                 </div>
               ))}
             </div>
