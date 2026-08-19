@@ -85,7 +85,7 @@ export function ImageField({
           className={`trans-state mt-1.5 flex w-full flex-col items-center justify-center gap-1.5 rounded-card border border-dashed border-line bg-plate text-fg-sub hover:border-primary hover:text-fg disabled:opacity-50 ${aspect}`}
         >
           <ImagePlus className="size-5" aria-hidden />
-          <span className="text-[13px] font-medium">{busy ? "올리는 중…" : "이미지 올리기"}</span>
+          <span className="text-[14px] font-medium">{busy ? "올리는 중…" : "이미지 올리기"}</span>
           <span className="text-[11px]">PNG·JPG·WEBP · 2MB 이하</span>
         </button>
       )}
@@ -98,7 +98,7 @@ export function ImageField({
         onChange={(e) => onChange(e.target.value)}
         placeholder="또는 이미지 주소 붙여넣기"
         aria-label={`${label} 주소`}
-        className="mt-2 h-9 w-full rounded-card border border-line bg-body px-2.5 text-[13px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
+        className="mt-2 h-9 w-full rounded-card border border-line bg-body px-2.5 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
       />
 
       {error ? (

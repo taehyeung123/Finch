@@ -116,9 +116,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
     }
     const { error } = await admin.from("link_clicks").insert({
       page_id: page.id,
-      /* item_id 는 0045 의 link_items FK 다. 블록 모델에서는 쓰지 않는다(0048 이후
-         이 컬럼은 null 로 남는다) — 블록 단위 집계는 아래 block_id 로 한다. */
-      item_id: null,
+      /* block_id 는 **스냅샷에 굳은 id** 다. 초안(link_blocks)에서 지운 뒤라도 라이브에는
+         남아 있고, 그 클릭은 반드시 기록돼야 한다 — 그래서 0049 에서 FK 를 뗐다.
+         (0045 의 item_id 는 link_items 와 함께 0049 에서 사라졌다.) */
       block_id: block.id,
       visitor_hash: visitorHash,
     });

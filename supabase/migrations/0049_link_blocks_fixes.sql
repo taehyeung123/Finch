@@ -206,3 +206,16 @@ $$;
 
 revoke all on function public.link_page_stats(uuid, int) from public;
 grant execute on function public.link_page_stats(uuid, int) to authenticated;
+
+-- ════════════════════════════════════════════════════════════════════
+-- ⑦ 구 link_items 정리
+-- ════════════════════════════════════════════════════════════════════
+-- 0048 이 link_blocks 로 이관하고 "화면 확인 후 drop 할 것"이라고 남겨둔 것.
+-- 화면은 확인했다(블록 빌더가 link_items 를 한 줄도 참조하지 않는다).
+-- 적용 직전 확인한 실제 데이터: link_items 0행, item_id 가 채워진 클릭 0행.
+--
+-- cascade 는 link_clicks.item_id 의 **FK 제약만** 없앤다(컬럼·데이터는 안 건드린다).
+-- 그래서 컬럼도 따로 지운다 — 0048 이후 영원히 null 인 컬럼이라 남겨두면
+-- 다음 사람이 "이건 뭐지"를 다시 묻는다.
+drop table if exists public.link_items cascade;
+alter table public.link_clicks drop column if exists item_id;
