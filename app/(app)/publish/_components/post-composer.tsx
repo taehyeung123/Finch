@@ -133,7 +133,7 @@ export function PostComposer({
         }}
       >
         <div className="modal-card-in shadow-pop w-full max-w-md rounded-card border border-line bg-body p-6">
-          <h2 className="text-[20px] font-semibold">SNS 연동하기</h2>
+          <h2 className="text-[17px] font-semibold">SNS 연동하기</h2>
           <p className="mt-2 text-[15px] leading-relaxed text-fg-sub">
             아직 연동된 SNS 계정이 없어요. 계정을 연동하면 게시물 예약 발행, 채널 분석, 댓글 자동 DM 까지 쓸 수
             있습니다.
@@ -168,7 +168,7 @@ export function PostComposer({
         className="modal-card-in shadow-pop flex max-h-[92vh] w-full max-w-[550px] flex-col overflow-hidden rounded-card border border-line bg-body outline-none sm:max-h-[88vh]"
       >
         <div className="flex items-center gap-2 px-5 pt-4">
-          <h2 className="flex-1 text-[20px] font-semibold">새 게시물 포스팅</h2>
+          <h2 className="flex-1 text-[17px] font-semibold">새 게시물 포스팅</h2>
           <button
             type="button"
             aria-label="닫기"

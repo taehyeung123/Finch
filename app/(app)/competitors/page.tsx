@@ -119,7 +119,7 @@ export default function CompetitorsPage() {
       <section aria-label="등록된 경쟁사" className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h3 className="text-[20px] font-bold leading-snug">등록된 경쟁사</h3>
+            <h3 className="text-[17px] font-semibold leading-snug">등록된 경쟁사</h3>
             {/* 2026-08-15: 「0/10개 사용 중」 게이지를 걷어냈다.
                 lib/data/empty.ts 하드코딩이었고 "경쟁사 등록 상한 10개"는
                 credit-config.ts 어디에도 없는 숫자였다. 통합 크레딧 모델과 무관하다. */}

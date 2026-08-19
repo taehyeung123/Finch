@@ -276,7 +276,7 @@ export function DashboardClient({
       {channel === "all" ? (
       <section aria-label="내 계정">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-[20px] font-bold leading-snug">내 계정</h2>
+          <h2 className="text-[17px] font-semibold leading-snug">내 계정</h2>
           <Link
             href="/settings"
             className="inline-flex items-center gap-1 text-[14px] font-semibold text-primary hover:text-primary-hover"

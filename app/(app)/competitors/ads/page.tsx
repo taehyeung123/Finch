@@ -99,7 +99,7 @@ export default function CompetitorAdsPage() {
       {/* 광고 피드 */}
       <section aria-label="경쟁사 광고 피드" className="space-y-3">
         <div>
-          <h3 className="text-[20px] font-bold leading-snug">광고 피드</h3>
+          <h3 className="text-[17px] font-semibold leading-snug">광고 피드</h3>
           <p className="mt-0.5 text-[14px] text-fg-sub">
             게재 기간이 길수록 성과가 검증된 소재일 가능성이 높습니다.
           </p>

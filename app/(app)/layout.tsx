@@ -51,12 +51,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           {IS_SAMPLE_DATA ? (
             /* 좌측 정렬 — text-center 라 1632px 띠 한가운데 한 줄이 떠 있었고,
                그게 모든 페이지 최상단에서 매번 반복됐다. */
-            <p className="border-b border-line bg-plate px-4 py-2 text-[12px] text-fg-sub md:px-6">
+            <p className="border-b border-line bg-plate px-4 py-1.5 text-[12px] text-fg-sub md:px-6">
               지금 보이는 수치는 <span className="font-semibold text-warning">예시 데이터</span>입니다 —
               채널 연동이 완료되면 실제 데이터로 교체됩니다
             </p>
           ) : null}
-          <main className="flex-1 px-4 py-6 pb-24 md:px-6 md:pb-10">{children}</main>
+          <main className="flex-1 px-4 py-5 pb-24 md:px-6 md:pb-10">{children}</main>
         </div>
       </div>
       <AgentPanel />

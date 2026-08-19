@@ -64,7 +64,7 @@ export function DailyBriefHero({ stats }: { stats: PoolHomeStats }) {
         </span>
 
         <div className="relative">
-          <h2 className="text-[28px] font-bold leading-[1.25] tracking-[-0.02em] text-on-primary">
+          <h2 className="text-[20px] font-bold leading-[1.3] tracking-[-0.02em] text-on-primary">
             {hasNew ? (
               <>
                 새 레퍼런스 <span className="tnum">{formatCompact(stats.newCreatives3d)}건</span>이<br />
@@ -226,7 +226,7 @@ export function ArchiveStatus({ stats }: { stats: PoolHomeStats }) {
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[11px] font-bold tracking-[0.08em] text-primary">BRAND ARCHIVE</p>
-          <h2 className="mt-1 text-[20px] font-bold leading-snug tracking-[-0.01em]">오늘의 아카이빙 현황</h2>
+          <h2 className="mt-1 text-[17px] font-semibold leading-snug tracking-[-0.01em]">오늘의 아카이빙 현황</h2>
           <p className="mt-1 text-[14px] text-fg-sub">최근 수집된 소재와 브랜드 흐름을 한눈에 확인하세요.</p>
         </div>
         <ButtonLink href="/library" size="sm" className="rounded-chip px-4">

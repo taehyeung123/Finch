@@ -61,7 +61,7 @@ export function Topbar() {
   }, [menuOpen]);
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line bg-body/90 px-4 backdrop-blur md:px-6">
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-body/90 px-4 backdrop-blur md:px-6">
       {/* 페이지 성격별 채널 영역 — 스위처(필터 동작) / 전용 표시 / 숨김 (channel-switcher.tsx) */}
       {scope.mode === "switch" ? (
         <ChannelSwitcher value={channel} onChange={setChannel} />
@@ -77,7 +77,7 @@ export function Topbar() {
           <input
             type="search"
             placeholder="계정·콘텐츠 검색"
-            className="h-9 w-52 rounded-card border border-line bg-body pl-9 pr-3 text-[15px] placeholder:text-fg-faint focus:border-primary focus:outline-none lg:w-64"
+            className="h-8 w-48 rounded-card border border-line bg-body pl-9 pr-3 text-[14px] placeholder:text-fg-faint focus:border-primary focus:outline-none lg:w-56"
           />
         </label>
       </div>
@@ -90,7 +90,7 @@ export function Topbar() {
         aria-label={`알림 ${unread}건`}
         className="relative rounded-card p-2 text-fg-sub hover:bg-overlay hover:text-fg"
       >
-        <Bell className="size-5" aria-hidden />
+        <Bell className="size-[18px]" aria-hidden />
         {/* 알림이 사이드바에서 빠져 이 벨이 유일한 상시 진입점 — 점 대신 미읽음 개수를 노출한다 */}
         {unread > 0 ? (
           <span className="absolute right-0.5 top-0.5 min-w-4 rounded-chip bg-primary px-1 text-[11px] font-bold leading-4 text-on-primary tnum">
@@ -106,7 +106,7 @@ export function Topbar() {
           aria-haspopup="menu"
           aria-expanded={menuOpen}
           onClick={() => setMenuOpen((open) => !open)}
-          className="flex size-9 items-center justify-center rounded-chip bg-primary-weak text-sm font-bold text-primary focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+          className="flex size-8 items-center justify-center rounded-chip bg-primary-weak text-sm font-bold text-primary focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
         >
           {email ? email[0].toUpperCase() : "핀"}
         </button>

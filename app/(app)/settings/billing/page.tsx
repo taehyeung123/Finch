@@ -369,7 +369,7 @@ export default async function BillingSettingsPage({
           써봅니다"(Free 영업 문구)와 "오픈 베타 3개월 무료"(신규 유치용)를 보여주고
           있었다. */}
       <div>
-        <h2 className="text-[20px] font-bold">플랜 변경</h2>
+        <h2 className="text-[17px] font-semibold">플랜 변경</h2>
         <p className="mt-1 text-[15px] text-fg-sub">
           {upgrades.length > 0
             ? `지금 ${currentName}보다 위 단계입니다`

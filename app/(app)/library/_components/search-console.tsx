@@ -1127,9 +1127,9 @@ export function SearchConsole({
          z 를 빼면 헤더가 쌓임 순서에서 결과 영역보다 아래가 되고, 패널 안에 z-30 을 아무리
          줘도 그 값은 헤더 안에서만 유효하므로 카드가 패널 위를 덮는다(2026-08-11 실측 사고).
          z-40 인 이유: 스크림(z-30)이 상단바까지 덮는 동안 이 헤더와 그 안의 패널은
-         밝게 남아야 한다. 상단바(top-0 h-16)와 이 헤더(top-16)는 화면에서 절대 겹치지
+         밝게 남아야 한다. 상단바(top-0 h-14)와 이 헤더(top-14)는 화면에서 절대 겹치지
          않으므로 z 가 더 커도 시각적 충돌이 없다. */}
-      <header className="sticky top-16 z-40 -mx-4 -mt-6 border-b border-line bg-body/95 px-4 pb-3 pt-4 backdrop-blur md:-mx-6 md:px-6">
+      <header className="sticky top-14 z-40 -mx-4 -mt-5 border-b border-line bg-body/95 px-4 pb-3 pt-4 backdrop-blur md:-mx-6 md:px-6">
       <h2 className="sr-only">레퍼런스 검색</h2>
 
       {/* ── 1행 — 검색 줄.

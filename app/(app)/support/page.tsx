@@ -88,7 +88,7 @@ export default async function SupportPage() {
       </Card>
 
       <section className="flex flex-col gap-3">
-        <h3 className="text-[20px] font-bold leading-snug">내 문의 내역</h3>
+        <h3 className="text-[17px] font-semibold leading-snug">내 문의 내역</h3>
 
         {notice ? (
           <Card>

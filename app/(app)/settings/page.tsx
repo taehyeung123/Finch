@@ -309,7 +309,7 @@ export default async function SettingsPage({
 
       {/* 권한(scope) 투명성 (PART 4.2) */}
       <Card className="p-5">
-        <h3 className="flex items-center gap-2 text-[20px] font-bold leading-snug">
+        <h3 className="flex items-center gap-2 text-[17px] font-semibold leading-snug">
           <ShieldCheck className="size-5 text-fg-sub" aria-hidden />
           핀치가 접근하는 권한
         </h3>

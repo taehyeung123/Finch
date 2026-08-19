@@ -98,7 +98,7 @@ function SectionHead({
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-        <h2 className="text-[20px] font-bold text-fg">{title}</h2>
+        <h2 className="text-[17px] font-semibold text-fg">{title}</h2>
         <p className="text-[12px] text-fg-sub">{subtitle}</p>
       </div>
       <button
@@ -910,7 +910,7 @@ export function LibraryClient({
         {!poolReady && !isDemo && totalSources === 0 && totalCollected === 0 ? (
           /* ① 신규 — 온보딩으로 결과 영역을 대체한다(추가가 아니라 대체) */
           <Card className="p-8 text-center">
-            <p className="text-[20px] font-bold text-fg">1분이면 첫 레퍼런스가 도착해요</p>
+            <p className="text-[17px] font-semibold text-fg">1분이면 첫 레퍼런스가 도착해요</p>
             <p className="mt-1.5 text-[15px] text-fg-sub">
               관심 키워드나 계정을 등록하면 매일 아침 자동으로 모아드려요.
             </p>
@@ -981,7 +981,7 @@ export function LibraryClient({
 
             {!hasQuery ? (
               <div className="mb-3 flex items-baseline gap-2.5">
-                <h2 className="text-[20px] font-bold text-fg">전체 레퍼런스</h2>
+                <h2 className="text-[17px] font-semibold text-fg">전체 레퍼런스</h2>
                 <span className="tnum text-[12px] text-fg-sub">{displayEntries.length}건</span>
               </div>
             ) : null}

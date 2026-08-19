@@ -248,7 +248,7 @@ export function LibrarySettingsDrawer({
         aria-label="수집 설정"
         className="drawer-in-right fixed inset-y-0 right-0 z-50 flex w-full max-w-[440px] flex-col border-l border-line-strong bg-overlay"
       >
-        <div className="flex h-16 shrink-0 items-center justify-between border-b border-line px-5">
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4">
           <h2 className="text-[17px] font-bold text-fg">수집 설정</h2>
           <button
             ref={closeRef}

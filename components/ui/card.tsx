@@ -38,9 +38,9 @@ export function CardHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-start justify-between gap-3 p-5 pb-0", className)}>
+    <div className={cn("flex items-start justify-between gap-3 p-4 pb-0", className)}>
       <div className="min-w-0">
-        <h3 className="text-[20px] font-bold leading-snug">{title}</h3>
+        <h3 className="text-[17px] font-semibold leading-snug">{title}</h3>
         {description ? <p className="mt-0.5 text-[14px] text-fg-sub">{description}</p> : null}
       </div>
       {action}
@@ -49,5 +49,5 @@ export function CardHeader({
 }
 
 export function CardBody({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("p-5", className)} {...props} />;
+  return <div className={cn("p-4", className)} {...props} />;
 }

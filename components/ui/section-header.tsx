@@ -15,15 +15,18 @@ export function PageHeader({
   return (
     <div className={cn("flex flex-wrap items-end justify-between gap-3", className)}>
       <div className="min-w-0">
-        {/* 28px — 타입 7단계의 페이지 제목 단계다. text-2xl(24px)은 **스케일 밖**이었고,
-            카드 제목 20px 와 4px 차이라 위계가 서지 않았다(같은 굵기·같은 색이면
-            4px 는 눈에 안 띈다). 8px 벌리면 훑을 때 층이 읽힌다. */}
-        <h2 className="text-[28px] font-bold leading-tight">{title}</h2>
+        {/* 20px — 2026-08-19 밀도 개편(링크팜 실측 비율 대응)으로 28→20.
+            28은 앱 화면에서 히어로 숫자 전용으로 내려갔다 — 링크팜·스니핏류 대비
+            우리 화면이 "투박하게 크게" 읽힌 첫 원인이 28px 페이지 제목이었다.
+            카드 제목(17px)과 3px 차이지만, 과거 "4px 는 같은 굵기·같은 색일 때
+            안 읽힌다"는 교훈대로 이번엔 **굵기를 가른다**(bold 대 semibold) —
+            크기+굵기 이중 신호라 층이 선다. */}
+        <h2 className="text-[20px] font-bold leading-tight">{title}</h2>
         {/* 읽기 폭 제한은 **문단 단위**로 건다. 페이지 전체를 max-w-6xl 로 묶던 것을
             2026-08-17 에 걷어냈다(1920 에서 콘텐츠 영역의 31% 가 빈 여백이었다) —
             그 대신 실제로 길어지면 곤란한 것, 즉 문장에만 제한을 둔다.
             카드·그리드·표는 넓을수록 좋다. */}
-        {description ? <p className="mt-1 max-w-[80ch] text-[15px] text-fg-sub">{description}</p> : null}
+        {description ? <p className="mt-1 max-w-[80ch] text-[14px] text-fg-sub">{description}</p> : null}
       </div>
       {action ? <div className="flex items-center gap-2">{action}</div> : null}
     </div>

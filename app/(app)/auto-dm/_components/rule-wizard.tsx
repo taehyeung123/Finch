@@ -447,7 +447,7 @@ export function RuleWizard({
               <ChevronLeft className="size-5" />
             </button>
           ) : null}
-          <h2 className="flex-1 text-[20px] font-semibold">
+          <h2 className="flex-1 text-[17px] font-semibold">
             {step === "review" ? "최종 검수" : initial ? "자동화 수정" : "자동화 만들기"}
           </h2>
           <button

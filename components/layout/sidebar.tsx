@@ -155,7 +155,7 @@ function writeGroups(next: GroupState) {
   groupsListeners.forEach((listener) => listener());
 }
 
-/** 좌측 사이드바 — 고정폭 240px, 접으면 72px 아이콘바 (PART 6.2) */
+/** 좌측 사이드바 — 고정폭 208px, 접으면 64px 아이콘바 (PART 6.2, 2026-08-19 밀도 개편) */
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -183,11 +183,11 @@ export function Sidebar() {
           aria-current={active ? "page" : undefined}
           title={collapsed ? (groupLabel ? `${groupLabel} · ${label}` : label) : undefined}
           className={cn(
-            "flex items-center gap-3 rounded-card px-3 py-2.5 text-[15px] font-medium trans-state",
+            "flex items-center gap-2.5 rounded-card px-2.5 py-2 text-[14px] font-medium trans-state",
             active ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-overlay hover:text-fg",
           )}
         >
-          <Icon className="size-[18px] shrink-0" aria-hidden />
+          <Icon className="size-4 shrink-0" aria-hidden />
           <span
             className={cn(
               "overflow-hidden whitespace-nowrap transition-all duration-300",
@@ -207,17 +207,17 @@ export function Sidebar() {
       className={cn(
         "sticky top-0 hidden h-screen shrink-0 flex-col overflow-hidden border-r border-line bg-rail transition-[width] duration-300 md:flex",
         EASE,
-        collapsed ? "w-[72px]" : "w-60",
+        collapsed ? "w-16" : "w-52",
       )}
     >
-      {/* 헤더 — 접힘 폭(72px)에선 로고 하나만으로도 여유가 빠듯해 토글 버튼을 여기 두면
+      {/* 헤더 — 접힘 폭(64px)에선 로고 하나만으로도 여유가 빠듯해 토글 버튼을 여기 두면
           겹친다. 토글은 하단에 고정 위치로 따로 둔다(아래 footer 참고). */}
-      <div className="flex h-16 items-center gap-2 border-b border-line pl-5 pr-3">
+      <div className="flex h-14 items-center gap-2 border-b border-line pl-4 pr-3">
         <Link href="/dashboard" aria-label="핀치 홈" className="flex min-w-0 items-center gap-2">
           <FinchMark className="shrink-0 text-primary" />
           <span
             className={cn(
-              "overflow-hidden whitespace-nowrap text-lg font-bold tracking-tight text-fg transition-all duration-300",
+              "overflow-hidden whitespace-nowrap text-[17px] font-bold tracking-tight text-fg transition-all duration-300",
               EASE,
               collapsed ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[100px] translate-x-0 opacity-100",
             )}
@@ -265,7 +265,7 @@ export function Sidebar() {
                       aria-expanded={open}
                       aria-controls={`navgroup-${group.key}`}
                       tabIndex={collapsed ? -1 : undefined}
-                      className="flex w-full items-center justify-between gap-2 rounded-card px-3 py-1.5 text-[12px] font-semibold tracking-wide text-fg-sub trans-state hover:text-fg"
+                      className="flex w-full items-center justify-between gap-2 rounded-card px-2.5 py-1 text-[11px] font-semibold tracking-wide text-fg-sub trans-state hover:text-fg"
                     >
                       {group.label}
                       <ChevronDown
@@ -306,7 +306,7 @@ export function Sidebar() {
         )}
       >
         <div className="overflow-hidden">
-          <div className="space-y-3 p-4">
+          <div className="space-y-3 p-3">
             <ButtonLink href="/settings/billing" size="sm" className="w-full">
               플랜 업그레이드
             </ButtonLink>
