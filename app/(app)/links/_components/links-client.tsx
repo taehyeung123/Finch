@@ -90,7 +90,12 @@ const LEAVE_WARNING = "저장하지 않은 편집 내용이 사라져요. 그래
  */
 function downloadCsv(filename: string, rows: Array<Array<string | number>>) {
   const esc = (v: string | number) => {
-    const t = String(v);
+    let t = String(v);
+    /* 수식 인젝션 방어 — 받은 내용의 이름·연락처·내용은 **방문자가 쓴 값**이다.
+       "=HYPERLINK(...)" 로 시작하는 셀을 엑셀이 수식으로 실행하면 방문자(비신뢰)가
+       페이지 주인(신뢰)의 엑셀에서 코드를 돌리는 셈이 된다. 시작 문자가 수식
+       트리거(= + - @ 탭 CR)면 작은따옴표를 붙여 문자열로 강제한다(OWASP 완화책). */
+    if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`;
     return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
   };
   const csv = "\uFEFF" + rows.map((r) => r.map(esc).join(",")).join("\r\n");
@@ -416,7 +421,14 @@ export function LinksClient({
                 blocks={blocks}
                 busy={busy}
                 onAdd={(t) => run(() => addBlock(t))}
-                onApplyTemplate={(k) => run(() => applyTemplate(k))}
+                onApplyTemplate={(k) =>
+                  run(
+                    () => applyTemplate(k),
+                    /* 템플릿은 블록 전체를 교체한다 — 직전 삭제의 「되돌리기」는 더 이상
+                       "삭제 취소"가 아니라 새 구성에 옛 블록을 끼워 넣는 일이 된다 */
+                    () => setLastDeleted(null),
+                  )
+                }
                 onImport={(items) =>
                   run(
                     () => addBlocksBulk(items),
@@ -467,7 +479,14 @@ export function LinksClient({
                 leads={leads}
                 busy={busy}
                 onPublishToggle={(v) => run(() => setLinkPublished(v))}
-                onDelete={() => run(() => deleteLinkPage())}
+                onDelete={() =>
+                  run(
+                    () => deleteLinkPage(),
+                    /* 페이지가 사라지면 되돌리기 대상도 없다 — 같은 컴포넌트 인스턴스가
+                       살아남아 새 페이지에 옛 블록을 꽂는 사고를 막는다 */
+                    () => setLastDeleted(null),
+                  )
+                }
               />
             )}
           </CardBody>
