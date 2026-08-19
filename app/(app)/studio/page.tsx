@@ -614,7 +614,7 @@ export default function StudioPage() {
                       aria-pressed={t.id === templateId}
                       className={cn(
                         "flex flex-col items-center gap-1.5 rounded-card border p-2 transition-all",
-                        t.id === templateId ? "border-primary ring-1 ring-primary" : "border-line hover:-translate-y-0.5 hover:border-line-strong",
+                        t.id === templateId ? "border-2 border-primary" : "border border-line trans-state hover:border-line-strong",
                       )}
                     >
                       <TemplateMock t={t} />
@@ -630,7 +630,7 @@ export default function StudioPage() {
                       aria-pressed={templateId === "brand"}
                       className={cn(
                         "flex flex-col items-center gap-1.5 rounded-card border p-2 transition-all",
-                        templateId === "brand" ? "border-primary ring-1 ring-primary" : "border-line hover:-translate-y-0.5 hover:border-line-strong",
+                        templateId === "brand" ? "border-2 border-primary" : "border border-line trans-state hover:border-line-strong",
                       )}
                     >
                       <TemplateMock t={customTemplate(brandKit)} />
@@ -688,7 +688,7 @@ export default function StudioPage() {
                     size="lg"
                     onClick={handleGenerate}
                     disabled={!topic.trim() || generating}
-                    className="w-full shadow-sm transition-transform hover:-translate-y-0.5 disabled:hover:translate-y-0 md:w-auto"
+                    className="w-full md:w-auto"
                   >
                     <Sparkles className="size-4" aria-hidden />
                     {generating ? "생성 중..." : "카드뉴스 생성"}
