@@ -7,12 +7,18 @@ import { NEXT_POST_SENTINEL, normalizeHttpUrl } from "@/lib/auto-dm/db";
 import type { AutoDmRule, AutoDmTrigger, DmButton, Post } from "@/lib/types";
 import { InfoTip } from "@/components/ui/info-tip";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Switch } from "@/components/ui/switch";
+import { FinchMark } from "@/components/logo";
 
 /*
-  자동화 만들기 위저드 — 리틀리 실측(2026-08-14) 기반 5단계 플로우 재구현.
+  자동화 만들기 위저드 — 리틀리 실측(2026-08-14) 5단계 + 최종 검수(2026-08-19 스딩 실측).
   1) 게시물 선택(3열 썸네일 그리드) → 2) 트리거(모든 댓글/키워드) →
   3) DM 메시지(실시간 미리보기 + 버튼 개수) → 4) 버튼별 링크 설정(URL 검증) →
-  5) 자동 답글 → 저장. 버튼 0개면 4단계를 건너뛴다.
+  5) 자동 답글 → 6) **최종 검수** → 저장. 버튼 0개면 4단계를 건너뛴다.
+
+  최종 검수는 설정 전체를 한 화면에 모아 보여주고, 자동 답글·팔로우 요청 온오프를
+  여기서 마지막으로 뒤집을 수 있다(스딩과 동일). 다른 항목은 뒤로 가서 고친다 —
+  검수 화면에서 본문까지 고치게 하면 "검수"가 아니라 7번째 편집 화면이 된다.
 
   모션: 모달 등장 modal-card-in, 단계 전환 wizard-step-in(key 교체, 오른쪽에서 스르륵),
   진행바 width transition, 라디오·선택 상태 trans-state. 미리보기 아바타는 연동
@@ -39,7 +45,7 @@ function makeId() {
   return `dm-${Date.now().toString(36)}`;
 }
 
-type StepKey = "post" | "trigger" | "message" | "links" | "reply";
+type StepKey = "post" | "trigger" | "message" | "links" | "reply" | "review";
 
 /**
  * 준비된 자동 답글 풀 — [새로고침]이 여기서 랜덤 3개를 뽑는다 (리틀리 실측 방식).
@@ -103,6 +109,7 @@ export function RuleWizard({
     initial?.buttons.length ? initial.buttons : [{ label: "", url: "" }],
   );
   const [wantReply, setWantReply] = useState(Boolean(initial?.publicReplies.length));
+  const [followRequest, setFollowRequest] = useState(initial?.followRequest ?? false);
   const [publicReplies, setPublicReplies] = useState<string[]>(
     initial?.publicReplies.length ? initial.publicReplies : pickRandomReplies(3),
   );
@@ -187,6 +194,7 @@ export function RuleWizard({
       postId !== initial.postId ||
       JSON.stringify(keywords) !== JSON.stringify(initial.keywords) ||
       JSON.stringify(activeButtons) !== JSON.stringify(initial.buttons) ||
+      followRequest !== initial.followRequest ||
       JSON.stringify(wantReply ? publicReplies.map((r) => r.trim()).filter(Boolean) : []) !==
         JSON.stringify(initial.publicReplies)
     : Boolean(
@@ -228,7 +236,10 @@ export function RuleWizard({
 
   // 버튼 0개면 링크 단계를 건너뛴다 — 리틀리도 '없음'이면 4단계가 사라진다
   const steps = useMemo<StepKey[]>(
-    () => (buttonCount > 0 ? ["post", "trigger", "message", "links", "reply"] : ["post", "trigger", "message", "reply"]),
+    () =>
+      buttonCount > 0
+        ? ["post", "trigger", "message", "links", "reply", "review"]
+        : ["post", "trigger", "message", "reply", "review"],
     [buttonCount],
   );
   const step = steps[Math.min(stepIdx, steps.length - 1)];
@@ -245,6 +256,10 @@ export function RuleWizard({
       case "links":
         return linksValid;
       case "reply":
+        return !wantReply || publicReplies.some((r) => r.trim().length > 0);
+      case "review":
+        /* 검수에서 자동 답글을 다시 켰는데 답글이 전부 비어 있으면 막는다 —
+           reply 단계와 같은 규칙(관문이 갈리면 반드시 어긋난다) */
         return !wantReply || publicReplies.some((r) => r.trim().length > 0);
     }
   })();
@@ -288,6 +303,7 @@ export function RuleWizard({
         // URL은 프로토콜 없이 입력해도 https://를 붙여 저장한다 (normalizeHttpUrl)
         buttons: activeButtons.map((b) => ({ label: b.label.trim(), url: normalizeHttpUrl(b.url) ?? b.url.trim() })),
         status: initial?.status ?? "active",
+        followRequest,
         // 광고성 토글은 2026-08-14 사장님 지시로 UI에서 제거 — 파이프라인 필드는 유지(편집 시 기존값 보존)
         isAdvertising: initial?.isAdvertising ?? false,
         dailyCap: initial?.dailyCap ?? 300, // 스팸 정책 안전 상한 — 위저드에선 노출하지 않는 기본값
@@ -428,7 +444,9 @@ export function RuleWizard({
               <ChevronLeft className="size-5" />
             </button>
           ) : null}
-          <h2 className="flex-1 text-[20px] font-semibold">{initial ? "자동화 수정" : "자동화 만들기"}</h2>
+          <h2 className="flex-1 text-[20px] font-semibold">
+            {step === "review" ? "최종 검수" : initial ? "자동화 수정" : "자동화 만들기"}
+          </h2>
           <button
             type="button"
             aria-label="닫기"
@@ -477,6 +495,9 @@ export function RuleWizard({
 
               {postMode === "next" ? (
                 <div className="anim-swap mt-3 rounded-card bg-overlay p-4">
+                  <span className="mb-2.5 flex size-14 items-center justify-center rounded-card bg-plate" aria-hidden>
+                    <FinchMark className="size-7" />
+                  </span>
                   <p className="text-[15px] font-medium">다음 게시물에 자동으로 연결돼요</p>
                   <p className="mt-1.5 text-[14px] leading-relaxed text-fg-sub">
                     지금 규칙을 만들어두면, 이 규칙을 만든 뒤 새로 올린 게시물에 첫 댓글이 달리는 순간 자동으로 그
@@ -827,6 +848,111 @@ export function RuleWizard({
               </p>
             </div>
           ) : null}
+
+          {step === "review" ? (
+            <div className="space-y-4">
+              {/* 스딩 실측(2026-08-19): 최종 검수 = 선택 게시물 / 감지될 키워드 /
+                  보내질 DM / 함께 보낼 링크 / 자동 답글 온오프 / 팔로우 요청 온오프 */}
+              <div>
+                <p className="text-[15px] font-medium text-fg-sub">선택한 인스타 게시물</p>
+                {postMode === "next" ? (
+                  <div className="mt-1.5 flex items-center gap-3 rounded-card bg-overlay p-3.5">
+                    {/* 게시물을 지정하지 않았다 — 핀치 로고가 그 자리다(사장님 지시) */}
+                    <span className="flex size-14 shrink-0 items-center justify-center rounded-card bg-plate" aria-hidden>
+                      <FinchMark className="size-7" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[15px] font-medium">다음에 올릴 게시물을 미리 설정</p>
+                      <p className="mt-0.5 text-[14px] text-fg-sub">업로드 후 첫 댓글이 달리는 순간 자동 연결돼요.</p>
+                    </div>
+                  </div>
+                ) : selectedPost ? (
+                  <div className="mt-1.5 flex items-center gap-3 rounded-card bg-overlay p-3.5">
+                    {selectedPost.thumb ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- 인스타 CDN 임시 URL
+                      <img
+                        src={selectedPost.thumb}
+                        alt=""
+                        className="size-14 shrink-0 rounded-card border border-line object-cover"
+                      />
+                    ) : (
+                      <span className="flex size-14 shrink-0 items-center justify-center rounded-card bg-plate text-fg-faint" aria-hidden>
+                        <ImageOff className="size-5" />
+                      </span>
+                    )}
+                    <div className="min-w-0">
+                      <p className="line-clamp-2 text-[15px] font-medium">{selectedPost.caption}</p>
+                      <p className="mt-0.5 text-[12px] text-fg-sub">{POST_TYPE_LABEL[selectedPost.type]}</p>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <div>
+                <p className="text-[15px] font-medium text-fg-sub">감지될 키워드</p>
+                <div className="mt-1.5 rounded-card bg-overlay px-3.5 py-3">
+                  {trigger === "all" ? (
+                    <p className="text-[15px]">전체 댓글</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {keywords.map((k) => (
+                        <span key={k} className="rounded-chip border border-line bg-body px-2.5 py-1 text-[14px] font-medium">
+                          {k}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[15px] font-medium text-fg-sub">보내질 DM 메시지</p>
+                <div className="mt-1.5">{preview}</div>
+              </div>
+
+              <div>
+                <p className="text-[15px] font-medium text-fg-sub">DM과 함께 보낼 링크</p>
+                <div className="mt-1.5 space-y-1.5">
+                  {buttonCount === 0 ? (
+                    <p className="rounded-card bg-overlay px-3.5 py-3 text-[15px] text-fg-sub">없음</p>
+                  ) : (
+                    activeButtons.map((b2, i) => (
+                      <div key={i} className="flex items-baseline gap-2 rounded-card bg-overlay px-3.5 py-3">
+                        <span className="shrink-0 text-[15px] font-medium">{b2.label || `버튼 ${i + 1}`}</span>
+                        <span className="tnum min-w-0 truncate text-[14px] text-fg-sub">{b2.url}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* 온오프 두 줄 — 검수에서 마지막으로 뒤집을 수 있는 유일한 항목(스딩과 동일) */}
+              <div className="space-y-2.5 pt-1">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[15px] font-medium">
+                    자동으로 답글 달기
+                    <InfoTip>켜면 준비된 답글 중 하나가 랜덤으로 댓글에 달립니다. 답글 문구는 이전 단계에서 수정해요.</InfoTip>
+                  </span>
+                  <Switch checked={wantReply} onChange={setWantReply} label="자동으로 답글 달기" />
+                </div>
+                {wantReply && !publicReplies.some((r) => r.trim()) ? (
+                  <p className="text-[12px] text-negative">답글 문구가 비어 있어요 — 뒤로 이동해 답글을 채워 주세요.</p>
+                ) : null}
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[15px] font-medium">
+                    팔로우 요청 후 메시지 보내기
+                    <InfoTip>
+                      댓글 작성자가 나를 팔로우하지 않았다면, 본 메시지 전에 팔로우 요청을 먼저 보냅니다.
+                      팔로워 전환에 도움이 되지만 한 단계가 늘어나요.
+                    </InfoTip>
+                  </span>
+                  <Switch checked={followRequest} onChange={setFollowRequest} label="팔로우 요청 후 메시지 보내기" />
+                </div>
+              </div>
+
+              <p className="pt-1 text-center text-[14px] text-fg-sub">수정하려면 뒤로 이동해주세요.</p>
+            </div>
+          ) : null}
         </div>
 
         {/* CTA — 리틀리 실측: 풀폭 54px, 16px/500, 활성 검정/비활성 회색 */}
@@ -849,7 +975,7 @@ export function RuleWizard({
                 : isLast
                   ? initial
                     ? "변경 저장"
-                    : "자동화 만들기"
+                    : "확인"
                   : "다음"}
           </button>
         </div>

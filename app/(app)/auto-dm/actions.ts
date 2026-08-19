@@ -7,9 +7,13 @@ import { applyAdDisclosure } from "@/lib/ads/ad-disclosure";
 import {
   RULE_COLUMNS,
   RULE_COLUMNS_LEGACY,
+  RULE_COLUMNS_NO_FOLLOW,
+  missingFollowRequest,
+  missingLegacyColumns,
   normalizeHttpUrl,
   ruleFromRow,
   ruleToWriteRow,
+  stripFollowRequest,
   stripNewColumns,
   type AutoDmRuleRow,
 } from "@/lib/auto-dm/db";
@@ -144,8 +148,13 @@ async function writeRule(
       .single();
   };
 
+  /* 폴백은 **한 단계씩만** 내려간다 — 0052(follow_request) 하나 없다고 legacy 까지
+     떨어지면 0038·0042 컬럼(buttons·post_thumb·public_replies)의 데이터가 유실된다. */
   let { data, error } = await run(row, RULE_COLUMNS);
-  if (error && /buttons|post_thumb|public_replies/i.test(error.message)) {
+  if (error && missingFollowRequest(error.message)) {
+    ({ data, error } = await run(stripFollowRequest(row), RULE_COLUMNS_NO_FOLLOW));
+  }
+  if (error && missingLegacyColumns(error.message)) {
     ({ data, error } = await run(stripNewColumns(row), RULE_COLUMNS_LEGACY));
   }
   return { data: (data as unknown as AutoDmRuleRow) ?? null, error: error?.message ?? null };

@@ -52,6 +52,7 @@ export interface AutoDmRuleRow {
   button_url: string | null;
   buttons?: unknown;
   status: AutoDmRule["status"];
+  follow_request?: boolean;
   is_advertising: boolean;
   daily_cap: number;
   sent_total: number;
@@ -64,9 +65,20 @@ export interface AutoDmRuleRow {
 const BASE_COLUMNS =
   "id, post_id, post_caption, post_type, post_views, trigger, keywords, public_reply, dm_message, button_label, button_url, status, is_advertising, daily_cap, sent_total, sent_today, failed_total, last_sent_at, created_at";
 
-export const RULE_COLUMNS = `${BASE_COLUMNS}, buttons, post_thumb, public_replies`;
+export const RULE_COLUMNS = `${BASE_COLUMNS}, buttons, post_thumb, public_replies, follow_request`;
+/** 0052(follow_request) 만 미적용일 때 — 0038·0042 컬럼은 그대로 읽는다 */
+export const RULE_COLUMNS_NO_FOLLOW = `${BASE_COLUMNS}, buttons, post_thumb, public_replies`;
 /** 0038·0042 미적용 DB 폴백 — buttons/post_thumb/public_replies 없이 조회 */
 export const RULE_COLUMNS_LEGACY = BASE_COLUMNS;
+
+/** 컬럼 없음 오류가 어느 세대 것인지 — 폴백을 **한 단계씩만** 내려가게 가른다.
+    한 번에 legacy 로 떨어지면 0052 하나 없다고 0038·0042 데이터까지 못 읽는다. */
+export function missingFollowRequest(message: string | null | undefined): boolean {
+  return /follow_request/i.test(message ?? "");
+}
+export function missingLegacyColumns(message: string | null | undefined): boolean {
+  return /buttons|post_thumb|public_replies/i.test(message ?? "");
+}
 
 /** public_replies jsonb → string[] — 비면 legacy 단일 public_reply로 폴백 (0042 미적용 호환) */
 export function parseReplies(row: Pick<AutoDmRuleRow, "public_replies" | "public_reply">): string[] {
@@ -108,6 +120,7 @@ export function ruleFromRow(row: AutoDmRuleRow): AutoDmRule {
     dmMessage: row.dm_message,
     buttons: parseButtons(row),
     status: row.status,
+    followRequest: row.follow_request ?? false,
     isAdvertising: row.is_advertising,
     dailyCap: row.daily_cap,
     sentTotal: row.sent_total,
@@ -132,6 +145,7 @@ export function ruleToWriteRow(input: {
   dmMessage: string;
   buttons: DmButton[];
   status: AutoDmRule["status"];
+  followRequest: boolean;
   isAdvertising: boolean;
   dailyCap: number;
 }) {
@@ -152,9 +166,17 @@ export function ruleToWriteRow(input: {
     button_label: first?.label ?? null,
     button_url: first?.url ?? null,
     status: input.status,
+    follow_request: input.followRequest,
     is_advertising: input.isAdvertising,
     daily_cap: input.dailyCap,
   };
+}
+
+/** 0052 미적용 DB 폴백 — follow_request 만 뺀 행(0038·0042 컬럼은 유지) */
+export function stripFollowRequest(row: ReturnType<typeof ruleToWriteRow>): Record<string, unknown> {
+  const rest: Record<string, unknown> = { ...row };
+  delete rest.follow_request;
+  return rest;
 }
 
 /** 0038·0042 미적용 DB에 쓸 때 — buttons/post_thumb/public_replies 컬럼을 뺀 행 */
@@ -163,5 +185,6 @@ export function stripNewColumns(row: ReturnType<typeof ruleToWriteRow>): Record<
   delete rest.buttons;
   delete rest.post_thumb;
   delete rest.public_replies;
+  delete rest.follow_request;
   return rest;
 }

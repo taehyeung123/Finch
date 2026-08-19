@@ -2,11 +2,13 @@
 
 import { useMemo, useState } from "react";
 import {
+  ImageOff,
   MessageSquareReply,
   Pencil,
   Plus,
   Trash2,
 } from "lucide-react";
+import { FinchMark } from "@/components/logo";
 import { formatAgo, formatCompact } from "@/lib/format";
 import { NEXT_POST_SENTINEL } from "@/lib/auto-dm/db";
 import type { AutoDmRule, AutoDmStatus, Post } from "@/lib/types";
@@ -210,7 +212,23 @@ export function AutoDmClient({
                         alt=""
                         className="size-14 shrink-0 rounded-card border border-line object-cover"
                       />
-                    ) : null}
+                    ) : rule.postId === NEXT_POST_SENTINEL ? (
+                      /* 게시물을 지정하지 않은 예약 규칙 — 핀치 로고가 그 자리다(스딩의
+                         "다음에 올릴 게시물" 표시에 해당, 2026-08-19 사장님 지시) */
+                      <span
+                        className="flex size-14 shrink-0 items-center justify-center rounded-card border border-line bg-plate"
+                        aria-hidden
+                      >
+                        <FinchMark className="size-7" />
+                      </span>
+                    ) : (
+                      <span
+                        className="flex size-14 shrink-0 items-center justify-center rounded-card border border-line bg-plate text-fg-faint"
+                        aria-hidden
+                      >
+                        <ImageOff className="size-5" />
+                      </span>
+                    )}
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         {rule.postId === NEXT_POST_SENTINEL ? (
@@ -226,27 +244,56 @@ export function AutoDmClient({
                       </div>
                       <p className="mt-2 line-clamp-1 text-[15px] font-semibold">{rule.postCaption}</p>
 
-                      {/* 트리거 */}
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[14px] text-fg-sub">
-                        <span className="text-fg-faint">트리거</span>
-                        {rule.trigger === "all" ? (
-                          <span>모든 댓글</span>
-                        ) : rule.keywords.length > 0 ? (
-                          rule.keywords.map((k) => (
-                            <span
-                              key={k}
-                              className="rounded-chip border border-line bg-body px-2 py-0.5 text-[12px] font-medium"
-                            >
-                              {k}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-fg-faint">키워드 없음</span>
-                        )}
-                      </div>
-
-                      {/* DM 미리보기 */}
-                      <p className="mt-2 line-clamp-2 text-[14px] leading-relaxed text-fg-sub">{rule.dmMessage}</p>
+                      {/* 설정 요약 — 스딩 실측(2026-08-19) 형식: 라벨 : 값 줄들.
+                          목록만 보고 "이 규칙이 뭘 하는지"를 카드 하나로 다 읽게 한다 */}
+                      <dl className="mt-2 space-y-1 text-[14px] leading-relaxed">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <dt className="shrink-0 text-fg-faint">키워드 :</dt>
+                          {rule.trigger === "all" ? (
+                            <dd className="text-fg-sub">모든 댓글</dd>
+                          ) : rule.keywords.length > 0 ? (
+                            <dd className="flex flex-wrap gap-1">
+                              {rule.keywords.map((k) => (
+                                <span
+                                  key={k}
+                                  className="rounded-chip border border-line bg-body px-2 py-0.5 text-[12px] font-medium"
+                                >
+                                  {k}
+                                </span>
+                              ))}
+                            </dd>
+                          ) : (
+                            <dd className="text-fg-faint">키워드 없음</dd>
+                          )}
+                        </div>
+                        <div className="flex gap-1.5">
+                          <dt className="shrink-0 text-fg-faint">DM :</dt>
+                          <dd className="line-clamp-2 min-w-0 text-fg-sub">{rule.dmMessage}</dd>
+                        </div>
+                        {rule.buttons.length > 0 ? (
+                          <div className="flex gap-1.5">
+                            <dt className="shrink-0 text-fg-faint">연결 링크 :</dt>
+                            <dd className="tnum min-w-0 truncate text-fg-sub">
+                              {rule.buttons[0].url}
+                              {rule.buttons.length > 1 ? ` 외 ${rule.buttons.length - 1}개` : ""}
+                            </dd>
+                          </div>
+                        ) : null}
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                          <div className="flex gap-1.5">
+                            <dt className="text-fg-faint">자동 답글 :</dt>
+                            <dd className={rule.publicReplies.length > 0 ? "font-semibold text-positive" : "text-fg-sub"}>
+                              {rule.publicReplies.length > 0 ? "ON" : "OFF"}
+                            </dd>
+                          </div>
+                          <div className="flex gap-1.5">
+                            <dt className="text-fg-faint">팔로우 요청 :</dt>
+                            <dd className={rule.followRequest ? "font-semibold text-positive" : "text-fg-sub"}>
+                              {rule.followRequest ? "ON" : "OFF"}
+                            </dd>
+                          </div>
+                        </div>
+                      </dl>
 
                       {/* 발송 통계 */}
                       <div className="tnum mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-fg-faint">

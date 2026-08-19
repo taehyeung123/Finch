@@ -3,7 +3,15 @@ import { createClient } from "@/lib/supabase/server";
 import { autoDmRules as sampleRules, recentPosts as samplePosts } from "@/lib/data";
 import { getIgAvatarUrl, getRecentPostsForPicker } from "@/lib/data/live";
 import { getCurrentPlan } from "@/lib/data/internal";
-import { RULE_COLUMNS, RULE_COLUMNS_LEGACY, ruleFromRow, type AutoDmRuleRow } from "@/lib/auto-dm/db";
+import {
+  RULE_COLUMNS,
+  RULE_COLUMNS_LEGACY,
+  RULE_COLUMNS_NO_FOLLOW,
+  missingFollowRequest,
+  missingLegacyColumns,
+  ruleFromRow,
+  type AutoDmRuleRow,
+} from "@/lib/auto-dm/db";
 import { dmContentLimitFor } from "@/lib/auto-dm/limits";
 import type { AutoDmRule, Post } from "@/lib/types";
 import { AutoDmClient } from "./_components/auto-dm-client";
@@ -28,19 +36,14 @@ export default async function AutoDmPage() {
     try {
       const supabase = await createClient();
       // buttons/post_thumb(0038) 미적용 DB 폴백 — 컬럼 오류 시 legacy 셋으로 재조회
+      /* 컬럼 폴백은 한 단계씩 — 0052 만 없으면 0038·0042 컬럼은 그대로 읽는다 */
       const loadRules = async (): Promise<{ data: unknown; error: string | null }> => {
-        const first = await supabase
-          .from("auto_dm_rules")
-          .select(RULE_COLUMNS)
-          .order("created_at", { ascending: false });
-        if (first.error && /buttons|post_thumb|public_replies/i.test(first.error.message)) {
-          const fallback = await supabase
-            .from("auto_dm_rules")
-            .select(RULE_COLUMNS_LEGACY)
-            .order("created_at", { ascending: false });
-          return { data: fallback.data, error: fallback.error?.message ?? null };
-        }
-        return { data: first.data, error: first.error?.message ?? null };
+        const q = (cols: string) =>
+          supabase.from("auto_dm_rules").select(cols).order("created_at", { ascending: false });
+        let res = await q(RULE_COLUMNS);
+        if (res.error && missingFollowRequest(res.error.message)) res = await q(RULE_COLUMNS_NO_FOLLOW);
+        if (res.error && missingLegacyColumns(res.error.message)) res = await q(RULE_COLUMNS_LEGACY);
+        return { data: res.data, error: res.error?.message ?? null };
       };
       const [{ data, error }, livePosts, accountRes, avatarUrl] = await Promise.all([
         loadRules(),

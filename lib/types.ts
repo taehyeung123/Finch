@@ -429,6 +429,11 @@ export interface AutoDmRule {
   buttons: DmButton[];
   status: AutoDmStatus;
   /**
+   * 팔로우 요청 후 메시지 보내기(0052) — 댓글 작성자가 미팔로워면 본 DM 전에
+   * 팔로우 요청 메시지를 먼저 보낸다. 발송 분기는 웹훅 파이프라인이 담당.
+   */
+  followRequest: boolean;
+  /**
    * 광고성 정보 여부. true면 정보통신망법에 따라 (광고) 표기와 수신거부 안내를
    * 본문에 자동 삽입해야 한다 — UI에서 강제한다.
    */
