@@ -314,12 +314,15 @@ export function NextActions() {
     { href: "/publish", icon: CalendarClock, label: "발행", desc: "예약한 게시물 확인" },
   ];
   return (
-    <section aria-label="바로가기" className="grid gap-4 sm:grid-cols-3">
+    /* 세로 스택 고정 — 하단 전폭 시절의 sm:grid-cols-3 이 340px 우측 레일로
+       이사한 뒤에도 남아, 칸당 실폭 ~9px 로 쪼개져 한글이 글자 단위 세로 줄바꿈
+       되던 버그(2026-08-20 점검 발견). 이 컴포넌트는 레일 전용이다. */
+    <section aria-label="바로가기" className="grid gap-3">
       {actions.map((a) => (
         <Link
           key={a.href}
           href={a.href}
-          className={cn(panel, "group flex items-center gap-3.5 p-5 trans-state hover:border-primary/60")}
+          className={cn(panel, "group flex items-center gap-3.5 p-4 trans-state hover:border-primary/60")}
         >
           <span className="flex size-10 shrink-0 items-center justify-center rounded-card bg-gradient-to-br from-primary-weak to-warning-weak text-primary">
             <a.icon className="size-[18px]" aria-hidden />
