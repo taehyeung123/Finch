@@ -82,6 +82,27 @@ const TABS: Array<{ key: Tab; label: string; icon: typeof User }> = [
 
 const LEAVE_WARNING = "저장하지 않은 편집 내용이 사라져요. 그래도 나갈까요?";
 
+/**
+ * CSV 를 만들어 내려준다 — 서버 왕복 없음. 화면이 이미 든 데이터가 전부다.
+ *
+ * BOM(\uFEFF)을 앞에 붙인다: 한국에서 CSV 는 곧 엑셀이고, BOM 없는 UTF-8 을
+ * 엑셀이 CP949 로 읽어 한글이 전부 깨진다.
+ */
+function downloadCsv(filename: string, rows: Array<Array<string | number>>) {
+  const esc = (v: string | number) => {
+    const t = String(v);
+    return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  const csv = "\uFEFF" + rows.map((r) => r.map(esc).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function LinksClient({
   page,
   blocks,
@@ -1163,6 +1184,34 @@ function StatsPanel({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-[15px] font-bold">통계</h3>
+        <div className="flex items-center gap-1.5">
+        {/* CSV — 링크팜 통계 모달의 다운로드에 해당. 화면이 든 데이터를 그대로 내린다 */}
+        <button
+          type="button"
+          onClick={() =>
+            downloadCsv(`핀치-프로필링크-통계-${stats.days}일.csv`, [
+              ["구분", "값"],
+              ["기간", `${stats.days}일`],
+              ["조회수", stats.views],
+              ["방문자", stats.uniques],
+              ["클릭", stats.clicks],
+              ["조회당 클릭(%)", stats.ctr],
+              ["재방문율(%)", stats.returning],
+              [],
+              ["날짜", "조회수", "클릭"],
+              ...stats.daily.map((d) => [d.date, d.views, d.clicks] as Array<string | number>),
+              [],
+              ["블록", "클릭", "상태"],
+              ...stats.blocks.map((b) => [b.label, b.clicks, b.removed ? "지운 블록" : ""] as Array<string | number>),
+              [],
+              ["지역", "국가", "조회수"],
+              ...stats.regions.map((r) => [r.region, r.country, r.views] as Array<string | number>),
+            ])
+          }
+          className="trans-state rounded-chip border border-line px-2.5 py-1 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg"
+        >
+          CSV
+        </button>
         <div className="flex gap-1" role="group" aria-label="조회 기간">
           {[7, 30, 90].map((d) => (
             <button
@@ -1179,6 +1228,7 @@ function StatsPanel({
               {d}일
             </button>
           ))}
+        </div>
         </div>
       </div>
 
@@ -1332,7 +1382,33 @@ function SettingsPanel({
       {/* 받은 내용 — 문의받기·구독신청 블록이 약속한 자리.
           이게 없으면 방문자가 남긴 게 어디로 갔는지 알 수 없다(편집기가 여기를 가리킨다). */}
       <div>
-        <p className="text-[12px] font-medium text-fg-sub">받은 내용</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[12px] font-medium text-fg-sub">받은 내용</p>
+          {leads.length > 0 ? (
+            <button
+              type="button"
+              onClick={() =>
+                downloadCsv("핀치-프로필링크-받은내용.csv", [
+                  ["종류", "이름", "이메일", "연락처", "내용", "접수일"],
+                  ...leads.map(
+                    (l) =>
+                      [
+                        l.kind === "subscribe" ? "구독" : "문의",
+                        l.name ?? "",
+                        l.email ?? "",
+                        l.phone ?? "",
+                        l.message ?? "",
+                        l.createdAt,
+                      ] as Array<string | number>,
+                  ),
+                ])
+              }
+              className="trans-state rounded-chip border border-line px-2.5 py-1 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg"
+            >
+              CSV
+            </button>
+          ) : null}
+        </div>
         {leads.length === 0 ? (
           <p className="mt-1.5 text-[14px] text-fg-sub">문의받기·구독신청 블록으로 들어온 내용이 여기에 쌓여요.</p>
         ) : (
