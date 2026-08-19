@@ -34,12 +34,12 @@ export default async function SubscribePage({
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-lg font-bold">핀치 {planName}</span>
+              <span className="text-[17px] font-bold">핀치 {planName}</span>
               <Badge tone="primary">월 자동결제</Badge>
             </div>
             <p className="mt-1 text-[14px] text-fg-sub">가격은 정식 출시 전 잠정값입니다. (테스트 결제)</p>
           </div>
-          <span className="shrink-0 text-xl font-bold tnum">{formatKRW(amount)}<span className="text-[14px] font-normal text-fg-sub">/월</span></span>
+          <span className="shrink-0 text-[20px] font-bold tnum">{formatKRW(amount)}<span className="text-[14px] font-normal text-fg-sub">/월</span></span>
         </div>
       </Card>
 

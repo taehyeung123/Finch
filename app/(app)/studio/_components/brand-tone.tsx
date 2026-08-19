@@ -63,7 +63,17 @@ export function BrandTone() {
     setOpen(false);
   }
 
-  if (!loaded) return null; // 로드 전엔 숨겨 깜빡임 방지
+  // 로드 전엔 스켈레톤 카드로 자리를 잡는다 — null 을 반환하면 2열 그리드에서 왼쪽
+  // 칸이 비었다가 데이터가 오며 갑자기 밀려 들어와 레이아웃이 튀었다.
+  if (!loaded) {
+    return (
+      <Card>
+        <CardBody>
+          <div className="anim-pulse h-24 rounded-card bg-plate" aria-hidden />
+        </CardBody>
+      </Card>
+    );
+  }
 
   return (
     <Card>

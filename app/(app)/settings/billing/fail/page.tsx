@@ -21,7 +21,7 @@ export default async function BillingFailPage({
       <Card className="flex flex-col items-center gap-4 p-8 text-center">
         <XCircle className="size-12 text-negative" aria-hidden />
         <div>
-          <p className="text-lg font-bold">결제가 완료되지 않았어요</p>
+          <p className="text-[17px] font-bold">결제가 완료되지 않았어요</p>
           <p className="mt-1 text-[15px] text-fg-sub">{message}</p>
         </div>
         <Link href="/settings/billing" className={buttonClasses("primary", "md")}>

@@ -19,7 +19,7 @@ export default async function SubscribeFailPage({
       <Card className="flex flex-col items-center gap-4 p-8 text-center">
         <XCircle className="size-12 text-negative" aria-hidden />
         <div>
-          <p className="text-lg font-bold">카드 등록이 완료되지 않았어요</p>
+          <p className="text-[17px] font-bold">카드 등록이 완료되지 않았어요</p>
           <p className="mt-1 text-[15px] text-fg-sub">{message}</p>
         </div>
         <Link href="/settings/billing" className={buttonClasses("primary", "md")}>

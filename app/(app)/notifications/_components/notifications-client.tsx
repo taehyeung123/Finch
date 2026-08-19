@@ -158,8 +158,19 @@ export function NotificationsClient({ initial }: { initial: AppNotification[] })
       ) : (
         <EmptyState
           icon={BellOff}
-          title="알림이 없습니다"
-          description="새로운 경쟁사 광고·트렌드·계정 변화가 감지되면 여기에 표시됩니다."
+          title={filter === "all" ? "알림이 없습니다" : "이 유형의 알림이 없어요"}
+          description={
+            filter === "all"
+              ? "새로운 경쟁사 광고·트렌드·계정 변화가 감지되면 여기에 표시됩니다."
+              : "다른 유형을 보거나 필터를 전체로 바꿔 보세요."
+          }
+          action={
+            filter === "all" ? undefined : (
+              <Button variant="secondary" size="sm" onClick={() => setFilter("all")}>
+                전체 보기
+              </Button>
+            )
+          }
         />
       )}
     </div>

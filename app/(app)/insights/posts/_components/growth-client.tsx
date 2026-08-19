@@ -177,7 +177,7 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
               <table className="w-full min-w-[640px] text-[15px]">
                 <thead>
                   <tr className="border-b border-line text-left text-xs text-fg-faint">
-                    <th className="pb-2 pr-3 font-medium">게시물</th>
+                    <th className="w-full pb-2 pr-3 text-left font-medium">게시물</th>
                     <th className="px-3 pb-2 font-medium">유형</th>
                     <th className="px-3 pb-2 text-right font-medium">
                       저장률
@@ -194,14 +194,22 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
                     const strong = p.saveRate >= performance.avgSaveRate;
                     return (
                       <tr key={p.id} className="border-b border-line">
-                        <td className="max-w-[280px] truncate py-2.5 pr-3">
-                          {p.permalink ? (
-                            <a href={p.permalink} target="_blank" rel="noopener noreferrer" className="hover:text-primary hover:underline">
-                              {p.caption}
-                            </a>
-                          ) : (
-                            p.caption
-                          )}
+                        {/* 캡션 셀을 w-full 로 — 숫자 4열이 1300px 에 흩어지던 것을
+                            오른쪽에 모은다. 이미 받아온 썸네일도 함께 렌더한다. */}
+                        <td className="w-full py-2.5 pr-3">
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            {p.thumbnailUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element -- IG CDN 임시 URL
+                              <img src={p.thumbnailUrl} alt="" className="size-9 shrink-0 rounded-card border border-line object-cover" />
+                            ) : null}
+                            {p.permalink ? (
+                              <a href={p.permalink} target="_blank" rel="noopener noreferrer" className="min-w-0 truncate hover:text-primary hover:underline">
+                                {p.caption}
+                              </a>
+                            ) : (
+                              <span className="min-w-0 truncate">{p.caption}</span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 py-2.5 text-fg-sub">{p.kind}</td>
                         <td className={`tnum px-3 py-2.5 text-right font-semibold ${strong ? "text-positive" : "text-fg-sub"}`}>

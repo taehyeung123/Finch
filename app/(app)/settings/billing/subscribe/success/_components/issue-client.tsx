@@ -59,7 +59,7 @@ export function IssueClient({ authKey, customerKey }: { authKey: string; custome
         <>
           <span className="size-10 animate-pulse rounded-chip bg-primary-weak" aria-hidden />
           <div>
-            <p className="text-lg font-bold">구독을 활성화하고 있어요…</p>
+            <p className="text-[17px] font-bold">구독을 활성화하고 있어요…</p>
             <p className="mt-1 text-[15px] text-fg-sub">카드 확인과 첫 결제를 진행 중입니다. 잠시만 기다려 주세요.</p>
           </div>
         </>
@@ -67,7 +67,7 @@ export function IssueClient({ authKey, customerKey }: { authKey: string; custome
         <>
           <CheckCircle2 className="size-12 text-positive" aria-hidden />
           <div>
-            <p className="text-lg font-bold">구독이 시작되었어요</p>
+            <p className="text-[17px] font-bold">구독이 시작되었어요</p>
             <p className="mt-1 text-[15px] text-fg-sub">
               {state.planName} 플랜
               {state.amount > 0 ? (
@@ -89,7 +89,7 @@ export function IssueClient({ authKey, customerKey }: { authKey: string; custome
         <>
           <XCircle className="size-12 text-negative" aria-hidden />
           <div>
-            <p className="text-lg font-bold">구독을 시작하지 못했어요</p>
+            <p className="text-[17px] font-bold">구독을 시작하지 못했어요</p>
             <p className="mt-1 text-[15px] text-fg-sub">{state.message}</p>
           </div>
         </>
