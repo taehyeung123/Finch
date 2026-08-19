@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/section-header";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { linkWorkspace } from "@/lib/data";
+import { isMissingColumnError } from "@/lib/links";
 import { blockSummary, type LinkBlock } from "@/lib/links/blocks";
 import type { LinkLead, LinkSnapshotView, LinkStats, LinkWorkspace } from "@/lib/links/types";
 import { LinksClient } from "./_components/links-client";
@@ -78,7 +79,9 @@ async function load(days: number): Promise<Loaded> {
     .select(`${BASE_COLS}, sns_placement, title_size`)
     .eq("user_id", user.id)
     .maybeSingle();
-  if (pageRes.error?.code === "42703") {
+  let optionsReady = true;
+  if (isMissingColumnError(pageRes.error)) {
+    optionsReady = false;
     pageRes = await supabase.from("link_pages").select(BASE_COLS).eq("user_id", user.id).maybeSingle();
   }
   const page = pageRes.data as (Record<string, unknown> & { id: string }) | null;
@@ -241,6 +244,7 @@ async function load(days: number): Promise<Loaded> {
       snsLinks: Array.isArray(page.sns_links) ? (page.sns_links as Array<{ kind: string; url: string }>) : [],
       seoTitle: (page.seo_title as string | null) ?? "",
       seoDesc: (page.seo_desc as string | null) ?? "",
+      optionsReady,
       /* 0051 이전에는 컬럼이 없어 undefined — 기본값으로 */
       snsPlacement: (page.sns_placement as string) ?? "profile",
       titleSize: (page.title_size as string) ?? "md",

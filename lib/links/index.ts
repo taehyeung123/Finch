@@ -65,6 +65,17 @@ export function publicLinkUrl(slug: string, origin?: string): string {
 }
 
 /**
+ * "컬럼이 없다" 오류인가 — 마이그레이션보다 배포가 먼저 나간 구간의 폴백 판정.
+ *
+ * code 만 보지 않고 메시지 정규식을 보험으로 함께 본다(lib/pool/schema.ts 와 같은
+ * 관행) — 프록시·캐시 레이어가 끼면 code 가 비어 올 수 있다.
+ */
+export function isMissingColumnError(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  return error.code === "42703" || /column .* does not exist/i.test(error.message ?? "");
+}
+
+/**
  * 키 순서에 흔들리지 않는 비교용 직렬화.
  *
  * "편집기에 미저장 내용이 있는가"를 판정하는 데 쓴다. JSON.stringify 를 그냥 쓰면

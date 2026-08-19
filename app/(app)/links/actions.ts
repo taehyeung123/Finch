@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
-import { SLUG_MESSAGES, normalizeUrl, sliceChars, validateSlug } from "@/lib/links";
+import { SLUG_MESSAGES, isMissingColumnError, normalizeUrl, sliceChars, validateSlug } from "@/lib/links";
 import { defaultBlockData, type BlockType } from "@/lib/links/blocks";
 import { DEFAULT_THEME_KEY, themeByKey } from "@/lib/links/themes";
 import { LINK_TEMPLATES } from "@/lib/links/templates";
@@ -199,7 +199,7 @@ export async function updateLinkProfile(input: {
     .from("link_pages")
     .update({ ...base, sns_placement: placement, title_size: titleSize })
     .eq("user_id", user.id);
-  if (error?.code === "42703") {
+  if (isMissingColumnError(error)) {
     ({ error } = await supabase.from("link_pages").update(base).eq("user_id", user.id));
   }
   if (error) {
@@ -611,7 +611,7 @@ export async function publishLinkPage(): Promise<Result> {
     .select(`${PUB_COLS}, sns_placement, title_size`)
     .eq("user_id", user.id)
     .maybeSingle();
-  if (pageRes.error?.code === "42703") {
+  if (isMissingColumnError(pageRes.error)) {
     pageRes = await supabase.from("link_pages").select(PUB_COLS).eq("user_id", user.id).maybeSingle();
   }
   const page = pageRes.data as Record<string, unknown> & { id: string } | null;
