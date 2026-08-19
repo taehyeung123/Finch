@@ -54,7 +54,7 @@ export default function AnalyzePage() {
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://www.instagram.com/reel/... 또는 TikTok·Threads 게시물 URL"
             aria-label="분석할 게시물 URL"
-            className="h-10 flex-1 rounded-card border border-line bg-overlay px-3 text-[15px] text-fg placeholder:text-fg-faint trans-state hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+            className="h-10 flex-1 rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint trans-state hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
           />
           <Button type="submit" disabled={!url.trim() || pending}>
             <Search className="size-4" aria-hidden />
@@ -138,7 +138,7 @@ export default function AnalyzePage() {
                     result.hashtags.map((tag) => (
                       <span
                         key={tag}
-                        className="inline-flex items-center rounded-chip border border-line bg-overlay px-2.5 py-0.5 text-xs font-semibold leading-5 text-fg-sub"
+                        className="inline-flex items-center rounded-chip border border-line bg-body px-2.5 py-0.5 text-xs font-semibold leading-5 text-fg-sub"
                       >
                         {tag}
                       </span>

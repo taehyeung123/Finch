@@ -1330,7 +1330,7 @@ export function SearchConsole({
               id="library-filter-panel"
               role="region"
               aria-label="상세 필터"
-              className="panel-drop absolute left-0 right-0 top-full z-30 mt-2.5 hidden max-h-[calc(100dvh-13rem)] overflow-y-auto rounded-card border border-line bg-overlay p-4 shadow-panel lg:block"
+              className="panel-drop absolute left-0 right-0 top-full z-30 mt-2.5 hidden max-h-[calc(100dvh-13rem)] overflow-y-auto rounded-card border border-line bg-body p-4 shadow-panel lg:block"
             >
               {panelInner}
             </div>

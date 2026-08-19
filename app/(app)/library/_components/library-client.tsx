@@ -989,7 +989,7 @@ export function LibraryClient({
                 비슷한 소재임을 알리고, 검색어 그대로의 수집을 한 번에 걸 수 있게 한다.
                 이미 이 검색어로 수집했으면 숨긴다(재과금 루프 차단). */}
             {poolResult?.isGap && canCollectQuery ? (
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-card border border-line bg-overlay px-4 py-3">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-card border border-line bg-body px-4 py-3">
                 <p className="text-[14px] text-fg-sub">
                   &lsquo;{query.trim()}&rsquo;와 정확히 일치하는 소재는 아직 없어서 비슷한 소재를 보여드리고 있어요.
                 </p>

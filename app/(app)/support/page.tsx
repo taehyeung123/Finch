@@ -119,7 +119,7 @@ export default async function SupportPage() {
                   </div>
 
                   {q.reply_body ? (
-                    <div className="rounded-card border border-line bg-overlay p-4">
+                    <div className="rounded-card border border-line bg-body p-4">
                       <div className="flex items-center gap-2">
                         <span className="text-[14px] font-bold text-primary">핀치 답변</span>
                         {q.replied_at ? (

@@ -63,7 +63,7 @@ export function SubscribeClient({
         </div>
       ) : null}
 
-      <label className="flex items-start gap-2.5 rounded-card border border-line bg-overlay p-4 text-[14px] leading-relaxed text-fg-sub">
+      <label className="flex items-start gap-2.5 rounded-card border border-line bg-body p-4 text-[14px] leading-relaxed text-fg-sub">
         <input
           type="checkbox"
           checked={agreed}

@@ -82,7 +82,7 @@ export function SchedulePublish({
   }
 
   return (
-    <div className="w-full rounded-card border border-line bg-overlay p-4">
+    <div className="w-full rounded-card border border-line bg-body p-4">
       <div className="flex items-center justify-between">
         <p className="text-[15px] font-semibold">인스타그램 예약 발행</p>
         <button

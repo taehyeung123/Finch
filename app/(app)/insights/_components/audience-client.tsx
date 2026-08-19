@@ -71,7 +71,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
         action={
           <div className="flex items-center gap-2">
             <ChannelBadge channel="instagram" />
-            <div className="flex rounded-chip border border-line bg-overlay p-0.5">
+            <div className="flex rounded-chip border border-line bg-body p-0.5">
               {([7, 14] as Period[]).map((p) => (
                 <button
                   key={p}

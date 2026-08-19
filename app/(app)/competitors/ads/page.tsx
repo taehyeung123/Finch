@@ -74,7 +74,7 @@ export default function CompetitorAdsPage() {
           {monitoredPages.map((page) => (
             <span
               key={page}
-              className="rounded-chip border border-line bg-overlay px-3.5 py-1.5 text-[14px] font-semibold text-fg-sub"
+              className="rounded-chip border border-line bg-body px-3.5 py-1.5 text-[14px] font-semibold text-fg-sub"
             >
               {page}
             </span>
@@ -97,7 +97,7 @@ export default function CompetitorAdsPage() {
             return (
               <Card key={ad.id} hover className="flex flex-col overflow-hidden">
                 {/* 소재 미리보기 자리 */}
-                <div className="flex aspect-video items-center justify-center border-b border-line bg-overlay">
+                <div className="flex aspect-video items-center justify-center border-b border-line bg-plate">
                   <div className="flex flex-col items-center gap-1.5 text-fg-faint">
                     <MediaIcon className="size-7" aria-hidden />
                     <span className="text-xs">{MEDIA_LABEL[ad.mediaType]}</span>
@@ -147,7 +147,7 @@ export default function CompetitorAdsPage() {
       {/* 정책·동작 안내 (PART 4.6) */}
       <section aria-label="모니터링 안내" className="grid gap-4 md:grid-cols-2">
         <Card className="flex items-start gap-3 p-5">
-          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-card bg-overlay text-fg-sub">
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-card bg-plate text-fg-sub">
             <Info className="size-4" aria-hidden />
           </span>
           <div>

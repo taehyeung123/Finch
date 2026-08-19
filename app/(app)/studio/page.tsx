@@ -662,7 +662,7 @@ export default function StudioPage() {
                       if (e.key === "Enter") handleGenerate();
                     }}
                     placeholder="예: 장마철 실내 데이트 코스"
-                    className="h-10 w-full rounded-card border border-line bg-overlay px-3 text-[15px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary"
+                    className="h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary"
                   />
                 </div>
                 <div className="md:w-44">
@@ -673,7 +673,7 @@ export default function StudioPage() {
                     id="studio-tone"
                     value={tone}
                     onChange={(e) => setTone(e.target.value as BrandTone)}
-                    className="h-10 w-full rounded-card border border-line bg-overlay px-3 text-[15px] text-fg focus-visible:outline-2 focus-visible:outline-primary"
+                    className="h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg focus-visible:outline-2 focus-visible:outline-primary"
                   >
                     {TONE_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -700,7 +700,7 @@ export default function StudioPage() {
                 </p>
               ) : null}
               {restored ? (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-line bg-overlay px-3 py-2.5 text-[14px] text-fg-sub">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-line bg-body px-3 py-2.5 text-[14px] text-fg-sub">
                   <span>이전에 작업하던 카드뉴스를 불러왔어요. (이 브라우저에 임시저장됨)</span>
                   <button type="button" onClick={clearDraft} className="font-semibold text-primary underline underline-offset-2">
                     새로 시작
@@ -736,7 +736,7 @@ export default function StudioPage() {
                   {Array.from({ length: 5 }).map((_, i) => (
                     <div
                       key={i}
-                      className="shimmer flex aspect-square flex-col gap-3 rounded-card border border-line bg-overlay p-4"
+                      className="shimmer flex aspect-square flex-col gap-3 rounded-card border border-line bg-body p-4"
                       style={{ animationDelay: `${i * 120}ms` }}
                     >
                       <div className="size-8 rounded-full bg-line" />
@@ -801,7 +801,7 @@ export default function StudioPage() {
                             className="w-full rounded-card border border-line transition-shadow duration-200 group-hover:border-primary/40 group-hover:shadow-lg"
                           />
                         ) : (
-                          <div className="flex aspect-square flex-col justify-between rounded-card border border-line bg-overlay p-3">
+                          <div className="flex aspect-square flex-col justify-between rounded-card border border-line bg-body p-3">
                             <span className="tnum text-xs font-semibold text-fg-faint">
                               {String(s.no).padStart(2, "0")} / {String(slides.length).padStart(2, "0")}
                             </span>
@@ -835,7 +835,7 @@ export default function StudioPage() {
                   {videoSupported ? " · ‘영상으로 저장’은 카드가 넘어가는 릴스형 영상(webm)으로 내려받아요." : ""}
                 </p>
 
-                <p className="flex items-center gap-1.5 rounded-card border border-line bg-overlay px-3 py-2.5 text-[14px] text-fg-sub">
+                <p className="flex items-center gap-1.5 rounded-card border border-line bg-body px-3 py-2.5 text-[14px] text-fg-sub">
                   <Sparkles className="size-4 shrink-0 text-primary" aria-hidden />
                   AI 생성 표시가 자동으로 부착됩니다 (플랫폼 정책 준수)
                 </p>
@@ -921,7 +921,7 @@ export default function StudioPage() {
                       if (e.key === "Enter") handleFindIdeas();
                     }}
                     placeholder="키워드를 입력하세요 — 예: 여름, 루틴, 수납"
-                    className="h-10 w-full rounded-card border border-line bg-overlay pl-10 pr-3 text-[15px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary"
+                    className="h-10 w-full rounded-card border border-line bg-body pl-10 pr-3 text-[15px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary"
                   />
                 </label>
                 <Button

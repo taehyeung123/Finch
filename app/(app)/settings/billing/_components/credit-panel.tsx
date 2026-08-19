@@ -35,8 +35,11 @@ export function CreditPanel({ summary }: { summary: CreditSummary }) {
         }
       />
       <CardBody className="space-y-5">
-        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-          <div>
+        {/* 두 숫자를 한 쌍으로 나란히 — 앞서는 justify-between 이라 넓은 화면에서
+            "남은 크레딧"과 "이번 달 사용"이 화면 양끝으로 벌어져 비교가 안 됐다.
+            2칸 그리드로 묶어 항상 붙여 놓는다(plate 타일로 각각 감싼다). */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-card bg-plate px-4 py-3">
             <p className="text-[12px] text-fg-sub">남은 크레딧</p>
             <p className="tnum mt-1 flex items-baseline gap-1.5 text-[28px] font-bold leading-none">
               <Coins className="size-5 shrink-0 self-center text-primary" strokeWidth={2} aria-hidden />
@@ -46,7 +49,7 @@ export function CreditPanel({ summary }: { summary: CreditSummary }) {
               ) : null}
             </p>
           </div>
-          <div className="text-right">
+          <div className="rounded-card bg-plate px-4 py-3">
             <p className="text-[12px] text-fg-sub">이번 달 사용</p>
             <p className="tnum mt-1 text-[20px] font-bold leading-none">
               {spentThisMonth.toLocaleString("ko-KR")}

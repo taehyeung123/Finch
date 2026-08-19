@@ -719,7 +719,7 @@ export default function CardEditor({
           </div>
 
           {selected ? (
-            <div className="space-y-3 rounded-card border border-line bg-overlay p-3">
+            <div className="space-y-3 rounded-card border border-line bg-body p-3">
               {isText ? (
                 <>
                   <div>

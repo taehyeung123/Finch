@@ -134,7 +134,7 @@ export function NotificationsClient({ initial }: { initial: AppNotification[] })
                     />
                     <span
                       className={cn(
-                        "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-card border border-line bg-overlay",
+                        "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-card border border-line bg-plate",
                         TYPE_ICON_TONE[n.type] ?? "text-fg-sub",
                       )}
                     >

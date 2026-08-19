@@ -29,7 +29,7 @@ const FORMAT_LABEL: Record<ReportItem["format"], string> = {
 };
 
 const inputClass =
-  "h-10 w-full rounded-card border border-line bg-overlay px-3 text-[15px] text-fg focus:outline-2 focus:outline-primary focus:outline-offset-2";
+  "h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg focus:outline-2 focus:outline-primary focus:outline-offset-2";
 
 function addDays(base: Date, days: number): Date {
   const d = new Date(base);
@@ -235,7 +235,7 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
             <div className="divide-y divide-line">
               {items.map((r) => (
                 <div key={r.id} className="flex flex-wrap items-center gap-3 py-4 first:pt-0 last:pb-0">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-card border border-line bg-overlay text-fg-sub">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-card border border-line bg-plate text-fg-sub">
                     {r.format === "pdf" ? (
                       <FileText className="size-4" aria-hidden />
                     ) : (

@@ -29,7 +29,7 @@ export function InsightsTabs({ current }: { current: (typeof TABS)[number]["key"
               "rounded-chip px-3.5 py-1.5 text-[14px] font-semibold trans-state",
               active
                 ? "bg-primary text-on-primary"
-                : "border border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg",
+                : "border border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg",
             )}
           >
             {tab.label}

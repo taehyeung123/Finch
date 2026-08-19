@@ -83,7 +83,7 @@ export default function CompetitorsPage() {
               disabled
               placeholder="정확한 사용자명(@handle)을 입력하세요"
               aria-label="경쟁사 계정 사용자명"
-              className="h-10 w-full rounded-card border border-line bg-overlay pl-9 pr-3 text-[15px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary"
+              className="h-10 w-full rounded-card border border-line bg-body pl-9 pr-3 text-[15px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary"
             />
           </div>
           <Button type="submit" disabled>
@@ -185,7 +185,7 @@ export default function CompetitorsPage() {
                     "rounded-chip px-3.5 py-1.5 text-[14px] font-semibold trans-state",
                     active
                       ? "bg-primary text-on-primary"
-                      : "border border-line bg-overlay text-fg-sub hover:border-line-strong hover:text-fg",
+                      : "border border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg",
                   )}
                 >
                   {c.displayName}

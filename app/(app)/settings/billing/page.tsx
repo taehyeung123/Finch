@@ -291,11 +291,74 @@ export default async function BillingSettingsPage({
         </div>
       </div>
 
+      {/* 내 상태 2단 — 크레딧(주)과 결제 내역·수단(레일)을 나란히.
+          앞서는 전폭 5블록 세로 1열이라 "내 플랜/크레딧/얼마 낼 건가"를 알려면
+          5화면을 스크롤해야 했다(사장님 지적: 가로 한 줄 밑에 또 한 줄). */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-start">
       {/* 크레딧 — 백엔드(0016·0037·0039)는 처음부터 있었는데 화면이 없어서
           "깎이는 건 보이는데 얼마 남았는지는 모르는" 상태였다.
           플랜 목록보다 위다: 이 화면에 들어온 사람의 첫 질문은 "얼마 남았지"지
           "뭘 살까"가 아니다. */}
       <CreditPanel summary={credits} />
+        <div className="space-y-6">
+      {/* 결제 내역 — payment_orders 실조회 (ready 상태 제외). 이력이 없어도 카드는 항상 보인다 */}
+      <Card>
+        <CardHeader
+          title="결제 내역"
+          description={orders.length > 0 ? `최근 ${orders.length}건` : "결제가 완료되면 여기에 표시됩니다"}
+        />
+        <CardBody>
+          {orders.length === 0 ? (
+            <EmptyState
+              icon={FileClock}
+              title="결제 내역이 없습니다"
+              description="플랜을 구독하면 결제 내역이 여기에 쌓입니다."
+            />
+          ) : (
+            <div className="divide-y divide-line">
+              {orders.map((o) => {
+                const status = ORDER_STATUS[o.status];
+                return (
+                  <div key={o.id} className="flex flex-wrap items-center gap-3 py-3.5 first:pt-0 last:pb-0">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-card border border-line bg-plate text-fg-sub">
+                      <FileClock className="size-4" aria-hidden />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[15px] font-semibold">{o.orderName}</p>
+                      <p className="tnum mt-0.5 text-[14px] text-fg-sub">
+                        {formatDate(o.approvedAt ?? o.createdAt)}
+                      </p>
+                    </div>
+                    <span className="tnum text-[15px] font-semibold">{formatKRW(o.amount)}</span>
+                    <Badge tone={status.tone}>{status.label}</Badge>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardBody>
+      </Card>
+      {/* 결제 수단 — 정기결제(빌링) 카드 */}
+      <Card>
+        <CardHeader
+          title="결제 수단"
+          action={hasActiveSub ? <Badge tone="positive">자동결제 등록됨</Badge> : <Badge tone="neutral">미등록</Badge>}
+        />
+        <CardBody className="space-y-1.5">
+          <p className="flex items-center gap-2 text-[15px] text-fg-sub">
+            <CreditCard className="size-4 text-fg-faint" aria-hidden />
+            {subscription?.cardSummary
+              ? `등록된 카드 ${subscription.cardSummary}`
+              : "구독 시작 시 카드를 한 번 등록하면 매월 자동으로 결제됩니다"}
+          </p>
+          <p className="text-[14px] text-fg-sub">
+            매월 결제 예정일 3일 전에 알림으로 미리 알려드리며, 언제든 이 화면에서 해지할 수 있어요.
+            {" "}(현재 테스트 모드 — 실제 청구 없음)
+          </p>
+        </CardBody>
+      </Card>
+        </div>
+      </div>
 
       {/* 플랜 변경 — **마케팅 카드를 쓰지 않는다**(2026-08-15 사장님 지적).
           숫자(PLAN_CARDS)는 /pricing 과 계속 공유한다. 그 공유를 깨는 순간
@@ -352,64 +415,6 @@ export default async function BillingSettingsPage({
           </Link>
         </p>
       </div>
-
-      {/* 결제 내역 — payment_orders 실조회 (ready 상태 제외). 이력이 없어도 카드는 항상 보인다 */}
-      <Card>
-        <CardHeader
-          title="결제 내역"
-          description={orders.length > 0 ? `최근 ${orders.length}건` : "결제가 완료되면 여기에 표시됩니다"}
-        />
-        <CardBody>
-          {orders.length === 0 ? (
-            <EmptyState
-              icon={FileClock}
-              title="결제 내역이 없습니다"
-              description="플랜을 구독하면 결제 내역이 여기에 쌓입니다."
-            />
-          ) : (
-            <div className="divide-y divide-line">
-              {orders.map((o) => {
-                const status = ORDER_STATUS[o.status];
-                return (
-                  <div key={o.id} className="flex flex-wrap items-center gap-3 py-3.5 first:pt-0 last:pb-0">
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-card border border-line bg-overlay text-fg-sub">
-                      <FileClock className="size-4" aria-hidden />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[15px] font-semibold">{o.orderName}</p>
-                      <p className="tnum mt-0.5 text-[14px] text-fg-sub">
-                        {formatDate(o.approvedAt ?? o.createdAt)}
-                      </p>
-                    </div>
-                    <span className="tnum text-[15px] font-semibold">{formatKRW(o.amount)}</span>
-                    <Badge tone={status.tone}>{status.label}</Badge>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardBody>
-      </Card>
-
-      {/* 결제 수단 — 정기결제(빌링) 카드 */}
-      <Card>
-        <CardHeader
-          title="결제 수단"
-          action={hasActiveSub ? <Badge tone="positive">자동결제 등록됨</Badge> : <Badge tone="neutral">미등록</Badge>}
-        />
-        <CardBody className="space-y-1.5">
-          <p className="flex items-center gap-2 text-[15px] text-fg-sub">
-            <CreditCard className="size-4 text-fg-faint" aria-hidden />
-            {subscription?.cardSummary
-              ? `등록된 카드 ${subscription.cardSummary}`
-              : "구독 시작 시 카드를 한 번 등록하면 매월 자동으로 결제됩니다"}
-          </p>
-          <p className="text-[14px] text-fg-sub">
-            매월 결제 예정일 3일 전에 알림으로 미리 알려드리며, 언제든 이 화면에서 해지할 수 있어요.
-            {" "}(현재 테스트 모드 — 실제 청구 없음)
-          </p>
-        </CardBody>
-      </Card>
     </div>
   );
 }

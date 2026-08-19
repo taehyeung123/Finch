@@ -128,7 +128,7 @@ export function CampaignDetailModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="modal-card-in shadow-pop flex max-h-[94vh] w-full max-w-5xl flex-col rounded-card border border-line bg-overlay">
+      <div className="modal-card-in shadow-pop flex max-h-[94vh] w-full max-w-5xl flex-col rounded-card border border-line bg-body">
         {/* 헤더 */}
         <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
           <div className="flex min-w-0 items-center gap-3.5">
@@ -201,7 +201,7 @@ export function CampaignDetailModal({
                   {/* 미리보기 목업 — 실제 동작 버튼 아님 */}
                   <span
                     aria-hidden
-                    className="shrink-0 rounded-card border border-line bg-overlay px-3 py-1.5 text-[14px] font-semibold"
+                    className="shrink-0 rounded-card border border-line bg-body px-3 py-1.5 text-[14px] font-semibold"
                   >
                     {detail.adCopy.cta}
                   </span>

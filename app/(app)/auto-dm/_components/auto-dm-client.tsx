@@ -233,7 +233,7 @@ export function AutoDmClient({
                           rule.keywords.map((k) => (
                             <span
                               key={k}
-                              className="rounded-chip border border-line bg-overlay px-2 py-0.5 text-[12px] font-medium"
+                              className="rounded-chip border border-line bg-body px-2 py-0.5 text-[12px] font-medium"
                             >
                               {k}
                             </span>

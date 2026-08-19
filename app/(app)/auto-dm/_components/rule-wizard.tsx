@@ -414,7 +414,7 @@ export function RuleWizard({
         ref={containerRef}
         tabIndex={-1}
         onKeyDown={trapFocus}
-        className="modal-card-in shadow-pop flex h-[min(849px,88vh)] max-h-[92vh] w-full max-w-[550px] flex-col overflow-hidden rounded-card border border-line bg-overlay outline-none sm:max-h-[88vh]"
+        className="modal-card-in shadow-pop flex h-[min(849px,88vh)] max-h-[92vh] w-full max-w-[550px] flex-col overflow-hidden rounded-card border border-line bg-body outline-none sm:max-h-[88vh]"
       >
         {/* 헤더 — 뒤로가기(2단계부터) + 제목 + 닫기 (리틀리: 흰 헤더, 타이틀 18px/600) */}
         <div className="flex items-center gap-2 px-5 pt-4">
@@ -607,7 +607,7 @@ export function RuleWizard({
                       {keywords.map((k) => (
                         <span
                           key={k}
-                          className="inline-flex items-center gap-1 rounded-chip border border-line bg-overlay px-2.5 py-1 text-[14px] font-medium"
+                          className="inline-flex items-center gap-1 rounded-chip border border-line bg-body px-2.5 py-1 text-[14px] font-medium"
                         >
                           {k}
                           <button

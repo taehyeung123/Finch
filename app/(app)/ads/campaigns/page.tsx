@@ -93,7 +93,7 @@ const STATUS_BADGE: Record<AdCampaign["status"], { tone: "positive" | "warning" 
 
 const fieldLabel = "block text-[14px] font-medium text-fg-sub";
 const fieldInput =
-  "mt-1.5 h-10 w-full rounded-card border border-line bg-overlay px-3 text-[15px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:opacity-40";
+  "mt-1.5 h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:opacity-40";
 
 /* ------------------------------ 로컬 UI 조각 ------------------------------ */
 
@@ -383,7 +383,7 @@ export default function CampaignsPage() {
                           ? "bg-primary text-on-primary"
                           : visited
                             ? "bg-primary-weak text-primary hover:bg-primary-weak"
-                            : "border border-line bg-overlay text-fg-faint",
+                            : "border border-line bg-body text-fg-faint",
                       )}
                     >
                       {visited && i < step ? (
@@ -452,7 +452,7 @@ export default function CampaignsPage() {
                         setAgeMin(v);
                         if (v > ageMax) setAgeMax(v);
                       }}
-                      className="tnum h-10 rounded-card border border-line bg-overlay px-3 text-[15px] font-medium text-fg outline-none trans-state hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
+                      className="tnum h-10 rounded-card border border-line bg-body px-3 text-[15px] font-medium text-fg outline-none trans-state hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
                     >
                       {AGE_OPTIONS.map((a) => (
                         <option key={a} value={a}>
@@ -465,7 +465,7 @@ export default function CampaignsPage() {
                       aria-label="최대 연령"
                       value={ageMax}
                       onChange={(e) => setAgeMax(Number(e.target.value))}
-                      className="tnum h-10 rounded-card border border-line bg-overlay px-3 text-[15px] font-medium text-fg outline-none trans-state hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
+                      className="tnum h-10 rounded-card border border-line bg-body px-3 text-[15px] font-medium text-fg outline-none trans-state hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
                     >
                       {AGE_OPTIONS.filter((a) => a >= ageMin).map((a) => (
                         <option key={a} value={a}>
@@ -488,7 +488,7 @@ export default function CampaignsPage() {
                 <div>
                   <p className={fieldLabel}>성별</p>
                   {includesMinors ? (
-                    <p className="mt-2 inline-flex items-center gap-2 rounded-card border border-line bg-overlay px-3.5 py-2 text-[15px] text-fg-sub">
+                    <p className="mt-2 inline-flex items-center gap-2 rounded-card border border-line bg-body px-3.5 py-2 text-[15px] text-fg-sub">
                       <Lock className="size-3.5" aria-hidden />
                       전체 — 18세 미만 포함 시 고정 (Meta 정책)
                     </p>
@@ -512,7 +512,7 @@ export default function CampaignsPage() {
                 <div>
                   <p className={fieldLabel}>상세 타겟팅 (관심사)</p>
                   {includesMinors ? (
-                    <p className="mt-2 inline-flex items-center gap-2 rounded-card border border-line bg-overlay px-3.5 py-2 text-[15px] text-fg-sub">
+                    <p className="mt-2 inline-flex items-center gap-2 rounded-card border border-line bg-body px-3.5 py-2 text-[15px] text-fg-sub">
                       <Lock className="size-3.5" aria-hidden />
                       18세 미만 포함 시 사용할 수 없어요 (Meta 정책 — 나이·위치만 허용)
                     </p>
@@ -531,7 +531,7 @@ export default function CampaignsPage() {
                 </div>
 
                 {/* 예상 도달 — 목 추정치 */}
-                <div className="flex items-start gap-3 rounded-card border border-line bg-overlay p-4">
+                <div className="flex items-start gap-3 rounded-card border border-line bg-body p-4">
                   <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-card bg-primary-weak text-primary">
                     <Users className="size-4.5" aria-hidden />
                   </span>
@@ -795,7 +795,7 @@ export default function CampaignsPage() {
                             value={card.headline}
                             onChange={(e) => updateCard(card.id, e.target.value)}
                             placeholder={`${i + 1}번째 카드 제목`}
-                            className="h-9 min-w-0 flex-1 rounded-card border border-line bg-overlay px-3 text-[15px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+                            className="h-9 min-w-0 flex-1 rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
                           />
                           {carouselCards.length > 2 ? (
                             <button
@@ -895,7 +895,7 @@ export default function CampaignsPage() {
                   ))}
                 </div>
 
-                <div className="flex flex-wrap items-start gap-3 rounded-card border border-line bg-overlay p-4">
+                <div className="flex flex-wrap items-start gap-3 rounded-card border border-line bg-body p-4">
                   <Lock className="mt-0.5 size-4 shrink-0 text-fg-faint" aria-hidden />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
