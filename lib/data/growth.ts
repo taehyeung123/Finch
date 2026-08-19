@@ -12,6 +12,8 @@ import "server-only";
 
 import { getInstagramAccessContext } from "./live";
 import { fetchRecentMedia, fetchMediaInsights, type MediaItem } from "@/lib/meta/instagram";
+import { isDemoMode } from "@/lib/supabase/config";
+import { recentPosts } from "@/lib/mock/data";
 
 const INSIGHT_LIMIT = 12; // 개별 인사이트를 조회할 최근 게시물 수
 
@@ -51,8 +53,54 @@ export interface GrowthPerformance {
   sampleSize: number;
 }
 
+const KIND_OF: Record<string, PostKind> = {
+  reels: "릴스", video: "영상", carousel: "캐러셀", text: "피드", feed: "피드", story: "스토리",
+};
+
+/** 데모 성과표 — 목 게시물에서 합성. 실측이 아니라 화면 확인용 샘플이다. */
+function demoPerformance(): GrowthPerformance {
+  const posts: PostPerf[] = recentPosts
+    .filter((p) => p.views > 0) // reach=0 → NaN 방지. 실경로의 reach<=0 제외와 대칭
+    .map((p) => {
+    const reach = Math.round(p.views * 1.12);
+    const saved = Math.round(p.shares * 0.85 + p.likes * 0.04);
+    const interactions = p.likes + p.comments + p.shares + saved;
+    return {
+      id: p.id,
+      caption: p.caption,
+      kind: KIND_OF[p.type] ?? "피드",
+      publishedAt: p.publishedAt,
+      permalink: null,
+      thumbnailUrl: p.thumb ?? null,
+      reach,
+      saved,
+      views: p.views,
+      likes: p.likes,
+      comments: p.comments,
+      saveRate: Math.round((saved / reach) * 1000) / 10,
+      engagementRate: Math.round((interactions / reach) * 1000) / 10,
+    };
+  }).sort((a, b) => b.saveRate - a.saveRate);
+
+  const avg = (sel: (x: PostPerf) => number) =>
+    Math.round((posts.reduce((s, x) => s + sel(x), 0) / posts.length) * 10) / 10;
+  return {
+    posts,
+    avgSaveRate: avg((x) => x.saveRate),
+    avgEngagementRate: avg((x) => x.engagementRate),
+    avgReach: Math.round(posts.reduce((s, x) => s + x.reach, 0) / posts.length),
+    sampleSize: posts.length,
+  };
+}
+
 /** 연동 계정의 최근 게시물 성과 집계. 연동/토큰 없으면 null, 유효 표본 없으면 sampleSize 0. */
 export async function getPostPerformance(): Promise<GrowthPerformance | null> {
+  /* 데모 모드는 실 IG 컨텍스트가 없어 아래 조회가 null 을 반환한다. 그러면 이 탭만
+     "연동해 주세요"로 비고, 개요·링크 탭은 샘플이 나와 위화감이 생긴다.
+     목 게시물에서 성과표를 합성해 다른 탭과 결을 맞춘다(공식 값 없는 목이라
+     reach·saved 는 views·shares 에서 그럴듯하게 유도한다). */
+  if (isDemoMode()) return demoPerformance();
+
   const ctx = await getInstagramAccessContext();
   if (!ctx) return null;
 

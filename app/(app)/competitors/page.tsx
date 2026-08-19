@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Plus, Search } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
@@ -12,6 +12,9 @@ import { cn } from "@/lib/cn";
 import { formatCompact, formatPercent } from "@/lib/format";
 import { competitors } from "@/lib/data";
 import type { Competitor } from "@/lib/types";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Users } from "lucide-react";
+import { ButtonLink } from "@/components/ui/button";
 import { CompetitorTabs } from "./tabs";
 
 /* 자체 산출 지표 고지 문구 (PRD 4.4) */
@@ -32,7 +35,6 @@ const COMPARE_ROWS: {
 ];
 
 export default function CompetitorsPage() {
-  const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string[]>(competitors.map((c) => c.id));
 
@@ -54,12 +56,9 @@ export default function CompetitorsPage() {
       <PageHeader
         title="경쟁사 비교"
         description="경쟁 계정의 성장 흐름과 콘텐츠 성과를 내 계정과 나란히 확인하세요."
-        action={
-          <Button size="sm" onClick={() => inputRef.current?.focus()}>
-            <Plus className="size-4" aria-hidden />
-            계정 등록
-          </Button>
-        }
+        /* 헤더의 "계정 등록" 버튼을 걷었다 — disabled 입력창에 포커스를 주려 했는데
+           disabled 요소는 포커스를 못 받아 아무 반응도 없는 죽은 버튼이었다.
+           등록 경로가 아직 없다는 건 아래 폼의 안내가 이미 설명한다. */
       />
 
       <CompetitorTabs current="accounts" />
@@ -78,7 +77,6 @@ export default function CompetitorsPage() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-faint" aria-hidden />
             <input
-              ref={inputRef}
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -106,6 +104,17 @@ export default function CompetitorsPage() {
         </p>
       </Card>
 
+      {/* 빈 데이터(실 모드)에서 목록·비교표가 값 없는 뼈대로 무너지던 것을 막는다.
+          경쟁사가 하나도 없으면 광고 모니터링으로 안내한다. */}
+      {competitors.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title="아직 등록된 경쟁사가 없어요"
+          description="경쟁사 직접 등록은 채널 연동 이후 제공됩니다. 지금은 실제 집행 중인 광고를 확인할 수 있어요."
+          action={<ButtonLink href="/competitors/ads">경쟁사 광고 보기</ButtonLink>}
+        />
+      ) : (
+        <>
       {/* 등록된 경쟁사 목록 */}
       <section aria-label="등록된 경쟁사" className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-2">
@@ -231,6 +240,8 @@ export default function CompetitorsPage() {
           </div>
         </CardBody>
       </Card>
+        </>
+      )}
     </div>
   );
 }

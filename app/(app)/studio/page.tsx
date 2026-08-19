@@ -812,7 +812,11 @@ export default function StudioPage() {
                         <button
                           type="button"
                           onClick={() => setEditingIndex(i)}
-                          className="absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded-card bg-black/65 px-2 py-1 text-[11px] font-semibold text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                          /* 항상 보인다. opacity-0 + group-hover 는 터치 기기에 hover 가 없어
+                             편집 버튼이 통째로 사라졌다 — 이 화면의 핵심 기능인데.
+                             데스크톱은 hover 로 조금 진해지는 정도만 남긴다. bg-black/text-white
+                             하드코딩도 scrim 토큰으로. */
+                          className="trans-state absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded-card bg-scrim px-2 py-1 text-[11px] font-semibold text-on-scrim opacity-90 hover:opacity-100 focus-visible:opacity-100"
                         >
                           <Pencil className="size-3" aria-hidden />
                           편집

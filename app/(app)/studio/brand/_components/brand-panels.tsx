@@ -12,8 +12,8 @@ import type { BrandKit } from "../../brand-kit-actions";
  * 여기서는 저장이 목적이라 이 컴포넌트가 직접 들고 있으면 된다.
  * (BrandKitPanel 은 저장 시 자체 server action 을 호출한다 — brand-kit-actions.ts)
  */
-export function BrandPanels() {
-  const [kit, setKit] = useState<BrandKit | null>(null);
+export function BrandPanels({ initialKit = null }: { initialKit?: BrandKit | null }) {
+  const [kit, setKit] = useState<BrandKit | null>(initialKit);
 
   return (
     <div className="grid gap-3 md:grid-cols-2">

@@ -176,22 +176,33 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
             description={`최근 ${period}일`}
           />
           <CardBody>
-            <div className="flex items-end gap-1" style={{ height: 120 }} aria-hidden>
+            {/* 발산형 막대 — 0 기준선을 가운데 두고 양수는 위, 음수는 아래로 그린다.
+                앞서는 전부 justify-end + Math.abs 라 -80 과 +80 이 **같은 방향·같은 높이**로
+                올라가고 색만 달랐다(방향이 안 읽혔다). 각 반쪽이 전체 높이의 50%다. */}
+            <div className="relative flex items-stretch gap-1" style={{ height: 120 }} aria-hidden>
               {days.map((d) => {
                 const max = Math.max(...days.map((x) => Math.abs(x.followerNet)), 1);
-                const h = Math.max((Math.abs(d.followerNet) / max) * 100, 3);
+                const pct = d.followerNet === 0 ? 0 : Math.max((Math.abs(d.followerNet) / max) * 100, 6);
+                const positive = d.followerNet >= 0;
                 return (
-                  <div key={d.date} className="flex flex-1 flex-col justify-end" style={{ height: "100%" }}>
-                    <div
-                      className={cn(
-                        "min-w-[4px] rounded-t-[2px]",
-                        d.followerNet >= 0 ? "bg-positive" : "bg-negative",
-                      )}
-                      style={{ height: `${h}%` }}
-                    />
+                  <div key={d.date} className="flex flex-1 flex-col">
+                    {/* 위(양수) 반쪽 — 가운데 기준선에서 위로 자란다 */}
+                    <div className="flex flex-1 flex-col justify-end">
+                      {positive && pct > 0 ? (
+                        <div className="min-w-[4px] rounded-t-[2px] bg-positive" style={{ height: `${pct}%` }} />
+                      ) : null}
+                    </div>
+                    {/* 아래(음수) 반쪽 — 가운데 기준선에서 아래로 자란다 */}
+                    <div className="flex flex-1 flex-col justify-start">
+                      {!positive ? (
+                        <div className="min-w-[4px] rounded-b-[2px] bg-negative" style={{ height: `${pct}%` }} />
+                      ) : null}
+                    </div>
                   </div>
                 );
               })}
+              {/* 0 기준선 */}
+              <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-line-strong" />
             </div>
             <div className="mt-2 flex justify-between text-xs text-fg-faint">
               <span>{days[0]?.date.slice(5).replace("-", ".")}</span>

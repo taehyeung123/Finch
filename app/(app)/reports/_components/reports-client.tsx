@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { Download, FileSpreadsheet, FileText, Plus } from "lucide-react";
+import { Download, FileSpreadsheet, FileText, Plus, X } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge, ChannelBadge } from "@/components/ui/badge";
@@ -103,9 +103,24 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
         title="리포트"
         description="광고주 보고용 리포트를 자동 생성하고 정기 발송합니다."
         action={
-          <Button size="sm" onClick={() => setFormOpen((v) => !v)}>
-            <Plus className="size-4" aria-hidden />
-            새 리포트 만들기
+          /* 버튼 라벨을 상태에 맞춘다 — 폼이 기본으로 열려 있는데 라벨이 항상
+             "새 리포트 만들기"라, 누르면 여는 게 아니라 닫혔다. */
+          <Button
+            size="sm"
+            variant={formOpen ? "secondary" : "primary"}
+            onClick={() => setFormOpen((v) => !v)}
+          >
+            {formOpen ? (
+              <>
+                <X className="size-4" aria-hidden />
+                폼 닫기
+              </>
+            ) : (
+              <>
+                <Plus className="size-4" aria-hidden />
+                새 리포트 만들기
+              </>
+            )}
           </Button>
         }
       />
