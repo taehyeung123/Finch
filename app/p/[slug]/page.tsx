@@ -5,6 +5,7 @@ import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
 import { linkWorkspace } from "@/lib/data";
 import { FinchMark } from "@/components/logo";
+import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf } from "@/lib/links";
 import { hiddenReason, type BlockType } from "@/lib/links/blocks";
 import { themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
@@ -197,8 +198,9 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
             href={s.url}
             target="_blank"
             rel="noopener noreferrer nofollow"
-            className="rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-3 py-1.5 text-[13px] font-medium"
+            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-3 py-1.5 text-[13px] font-medium"
           >
+            <SnsIcon kind={s.kind} className="size-3.5 shrink-0" />
             {SNS_LABEL.get(s.kind) ?? s.kind}
           </a>
         ))}

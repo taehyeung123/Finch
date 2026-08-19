@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/cn";
+import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, youtubeEmbed } from "@/lib/links";
 import { themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
 import { BLOCK_CATALOG, blockSummary, hiddenReason, type LinkBlock } from "@/lib/links/blocks";
@@ -68,10 +69,10 @@ export function PhonePreview({
         {page.snsLinks.map((x, i) => (
           <span
             key={i}
-            className="rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-2.5 py-1 text-[11px] font-medium"
+            className="inline-flex items-center gap-1 rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-2.5 py-1 text-[11px] font-medium"
           >
-            {/* 공개 페이지는 한글 라벨을 쓴다 — 여기서 영문 키를 그대로 찍으면
-                미리보기와 실제가 대놓고 다르다 */}
+            {/* 공개 페이지와 같은 아이콘+한글 라벨 — 미리보기와 실제가 어긋나면 안 된다 */}
+            <SnsIcon kind={x.kind} className="size-3 shrink-0" />
             {SNS_LABEL.get(x.kind) ?? x.kind}
           </span>
         ))}
