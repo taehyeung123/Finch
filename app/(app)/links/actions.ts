@@ -448,6 +448,10 @@ export async function importFromLittly(
     input = input.slice(host.length + 1);
   }
   const slug = input.split(/[/?#]/)[0];
+  /* "litt.ly" 만 넣은 자연스러운 실수 — 404 류 메시지 대신 뭘 빠뜨렸는지 말한다 */
+  if (slug.toLowerCase() === "litt.ly") {
+    return { ok: false, error: "아이디까지 넣어 주세요 — litt.ly/아이디 형태예요." };
+  }
   if (!LITTLY_SLUG_RE.test(slug)) {
     return { ok: false, error: "리틀리 주소가 아니에요. litt.ly/아이디 형태로 넣어 주세요." };
   }
@@ -468,34 +472,53 @@ export async function importFromLittly(
     return { ok: false, error: "리틀리에 접속하지 못했어요. 잠시 후 다시 시도해 주세요." };
   }
 
+  /* 조기 반환 때도 body 를 취소한다 — 안 하면 연결이 GC 까지 붙잡힌다.
+     없는 슬러그(301)가 이 함수의 가장 흔한 실패 경로다. */
+  const drop = () => res.body?.cancel().catch(() => {});
+
   /* 없는 슬러그 = 301 홈 리다이렉트(실측). 따라가지 않고 여기서 끝낸다 */
   if (res.status >= 300 && res.status < 400) {
+    drop();
     return { ok: false, error: "그 주소의 리틀리 페이지를 찾지 못했어요. 아이디를 확인해 주세요." };
   }
   if (!res.ok) {
+    drop();
     return { ok: false, error: "리틀리 페이지를 열지 못했어요. 잠시 후 다시 시도해 주세요." };
   }
   if (!(res.headers.get("content-type") ?? "").includes("text/html")) {
+    drop();
     return { ok: false, error: "리틀리 페이지 형식을 읽지 못했어요." };
   }
 
-  /* 크기 상한을 걸며 읽는다 — arrayBuffer() 는 상한 없이 다 받는다 */
+  /* 크기 상한을 걸며 읽는다 — arrayBuffer() 는 상한 없이 다 받는다.
+     ⚠️ 루프 전체를 try 로 감싼다: 타임아웃(AbortSignal)이 **본문 수신 도중**
+     터지면 reader.read() 가 reject 하는데, 안 잡으면 이 액션이 스스로 정한
+     { ok:false } 계약을 어기고 예외로 죽는다. */
   let html = "";
   const reader = res.body?.getReader();
   if (!reader) return { ok: false, error: "리틀리 페이지를 읽지 못했어요." };
-  const decoder = new TextDecoder();
-  let received = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    received += value.byteLength;
-    if (received > LITTLY_MAX_BYTES) {
-      reader.cancel().catch(() => {});
-      return { ok: false, error: "페이지가 너무 커서 가져올 수 없어요." };
+  try {
+    const decoder = new TextDecoder();
+    let received = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.byteLength;
+      if (received > LITTLY_MAX_BYTES) {
+        reader.cancel().catch(() => {});
+        return { ok: false, error: "페이지가 너무 커서 가져올 수 없어요." };
+      }
+      html += decoder.decode(value, { stream: true });
     }
-    html += decoder.decode(value, { stream: true });
+    html += decoder.decode();
+  } catch (e) {
+    reader.cancel().catch(() => {});
+    const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
+    return {
+      ok: false,
+      error: timedOut ? "리틀리 응답이 너무 느려요. 잠시 후 다시 시도해 주세요." : "리틀리 페이지를 읽지 못했어요.",
+    };
   }
-  html += decoder.decode();
 
   const parsed = parseLittlyHtml(html);
   if (!parsed) {

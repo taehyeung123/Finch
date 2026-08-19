@@ -68,6 +68,16 @@ export function parseLittlyHtml(html: string): LittlyParsed | null {
     if (out.length >= MAX_CANDIDATES) return;
     const url = str(rawUrl).trim();
     if (!url) return;
+    /* 리틀리 **운영 앱**(app.litt.ly — 가입·로그인 CTA)은 페이지 주인의 콘텐츠일 수
+       없다 — 리틀리 자기 홍보다. 기본 체크된 채 우리 페이지에 저장되면 사용자
+       페이지가 리틀리 광고판이 된다. litt.ly/* 자체는 남긴다: 다른 리틀리 페이지를
+       링크하는 건 진짜 콘텐츠다(실측: 매거진 페이지가 66개를 링크한다). */
+    if (/^https?:\/\/(www\.)?app\.litt\.ly(\/|$)/i.test(url)) return;
+    /* sns 항목의 value 는 URL·이메일·전화번호가 섞여 온다. 스킴 없는 값 중
+       이메일(@)이나 점 없는 것(전화번호)은 주소가 아니다 — 여기서 거른다.
+       (이메일은 normalizeUrl 의 userinfo 거부가 한 번 더 막지만, 여기서 걸러야
+        후보 표에 쓰레기가 아예 안 뜬다.) */
+    if (!/^https?:\/\//i.test(url) && (url.includes("@") || !url.includes("."))) return;
     const label = rawLabel.trim() || TYPE_LABEL[type] || "링크";
     out.push({ url, label });
   };

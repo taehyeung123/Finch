@@ -55,6 +55,10 @@ export function normalizeUrl(raw: string): string | null {
     return null;
   }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+  /* userinfo(user@host) 거부 — 공개 링크에 자격증명이 실릴 이유가 없다.
+     이걸 안 막으면 이메일 주소가 "https://lead@litt.ly/" 로 둔갑해 통과하고,
+     방문자가 누르면 브라우저가 피싱 경고를 띄운다(우리 페이지 신뢰도 문제). */
+  if (parsed.username || parsed.password) return null;
   return parsed.toString();
 }
 
