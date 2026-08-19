@@ -457,10 +457,16 @@ export function LinksClient({
                     () => setLastDeleted(null),
                   )
                 }
-                onImport={(items) =>
+                onImport={(items, clear) =>
                   run(
                     () => addBlocksBulk(items),
-                    () => setNotice(`링크 ${items.length}개를 추가했어요.`),
+                    () => {
+                      /* 성공했을 때만 표를 비운다 — 실패하면 고른 목록·고친 이름이
+                         남아 있어야 한다(붙여넣기 원문은 textarea 에 없어서 여기서
+                         날리면 원래 서비스로 돌아가 다시 복사해 와야 한다). */
+                      clear();
+                      setNotice(`링크 ${items.length}개를 추가했어요.`);
+                    },
                   )
                 }
                 onEdit={openEditor}
@@ -630,7 +636,7 @@ function BlocksPanel({
   busy: boolean;
   onAdd: (t: BlockType) => void;
   onApplyTemplate: (key: string) => void;
-  onImport: (items: Array<{ label: string; url: string }>) => void;
+  onImport: (items: Array<{ label: string; url: string }>, clear: () => void) => void;
   onEdit: (id: string) => void;
   onToggle: (id: string, active: boolean) => void;
   onMove: (id: string, dir: "up" | "down", label: string) => void;
@@ -1588,6 +1594,8 @@ function CreateForm({
               <ImportLinksBody
                 busy={busy}
                 actionLabel="담아서 시작하기"
+                /* clear 는 안 부른다 — 성공하면 CreateForm 자체가 빌더로 바뀌며 사라지고,
+                   실패하면 고른 목록이 남아 있어야 다시 시도할 수 있다 */
                 onImport={(items) => onStart({ links: items })}
               />
             </div>
@@ -1598,7 +1606,7 @@ function CreateForm({
             disabled={isDemo || busy}
             aria-expanded={mode === "blank"}
             onClick={() => setMode(mode === "blank" ? null : "blank")}
-            className="trans-state mx-auto block text-[13px] text-fg-sub underline underline-offset-2 hover:text-fg disabled:opacity-50"
+            className="trans-state mx-auto block text-[12px] text-fg-sub underline underline-offset-2 hover:text-fg disabled:opacity-50"
           >
             빈 페이지로 시작 (주소 직접 정하기)
           </button>

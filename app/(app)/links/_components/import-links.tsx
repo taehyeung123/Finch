@@ -35,7 +35,12 @@ export function ImportLinksBody({
   actionLabel = "추가하기",
 }: {
   busy: boolean;
-  onImport: (items: Array<{ label: string; url: string }>) => void;
+  /**
+   * clear 는 **성공했을 때만** 부를 것 — 즉시 비우면 실패 시 고른 목록·고친 이름이
+   * 통째로 사라진다. 붙여넣기 경로는 원문이 textarea 에 안 남아(파싱만 한다)
+   * 복구하려면 원래 서비스에서 다시 복사해 와야 했다.
+   */
+  onImport: (items: Array<{ label: string; url: string }>, clear: () => void) => void;
   /** 적용 버튼 문구 — "{n}개 " 뒤에 붙는다 */
   actionLabel?: string;
 }) {
@@ -238,17 +243,19 @@ export function ImportLinksBody({
             <Button
               size="sm"
               disabled={busy || chosen.length === 0}
-              onClick={() => {
+              onClick={() =>
                 onImport(
                   (found ?? [])
                     .map((l, i) => ({ label: labels[i] ?? l.label, url: l.url, i }))
                     .filter((x) => picked.has(x.i))
                     .map(({ label, url }) => ({ label, url })),
-                );
-                setFound(null);
-                setPicked(new Set());
-                setLabels({});
-              }}
+                  () => {
+                    setFound(null);
+                    setPicked(new Set());
+                    setLabels({});
+                  },
+                )
+              }
               className={cn(chosen.length === 0 && "opacity-60")}
             >
               {busy ? "처리 중…" : `${chosen.length}개 ${actionLabel}`}
@@ -265,7 +272,7 @@ export function ImportLinks({
   onImport,
 }: {
   busy: boolean;
-  onImport: (items: Array<{ label: string; url: string }>) => void;
+  onImport: (items: Array<{ label: string; url: string }>, clear: () => void) => void;
 }) {
   return (
     <details className="rounded-card border border-line">
