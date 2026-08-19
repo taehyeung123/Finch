@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/ui/section-header";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
+import { accounts as sampleAccounts } from "@/lib/data";
+import type { ComposerChannel } from "./_components/post-composer";
 import { PublishList, type ScheduledPost } from "./_components/publish-list";
 
 export const metadata: Metadata = {
@@ -71,8 +73,27 @@ async function loadScheduled(): Promise<{ items: ScheduledPost[]; truncated: boo
   return { items, truncated: (sched.data ?? []).length >= PAGE_LIMIT };
 }
 
+/** 채널 연결 스트립 데이터 — 데모: 샘플 계정, 실제: connected_accounts */
+async function loadChannels(): Promise<ComposerChannel[]> {
+  if (isDemoMode()) {
+    return sampleAccounts.map((a) => ({ channel: a.channel, handle: a.handle, connected: a.connected }));
+  }
+  const user = await getAuthUser();
+  if (!user) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("connected_accounts")
+    .select("channel, handle, connected")
+    .eq("user_id", user.id);
+  return ((data ?? []) as Array<{ channel: string; handle: string | null; connected: boolean }>).map((r) => ({
+    channel: r.channel,
+    handle: r.handle,
+    connected: !!r.connected,
+  }));
+}
+
 export default async function PublishPage() {
-  const { items, truncated } = await loadScheduled();
+  const [{ items, truncated }, channels] = await Promise.all([loadScheduled(), loadChannels()]);
 
   return (
     <div className="space-y-5">
@@ -80,7 +101,7 @@ export default async function PublishPage() {
         title="발행"
         description="인스타그램 예약 발행을 확인하고 관리합니다. 예약일 아침 배치에서 자동으로 발행됩니다."
       />
-      <PublishList initialItems={items} truncated={truncated} />
+      <PublishList initialItems={items} channels={channels} isDemo={isDemoMode()} truncated={truncated} />
     </div>
   );
 }

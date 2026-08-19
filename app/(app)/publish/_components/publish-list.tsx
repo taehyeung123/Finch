@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarClock, ChevronLeft, ChevronRight, ImageIcon, List, Trash2, X } from "lucide-react";
+import { CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, FileText, ImageIcon, Plus, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -17,8 +17,10 @@ import {
   monthGrid,
   shiftMonth,
 } from "@/lib/calendar";
+import { SnsIcon } from "@/components/sns-brand-icons";
 import { cancelScheduledPost } from "@/app/(app)/studio/actions";
 import { deleteDraft, scheduleDraft } from "../actions";
+import { PostComposer, type ComposerChannel } from "./post-composer";
 
 export interface ScheduledPost {
   id: string;
@@ -41,9 +43,14 @@ export interface ScheduledPost {
  */
 export function PublishList({
   initialItems,
+  channels,
+  isDemo,
   truncated = false,
 }: {
   initialItems: ScheduledPost[];
+  /** 채널 연결 스트립 — 링크팜 포스팅 상단의 연결 상태 표시(실측 2026-08-19) */
+  channels: ComposerChannel[];
+  isDemo: boolean;
   /** 서버 조회가 한도에서 잘렸다 — 화면이 "이게 전부"라고 거짓말하지 않게 알린다 */
   truncated?: boolean;
 }) {
@@ -63,7 +70,13 @@ export function PublishList({
     setItems(initialItems);
   }
 
-  const [view, setView] = useState<"calendar" | "list">("calendar");
+  /* 링크팜 실측 서브탭: 포스팅(캘린더) / 발행예약 / 발행완료 / 초안.
+     기존 "목록" 하나를 상태별 둘로 갈랐다 — 예약(고칠 수 있는 것)과 완료(이력)는
+     보는 이유가 다르다. */
+  const [view, setView] = useState<"calendar" | "scheduled" | "done" | "drafts">("calendar");
+  /* 새 게시물 컴포저 — null 아니면 열림, 문자열이면 캘린더에서 고른 날짜가 미리 담긴다 */
+  const [composer, setComposer] = useState<{ date: string | null } | null>(null);
+  const [notice, setNotice] = useState("");
   const today = kstToday();
   /* 초안에 날짜를 붙일 때 고를 수 있는 가장 이른 날. 배치가 KST 06:00 하루 1회라
      그 시각이 지나면 오늘은 이미 늦었다 — 고를 수 없는 날을 열어두지 않는다. */
@@ -95,7 +108,15 @@ export function PublishList({
   }, [items]);
 
   const drafts = useMemo(() => items.filter((p) => p.status === "draft"), [items]);
-  const listItems = useMemo(() => items.filter((p) => p.status !== "draft"), [items]);
+  /* 발행예약 = 아직 손댈 수 있는 것(예약·발행 중·실패) / 발행완료 = 이력(발행됨·취소됨) */
+  const scheduledItems = useMemo(
+    () => items.filter((p) => p.status === "scheduled" || p.status === "publishing" || p.status === "failed"),
+    [items],
+  );
+  const doneItems = useMemo(
+    () => items.filter((p) => p.status === "published" || p.status === "canceled"),
+    [items],
+  );
   const cells = useMemo(() => monthGrid(cursor.year, cursor.month), [cursor]);
   const selectedPosts = selected ? (byDay.get(selected) ?? []) : [];
 
@@ -142,14 +163,57 @@ export function PublishList({
 
   return (
     <div className="space-y-5">
-      {/* 보기 전환 — 캘린더가 기본. 두 보기는 같은 데이터를 다른 질문으로 읽는다:
-          캘린더는 "언제 비었나", 목록은 "무엇이 잘못됐나". */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex gap-1.5" role="tablist" aria-label="발행 보기">
+      {/* 채널 연결 스트립 — 링크팜 포스팅 상단(실측). 연결 안 된 채널은 눌러서
+          연동 관리로 간다. 발행이 어느 계정으로 나가는지 이 줄이 항상 말해준다. */}
+      <div className="card-face flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3">
+        {(["instagram", "tiktok", "threads"] as const).map((ch) => {
+          const meta = channels.find((c) => c.channel === ch);
+          const connected = !!meta?.connected;
+          const label = ch === "instagram" ? "인스타그램" : ch === "tiktok" ? "틱톡" : "스레드";
+          const inner = (
+            <>
+              <span
+                className={cn(
+                  "relative flex size-9 items-center justify-center rounded-full border",
+                  connected ? "border-primary bg-primary-weak text-fg" : "border-line bg-plate text-fg-faint",
+                )}
+              >
+                <SnsIcon kind={ch} className="size-4" />
+                {!connected ? (
+                  <span className="absolute -bottom-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full border border-line bg-body">
+                    <Plus className="size-2.5 text-fg-sub" aria-hidden />
+                  </span>
+                ) : null}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[12px] font-semibold">{label}</span>
+                <span className={cn("block truncate text-[11px]", connected ? "text-fg-sub" : "text-fg-faint")}>
+                  {connected ? (meta?.handle ?? "연결됨") : "연결하기"}
+                </span>
+              </span>
+            </>
+          );
+          return connected ? (
+            <span key={ch} className="flex items-center gap-2">
+              {inner}
+            </span>
+          ) : (
+            <ButtonLink key={ch} href="/settings" variant="ghost" size="sm" className="flex items-center gap-2 !px-1.5">
+              {inner}
+            </ButtonLink>
+          );
+        })}
+      </div>
+
+      {/* 서브탭(링크팜 실측: 포스팅/초안/발행예약/발행완료) + 새 게시물 CTA */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="발행 보기">
           {(
             [
-              { key: "calendar", label: "캘린더", icon: CalendarClock },
-              { key: "list", label: "목록", icon: List },
+              { key: "calendar", label: "캘린더", icon: CalendarClock, count: null },
+              { key: "scheduled", label: "발행예약", icon: CalendarClock, count: scheduledItems.length },
+              { key: "done", label: "발행완료", icon: CheckCircle2, count: doneItems.length },
+              { key: "drafts", label: "초안", icon: FileText, count: drafts.length },
             ] as const
           ).map((t) => {
             const on = view === t.key;
@@ -167,14 +231,24 @@ export function PublishList({
               >
                 <t.icon className="size-3.5" aria-hidden />
                 {t.label}
+                {t.count !== null && t.count > 0 ? <span className="tnum">{t.count}</span> : null}
               </button>
             );
           })}
         </div>
-        <ButtonLink href="/studio" variant="secondary" size="sm">
-          새 콘텐츠 만들기
-        </ButtonLink>
+        <div className="flex items-center gap-2">
+          <ButtonLink href="/studio" variant="secondary" size="sm">
+            스튜디오에서 만들기
+          </ButtonLink>
+          <Button size="sm" onClick={() => setComposer({ date: null })}>
+            <Plus className="size-3.5" aria-hidden /> 새 게시물 포스팅
+          </Button>
+        </div>
       </div>
+
+      <p aria-live="polite" className="sr-only">
+        {notice}
+      </p>
 
       {view === "calendar" ? (
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -298,7 +372,25 @@ export function PublishList({
                 })}
               </div>
 
-              <p className="mt-4 text-[12px] text-fg-sub">
+              {/* 범례 — 링크팜은 3개(게시됨/예약됨/알림 발행), 우리는 실패·발행 중까지
+                  갈라 보여준다. 점 색만으로 상태를 추측하게 두지 않는다. */}
+              <div className="mt-4 flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[12px] text-fg-sub">
+                {(
+                  [
+                    ["bg-positive", "게시됨"],
+                    ["bg-primary", "예약됨"],
+                    ["bg-warning", "발행 중"],
+                    ["bg-negative", "실패"],
+                    ["bg-fg-faint", "취소됨"],
+                  ] as const
+                ).map(([dot, label]) => (
+                  <span key={label} className="inline-flex items-center gap-1.5">
+                    <span className={cn("size-1.5 rounded-full", dot)} aria-hidden />
+                    {label}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-2 text-[12px] text-fg-sub">
                 예약일 오전 6시 배치에서 자동 발행됩니다(정시 발행이 아니에요).
                 {batchPassed ? " 오늘 배치는 이미 지났어요 — 내일부터 예약할 수 있어요." : ""}
                 {truncated ? " 최근 200건만 표시하고 있어요." : ""}
@@ -309,23 +401,42 @@ export function PublishList({
           {/* 선택한 날 — 캘린더 옆 고정 레일. 칸 안에 내용을 다 넣으면 격자가 깨진다 */}
           <Card className="lg:sticky lg:top-20 lg:self-start">
             <CardHeader
-              title={selected ? `${Number(selected.slice(5, 7))}월 ${Number(selected.slice(8, 10))}일` : "날짜 선택"}
+              title={
+                selected
+                  ? /* 요일은 KST 정오 기준 getUTCDay — +09:00 정오는 UTC 같은 날 03시라
+                       서버·브라우저 타임존과 무관하게 KST 요일이 나온다 */
+                    `${Number(selected.slice(5, 7))}월 ${Number(selected.slice(8, 10))}일 (${WEEKDAYS[new Date(`${selected}T12:00:00+09:00`).getUTCDay()]})`
+                  : "날짜 선택"
+              }
+              description={selected ? `게시물 ${selectedPosts.length}건` : undefined}
             />
             <CardBody>
+              {/* 링크팜의 날짜 셀 hover「+」에 해당 — 고른 날짜로 바로 작성.
+                  지난 날짜·오늘(배치 지남)은 예약할 수 없으니 버튼도 안 그린다 */}
+              {selected && selected >= earliest ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="mb-3 w-full"
+                  onClick={() => setComposer({ date: selected })}
+                >
+                  <Plus className="size-3.5" aria-hidden /> 이 날짜로 포스팅
+                </Button>
+              ) : null}
               {selectedPosts.length === 0 ? (
                 items.length === 0 ? (
                   <EmptyState
                     icon={CalendarClock}
                     title="아직 예약이 없어요"
-                    description="스튜디오에서 카드뉴스를 만들면 여기서 날짜를 잡을 수 있어요."
+                    description="새 게시물을 쓰거나 스튜디오에서 카드뉴스를 만들면 여기서 날짜를 잡을 수 있어요."
                     action={
-                      <ButtonLink href="/studio" size="sm">
-                        만들러 가기
-                      </ButtonLink>
+                      <Button size="sm" onClick={() => setComposer({ date: selected })}>
+                        새 게시물 포스팅
+                      </Button>
                     }
                   />
                 ) : (
-                  <p className="text-[14px] text-fg-sub">이 날은 예약이 없어요.</p>
+                  <p className="text-[14px] text-fg-sub">이 날짜에 등록된 게시물이 없어요.</p>
                 )
               ) : (
                 <ul className="space-y-3">
@@ -360,15 +471,24 @@ export function PublishList({
             </CardBody>
           </Card>
         </div>
-      ) : (
+      ) : view === "scheduled" || view === "done" ? (
         <Card>
-          <CardHeader title="예약 목록" description="예약일 아침 배치에서 자동 발행됩니다" />
+          <CardHeader
+            title={view === "scheduled" ? "발행예약" : "발행완료"}
+            description={
+              view === "scheduled" ? "예약일 아침 배치에서 자동 발행됩니다" : "발행이 끝났거나 취소된 게시물이에요"
+            }
+          />
           <CardBody>
-            {listItems.length === 0 ? (
-              <p className="text-[14px] text-fg-sub">예약된 게시물이 없어요. 아래 초안에서 날짜를 정해 보세요.</p>
+            {(view === "scheduled" ? scheduledItems : doneItems).length === 0 ? (
+              <p className="text-[14px] text-fg-sub">
+                {view === "scheduled"
+                  ? "예약된 게시물이 없어요. 「새 게시물 포스팅」으로 시작해 보세요."
+                  : "아직 발행이 끝난 게시물이 없어요."}
+              </p>
             ) : (
               <ul className="divide-y divide-line">
-                {listItems.map((post) => (
+                {(view === "scheduled" ? scheduledItems : doneItems).map((post) => (
                   <li key={post.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
                     <Thumb url={post.image_urls[0]} />
                     <div className="min-w-0 flex-1">
@@ -398,22 +518,26 @@ export function PublishList({
             {truncated ? <p className="mt-3 text-[12px] text-fg-sub">최근 200건만 표시하고 있어요.</p> : null}
           </CardBody>
         </Card>
-      )}
+      ) : null}
 
-      {/* 초안 — 날짜가 정해지지 않은 것들. 캘린더에는 찍히지 않으므로 여기 따로 두지
-          않으면 만든 사람이 다시 찾을 길이 없다.
-          날짜 지정·삭제가 **여기에만** 있다 — 이게 없으면 초안은 지울 수도 예약으로
-          바꿀 수도 없는 미아가 되고, 쌓이면 조회 한도를 밀어 진짜 예약을 가린다. */}
-      {drafts.length > 0 ? (
+      {/* 초안 탭 — 날짜가 정해지지 않은 것들. 캘린더에는 찍히지 않으므로(안 정한
+          날짜를 달력에 찍으면 계획이 있는 것처럼 보인다) 전용 탭이 유일한 집이다.
+          날짜 지정·삭제가 **여기에만** 있다. */}
+      {view === "drafts" ? (
         <Card>
           <CardHeader title="초안" description="아직 발행일을 정하지 않은 콘텐츠예요" />
           <CardBody>
+            {drafts.length === 0 ? (
+              <p className="text-[14px] text-fg-sub">
+                초안이 없어요. 「새 게시물 포스팅」에서 「초안으로 저장」을 고르면 여기에 쌓여요.
+              </p>
+            ) : null}
             {draftError ? (
               <p role="alert" className="mb-3 text-[14px] text-negative-strong">
                 {draftError}
               </p>
             ) : null}
-            <ul className="divide-y divide-line">
+            <ul className={cn("divide-y divide-line", drafts.length === 0 && "hidden")}>
               {drafts.map((post) => (
                 <li key={post.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0">
                   <Thumb url={post.image_urls[0]} />
@@ -453,6 +577,22 @@ export function PublishList({
             </ul>
           </CardBody>
         </Card>
+      ) : null}
+
+      {composer ? (
+        <PostComposer
+          channels={channels}
+          isDemo={isDemo}
+          defaultDate={composer.date}
+          onClose={() => setComposer(null)}
+          onSaved={(message) => {
+            setComposer(null);
+            setNotice(message);
+            /* createPost 의 revalidatePath 가 서버 목록을 새로 내려보낸다 —
+               initialItems 동기화(위 prevInitial 패턴)가 화면에 반영한다 */
+            router.refresh();
+          }}
+        />
       ) : null}
     </div>
   );
