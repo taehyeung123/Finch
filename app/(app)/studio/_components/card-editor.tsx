@@ -69,8 +69,11 @@ import {
 import type { CardTemplate } from "@/lib/studio/templates";
 import type { LogoPlacement } from "@/lib/studio/export-slides";
 
-const DISPLAY = 520; // 화면 표시 크기 (내부 좌표는 항상 1080)
-const SCALE = DISPLAY / CARD_SIZE;
+const MAX_DISPLAY = 520; // 최대 표시 크기 (내부 좌표는 항상 CARD_SIZE=1080)
+const MIN_DISPLAY = 260; // 아주 좁은 화면에서도 조작 가능한 하한
+/* 선택 외곽선·가이드 hairline 은 stage 좌표계 값이라 화면 2px 로 보이려면 scale 로 나눈다.
+   자식 노드에서 참조하므로 최대 표시 기준 상수로 둔다(작은 화면에선 미세하게 얇아질 뿐, 무해). */
+const STROKE_SCALE = MAX_DISPLAY / CARD_SIZE;
 const CENTER = CARD_SIZE / 2;
 const SNAP = 12; // 중앙 스냅 임계 (카드 좌표 px)
 
@@ -178,7 +181,7 @@ function ImageNode({
         node.scaleY(1);
       }}
       stroke={isSelected ? CORAL : undefined}
-      strokeWidth={isSelected ? 2 / SCALE : 0}
+      strokeWidth={isSelected ? 2 / STROKE_SCALE : 0}
     />
   );
 }
@@ -214,6 +217,25 @@ export default function CardEditor({
 
   const stageRef = useRef<Konva.Stage>(null);
   const trRef = useRef<Konva.Transformer>(null);
+  /* 표시 크기를 컨테이너 폭에 맞춘다 — 520 고정이면 375px 화면에서 좌우가 잘리고
+     스크롤도 안 됐다. 내부 좌표계(CARD_SIZE=1080)는 그대로라 드래그·내보내기 정확도는
+     유지된다: Stage 에 scale 을 걸면 Konva 가 포인터를 stage 좌표로 되돌리고,
+     export 는 pixelRatio 로 항상 1080px 을 만든다. */
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [display, setDisplay] = useState(MAX_DISPLAY);
+  useEffect(() => {
+    const el = frameRef.current;
+    if (!el) return;
+    const measure = () => {
+      const avail = el.clientWidth - 32; // 좌우 p-4
+      setDisplay(Math.max(MIN_DISPLAY, Math.min(MAX_DISPLAY, avail)));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const scale = display / CARD_SIZE;
   const fileRef = useRef<HTMLInputElement>(null);
 
   // 실행취소/재실행 히스토리 — 같은 라벨이 700ms 내 연속이면 하나로 합쳐 기록(드래그·타이핑·슬라이더)
@@ -414,7 +436,7 @@ export default function CardEditor({
     requestAnimationFrame(() => {
       const stage = stageRef.current;
       if (!stage) return;
-      const png = stage.toDataURL({ pixelRatio: CARD_SIZE / DISPLAY, mimeType: "image/png" });
+      const png = stage.toDataURL({ pixelRatio: CARD_SIZE / display, mimeType: "image/png" });
       onSave(png, { background, elements });
     });
   }
@@ -453,8 +475,8 @@ export default function CardEditor({
     <div className="fixed inset-0 z-50 flex flex-col bg-black/70 p-4 backdrop-blur-sm sm:items-center sm:justify-center">
       <div className="flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-card border border-line bg-body sm:flex-row">
         {/* 캔버스 */}
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-overlay p-4">
-          <div className="flex w-full items-center justify-between px-1" style={{ maxWidth: DISPLAY }}>
+        <div ref={frameRef} className="flex flex-1 flex-col items-center justify-center gap-3 bg-overlay p-4">
+          <div className="flex w-full items-center justify-between px-1" style={{ maxWidth: display }}>
             <p className="text-[14px] font-semibold text-fg-sub">카드 편집</p>
             <div className="flex gap-1">
               <button type="button" onClick={undo} disabled={!canUndo} aria-label="실행취소" className="flex size-8 items-center justify-center rounded-card border border-line text-fg-sub disabled:opacity-40 enabled:hover:border-primary enabled:hover:text-primary">
@@ -465,13 +487,13 @@ export default function CardEditor({
               </button>
             </div>
           </div>
-          <div style={{ width: DISPLAY, height: DISPLAY }} className="shrink-0 rounded-card shadow-lg">
+          <div style={{ width: display, height: display }} className="shrink-0 rounded-card shadow-lg">
             <Stage
               ref={stageRef}
-              width={DISPLAY}
-              height={DISPLAY}
-              scaleX={SCALE}
-              scaleY={SCALE}
+              width={display}
+              height={display}
+              scaleX={scale}
+              scaleY={scale}
               onMouseDown={(e) => {
                 if (e.target === e.target.getStage()) setSelectedId(null);
               }}
@@ -657,9 +679,9 @@ export default function CardEditor({
                 })}
                 {guides.map((g, i) =>
                   g.o === "v" ? (
-                    <KLine key={`g${i}`} points={[g.p, 0, g.p, CARD_SIZE]} stroke="#FF3B7F" strokeWidth={1 / SCALE} dash={[10 / SCALE, 10 / SCALE]} listening={false} />
+                    <KLine key={`g${i}`} points={[g.p, 0, g.p, CARD_SIZE]} stroke="#FF3B7F" strokeWidth={1 / STROKE_SCALE} dash={[10 / STROKE_SCALE, 10 / STROKE_SCALE]} listening={false} />
                   ) : (
-                    <KLine key={`g${i}`} points={[0, g.p, CARD_SIZE, g.p]} stroke="#FF3B7F" strokeWidth={1 / SCALE} dash={[10 / SCALE, 10 / SCALE]} listening={false} />
+                    <KLine key={`g${i}`} points={[0, g.p, CARD_SIZE, g.p]} stroke="#FF3B7F" strokeWidth={1 / STROKE_SCALE} dash={[10 / STROKE_SCALE, 10 / STROKE_SCALE]} listening={false} />
                   ),
                 )}
                 <Transformer

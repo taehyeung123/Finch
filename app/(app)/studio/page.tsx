@@ -17,6 +17,7 @@ import {
   Video,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge, ChannelBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -595,7 +596,7 @@ export default function StudioPage() {
             </Link>
           </p>
 
-          <Card className="border-primary/20 ring-1 ring-primary/10">
+          <Card className="border-primary/30">
             <CardHeader
               title="카드뉴스 만들기"
               description="템플릿과 주제를 고르면 내 톤으로 5장 카드뉴스 2안을 만들어드려요."
@@ -1133,7 +1134,15 @@ export default function StudioPage() {
                     })}
                   </div>
                 </section>
-              ) : null}
+              ) : (
+                /* 실 모드는 ideaSuggestions 가 빈 배열이라 위 섹션이 통째로 사라져
+                   화면이 거의 비었다 — 검색 카드와 안내 한 줄만 남았다. 검색으로 유도한다. */
+                <EmptyState
+                  icon={Lightbulb}
+                  title="키워드로 아이디어를 찾아보세요"
+                  description="위에서 관심 키워드를 검색하면 최근 트렌드를 근거로 맞춤 콘텐츠 아이디어를 만들어드려요."
+                />
+              )}
             </>
           )}
 
