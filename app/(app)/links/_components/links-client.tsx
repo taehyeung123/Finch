@@ -219,6 +219,12 @@ export function LinksClient({
 
   const editing = blocks.find((b) => b.id === editingId) ?? null;
 
+  /* 미리보기 대상은 **파생값**이다. previewMode 상태가 "live" 로 남아 있어도
+     스냅샷이 없으면(페이지를 지웠다 새로 만든 경우 — 같은 컴포넌트 인스턴스가
+     state 를 들고 살아남는다) 초안이다. 상태만 믿으면 토글은 「라이브」가 눌린
+     채로 초안을 그리는, 화면이 스스로 거짓말하는 조합이 생긴다. */
+  const effectivePreview: "draft" | "live" = previewMode === "live" && snapshot ? "live" : "draft";
+
   return (
     <div className="space-y-4">
       {/* 데모 모드는 **눌러보기 전에** 알린다 — 저장은 서버 액션이 막는다 */}
@@ -230,7 +236,20 @@ export function LinksClient({
       ) : null}
 
       {/* 상단 바 — 주소·복사·열기 + 라이브 반영 */}
-      <TopBar page={page} origin={origin} busy={busy} onPublish={() => run(() => publishLinkPage())} />
+      <TopBar
+        page={page}
+        origin={origin}
+        busy={busy}
+        onPublish={() =>
+          run(
+            () => publishLinkPage(),
+            /* 발행은 직전 삭제를 라이브로 **확정**하는 조작이다 — 그 뒤에도 되돌리기
+               바가 남아 있으면 "아직 무를 수 있는 실수"처럼 읽힌다(템플릿 적용·페이지
+               삭제와 같은 정리 규칙). */
+            () => setLastDeleted(null),
+          )
+        }
+      />
 
       {error ? (
         <p role="alert" className="rounded-card border border-negative/40 bg-negative-weak p-4 text-[15px] text-negative-strong">
@@ -279,7 +298,7 @@ export function LinksClient({
           <CardHeader
             title="미리보기"
             description={
-              previewMode === "live"
+              effectivePreview === "live"
                 ? "지금 공개 주소에 걸려 있는 모습이에요."
                 : page.publishedAt
                   ? page.dirty
@@ -299,12 +318,12 @@ export function LinksClient({
                 <button
                   key={m.key}
                   type="button"
-                  aria-pressed={previewMode === m.key}
+                  aria-pressed={effectivePreview === m.key}
                   disabled={m.key === "live" && !snapshot}
                   onClick={() => setPreviewMode(m.key)}
                   className={cn(
                     "trans-state rounded-chip px-3 py-1 text-[12px] font-semibold disabled:opacity-40",
-                    previewMode === m.key
+                    effectivePreview === m.key
                       ? "bg-primary text-on-primary"
                       : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
                   )}
@@ -314,7 +333,7 @@ export function LinksClient({
               ))}
             </div>
 
-            {previewMode === "live" && snapshot ? (
+            {effectivePreview === "live" && snapshot ? (
               <PhonePreview
                 /* 발행본은 프로필·테마까지 초안과 다를 수 있다 — 스냅샷의 값으로 통째로
                    바꿔 그린다. 초안 테마로 그리면 "라이브 모습"이라는 약속이 거짓이 된다. */
