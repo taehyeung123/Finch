@@ -5,21 +5,22 @@ import { Download } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
 import { parsePastedLinks, type HarvestedLink } from "@/lib/links";
+import { importFromLittly } from "../actions";
 
 /*
-  다른 서비스에서 링크 옮겨오기 — **붙여넣기**로 한다.
+  다른 서비스에서 링크 옮겨오기 — 기본은 **붙여넣기**, 리틀리만 **주소 가져오기**.
 
-  링크팜·Beacons 는 "주소만 넣으면 자동으로 가져오기"를 판다. 우리는 안 만들었다.
-  이유는 lib/links/index.ts 상단에 길게 적어놨는데 요약하면:
-   · 서버가 남의 주소를 여는 건 SSRF 다. Node fetch 로는 DNS 리바인딩을 막을 수 없고
-     Vercel 방화벽은 전부 인바운드라 애플리케이션 코드가 유일한 방어선이다.
-   · 정작 긁을 수 있는 곳이 거의 없다 — 링크트리는 robots 가 전면 거부,
-     인포크는 목적지가 페이로드에 없고, 링크팜은 Flutter 라 DOM 이 없다.
-   · 붙여넣기면 조작 4번이고 서버가 아무 데도 나가지 않는다.
+  임의 URL 서버 fetch 는 안 만든다(이유는 lib/links/index.ts 상단 — DNS 리바인딩을
+  fetch 로는 못 막고, Vercel 방화벽은 전부 인바운드다). 리틀리가 유일한 예외인 근거:
+  호스트가 상수(litt.ly)라 사용자 입력이 목적지를 못 정하고, robots 가 Allow: / 이며,
+  서버 HTML 의 data 페이로드에 블록이 구조화돼 있어 실측으로 검증됐다(2026-08-19,
+  사장님 승인). 상세는 actions.ts 의 importFromLittly 주석.
 
-  실제 사용법: 기존 링크 페이지를 브라우저에서 열고 → 전체 선택(Ctrl+A) → 복사 →
+  붙여넣기 사용법: 기존 링크 페이지를 브라우저에서 열고 → 전체 선택(Ctrl+A) → 복사 →
   여기 붙여넣기. 브라우저가 클립보드에 HTML 을 함께 넣어주므로 <a> 를 그대로 건진다.
   HTML 이 없으면 "이름 | 주소" 줄 파싱으로 떨어진다.
+
+  두 경로 모두 **같은 검증 관문**(parsePastedLinks)과 같은 선택 표를 쓴다.
 */
 
 export function ImportLinks({
@@ -33,6 +34,44 @@ export function ImportLinks({
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [labels, setLabels] = useState<Record<number, string>>({});
   const [note, setNote] = useState<string | null>(null);
+  const [littly, setLittly] = useState("");
+  const [fetching, setFetching] = useState(false);
+
+  /** 건진 후보를 표에 얹는다 — 붙여넣기·리틀리 두 경로가 같은 표를 쓴다 */
+  function showLinks(links: HarvestedLink[], emptyNote: string) {
+    setFound(links);
+    setPicked(new Set(links.map((_, i) => i).filter((i) => !links[i].tracking)));
+    setLabels({});
+    setNote(links.length === 0 ? emptyNote : null);
+  }
+
+  async function pullLittly() {
+    if (fetching || !littly.trim()) return;
+    setFetching(true);
+    setNote(null);
+    try {
+      const res = await importFromLittly(littly);
+      if (!res.ok || !res.links) {
+        setNote(res.error ?? "가져오지 못했어요.");
+        return;
+      }
+      /* 검증은 붙여넣기와 **같은 관문**(parsePastedLinks) — http 만·중복 제거·
+         추적 파라미터 제거·추적 주소 경고. sourceHost 는 안 넘긴다: 리틀리 페이로드에는
+         사이트 장식(푸터·로고)이 없고 전부 주인이 깐 블록이라, litt.ly/* 로 가는
+         링크도 주인이 의도한 진짜 링크다(실측: 매거진 페이지가 다른 리틀리 페이지
+         66개를 링크한다). */
+      const links = parsePastedLinks({
+        text: "",
+        anchors: res.links.map((l) => ({ href: l.url, label: l.label })),
+        max: 100,
+      });
+      showLinks(links, "그 페이지에서 가져올 링크를 찾지 못했어요.");
+    } catch {
+      setNote("가져오지 못했어요. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setFetching(false);
+    }
+  }
 
   function harvest(text: string, html: string) {
     let anchors: Array<{ href: string; label: string }> = [];
@@ -73,13 +112,9 @@ export function ImportLinks({
     }
 
     const links = parsePastedLinks({ text, anchors, sourceHost });
-    setFound(links);
-    setPicked(new Set(links.map((_, i) => i).filter((i) => !links[i].tracking)));
-    setLabels({});
-    setNote(
-      links.length === 0
-        ? "링크를 못 찾았어요. 기존 페이지를 열어 전체 선택(Ctrl+A) 후 복사해 붙여넣거나, 한 줄에 하나씩 「이름 | 주소」로 적어 주세요."
-        : null,
+    showLinks(
+      links,
+      "링크를 못 찾았어요. 기존 페이지를 열어 전체 선택(Ctrl+A) 후 복사해 붙여넣거나, 한 줄에 하나씩 「이름 | 주소」로 적어 주세요.",
     );
   }
 
@@ -97,6 +132,29 @@ export function ImportLinks({
           쓰던 링크 페이지를 열어 <strong className="font-semibold text-fg">전체 선택(Ctrl+A) → 복사</strong> 한 뒤
           아래에 붙여넣으세요. 한 줄에 하나씩 <code className="text-[12px]">이름 | 주소</code> 로 적어도 됩니다.
         </p>
+
+        {/* 리틀리는 주소만으로 가져온다 — 서버가 페이지의 data 페이로드를 읽는다
+            (actions.ts 의 importFromLittly, 유일한 서버 fetch 경로). */}
+        <div className="flex items-center gap-1.5">
+          <input
+            value={littly}
+            onChange={(e) => setLittly(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void pullLittly();
+              }
+            }}
+            placeholder="litt.ly/아이디"
+            aria-label="리틀리 주소"
+            className="h-9 min-w-0 flex-1 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
+          />
+          <Button size="sm" variant="secondary" disabled={fetching || !littly.trim()} onClick={() => void pullLittly()}>
+            {fetching ? "가져오는 중…" : "리틀리에서 가져오기"}
+          </Button>
+        </div>
+
+        <p className="text-[12px] text-fg-sub">다른 서비스는 아래에 붙여넣으세요.</p>
 
         <textarea
           rows={3}

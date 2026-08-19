@@ -8,6 +8,7 @@ import { SLUG_MESSAGES, normalizeUrl, sliceChars, validateSlug } from "@/lib/lin
 import { BLOCK_TYPES, defaultBlockData, type BlockType } from "@/lib/links/blocks";
 import { DEFAULT_THEME_KEY, themeByKey } from "@/lib/links/themes";
 import { LINK_TEMPLATES } from "@/lib/links/templates";
+import { parseLittlyHtml } from "@/lib/links/littly";
 import { getLinkFeedItems } from "@/lib/data/live";
 
 /*
@@ -396,6 +397,114 @@ export async function addBlock(type: BlockType): Promise<Result> {
   }
   revalidatePath("/links");
   return { ok: true };
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   리틀리 가져오기 — 유일한 서버 fetch 경로
+   ══════════════════════════════════════════════════════════════════ */
+
+/** 리틀리 별칭 형식 — 실측 별칭(start_now_new·client 등)이 전부 이 안에 든다 */
+const LITTLY_SLUG_RE = /^[A-Za-z0-9._~-]{1,80}$/;
+
+/** 리틀리 응답 상한 — 실측 페이지가 22~35KB 다. 이걸 넘으면 페이지가 아니라 공격이다 */
+const LITTLY_MAX_BYTES = 2 * 1024 * 1024;
+
+/**
+ * 리틀리(litt.ly) 페이지에서 링크 후보를 가져온다.
+ *
+ * **이 레포에서 사용자 입력으로 서버가 밖에 나가는 유일한 경로다.** 일반 URL
+ * 가져오기를 만들지 않은 이유(lib/links/index.ts 상단)는 그대로 유효하고,
+ * 여기가 예외일 수 있는 근거는 셋이다:
+ *  ① 호스트가 **상수**다 — 사용자는 슬러그만 주고 주소는 우리가 조립한다.
+ *     DNS 리바인딩·내부망 접근은 공격자가 호스트를 고를 수 있을 때의 위협이다.
+ *  ② 리다이렉트를 **따라가지 않는다** — 없는 슬러그는 리틀리가 301 로 홈에
+ *     되던지는데(실측), 그게 곧 "못 찾음" 신호다. 3xx 를 내부망으로 트는
+ *     고전 우회도 같은 이유로 막힌다.
+ *  ③ robots.txt 가 `Allow: /` 다(실측 — 링크트리는 전면 거부라 안 만들었다).
+ *
+ * 남용(우리를 리틀리 상대 프록시로 쓰기): 로그인 필수 + 호스트 상수 + 응답 상한.
+ * 공격자 입장에서는 리틀리를 직접 치는 게 더 싸므로 실익이 없다.
+ *
+ * 여기서는 **가져오기만** 한다 — 저장은 사용자가 표에서 골라 addBlocksBulk 로.
+ * 후보 검증(http 만·중복 제거·추적 파라미터 제거)도 붙여넣기 경로와 같은
+ * parsePastedLinks 관문을 클라이언트에서 태운다. 관문을 두 벌 만들면 반드시 갈린다.
+ */
+export async function importFromLittly(
+  raw: string,
+): Promise<{ ok: boolean; error?: string; pageTitle?: string | null; links?: Array<{ label: string; url: string }> }> {
+  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 가져올 수 없어요." };
+  const user = await getAuthUser();
+  if (!user) return AUTH;
+
+  /* "https://litt.ly/abc", "litt.ly/abc", "abc" 를 모두 받는다.
+     다른 도메인 주소가 들어오면 **다른 오류**로 갈라 말한다 — "못 찾았어요"로
+     뭉개면 사용자가 리틀리 주소를 계속 다시 붙여넣는다. */
+  let input = raw.trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "");
+  if (input.includes("/")) {
+    const host = input.split("/")[0].toLowerCase();
+    if (host !== "litt.ly") {
+      return { ok: false, error: "리틀리(litt.ly) 주소만 가져올 수 있어요. 다른 서비스는 페이지를 복사해 위 칸에 붙여넣어 주세요." };
+    }
+    input = input.slice(host.length + 1);
+  }
+  const slug = input.split(/[/?#]/)[0];
+  if (!LITTLY_SLUG_RE.test(slug)) {
+    return { ok: false, error: "리틀리 주소가 아니에요. litt.ly/아이디 형태로 넣어 주세요." };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`https://litt.ly/${encodeURIComponent(slug)}`, {
+      redirect: "manual",
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+      headers: {
+        /* 우리가 누구인지 밝힌다 — robots 를 열어둔 상대에 대한 최소한의 예의다 */
+        "user-agent": "Mozilla/5.0 (compatible; FinchImport/1.0; +https://finch.ai.kr)",
+        accept: "text/html",
+      },
+    });
+  } catch {
+    return { ok: false, error: "리틀리에 접속하지 못했어요. 잠시 후 다시 시도해 주세요." };
+  }
+
+  /* 없는 슬러그 = 301 홈 리다이렉트(실측). 따라가지 않고 여기서 끝낸다 */
+  if (res.status >= 300 && res.status < 400) {
+    return { ok: false, error: "그 주소의 리틀리 페이지를 찾지 못했어요. 아이디를 확인해 주세요." };
+  }
+  if (!res.ok) {
+    return { ok: false, error: "리틀리 페이지를 열지 못했어요. 잠시 후 다시 시도해 주세요." };
+  }
+  if (!(res.headers.get("content-type") ?? "").includes("text/html")) {
+    return { ok: false, error: "리틀리 페이지 형식을 읽지 못했어요." };
+  }
+
+  /* 크기 상한을 걸며 읽는다 — arrayBuffer() 는 상한 없이 다 받는다 */
+  let html = "";
+  const reader = res.body?.getReader();
+  if (!reader) return { ok: false, error: "리틀리 페이지를 읽지 못했어요." };
+  const decoder = new TextDecoder();
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > LITTLY_MAX_BYTES) {
+      reader.cancel().catch(() => {});
+      return { ok: false, error: "페이지가 너무 커서 가져올 수 없어요." };
+    }
+    html += decoder.decode(value, { stream: true });
+  }
+  html += decoder.decode();
+
+  const parsed = parseLittlyHtml(html);
+  if (!parsed) {
+    return { ok: false, error: "리틀리 페이지 형식이 바뀐 것 같아요. 페이지를 복사해 위 칸에 붙여넣어 주세요." };
+  }
+  if (parsed.candidates.length === 0) {
+    return { ok: false, error: "그 페이지에서 가져올 링크를 찾지 못했어요." };
+  }
+  return { ok: true, pageTitle: parsed.pageTitle, links: parsed.candidates };
 }
 
 /**
