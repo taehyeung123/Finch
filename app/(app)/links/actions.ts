@@ -5,7 +5,7 @@ import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
 import { SLUG_MESSAGES, isMissingColumnError, normalizeUrl, sliceChars, validateSlug } from "@/lib/links";
-import { defaultBlockData, type BlockType } from "@/lib/links/blocks";
+import { BLOCK_TYPES, defaultBlockData, type BlockType } from "@/lib/links/blocks";
 import { DEFAULT_THEME_KEY, themeByKey } from "@/lib/links/themes";
 import { LINK_TEMPLATES } from "@/lib/links/templates";
 import { getLinkFeedItems } from "@/lib/data/live";
@@ -508,6 +508,57 @@ export async function deleteBlock(id: string): Promise<Result> {
   if (error) {
     console.error("[links] 블록 삭제 실패:", error.message);
     return { ok: false, error: "삭제하지 못했어요." };
+  }
+  revalidatePath("/links");
+  return { ok: true };
+}
+
+/**
+ * 지운 블록을 되살린다 — 삭제 직후 「되돌리기」 한 번의 범위다.
+ *
+ * 전체 undo 스택을 만들지 않는 이유: 모든 변경이 이미 DB 에 커밋되는 구조라
+ * 역방향 액션을 조작마다 새로 만들어야 하는데, 실수의 대부분은 "잘못 지웠다"다.
+ * 삭제 확인 + 이 되돌리기로 그 실수를 막고, 나머지는 draft/발행 분리가 안전망이다.
+ *
+ * id 는 새로 나온다(옛 id 는 이미 지워졌다). 통계의 block_id 는 스냅샷에 굳은
+ * id 를 가리키므로(0049) 다음 발행 때 자연히 새 id 로 이어진다.
+ */
+export async function restoreBlock(input: {
+  type: BlockType;
+  data: Record<string, unknown>;
+  sortOrder: number;
+  active: boolean;
+}): Promise<Result> {
+  if (isDemoMode()) return DEMO;
+  const page = await myPage();
+  if (!page) return { ok: false, error: "프로필 링크가 없어요." };
+
+  /* 클라이언트가 들고 있던 값이지만 원래 서버에서 나간 값이다 — 그래도 관문은
+     그대로 태운다. 여기서만 건너뛰면 이 경로가 검증 우회 통로가 된다. */
+  if (!BLOCK_TYPES.includes(input.type)) return { ok: false, error: "되살릴 수 없는 블록이에요." };
+  const cleaned = sanitizeBlockData(input.data ?? {});
+  if (cleaned.error) return { ok: false, error: cleaned.error };
+
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("link_blocks")
+    .select("id", { count: "exact", head: true })
+    .eq("page_id", page.id);
+  if ((count ?? 0) >= MAX_BLOCKS) {
+    return { ok: false, error: `블록은 ${MAX_BLOCKS}개까지예요.` };
+  }
+
+  const sortOrder = Number.isInteger(input.sortOrder) && input.sortOrder >= 0 ? input.sortOrder : 0;
+  const { error } = await supabase.from("link_blocks").insert({
+    page_id: page.id,
+    type: input.type,
+    data: cleaned.data,
+    sort_order: sortOrder,
+    active: !!input.active,
+  });
+  if (error) {
+    console.error("[links] 블록 복원 실패:", error.message);
+    return { ok: false, error: "되살리지 못했어요." };
   }
   revalidatePath("/links");
   return { ok: true };

@@ -39,6 +39,7 @@ import {
   deleteLinkPage,
   moveBlock,
   publishLinkPage,
+  restoreBlock,
   setLinkPublished,
   updateBlock,
   updateLinkImages,
@@ -109,6 +110,14 @@ export function LinksClient({
      링크팜은 이 둘을 나란히 두 판으로 보여주는데, 우리 지면에는 한 판 자리라
      토글로 간다 — 목적(초안과 라이브를 눈으로 비교)은 같다. */
   const [previewMode, setPreviewMode] = useState<"draft" | "live">("draft");
+  /* 마지막으로 지운 블록 — 「되돌리기」 한 번의 범위. 새 삭제가 덮어쓴다 */
+  const [lastDeleted, setLastDeleted] = useState<{
+    type: BlockType;
+    data: Record<string, unknown>;
+    sortOrder: number;
+    active: boolean;
+    label: string;
+  } | null>(null);
 
   /* 편집 중인 블록 값은 **여기서** 들고 있다 — 편집기 안에 가둬 두면 탭을 누르는
      시점에 부모가 "미저장인가"를 알 수 없다. baseline 은 마지막으로 서버에 반영된 값. */
@@ -208,6 +217,34 @@ export function LinksClient({
       <p aria-live="polite" className="sr-only">
         {notice}
       </p>
+
+      {/* 삭제 되돌리기 — 블록 삭제는 물리 삭제다. 마지막 한 건은 여기서 복원한다 */}
+      {lastDeleted ? (
+        <div className="card-face flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
+          <span className="min-w-0 flex-1 truncate text-[14px]">
+            「{lastDeleted.label}」 블록을 삭제했어요.
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={busy}
+            onClick={() =>
+              run(
+                () => restoreBlock(lastDeleted),
+                () => {
+                  setLastDeleted(null);
+                  setNotice("블록을 되살렸어요.");
+                },
+              )
+            }
+          >
+            되돌리기
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setLastDeleted(null)}>
+            닫기
+          </Button>
+        </div>
+      ) : null}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_26rem] xl:items-start">
         {/* 좌 — 미리보기. 초안/라이브를 토글로 오간다(링크팜은 두 판을 나란히 두는데,
@@ -376,7 +413,26 @@ export function LinksClient({
                     () => setNotice(`${label} 블록을 ${dir === "up" ? "위로" : "아래로"} 옮겼어요.`),
                   )
                 }
-                onDelete={(id) => run(() => deleteBlock(id))}
+                onDelete={(id) => {
+                  const b = blocks.find((x) => x.id === id);
+                  run(
+                    () => deleteBlock(id),
+                    () => {
+                      /* 삭제는 물리 삭제라 되돌릴 길이 없었다 — 지운 내용을 여기 들고
+                         있다가 「되돌리기」가 새 행으로 재삽입한다(restoreBlock). */
+                      if (b) {
+                        setLastDeleted({
+                          type: b.type,
+                          data: b.data,
+                          sortOrder: b.sortOrder,
+                          active: b.active,
+                          label: blockSummary(b.type, b.data),
+                        });
+                      }
+                      setNotice("블록을 삭제했어요. 되돌리기를 누르면 복원돼요.");
+                    },
+                  );
+                }}
               />
             ) : tab === "stats" ? (
               <StatsPanel
