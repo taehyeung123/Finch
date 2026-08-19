@@ -27,6 +27,10 @@ export default async function AutoDmPage() {
   let posts: Post[] = samplePosts.filter((p) => p.channel === "instagram");
   let accountHandle: string | null = null;
   let accountAvatar: string | null = null;
+  /* 0052(follow_request) 컬럼이 실제로 있는가 — false 면 위저드가 팔로우 요청 토글을
+     비활성화한다. 저장이 조용히 버려지는데 성공으로 보이는 컨트롤은 없느니만 못하다
+     (links 0051 때 확정한 규칙 — 같은 패턴, 같은 대책). */
+  let followRequestReady = true;
 
   const plan = await getCurrentPlan();
   const contentLimit = dmContentLimitFor(plan);
@@ -41,7 +45,10 @@ export default async function AutoDmPage() {
         const q = (cols: string) =>
           supabase.from("auto_dm_rules").select(cols).order("created_at", { ascending: false });
         let res = await q(RULE_COLUMNS);
-        if (res.error && missingFollowRequest(res.error.message)) res = await q(RULE_COLUMNS_NO_FOLLOW);
+        if (res.error && missingFollowRequest(res.error.message)) {
+          followRequestReady = false;
+          res = await q(RULE_COLUMNS_NO_FOLLOW);
+        }
         if (res.error && missingLegacyColumns(res.error.message)) res = await q(RULE_COLUMNS_LEGACY);
         return { data: res.data, error: res.error?.message ?? null };
       };
@@ -77,6 +84,7 @@ export default async function AutoDmPage() {
       contentLimit={contentLimit}
       accountHandle={accountHandle}
       accountAvatar={accountAvatar}
+      followRequestReady={followRequestReady}
     />
   );
 }

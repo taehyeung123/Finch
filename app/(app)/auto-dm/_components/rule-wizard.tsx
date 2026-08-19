@@ -81,6 +81,7 @@ export function RuleWizard({
   contentLimit,
   accountHandle,
   accountAvatar,
+  followRequestReady,
   onSave,
   onClose,
 }: {
@@ -93,6 +94,8 @@ export function RuleWizard({
   accountHandle: string | null;
   /** 연동 인스타 프로필 사진 — 있으면 미리보기 아바타에 실제 사진을 쓴다 */
   accountAvatar: string | null;
+  /** 0052(follow_request) 컬럼 존재 여부 — false 면 토글 비활성(조용한 유실 방지) */
+  followRequestReady: boolean;
   onSave: (draft: RuleDraft) => void | Promise<void>;
   onClose: () => void;
 }) {
@@ -939,15 +942,25 @@ export function RuleWizard({
                   <p className="text-[12px] text-negative">답글 문구가 비어 있어요 — 뒤로 이동해 답글을 채워 주세요.</p>
                 ) : null}
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-[15px] font-medium">
+                  <span className={cn("text-[15px] font-medium", !followRequestReady && "text-fg-sub")}>
                     팔로우 요청 후 메시지 보내기
                     <InfoTip>
                       댓글 작성자가 나를 팔로우하지 않았다면, 본 메시지 전에 팔로우 요청을 먼저 보냅니다.
                       팔로워 전환에 도움이 되지만 한 단계가 늘어나요.
                     </InfoTip>
                   </span>
-                  <Switch checked={followRequest} onChange={setFollowRequest} label="팔로우 요청 후 메시지 보내기" />
+                  {/* 0052 미적용이면 비활성 — 켜고 확인했는데 목록에 OFF 로 나오는
+                      "성공처럼 보이는 유실"을 만들지 않는다(links 0051 과 같은 규칙) */}
+                  <Switch
+                    checked={followRequest}
+                    onChange={setFollowRequest}
+                    disabled={!followRequestReady}
+                    label="팔로우 요청 후 메시지 보내기"
+                  />
                 </div>
+                {!followRequestReady ? (
+                  <p className="text-[12px] text-fg-sub">팔로우 요청은 서버 업데이트(0052) 적용 후 쓸 수 있어요.</p>
+                ) : null}
               </div>
 
               <p className="pt-1 text-center text-[14px] text-fg-sub">수정하려면 뒤로 이동해주세요.</p>

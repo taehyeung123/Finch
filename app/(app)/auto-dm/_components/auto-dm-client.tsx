@@ -45,6 +45,7 @@ export function AutoDmClient({
   contentLimit,
   accountHandle,
   accountAvatar,
+  followRequestReady,
 }: {
   initialRules: AutoDmRule[];
   posts: Post[];
@@ -53,6 +54,8 @@ export function AutoDmClient({
   accountHandle: string | null;
   /** 연동 인스타 프로필 사진 — 위저드 DM 미리보기 아바타 (미연동 시 이니셜 폴백) */
   accountAvatar: string | null;
+  /** 0052 컬럼 존재 여부 — false 면 위저드가 팔로우 요청 토글을 비활성화한다 */
+  followRequestReady: boolean;
 }) {
   const [rules, setRules] = useState<AutoDmRule[]>(initialRules);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -279,19 +282,17 @@ export function AutoDmClient({
                             </dd>
                           </div>
                         ) : null}
-                        <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                          <div className="flex gap-1.5">
-                            <dt className="text-fg-faint">자동 답글 :</dt>
-                            <dd className={rule.publicReplies.length > 0 ? "font-semibold text-positive" : "text-fg-sub"}>
-                              {rule.publicReplies.length > 0 ? "ON" : "OFF"}
-                            </dd>
-                          </div>
-                          <div className="flex gap-1.5">
-                            <dt className="text-fg-faint">팔로우 요청 :</dt>
-                            <dd className={rule.followRequest ? "font-semibold text-positive" : "text-fg-sub"}>
-                              {rule.followRequest ? "ON" : "OFF"}
-                            </dd>
-                          </div>
+                        {/* dl 의 div 래퍼는 dt/dd 를 **직접** 담아야 명세에 맞는다 —
+                            중첩 div 로 한 단계 더 감싸면 콘텐츠 모델 위반이다 */}
+                        <div className="flex flex-wrap gap-x-1.5 gap-y-0.5">
+                          <dt className="text-fg-faint">자동 답글 :</dt>
+                          <dd className={rule.publicReplies.length > 0 ? "font-semibold text-positive" : "text-fg-sub"}>
+                            {rule.publicReplies.length > 0 ? "ON" : "OFF"}
+                          </dd>
+                          <dt className="ml-1.5 text-fg-faint">팔로우 요청 :</dt>
+                          <dd className={rule.followRequest ? "font-semibold text-positive" : "text-fg-sub"}>
+                            {rule.followRequest ? "ON" : "OFF"}
+                          </dd>
                         </div>
                       </dl>
 
@@ -348,6 +349,7 @@ export function AutoDmClient({
           contentLimit={contentLimit}
           accountHandle={accountHandle}
           accountAvatar={accountAvatar}
+          followRequestReady={followRequestReady}
           onSave={saveRule}
           onClose={() => {
             setEditorOpen(false);
