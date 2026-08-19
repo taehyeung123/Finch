@@ -32,6 +32,7 @@ import { LAYOUTS, LINK_THEMES, SNS_KINDS } from "@/lib/links/themes";
 import { LINK_TEMPLATES } from "@/lib/links/templates";
 import {
   addBlock,
+  addBlocksBulk,
   applyTemplate,
   createLinkPage,
   deleteBlock,
@@ -47,6 +48,7 @@ import {
 import type { LinkLead, LinkPageView, LinkStats } from "@/lib/links/types";
 import { BlockEditor, EDITOR_TITLE_ID } from "./block-editor";
 import { ImageField } from "./image-field";
+import { ImportLinks } from "./import-links";
 import { PhonePreview } from "./phone-preview";
 
 /*
@@ -294,6 +296,12 @@ export function LinksClient({
                 busy={busy}
                 onAdd={(t) => run(() => addBlock(t))}
                 onApplyTemplate={(k) => run(() => applyTemplate(k))}
+                onImport={(items) =>
+                  run(
+                    () => addBlocksBulk(items),
+                    () => setNotice(`링크 ${items.length}개를 추가했어요.`),
+                  )
+                }
                 onEdit={openEditor}
                 onToggle={(id, active) => run(() => updateBlock(id, { active }))}
                 /* 안내는 **성공했을 때만** 나간다. 앞서는 run() 밖에서 동기로 불러서,
@@ -400,6 +408,7 @@ function BlocksPanel({
   busy,
   onAdd,
   onApplyTemplate,
+  onImport,
   onEdit,
   onToggle,
   onMove,
@@ -409,6 +418,7 @@ function BlocksPanel({
   busy: boolean;
   onAdd: (t: BlockType) => void;
   onApplyTemplate: (key: string) => void;
+  onImport: (items: Array<{ label: string; url: string }>) => void;
   onEdit: (id: string) => void;
   onToggle: (id: string, active: boolean) => void;
   onMove: (id: string, dir: "up" | "down", label: string) => void;
@@ -498,6 +508,10 @@ function BlocksPanel({
           ))}
         </div>
       </details>
+
+      {/* 다른 서비스에서 옮겨오기 — 템플릿과 같은 격의 접이식.
+          생성 폼에 두면 이미 페이지가 있는 사용자가 영원히 못 본다. */}
+      <ImportLinks busy={busy} onImport={onImport} />
 
       {blocks.length === 0 ? (
         <p className="text-[14px] text-fg-sub">「추가」를 눌러 첫 블록을 만들거나, 위 템플릿으로 시작해 보세요.</p>

@@ -95,6 +95,154 @@ export function sliceChars(raw: string, max: number): string {
   return chars.length <= max ? raw : chars.slice(0, max).join("");
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   다른 서비스에서 링크 옮겨오기 — 붙여넣기 파싱
+   ══════════════════════════════════════════════════════════════════
+
+   ⚠️ **서버가 남의 URL 을 fetch 하지 않는다.** 링크팜·Beacons 식 "주소만 넣으면
+   자동으로 가져오기"를 안 만든 이유는 셋이다:
+
+    ① 위험. 사용자가 준 주소를 서버가 여는 건 SSRF 의 교과서적 형태다. Node 의
+       global fetch 에는 소켓 연결 직전에 목적지 IP 를 검사할 훅이 없어서
+       **DNS 리바인딩**(1차 조회는 공인 IP, 2차는 169.254.169.254)을 막을 수 없다.
+       redirect:"manual" 로도 못 막는다 — 리다이렉트가 아니라 같은 주소의 DNS
+       재조회가 문제이기 때문이다. 제대로 하려면 node:https + 커스텀 lookup 으로
+       네트워크 계층을 직접 짜야 한다. 게다가 Vercel 의 방화벽은 전부 인바운드라
+       애플리케이션 코드가 유일한 방어선이다 = 한 줄 실수가 곧 완전한 SSRF.
+
+    ② 실익. 실제로 긁을 수 있는 곳이 거의 없다. 링크트리는 robots.txt 가
+       `Disallow: /` 이고(명명된 봇 58개만 허용, 우리는 없다), 인포크는 모든 주소가
+       자체 리다이렉트라 **진짜 목적지가 페이로드에 없으며**, 링크팜은 Flutter 웹이라
+       DOM 도 페이로드도 없다.
+
+    ③ 대안이 거의 같은 값을 낸다. 붙여넣기는 조작 4번이면 끝나고 서버가 아무 데도
+       나가지 않는다(위 위협 모델 전체가 사라진다).
+
+   그래서 여기 있는 건 **순수 함수**다. 네트워크를 쓰지 않는다. */
+
+/** 붙여넣기에서 건져낸 링크 후보 */
+export interface HarvestedLink {
+  url: string;
+  label: string;
+  /** 남의 클릭 추적을 거치는 주소인가 — 그대로 넣으면 성과가 그쪽에 계속 쌓인다 */
+  tracking: boolean;
+}
+
+/** 중복 판정 전에 떼어내는 추적 파라미터. **저장할 때도** 뗀다 */
+const TRACKING_PARAMS = [
+  "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "utm_id",
+  "si", "fbclid", "igshid", "gclid", "mc_cid", "mc_eid", "ref_src", "ref_url", "_gl",
+];
+
+/**
+ * 남의 클릭 집계를 거치는 주소.
+ *
+ * 이런 링크를 그대로 옮기면 방문자가 우리 페이지에서 눌러도 **클릭이 그쪽에 잡힌다.**
+ * 게다가 원 서비스를 해지하면 그 주소가 통째로 죽는다. 자동 임포트를 파는 경쟁사는
+ * 이 사실을 말해주지 않는다 — 우리는 체크를 꺼두고 이유를 적는다.
+ */
+const TRACKING_HOSTS = [
+  "link.inpock.co.kr", "linktr.ee", "bit.ly", "buly.kr", "vo.la", "me2.do", "han.gl", "lnk.bio",
+];
+
+/** 추적 파라미터를 떼고 비교용으로 정규화 — 같은 목적지가 여러 번 들어오는 걸 막는다 */
+function dedupeKey(raw: string): string {
+  try {
+    const u = new URL(raw);
+    for (const p of TRACKING_PARAMS) u.searchParams.delete(p);
+    u.hash = "";
+    /* 끝의 / 하나는 같은 페이지다 */
+    const path = u.pathname.replace(/\/$/, "");
+    return `${u.hostname.replace(/^www\./, "")}${path}${u.search}`;
+  } catch {
+    return raw;
+  }
+}
+
+/** 추적 파라미터를 실제로 떼어낸 저장용 주소 */
+function cleanUrl(raw: string): string {
+  try {
+    const u = new URL(raw);
+    for (const p of TRACKING_PARAMS) u.searchParams.delete(p);
+    return u.toString();
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * 붙여넣기 텍스트에서 이름·주소 쌍을 건진다.
+ *
+ * 두 갈래를 **한 상자에서** 받는다:
+ *  · `anchors` — 브라우저가 클립보드에 함께 넣어준 HTML 에서 뽑은 <a> (본선).
+ *    링크트리·리틀리 같은 페이지를 그대로 긁어 붙이면 이쪽이 채워진다.
+ *  · `text` — "이름 | 주소" 또는 주소만 있는 줄 (안전망). HTML 이 없거나
+ *    앵커가 하나도 없을 때 쓴다. 순수 텍스트에는 라벨만 남고 URL 이 없는 경우가
+ *    많아서 본선이 될 수 없다.
+ *
+ * 노이즈 제거 규칙 셋이면 충분하다는 게 실측이다(링크트리 앵커 133개 → 정답 20,
+ * 오검출 0): ① 원본과 같은 호스트 버리기 ② 이름 없는 링크 버리기 ③ 중복 제거.
+ */
+export function parsePastedLinks(input: {
+  text: string;
+  anchors?: Array<{ href: string; label: string }>;
+  /** 붙여넣은 페이지 자신의 호스트 — 그쪽 푸터·로고 링크를 걸러낸다 */
+  sourceHost?: string;
+  max?: number;
+}): HarvestedLink[] {
+  const max = input.max ?? 30;
+  const out: HarvestedLink[] = [];
+  const seen = new Set<string>();
+
+  const push = (rawHref: string, rawLabel: string) => {
+    if (out.length >= max) return;
+    const href = normalizeUrl(rawHref);
+    if (!href) return;
+
+    let host: string;
+    try {
+      host = new URL(href).hostname.replace(/^www\./, "");
+    } catch {
+      return;
+    }
+    /* ① 붙여넣은 페이지 자신으로 돌아가는 링크(로고·푸터·약관)는 버린다 */
+    if (input.sourceHost && host === input.sourceHost.replace(/^www\./, "")) return;
+
+    const key = dedupeKey(href);
+    if (seen.has(key)) return; // ③ 중복
+    seen.add(key);
+
+    const label = sliceChars(rawLabel.replace(/\s+/g, " ").trim(), 40);
+    out.push({
+      url: cleanUrl(href),
+      label,
+      tracking: TRACKING_HOSTS.some((t) => host === t || host.endsWith(`.${t}`)),
+    });
+  };
+
+  /* 본선: HTML 앵커 */
+  for (const a of input.anchors ?? []) {
+    if (!a.label.trim()) continue; // ② 이름 없는 링크(아이콘·빈 앵커)
+    push(a.href, a.label);
+  }
+
+  /* 안전망: 줄 단위. 앵커에서 이미 건진 주소는 dedupe 가 막는다 */
+  for (const line of (input.text ?? "").split(/\r?\n/)) {
+    const row = line.trim();
+    if (!row) continue;
+    /* "이름 | 주소", "이름 - 주소", "이름<탭>주소" 를 모두 받는다 */
+    const m = /^(.*?)[\s|\-–—\t]+((?:https?:\/\/|www\.)\S+)$/i.exec(row);
+    if (m) {
+      push(m[2], m[1].trim());
+      continue;
+    }
+    const only = /^((?:https?:\/\/|www\.)\S+)$/i.exec(row);
+    if (only) push(only[1], "");
+  }
+
+  return out;
+}
+
 /**
  * 이니셜 원에 쓸 첫 글자.
  *

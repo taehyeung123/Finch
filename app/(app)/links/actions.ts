@@ -389,6 +389,70 @@ export async function addBlock(type: BlockType): Promise<Result> {
   return { ok: true };
 }
 
+/**
+ * 여러 링크를 한 번에 추가한다 — 다른 서비스에서 옮겨올 때 쓴다.
+ *
+ * ⚠️ 서버가 남의 주소를 **fetch 하지 않는다.** 수확은 클라이언트가 붙여넣기에서
+ * 하고(lib/links 의 parsePastedLinks — 순수 함수), 여기는 그 결과를 받아 넣기만 한다.
+ * 이유는 lib/links/index.ts 상단에 적었다(요약: fetch 로는 DNS 리바인딩을 못 막고,
+ * Vercel 에는 아웃바운드 방어가 없어 코드 한 줄 실수가 곧 완전한 SSRF 다).
+ *
+ * **덮지 않고 뒤에 붙인다.** applyTemplate 이 덮는 건 그게 페이지 *전체 구성*이라서고,
+ * 가져오기는 *링크 목록*이다. 되돌릴 수 있는 쪽이 기본값이어야 한다.
+ */
+export async function addBlocksBulk(
+  items: Array<{ label: string; url: string }>,
+): Promise<Result & { added?: number }> {
+  if (isDemoMode()) return DEMO;
+  const page = await myPage();
+  if (!page) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
+  if (items.length === 0) return { ok: false, error: "추가할 링크가 없어요." };
+
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("link_blocks")
+    .select("id", { count: "exact", head: true })
+    .eq("page_id", page.id);
+
+  const room = MAX_BLOCKS - (count ?? 0);
+  if (room <= 0) {
+    return { ok: false, error: `블록은 ${MAX_BLOCKS}개까지예요. 안 쓰는 블록을 지우고 다시 시도해 주세요.` };
+  }
+  /* 넘치면 **자르지 않고 알린다** — 조용히 앞 몇 개만 들어가면 나머지가 어디 갔는지 모른다 */
+  if (items.length > room) {
+    return { ok: false, error: `지금 ${room}개까지만 더 넣을 수 있어요. ${items.length}개를 고르셨습니다.` };
+  }
+
+  /* 맨 아래부터. max+1 을 읽는다 — count 를 쓰면 중간 삭제 후 기존 블록과 겹친다 */
+  const { data: last } = await supabase
+    .from("link_blocks")
+    .select("sort_order")
+    .eq("page_id", page.id)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  let order = (last?.sort_order ?? -1) + 1;
+
+  const rows: Array<{ page_id: string; type: BlockType; data: Record<string, unknown>; sort_order: number }> = [];
+  for (const it of items) {
+    /* 새 검증 경로를 만들지 않는다 — 기존 관문을 그대로 태운다.
+       여기서 갈라지면 언젠가 반드시 어긋난다. */
+    const cleaned = sanitizeBlockData({ label: it.label || "링크", url: it.url, emphasis: "normal" });
+    if (cleaned.error) return { ok: false, error: cleaned.error };
+    if (!cleaned.data?.url) continue; // 주소가 안 남았으면 넣을 이유가 없다
+    rows.push({ page_id: page.id, type: "link", data: cleaned.data, sort_order: order++ });
+  }
+  if (rows.length === 0) return { ok: false, error: "넣을 수 있는 주소가 없어요." };
+
+  const { error } = await supabase.from("link_blocks").insert(rows);
+  if (error) {
+    console.error("[links] 링크 일괄 추가 실패:", error.message);
+    return { ok: false, error: "추가하지 못했어요." };
+  }
+  revalidatePath("/links");
+  return { ok: true, added: rows.length };
+}
+
 export async function updateBlock(
   id: string,
   patch: { data?: Record<string, unknown>; active?: boolean },
