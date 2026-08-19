@@ -19,7 +19,7 @@ import { DELETE_PHRASE } from "./constants";
   ⚠️ 새 버킷에 사용자별 프리픽스로 파일을 쓰기 시작하면 **여기 추가할 것.**
      (reference-thumbs 의 `pool/` 프리픽스는 공용 풀이라 대상이 아니다)
 */
-const USER_BUCKETS = ["cardnews", "brand-logos", "reference-thumbs"] as const;
+const USER_BUCKETS = ["cardnews", "brand-logos", "reference-thumbs", "link-assets"] as const;
 
 /** Storage list 는 한 번에 최대 1000개다 — 넘으면 조용히 잘려 파일이 남는다. 끝까지 판다. */
 async function listAll(

@@ -212,6 +212,71 @@ export async function deleteLinkPage(): Promise<Result> {
 }
 
 /* ══════════════════════════════════════════════════════════════════
+   이미지 업로드
+   ══════════════════════════════════════════════════════════════════ */
+
+/** 2MB. 프로필 링크는 모바일에서 열리는 페이지라 큰 이미지는 그 자체로 이탈 요인이다 */
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
+/**
+ * data URL 을 link-assets 버킷에 올리고 공개 URL 을 돌려준다.
+ *
+ * 클라이언트가 FileReader 로 만든 data URL 을 보낸다 — FormData 멀티파트 대신 이 방식인
+ * 이유는 서버 액션 하나로 끝나고(별도 API 라우트 불필요) 브랜드 킷(0015)이 이미 같은
+ * 패턴이라 검증돼 있어서다.
+ *
+ * 경로는 `${user.id}/...` — Storage RLS 가 본인 폴더만 허용한다(0048).
+ * 탈퇴 시 정리 대상이기도 하다(settings/profile/actions.ts 의 USER_BUCKETS 에 추가할 것).
+ */
+export async function uploadLinkImage(dataUrl: string): Promise<{ ok: boolean; url?: string; error?: string }> {
+  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 올릴 수 없어요." };
+  const user = await getAuthUser();
+  if (!user) return { ok: false, error: "로그인이 필요해요." };
+
+  const m = /^data:(image\/(?:png|jpeg|webp|gif|svg\+xml));base64,(.+)$/.exec(dataUrl);
+  if (!m) return { ok: false, error: "PNG·JPG·WEBP·GIF·SVG 이미지만 올릴 수 있어요." };
+
+  const buf = Buffer.from(m[2], "base64");
+  if (buf.byteLength > MAX_IMAGE_BYTES) return { ok: false, error: "이미지는 2MB 이하만 올릴 수 있어요." };
+
+  const ext = m[1].split("/")[1].replace("svg+xml", "svg").replace("jpeg", "jpg");
+  const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+
+  const supabase = await createClient();
+  const { error } = await supabase.storage.from("link-assets").upload(path, buf, {
+    contentType: m[1],
+    upsert: false,
+  });
+  if (error) {
+    console.error("[links] 이미지 업로드 실패:", error.message);
+    return { ok: false, error: "업로드하지 못했어요. 잠시 후 다시 시도해 주세요." };
+  }
+  const { data } = supabase.storage.from("link-assets").getPublicUrl(path);
+  return { ok: true, url: data.publicUrl };
+}
+
+/** 프로필 사진·커버 저장 — 업로드 결과 URL 을 페이지에 붙인다 */
+export async function updateLinkImages(patch: { avatarPath?: string | null; coverPath?: string | null }): Promise<Result> {
+  if (isDemoMode()) return DEMO;
+  const user = await getAuthUser();
+  if (!user) return AUTH;
+
+  const fields: Record<string, unknown> = {};
+  if (patch.avatarPath !== undefined) fields.avatar_path = patch.avatarPath;
+  if (patch.coverPath !== undefined) fields.cover_path = patch.coverPath;
+  if (Object.keys(fields).length === 0) return { ok: true };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("link_pages").update(fields).eq("user_id", user.id);
+  if (error) {
+    console.error("[links] 이미지 저장 실패:", error.message);
+    return { ok: false, error: "저장하지 못했어요." };
+  }
+  revalidatePath("/links");
+  return { ok: true };
+}
+
+/* ══════════════════════════════════════════════════════════════════
    블록
    ══════════════════════════════════════════════════════════════════ */
 

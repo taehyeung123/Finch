@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BLOCK_CATALOG, type LinkBlock } from "@/lib/links/blocks";
+import { ImageField } from "./image-field";
 
 /*
   블록 편집기 — 블록 타입마다 다른 필드를 그린다.
@@ -180,21 +181,7 @@ export function BlockEditor({
 
       {/* ── 이미지·이미지 카드 ── */}
       {block.type === "image" || block.type === "image_card" ? (
-        <div>
-          <label className={label} htmlFor="b-img">
-            이미지 주소
-          </label>
-          <input
-            id="b-img"
-            value={str("imagePath")}
-            onChange={(e) => set("imagePath", e.target.value)}
-            placeholder="https://…"
-            className={`mt-1.5 ${input}`}
-          />
-          {/* 업로드는 아직 없다. "업로드" 버튼을 그려놓고 아무 일도 안 하게 두느니
-              지금 되는 것(주소 붙여넣기)을 정확히 말한다. */}
-          <p className="mt-1 text-[12px] text-fg-sub">이미지 주소를 붙여넣으세요. 파일 업로드는 준비 중이에요.</p>
-        </div>
+        <ImageField label="이미지" value={str("imagePath")} onChange={(v) => set("imagePath", v)} />
       ) : null}
 
       {block.type === "image_card" ? (
@@ -281,12 +268,11 @@ export function BlockEditor({
                   aria-label={`항목 ${i + 1} 주소`}
                   className={input}
                 />
-                <input
+                <ImageField
+                  label={`항목 ${i + 1} 이미지`}
                   value={typeof it.imagePath === "string" ? it.imagePath : ""}
-                  onChange={(e) => setItem(i, "imagePath", e.target.value)}
-                  placeholder="이미지 주소 (선택)"
-                  aria-label={`항목 ${i + 1} 이미지`}
-                  className={input}
+                  onChange={(v) => setItem(i, "imagePath", v)}
+                  aspect="aspect-[3/2]"
                 />
               </div>
             ))}

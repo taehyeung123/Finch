@@ -36,11 +36,13 @@ import {
   publishLinkPage,
   setLinkPublished,
   updateBlock,
+  updateLinkImages,
   updateLinkProfile,
   updateLinkTheme,
 } from "../actions";
 import type { LinkLead } from "../page";
 import { BlockEditor } from "./block-editor";
+import { ImageField } from "./image-field";
 import { PhonePreview } from "./phone-preview";
 
 export interface LinkPageView {
@@ -200,7 +202,12 @@ export function LinksClient({
                 onSave={(data) => run(() => updateBlock(editing.id, { data }))}
               />
             ) : tab === "profile" ? (
-              <ProfilePanel page={page} busy={busy} onSave={(v) => run(() => updateLinkProfile(v))} />
+              <ProfilePanel
+                page={page}
+                busy={busy}
+                onSave={(v) => run(() => updateLinkProfile(v))}
+                onImages={(v) => run(() => updateLinkImages(v))}
+              />
             ) : tab === "theme" ? (
               <ThemePanel current={page.theme} busy={busy} onPick={(k) => run(() => updateLinkTheme(k))} />
             ) : tab === "blocks" ? (
@@ -434,9 +441,11 @@ function ProfilePanel({
   page,
   busy,
   onSave,
+  onImages,
 }: {
   page: LinkPageView;
   busy: boolean;
+  onImages: (v: { avatarPath?: string | null; coverPath?: string | null }) => void;
   onSave: (v: {
     slug: string;
     title: string;
@@ -494,6 +503,25 @@ function ProfilePanel({
           ))}
         </div>
       </div>
+
+      {/* 이미지는 **고르는 즉시 저장**한다 — 업로드가 이미 서버 왕복이라, 여기서 또
+          「저장」을 누르게 하면 올렸는데 반영이 안 되는 것처럼 보인다. */}
+      {layout !== "cover" ? (
+        <ImageField
+          label="프로필 사진"
+          value={page.avatarPath ?? ""}
+          onChange={(v) => onImages({ avatarPath: v || null })}
+          aspect="aspect-square"
+        />
+      ) : null}
+      {layout === "cover" || layout === "cover_profile" ? (
+        <ImageField
+          label="커버 이미지"
+          value={page.coverPath ?? ""}
+          onChange={(v) => onImages({ coverPath: v || null })}
+          aspect="aspect-[3/1]"
+        />
+      ) : null}
 
       <div>
         <label htmlFor="p-slug" className="block text-[12px] font-medium text-fg-sub">

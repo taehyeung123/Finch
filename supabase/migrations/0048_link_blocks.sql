@@ -166,3 +166,28 @@ drop policy if exists "own link leads read" on public.link_leads;
 create policy "own link leads read" on public.link_leads
   for select to authenticated
   using (exists (select 1 from public.link_pages p where p.id = page_id and p.user_id = auth.uid()));
+
+-- ════════════════════════════════════════════════════════════════════
+-- 7. link-assets 버킷 — 프로필 사진·커버·블록 이미지
+-- ════════════════════════════════════════════════════════════════════
+-- 공개 버킷이다: 공개 페이지(/p/{slug})가 방문자에게 그대로 내보내는 이미지라
+-- 서명 URL 을 쓰면 만료될 때마다 남의 페이지가 깨진다.
+-- 업로드·삭제는 **본인 폴더(user_id/...)** 로만 — cardnews(0010) 와 같은 패턴.
+insert into storage.buckets (id, name, public)
+values ('link-assets', 'link-assets', true)
+on conflict (id) do nothing;
+
+drop policy if exists "own link assets upload" on storage.objects;
+create policy "own link assets upload" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'link-assets' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "own link assets update" on storage.objects;
+create policy "own link assets update" on storage.objects
+  for update to authenticated
+  using (bucket_id = 'link-assets' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "own link assets delete" on storage.objects;
+create policy "own link assets delete" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'link-assets' and (storage.foldername(name))[1] = auth.uid()::text);
