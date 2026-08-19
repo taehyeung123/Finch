@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
+import { linkWorkspace } from "@/lib/data";
 import { FinchMark } from "@/components/logo";
 import { themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
 import { BlockRenderer, type SnapshotBlock } from "./_components/block-renderer";
@@ -41,7 +42,41 @@ interface Snapshot {
   blocks: SnapshotBlock[];
 }
 
+/**
+ * 데모 모드에서 샘플 페이지를 공개 주소로도 연다.
+ *
+ * 안 하면 /links 는 샘플 페이지를 보여주는데 그 「열기」 버튼이 404 로 떨어진다 —
+ * 둘러보러 온 사람에게 제품이 고장난 것으로 읽힌다. 초안을 스냅샷 모양으로 굽는 건
+ * publishLinkPage 가 하는 일과 같다(social_feed 의 cached 만 없다 — 연동이 없으므로).
+ */
+function demoSnapshot(slug: string): { pageId: string; published: boolean; isOwner: boolean; snap: Snapshot } | null {
+  const p = linkWorkspace.page;
+  if (!p || p.slug !== slug) return null;
+  return {
+    pageId: p.id,
+    published: true,
+    isOwner: false,
+    snap: {
+      v: 1,
+      title: p.title,
+      bio: p.bio,
+      layout: p.layout,
+      theme: p.theme,
+      align: p.align,
+      avatarPath: p.avatarPath,
+      coverPath: p.coverPath,
+      snsLinks: p.snsLinks,
+      seoTitle: p.seoTitle || null,
+      seoDesc: p.seoDesc || null,
+      blocks: linkWorkspace.blocks
+        .filter((b) => b.active)
+        .map((b) => ({ id: b.id, type: b.type, data: b.data })),
+    },
+  };
+}
+
 async function load(slug: string) {
+  if (isDemoMode()) return demoSnapshot(slug);
   if (!isSupabaseConfigured()) return null;
   const supabase = await createClient();
 

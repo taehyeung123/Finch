@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
+import { linkWorkspace } from "@/lib/data";
 
 /*
   프로필 링크 클릭 — 집계 후 목적지로 302.
@@ -60,6 +61,20 @@ function destinationOf(block: SnapBlock, idx: number | null): string | null {
 export async function GET(request: Request, ctx: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = await ctx.params;
   const back = () => NextResponse.redirect(new URL(`/p/${slug}`, request.url));
+
+  /* 데모 모드는 샘플 블록에서 목적지를 찾는다 — 안 하면 데모 페이지의 모든 버튼이
+     제자리로 되던져져서, 고치고 있는 바로 그 증상("누르면 아무 일도 안 남")이 된다.
+     집계는 남기지 않는다(샘플이라 셀 것이 없다). */
+  if (isDemoMode()) {
+    const b = linkWorkspace.blocks.find((x) => x.id === id);
+    if (!b) return back();
+    const iParam = new URL(request.url).searchParams.get("i");
+    const dest = destinationOf(
+      { id: b.id, type: b.type, data: b.data },
+      iParam !== null && /^\d+$/.test(iParam) ? Number(iParam) : null,
+    );
+    return dest ? NextResponse.redirect(dest, { status: 302 }) : back();
+  }
 
   if (!isSupabaseConfigured()) return back();
 
