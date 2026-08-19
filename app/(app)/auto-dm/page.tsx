@@ -40,19 +40,21 @@ export default async function AutoDmPage() {
     try {
       const supabase = await createClient();
       // buttons/post_thumb(0038) 미적용 DB 폴백 — 컬럼 오류 시 legacy 셋으로 재조회
-      /* 컬럼 폴백은 한 단계씩 — 0052 만 없으면 0038·0042 컬럼은 그대로 읽는다 */
-      const loadRules = async (): Promise<{ data: unknown; error: string | null }> => {
+      /* 컬럼 폴백은 한 단계씩 — 0052 만 없으면 0038·0042 컬럼은 그대로 읽는다.
+         폴백 발동 여부는 반환값으로 알린다(클로저 밖 재할당은 린트가 막는다). */
+      const loadRules = async (): Promise<{ data: unknown; error: string | null; followReady: boolean }> => {
         const q = (cols: string) =>
           supabase.from("auto_dm_rules").select(cols).order("created_at", { ascending: false });
+        let followReady = true;
         let res = await q(RULE_COLUMNS);
         if (res.error && missingFollowRequest(res.error.message)) {
-          followRequestReady = false;
+          followReady = false;
           res = await q(RULE_COLUMNS_NO_FOLLOW);
         }
         if (res.error && missingLegacyColumns(res.error.message)) res = await q(RULE_COLUMNS_LEGACY);
-        return { data: res.data, error: res.error?.message ?? null };
+        return { data: res.data, error: res.error?.message ?? null, followReady };
       };
-      const [{ data, error }, livePosts, accountRes, avatarUrl] = await Promise.all([
+      const [{ data, error, followReady }, livePosts, accountRes, avatarUrl] = await Promise.all([
         loadRules(),
         getRecentPostsForPicker(),
         supabase
@@ -64,6 +66,7 @@ export default async function AutoDmPage() {
         getIgAvatarUrl(),
       ]);
       posts = livePosts;
+      followRequestReady = followReady;
       accountHandle = (accountRes.data?.handle as string | undefined) ?? null;
       accountAvatar = avatarUrl;
       if (error) {
