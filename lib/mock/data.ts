@@ -1099,7 +1099,6 @@ export const linkWorkspace: LinkWorkspace = {
     ],
     seoTitle: "",
     seoDesc: "",
-    optionsReady: true,
     snsPlacement: "profile",
     titleSize: "md",
     publishedAt: "2026-08-18T21:00:00+09:00",

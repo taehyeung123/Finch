@@ -990,9 +990,7 @@ function ProfilePanel({
       </div>
 
       {/* 타이틀 크기·SNS 위치 — 링크팜 프로필 설정 실측(2026-08-19)에서 가져온 둘.
-          링크팜의 「드래그」 배치는 안 가져온다 — 우리는 드래그 정렬 자체를 뺐다.
-          ⚠️ 0051 컬럼이 아직 없으면 **비활성화한다** — 저장이 조용히 버려지는데
-          성공으로 보이는 컨트롤은 없느니만 못하다. */}
+          링크팜의 「드래그」 배치는 안 가져온다 — 우리는 드래그 정렬 자체를 뺐다. */}
       <div>
         <p className="text-[12px] font-medium text-fg-sub">타이틀 크기</p>
         <div className="mt-1.5 grid grid-cols-3 gap-2">
@@ -1006,11 +1004,10 @@ function ProfilePanel({
             <button
               key={t.key}
               type="button"
-              disabled={!page.optionsReady}
               onClick={() => setTitleSize(t.key)}
               aria-pressed={titleSize === t.key}
               className={cn(
-                "trans-state rounded-card border px-2 py-1.5 font-semibold disabled:opacity-40",
+                "trans-state rounded-card border px-2 py-1.5 font-semibold",
                 t.key === "sm" ? "text-[12px]" : t.key === "md" ? "text-[14px]" : "text-[17px]",
                 titleSize === t.key ? "border-2 border-primary" : "border border-line hover:bg-tint-hover",
               )}
@@ -1033,11 +1030,10 @@ function ProfilePanel({
             <button
               key={o.key}
               type="button"
-              disabled={!page.optionsReady}
               onClick={() => setSnsPlacement(o.key)}
               aria-pressed={snsPlacement === o.key}
               className={cn(
-                "trans-state rounded-card border px-2 py-1.5 text-[12px] font-semibold disabled:opacity-40",
+                "trans-state rounded-card border px-2 py-1.5 text-[12px] font-semibold",
                 snsPlacement === o.key ? "border-2 border-primary" : "border border-line hover:bg-tint-hover",
               )}
             >
@@ -1046,12 +1042,6 @@ function ProfilePanel({
           ))}
         </div>
       </div>
-
-      {!page.optionsReady ? (
-        <p className="text-[12px] leading-relaxed text-fg-sub">
-          타이틀 크기·SNS 위치는 서버 업데이트(0051) 적용 후 쓸 수 있어요.
-        </p>
-      ) : null}
 
       <div>
         <p className="text-[12px] font-medium text-fg-sub">SNS 링크</p>

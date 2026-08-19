@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
-import { SLUG_MESSAGES, isMissingColumnError, normalizeUrl, sliceChars, validateSlug } from "@/lib/links";
+import { SLUG_MESSAGES, normalizeUrl, sliceChars, validateSlug } from "@/lib/links";
 import { BLOCK_TYPES, defaultBlockData, type BlockType } from "@/lib/links/blocks";
 import { DEFAULT_THEME_KEY, themeByKey } from "@/lib/links/themes";
 import { LINK_TEMPLATES } from "@/lib/links/templates";
@@ -192,16 +192,10 @@ export async function updateLinkProfile(input: {
   const placement = input.snsPlacement === "links" ? "links" : "profile";
   const titleSize = ["sm", "md", "lg"].includes(input.titleSize) ? input.titleSize : "md";
 
-  /* sns_placement·title_size 는 0051 컬럼 — 마이그레이션보다 배포가 먼저 나가도
-     저장이 깨지면 안 된다. 컬럼 없음(42703)이면 그 둘만 빼고 다시 저장한다.
-     0051 적용 후 이 폴백은 죽은 코드 — 다음 정리 때 걷어낼 것. */
-  let { error } = await supabase
+  const { error } = await supabase
     .from("link_pages")
     .update({ ...base, sns_placement: placement, title_size: titleSize })
     .eq("user_id", user.id);
-  if (isMissingColumnError(error)) {
-    ({ error } = await supabase.from("link_pages").update(base).eq("user_id", user.id));
-  }
   if (error) {
     if (error.code === "23505") return { ok: false, error: "이미 사용 중인 주소예요." };
     console.error("[links] 프로필 저장 실패:", error.message);
@@ -655,17 +649,14 @@ export async function publishLinkPage(): Promise<Result> {
   if (!user) return AUTH;
 
   const supabase = await createClient();
-  const PUB_COLS = "id, slug, title, bio, layout, theme, align, avatar_path, cover_path, sns_links, seo_title, seo_desc";
-  /* 0051 컬럼 폴백 — links/page.tsx 의 load() 와 같은 이유·같은 수명 */
-  let pageRes = await supabase
+  const { data } = await supabase
     .from("link_pages")
-    .select(`${PUB_COLS}, sns_placement, title_size`)
+    .select(
+      "id, slug, title, bio, layout, theme, align, avatar_path, cover_path, sns_links, sns_placement, title_size, seo_title, seo_desc",
+    )
     .eq("user_id", user.id)
     .maybeSingle();
-  if (isMissingColumnError(pageRes.error)) {
-    pageRes = await supabase.from("link_pages").select(PUB_COLS).eq("user_id", user.id).maybeSingle();
-  }
-  const page = pageRes.data as Record<string, unknown> & { id: string } | null;
+  const page = data as (Record<string, unknown> & { id: string }) | null;
   if (!page) return { ok: false, error: "프로필 링크가 없어요." };
 
   /* ⚠️ **error 를 반드시 본다.** 앞서는 꺼내지도 않아서, 조회가 실패해 blocks 가 null 이면

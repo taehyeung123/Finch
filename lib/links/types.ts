@@ -22,16 +22,9 @@ export interface LinkPageView {
   snsLinks: Array<{ kind: string; url: string }>;
   seoTitle: string;
   seoDesc: string;
-  /**
-   * 0051 컬럼(sns_placement·title_size)이 실제로 존재하는가.
-   *
-   * false 면 프로필 패널이 두 컨트롤을 **비활성화한다** — 저장이 조용히 버려지는데
-   * 성공으로 보이는 컨트롤은 없느니만 못하다(마이그레이션 선배포 구간 한정).
-   */
-  optionsReady: boolean;
-  /** SNS 줄 위치: profile(소개 아래) | links(블록 목록 위). 0051 이후 저장된다 */
+  /** SNS 줄 위치: profile(소개 아래) | links(블록 목록 위) */
   snsPlacement: string;
-  /** 프로필 타이틀 크기: sm | md | lg. 0051 이후 저장된다 */
+  /** 프로필 타이틀 크기: sm | md | lg */
   titleSize: string;
   /** 마지막 라이브 반영 시각. null 이면 한 번도 발행 안 함 */
   publishedAt: string | null;

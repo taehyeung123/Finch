@@ -4,7 +4,6 @@ import { PageHeader } from "@/components/ui/section-header";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { linkWorkspace } from "@/lib/data";
-import { isMissingColumnError } from "@/lib/links";
 import { blockSummary, type LinkBlock } from "@/lib/links/blocks";
 import type { LinkLead, LinkSnapshotView, LinkStats, LinkWorkspace } from "@/lib/links/types";
 import { LinksClient } from "./_components/links-client";
@@ -69,22 +68,14 @@ async function load(days: number): Promise<Loaded> {
   if (!user) return { ...EMPTY, stats: { ...EMPTY_STATS, days } };
 
   const supabase = await createClient();
-  const BASE_COLS =
-    "id, slug, title, bio, published, layout, theme, align, avatar_path, cover_path, sns_links, seo_title, seo_desc, published_at, published_snapshot, updated_at";
-  /* sns_placement·title_size 는 0051 컬럼이다. 마이그레이션보다 배포가 먼저 나가는
-     순서를 견뎌야 하므로, 컬럼 없음(42703)이면 없는 셈 치고 다시 읽는다.
-     0051 적용 후 이 폴백은 죽은 코드가 된다 — 다음 정리 때 걷어낼 것. */
-  let pageRes = await supabase
+  const { data } = await supabase
     .from("link_pages")
-    .select(`${BASE_COLS}, sns_placement, title_size`)
+    .select(
+      "id, slug, title, bio, published, layout, theme, align, avatar_path, cover_path, sns_links, sns_placement, title_size, seo_title, seo_desc, published_at, published_snapshot, updated_at",
+    )
     .eq("user_id", user.id)
     .maybeSingle();
-  let optionsReady = true;
-  if (isMissingColumnError(pageRes.error)) {
-    optionsReady = false;
-    pageRes = await supabase.from("link_pages").select(BASE_COLS).eq("user_id", user.id).maybeSingle();
-  }
-  const page = pageRes.data as (Record<string, unknown> & { id: string }) | null;
+  const page = data as (Record<string, unknown> & { id: string }) | null;
   if (!page) return { ...EMPTY, stats: { ...EMPTY_STATS, days } };
 
   const [{ data: rows }, statsRes, leadRows] = await Promise.all([
@@ -244,8 +235,6 @@ async function load(days: number): Promise<Loaded> {
       snsLinks: Array.isArray(page.sns_links) ? (page.sns_links as Array<{ kind: string; url: string }>) : [],
       seoTitle: (page.seo_title as string | null) ?? "",
       seoDesc: (page.seo_desc as string | null) ?? "",
-      optionsReady,
-      /* 0051 이전에는 컬럼이 없어 undefined — 기본값으로 */
       snsPlacement: (page.sns_placement as string) ?? "profile",
       titleSize: (page.title_size as string) ?? "md",
       publishedAt,
