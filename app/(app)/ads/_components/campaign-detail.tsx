@@ -258,7 +258,8 @@ export function CampaignDetailModal({
                     { data: detail.cpaTrend, stroke: "var(--color-primary)" },
                   ]}
                 />
-                <p className="mt-2 text-xs text-fg-faint">
+                {/* 읽으라고 쓴 문장은 본문이다 — fg-faint(4.0:1)는 본문 금지, 플레이스홀더·아이콘 전용 */}
+                <p className="mt-2 text-xs text-fg-sub">
                   {detail.periodLabel} 일별 추이 · 두 지표를 각자 범위로 정규화한 추세 비교입니다
                 </p>
               </section>
