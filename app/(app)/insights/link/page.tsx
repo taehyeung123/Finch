@@ -47,7 +47,8 @@ export default function AnalyzePage() {
 
       {/* URL 입력 (PART 4.3) */}
       <Card className="p-4">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-2 sm:flex-row">
+        {/* 폼 폭 제한 — URL 하나 받는 입력이 화면 전체(1450px)로 늘어나던 것을 막는다 */}
+        <form onSubmit={handleSubmit} className="flex max-w-3xl flex-col gap-2 sm:flex-row">
           <input
             type="url"
             value={url}

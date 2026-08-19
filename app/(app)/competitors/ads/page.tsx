@@ -8,6 +8,9 @@ import { cn } from "@/lib/cn";
 import { formatAgo, formatDate } from "@/lib/format";
 import { competitorAds } from "@/lib/data";
 import type { CompetitorAd } from "@/lib/types";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ButtonLink } from "@/components/ui/button";
+import { Megaphone } from "lucide-react";
 import { CompetitorTabs } from "../tabs";
 
 const MEDIA_ICON: Record<CompetitorAd["mediaType"], LucideIcon> = {
@@ -59,6 +62,17 @@ export default function CompetitorAdsPage() {
         </div>
       </Card>
 
+      {/* 빈 데이터(실 모드)에서 "0개 추적", 빈 피드, "하루 4회 감지" 약속만 남아
+          화면이 거짓말을 하던 것을 막는다. 광고가 하나도 없으면 안내로 대체한다. */}
+      {competitorAds.length === 0 ? (
+        <EmptyState
+          icon={Megaphone}
+          title="아직 감지된 경쟁사 광고가 없어요"
+          description="경쟁사를 등록하면 Meta 광고 라이브러리에서 새 광고를 하루 4회 확인해 여기에 모읍니다."
+          action={<ButtonLink href="/competitors">경쟁사 관리</ButtonLink>}
+        />
+      ) : (
+        <>
       {/* 모니터링 중인 페이지 요약 (PART 4.6) */}
       <Card>
         <CardHeader
@@ -91,7 +105,8 @@ export default function CompetitorAdsPage() {
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {/* 3열에서 멈추면 2560 에서 카드가 747×420 회색판이 된다 → xl 4열 */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {competitorAds.map((ad) => {
             const MediaIcon = MEDIA_ICON[ad.mediaType];
             return (
@@ -143,6 +158,8 @@ export default function CompetitorAdsPage() {
           })}
         </div>
       </section>
+      </>
+      )}
 
       {/* 정책·동작 안내 (PART 4.6) */}
       <section aria-label="모니터링 안내" className="grid gap-4 md:grid-cols-2">
