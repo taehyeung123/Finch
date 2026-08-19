@@ -6,6 +6,7 @@ import { isDemoMode } from "@/lib/supabase/config";
 import { SLUG_MESSAGES, normalizeUrl, validateSlug } from "@/lib/links";
 import { defaultBlockData, type BlockType } from "@/lib/links/blocks";
 import { DEFAULT_THEME_KEY, themeByKey } from "@/lib/links/themes";
+import { LINK_TEMPLATES } from "@/lib/links/templates";
 import { getLinkFeedItems } from "@/lib/data/live";
 
 /*
@@ -389,6 +390,49 @@ export async function moveBlock(id: string, dir: "up" | "down"): Promise<Result>
     await supabase.from("link_blocks").update({ sort_order: a.sort_order }).eq("id", a.id);
     return { ok: false, error: "순서를 바꾸지 못했어요." };
   }
+  revalidatePath("/links");
+  return { ok: true };
+}
+
+/**
+ * 템플릿 적용 — 기존 블록을 **지우고** 템플릿 블록으로 덮는다.
+ *
+ * 섞지 않는 이유: 순서가 엉키고 되돌릴 수도 없다. 화면이 "기존 블록이 사라진다"는
+ * 확인을 먼저 받는다.
+ *
+ * 발행본(published_snapshot)은 건드리지 않는다 — 적용해 보고 마음에 안 들면
+ * 라이브 반영을 안 하면 그만이다. 그게 draft/publish 분리의 값어치다.
+ */
+export async function applyTemplate(key: string): Promise<Result> {
+  if (isDemoMode()) return DEMO;
+  const page = await myPage();
+  if (!page) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
+
+  const tpl = LINK_TEMPLATES.find((t) => t.key === key);
+  if (!tpl) return { ok: false, error: "없는 템플릿이에요." };
+
+  const supabase = await createClient();
+  const { error: delErr } = await supabase.from("link_blocks").delete().eq("page_id", page.id);
+  if (delErr) {
+    console.error("[links] 템플릿 적용(기존 삭제) 실패:", delErr.message);
+    return { ok: false, error: "적용하지 못했어요." };
+  }
+
+  const rows = tpl.blocks.map((b, i) => ({
+    page_id: page.id,
+    type: b.type,
+    data: b.data,
+    sort_order: i,
+  }));
+  const { error } = await supabase.from("link_blocks").insert(rows);
+  if (error) {
+    console.error("[links] 템플릿 적용 실패:", error.message);
+    return { ok: false, error: "적용하지 못했어요." };
+  }
+
+  /* 템플릿마다 어울리는 테마가 있다 — 블록만 바뀌고 테마가 그대로면 의도한 인상이 안 난다 */
+  await supabase.from("link_pages").update({ theme: tpl.theme }).eq("id", page.id);
+
   revalidatePath("/links");
   return { ok: true };
 }

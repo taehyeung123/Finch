@@ -27,8 +27,10 @@ import { Switch } from "@/components/ui/switch";
 import { publicLinkUrl } from "@/lib/links";
 import { BLOCK_CATALOG, blockSummary, type BlockType, type LinkBlock } from "@/lib/links/blocks";
 import { LAYOUTS, LINK_THEMES, SNS_KINDS } from "@/lib/links/themes";
+import { LINK_TEMPLATES } from "@/lib/links/templates";
 import {
   addBlock,
+  applyTemplate,
   createLinkPage,
   deleteBlock,
   deleteLinkPage,
@@ -215,6 +217,7 @@ export function LinksClient({
                 blocks={blocks}
                 busy={busy}
                 onAdd={(t) => run(() => addBlock(t))}
+                onApplyTemplate={(k) => run(() => applyTemplate(k))}
                 onEdit={setEditingId}
                 onToggle={(id, active) => run(() => updateBlock(id, { active }))}
                 onMove={(id, dir) => run(() => moveBlock(id, dir))}
@@ -305,6 +308,7 @@ function BlocksPanel({
   blocks,
   busy,
   onAdd,
+  onApplyTemplate,
   onEdit,
   onToggle,
   onMove,
@@ -313,6 +317,7 @@ function BlocksPanel({
   blocks: LinkBlock[];
   busy: boolean;
   onAdd: (t: BlockType) => void;
+  onApplyTemplate: (key: string) => void;
   onEdit: (id: string) => void;
   onToggle: (id: string, active: boolean) => void;
   onMove: (id: string, dir: "up" | "down") => void;
@@ -377,8 +382,33 @@ function BlocksPanel({
         </Button>
       </div>
 
+      {/* 템플릿 — 빈 캔버스에서 "뭘 만들지"에 멈추는 지점을 넘긴다.
+          적용은 기존 블록을 덮으므로 확인을 받는다. */}
+      <details className="rounded-card border border-line">
+        <summary className="cursor-pointer px-3 py-2 text-[13px] font-semibold">✨ 템플릿으로 시작</summary>
+        <div className="space-y-1.5 px-3 pb-3">
+          {LINK_TEMPLATES.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                if (blocks.length > 0 && !window.confirm("지금 블록이 모두 지워지고 템플릿으로 바뀝니다. 계속할까요?")) return;
+                onApplyTemplate(t.key);
+              }}
+              className="trans-state w-full rounded-card border border-line px-3 py-2 text-left hover:border-primary hover:bg-tint-hover disabled:opacity-50"
+            >
+              <span className="block text-[14px] font-semibold">
+                {t.name} <span className="tnum font-normal text-fg-sub">{t.blocks.length}블록</span>
+              </span>
+              <span className="mt-0.5 block text-[12px] text-fg-sub">{t.hint}</span>
+            </button>
+          ))}
+        </div>
+      </details>
+
       {blocks.length === 0 ? (
-        <p className="text-[14px] text-fg-sub">「추가」를 눌러 첫 블록을 만들어 보세요.</p>
+        <p className="text-[14px] text-fg-sub">「추가」를 눌러 첫 블록을 만들거나, 위 템플릿으로 시작해 보세요.</p>
       ) : (
         <ul className="divide-y divide-line">
           {blocks.map((b, i) => (
