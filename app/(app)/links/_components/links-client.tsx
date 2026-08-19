@@ -91,15 +91,10 @@ export function LinksClient({
         </p>
       ) : null}
 
-      <PageSettings
-        page={page}
-        origin={origin}
-        busy={busy}
-        onSave={(v) => run(() => updateLinkPage(v))}
-        onPublish={(v) => run(() => setLinkPublished(v))}
-        onDelete={() => run(() => deleteLinkPage())}
-      />
-
+      {/* 링크 목록(주)·페이지 설정(레일) 2단. 앞서는 설정 카드가 위, 링크 목록이
+          아래라 링크 6~8개만 돼도 목록이 첫 화면 밖이었다 — 이 화면의 작업 대상은
+          링크 목록인데 위계가 뒤집혀 있었다. */}
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
       <Card>
         <CardHeader
           title="링크"
@@ -135,6 +130,18 @@ export function LinksClient({
           <AddForm busy={busy} onAdd={(label, url) => run(() => addLinkItem(label, url))} />
         </CardBody>
       </Card>
+
+      <div className="lg:sticky lg:top-6">
+        <PageSettings
+          page={page}
+          origin={origin}
+          busy={busy}
+          onSave={(v) => run(() => updateLinkPage(v))}
+          onPublish={(v) => run(() => setLinkPublished(v))}
+          onDelete={() => run(() => deleteLinkPage())}
+        />
+      </div>
+      </div>
     </div>
   );
 }

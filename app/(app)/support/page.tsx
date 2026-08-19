@@ -77,7 +77,10 @@ export default async function SupportPage() {
         description="이용 중 문제가 있거나 궁금한 점이 있으면 남겨주세요. 답변은 이 화면에서 확인할 수 있습니다."
       />
 
-      <Card>
+      {/* 폼(좌)·내역(우) 2단 — 앞서는 위아래 1열이라 ① 제목·본문 입력이 1600px 로
+          늘어나고 ② 답변 확인하러 온 사람이 매번 폼 전체를 지나쳐 스크롤해야 했다. */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start">
+      <Card className="lg:sticky lg:top-6">
         <CardHeader title="새 문의" description="유형을 고르고 내용을 적어주세요." />
         <CardBody>
           <InquiryForm />
@@ -137,6 +140,7 @@ export default async function SupportPage() {
           })
         )}
       </section>
+      </div>
     </div>
   );
 }

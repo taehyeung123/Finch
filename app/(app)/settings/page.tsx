@@ -205,8 +205,9 @@ export default async function SettingsPage({
         </div>
       ) : null}
 
-      {/* 채널별 연동 카드 */}
-      <section aria-label="계정 연동 상태" className="space-y-3">
+      {/* 채널별 연동 카드 — 세로 1열이라 카드 하나가 배지·핸들 한 줄만 담고 폭 1600px 을
+          썼다. 2열로 묶어 넓은 화면에서 4장이 한눈에 들어오게 한다. */}
+      <section aria-label="계정 연동 상태" className="grid gap-3 lg:grid-cols-2">
         {cards.map((card) => (
           <Card key={card.channel} className="p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
