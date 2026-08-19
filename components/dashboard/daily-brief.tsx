@@ -37,7 +37,7 @@ const FINCH_NEWS = [
 ];
 
 /** 홈 공용 카드 스킨 — 부드러운 그림자 + 옅은 테두리 (스니핏 질감) */
-const panel = "rounded-card border border-line/60 bg-overlay shadow-panel";
+const panel = "rounded-card border border-line bg-body shadow-panel";
 
 /** ① 히어로 — 딥 그라데이션 브리핑 + 핀치 소식 리스트 */
 export function DailyBriefHero({ stats }: { stats: PoolHomeStats }) {
@@ -93,7 +93,7 @@ export function DailyBriefHero({ stats }: { stats: PoolHomeStats }) {
             key={n.title}
             href="/notifications"
             className={cn(
-              "group rounded-card px-3.5 py-3 trans-state hover:bg-body",
+              "group rounded-card px-3.5 py-3 trans-state hover:bg-tint-hover",
               i > 0 && "border-t border-line/50",
             )}
           >
@@ -145,7 +145,7 @@ export function HomeSearch({ stats }: { stats: PoolHomeStats }) {
     <section aria-label="레퍼런스 검색" className="w-full py-3">
       <form
         onSubmit={submit}
-        className="shadow-panel flex h-16 items-center rounded-chip border border-line/60 bg-overlay pl-2.5 pr-2 transition-[border-color,box-shadow] focus-within:border-primary focus-within:shadow-[0_0_0_4px_var(--color-primary-weak)]"
+        className="shadow-panel flex h-16 items-center rounded-chip border border-line bg-body pl-2.5 pr-2 transition-[border-color,box-shadow] focus-within:border-primary focus-within:shadow-[0_0_0_4px_var(--color-primary-weak)]"
       >
         {/* 검색 대상 세그먼트 — 스니핏의 드롭다운 자리 */}
         <label className="relative flex h-11 shrink-0 cursor-pointer items-center gap-1 rounded-chip bg-body pl-4 pr-8 text-[15px] font-semibold text-fg-sub trans-state hover:text-fg">
@@ -191,7 +191,7 @@ export function HomeSearch({ stats }: { stats: PoolHomeStats }) {
             <Link
               key={chip}
               href={`/library?q=${encodeURIComponent(chip)}`}
-              className="shadow-panel inline-flex items-center gap-1.5 rounded-chip border border-line/50 bg-overlay px-3.5 py-2 text-[14px] font-medium text-fg-sub transition-all hover:-translate-y-0.5 hover:border-primary hover:text-primary"
+              className="shadow-panel inline-flex items-center gap-1.5 rounded-chip border border-line bg-body px-3.5 py-2 text-[14px] font-medium text-fg-sub trans-state hover:border-primary hover:text-primary-ink"
             >
               <Search className={cn("size-3", CHIP_TONES[i % CHIP_TONES.length])} aria-hidden />
               {chip}
@@ -244,7 +244,7 @@ export function ArchiveStatus({ stats }: { stats: PoolHomeStats }) {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className={cn(panel, "p-6 transition-transform hover:-translate-y-0.5")}>
+        <div className={cn(panel, "p-6 trans-state hover:border-line-strong")}>
           <div className="flex items-center justify-between">
             <p className="text-[14px] font-semibold text-fg-sub">신규 수집 소재</p>
             <span className="rounded-chip bg-primary-weak px-2.5 py-1 text-[11px] font-semibold text-primary">
@@ -267,7 +267,7 @@ export function ArchiveStatus({ stats }: { stats: PoolHomeStats }) {
           </div>
         </div>
 
-        <div className={cn(panel, "p-6 transition-transform hover:-translate-y-0.5")}>
+        <div className={cn(panel, "p-6 trans-state hover:border-line-strong")}>
           <div className="flex items-center justify-between">
             <p className="flex items-center gap-1.5 text-[14px] font-semibold text-fg-sub">
               <TrendingUp className="size-3.5 text-primary" aria-hidden /> 콘텐츠가 많이 게재된 브랜드
@@ -319,7 +319,7 @@ export function NextActions() {
         <Link
           key={a.href}
           href={a.href}
-          className={cn(panel, "group flex items-center gap-3.5 p-5 transition-all hover:-translate-y-0.5 hover:border-primary/60")}
+          className={cn(panel, "group flex items-center gap-3.5 p-5 trans-state hover:border-primary/60")}
         >
           <span className="flex size-10 shrink-0 items-center justify-center rounded-card bg-gradient-to-br from-primary-weak to-warning-weak text-primary">
             <a.icon className="size-[18px]" aria-hidden />
