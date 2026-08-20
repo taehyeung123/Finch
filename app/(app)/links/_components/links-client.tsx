@@ -246,12 +246,18 @@ export function LinksClient({
   /* run() 의 전역 busy 는 순서가 중요한 조작(이동·삭제·발행)용이다. 온오프·테마는
      독립적·멱등이라 그 줄에 세우면 연타가 "앞선 작업 처리 중" 안내로 삼켜져
      "엄청 느리다"는 체감이 됐다(2026-08-20). 낙관 반영과 함께 바로 쏜다. */
-  function fire(optimistic: () => void, fn: () => Promise<{ ok: boolean; error?: string }>) {
+  function fire(optimistic: () => void, fn: () => Promise<{ ok: boolean; error?: string }>, onFail?: () => void) {
     setError(null);
     startTransition(async () => {
       optimistic();
       const res = await fn();
-      if (!res.ok) setError(res.error ?? "처리하지 못했어요.");
+      if (!res.ok) {
+        setError(res.error ?? "처리하지 못했어요.");
+        /* 낙관이 useOptimistic 이 아니라 **폼 상태**를 미리 바꾼 경우(인라인 프로필),
+           서버 값이 안 바뀌는 실패에선 serverKey 동기화가 깨어나지 않는다 —
+           호출부가 준 onFail 이 유일한 복구 경로다(소넷 확정 2). */
+        onFail?.();
+      }
     });
   }
 
@@ -270,6 +276,9 @@ export function LinksClient({
     setDraft(data);
     setBaseline(stableJson(data));
     setEditingId(id);
+    /* 편집을 닫으면 **캔버스만** 남는다 — 드로어를 연 채 진입하면 닫을 때 이전
+       드로어가 재등장하는 뒷문이 생긴다(소넷 확정 4). 여기서 닫아 규칙을 하나로. */
+    setDrawer(null);
     /* 앞선 조작의 실패 문구를 들고 들어가지 않는다 — 안 누른 폼이 실패한 것처럼 읽힌다 */
     setError(null);
     /* 새로 열린 패널의 제목으로 포커스를 옮긴다 — 목록에 남겨두면 키보드·스크린리더
@@ -434,7 +443,17 @@ export function LinksClient({
               type="button"
               aria-pressed={effectivePreview === m.key}
               disabled={m.key === "live" && !snapshot}
-              onClick={() => setPreviewMode(m.key)}
+              onClick={() => {
+                /* 라이브는 보기 전용 — 편집기·드로어를 연 채 넘어가면 화면에 없는
+                   블록을 편집하는 모순이 생긴다(소넷 확정 7). 닫고 간다. */
+                if (m.key === "live") {
+                  if (!leaveEditor()) return;
+                  setEditingId(null);
+                  setDrawer(null);
+                  setError(null);
+                }
+                setPreviewMode(m.key);
+              }}
               className={cn(
                 "trans-state rounded-chip px-3 py-1 text-[12px] font-semibold disabled:opacity-40",
                 effectivePreview === m.key
@@ -536,12 +555,20 @@ export function LinksClient({
                   onAdd: () => openDrawer("add", true),
                   onOpenProfile: () => openDrawer("profile", true),
                   onProfileCommit: (patch) => {
-                    /* 인라인 편집은 그 자리에서 확정이다 — 폼과 서버를 함께 맞춘다.
-                       캔버스는 폼을 그리므로 즉시 새 글자가 보이고, 저장이 실패하면
-                       서버 값 동기화가 폼을 되돌린다. */
-                    const next = { ...profileForm, ...patch };
-                    setProfileForm(next);
-                    fire(() => {}, () => updateLinkProfile(next));
+                    /* 인라인 편집은 **그 필드만** 확정한다. 서버에는 「마지막 서버
+                       확정값 + 이번 패치」를 보낸다 — profileForm 전체를 보내면
+                       드로어에 남아 있던 미저장 주소·SEO 가 저장 버튼 없이 딸려
+                       나간다(소넷 확정 1). 실패하면 그 필드만 폼에서 되돌린다 —
+                       서버 값이 안 바뀌는 실패에선 serverKey 동기화가 영원히
+                       깨어나지 않기 때문이다(확정 2). */
+                    const before: Partial<ProfileFormState> = {};
+                    for (const k of Object.keys(patch) as Array<keyof typeof patch>) before[k] = profileForm[k];
+                    setProfileForm((f) => ({ ...f, ...patch }));
+                    fire(
+                      () => {},
+                      () => updateLinkProfile({ ...profileFormFrom(page), ...patch }),
+                      () => setProfileForm((f) => ({ ...f, ...before })),
+                    );
                   },
                 }}
               />
@@ -559,7 +586,12 @@ export function LinksClient({
                 <button
                   type="button"
                   aria-label="패널 닫기"
-                  onClick={() => setDrawer(null)}
+                  /* 오류는 그 패널의 조작에 붙은 것 — 패널만 닫고 배너를 남기면
+                     무관한 다음 작업 위에 유령처럼 얹힌다(소넷 확정 3) */
+                  onClick={() => {
+                    setDrawer(null);
+                    setError(null);
+                  }}
                   className="trans-state rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg"
                 >
                   <X className="size-4" aria-hidden />

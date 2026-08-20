@@ -56,14 +56,12 @@ export function PhonePreview({
   page,
   blocks,
   selectedId,
-  onPick,
   mode = "draft",
   edit,
 }: {
   page: LinkPageView;
   blocks: LinkBlock[];
   selectedId: string | null;
-  onPick?: (id: string) => void;
   /**
    * draft: 편집 중인 초안 — 숨김 블록은 "공개 안 됨" 유령칸으로, 클릭하면 편집.
    * live: 마지막 발행본 — 공개 페이지와 똑같이 숨김 블록을 **아예 안 그리고**,
@@ -98,7 +96,8 @@ export function PhonePreview({
   }
   const inlineKeys = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.nativeEvent.isComposing && inlineField === "title") (e.target as HTMLElement).blur();
-    if (e.key === "Escape") setInlineField(null);
+    /* 한글 조합 중 Escape 는 조합 취소다 — 편집 전체를 닫아버리면 안 된다 */
+    if (e.key === "Escape" && !e.nativeEvent.isComposing) setInlineField(null);
   };
 
   const editable = mode !== "live" && !!edit;
@@ -250,6 +249,7 @@ export function PhonePreview({
             ) : editable && edit ? (
               visible.map((b, i) => {
                 const label = blockSummary(b.type, b.data);
+                const hidden = hiddenReason(b.type, b.data);
                 return (
                   <div key={b.id} className="relative pt-3">
                     {/* 블록 툴바 — 링크팜의 블록 위 상시 도구(편집·이동·노출·삭제).
@@ -314,27 +314,18 @@ export function PhonePreview({
                     >
                       <PreviewBlock block={b} />
                     </button>
-                    {!b.active ? (
+                    {/* 유령칸(내용 부재 사유)이 이미 뜬 블록엔 숨김 캡션을 겹치지 않는다 —
+                        같은 "안 나감"을 두 말투로 두 번 말하면 헷갈린다(소넷 확정 5) */}
+                    {!b.active && !hidden ? (
                       <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">숨김 — 공개 페이지에 안 나가요</p>
                     ) : null}
                   </div>
                 );
               })
             ) : (
-              visible.map((b) => (
-                <button
-                  key={b.id}
-                  type="button"
-                  onClick={() => onPick?.(b.id)}
-                  aria-label={`${BLOCK_CATALOG.find((c) => c.type === b.type)?.label ?? b.type} · ${blockSummary(b.type, b.data)} 편집`}
-                  className={cn(
-                    "trans-state block w-full rounded-[calc(var(--lp-radius)+4px)] text-left outline-offset-2",
-                    selectedId === b.id && "outline outline-2 outline-primary",
-                  )}
-                >
-                  <PreviewBlock block={b} />
-                </button>
-              ))
+              /* edit 없는 draft — 지금 호출부는 없지만, 읽기 전용 초안 표시가
+                 필요해지면 이 분기가 그 자리다(조작 없음 — 그래서 버튼이 아니다) */
+              visible.map((b) => <PreviewBlock key={b.id} block={b} />)
             )}
 
             {editable && edit ? (
