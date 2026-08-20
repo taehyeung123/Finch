@@ -43,6 +43,7 @@ import {
   deleteLinkPage,
   moveBlock,
   publishLinkPage,
+  reorderBlock,
   restoreBlock,
   setLinkPublished,
   updateBlock,
@@ -238,8 +239,19 @@ export function LinksClient({
      (실패 시 자동 복귀) 수동 롤백이 필요 없다. */
   const [liveBlocks, applyBlockPatch] = useOptimistic(
     blocks,
-    (bs: LinkBlock[], p: { id: string; active: boolean }) =>
-      bs.map((b) => (b.id === p.id ? { ...b, active: p.active } : b)),
+    (
+      bs: LinkBlock[],
+      p: { kind: "active"; id: string; active: boolean } | { kind: "order"; id: string; beforeId: string | null },
+    ) => {
+      if (p.kind === "active") return bs.map((b) => (b.id === p.id ? { ...b, active: p.active } : b));
+      /* order — 서버 reorderBlock 과 같은 의미론: 빼서 beforeId 앞(null=맨 뒤)에 끼운다 */
+      const moved = bs.find((b) => b.id === p.id);
+      if (!moved) return bs;
+      const rest = bs.filter((b) => b.id !== p.id);
+      const at = p.beforeId === null ? rest.length : rest.findIndex((b) => b.id === p.beforeId);
+      if (at < 0) return bs;
+      return [...rest.slice(0, at), moved, ...rest.slice(at)];
+    },
   );
   const [liveTheme, pickThemeOptimistic] = useOptimistic(page?.theme ?? "");
 
@@ -581,7 +593,7 @@ export function LinksClient({
                   /* 온오프는 낙관 즉시 반영 — 스위치가 서버 왕복을 기다리면 고장처럼 보인다 */
                   onToggle: (id, active) =>
                     fire(
-                      () => applyBlockPatch({ id, active }),
+                      () => applyBlockPatch({ kind: "active", id, active }),
                       () => updateBlock(id, { active }),
                       undefined,
                       () =>
@@ -609,6 +621,26 @@ export function LinksClient({
                         });
                       },
                     ),
+                  /* 드래그 정렬 — 낙관으로 즉시 재배치, 성공 시에만 역연산 기록.
+                     origBefore(원래 바로 뒤 블록)가 복원 좌표다. */
+                  onReorder: (dragId, beforeId, label) => {
+                    const from = liveBlocks.findIndex((b) => b.id === dragId);
+                    if (from < 0) return;
+                    const origBefore = liveBlocks[from + 1]?.id ?? null;
+                    /* 제자리 드롭은 조작이 아니다 — 서버 왕복도 이력도 만들지 않는다 */
+                    if (beforeId === dragId || beforeId === origBefore) return;
+                    fire(
+                      () => applyBlockPatch({ kind: "order", id: dragId, beforeId }),
+                      () => reorderBlock(dragId, beforeId),
+                      undefined,
+                      () =>
+                        record({
+                          label: `${label} 이동`,
+                          undo: () => reorderBlock(dragId, origBefore),
+                          redo: () => reorderBlock(dragId, beforeId),
+                        }),
+                    );
+                  },
                   onDelete: (id, label) => {
                     /* 삭제는 물리 삭제 — 확인 후 지우고, 직전 1건은 되돌리기 바가 복원한다 */
                     if (!window.confirm(`「${label}」 블록을 삭제할까요?`)) return;

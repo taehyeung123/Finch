@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowDown, ArrowUp, Eye, EyeOff, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, youtubeEmbed } from "@/lib/links";
@@ -44,6 +44,8 @@ export type CanvasEdit = {
   onEdit: (id: string) => void;
   onToggle: (id: string, active: boolean) => void;
   onMove: (id: string, dir: "up" | "down", label: string) => void;
+  /** 드래그 드롭 — beforeId 앞으로(null 은 맨 뒤). label 은 끌던 블록 요약 */
+  onReorder: (id: string, beforeId: string | null, label: string) => void;
   onDelete: (id: string, label: string) => void;
   onAdd: () => void;
   /** 아바타·커버 클릭 — 사진·레이아웃은 폼이 필요해서 드로어를 연다 */
@@ -78,6 +80,17 @@ export function PhonePreview({
   /* 이름·소개 인라인 편집 — 연필을 누르면 그 자리가 입력창이 된다.
      Enter/포커스 이탈로 확정, Escape 로 취소. 확정은 onProfileCommit 이 저장까지 간다. */
   const [inlineField, setInlineField] = useState<null | "title" | "bio">(null);
+  /* 드래그 정렬 상태 — HTML5 DnD(터치는 툴바 ↑↓ 가 맡는다) */
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  function dropOn(beforeId: string | null) {
+    if (draggingId && edit) {
+      const dragged = blocks.find((b) => b.id === draggingId);
+      if (dragged && draggingId !== beforeId) edit.onReorder(draggingId, beforeId, blockSummary(dragged.type, dragged.data));
+    }
+    setDraggingId(null);
+    setOverId(null);
+  }
   const [inlineText, setInlineText] = useState("");
   function startInline(f: "title" | "bio") {
     setInlineField(f);
@@ -251,7 +264,26 @@ export function PhonePreview({
                 const label = blockSummary(b.type, b.data);
                 const hidden = hiddenReason(b.type, b.data);
                 return (
-                  <div key={b.id} className="relative pt-3">
+                  <div
+                    key={b.id}
+                    className={cn(
+                      "relative pt-3",
+                      draggingId === b.id && "opacity-50",
+                      /* 드롭 대상 표시 — 선택(실선)과 헷갈리지 않게 점선 */
+                      overId === b.id && draggingId && draggingId !== b.id && "outline-dashed outline-2 outline-primary",
+                    )}
+                    onDragOver={(e) => {
+                      if (draggingId && draggingId !== b.id) {
+                        e.preventDefault();
+                        setOverId(b.id);
+                      }
+                    }}
+                    onDragLeave={() => setOverId((v) => (v === b.id ? null : v))}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      dropOn(b.id);
+                    }}
+                  >
                     {/* 블록 툴바 — 링크팜의 블록 위 상시 도구(편집·이동·노출·삭제).
                         스크림 배경이라 어떤 테마 위에서도 보인다. */}
                     <div className="absolute right-2 top-0 z-10 flex items-center rounded-chip bg-scrim px-1 py-0.5">
@@ -298,6 +330,25 @@ export function PhonePreview({
                       >
                         <Trash2 className="size-3.5" aria-hidden />
                       </button>
+                      {/* 드래그 핸들 — 버튼째 끌면 클릭 편집과 충돌해서 핸들만 draggable.
+                          터치·키보드는 ↑↓ 가 같은 일을 한다. */}
+                      <span
+                        draggable
+                        role="button"
+                        aria-label={`${label} 끌어서 순서 바꾸기`}
+                        onDragStart={(e) => {
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", b.id);
+                          setDraggingId(b.id);
+                        }}
+                        onDragEnd={() => {
+                          setDraggingId(null);
+                          setOverId(null);
+                        }}
+                        className="cursor-grab rounded-full p-1 text-on-scrim/85 hover:text-on-scrim active:cursor-grabbing"
+                      >
+                        <GripVertical className="size-3.5" aria-hidden />
+                      </span>
                     </div>
 
                     <button
@@ -332,10 +383,24 @@ export function PhonePreview({
               <button
                 type="button"
                 onClick={edit.onAdd}
-                className="trans-state flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-[var(--lp-radius)] border border-dashed border-[var(--lp-border)] text-[13px] font-semibold text-[var(--lp-muted)] hover:border-[var(--lp-accent)] hover:text-[var(--lp-accent)]"
+                onDragOver={(e) => {
+                  if (draggingId) {
+                    e.preventDefault();
+                    setOverId("__end__");
+                  }
+                }}
+                onDragLeave={() => setOverId((v) => (v === "__end__" ? null : v))}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  dropOn(null);
+                }}
+                className={cn(
+                  "trans-state flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-[var(--lp-radius)] border border-dashed border-[var(--lp-border)] text-[13px] font-semibold text-[var(--lp-muted)] hover:border-[var(--lp-accent)] hover:text-[var(--lp-accent)]",
+                  overId === "__end__" && draggingId && "outline-dashed outline-2 outline-primary",
+                )}
               >
                 <Plus className="size-4" aria-hidden />
-                블록 추가
+                {draggingId ? "여기 놓으면 맨 뒤로" : "블록 추가"}
               </button>
             ) : null}
           </div>

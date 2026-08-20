@@ -924,6 +924,54 @@ export async function restoreBlock(input: {
   return { ok: true, id: (created as { id: string } | null)?.id };
 }
 
+/**
+ * 드래그 정렬 — id 블록을 beforeId 앞으로(null 이면 맨 뒤로) 옮긴다.
+ *
+ * moveBlock(한 칸)과 달리 시퀀스 전체를 다시 쓴다: 목표 순서를 만든 뒤
+ * sort_order 가 달라진 행만 갱신한다. 트랜잭션이 아니라 중간 실패가 가능하지만,
+ * 모든 조회가 (sort_order, created_at) 복합 정렬이라 순서는 항상 정의되고
+ * 같은 드래그를 다시 하면 복구된다.
+ */
+export async function reorderBlock(id: string, beforeId: string | null): Promise<Result> {
+  if (isDemoMode()) return DEMO;
+  const page = await myPage();
+  if (!page) return { ok: false, error: "프로필 링크가 없어요." };
+
+  const supabase = await createClient();
+  const { data: rows } = await supabase
+    .from("link_blocks")
+    .select("id, sort_order")
+    .eq("page_id", page.id)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  const list = (rows ?? []) as Array<{ id: string; sort_order: number }>;
+  const ids = list.map((x) => x.id);
+  const from = ids.indexOf(id);
+  if (from < 0) return { ok: false, error: "블록을 찾지 못했어요." };
+  /* 드롭 기준 블록이 그 사이 지워졌으면(다른 탭 등) 조용히 엉뚱한 자리로 넣지 않는다 */
+  if (beforeId !== null && !ids.includes(beforeId)) {
+    return { ok: false, error: "순서를 바꾸지 못했어요. 화면을 새로고침해 주세요." };
+  }
+
+  ids.splice(from, 1);
+  const at = beforeId === null ? ids.length : ids.indexOf(beforeId);
+  ids.splice(at, 0, id);
+
+  /* 목표 순서 = 0..n-1. 달라진 행만 쓴다 — 대부분의 드래그는 소수 행만 움직인다 */
+  for (let i = 0; i < ids.length; i++) {
+    const cur = list.find((x) => x.id === ids[i]);
+    if (!cur || cur.sort_order === i) continue;
+    const { error } = await supabase.from("link_blocks").update({ sort_order: i }).eq("id", ids[i]);
+    if (error) {
+      console.error("[links] 드래그 정렬 실패:", error.message);
+      return { ok: false, error: "순서를 바꾸지 못했어요." };
+    }
+  }
+  revalidatePath("/links");
+  return { ok: true };
+}
+
 export async function moveBlock(id: string, dir: "up" | "down"): Promise<Result> {
   if (isDemoMode()) return DEMO;
   const page = await myPage();
