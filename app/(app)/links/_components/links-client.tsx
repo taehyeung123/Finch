@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useOptimistic, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowDown,
@@ -73,13 +73,12 @@ import { PhonePreview } from "./phone-preview";
   부르지 않는다** — 부르면 같은 집계 질의가 한 조작에 두 번 돈다.
 */
 
-type Tab = "profile" | "theme" | "blocks" | "stats" | "settings";
+type Tab = "profile" | "theme" | "blocks" | "settings";
 
 const TABS: Array<{ key: Tab; label: string; icon: typeof User }> = [
   { key: "profile", label: "프로필", icon: User },
   { key: "theme", label: "테마", icon: Palette },
   { key: "blocks", label: "블록", icon: Layers },
-  { key: "stats", label: "통계", icon: BarChart3 },
   { key: "settings", label: "설정", icon: Settings },
 ];
 
@@ -200,9 +199,19 @@ export function LinksClient({
     setProfileForm(profileFormFrom(page));
   }
   const profileDirty = profileServerKey !== stableJson(profileForm);
-  /* 테마는 누르는 즉시 서버 저장이지만 왕복(수백 ms) 동안 옛 색이 남는다 —
-     누른 값을 먼저 그리고, 서버 값이 따라잡으면 파생값이 알아서 물러난다 */
-  const [themePick, setThemePick] = useState<string | null>(null);
+  /* 통계 — 편집 탭이 아니라 상단 바에서 여닫는다("만드는 창에 통계가 왜 있냐",
+     2026-08-20). 만들기와 성과 보기는 다른 일이다 — 링크팜도 통계는 빌더 밖이다. */
+  const [statsOpen, setStatsOpen] = useState(false);
+
+  /* 낙관 상태 — 블록 온오프·테마처럼 잦고 독립적인 조작은 서버 왕복을 기다리지
+     않고 즉시 그린다. 트랜지션이 끝나면 서버 props 가 진실을 되돌려주므로
+     (실패 시 자동 복귀) 수동 롤백이 필요 없다. */
+  const [liveBlocks, applyBlockPatch] = useOptimistic(
+    blocks,
+    (bs: LinkBlock[], p: { id: string; active: boolean }) =>
+      bs.map((b) => (b.id === p.id ? { ...b, active: p.active } : b)),
+  );
+  const [liveTheme, pickThemeOptimistic] = useOptimistic(page?.theme ?? "");
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>, onOk?: () => void, onFail?: () => void) {
     if (busy) {
@@ -224,6 +233,18 @@ export function LinksClient({
       } finally {
         setBusy(false);
       }
+    });
+  }
+
+  /* run() 의 전역 busy 는 순서가 중요한 조작(이동·삭제·발행)용이다. 온오프·테마는
+     독립적·멱등이라 그 줄에 세우면 연타가 "앞선 작업 처리 중" 안내로 삼켜져
+     "엄청 느리다"는 체감이 됐다(2026-08-20). 낙관 반영과 함께 바로 쏜다. */
+  function fire(optimistic: () => void, fn: () => Promise<{ ok: boolean; error?: string }>) {
+    setError(null);
+    startTransition(async () => {
+      optimistic();
+      const res = await fn();
+      if (!res.ok) setError(res.error ?? "처리하지 못했어요.");
     });
   }
 
@@ -286,8 +307,6 @@ export function LinksClient({
      채로 초안을 그리는, 화면이 스스로 거짓말하는 조합이 생긴다. */
   const effectivePreview: "draft" | "live" = previewMode === "live" && snapshot ? "live" : "draft";
 
-  /* 방금 고른 테마 — 서버 값이 같아지는 순간 자동으로 물러난다(실패 시엔 onFail 이 걷는다) */
-  const themeOverlay = themePick && themePick !== page.theme ? themePick : null;
 
   return (
     <div className="space-y-4">
@@ -313,7 +332,17 @@ export function LinksClient({
             () => setLastDeleted(null),
           )
         }
+        statsOpen={statsOpen}
+        onToggleStats={() => setStatsOpen((v) => !v)}
       />
+
+      {statsOpen ? (
+        <Card>
+          <CardBody>
+            <StatsPanel stats={stats} onRange={(d) => router.push(`/links?days=${d}`, { scroll: false })} busy={busy} />
+          </CardBody>
+        </Card>
+      ) : null}
 
       {error ? (
         <p role="alert" className="rounded-card border border-negative/40 bg-negative-weak p-4 text-[15px] text-negative-strong">
@@ -438,9 +467,9 @@ export function LinksClient({
                   snsLinks: profileForm.snsLinks,
                   snsPlacement: profileForm.snsPlacement,
                   titleSize: profileForm.titleSize,
-                  ...(themeOverlay ? { theme: themeOverlay } : null),
+                  theme: liveTheme,
                 }}
-                blocks={blocks
+                blocks={liveBlocks
                   .map((b) => (b.id === editingId ? { ...b, data: draft } : b))
                   .filter((b) => b.active)}
                 selectedId={editingId}
@@ -456,7 +485,7 @@ export function LinksClient({
         {/* 우 — 5탭 패널 */}
         <Card className="xl:sticky xl:top-6">
           <CardBody className="space-y-4">
-            <div role="tablist" aria-label="편집 도구" className="grid grid-cols-5 gap-1.5">
+            <div role="tablist" aria-label="편집 도구" className="grid grid-cols-4 gap-1.5">
               {TABS.map((t) => {
                 const on = tab === t.key && !editing;
                 return (
@@ -517,17 +546,14 @@ export function LinksClient({
               />
             ) : tab === "theme" ? (
               <ThemePanel
-                current={themeOverlay ?? page.theme}
-                busy={busy}
-                onPick={(k) => {
-                  setThemePick(k);
-                  /* 실패하면 되돌린다 — 성공한 것처럼 칠해 두지 않는다 */
-                  run(() => updateLinkTheme(k), undefined, () => setThemePick(null));
-                }}
+                current={liveTheme}
+                /* 누르는 즉시 칠한다 — 로딩·비활성 없음. 실패하면 트랜지션 종료와 함께
+                   서버 값으로 자동 복귀한다(2026-08-20 "굳이 로딩 걸어야 되나") */
+                onPick={(k) => fire(() => pickThemeOptimistic(k), () => updateLinkTheme(k))}
               />
             ) : tab === "blocks" ? (
               <BlocksPanel
-                blocks={blocks}
+                blocks={liveBlocks}
                 busy={busy}
                 onAdd={(t) => run(() => addBlock(t))}
                 onApplyTemplate={(k) =>
@@ -551,7 +577,8 @@ export function LinksClient({
                   )
                 }
                 onEdit={openEditor}
-                onToggle={(id, active) => run(() => updateBlock(id, { active }))}
+                /* 온오프는 낙관 즉시 반영 — 스위치가 서버 왕복을 기다리면 고장처럼 보인다 */
+                onToggle={(id, active) => fire(() => applyBlockPatch({ id, active }), () => updateBlock(id, { active }))}
                 /* 안내는 **성공했을 때만** 나간다. 앞서는 run() 밖에서 동기로 불러서,
                    연타로 무시된 클릭이나 서버 실패에도 「옮겼어요」가 읽혔다 —
                    목록을 눈으로 못 보는 사용자에게는 그게 확정이다. */
@@ -581,12 +608,6 @@ export function LinksClient({
                     },
                   );
                 }}
-              />
-            ) : tab === "stats" ? (
-              <StatsPanel
-                stats={stats}
-                onRange={(d) => router.push(`/links?days=${d}`, { scroll: false })}
-                busy={busy}
               />
             ) : (
               <SettingsPanel
@@ -620,11 +641,15 @@ function TopBar({
   origin,
   busy,
   onPublish,
+  statsOpen,
+  onToggleStats,
 }: {
   page: LinkPageView;
   origin: string;
   busy: boolean;
   onPublish: () => void;
+  statsOpen: boolean;
+  onToggleStats: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const url = publicLinkUrl(page.slug, origin);
@@ -662,6 +687,11 @@ function TopBar({
       <Button variant="ghost" size="sm" onClick={() => window.open(url, "_blank", "noopener,noreferrer")}>
         <ExternalLink className="size-3.5" aria-hidden />
         열기
+      </Button>
+      {/* 통계 — 편집 탭이 아니라 여기. 만드는 도구와 성과 보기를 섞지 않는다 */}
+      <Button variant={statsOpen ? "secondary" : "ghost"} size="sm" onClick={onToggleStats} aria-expanded={statsOpen}>
+        <BarChart3 className="size-3.5" aria-hidden />
+        통계
       </Button>
 
       {/* 발행 상태는 **버튼 라벨이 아니라 칩**으로 보여준다(링크팜 실측 반영).
@@ -975,6 +1005,8 @@ function ProfilePanel({
           value={page.avatarPath ?? ""}
           onChange={(v) => onImages({ avatarPath: v || null })}
           aspect="aspect-square"
+          cropAspect={1}
+          hint="권장 400×400 이상 정사각형 — 다른 비율은 올릴 때 위치를 맞출 수 있어요"
         />
       ) : null}
       {layout === "cover" || layout === "cover_profile" ? (
@@ -983,6 +1015,8 @@ function ProfilePanel({
           value={page.coverPath ?? ""}
           onChange={(v) => onImages({ coverPath: v || null })}
           aspect="aspect-[3/1]"
+          cropAspect={3}
+          hint="권장 1200×400(3:1) — 다른 비율은 올릴 때 보일 부분을 직접 고를 수 있어요"
         />
       ) : null}
 
@@ -1199,7 +1233,7 @@ function ProfilePanel({
    테마 패널
    ══════════════════════════════════════════════════════════════════ */
 
-function ThemePanel({ current, busy, onPick }: { current: string; busy: boolean; onPick: (k: string) => void }) {
+function ThemePanel({ current, onPick }: { current: string; onPick: (k: string) => void }) {
   const groups = useMemo(() => {
     const m = new Map<string, typeof LINK_THEMES>();
     for (const t of LINK_THEMES) {
@@ -1221,7 +1255,6 @@ function ThemePanel({ current, busy, onPick }: { current: string; busy: boolean;
               <button
                 key={t.key}
                 type="button"
-                disabled={busy}
                 onClick={() => onPick(t.key)}
                 aria-pressed={current === t.key}
                 className={cn(
