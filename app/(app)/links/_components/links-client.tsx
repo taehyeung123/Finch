@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useOptimistic, useState, useTransition } from "react";
+import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   BarChart3,
@@ -13,6 +13,7 @@ import {
   Link2,
   Palette,
   Plus,
+  QrCode,
   Redo2,
   Rocket,
   Settings,
@@ -876,6 +877,7 @@ function TopBar({
   onToggleStats: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [qr, setQr] = useState(false);
   const url = publicLinkUrl(page.slug, origin);
 
   async function copy() {
@@ -912,6 +914,12 @@ function TopBar({
         <ExternalLink className="size-3.5" aria-hidden />
         열기
       </Button>
+      <Button variant="ghost" size="sm" onClick={() => setQr(true)}>
+        <QrCode className="size-3.5" aria-hidden />
+        QR
+      </Button>
+      {qr ? <QrModal url={url} onClose={() => setQr(false)} /> : null}
+
       {/* 통계 — 편집 탭이 아니라 여기. 만드는 도구와 성과 보기를 섞지 않는다 */}
       <Button variant={statsOpen ? "secondary" : "ghost"} size="sm" onClick={onToggleStats} aria-expanded={statsOpen}>
         <BarChart3 className="size-3.5" aria-hidden />
@@ -955,6 +963,87 @@ function TopBar({
 /* ══════════════════════════════════════════════════════════════════
    블록 추가 패널 — 카탈로그·템플릿·가져오기 (블록 목록은 캔버스가 대신한다)
    ══════════════════════════════════════════════════════════════════ */
+
+/* QR 코드 — 링크팜 라이브 미리보기 옆 QR 카피(2026-08-20 대조). 명함·매장·
+   오프라인 유입의 표준 통로다. qrcode 는 모달을 열 때만 동적 로드해서
+   편집기 본 번들에 끼우지 않는다. */
+function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    import("qrcode")
+      .then((QR) => {
+        if (alive && canvasRef.current) {
+          /* 카메라가 읽어야 하므로 테마와 무관하게 **항상 검정-흰색**이다 —
+             다크 토큰을 따르면 대비가 뒤집혀 스캔이 안 된다(의도된 hex 예외) */
+          return QR.toCanvas(canvasRef.current, url, {
+            width: 220,
+            margin: 1,
+            color: { dark: "#111111", light: "#ffffff" },
+          });
+        }
+      })
+      .catch(() => {
+        if (alive) setFailed(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [url]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  function download() {
+    const c = canvasRef.current;
+    if (!c) return;
+    const a = document.createElement("a");
+    a.href = c.toDataURL("image/png");
+    a.download = "핀치-프로필링크-QR.png";
+    a.click();
+  }
+
+  return (
+    <div
+      className="modal-scrim-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="QR 코드"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="modal-card-in shadow-pop w-full max-w-xs rounded-card border border-line bg-body p-5 text-center">
+        <h3 className="text-[15px] font-bold">QR 코드</h3>
+        <p className="mt-1 text-[12px] text-fg-sub">명함·매장·포스터 어디든 — 찍으면 내 프로필 링크로 와요.</p>
+        <div className="mx-auto mt-3 w-fit rounded-card bg-white p-2.5">
+          <canvas ref={canvasRef} aria-label={`${url} QR 코드`} />
+        </div>
+        {failed ? (
+          <p role="alert" className="mt-2 text-[12px] text-negative-strong">
+            QR 을 만들지 못했어요. 잠시 후 다시 열어 주세요.
+          </p>
+        ) : null}
+        <p className="mt-2 break-all text-[11px] text-fg-sub">{url}</p>
+        <div className="mt-3 flex justify-center gap-2">
+          <Button size="sm" onClick={download} disabled={failed}>
+            PNG 저장
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            닫기
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function AddPanel({
   busy,
