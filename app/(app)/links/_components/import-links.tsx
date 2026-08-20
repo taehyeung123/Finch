@@ -5,16 +5,17 @@ import { Download } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
 import { parsePastedLinks, type HarvestedLink } from "@/lib/links";
-import { importFromLittly } from "../actions";
+import { importFromInpock, importFromLittly } from "../actions";
 
 /*
-  다른 서비스에서 링크 옮겨오기 — 기본은 **붙여넣기**, 리틀리만 **주소 가져오기**.
+  다른 서비스에서 링크 옮겨오기 — 기본은 **붙여넣기**, 리틀리·인포크는 **주소 가져오기**.
 
   임의 URL 서버 fetch 는 안 만든다(이유는 lib/links/index.ts 상단 — DNS 리바인딩을
-  fetch 로는 못 막고, Vercel 방화벽은 전부 인바운드다). 리틀리가 유일한 예외인 근거:
-  호스트가 상수(litt.ly)라 사용자 입력이 목적지를 못 정하고, robots 가 Allow: / 이며,
-  서버 HTML 의 data 페이로드에 블록이 구조화돼 있어 실측으로 검증됐다(2026-08-19,
-  사장님 승인). 상세는 actions.ts 의 importFromLittly 주석.
+  fetch 로는 못 막고, Vercel 방화벽은 전부 인바운드다). 예외는 상수 호스트 화이트리스트
+  둘뿐이다: 리틀리(litt.ly, 2026-08-19 사장님 승인)와 인포크(link.inpock.co.kr,
+  2026-08-20 — robots 가 프로필을 허용하고 __NEXT_DATA__ 가 구조화돼 실측 검증).
+  링크트리는 robots 전면 거부(User-agent:* Disallow:/)라 계속 제외한다.
+  상세는 actions.ts 의 importFromLittly·importFromInpock 주석.
 
   붙여넣기 사용법: 기존 링크 페이지를 브라우저에서 열고 → 전체 선택(Ctrl+A) → 복사 →
   여기 붙여넣기. 브라우저가 클립보드에 HTML 을 함께 넣어주므로 <a> 를 그대로 건진다.
@@ -51,7 +52,7 @@ export function ImportLinksBody({
   const [littly, setLittly] = useState("");
   const [fetching, setFetching] = useState(false);
 
-  /** 건진 후보를 표에 얹는다 — 붙여넣기·리틀리 두 경로가 같은 표를 쓴다 */
+  /** 건진 후보를 표에 얹는다 — 붙여넣기·주소 가져오기 경로가 같은 표를 쓴다 */
   function showLinks(links: HarvestedLink[], emptyNote: string) {
     setFound(links);
     setPicked(new Set(links.map((_, i) => i).filter((i) => !links[i].tracking)));
@@ -59,12 +60,16 @@ export function ImportLinksBody({
     setNote(links.length === 0 ? emptyNote : null);
   }
 
-  async function pullLittly() {
+  async function pullByAddress() {
     if (fetching || !littly.trim()) return;
     setFetching(true);
     setNote(null);
     try {
-      const res = await importFromLittly(littly);
+      /* 주소로 서비스 판별 — 인포크 도메인이 보이면 인포크, 나머지는 리틀리 규칙.
+         아이디만 넣으면 리틀리로 간다(입력칸 안내가 그렇게 말한다). */
+      const res = littly.toLowerCase().includes("inpock")
+        ? await importFromInpock(littly)
+        : await importFromLittly(littly);
       if (!res.ok || !res.links) {
         setNote(res.error ?? "가져오지 못했어요.");
         return;
@@ -141,8 +146,8 @@ export function ImportLinksBody({
           아래에 붙여넣으세요. 한 줄에 하나씩 <code className="text-[12px]">이름 | 주소</code> 로 적어도 됩니다.
         </p>
 
-        {/* 리틀리는 주소만으로 가져온다 — 서버가 페이지의 data 페이로드를 읽는다
-            (actions.ts 의 importFromLittly, 유일한 서버 fetch 경로). */}
+        {/* 리틀리·인포크는 주소만으로 가져온다 — 서버가 페이지의 data 페이로드를
+            읽는다(actions.ts, 상수 호스트 화이트리스트가 서버 fetch 의 전부). */}
         <div className="flex items-center gap-1.5">
           <input
             value={littly}
@@ -150,15 +155,15 @@ export function ImportLinksBody({
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                void pullLittly();
+                void pullByAddress();
               }
             }}
-            placeholder="litt.ly/아이디"
-            aria-label="리틀리 주소"
+            placeholder="litt.ly/아이디 · link.inpock.co.kr/아이디"
+            aria-label="리틀리·인포크 주소"
             className="h-9 min-w-0 flex-1 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
           />
-          <Button size="sm" variant="secondary" disabled={fetching || !littly.trim()} onClick={() => void pullLittly()}>
-            {fetching ? "가져오는 중…" : "리틀리에서 가져오기"}
+          <Button size="sm" variant="secondary" disabled={fetching || !littly.trim()} onClick={() => void pullByAddress()}>
+            {fetching ? "가져오는 중…" : "주소로 가져오기"}
           </Button>
         </div>
 

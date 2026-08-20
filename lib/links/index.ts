@@ -114,10 +114,11 @@ export function sliceChars(raw: string, max: number): string {
        네트워크 계층을 직접 짜야 한다. 게다가 Vercel 의 방화벽은 전부 인바운드라
        애플리케이션 코드가 유일한 방어선이다 = 한 줄 실수가 곧 완전한 SSRF.
 
-    ② 실익. 실제로 긁을 수 있는 곳이 거의 없다. 링크트리는 robots.txt 가
-       `Disallow: /` 이고(명명된 봇 58개만 허용, 우리는 없다), 인포크는 모든 주소가
-       자체 리다이렉트라 **진짜 목적지가 페이로드에 없으며**, 링크팜은 Flutter 웹이라
-       DOM 도 페이로드도 없다.
+    ② 실익. 임의 URL 로 긁을 수 있는 곳이 거의 없다. 링크트리는 robots.txt 가
+       `Disallow: /` 이고(명명된 봇만 허용, 우리는 없다), 링크팜은 Flutter 웹이라
+       DOM 도 페이로드도 없다. 되는 곳(리틀리·인포크)은 **상수 호스트 예외**로
+       따로 열었다 — actions.ts 의 importFromLittly·importFromInpock. 인포크의
+       /api/r 추적 리다이렉트도 같은 상수 호스트에 Location 만 물어 해석한다.
 
     ③ 대안이 거의 같은 값을 낸다. 붙여넣기는 조작 4번이면 끝나고 서버가 아무 데도
        나가지 않는다(위 위협 모델 전체가 사라진다).

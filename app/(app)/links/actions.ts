@@ -9,6 +9,7 @@ import { BLOCK_TYPES, defaultBlockData, type BlockType } from "@/lib/links/block
 import { DEFAULT_THEME_KEY, themeByKey } from "@/lib/links/themes";
 import { LINK_TEMPLATES } from "@/lib/links/templates";
 import { parseLittlyHtml } from "@/lib/links/littly";
+import { parseInpockHtml } from "@/lib/links/inpock";
 import { getLinkFeedItems } from "@/lib/data/live";
 
 /*
@@ -495,8 +496,81 @@ export async function addBlock(type: BlockType): Promise<Result> {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   리틀리 가져오기 — 유일한 서버 fetch 경로
+   리틀리·인포크 가져오기 — 서버가 밖에 나가는 경로는 이 상수 호스트
+   화이트리스트(litt.ly · link.inpock.co.kr)뿐이다
    ══════════════════════════════════════════════════════════════════ */
+
+/** 상수 호스트 페이지의 공용 수신부 — 리틀리·인포크가 같이 쓴다.
+    크기 상한·타임아웃·redirect 처리 관문을 두 벌 만들면 반드시 갈린다. */
+type BoundedHtml =
+  | { kind: "ok"; html: string }
+  | { kind: "network" }
+  | { kind: "redirect" }
+  | { kind: "http" }
+  | { kind: "type" }
+  | { kind: "toolarge" }
+  | { kind: "timeout" }
+  | { kind: "read" };
+
+async function fetchBoundedHtml(url: string): Promise<BoundedHtml> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      redirect: "manual",
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+      headers: {
+        /* 우리가 누구인지 밝힌다 — robots 를 열어둔 상대에 대한 최소한의 예의다 */
+        "user-agent": "Mozilla/5.0 (compatible; FinchImport/1.0; +https://finch.ai.kr)",
+        accept: "text/html",
+      },
+    });
+  } catch {
+    return { kind: "network" };
+  }
+
+  /* 조기 반환 때도 body 를 취소한다 — 안 하면 연결이 GC 까지 붙잡힌다 */
+  const drop = () => res.body?.cancel().catch(() => {});
+
+  if (res.status >= 300 && res.status < 400) {
+    drop();
+    return { kind: "redirect" };
+  }
+  if (!res.ok) {
+    drop();
+    return { kind: "http" };
+  }
+  if (!(res.headers.get("content-type") ?? "").includes("text/html")) {
+    drop();
+    return { kind: "type" };
+  }
+
+  /* 크기 상한을 걸며 읽는다 — arrayBuffer() 는 상한 없이 다 받는다.
+     타임아웃이 본문 수신 도중 터지면 read() 가 reject 하므로 루프 전체를 잡는다. */
+  let html = "";
+  const reader = res.body?.getReader();
+  if (!reader) return { kind: "read" };
+  try {
+    const decoder = new TextDecoder();
+    let received = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.byteLength;
+      if (received > LITTLY_MAX_BYTES) {
+        reader.cancel().catch(() => {});
+        return { kind: "toolarge" };
+      }
+      html += decoder.decode(value, { stream: true });
+    }
+    html += decoder.decode();
+  } catch (e) {
+    reader.cancel().catch(() => {});
+    const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
+    return { kind: timedOut ? "timeout" : "read" };
+  }
+  return { kind: "ok", html };
+}
 
 /** 리틀리 별칭 형식 — 실측 별칭(start_now_new·client 등)이 전부 이 안에 든다 */
 const LITTLY_SLUG_RE = /^[A-Za-z0-9._~-]{1,80}$/;
@@ -507,7 +581,7 @@ const LITTLY_MAX_BYTES = 2 * 1024 * 1024;
 /**
  * 리틀리(litt.ly) 페이지에서 링크 후보를 가져온다.
  *
- * **이 레포에서 사용자 입력으로 서버가 밖에 나가는 유일한 경로다.** 일반 URL
+ * **서버가 밖에 나가는 상수 호스트 화이트리스트의 1호다**(2호는 인포크). 일반 URL
  * 가져오기를 만들지 않은 이유(lib/links/index.ts 상단)는 그대로 유효하고,
  * 여기가 예외일 수 있는 근거는 셋이다:
  *  ① 호스트가 **상수**다 — 사용자는 슬러그만 주고 주소는 우리가 조립한다.
@@ -551,71 +625,22 @@ export async function importFromLittly(
     return { ok: false, error: "리틀리 주소가 아니에요. litt.ly/아이디 형태로 넣어 주세요." };
   }
 
-  let res: Response;
-  try {
-    res = await fetch(`https://litt.ly/${encodeURIComponent(slug)}`, {
-      redirect: "manual",
-      cache: "no-store",
-      signal: AbortSignal.timeout(10_000),
-      headers: {
-        /* 우리가 누구인지 밝힌다 — robots 를 열어둔 상대에 대한 최소한의 예의다 */
-        "user-agent": "Mozilla/5.0 (compatible; FinchImport/1.0; +https://finch.ai.kr)",
-        accept: "text/html",
-      },
-    });
-  } catch {
-    return { ok: false, error: "리틀리에 접속하지 못했어요. 잠시 후 다시 시도해 주세요." };
-  }
-
-  /* 조기 반환 때도 body 를 취소한다 — 안 하면 연결이 GC 까지 붙잡힌다.
-     없는 슬러그(301)가 이 함수의 가장 흔한 실패 경로다. */
-  const drop = () => res.body?.cancel().catch(() => {});
-
-  /* 없는 슬러그 = 301 홈 리다이렉트(실측). 따라가지 않고 여기서 끝낸다 */
-  if (res.status >= 300 && res.status < 400) {
-    drop();
-    return { ok: false, error: "그 주소의 리틀리 페이지를 찾지 못했어요. 아이디를 확인해 주세요." };
-  }
-  if (!res.ok) {
-    drop();
-    return { ok: false, error: "리틀리 페이지를 열지 못했어요. 잠시 후 다시 시도해 주세요." };
-  }
-  if (!(res.headers.get("content-type") ?? "").includes("text/html")) {
-    drop();
-    return { ok: false, error: "리틀리 페이지 형식을 읽지 못했어요." };
-  }
-
-  /* 크기 상한을 걸며 읽는다 — arrayBuffer() 는 상한 없이 다 받는다.
-     ⚠️ 루프 전체를 try 로 감싼다: 타임아웃(AbortSignal)이 **본문 수신 도중**
-     터지면 reader.read() 가 reject 하는데, 안 잡으면 이 액션이 스스로 정한
-     { ok:false } 계약을 어기고 예외로 죽는다. */
-  let html = "";
-  const reader = res.body?.getReader();
-  if (!reader) return { ok: false, error: "리틀리 페이지를 읽지 못했어요." };
-  try {
-    const decoder = new TextDecoder();
-    let received = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      received += value.byteLength;
-      if (received > LITTLY_MAX_BYTES) {
-        reader.cancel().catch(() => {});
-        return { ok: false, error: "페이지가 너무 커서 가져올 수 없어요." };
-      }
-      html += decoder.decode(value, { stream: true });
-    }
-    html += decoder.decode();
-  } catch (e) {
-    reader.cancel().catch(() => {});
-    const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
-    return {
-      ok: false,
-      error: timedOut ? "리틀리 응답이 너무 느려요. 잠시 후 다시 시도해 주세요." : "리틀리 페이지를 읽지 못했어요.",
+  const fetched = await fetchBoundedHtml(`https://litt.ly/${encodeURIComponent(slug)}`);
+  if (fetched.kind !== "ok") {
+    /* 없는 슬러그 = 301 홈 리다이렉트(실측) — redirect 가 곧 "못 찾음" 신호다 */
+    const msg: Record<Exclude<BoundedHtml["kind"], "ok">, string> = {
+      network: "리틀리에 접속하지 못했어요. 잠시 후 다시 시도해 주세요.",
+      redirect: "그 주소의 리틀리 페이지를 찾지 못했어요. 아이디를 확인해 주세요.",
+      http: "리틀리 페이지를 열지 못했어요. 잠시 후 다시 시도해 주세요.",
+      type: "리틀리 페이지 형식을 읽지 못했어요.",
+      toolarge: "페이지가 너무 커서 가져올 수 없어요.",
+      timeout: "리틀리 응답이 너무 느려요. 잠시 후 다시 시도해 주세요.",
+      read: "리틀리 페이지를 읽지 못했어요.",
     };
+    return { ok: false, error: msg[fetched.kind] };
   }
 
-  const parsed = parseLittlyHtml(html);
+  const parsed = parseLittlyHtml(fetched.html);
   if (!parsed) {
     return { ok: false, error: "리틀리 페이지 형식이 바뀐 것 같아요. 페이지를 복사해 위 칸에 붙여넣어 주세요." };
   }
@@ -623,6 +648,108 @@ export async function importFromLittly(
     return { ok: false, error: "그 페이지에서 가져올 링크를 찾지 못했어요." };
   }
   return { ok: true, pageTitle: parsed.pageTitle, links: parsed.candidates };
+}
+
+/** 인포크 별칭 형식 */
+const INPOCK_SLUG_RE = /^[A-Za-z0-9._-]{1,80}$/;
+/** /api/r/ 리다이렉트 해석 동시성 — 한 번에 5개씩 */
+const INPOCK_RESOLVE_CHUNK = 5;
+
+/**
+ * 인포크링크(link.inpock.co.kr)에서 링크 후보를 가져온다 — 상수 호스트 2호.
+ *
+ * 리틀리와 같은 예외 근거(2026-08-20 실측):
+ *  ① 호스트 상수 — 사용자는 별칭만 주고 주소는 우리가 조립한다.
+ *  ② robots.txt 가 프로필 경로를 허용한다(Disallow 는 /admin 뿐).
+ *  ③ __NEXT_DATA__ 에 블록이 구조화돼 서버 HTML 만으로 읽힌다.
+ *  · 링크가 /api/r/{token} 추적 리다이렉트라, 실제 목적지는 **같은 상수 호스트**에
+ *    redirect:"manual" 로 물어 Location 헤더만 읽는다 — 남의 호스트로는 안 나간다.
+ *  · 링크트리는 안 만든다: robots 가 User-agent:* Disallow:/ (전면 거부, 재실측 동일).
+ */
+export async function importFromInpock(
+  raw: string,
+): Promise<{ ok: boolean; error?: string; pageTitle?: string | null; links?: Array<{ label: string; url: string }> }> {
+  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 가져올 수 없어요." };
+  const user = await getAuthUser();
+  if (!user) return AUTH;
+
+  let input = raw.trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "");
+  if (input.includes("/")) {
+    const host = input.split("/")[0].toLowerCase();
+    if (host !== "link.inpock.co.kr" && host !== "inpock.co.kr") {
+      return { ok: false, error: "인포크(link.inpock.co.kr) 주소만 가져올 수 있어요." };
+    }
+    input = input.slice(input.indexOf("/") + 1);
+  }
+  const slug = input.split(/[/?#]/)[0];
+  if (!slug || slug.toLowerCase() === "link.inpock.co.kr") {
+    return { ok: false, error: "아이디까지 넣어 주세요 — link.inpock.co.kr/아이디 형태예요." };
+  }
+  if (!INPOCK_SLUG_RE.test(slug)) {
+    return { ok: false, error: "인포크 주소가 아니에요. link.inpock.co.kr/아이디 형태로 넣어 주세요." };
+  }
+
+  const fetched = await fetchBoundedHtml(`https://link.inpock.co.kr/${encodeURIComponent(slug)}`);
+  if (fetched.kind !== "ok") {
+    const msg: Record<Exclude<BoundedHtml["kind"], "ok">, string> = {
+      network: "인포크에 접속하지 못했어요. 잠시 후 다시 시도해 주세요.",
+      redirect: "그 주소의 인포크 페이지를 찾지 못했어요. 아이디를 확인해 주세요.",
+      http: "인포크 페이지를 열지 못했어요. 잠시 후 다시 시도해 주세요.",
+      type: "인포크 페이지 형식을 읽지 못했어요.",
+      toolarge: "페이지가 너무 커서 가져올 수 없어요.",
+      timeout: "인포크 응답이 너무 느려요. 잠시 후 다시 시도해 주세요.",
+      read: "인포크 페이지를 읽지 못했어요.",
+    };
+    return { ok: false, error: msg[fetched.kind] };
+  }
+
+  const parsed = parseInpockHtml(fetched.html);
+  if (!parsed) {
+    return { ok: false, error: "인포크 페이지 형식이 바뀐 것 같아요. 페이지를 복사해 위 칸에 붙여넣어 주세요." };
+  }
+  if (parsed.notFound) {
+    return { ok: false, error: "그 주소의 인포크 페이지를 찾지 못했어요. 아이디를 확인해 주세요." };
+  }
+
+  /* /api/r/{token} 은 인포크의 클릭 추적 리다이렉트다 — 같은 호스트에 물어
+     Location 으로 바꾼다. 해석 실패·인포크 안으로 되도는 링크(다른 인포크 페이지)는
+     버린다: 이사 나가는 사용자에게 옛집 의존 링크를 심으면 안 된다. */
+  const out: Array<{ label: string; url: string }> = [];
+  const rel: Array<{ label: string; url: string }> = [];
+  for (const c of parsed.candidates) {
+    if (/^https?:\/\//i.test(c.url)) out.push(c);
+    else if (c.url.startsWith("/api/r/")) rel.push(c);
+  }
+  for (let i = 0; i < rel.length; i += INPOCK_RESOLVE_CHUNK) {
+    const chunk = rel.slice(i, i + INPOCK_RESOLVE_CHUNK);
+    const resolved = await Promise.all(
+      chunk.map(async (c) => {
+        try {
+          const r = await fetch(`https://link.inpock.co.kr${c.url}`, {
+            redirect: "manual",
+            cache: "no-store",
+            signal: AbortSignal.timeout(5_000),
+            headers: { "user-agent": "Mozilla/5.0 (compatible; FinchImport/1.0; +https://finch.ai.kr)" },
+          });
+          r.body?.cancel().catch(() => {});
+          const loc = r.headers.get("location");
+          if (r.status >= 300 && r.status < 400 && loc && /^https?:\/\//i.test(loc)) {
+            if (new URL(loc).hostname.toLowerCase().endsWith("inpock.co.kr")) return null;
+            return { label: c.label, url: loc };
+          }
+        } catch {
+          /* 한 개 실패가 전체를 무너뜨리지 않는다 — 그 링크만 버린다 */
+        }
+        return null;
+      }),
+    );
+    for (const done of resolved) if (done) out.push(done);
+  }
+
+  if (out.length === 0) {
+    return { ok: false, error: "그 페이지에서 가져올 링크를 찾지 못했어요." };
+  }
+  return { ok: true, pageTitle: parsed.pageTitle, links: out };
 }
 
 /**
