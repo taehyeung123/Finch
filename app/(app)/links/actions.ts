@@ -1148,6 +1148,8 @@ const TEXT_CAPS: Record<string, number> = {
 };
 const ENUMS: Record<string, readonly string[]> = {
   emphasis: ["normal", "primary", "outline"],
+  textSize: ["sm", "md", "lg"],
+  textWeight: ["medium", "semibold", "bold"],
   align: ["left", "center"],
   style: ["line", "dot"],
   tone: ["info", "primary", "warning"],
@@ -1171,6 +1173,12 @@ function sanitizeBlockData(input: Record<string, unknown>): { data?: Record<stri
     /* cached 는 「라이브 반영」이 채우는 서버 생성 값이다. 클라이언트가 보낸 걸 그대로
        두면 연동하지 않은 계정의 썸네일·링크를 스냅샷에 심을 수 있다 — 발행 때 다시 채운다. */
     if (k === "cached") continue;
+
+    if (k === "textColor") {
+      /* 색은 #rrggbb 만 — 임의 문자열이 공개 페이지 inline style 로 나가면 안 된다 */
+      if (typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v)) out[k] = v;
+      continue;
+    }
 
     if (k === "url" || k === "imagePath") {
       if (typeof v !== "string" || !v.trim()) continue;

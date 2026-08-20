@@ -47,7 +47,27 @@ export interface LinkBlockData {
   emoji?: string;
   /** 강조 스타일 — 대표 버튼 하나를 눈에 띄게 */
   emphasis?: "normal" | "primary" | "outline";
+  /** 텍스트 크기 — 기본 md. 공개 15px 기준 sm 13 / lg 17 */
+  textSize?: "sm" | "md" | "lg";
+  /** 텍스트 굵기 — 기본 semibold */
+  textWeight?: "medium" | "semibold" | "bold";
+  /** 텍스트 색 — #rrggbb. 비우면 테마가 정한다 */
+  textColor?: string;
 }
+
+/** 링크 버튼 텍스트 색 스와치 — 링크팜 편집기의 8색 카피.
+    ⚠️ 앱 UI 토큰 아님: 방문자 페이지에 찍히는 **사용자 콘텐츠 팔레트**라
+    LINK_THEMES 와 같은 이유로 hex 가 맞다(테마 토큰과 무관해야 한다). */
+export const LINK_TEXT_COLORS = [
+  "#111827",
+  "#FFFFFF",
+  "#64748B",
+  "#22C55E",
+  "#3B82F6",
+  "#EC4899",
+  "#F59E0B",
+  "#8B5CF6",
+] as const;
 
 /** 소제목 — 링크 묶음을 구분한다(링크팜에는 없다. 링크 10개 넘으면 반드시 필요해진다) */
 export interface HeadingBlockData {

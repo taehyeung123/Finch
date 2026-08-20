@@ -372,8 +372,18 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
   switch (block.type) {
     case "link": {
       const emphasis = s(d, "emphasis") || "normal";
+      /* 공개 렌더러와 같은 규칙 — 프레임 비율로 줄인 값(공개 13/15/17 → 12/13/15) */
+      const textStyle: React.CSSProperties = {};
+      const tSize = s(d, "textSize");
+      if (tSize === "sm") textStyle.fontSize = "12px";
+      else if (tSize === "lg") textStyle.fontSize = "15px";
+      const tWeight = s(d, "textWeight");
+      if (tWeight === "medium") textStyle.fontWeight = 500;
+      else if (tWeight === "bold") textStyle.fontWeight = 700;
+      if (/^#[0-9a-fA-F]{6}$/.test(s(d, "textColor"))) textStyle.color = s(d, "textColor");
       return (
         <div
+          style={textStyle}
           className={[
             "flex min-h-[44px] items-center justify-center gap-1.5 rounded-[var(--lp-radius-btn)] px-4 py-2.5 text-center text-[13px] font-semibold",
             emphasis === "primary"

@@ -51,10 +51,21 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
       const emphasis = s(d, "emphasis") || "normal";
       const primary = emphasis === "primary";
       const outline = emphasis === "outline";
+      /* 블록별 텍스트 스타일 — 값이 있을 때만 inline 으로 얹는다(없으면 테마가 정한다).
+         색은 sanitize 가 #rrggbb 만 통과시키지만 여기서도 한 번 더 거른다. */
+      const textStyle: React.CSSProperties = {};
+      const tSize = s(d, "textSize");
+      if (tSize === "sm") textStyle.fontSize = "13px";
+      else if (tSize === "lg") textStyle.fontSize = "17px";
+      const tWeight = s(d, "textWeight");
+      if (tWeight === "medium") textStyle.fontWeight = 500;
+      else if (tWeight === "bold") textStyle.fontWeight = 700;
+      if (/^#[0-9a-fA-F]{6}$/.test(s(d, "textColor"))) textStyle.color = s(d, "textColor");
       return (
         <a
           href={goHref(slug, block.id)}
           rel="noopener noreferrer nofollow"
+          style={textStyle}
           className={[
             "flex min-h-[52px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] px-5 py-3 text-center text-[15px] font-semibold transition-opacity hover:opacity-85",
             primary

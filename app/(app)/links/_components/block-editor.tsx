@@ -3,7 +3,7 @@
 import { Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { sliceChars } from "@/lib/links";
-import { BLOCK_CATALOG, CONTACT_FIELDS, COUPANG_DISCLOSURE, type LinkBlock } from "@/lib/links/blocks";
+import { BLOCK_CATALOG, CONTACT_FIELDS, COUPANG_DISCLOSURE, LINK_TEXT_COLORS, type LinkBlock } from "@/lib/links/blocks";
 import { ImageField } from "./image-field";
 
 /*
@@ -123,6 +123,64 @@ export function BlockEditor({
                 <option value="primary">채움</option>
                 <option value="outline">테두리</option>
               </select>
+            </div>
+          </div>
+
+          {/* 텍스트 스타일 — 링크팜의 블록별 크기·굵기·색 카피(2026-08-20 대조 6번) */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className={label} htmlFor="b-tsize">
+                글자 크기
+              </label>
+              <select id="b-tsize" value={str("textSize") || "md"} onChange={(e) => set("textSize", e.target.value)} className={`mt-1.5 ${input}`}>
+                <option value="sm">작게</option>
+                <option value="md">기본</option>
+                <option value="lg">크게</option>
+              </select>
+            </div>
+            <div>
+              <label className={label} htmlFor="b-tweight">
+                글자 굵기
+              </label>
+              <select id="b-tweight" value={str("textWeight") || "semibold"} onChange={(e) => set("textWeight", e.target.value)} className={`mt-1.5 ${input}`}>
+                <option value="medium">보통</option>
+                <option value="semibold">세미볼드</option>
+                <option value="bold">볼드</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <span className={label}>글자 색</span>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {LINK_TEXT_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => set("textColor", c)}
+                  aria-label={`글자 색 ${c}`}
+                  aria-pressed={str("textColor") === c}
+                  className={
+                    str("textColor") === c
+                      ? "size-6 rounded-full border-2 border-primary"
+                      : "trans-state size-6 rounded-full border border-line hover:border-line-strong"
+                  }
+                  style={{ background: c }}
+                />
+              ))}
+              <input
+                type="color"
+                value={/^#[0-9a-fA-F]{6}$/.test(str("textColor")) ? str("textColor") : "#111827"}
+                onChange={(e) => set("textColor", e.target.value)}
+                aria-label="글자 색 직접 고르기"
+                className="size-6 cursor-pointer rounded-full border border-line bg-body p-0"
+              />
+              <button
+                type="button"
+                onClick={() => set("textColor", "")}
+                className="trans-state rounded-chip border border-line px-2 py-0.5 text-[11px] font-medium text-fg-sub hover:bg-tint-hover hover:text-fg"
+              >
+                테마 색으로
+              </button>
             </div>
           </div>
         </>
