@@ -482,6 +482,11 @@ export async function addBlock(type: BlockType): Promise<Result> {
     sort_order: (last?.sort_order ?? -1) + 1,
   });
   if (error) {
+    /* 0054(수익화 블록 타입) 미적용 DB — check 위반을 사용자 언어로.
+       조용히 "추가하지 못했어요"만 내면 코드 버그처럼 읽힌다(계단식 폴백 관례). */
+    if (error.code === "23514" || /link_blocks_type_check/.test(error.message)) {
+      return { ok: false, error: "이 블록은 서버 업데이트(0054) 적용 후 쓸 수 있어요." };
+    }
     console.error("[links] 블록 추가 실패:", error.message);
     return { ok: false, error: "추가하지 못했어요." };
   }
@@ -1001,6 +1006,8 @@ const TEXT_CAPS: Record<string, number> = {
   alt: 100,
   address: 200,
   emoji: 4,
+  price: 20,
+  message: 140,
 };
 const ENUMS: Record<string, readonly string[]> = {
   emphasis: ["normal", "primary", "outline"],

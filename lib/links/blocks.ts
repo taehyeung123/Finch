@@ -8,10 +8,11 @@
   DB 가 모르는 타입이 들어오면 저장은 되는데 공개 페이지가 렌더를 못 해 조용히 사라진다.
 
   링크팜에서 **안 가져온 것**과 이유:
-   · 쿠팡 파트너스 상품 — 그들의 제휴 비즈니스다. 우리 제품 맥락이 아니다.
-   · 후원하기·예약받기·캘린더 — 결제·예약 백엔드가 필요하다. 화면만 만들면
-     "누르면 아무 일도 안 나는 버튼"이 된다(이번 개편에서 계속 걷어낸 그것).
-     결제 연동 뒤에 연다.
+   · 예약받기·캘린더 — 예약 백엔드가 필요하다. 화면만 만들면 "누르면 아무 일도
+     안 나는 버튼"이 된다(이번 개편에서 계속 걷어낸 그것). 연동 뒤에 연다.
+   · 쿠팡 파트너스·후원하기는 0048 때 같은 이유로 미뤘다가 2026-08-20 재실측에서
+     **둘 다 링크 아웃**(제휴 링크 / 송금 링크)임을 확인하고 0054 로 열었다 —
+     백엔드 없이 온전히 동작한다.
   대신 **우리에게만 있는 것**을 넣었다: social_feed 가 연동된 채널의 실제 최근
   게시물을 끌어온다(링크팜은 사용자가 URL 을 손으로 넣어야 한다).
 */
@@ -32,6 +33,8 @@ export const BLOCK_TYPES = [
   "contact",
   "subscribe",
   "map",
+  "coupang",
+  "donation",
 ] as const;
 
 export type BlockType = (typeof BLOCK_TYPES)[number];
@@ -153,6 +156,26 @@ export interface SubscribeBlockData {
 }
 
 /** 지도/주소 — 좌표가 아니라 주소 문자열 + 지도 앱 링크. 임베드는 방문자 추적을 붙인다 */
+/** 쿠팡 파트너스 상품 — 제휴 링크 카드. 공개 렌더러가 법정 고지 문구를 항상 붙인다 */
+export interface CoupangBlockData {
+  url: string;
+  title: string;
+  price?: string;
+  imagePath?: string;
+}
+
+/** 후원하기 — 토스·카카오페이 송금 링크 등으로 응원받기. 링크 아웃이라 결제 백엔드가 필요 없다 */
+export interface DonationBlockData {
+  url: string;
+  label?: string;
+  message?: string;
+  emoji?: string;
+}
+
+/** 쿠팡 파트너스 법정 고지 — 공정위 추천·보증 심사지침상 대가관계 표시 의무. 렌더러가 항상 붙이고 끌 수 없다 */
+export const COUPANG_DISCLOSURE =
+  "이 게시물은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.";
+
 export interface MapBlockData {
   address: string;
   label?: string;
@@ -188,8 +211,12 @@ export const BLOCK_CATALOG: Array<{
   type: BlockType;
   label: string;
   hint: string;
-  group: "기본" | "콘텐츠" | "레이아웃" | "받기";
+  group: "수익" | "기본" | "콘텐츠" | "레이아웃" | "받기";
 }> = [
+  /* 수익 — 링크로 돈이 되는 블록을 맨 앞에(링크팜은 쿠팡 CTA 를 카탈로그 최상단에 고정한다) */
+  { type: "coupang", label: "쿠팡 파트너스 상품", hint: "제휴 링크 카드 — 고지 문구는 자동으로 붙어요", group: "수익" },
+  { type: "donation", label: "후원하기", hint: "토스·카카오페이 송금 링크로 응원받기", group: "수익" },
+
   { type: "link", label: "링크 버튼", hint: "가장 기본. 어디로든 보냅니다", group: "기본" },
   { type: "image_card", label: "이미지·제품 카드", hint: "썸네일·가격·구매 버튼까지", group: "기본" },
   { type: "card_row", label: "가로 카드", hint: "썸네일과 설명을 나란히", group: "기본" },
@@ -245,6 +272,10 @@ export function defaultBlockData(type: BlockType): Record<string, unknown> {
       return { title: "새 소식 받기", description: "", buttonLabel: "구독하기" };
     case "map":
       return { address: "", label: "" };
+    case "coupang":
+      return { url: "", title: "", price: "", imagePath: "" };
+    case "donation":
+      return { url: "", label: "후원하기", emoji: "💛", message: "" };
     default:
       return {};
   }
@@ -264,6 +295,8 @@ export function hiddenReason(type: BlockType, data: Record<string, unknown>): st
   const withUrl = items.filter((it) => typeof it.url === "string" && it.url.trim()).length;
   switch (type) {
     case "link":
+    case "coupang":
+    case "donation":
       return s("url") ? null : "주소가 비어 공개되지 않아요";
     case "image":
       return s("imagePath") ? null : "이미지가 없어 공개되지 않아요";
@@ -304,6 +337,10 @@ export function blockSummary(type: BlockType, data: Record<string, unknown>): st
       return `항목 ${n("items")}개`;
     case "social_feed":
       return `${s("channel") || "instagram"} 최근 게시물`;
+    case "coupang":
+      return s("title") || "쿠팡 상품";
+    case "donation":
+      return s("label") || "후원하기";
     case "contact":
       return s("title") || "문의받기";
     case "subscribe":

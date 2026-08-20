@@ -1,5 +1,6 @@
 import { youtubeEmbed } from "@/lib/links";
 import type { BlockType } from "@/lib/links/blocks";
+import { COUPANG_DISCLOSURE } from "@/lib/links/blocks";
 
 /*
   공개 페이지 블록 렌더러.
@@ -308,6 +309,53 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
          (lead-form.tsx)가 맡고, page.tsx 가 타입을 보고 그쪽으로 보낸다.
          서버 렌더러에 폼 로직을 섞으면 이 파일이 클라이언트 번들로 끌려간다. */
       return null;
+
+    /* ── 쿠팡 파트너스 상품 — 고지 문구는 항상 붙는다(공정위 표시 의무).
+       클릭은 /go 집계를 거친다. url 없으면 링크 버튼과 같은 이유로 안 그린다. ── */
+    case "coupang": {
+      if (!s(d, "url")) return null;
+      return (
+        <div className="overflow-hidden rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-card)] shadow-[var(--lp-shadow)]">
+          {s(d, "imagePath") ? (
+            // eslint-disable-next-line @next/next/no-img-element -- 사용자 업로드·원격 URL
+            <img src={s(d, "imagePath")} alt={s(d, "title")} className="aspect-[16/9] w-full object-cover" />
+          ) : null}
+          <div className="px-4 py-3">
+            <span className="inline-block rounded-full bg-[var(--lp-accent)] px-2.5 py-0.5 text-[11px] font-bold text-[var(--lp-on-accent)]">
+              쿠팡 파트너스
+            </span>
+            <p className="mt-1.5 text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "title") || "상품 보러 가기"}</p>
+            {s(d, "price") ? <p className="tnum mt-0.5 text-[17px] font-bold text-[var(--lp-fg)]">{s(d, "price")}</p> : null}
+            <a
+              href={goHref(slug, block.id)}
+              rel="noopener noreferrer nofollow"
+              className="mt-2.5 flex min-h-[44px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-4 text-[14px] font-semibold text-[var(--lp-on-accent)] transition-opacity hover:opacity-85"
+            >
+              쿠팡에서 보기
+            </a>
+            <p className="mt-2 text-[11px] leading-[1.6] text-[var(--lp-muted)]">{COUPANG_DISCLOSURE}</p>
+          </div>
+        </div>
+      );
+    }
+
+    /* ── 후원하기 — 송금 링크로 나가는 강조 버튼. 응원 문구는 버튼 아래 작게 ── */
+    case "donation": {
+      if (!s(d, "url")) return null;
+      return (
+        <div>
+          <a
+            href={goHref(slug, block.id)}
+            rel="noopener noreferrer nofollow"
+            className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-5 py-3 text-center text-[15px] font-semibold text-[var(--lp-on-accent)] transition-opacity hover:opacity-85"
+          >
+            {s(d, "emoji") ? <span aria-hidden>{s(d, "emoji")}</span> : null}
+            {s(d, "label") || "후원하기"}
+          </a>
+          {s(d, "message") ? <p className="mt-1.5 text-center text-[12px] text-[var(--lp-muted)]">{s(d, "message")}</p> : null}
+        </div>
+      );
+    }
 
     case "map": {
       const address = s(d, "address");

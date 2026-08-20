@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, youtubeEmbed } from "@/lib/links";
 import { themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
-import { BLOCK_CATALOG, blockSummary, hiddenReason, type LinkBlock } from "@/lib/links/blocks";
+import { BLOCK_CATALOG, blockSummary, COUPANG_DISCLOSURE, hiddenReason, type LinkBlock } from "@/lib/links/blocks";
 import type { LinkPageView } from "@/lib/links/types";
 
 /*
@@ -556,6 +556,37 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
         </div>
       );
     }
+    case "coupang":
+      return (
+        <div className={`${card} overflow-hidden`}>
+          {s(d, "imagePath") ? (
+            // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
+            <img src={s(d, "imagePath")} alt="" className="aspect-[16/9] w-full object-cover" />
+          ) : null}
+          <div className="px-3 py-2.5">
+            <span className="inline-block rounded-full bg-[var(--lp-accent)] px-2 py-0.5 text-[10px] font-bold text-[var(--lp-on-accent)]">
+              쿠팡 파트너스
+            </span>
+            <p className="mt-1 text-[13px] font-semibold">{s(d, "title") || "상품 이름"}</p>
+            {s(d, "price") ? <p className="tnum mt-0.5 text-[15px] font-bold">{s(d, "price")}</p> : null}
+            <span className="mt-2 flex min-h-[32px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-3 text-[12px] font-semibold text-[var(--lp-on-accent)]">
+              쿠팡에서 보기
+            </span>
+            {/* 고지 — 공개 렌더러가 항상 붙이므로 미리보기도 그대로 보여야 발행 후 모양이 안 달라진다 */}
+            <p className="mt-1.5 text-[9px] leading-[1.5] text-[var(--lp-muted)]">{COUPANG_DISCLOSURE}</p>
+          </div>
+        </div>
+      );
+    case "donation":
+      return (
+        <div>
+          <div className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-4 py-2.5 text-center text-[13px] font-semibold text-[var(--lp-on-accent)]">
+            {s(d, "emoji") ? <span aria-hidden>{s(d, "emoji")}</span> : null}
+            {s(d, "label") || "후원하기"}
+          </div>
+          {s(d, "message") ? <p className="mt-1.5 text-center text-[11px] text-[var(--lp-muted)]">{s(d, "message")}</p> : null}
+        </div>
+      );
     case "map":
       return (
         <div className={`${card} px-3 py-2.5`}>

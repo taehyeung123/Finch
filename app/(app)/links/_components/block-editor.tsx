@@ -3,7 +3,7 @@
 import { Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { sliceChars } from "@/lib/links";
-import { BLOCK_CATALOG, CONTACT_FIELDS, type LinkBlock } from "@/lib/links/blocks";
+import { BLOCK_CATALOG, CONTACT_FIELDS, COUPANG_DISCLOSURE, type LinkBlock } from "@/lib/links/blocks";
 import { ImageField } from "./image-field";
 
 /*
@@ -200,6 +200,112 @@ export function BlockEditor({
             ))}
           </select>
         </div>
+      ) : null}
+
+      {/* ── 수익화: 쿠팡 파트너스·후원하기 ── */}
+      {block.type === "coupang" ? (
+        <>
+          <div>
+            <label className={label} htmlFor="b-cp-url">
+              파트너스 링크
+            </label>
+            <input
+              id="b-cp-url"
+              value={str("url")}
+              onChange={(e) => set("url", e.target.value)}
+              placeholder="https://link.coupang.com/..."
+              className={`mt-1.5 ${input}`}
+            />
+            <p className="mt-1 text-[12px] text-fg-sub">쿠팡 파트너스에서 발급받은 상품 링크를 붙여넣으세요.</p>
+          </div>
+          <div>
+            <label className={label} htmlFor="b-cp-title">
+              상품 이름
+            </label>
+            <input
+              id="b-cp-title"
+              value={str("title")}
+              onChange={(e) => set("title", e.target.value)}
+              maxLength={60}
+              className={`mt-1.5 ${input}`}
+            />
+          </div>
+          <div>
+            <label className={label} htmlFor="b-cp-price">
+              가격 표시 (선택)
+            </label>
+            <input
+              id="b-cp-price"
+              value={str("price")}
+              onChange={(e) => set("price", e.target.value)}
+              maxLength={20}
+              placeholder="19,900원"
+              className={`mt-1.5 ${input}`}
+            />
+          </div>
+          <ImageField label="상품 이미지 (선택)" value={str("imagePath")} onChange={(v) => set("imagePath", v)} />
+          {/* 고지는 옵션이 아니다 — 편집 중에 미리 보여줘야 발행 후에 놀라지 않는다 */}
+          <p className="rounded-card bg-plate px-3 py-2.5 text-[12px] leading-[1.6] text-fg-sub">
+            공개 페이지에는 「{COUPANG_DISCLOSURE}」 문구가 자동으로 붙어요 — 공정위 표시 의무라 끌 수 없습니다.
+          </p>
+        </>
+      ) : null}
+
+      {block.type === "donation" ? (
+        <>
+          <div>
+            <label className={label} htmlFor="b-dn-url">
+              후원 링크
+            </label>
+            <input
+              id="b-dn-url"
+              value={str("url")}
+              onChange={(e) => set("url", e.target.value)}
+              placeholder="https://toss.me/내아이디"
+              className={`mt-1.5 ${input}`}
+            />
+            <p className="mt-1 text-[12px] text-fg-sub">토스 송금 링크(toss.me)·카카오페이 송금코드 주소 등을 넣으세요.</p>
+          </div>
+          <div>
+            <label className={label} htmlFor="b-dn-label">
+              버튼 문구
+            </label>
+            <input
+              id="b-dn-label"
+              value={str("label")}
+              onChange={(e) => set("label", e.target.value)}
+              maxLength={40}
+              placeholder="후원하기"
+              className={`mt-1.5 ${input}`}
+            />
+          </div>
+          <div>
+            <label className={label} htmlFor="b-dn-emoji">
+              이모지 (선택)
+            </label>
+            <input
+              id="b-dn-emoji"
+              value={str("emoji")}
+              onChange={(e) => set("emoji", e.target.value)}
+              maxLength={4}
+              placeholder="💛"
+              className={`mt-1.5 ${input}`}
+            />
+          </div>
+          <div>
+            <label className={label} htmlFor="b-dn-msg">
+              응원 문구 (선택)
+            </label>
+            <input
+              id="b-dn-msg"
+              value={str("message")}
+              onChange={(e) => set("message", e.target.value)}
+              maxLength={140}
+              placeholder="콘텐츠가 도움이 됐다면 커피 한 잔 부탁드려요"
+              className={`mt-1.5 ${input}`}
+            />
+          </div>
+        </>
       ) : null}
 
       {/* ── 이미지·이미지 카드 ── */}
