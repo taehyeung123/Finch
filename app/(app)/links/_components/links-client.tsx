@@ -198,15 +198,6 @@ export function LinksClient({
      링크팜은 이 둘을 나란히 두 판으로 보여주는데, 우리 지면에는 한 판 자리라
      토글로 간다 — 목적(초안과 라이브를 눈으로 비교)은 같다. */
   const [previewMode, setPreviewMode] = useState<"draft" | "live">("draft");
-  /* 마지막으로 지운 블록 — 「되돌리기」 한 번의 범위. 새 삭제가 덮어쓴다 */
-  const [lastDeleted, setLastDeleted] = useState<{
-    type: BlockType;
-    data: Record<string, unknown>;
-    sortOrder: number;
-    active: boolean;
-    label: string;
-  } | null>(null);
-
   /* 편집 중인 블록 값은 **여기서** 들고 있다 — 편집기 안에 가둬 두면 탭을 누르는
      시점에 부모가 "미저장인가"를 알 수 없다. baseline 은 마지막으로 서버에 반영된 값. */
   const [draft, setDraft] = useState<Record<string, unknown>>({});
@@ -302,6 +293,13 @@ export function LinksClient({
   function record(entry: UndoEntry) {
     setUndoStack((s) => [...s.slice(-(UNDO_MAX - 1)), entry]);
     /* 새 조작은 다시실행 가지를 자른다 — 표준 히스토리 의미론 */
+    setRedoStack([]);
+  }
+
+  /** 이력 전체 파기 — 대상 블록들이 통째로 사라지는 조작(템플릿 적용·페이지 삭제) 후.
+      옛 역연산이 새 구성에 유령 블록을 꽂거나 0행 매치로 헛돌게 두지 않는다(소넷 확정 2). */
+  function clearHistory() {
+    setUndoStack([]);
     setRedoStack([]);
   }
 
@@ -412,15 +410,8 @@ export function LinksClient({
         page={page}
         origin={origin}
         busy={busy}
-        onPublish={() =>
-          run(
-            () => publishLinkPage(),
-            /* 발행은 직전 삭제를 라이브로 **확정**하는 조작이다 — 그 뒤에도 되돌리기
-               바가 남아 있으면 "아직 무를 수 있는 실수"처럼 읽힌다(템플릿 적용·페이지
-               삭제와 같은 정리 규칙). */
-            () => setLastDeleted(null),
-          )
-        }
+        /* 발행은 초안을 스냅샷으로 복사할 뿐 — 초안 조작의 실행취소는 그대로 유효하다 */
+        onPublish={() => run(() => publishLinkPage())}
         statsOpen={statsOpen}
         onToggleStats={() => setStatsOpen((v) => !v)}
       />
@@ -444,34 +435,6 @@ export function LinksClient({
       <p aria-live="polite" className="sr-only">
         {notice}
       </p>
-
-      {/* 삭제 되돌리기 — 블록 삭제는 물리 삭제다. 마지막 한 건은 여기서 복원한다 */}
-      {lastDeleted ? (
-        <div className="card-face flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
-          <span className="min-w-0 flex-1 truncate text-[14px]">
-            「{lastDeleted.label}」 블록을 삭제했어요.
-          </span>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={busy}
-            onClick={() =>
-              run(
-                () => restoreBlock(lastDeleted),
-                () => {
-                  setLastDeleted(null);
-                  setNotice("블록을 되살렸어요.");
-                },
-              )
-            }
-          >
-            되돌리기
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setLastDeleted(null)}>
-            닫기
-          </Button>
-        </div>
-      ) : null}
 
       {/* 도구 스트립 — 링크팜 상단 칩 줄(2026-08-20 캔버스 개편). 캔버스는 항상
           보이고, 칩이 우측 드로어를 여닫는다. */}
@@ -635,6 +598,10 @@ export function LinksClient({
                       () => moveBlock(id, dir),
                       () => {
                         setNotice(`${label} 블록을 ${dir === "up" ? "위로" : "아래로"} 옮겼어요.`);
+                        /* 한계(소넷 확정 3, 수용): 역연산은 "그때의 이웃"이 아니라 실행
+                           시점의 이웃과 스왑한다(moveBlock 이 현재 목록을 다시 읽는다).
+                           사이에 다른 이동이 끼면 원래 배치 복원이 아니라 한 칸 이동을
+                           무를 뿐이다 — 순서는 늘 정의돼 있어(sort_order,created_at) 안전. */
                         record({
                           label: `${label} 이동`,
                           undo: () => moveBlock(id, dir === "up" ? "down" : "up"),
@@ -650,8 +617,9 @@ export function LinksClient({
                       () => deleteBlock(id),
                       () => {
                         if (b) {
+                          /* 복원 경로는 전역 실행취소 **하나**다 — 인라인 되돌리기 바와
+                             이중으로 기록하면 같은 블록이 두 번 복원된다(소넷 확정 1). */
                           const payload = { type: b.type, data: b.data, sortOrder: b.sortOrder, active: b.active };
-                          setLastDeleted({ ...payload, label });
                           /* 복원은 **새 행**을 만든다 — 다시실행(재삭제)은 그 새 id 를
                              지워야 하므로 클로저 변수로 따라간다 */
                           let currentId = id;
@@ -665,7 +633,7 @@ export function LinksClient({
                             redo: () => deleteBlock(currentId),
                           });
                         }
-                        setNotice("블록을 삭제했어요. 되돌리기를 누르면 복원돼요.");
+                        setNotice("블록을 삭제했어요. 상단 ↩ 실행취소로 복원할 수 있어요.");
                       },
                     );
                   },
@@ -811,9 +779,9 @@ export function LinksClient({
                 onApplyTemplate={(k) =>
                   run(
                     () => applyTemplate(k),
-                    /* 템플릿은 블록 전체를 교체한다 — 직전 삭제의 「되돌리기」는 더 이상
-                       "삭제 취소"가 아니라 새 구성에 옛 블록을 끼워 넣는 일이 된다 */
-                    () => setLastDeleted(null),
+                    /* 템플릿은 블록 전체를 교체한다 — 이전 조작의 역연산이 가리키던
+                       블록들이 통째로 사라지므로 실행취소 이력도 여기서 끊는다 */
+                    () => clearHistory(),
                   )
                 }
                 onImport={(items, clear) =>
@@ -840,9 +808,9 @@ export function LinksClient({
                 onDelete={() =>
                   run(
                     () => deleteLinkPage(),
-                    /* 페이지가 사라지면 되돌리기 대상도 없다 — 같은 컴포넌트 인스턴스가
+                    /* 페이지가 사라지면 역연산 대상도 없다 — 같은 컴포넌트 인스턴스가
                        살아남아 새 페이지에 옛 블록을 꽂는 사고를 막는다 */
-                    () => setLastDeleted(null),
+                    () => clearHistory(),
                   )
                 }
               />
@@ -1429,9 +1397,13 @@ function StatsPanel({
               [],
               ["지역", "국가", "조회수"],
               ...stats.regions.map((r) => [r.region, r.country, r.views] as Array<string | number>),
-              [],
-              ["유입 채널", "조회수"],
-              ...stats.sources.map((x) => [(x.src && SRC_LABEL.get(x.src)) ?? "직접·기타", x.views] as Array<string | number>),
+              ...(stats.sources.length
+                ? [
+                    [],
+                    ["유입 채널", "조회수"],
+                    ...stats.sources.map((x) => [(x.src && SRC_LABEL.get(x.src)) ?? "직접·기타", x.views] as Array<string | number>),
+                  ]
+                : []),
             ])
           }
           className="trans-state rounded-chip border border-line px-2.5 py-1 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg"

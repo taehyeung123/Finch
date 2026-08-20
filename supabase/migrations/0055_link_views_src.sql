@@ -25,6 +25,7 @@ security invoker
 stable
 as $$
   with bounds as (
+    -- 필터·버킷 공통 시작점. KST 자정 기준이라 첫 날도 온전한 하루다.
     select date_trunc('day', now() at time zone 'Asia/Seoul')
              - ((greatest(least(p_days, 365), 1) - 1) || ' days')::interval as since_local
   ),
@@ -64,6 +65,7 @@ as $$
     ),
     'blocks', (
       select coalesce(jsonb_agg(jsonb_build_object('id', block_id, 'n', n) order by n desc), '[]'::jsonb)
+        -- order by 가 limit **안쪽**이어야 상위 50개가 뽑힌다
         from (select block_id, count(*) as n from c where block_id is not null
                group by 1 order by n desc limit 50) b
     ),

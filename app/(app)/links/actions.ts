@@ -739,7 +739,9 @@ export async function importFromInpock(
           r.body?.cancel().catch(() => {});
           const loc = r.headers.get("location");
           if (r.status >= 300 && r.status < 400 && loc && /^https?:\/\//i.test(loc)) {
-            if (new URL(loc).hostname.toLowerCase().endsWith("inpock.co.kr")) return null;
+            const locHost = new URL(loc).hostname.toLowerCase();
+            /* 정확한 도메인 경계 — 접미사 매칭이면 무관한 *inpock.co.kr 류도 버려진다 */
+            if (locHost === "inpock.co.kr" || locHost.endsWith(".inpock.co.kr")) return null;
             return { label: c.label, url: loc };
           }
         } catch {

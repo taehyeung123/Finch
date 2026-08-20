@@ -140,7 +140,7 @@ export async function recordView(slug: string, src?: string): Promise<void> {
   const cleanSrc = src && VIEW_SRC.has(src) ? src : null;
   /* 0055(src 컬럼) 미적용 DB 폴백 — 계단식, 의미 유실은 유입 표식뿐이다 */
   let { error } = await admin.from("link_views").insert({ ...row, src: cleanSrc });
-  if (error && /src/i.test(error.message) && /column|schema/i.test(error.message)) {
+  if (error && (error.code === "42703" || (/src/i.test(error.message) && /column|schema/i.test(error.message)))) {
     ({ error } = await admin.from("link_views").insert(row));
   }
   if (error) console.error("[links] 방문 기록 실패:", error.message);

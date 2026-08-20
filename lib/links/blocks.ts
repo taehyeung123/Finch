@@ -216,7 +216,9 @@ export type BlockData =
   | ({ type: "social_feed" } & SocialFeedBlockData)
   | ({ type: "contact" } & ContactBlockData)
   | ({ type: "subscribe" } & SubscribeBlockData)
-  | ({ type: "map" } & MapBlockData);
+  | ({ type: "map" } & MapBlockData)
+  | ({ type: "coupang" } & CoupangBlockData)
+  | ({ type: "donation" } & DonationBlockData);
 
 export interface LinkBlock {
   id: string;
