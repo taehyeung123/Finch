@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { ArrowDown, ArrowUp, Eye, EyeOff, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, youtubeEmbed } from "@/lib/links";
@@ -37,12 +39,26 @@ const card = "rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[va
 
 const SNS_LABEL = new Map<string, string>(SNS_KINDS.map((k) => [k.key, k.label]));
 
+/** 캔버스 직접 편집 콜백 — 넘기면 draft 미리보기가 편집기가 된다(링크팜 캔버스, 2026-08-20) */
+export type CanvasEdit = {
+  onEdit: (id: string) => void;
+  onToggle: (id: string, active: boolean) => void;
+  onMove: (id: string, dir: "up" | "down", label: string) => void;
+  onDelete: (id: string, label: string) => void;
+  onAdd: () => void;
+  /** 아바타·커버 클릭 — 사진·레이아웃은 폼이 필요해서 드로어를 연다 */
+  onOpenProfile: () => void;
+  /** 이름·소개 인라인 편집 확정 — 그 자리에서 저장까지 간다 */
+  onProfileCommit: (patch: { title?: string; bio?: string }) => void;
+};
+
 export function PhonePreview({
   page,
   blocks,
   selectedId,
   onPick,
   mode = "draft",
+  edit,
 }: {
   page: LinkPageView;
   blocks: LinkBlock[];
@@ -54,12 +70,40 @@ export function PhonePreview({
    *       클릭도 없다(발행본은 여기서 고칠 수 있는 것이 아니다).
    */
   mode?: "draft" | "live";
+  /** 있으면 캔버스 직접 편집 — 블록 툴바·이름/소개 인라인 편집·블록 추가가 켜진다 */
+  edit?: CanvasEdit;
 }) {
   const theme = themeByKey(page.theme);
   const align =
     page.align === "left" ? "items-start text-left" : page.align === "right" ? "items-end text-right" : "items-center text-center";
-  /* live 는 공개 렌더러가 숨기는 블록을 **여기서도 뺀다** — 유령칸을 그리면
-     "라이브 모습"이 아니라 또 하나의 초안 화면이 된다. draft 는 전부 그린다(유령 포함). */
+
+  /* 이름·소개 인라인 편집 — 연필을 누르면 그 자리가 입력창이 된다.
+     Enter/포커스 이탈로 확정, Escape 로 취소. 확정은 onProfileCommit 이 저장까지 간다. */
+  const [inlineField, setInlineField] = useState<null | "title" | "bio">(null);
+  const [inlineText, setInlineText] = useState("");
+  function startInline(f: "title" | "bio") {
+    setInlineField(f);
+    setInlineText(f === "title" ? page.title : page.bio);
+  }
+  function commitInline() {
+    if (!inlineField || !edit) return setInlineField(null);
+    const v = inlineText.trim();
+    /* 제목은 비울 수 없다(공개 페이지 머리가 사라진다) — 빈 확정은 취소로 처리 */
+    if (inlineField === "title") {
+      if (v && v !== page.title) edit.onProfileCommit({ title: v });
+    } else if (v !== page.bio) {
+      edit.onProfileCommit({ bio: v });
+    }
+    setInlineField(null);
+  }
+  const inlineKeys = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.nativeEvent.isComposing && inlineField === "title") (e.target as HTMLElement).blur();
+    if (e.key === "Escape") setInlineField(null);
+  };
+
+  const editable = mode !== "live" && !!edit;
+  /* live 는 공개 렌더러가 숨기는 블록을 **여기서도 뺀다**. draft 는 전부 그린다 —
+     캔버스 편집에선 꺼진(active=false) 블록도 흐리게 그려야 다시 켤 수 있다. */
   const visible = mode === "live" ? blocks.filter((b) => !hiddenReason(b.type, b.data)) : blocks;
   /* 공개 페이지의 20/24/30px 를 380px 프레임 비율로 줄인 값 */
   const titlePx = page.titleSize === "sm" ? "text-[16px]" : page.titleSize === "lg" ? "text-[24px]" : "text-[19px]";
@@ -79,6 +123,36 @@ export function PhonePreview({
       </div>
     ) : null;
 
+  /* 인라인 연필 — 테마색을 따라가고, 정렬이 왼/오른쪽이어도 텍스트 옆에 붙는다 */
+  const pencilBtn = (f: "title" | "bio", label: string) =>
+    editable ? (
+      <button
+        type="button"
+        onClick={() => startInline(f)}
+        aria-label={label}
+        className="trans-state ml-1 inline-flex rounded-full p-0.5 align-middle text-[var(--lp-muted)] hover:text-[var(--lp-fg)]"
+      >
+        <Pencil className="size-3" aria-hidden />
+      </button>
+    ) : null;
+
+  const avatar =
+    page.layout !== "cover" ? (
+      page.avatarPath ? (
+        // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
+        <img src={page.avatarPath} alt="" className="mb-2.5 size-16 rounded-full object-cover" />
+      ) : (
+        /* 사진이 없으면 이니셜 원 — 공개 페이지도 같은 것을 그린다. */
+        <span
+          className="mb-2.5 flex size-16 items-center justify-center rounded-full text-[20px] font-bold"
+          style={{ background: theme.card, color: theme.muted }}
+          aria-hidden
+        >
+          {initialOf(page.title || page.slug)}
+        </span>
+      )
+    ) : null;
+
   return (
     <div className="mx-auto w-full max-w-[380px]">
       {/* 폰 프레임 */}
@@ -87,33 +161,79 @@ export function PhonePreview({
           style={themeVars(theme) as React.CSSProperties}
           className="max-h-[620px] overflow-y-auto bg-[var(--lp-bg)] px-5 pb-10 pt-8 text-[var(--lp-fg)]"
         >
-          {/* 커버 */}
+          {/* 커버 — 캔버스 편집에선 눌러서 프로필 설정(사진 교체)으로 */}
           {(page.layout === "cover" || page.layout === "cover_profile") && page.coverPath ? (
-            // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
-            <img src={page.coverPath} alt="" className="mb-3 aspect-[3/1] w-full rounded-[var(--lp-radius)] object-cover" />
+            editable ? (
+              <button type="button" onClick={edit?.onOpenProfile} aria-label="커버 이미지 바꾸기" className="mb-3 block w-full">
+                {/* eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL */}
+                <img src={page.coverPath} alt="" className="aspect-[3/1] w-full rounded-[var(--lp-radius)] object-cover" />
+              </button>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
+              <img src={page.coverPath} alt="" className="mb-3 aspect-[3/1] w-full rounded-[var(--lp-radius)] object-cover" />
+            )
           ) : null}
 
           {/* 프로필 */}
           <div className={`flex flex-col ${align}`}>
-            {page.layout !== "cover" ? (
-              page.avatarPath ? (
-                // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
-                <img src={page.avatarPath} alt="" className="mb-2.5 size-16 rounded-full object-cover" />
-              ) : (
-                /* 사진이 없으면 이니셜 원 — 공개 페이지도 같은 것을 그린다.
-                   아무것도 안 그리면 브랜드 페이지 머리가 통째로 비어 허전하다. */
-                <span
-                  className="mb-2.5 flex size-16 items-center justify-center rounded-full text-[20px] font-bold"
-                  style={{ background: theme.card, color: theme.muted }}
-                  aria-hidden
-                >
-                  {initialOf(page.title || page.slug)}
-                </span>
-              )
-            ) : null}
-            <p className={cn("font-bold leading-[1.3]", titlePx)}>{page.title || page.slug}</p>
-            {page.bio ? (
-              <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-[1.6] text-[var(--lp-muted)]">{page.bio}</p>
+            {editable && page.layout !== "cover" ? (
+              <button type="button" onClick={edit?.onOpenProfile} aria-label="프로필 사진·레이아웃 설정">
+                {avatar}
+              </button>
+            ) : (
+              avatar
+            )}
+
+            {editable && inlineField === "title" ? (
+              <input
+                autoFocus
+                value={inlineText}
+                maxLength={40}
+                onChange={(e) => setInlineText(e.target.value)}
+                onBlur={commitInline}
+                onKeyDown={inlineKeys}
+                aria-label="페이지 이름"
+                style={{ textAlign: "inherit" }}
+                className={cn(
+                  "w-full rounded-[8px] border border-[var(--lp-accent)] bg-[var(--lp-card)] px-2 py-1 font-bold leading-[1.3] outline-none",
+                  titlePx,
+                )}
+              />
+            ) : (
+              <p className={cn("font-bold leading-[1.3]", titlePx)}>
+                {page.title || page.slug}
+                {pencilBtn("title", "이름 바로 고치기")}
+              </p>
+            )}
+
+            {editable && inlineField === "bio" ? (
+              <textarea
+                autoFocus
+                value={inlineText}
+                rows={2}
+                maxLength={200}
+                onChange={(e) => setInlineText(e.target.value)}
+                onBlur={commitInline}
+                onKeyDown={inlineKeys}
+                aria-label="소개"
+                style={{ textAlign: "inherit" }}
+                className="mt-1.5 w-full resize-none rounded-[8px] border border-[var(--lp-accent)] bg-[var(--lp-card)] px-2 py-1 text-[13px] leading-[1.6] outline-none"
+              />
+            ) : page.bio ? (
+              <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-[1.6] text-[var(--lp-muted)]">
+                {page.bio}
+                {pencilBtn("bio", "소개 바로 고치기")}
+              </p>
+            ) : editable ? (
+              /* 소개가 비어 있으면 링크팜처럼 자리 문구를 그려서 "여기 눌러 쓰면 된다"를 보여준다 */
+              <button
+                type="button"
+                onClick={() => startInline("bio")}
+                className="trans-state mt-1.5 inline-flex items-center gap-1 text-[13px] text-[var(--lp-muted)] hover:text-[var(--lp-fg)]"
+              >
+                소개를 추가하세요
+                <Pencil className="size-3" aria-hidden />
+              </button>
             ) : null}
             {page.snsPlacement !== "links" ? snsChips : null}
           </div>
@@ -121,12 +241,85 @@ export function PhonePreview({
           {/* 블록 — snsPlacement=links 면 SNS 줄이 블록 목록 맨 위로 온다 */}
           <div className="mt-6 space-y-2.5">
             {page.snsPlacement === "links" ? snsChips : null}
-            {visible.length === 0 ? (
+            {visible.length === 0 && !editable ? (
               <p className="text-center text-[13px] text-[var(--lp-muted)]">
                 {mode === "live" ? "라이브에 보이는 블록이 없어요." : "블록을 추가하면 여기에 보여요."}
               </p>
             ) : mode === "live" ? (
               visible.map((b) => <PreviewBlock key={b.id} block={b} mode="live" />)
+            ) : editable && edit ? (
+              visible.map((b, i) => {
+                const label = blockSummary(b.type, b.data);
+                return (
+                  <div key={b.id} className="relative pt-3">
+                    {/* 블록 툴바 — 링크팜의 블록 위 상시 도구(편집·이동·노출·삭제).
+                        스크림 배경이라 어떤 테마 위에서도 보인다. */}
+                    <div className="absolute right-2 top-0 z-10 flex items-center rounded-chip bg-scrim px-1 py-0.5">
+                      <button
+                        type="button"
+                        onClick={() => edit.onEdit(b.id)}
+                        aria-label={`${label} 편집`}
+                        className="trans-state rounded-full p-1 text-on-scrim/85 hover:text-on-scrim"
+                      >
+                        <Pencil className="size-3.5" aria-hidden />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => edit.onMove(b.id, "up", label)}
+                        disabled={i === 0}
+                        aria-label={`${label} 위로`}
+                        className="trans-state rounded-full p-1 text-on-scrim/85 hover:text-on-scrim disabled:opacity-30"
+                      >
+                        <ArrowUp className="size-3.5" aria-hidden />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => edit.onMove(b.id, "down", label)}
+                        disabled={i === visible.length - 1}
+                        aria-label={`${label} 아래로`}
+                        className="trans-state rounded-full p-1 text-on-scrim/85 hover:text-on-scrim disabled:opacity-30"
+                      >
+                        <ArrowDown className="size-3.5" aria-hidden />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => edit.onToggle(b.id, !b.active)}
+                        aria-pressed={b.active}
+                        aria-label={`${label} ${b.active ? "숨기기" : "노출하기"}`}
+                        className="trans-state rounded-full p-1 text-on-scrim/85 hover:text-on-scrim"
+                      >
+                        {b.active ? <Eye className="size-3.5" aria-hidden /> : <EyeOff className="size-3.5" aria-hidden />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => edit.onDelete(b.id, label)}
+                        aria-label={`${label} 삭제`}
+                        className="trans-state rounded-full p-1 text-on-scrim/85 hover:text-negative"
+                      >
+                        <Trash2 className="size-3.5" aria-hidden />
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      id={`blk-${b.id}`}
+                      onClick={() => edit.onEdit(b.id)}
+                      aria-label={`${BLOCK_CATALOG.find((c) => c.type === b.type)?.label ?? b.type} · ${label} 편집`}
+                      className={cn(
+                        "trans-state block w-full rounded-[calc(var(--lp-radius)+4px)] text-left outline-offset-2",
+                        selectedId === b.id && "outline outline-2 outline-primary",
+                        /* 꺼진 블록은 흐리게 남긴다 — 목록이 없어진 지금, 여기서 안 보이면 다시 켤 길이 없다 */
+                        !b.active && "opacity-40",
+                      )}
+                    >
+                      <PreviewBlock block={b} />
+                    </button>
+                    {!b.active ? (
+                      <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">숨김 — 공개 페이지에 안 나가요</p>
+                    ) : null}
+                  </div>
+                );
+              })
             ) : (
               visible.map((b) => (
                 <button
@@ -143,11 +336,26 @@ export function PhonePreview({
                 </button>
               ))
             )}
+
+            {editable && edit ? (
+              <button
+                type="button"
+                onClick={edit.onAdd}
+                className="trans-state flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-[var(--lp-radius)] border border-dashed border-[var(--lp-border)] text-[13px] font-semibold text-[var(--lp-muted)] hover:border-[var(--lp-accent)] hover:text-[var(--lp-accent)]"
+              >
+                <Plus className="size-4" aria-hidden />
+                블록 추가
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
       <p className="mt-2 text-center text-[12px] text-fg-sub">
-        {mode === "live" ? "마지막 「라이브 반영」 시점의 모습이에요." : "블록을 누르면 바로 편집할 수 있어요."}
+        {mode === "live"
+          ? "마지막 「라이브 반영」 시점의 모습이에요."
+          : editable
+            ? "이름·소개·블록을 이 자리에서 바로 고칠 수 있어요."
+            : "블록을 누르면 바로 편집할 수 있어요."}
       </p>
     </div>
   );

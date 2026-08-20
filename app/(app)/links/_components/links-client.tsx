@@ -3,8 +3,6 @@
 import { useMemo, useOptimistic, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowDown,
-  ArrowUp,
   BarChart3,
   Check,
   Copy,
@@ -12,7 +10,6 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
-  Layers,
   Link2,
   Palette,
   Plus,
@@ -21,15 +18,16 @@ import {
   Sparkles,
   Trash2,
   User,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
-import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { Card, CardBody } from "@/components/ui/card";
 import { DualLineChart } from "@/components/ui/charts";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Switch } from "@/components/ui/switch";
 import { publicLinkUrl, stableJson } from "@/lib/links";
-import { BLOCK_CATALOG, blockSummary, hiddenReason, type BlockType, type LinkBlock } from "@/lib/links/blocks";
+import { BLOCK_CATALOG, type BlockType, type LinkBlock } from "@/lib/links/blocks";
 import { LAYOUTS, LINK_THEMES, SNS_KINDS } from "@/lib/links/themes";
 import { LINK_TEMPLATES } from "@/lib/links/templates";
 import {
@@ -73,14 +71,23 @@ import { PhonePreview } from "./phone-preview";
   부르지 않는다** — 부르면 같은 집계 질의가 한 조작에 두 번 돈다.
 */
 
-type Tab = "profile" | "theme" | "blocks" | "settings";
+type Drawer = "profile" | "theme" | "add" | "settings";
 
-const TABS: Array<{ key: Tab; label: string; icon: typeof User }> = [
+/* 상단 도구 칩 — 링크팜 실측 순서(2026-08-20 캔버스 개편). 칩은 우측 드로어를
+   여닫고, 캔버스(폰)는 항상 보인다. 블록 목록 패널은 없다 — 캔버스가 목록이다. */
+const TOOLS: Array<{ key: Drawer; label: string; icon: typeof User }> = [
   { key: "profile", label: "프로필", icon: User },
   { key: "theme", label: "테마", icon: Palette },
-  { key: "blocks", label: "블록", icon: Layers },
+  { key: "add", label: "블록 추가", icon: Plus },
   { key: "settings", label: "설정", icon: Settings },
 ];
+
+const DRAWER_TITLE: Record<Drawer, string> = {
+  profile: "프로필 설정",
+  theme: "테마 선택",
+  add: "블록 추가",
+  settings: "설정",
+};
 
 const LEAVE_WARNING = "저장하지 않은 편집 내용이 사라져요. 그래도 나갈까요?";
 
@@ -161,7 +168,7 @@ export function LinksClient({
   const [, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<Tab>("blocks");
+  const [drawer, setDrawer] = useState<Drawer | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   /* 미리보기가 그리는 것: 초안(편집 중) / 라이브(마지막 발행본).
@@ -246,6 +253,15 @@ export function LinksClient({
       const res = await fn();
       if (!res.ok) setError(res.error ?? "처리하지 못했어요.");
     });
+  }
+
+  /** 도구 칩·캔버스에서 드로어 열기 — 같은 칩을 다시 누르면 닫힌다(forceOpen 은 토글 없이 연다) */
+  function openDrawer(key: Drawer, forceOpen = false) {
+    if (!leaveEditor()) return;
+    setEditingId(null);
+    /* 오류는 그 조작에 붙은 것 — 드로어를 옮기면 함께 사라져야 한다 */
+    setError(null);
+    setDrawer((prev) => (prev === key && !forceOpen ? null : key));
   }
 
   function openEditor(id: string) {
@@ -384,47 +400,66 @@ export function LinksClient({
         </div>
       ) : null}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_26rem] xl:items-start">
-        {/* 좌 — 미리보기. 초안/라이브를 토글로 오간다(링크팜은 두 판을 나란히 두는데,
-            우리 지면은 한 판 자리다 — 목적은 같다: 초안과 발행본을 눈으로 비교). */}
-        <Card className="xl:sticky xl:top-6">
-          <CardHeader
-            title="미리보기"
-            description={
-              effectivePreview === "live"
-                ? "지금 공개 주소에 걸려 있는 모습이에요."
-                : page.publishedAt
-                  ? page.dirty
-                    ? "지금 화면은 초안이에요. 「라이브 반영」을 눌러야 공개 주소에 나갑니다."
-                    : "공개 주소와 같은 상태예요."
-                  : "아직 발행하지 않았어요. 「라이브 반영」을 누르면 공개 주소가 살아납니다."
-            }
-          />
-          <CardBody className="space-y-3">
-            <div role="group" aria-label="미리보기 대상" className="flex justify-center gap-1">
-              {(
-                [
-                  { key: "draft", label: "초안" },
-                  { key: "live", label: "라이브" },
-                ] as const
-              ).map((m) => (
-                <button
-                  key={m.key}
-                  type="button"
-                  aria-pressed={effectivePreview === m.key}
-                  disabled={m.key === "live" && !snapshot}
-                  onClick={() => setPreviewMode(m.key)}
-                  className={cn(
-                    "trans-state rounded-chip px-3 py-1 text-[12px] font-semibold disabled:opacity-40",
-                    effectivePreview === m.key
-                      ? "bg-primary text-on-primary"
-                      : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
-                  )}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
+      {/* 도구 스트립 — 링크팜 상단 칩 줄(2026-08-20 캔버스 개편). 캔버스는 항상
+          보이고, 칩이 우측 드로어를 여닫는다. */}
+      <div className="card-face flex flex-wrap items-center gap-1.5 px-3 py-2">
+        {TOOLS.map((t) => {
+          const on = !editing && drawer === t.key;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              aria-pressed={on}
+              onClick={() => openDrawer(t.key)}
+              className={cn(
+                "trans-state flex items-center gap-1.5 rounded-chip px-3 py-1.5 text-[14px] font-semibold",
+                on ? "bg-primary text-on-primary" : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
+              )}
+            >
+              <t.icon className="size-4" aria-hidden />
+              {t.label}
+            </button>
+          );
+        })}
+
+        <div role="group" aria-label="미리보기 대상" className="ml-auto flex items-center gap-1">
+          {(
+            [
+              { key: "draft", label: "초안" },
+              { key: "live", label: "라이브" },
+            ] as const
+          ).map((m) => (
+            <button
+              key={m.key}
+              type="button"
+              aria-pressed={effectivePreview === m.key}
+              disabled={m.key === "live" && !snapshot}
+              onClick={() => setPreviewMode(m.key)}
+              className={cn(
+                "trans-state rounded-chip px-3 py-1 text-[12px] font-semibold disabled:opacity-40",
+                effectivePreview === m.key
+                  ? "bg-primary text-on-primary"
+                  : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
+              )}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className={cn("gap-5 xl:items-start", editing || drawer ? "grid xl:grid-cols-[minmax(0,1fr)_26rem]" : "")}>
+        {/* 캔버스 — 미리보기가 곧 편집기다. 상태 한 줄이 지금 보는 판을 말해 준다. */}
+        <div className="min-w-0">
+          <p className="mb-3 text-center text-[12px] text-fg-sub">
+            {effectivePreview === "live"
+              ? "지금 공개 주소에 걸려 있는 모습이에요."
+              : page.publishedAt
+                ? page.dirty
+                  ? "지금 화면은 초안이에요. 「라이브 반영」을 눌러야 공개 주소에 나갑니다."
+                  : "공개 주소와 같은 상태예요."
+                : "아직 발행하지 않았어요. 「라이브 반영」을 누르면 공개 주소가 살아납니다."}
+          </p>
 
             {effectivePreview === "live" && snapshot ? (
               <PhonePreview
@@ -469,51 +504,68 @@ export function LinksClient({
                   titleSize: profileForm.titleSize,
                   theme: liveTheme,
                 }}
-                blocks={liveBlocks
-                  .map((b) => (b.id === editingId ? { ...b, data: draft } : b))
-                  .filter((b) => b.active)}
+                /* active 필터를 걸지 않는다 — 목록 패널이 사라진 캔버스 체제에서
+                   꺼진 블록은 여기 흐리게라도 보여야 다시 켤 수 있다 */
+                blocks={liveBlocks.map((b) => (b.id === editingId ? { ...b, data: draft } : b))}
                 selectedId={editingId}
-                onPick={(id) => {
-                  setTab("blocks");
-                  openEditor(id);
+                edit={{
+                  onEdit: openEditor,
+                  /* 온오프는 낙관 즉시 반영 — 스위치가 서버 왕복을 기다리면 고장처럼 보인다 */
+                  onToggle: (id, active) => fire(() => applyBlockPatch({ id, active }), () => updateBlock(id, { active })),
+                  /* 안내는 **성공했을 때만** 나간다 — 연타로 무시된 클릭·서버 실패에
+                     「옮겼어요」가 읽히면 안 된다(목록을 눈으로 못 보는 사용자에게는 확정이다) */
+                  onMove: (id, dir, label) =>
+                    run(
+                      () => moveBlock(id, dir),
+                      () => setNotice(`${label} 블록을 ${dir === "up" ? "위로" : "아래로"} 옮겼어요.`),
+                    ),
+                  onDelete: (id, label) => {
+                    /* 삭제는 물리 삭제 — 확인 후 지우고, 직전 1건은 되돌리기 바가 복원한다 */
+                    if (!window.confirm(`「${label}」 블록을 삭제할까요?`)) return;
+                    const b = blocks.find((x) => x.id === id);
+                    run(
+                      () => deleteBlock(id),
+                      () => {
+                        if (b) {
+                          setLastDeleted({ type: b.type, data: b.data, sortOrder: b.sortOrder, active: b.active, label });
+                        }
+                        setNotice("블록을 삭제했어요. 되돌리기를 누르면 복원돼요.");
+                      },
+                    );
+                  },
+                  onAdd: () => openDrawer("add", true),
+                  onOpenProfile: () => openDrawer("profile", true),
+                  onProfileCommit: (patch) => {
+                    /* 인라인 편집은 그 자리에서 확정이다 — 폼과 서버를 함께 맞춘다.
+                       캔버스는 폼을 그리므로 즉시 새 글자가 보이고, 저장이 실패하면
+                       서버 값 동기화가 폼을 되돌린다. */
+                    const next = { ...profileForm, ...patch };
+                    setProfileForm(next);
+                    fire(() => {}, () => updateLinkProfile(next));
+                  },
                 }}
               />
             )}
-          </CardBody>
-        </Card>
+        </div>
 
-        {/* 우 — 5탭 패널 */}
-        <Card className="xl:sticky xl:top-6">
+        {/* 우측 드로어 — 열렸을 때만. 모바일에선 캔버스보다 먼저 보여야
+            칩을 누른 손이 결과를 바로 본다(order-first). */}
+        {editing || drawer ? (
+        <Card className="order-first xl:order-none xl:sticky xl:top-6">
           <CardBody className="space-y-4">
-            <div role="tablist" aria-label="편집 도구" className="grid grid-cols-4 gap-1.5">
-              {TABS.map((t) => {
-                const on = tab === t.key && !editing;
-                return (
-                  <button
-                    key={t.key}
-                    type="button"
-                    role="tab"
-                    aria-selected={on}
-                    onClick={() => {
-                      if (!leaveEditor()) return;
-                      setTab(t.key);
-                      setEditingId(null);
-                      /* 오류는 그 조작에 붙은 것이다 — 탭을 옮기면 함께 사라져야 한다.
-                         안 그러면 프로필 「저장」 버튼 위에 방금 블록에서 난 URL 오류가
-                         role="alert" 로 떠서, 누른 적도 없는 폼이 실패한 것처럼 읽힌다. */
-                      setError(null);
-                    }}
-                    className={cn(
-                      "trans-state flex flex-col items-center gap-1 rounded-card px-1.5 py-2 text-[11px] font-semibold",
-                      on ? "bg-primary text-on-primary" : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
-                    )}
-                  >
-                    <t.icon className="size-4" aria-hidden />
-                    {t.label}
-                  </button>
-                );
-              })}
-            </div>
+            {!editing && drawer ? (
+              <div className="flex items-center justify-between">
+                <h3 className="text-[15px] font-bold">{DRAWER_TITLE[drawer]}</h3>
+                <button
+                  type="button"
+                  aria-label="패널 닫기"
+                  onClick={() => setDrawer(null)}
+                  className="trans-state rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg"
+                >
+                  <X className="size-4" aria-hidden />
+                </button>
+              </div>
+            ) : null}
 
             {editing ? (
               <BlockEditor
@@ -533,7 +585,7 @@ export function LinksClient({
                    탭을 눌러 나갈 때 확인을 받는다(그게 맞다). */
                 onSave={(data) => run(() => updateBlock(editing.id, { data }), () => setBaseline(stableJson(data)))}
               />
-            ) : tab === "profile" ? (
+            ) : drawer === "profile" ? (
               <ProfilePanel
                 page={page}
                 form={profileForm}
@@ -544,18 +596,23 @@ export function LinksClient({
                 onSave={() => run(() => updateLinkProfile(profileForm))}
                 onImages={(v) => run(() => updateLinkImages(v))}
               />
-            ) : tab === "theme" ? (
+            ) : drawer === "theme" ? (
               <ThemePanel
                 current={liveTheme}
                 /* 누르는 즉시 칠한다 — 로딩·비활성 없음. 실패하면 트랜지션 종료와 함께
                    서버 값으로 자동 복귀한다(2026-08-20 "굳이 로딩 걸어야 되나") */
                 onPick={(k) => fire(() => pickThemeOptimistic(k), () => updateLinkTheme(k))}
               />
-            ) : tab === "blocks" ? (
-              <BlocksPanel
-                blocks={liveBlocks}
+            ) : drawer === "add" ? (
+              <AddPanel
                 busy={busy}
-                onAdd={(t) => run(() => addBlock(t))}
+                hasBlocks={blocks.length > 0}
+                onAdd={(t) =>
+                  run(
+                    () => addBlock(t),
+                    () => setNotice("블록을 추가했어요. 캔버스의 블록을 누르면 바로 고칠 수 있어요."),
+                  )
+                }
                 onApplyTemplate={(k) =>
                   run(
                     () => applyTemplate(k),
@@ -576,38 +633,6 @@ export function LinksClient({
                     },
                   )
                 }
-                onEdit={openEditor}
-                /* 온오프는 낙관 즉시 반영 — 스위치가 서버 왕복을 기다리면 고장처럼 보인다 */
-                onToggle={(id, active) => fire(() => applyBlockPatch({ id, active }), () => updateBlock(id, { active }))}
-                /* 안내는 **성공했을 때만** 나간다. 앞서는 run() 밖에서 동기로 불러서,
-                   연타로 무시된 클릭이나 서버 실패에도 「옮겼어요」가 읽혔다 —
-                   목록을 눈으로 못 보는 사용자에게는 그게 확정이다. */
-                onMove={(id, dir, label) =>
-                  run(
-                    () => moveBlock(id, dir),
-                    () => setNotice(`${label} 블록을 ${dir === "up" ? "위로" : "아래로"} 옮겼어요.`),
-                  )
-                }
-                onDelete={(id) => {
-                  const b = blocks.find((x) => x.id === id);
-                  run(
-                    () => deleteBlock(id),
-                    () => {
-                      /* 삭제는 물리 삭제라 되돌릴 길이 없었다 — 지운 내용을 여기 들고
-                         있다가 「되돌리기」가 새 행으로 재삽입한다(restoreBlock). */
-                      if (b) {
-                        setLastDeleted({
-                          type: b.type,
-                          data: b.data,
-                          sortOrder: b.sortOrder,
-                          active: b.active,
-                          label: blockSummary(b.type, b.data),
-                        });
-                      }
-                      setNotice("블록을 삭제했어요. 되돌리기를 누르면 복원돼요.");
-                    },
-                  );
-                }}
               />
             ) : (
               <SettingsPanel
@@ -627,6 +652,7 @@ export function LinksClient({
             )}
           </CardBody>
         </Card>
+        ) : null}
       </div>
     </div>
   );
@@ -729,33 +755,23 @@ function TopBar({
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   블록 패널
+   블록 추가 패널 — 카탈로그·템플릿·가져오기 (블록 목록은 캔버스가 대신한다)
    ══════════════════════════════════════════════════════════════════ */
 
-function BlocksPanel({
-  blocks,
+function AddPanel({
   busy,
+  hasBlocks,
   onAdd,
   onApplyTemplate,
   onImport,
-  onEdit,
-  onToggle,
-  onMove,
-  onDelete,
 }: {
-  blocks: LinkBlock[];
   busy: boolean;
+  /** 템플릿 적용 확인 문구용 — 기존 블록이 있어야 "지워진다" 경고가 참이 된다 */
+  hasBlocks: boolean;
   onAdd: (t: BlockType) => void;
   onApplyTemplate: (key: string) => void;
   onImport: (items: Array<{ label: string; url: string }>, clear: () => void) => void;
-  onEdit: (id: string) => void;
-  onToggle: (id: string, active: boolean) => void;
-  onMove: (id: string, dir: "up" | "down", label: string) => void;
-  onDelete: (id: string) => void;
 }) {
-  const [adding, setAdding] = useState(false);
-  const [confirmId, setConfirmId] = useState<string | null>(null);
-
   const groups = useMemo(() => {
     const m = new Map<string, typeof BLOCK_CATALOG>();
     for (const c of BLOCK_CATALOG) {
@@ -766,52 +782,27 @@ function BlocksPanel({
     return [...m.entries()];
   }, []);
 
-  if (adding) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-[15px] font-bold">블록 추가</h3>
-          <Button variant="ghost" size="sm" onClick={() => setAdding(false)}>
-            닫기
-          </Button>
-        </div>
-        {groups.map(([group, list]) => (
-          <div key={group}>
-            <p className="text-[12px] font-semibold text-fg-sub">{group}</p>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              {list.map((c) => (
-                <button
-                  key={c.type}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    onAdd(c.type);
-                    setAdding(false);
-                  }}
-                  className="trans-state rounded-card border border-line px-3 py-2.5 text-left hover:border-primary hover:bg-tint-hover disabled:opacity-50"
-                >
-                  <span className="block text-[14px] font-semibold">{c.label}</span>
-                  <span className="mt-0.5 block text-[12px] leading-snug text-fg-sub">{c.hint}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-[15px] font-bold">
-          블록 <span className="tnum text-fg-sub">{blocks.length}</span>
-        </h3>
-        <Button size="sm" onClick={() => setAdding(true)} disabled={busy}>
-          <Plus className="size-3.5" aria-hidden />
-          추가
-        </Button>
-      </div>
+    <div className="space-y-4">
+      {groups.map(([group, list]) => (
+        <div key={group}>
+          <p className="text-[12px] font-semibold text-fg-sub">{group}</p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {list.map((c) => (
+              <button
+                key={c.type}
+                type="button"
+                disabled={busy}
+                onClick={() => onAdd(c.type)}
+                className="trans-state rounded-card border border-line px-3 py-2.5 text-left hover:border-primary hover:bg-tint-hover disabled:opacity-50"
+              >
+                <span className="block text-[14px] font-semibold">{c.label}</span>
+                <span className="mt-0.5 block text-[12px] leading-snug text-fg-sub">{c.hint}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
 
       {/* 템플릿 — 빈 캔버스에서 "뭘 만들지"에 멈추는 지점을 넘긴다.
           적용은 기존 블록을 덮으므로 확인을 받는다. */}
@@ -824,7 +815,7 @@ function BlocksPanel({
               type="button"
               disabled={busy}
               onClick={() => {
-                if (blocks.length > 0 && !window.confirm("지금 블록이 모두 지워지고 템플릿으로 바뀝니다. 계속할까요?")) return;
+                if (hasBlocks && !window.confirm("지금 블록이 모두 지워지고 템플릿으로 바뀝니다. 계속할까요?")) return;
                 onApplyTemplate(t.key);
               }}
               className="trans-state w-full rounded-card border border-line px-3 py-2 text-left hover:border-primary hover:bg-tint-hover disabled:opacity-50"
@@ -838,92 +829,8 @@ function BlocksPanel({
         </div>
       </details>
 
-      {/* 다른 서비스에서 옮겨오기 — 템플릿과 같은 격의 접이식.
-          생성 폼에 두면 이미 페이지가 있는 사용자가 영원히 못 본다. */}
+      {/* 다른 서비스에서 옮겨오기 — 템플릿과 같은 격의 접이식 */}
       <ImportLinks busy={busy} onImport={onImport} />
-
-      {blocks.length === 0 ? (
-        <p className="text-[14px] text-fg-sub">「추가」를 눌러 첫 블록을 만들거나, 위 템플릿으로 시작해 보세요.</p>
-      ) : (
-        <ul className="divide-y divide-line">
-          {blocks.map((b, i) => {
-            const label = blockSummary(b.type, b.data);
-            const hidden = hiddenReason(b.type, b.data);
-            return (
-              <li key={b.id} className="flex items-center gap-2 py-2.5 first:pt-0 last:pb-0">
-                {/* ↑↓ 는 p-1.5(28px)·사이 간격 — 앞서 18px 로 맞붙어 있어 WCAG 24px 미달이었고
-                    같은 행의 삭제 버튼(28px)과도 크기가 달랐다.
-                    ⚠️ busy 로 **비활성화하지 않는다.** 누른 버튼이 눌리는 순간 disabled 가 되면
-                    포커스가 문서 맨 위로 튄다(연타 방지는 run() 이 이미 한다). */}
-                <div className="flex shrink-0 flex-col gap-0.5">
-                  <button
-                    type="button"
-                    onClick={() => onMove(b.id, "up", label)}
-                    disabled={i === 0}
-                    aria-label={`${label} 위로`}
-                    className="trans-state rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg disabled:opacity-30"
-                  >
-                    <ArrowUp className="size-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onMove(b.id, "down", label)}
-                    disabled={i === blocks.length - 1}
-                    aria-label={`${label} 아래로`}
-                    className="trans-state rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg disabled:opacity-30"
-                  >
-                    <ArrowDown className="size-3.5" />
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  id={`blk-${b.id}`}
-                  onClick={() => onEdit(b.id)}
-                  className={cn("min-w-0 flex-1 text-left", !b.active && "opacity-50")}
-                >
-                  <span className="block text-[12px] font-medium text-fg-sub">
-                    {BLOCK_CATALOG.find((c) => c.type === b.type)?.label ?? b.type}
-                  </span>
-                  <span className="block truncate text-[14px] font-semibold">{label}</span>
-                  {/* 발행해도 안 나오는 블록은 **여기서** 알려야 한다 — 안 그러면
-                      "분명 만들었는데 공개 페이지에 없다"를 방문자 제보로 알게 된다 */}
-                  {b.active && hidden ? (
-                    <span className="mt-0.5 block text-[12px] text-negative-strong">{hidden}</span>
-                  ) : null}
-                </button>
-
-                {/* 접근성 이름에 블록 요약을 넣는다 — "노출" 고정이면 6개가 전부 같은 이름이다.
-                    disabled={busy} 는 안 건다: 누르는 순간 비활성화되면 포커스가 문서 맨 위로
-                    튄다(↑↓ 와 같은 이유). 연타는 run() 의 busy 가드가 막는다. */}
-                <Switch checked={b.active} onChange={(v) => onToggle(b.id, v)} label={`${label} 노출`} />
-
-                {/* 삭제는 되돌릴 수 없다(DB 물리 삭제). 항목 8개를 손으로 채운 그리드를
-                    잘못 누르면 끝이다 — 덜 파괴적인 템플릿 적용에도 확인이 있다. */}
-                {confirmId === b.id ? (
-                  <span className="flex shrink-0 items-center gap-1">
-                    <Button variant="danger" size="sm" disabled={busy} onClick={() => onDelete(b.id)}>
-                      삭제
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setConfirmId(null)}>
-                      취소
-                    </Button>
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmId(b.id)}
-                    aria-label={`${label} 삭제`}
-                    className="trans-state shrink-0 rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-negative"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
     </div>
   );
 }
