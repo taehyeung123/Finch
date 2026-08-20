@@ -226,10 +226,23 @@ export function LinksClient({
      2026-08-20). 만들기와 성과 보기는 다른 일이다 — 링크팜도 통계는 빌더 밖이다. */
   const [statsOpen, setStatsOpen] = useState(false);
 
-  /* 연속 드래그 직렬화 — fire() 는 busy 를 안 거므로 두 드래그의 서버 호출이
-     경주할 수 있다(SELECT→계산→UPDATE 의 TOCTOU, 소넷 확정 2). 낙관 반영은
-     즉시 하되 서버 실행만 이 체인으로 드래그 순서대로 줄 세운다. */
+  /* 순서 계열 직렬화 — 드래그(fire)와 ↑↓·undo/redo(run)는 서로의 잠금을 모른다.
+     순서를 바꾸는 서버 호출(SELECT→계산→UPDATE, TOCTOU 취약)은 **전부** 이 체인을
+     타야 겹치지 않는다(소넷 확정 — 드래그만 태우면 undo 가 끼어들어 경주한다).
+     낙관 반영은 즉시, 서버 실행만 조작 순서대로. */
   const reorderChain = useRef<Promise<unknown>>(Promise.resolve());
+
+  function chained<T extends { ok: boolean; error?: string }>(fn: () => Promise<T>): () => Promise<T> {
+    return () => {
+      const p = reorderChain.current.then(fn);
+      /* 실패해도 다음 링크는 돈다 — 체인에는 캐치된 사본만 저장한다 */
+      reorderChain.current = p.then(
+        () => {},
+        () => {},
+      );
+      return p;
+    };
+  }
 
   /* 실행취소/다시실행 — 링크팜 상단 ↩↪ 카피(2026-08-20 대조 보고서 3번).
      서버 조작의 **역연산 쌍**을 메모리에 쌓는다(새로고침이면 사라진다 — 링크팜 동일).
@@ -278,6 +291,10 @@ export function LinksClient({
           setError(res.error ?? "처리하지 못했어요.");
           onFail?.();
         } else onOk?.(res);
+      } catch {
+        /* 전송 계층 실패(네트워크 단절 등) — 잡지 않으면 busy 만 풀리고 아무 안내가 없다 */
+        setError("네트워크 오류가 발생했어요. 잠시 후 다시 시도해 주세요.");
+        onFail?.();
       } finally {
         setBusy(false);
       }
@@ -296,7 +313,14 @@ export function LinksClient({
     setError(null);
     startTransition(async () => {
       optimistic();
-      const res = await fn();
+      let res: { ok: boolean; error?: string };
+      try {
+        res = await fn();
+      } catch {
+        /* {ok:false} 계약 밖 예외를 여기서 흡수해야 낙관 반영이
+           "성공한 척" 화면에 박제되지 않는다 */
+        res = { ok: false, error: "네트워크 오류가 발생했어요. 잠시 후 다시 시도해 주세요." };
+      }
       if (res.ok) onOk?.();
       if (!res.ok) {
         setError(res.error ?? "처리하지 못했어요.");
@@ -613,7 +637,7 @@ export function LinksClient({
                      「옮겼어요」가 읽히면 안 된다(목록을 눈으로 못 보는 사용자에게는 확정이다) */
                   onMove: (id, dir, label) =>
                     run(
-                      () => moveBlock(id, dir),
+                      chained(() => moveBlock(id, dir)),
                       () => {
                         setNotice(`${label} 블록을 ${dir === "up" ? "위로" : "아래로"} 옮겼어요.`);
                         /* 한계(소넷 확정 3, 수용): 역연산은 "그때의 이웃"이 아니라 실행
@@ -622,8 +646,8 @@ export function LinksClient({
                            무를 뿐이다 — 순서는 늘 정의돼 있어(sort_order,created_at) 안전. */
                         record({
                           label: `${label} 이동`,
-                          undo: () => moveBlock(id, dir === "up" ? "down" : "up"),
-                          redo: () => moveBlock(id, dir),
+                          undo: chained(() => moveBlock(id, dir === "up" ? "down" : "up")),
+                          redo: chained(() => moveBlock(id, dir)),
                         });
                       },
                     ),
@@ -635,15 +659,9 @@ export function LinksClient({
                     const origBefore = liveBlocks[from + 1]?.id ?? null;
                     /* 제자리 드롭은 조작이 아니다 — 서버 왕복도 이력도 만들지 않는다 */
                     if (beforeId === dragId || beforeId === origBefore) return;
-                    const serialized = () => {
-                      const prev = reorderChain.current;
-                      const p = prev.then(() => reorderBlock(dragId, beforeId));
-                      reorderChain.current = p.catch(() => {});
-                      return p;
-                    };
                     fire(
                       () => applyBlockPatch({ kind: "order", id: dragId, beforeId }),
-                      serialized,
+                      chained(() => reorderBlock(dragId, beforeId)),
                       undefined,
                       () =>
                         /* 한계(이동 undo 와 같은 수용, 소넷 확정 4): undo 좌표(origBefore)는
@@ -652,8 +670,8 @@ export function LinksClient({
                            스택에 남는다 — 데이터는 안 다치고, 다른 조작이 이력을 밀어낸다. */
                         record({
                           label: `${label} 이동`,
-                          undo: () => reorderBlock(dragId, origBefore),
-                          redo: () => reorderBlock(dragId, beforeId),
+                          undo: chained(() => reorderBlock(dragId, origBefore)),
+                          redo: chained(() => reorderBlock(dragId, beforeId)),
                         }),
                     );
                   },
@@ -984,7 +1002,22 @@ function TopBar({
    편집기 본 번들에 끼우지 않는다. */
 function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
+
+  /* onClose 는 부모 렌더마다 새 함수다 — ref 로 고정해 리스너를 한 번만 건다
+     (rule-wizard·post-composer 와 같은 관례, 소넷 확정) */
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
+  /* 열릴 때 모달로 포커스, 닫히면 원래 자리로 — 레포 모달 공통 관례 */
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null;
+    boxRef.current?.focus();
+    return () => prev?.focus?.();
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -1010,19 +1043,25 @@ function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
 
   function download() {
     const c = canvasRef.current;
     if (!c) return;
-    const a = document.createElement("a");
-    a.href = c.toDataURL("image/png");
-    a.download = "핀치-프로필링크-QR.png";
-    a.click();
+    /* data: URL 은 일부 사파리가 다운로드 대신 새 탭으로 연다 — Blob 경로가 안전하다 */
+    c.toBlob((blob) => {
+      if (!blob) return;
+      const u = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = u;
+      a.download = "핀치-프로필링크-QR.png";
+      a.click();
+      window.setTimeout(() => URL.revokeObjectURL(u), 10_000);
+    }, "image/png");
   }
 
   return (
@@ -1035,7 +1074,7 @@ function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="modal-card-in shadow-pop w-full max-w-xs rounded-card border border-line bg-body p-5 text-center">
+      <div ref={boxRef} tabIndex={-1} className="modal-card-in shadow-pop w-full max-w-xs rounded-card border border-line bg-body p-5 text-center outline-none">
         <h3 className="text-[15px] font-bold">QR 코드</h3>
         <p className="mt-1 text-[12px] text-fg-sub">명함·매장·포스터 어디든 — 찍으면 내 프로필 링크로 와요.</p>
         <div className="mx-auto mt-3 w-fit rounded-card bg-white p-2.5">
