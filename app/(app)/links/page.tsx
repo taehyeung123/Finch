@@ -41,6 +41,7 @@ const EMPTY_STATS: LinkStats = {
   daily: [],
   blocks: [],
   regions: [],
+  sources: [],
 };
 
 const EMPTY: Loaded = { page: null, blocks: [], snapshot: null, stats: EMPTY_STATS, leads: [] };
@@ -54,6 +55,8 @@ interface RawStats {
   daily: Array<{ d: string; v: number; c: number }>;
   blocks: Array<{ id: string; n: number }>;
   regions: Array<{ country: string | null; region: string | null; n: number }>;
+  /** 0055 이후에만 온다 — 옛 함수 응답엔 없다 */
+  sources?: Array<{ src: string | null; n: number }>;
 }
 
 async function load(days: number): Promise<Loaded> {
@@ -183,6 +186,7 @@ async function load(days: number): Promise<Loaded> {
       region: x.region ?? "",
       views: x.n,
     })),
+    sources: (raw?.sources ?? []).map((x) => ({ src: x.src, views: x.n })),
   };
 
   const leads: LinkLead[] = (

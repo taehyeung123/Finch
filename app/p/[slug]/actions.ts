@@ -92,7 +92,10 @@ const LEAD_PAGE_WINDOW_MS = 60 * 60 * 1000;
 const LEAD_PAGE_MAX = 30;
 
 /** 방문 1건 기록. 실패해도 조용히 넘어간다 — 통계 때문에 페이지가 깨지면 안 된다 */
-export async function recordView(slug: string): Promise<void> {
+/** 유입 표식 허용 목록 — 방문자가 URL 에 아무 값이나 달아도 통계 축이 안 오염된다 */
+const VIEW_SRC = new Set(["instagram", "tiktok", "threads", "youtube", "x"]);
+
+export async function recordView(slug: string, src?: string): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const pageId = await publicPageId(slug);
   if (!pageId) return;
@@ -127,13 +130,19 @@ export async function recordView(slug: string): Promise<void> {
   }
 
   const h = await headers();
-  const { error } = await admin.from("link_views").insert({
+  const row = {
     page_id: pageId,
     visitor_hash: hash,
     /* Vercel 이 주는 국가/도시 코드만 — 좌표·상세주소는 받지 않는다 */
     country: h.get("x-vercel-ip-country") ?? null,
     region: h.get("x-vercel-ip-city") ?? null,
-  });
+  };
+  const cleanSrc = src && VIEW_SRC.has(src) ? src : null;
+  /* 0055(src 컬럼) 미적용 DB 폴백 — 계단식, 의미 유실은 유입 표식뿐이다 */
+  let { error } = await admin.from("link_views").insert({ ...row, src: cleanSrc });
+  if (error && /src/i.test(error.message) && /column|schema/i.test(error.message)) {
+    ({ error } = await admin.from("link_views").insert(row));
+  }
   if (error) console.error("[links] 방문 기록 실패:", error.message);
 }
 

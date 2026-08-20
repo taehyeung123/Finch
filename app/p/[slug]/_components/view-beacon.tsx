@@ -17,7 +17,8 @@ export function ViewBeacon({ slug }: { slug: string }) {
     if (sent.current) return;
     sent.current = true;
     /* 실패해도 아무 일도 하지 않는다 — 방문자는 통계를 남기러 온 게 아니다 */
-    void recordView(slug).catch(() => {});
+    const src = new URLSearchParams(window.location.search).get("src") ?? undefined;
+    void recordView(slug, src).catch(() => {});
   }, [slug]);
   return null;
 }

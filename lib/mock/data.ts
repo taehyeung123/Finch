@@ -1165,6 +1165,11 @@ export const linkWorkspace: LinkWorkspace = {
       { country: "KR", region: "Incheon", views: 402 },
       { country: "US", region: "Los Angeles", views: 188 },
     ],
+    sources: [
+      { src: "instagram", views: 2114 },
+      { src: "youtube", views: 604 },
+      { src: null, views: 1213 },
+    ],
   },
   leads: [
     { id: 1, kind: "contact", name: "김서연", email: "seoyeon@example.com", phone: null, message: "뷰티 브랜드 협업 제안드립니다. 상세 자료 보내드릴게요.", createdAt: "2026-08-18T14:22:00+09:00" },

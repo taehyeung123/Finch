@@ -75,6 +75,8 @@ export interface LinkStats {
   /** removed=true 는 초안에서 지웠지만 라이브에서 눌린 블록 */
   blocks: Array<{ id: string; label: string; removed: boolean; clicks: number }>;
   regions: Array<{ country: string; region: string; views: number }>;
+  /** 유입 채널(?src=) — null 은 직접·표식 없는 링크. 0055 미적용 서버는 빈 배열 */
+  sources: Array<{ src: string | null; views: number }>;
 }
 
 export interface LinkLead {

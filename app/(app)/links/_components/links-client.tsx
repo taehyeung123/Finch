@@ -25,6 +25,7 @@ import {
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
+import { SnsIcon } from "@/components/sns-brand-icons";
 import { DualLineChart } from "@/components/ui/charts";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Switch } from "@/components/ui/switch";
@@ -101,6 +102,17 @@ type UndoEntry = {
 };
 /** 스택 상한 — 밤새 눌러도 메모리가 안 자란다 */
 const UNDO_MAX = 30;
+
+/* 플랫폼별 추적 링크 — 링크팜 설정의 「SNS 링크 설정」 카피(2026-08-20 대조 7번).
+   같은 공개 주소에 ?src= 표식만 달라, 어느 채널에서 온 방문인지 통계에 잡힌다. */
+const SRC_PLATFORMS = [
+  { key: "instagram", label: "인스타그램" },
+  { key: "tiktok", label: "틱톡" },
+  { key: "threads", label: "스레드" },
+  { key: "youtube", label: "유튜브" },
+  { key: "x", label: "X" },
+] as const;
+const SRC_LABEL = new Map<string, string>(SRC_PLATFORMS.map((p) => [p.key, p.label]));
 
 /**
  * CSV 를 만들어 내려준다 — 서버 왕복 없음. 화면이 이미 든 데이터가 전부다.
@@ -818,6 +830,8 @@ export function LinksClient({
                 }
               />
             ) : (
+              <>
+              <PlatformLinks slug={page.slug} origin={origin} />
               <SettingsPanel
                 page={page}
                 leads={leads}
@@ -832,6 +846,7 @@ export function LinksClient({
                   )
                 }
               />
+              </>
             )}
           </CardBody>
         </Card>
@@ -1414,6 +1429,9 @@ function StatsPanel({
               [],
               ["지역", "국가", "조회수"],
               ...stats.regions.map((r) => [r.region, r.country, r.views] as Array<string | number>),
+              [],
+              ["유입 채널", "조회수"],
+              ...stats.sources.map((x) => [(x.src && SRC_LABEL.get(x.src)) ?? "직접·기타", x.views] as Array<string | number>),
             ])
           }
           className="trans-state rounded-chip border border-line px-2.5 py-1 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg"
@@ -1469,6 +1487,21 @@ function StatsPanel({
         사람이 30분 안에 다시 와도 조회는 1로 세고 클릭은 전부 세요 — 그래서 「조회당 클릭」은 100%를 넘을 수 있어요.
         쿠키를 지운 방문은 사람 수를 셀 수 없어 방문자 집계에서 빠집니다.
       </p>
+
+      {stats.sources.length > 0 ? (
+        <div>
+          <p className="text-[12px] font-medium text-fg-sub">유입 채널</p>
+          <ul className="mt-1.5 space-y-1">
+            {stats.sources.map((x) => (
+              <li key={x.src ?? "direct"} className="flex items-center justify-between gap-2 text-[14px]">
+                <span className="min-w-0 truncate">{(x.src && SRC_LABEL.get(x.src)) ?? "직접·기타"}</span>
+                <span className="tnum font-semibold">{x.views.toLocaleString("ko-KR")}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-[11px] text-fg-sub">설정의 「플랫폼별 링크」로 복사한 주소로 들어온 방문이에요.</p>
+        </div>
+      ) : null}
 
       {/* 추이 */}
       <div>
@@ -1557,6 +1590,41 @@ function StatsPanel({
 /* ══════════════════════════════════════════════════════════════════
    설정 패널
    ══════════════════════════════════════════════════════════════════ */
+
+function PlatformLinks({ slug, origin }: { slug: string; origin: string }) {
+  const [copied, setCopied] = useState<string | null>(null);
+  async function copy(key: string) {
+    try {
+      await navigator.clipboard.writeText(`${publicLinkUrl(slug, origin)}?src=${key}`);
+      setCopied(key);
+      window.setTimeout(() => setCopied(null), 1600);
+    } catch {
+      /* 권한 거부·비보안 컨텍스트 — 상단 바의 주소를 손으로 복사하면 된다 */
+    }
+  }
+  return (
+    <div>
+      <h3 className="text-[15px] font-bold">플랫폼별 링크</h3>
+      <p className="mt-1 text-[12px] leading-relaxed text-fg-sub">
+        올리는 곳마다 그 플랫폼의 주소를 쓰면, 방문이 어느 채널에서 왔는지 통계의 「유입 채널」에 잡혀요.
+      </p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {SRC_PLATFORMS.map((pf) => (
+          <button
+            key={pf.key}
+            type="button"
+            onClick={() => void copy(pf.key)}
+            aria-label={`${pf.label}용 주소 복사`}
+            className="trans-state flex items-center gap-1.5 rounded-chip border border-line px-2.5 py-1.5 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg"
+          >
+            <SnsIcon kind={pf.key} className="size-3.5" />
+            {copied === pf.key ? "복사됨!" : pf.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function SettingsPanel({
   page,
