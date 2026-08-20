@@ -965,6 +965,10 @@ export async function reorderBlock(id: string, beforeId: string | null): Promise
     const { error } = await supabase.from("link_blocks").update({ sort_order: i }).eq("id", ids[i]);
     if (error) {
       console.error("[links] 드래그 정렬 실패:", error.message);
+      /* 앞선 행 일부는 이미 커밋됐다 — revalidate 없이 돌아가면 클라이언트가
+         드래그 전 상태를 그리고 DB 는 반쯤 섞인 상태로 남아 3중으로 어긋난다
+         (소넷 확정 1). 실패해도 서버의 실제 순서를 다시 내려보낸다. */
+      revalidatePath("/links");
       return { ok: false, error: "순서를 바꾸지 못했어요." };
     }
   }

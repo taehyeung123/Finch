@@ -83,9 +83,19 @@ export function PhonePreview({
   /* 드래그 정렬 상태 — HTML5 DnD(터치는 툴바 ↑↓ 가 맡는다) */
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
+  /* live↔draft 토글은 리마운트가 아니다(같은 위치·같은 타입) — 드래그 도중 소스
+     노드가 사라지면 dragend 가 안 와 상태가 박제될 수 있어 모드 전환에서 리셋한다 */
+  const [prevMode, setPrevMode] = useState(mode);
+  if (prevMode !== mode) {
+    setPrevMode(mode);
+    setDraggingId(null);
+    setOverId(null);
+  }
   function dropOn(beforeId: string | null) {
     if (draggingId && edit) {
-      const dragged = blocks.find((b) => b.id === draggingId);
+      /* 화면이 그리는 목록(visible)에서 찾는다 — blocks 와 갈라지는 날이 와도
+         보이지 않는 블록을 조용히 움직이지 않는다 */
+      const dragged = visible.find((b) => b.id === draggingId);
       if (dragged && draggingId !== beforeId) edit.onReorder(draggingId, beforeId, blockSummary(dragged.type, dragged.data));
     }
     setDraggingId(null);
@@ -332,10 +342,12 @@ export function PhonePreview({
                       </button>
                       {/* 드래그 핸들 — 버튼째 끌면 클릭 편집과 충돌해서 핸들만 draggable.
                           터치·키보드는 ↑↓ 가 같은 일을 한다. */}
+                      {/* 마우스 전용 — role/label 을 주면 스크린리더에 "버튼"이라
+                          선언되는데 키보드로는 아무것도 못 한다(거짓 어포던스,
+                          소넷 확정 3). 키보드·터치의 순서 변경은 ↑↓ 가 맡는다. */}
                       <span
                         draggable
-                        role="button"
-                        aria-label={`${label} 끌어서 순서 바꾸기`}
+                        aria-hidden="true"
                         onDragStart={(e) => {
                           e.dataTransfer.effectAllowed = "move";
                           e.dataTransfer.setData("text/plain", b.id);

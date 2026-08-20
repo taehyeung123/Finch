@@ -70,7 +70,7 @@ import { PhonePreview } from "./phone-preview";
    · 링크팜은 미리보기 안에서 직접 편집(호버 툴바)한다. 우리는 **목록에서 편집**하되
      미리보기 블록을 누르면 그 블록의 편집기가 열린다 — 블록이 15종이라 인라인으로는
      필드를 다 못 넣고, 무엇보다 키보드로 조작할 수 있어야 한다.
-   · 드래그 정렬 대신 ↑↓ 버튼. 모바일에서 드래그는 스크롤과 싸운다.
+   · 순서 변경은 드래그(캔버스 그립)와 ↑↓ 병행 — 터치·키보드는 ↑↓ 가 맡는다.
 
   서버 액션만 쓴다. 서버 액션이 revalidatePath 를 부르므로 **router.refresh 를 따로
   부르지 않는다** — 부르면 같은 집계 질의가 한 조작에 두 번 돈다.
@@ -225,6 +225,11 @@ export function LinksClient({
   /* 통계 — 편집 탭이 아니라 상단 바에서 여닫는다("만드는 창에 통계가 왜 있냐",
      2026-08-20). 만들기와 성과 보기는 다른 일이다 — 링크팜도 통계는 빌더 밖이다. */
   const [statsOpen, setStatsOpen] = useState(false);
+
+  /* 연속 드래그 직렬화 — fire() 는 busy 를 안 거므로 두 드래그의 서버 호출이
+     경주할 수 있다(SELECT→계산→UPDATE 의 TOCTOU, 소넷 확정 2). 낙관 반영은
+     즉시 하되 서버 실행만 이 체인으로 드래그 순서대로 줄 세운다. */
+  const reorderChain = useRef<Promise<unknown>>(Promise.resolve());
 
   /* 실행취소/다시실행 — 링크팜 상단 ↩↪ 카피(2026-08-20 대조 보고서 3번).
      서버 조작의 **역연산 쌍**을 메모리에 쌓는다(새로고침이면 사라진다 — 링크팜 동일).
@@ -630,11 +635,21 @@ export function LinksClient({
                     const origBefore = liveBlocks[from + 1]?.id ?? null;
                     /* 제자리 드롭은 조작이 아니다 — 서버 왕복도 이력도 만들지 않는다 */
                     if (beforeId === dragId || beforeId === origBefore) return;
+                    const serialized = () => {
+                      const prev = reorderChain.current;
+                      const p = prev.then(() => reorderBlock(dragId, beforeId));
+                      reorderChain.current = p.catch(() => {});
+                      return p;
+                    };
                     fire(
                       () => applyBlockPatch({ kind: "order", id: dragId, beforeId }),
-                      () => reorderBlock(dragId, beforeId),
+                      serialized,
                       undefined,
                       () =>
+                        /* 한계(이동 undo 와 같은 수용, 소넷 확정 4): undo 좌표(origBefore)는
+                           드래그 시점 스냅샷이다. 그 블록이 그 사이 삭제되면 undo 는
+                           "화면을 새로고침해 주세요"로 명시적으로 실패하고 엔트리는
+                           스택에 남는다 — 데이터는 안 다치고, 다른 조작이 이력을 밀어낸다. */
                         record({
                           label: `${label} 이동`,
                           undo: () => reorderBlock(dragId, origBefore),
