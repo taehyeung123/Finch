@@ -13,10 +13,12 @@ import {
   Link2,
   Palette,
   Plus,
+  Redo2,
   Rocket,
   Settings,
   Sparkles,
   Trash2,
+  Undo2,
   User,
   X,
 } from "lucide-react";
@@ -27,7 +29,7 @@ import { DualLineChart } from "@/components/ui/charts";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Switch } from "@/components/ui/switch";
 import { publicLinkUrl, stableJson } from "@/lib/links";
-import { BLOCK_CATALOG, type BlockType, type LinkBlock } from "@/lib/links/blocks";
+import { BLOCK_CATALOG, blockSummary, defaultBlockData, type BlockType, type LinkBlock } from "@/lib/links/blocks";
 import { LAYOUTS, LINK_THEMES, SNS_KINDS } from "@/lib/links/themes";
 import { LINK_TEMPLATES } from "@/lib/links/templates";
 import {
@@ -90,6 +92,15 @@ const DRAWER_TITLE: Record<Drawer, string> = {
 };
 
 const LEAVE_WARNING = "저장하지 않은 편집 내용이 사라져요. 그래도 나갈까요?";
+
+/** 실행취소 한 칸 — 성공한 서버 조작의 역연산 쌍 */
+type UndoEntry = {
+  label: string;
+  undo: () => Promise<{ ok: boolean; error?: string }>;
+  redo: () => Promise<{ ok: boolean; error?: string }>;
+};
+/** 스택 상한 — 밤새 눌러도 메모리가 안 자란다 */
+const UNDO_MAX = 30;
 
 /**
  * CSV 를 만들어 내려준다 — 서버 왕복 없음. 화면이 이미 든 데이터가 전부다.
@@ -210,6 +221,15 @@ export function LinksClient({
      2026-08-20). 만들기와 성과 보기는 다른 일이다 — 링크팜도 통계는 빌더 밖이다. */
   const [statsOpen, setStatsOpen] = useState(false);
 
+  /* 실행취소/다시실행 — 링크팜 상단 ↩↪ 카피(2026-08-20 대조 보고서 3번).
+     서버 조작의 **역연산 쌍**을 메모리에 쌓는다(새로고침이면 사라진다 — 링크팜 동일).
+     성공한 조작만 기록한다: 실패한 조작을 기록하면 실행취소가 "안 일어난 일의
+     역연산"을 실행해 상태를 실제로 망가뜨린다.
+     템플릿 적용·대량 가져오기는 제외 — 역연산이 전체 교체 복원이라 자체 확인창이
+     이미 있고, 발행본은 어차피 안 다친다(draft/publish 분리). */
+  const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
+  const [redoStack, setRedoStack] = useState<UndoEntry[]>([]);
+
   /* 낙관 상태 — 블록 온오프·테마처럼 잦고 독립적인 조작은 서버 왕복을 기다리지
      않고 즉시 그린다. 트랜지션이 끝나면 서버 props 가 진실을 되돌려주므로
      (실패 시 자동 복귀) 수동 롤백이 필요 없다. */
@@ -220,7 +240,7 @@ export function LinksClient({
   );
   const [liveTheme, pickThemeOptimistic] = useOptimistic(page?.theme ?? "");
 
-  function run(fn: () => Promise<{ ok: boolean; error?: string }>, onOk?: () => void, onFail?: () => void) {
+  function run<T extends { ok: boolean; error?: string }>(fn: () => Promise<T>, onOk?: (res: T) => void, onFail?: () => void) {
     if (busy) {
       /* 앞선 작업이 끝날 때까지 조용히 삼킨다. **삼켰다는 사실은 알려야 한다** —
          ↑↓ 는 포커스가 튀지 않게 일부러 비활성화하지 않으므로, 눌렀는데 아무 일도
@@ -236,7 +256,7 @@ export function LinksClient({
         if (!res.ok) {
           setError(res.error ?? "처리하지 못했어요.");
           onFail?.();
-        } else onOk?.();
+        } else onOk?.(res);
       } finally {
         setBusy(false);
       }
@@ -246,11 +266,17 @@ export function LinksClient({
   /* run() 의 전역 busy 는 순서가 중요한 조작(이동·삭제·발행)용이다. 온오프·테마는
      독립적·멱등이라 그 줄에 세우면 연타가 "앞선 작업 처리 중" 안내로 삼켜져
      "엄청 느리다"는 체감이 됐다(2026-08-20). 낙관 반영과 함께 바로 쏜다. */
-  function fire(optimistic: () => void, fn: () => Promise<{ ok: boolean; error?: string }>, onFail?: () => void) {
+  function fire(
+    optimistic: () => void,
+    fn: () => Promise<{ ok: boolean; error?: string }>,
+    onFail?: () => void,
+    onOk?: () => void,
+  ) {
     setError(null);
     startTransition(async () => {
       optimistic();
       const res = await fn();
+      if (res.ok) onOk?.();
       if (!res.ok) {
         setError(res.error ?? "처리하지 못했어요.");
         /* 낙관이 useOptimistic 이 아니라 **폼 상태**를 미리 바꾼 경우(인라인 프로필),
@@ -258,6 +284,32 @@ export function LinksClient({
            호출부가 준 onFail 이 유일한 복구 경로다(소넷 확정 2). */
         onFail?.();
       }
+    });
+  }
+
+  function record(entry: UndoEntry) {
+    setUndoStack((s) => [...s.slice(-(UNDO_MAX - 1)), entry]);
+    /* 새 조작은 다시실행 가지를 자른다 — 표준 히스토리 의미론 */
+    setRedoStack([]);
+  }
+
+  function performUndo() {
+    const entry = undoStack[undoStack.length - 1];
+    if (!entry) return;
+    run(entry.undo, () => {
+      setUndoStack((s) => s.slice(0, -1));
+      setRedoStack((s) => [...s, entry]);
+      setNotice(`되돌렸어요: ${entry.label}`);
+    });
+  }
+
+  function performRedo() {
+    const entry = redoStack[redoStack.length - 1];
+    if (!entry) return;
+    run(entry.redo, () => {
+      setRedoStack((s) => s.slice(0, -1));
+      setUndoStack((s) => [...s, entry]);
+      setNotice(`다시 실행했어요: ${entry.label}`);
     });
   }
 
@@ -431,6 +483,28 @@ export function LinksClient({
           );
         })}
 
+        <div className="mx-0.5 hidden h-5 w-px bg-line sm:block" aria-hidden />
+        <button
+          type="button"
+          onClick={performUndo}
+          disabled={undoStack.length === 0 || busy}
+          aria-label={undoStack.length ? `실행취소: ${undoStack[undoStack.length - 1].label}` : "실행취소"}
+          title={undoStack.length ? `실행취소: ${undoStack[undoStack.length - 1].label}` : undefined}
+          className="trans-state rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg disabled:opacity-30"
+        >
+          <Undo2 className="size-4" aria-hidden />
+        </button>
+        <button
+          type="button"
+          onClick={performRedo}
+          disabled={redoStack.length === 0 || busy}
+          aria-label={redoStack.length ? `다시실행: ${redoStack[redoStack.length - 1].label}` : "다시실행"}
+          title={redoStack.length ? `다시실행: ${redoStack[redoStack.length - 1].label}` : undefined}
+          className="trans-state rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg disabled:opacity-30"
+        >
+          <Redo2 className="size-4" aria-hidden />
+        </button>
+
         <div role="group" aria-label="미리보기 대상" className="ml-auto flex items-center gap-1">
           {(
             [
@@ -530,13 +604,31 @@ export function LinksClient({
                 edit={{
                   onEdit: openEditor,
                   /* 온오프는 낙관 즉시 반영 — 스위치가 서버 왕복을 기다리면 고장처럼 보인다 */
-                  onToggle: (id, active) => fire(() => applyBlockPatch({ id, active }), () => updateBlock(id, { active })),
+                  onToggle: (id, active) =>
+                    fire(
+                      () => applyBlockPatch({ id, active }),
+                      () => updateBlock(id, { active }),
+                      undefined,
+                      () =>
+                        record({
+                          label: active ? "노출 켜기" : "노출 끄기",
+                          undo: () => updateBlock(id, { active: !active }),
+                          redo: () => updateBlock(id, { active }),
+                        }),
+                    ),
                   /* 안내는 **성공했을 때만** 나간다 — 연타로 무시된 클릭·서버 실패에
                      「옮겼어요」가 읽히면 안 된다(목록을 눈으로 못 보는 사용자에게는 확정이다) */
                   onMove: (id, dir, label) =>
                     run(
                       () => moveBlock(id, dir),
-                      () => setNotice(`${label} 블록을 ${dir === "up" ? "위로" : "아래로"} 옮겼어요.`),
+                      () => {
+                        setNotice(`${label} 블록을 ${dir === "up" ? "위로" : "아래로"} 옮겼어요.`);
+                        record({
+                          label: `${label} 이동`,
+                          undo: () => moveBlock(id, dir === "up" ? "down" : "up"),
+                          redo: () => moveBlock(id, dir),
+                        });
+                      },
                     ),
                   onDelete: (id, label) => {
                     /* 삭제는 물리 삭제 — 확인 후 지우고, 직전 1건은 되돌리기 바가 복원한다 */
@@ -546,7 +638,20 @@ export function LinksClient({
                       () => deleteBlock(id),
                       () => {
                         if (b) {
-                          setLastDeleted({ type: b.type, data: b.data, sortOrder: b.sortOrder, active: b.active, label });
+                          const payload = { type: b.type, data: b.data, sortOrder: b.sortOrder, active: b.active };
+                          setLastDeleted({ ...payload, label });
+                          /* 복원은 **새 행**을 만든다 — 다시실행(재삭제)은 그 새 id 를
+                             지워야 하므로 클로저 변수로 따라간다 */
+                          let currentId = id;
+                          record({
+                            label: `${label} 삭제`,
+                            undo: async () => {
+                              const r = await restoreBlock(payload);
+                              if (r.ok && r.id) currentId = r.id;
+                              return r;
+                            },
+                            redo: () => deleteBlock(currentId),
+                          });
                         }
                         setNotice("블록을 삭제했어요. 되돌리기를 누르면 복원돼요.");
                       },
@@ -615,7 +720,21 @@ export function LinksClient({
                 }}
                 /* 저장이 성공해야 기준선을 옮긴다 — 실패하면 「저장 안 됨」이 남고
                    탭을 눌러 나갈 때 확인을 받는다(그게 맞다). */
-                onSave={(data) => run(() => updateBlock(editing.id, { data }), () => setBaseline(stableJson(data)))}
+                onSave={(data) =>
+                  run(
+                    () => updateBlock(editing.id, { data }),
+                    () => {
+                      setBaseline(stableJson(data));
+                      /* editing.data 는 저장 직전 렌더의 서버 값 — 역연산의 원본이다 */
+                      const prev = editing.data ?? {};
+                      record({
+                        label: `${blockSummary(editing.type, data)} 내용 저장`,
+                        undo: () => updateBlock(editing.id, { data: prev }),
+                        redo: () => updateBlock(editing.id, { data }),
+                      });
+                    },
+                  )
+                }
               />
             ) : drawer === "profile" ? (
               <ProfilePanel
@@ -633,7 +752,19 @@ export function LinksClient({
                 current={liveTheme}
                 /* 누르는 즉시 칠한다 — 로딩·비활성 없음. 실패하면 트랜지션 종료와 함께
                    서버 값으로 자동 복귀한다(2026-08-20 "굳이 로딩 걸어야 되나") */
-                onPick={(k) => fire(() => pickThemeOptimistic(k), () => updateLinkTheme(k))}
+                onPick={(k) => {
+                  const prev = liveTheme;
+                  fire(
+                    () => pickThemeOptimistic(k),
+                    () => updateLinkTheme(k),
+                    undefined,
+                    () => {
+                      if (prev !== k) {
+                        record({ label: "테마 변경", undo: () => updateLinkTheme(prev), redo: () => updateLinkTheme(k) });
+                      }
+                    },
+                  );
+                }}
               />
             ) : drawer === "add" ? (
               <AddPanel
@@ -642,7 +773,27 @@ export function LinksClient({
                 onAdd={(t) =>
                   run(
                     () => addBlock(t),
-                    () => setNotice("블록을 추가했어요. 캔버스의 블록을 누르면 바로 고칠 수 있어요."),
+                    (res) => {
+                      setNotice("블록을 추가했어요. 캔버스의 블록을 누르면 바로 고칠 수 있어요.");
+                      if (res.id) {
+                        const payload = {
+                          type: t,
+                          data: defaultBlockData(t),
+                          sortOrder: (blocks[blocks.length - 1]?.sortOrder ?? -1) + 1,
+                          active: true,
+                        };
+                        let currentId = res.id;
+                        record({
+                          label: `${BLOCK_CATALOG.find((c) => c.type === t)?.label ?? t} 추가`,
+                          undo: () => deleteBlock(currentId),
+                          redo: async () => {
+                            const r = await restoreBlock(payload);
+                            if (r.ok && r.id) currentId = r.id;
+                            return r;
+                          },
+                        });
+                      }
+                    },
                   )
                 }
                 onApplyTemplate={(k) =>

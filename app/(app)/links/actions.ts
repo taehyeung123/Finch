@@ -451,7 +451,7 @@ export async function updateLinkImages(patch: { avatarPath?: string | null; cove
    블록
    ══════════════════════════════════════════════════════════════════ */
 
-export async function addBlock(type: BlockType): Promise<Result> {
+export async function addBlock(type: BlockType): Promise<Result & { id?: string }> {
   if (isDemoMode()) return DEMO;
   const page = await myPage();
   if (!page) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
@@ -476,12 +476,17 @@ export async function addBlock(type: BlockType): Promise<Result> {
     .limit(1)
     .maybeSingle();
 
-  const { error } = await supabase.from("link_blocks").insert({
-    page_id: page.id,
-    type,
-    data: defaultBlockData(type),
-    sort_order: (last?.sort_order ?? -1) + 1,
-  });
+  /* id 를 되돌려준다 — 실행취소(방금 추가한 블록 삭제)가 대상을 알아야 한다 */
+  const { data: created, error } = await supabase
+    .from("link_blocks")
+    .insert({
+      page_id: page.id,
+      type,
+      data: defaultBlockData(type),
+      sort_order: (last?.sort_order ?? -1) + 1,
+    })
+    .select("id")
+    .single();
   if (error) {
     /* 0054(수익화 블록 타입) 미적용 DB — check 위반을 사용자 언어로.
        조용히 "추가하지 못했어요"만 내면 코드 버그처럼 읽힌다(계단식 폴백 관례). */
@@ -492,7 +497,7 @@ export async function addBlock(type: BlockType): Promise<Result> {
     return { ok: false, error: "추가하지 못했어요." };
   }
   revalidatePath("/links");
-  return { ok: true };
+  return { ok: true, id: (created as { id: string } | null)?.id };
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -876,7 +881,7 @@ export async function restoreBlock(input: {
   data: Record<string, unknown>;
   sortOrder: number;
   active: boolean;
-}): Promise<Result> {
+}): Promise<Result & { id?: string }> {
   if (isDemoMode()) return DEMO;
   const page = await myPage();
   if (!page) return { ok: false, error: "프로필 링크가 없어요." };
@@ -897,19 +902,24 @@ export async function restoreBlock(input: {
   }
 
   const sortOrder = Number.isInteger(input.sortOrder) && input.sortOrder >= 0 ? input.sortOrder : 0;
-  const { error } = await supabase.from("link_blocks").insert({
-    page_id: page.id,
-    type: input.type,
-    data: cleaned.data,
-    sort_order: sortOrder,
-    active: !!input.active,
-  });
+  /* id 를 되돌려준다 — 「삭제 실행취소 → 다시실행」이 복원된 새 행을 지워야 한다 */
+  const { data: created, error } = await supabase
+    .from("link_blocks")
+    .insert({
+      page_id: page.id,
+      type: input.type,
+      data: cleaned.data,
+      sort_order: sortOrder,
+      active: !!input.active,
+    })
+    .select("id")
+    .single();
   if (error) {
     console.error("[links] 블록 복원 실패:", error.message);
     return { ok: false, error: "되살리지 못했어요." };
   }
   revalidatePath("/links");
-  return { ok: true };
+  return { ok: true, id: (created as { id: string } | null)?.id };
 }
 
 export async function moveBlock(id: string, dir: "up" | "down"): Promise<Result> {
