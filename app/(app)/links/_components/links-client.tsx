@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowDown,
@@ -111,6 +111,18 @@ function downloadCsv(filename: string, rows: Array<Array<string | number>>) {
   URL.revokeObjectURL(url);
 }
 
+/** 프로필 패널이 미리보기에 밀어 올리는 필드 — 폰에 실제로 그려지는 것만.
+    저장 페이로드(slug·seo 포함)와 다르다: 이건 전송용이 아니라 그리기 전용이다. */
+type ProfilePreviewDraft = {
+  title: string;
+  bio: string;
+  layout: string;
+  align: string;
+  snsLinks: Array<{ kind: string; url: string }>;
+  snsPlacement: string;
+  titleSize: string;
+};
+
 export function LinksClient({
   page,
   blocks,
@@ -154,7 +166,16 @@ export function LinksClient({
   const [baseline, setBaseline] = useState("");
   const editorDirty = editingId !== null && stableJson(draft) !== baseline;
 
-  function run(fn: () => Promise<{ ok: boolean; error?: string }>, onOk?: () => void) {
+  /* 프로필 폼의 **그리기 전용 사본** — 저장 전 입력이 왼쪽 폰에 바로 비친다
+     (링크팜 동작. 저장해야만 바뀌는 미리보기는 미리보기가 아니라는 지적, 2026-08-20).
+     저장 판정·전송에는 절대 쓰지 않는다. ProfilePanel 이 입력마다 밀어 올리고,
+     패널 언마운트(탭 이동·블록 편집 진입)와 저장 성공 시 null 로 걷는다. */
+  const [profileDraft, setProfileDraft] = useState<ProfilePreviewDraft | null>(null);
+  /* 테마는 누르는 즉시 서버 저장이지만 왕복(수백 ms) 동안 옛 색이 남는다 —
+     누른 값을 먼저 그리고, 서버 값이 따라잡으면 파생값이 알아서 물러난다 */
+  const [themePick, setThemePick] = useState<string | null>(null);
+
+  function run(fn: () => Promise<{ ok: boolean; error?: string }>, onOk?: () => void, onFail?: () => void) {
     if (busy) {
       /* 앞선 작업이 끝날 때까지 조용히 삼킨다. **삼켰다는 사실은 알려야 한다** —
          ↑↓ 는 포커스가 튀지 않게 일부러 비활성화하지 않으므로, 눌렀는데 아무 일도
@@ -167,8 +188,10 @@ export function LinksClient({
     startTransition(async () => {
       try {
         const res = await fn();
-        if (!res.ok) setError(res.error ?? "처리하지 못했어요.");
-        else onOk?.();
+        if (!res.ok) {
+          setError(res.error ?? "처리하지 못했어요.");
+          onFail?.();
+        } else onOk?.();
       } finally {
         setBusy(false);
       }
@@ -233,6 +256,9 @@ export function LinksClient({
      state 를 들고 살아남는다) 초안이다. 상태만 믿으면 토글은 「라이브」가 눌린
      채로 초안을 그리는, 화면이 스스로 거짓말하는 조합이 생긴다. */
   const effectivePreview: "draft" | "live" = previewMode === "live" && snapshot ? "live" : "draft";
+
+  /* 방금 고른 테마 — 서버 값이 같아지는 순간 자동으로 물러난다(실패 시엔 onFail 이 걷는다) */
+  const themeOverlay = themePick && themePick !== page.theme ? themePick : null;
 
   return (
     <div className="space-y-4">
@@ -371,8 +397,16 @@ export function LinksClient({
               />
             ) : (
               <PhonePreview
-                page={page}
-                blocks={blocks.filter((b) => b.active)}
+                /* 저장 전 입력의 실시간 반영 — 프로필 폼 사본, 방금 고른 테마,
+                   편집 중 블록의 draft 를 **그리기에만** 얹는다 */
+                page={{
+                  ...page,
+                  ...(tab === "profile" && !editing && profileDraft ? profileDraft : null),
+                  ...(themeOverlay ? { theme: themeOverlay } : null),
+                }}
+                blocks={blocks
+                  .map((b) => (b.id === editingId ? { ...b, data: draft } : b))
+                  .filter((b) => b.active)}
                 selectedId={editingId}
                 onPick={(id) => {
                   setTab("blocks");
@@ -439,11 +473,24 @@ export function LinksClient({
                 page={page}
                 busy={busy}
                 error={error}
-                onSave={(v) => run(() => updateLinkProfile(v))}
+                /* useState setter 를 그대로 준다(식별자 고정) — 패널의 언마운트 cleanup 이
+                   이 prop 에 걸려 있어, 렌더마다 새 함수를 주면 편집 중 사본이 걷혀 버린다 */
+                onPreview={setProfileDraft}
+                /* 저장 성공 시 사본을 걷는다 — 같은 트랜지션으로 서버 정규화 값이 내려와
+                   폰이 "저장된 진실"로 넘어간다 */
+                onSave={(v) => run(() => updateLinkProfile(v), () => setProfileDraft(null))}
                 onImages={(v) => run(() => updateLinkImages(v))}
               />
             ) : tab === "theme" ? (
-              <ThemePanel current={page.theme} busy={busy} onPick={(k) => run(() => updateLinkTheme(k))} />
+              <ThemePanel
+                current={themeOverlay ?? page.theme}
+                busy={busy}
+                onPick={(k) => {
+                  setThemePick(k);
+                  /* 실패하면 되돌린다 — 성공한 것처럼 칠해 두지 않는다 */
+                  run(() => updateLinkTheme(k), undefined, () => setThemePick(null));
+                }}
+              />
             ) : tab === "blocks" ? (
               <BlocksPanel
                 blocks={blocks}
@@ -825,12 +872,15 @@ function ProfilePanel({
   page,
   busy,
   error,
+  onPreview,
   onSave,
   onImages,
 }: {
   page: LinkPageView;
   busy: boolean;
   error: string | null;
+  /** 입력 즉시 미리보기 반영 — 폰에 그려지는 필드만. null = 사본 걷기 */
+  onPreview: (v: ProfilePreviewDraft | null) => void;
   onImages: (v: { avatarPath?: string | null; coverPath?: string | null }) => void;
   onSave: (v: {
     slug: string;
@@ -855,6 +905,15 @@ function ProfilePanel({
   const [titleSize, setTitleSize] = useState(page.titleSize);
   const [seoTitle, setSeoTitle] = useState(page.seoTitle);
   const [seoDesc, setSeoDesc] = useState(page.seoDesc);
+
+  /* 그리기 전용 통지 — 이벤트 핸들러에서 다음 값을 만들어 상태와 미리보기에
+     같은 값을 준다. slug·seo 는 폰에 안 그려지므로 안 보낸다. */
+  function preview(next: Partial<ProfilePreviewDraft>) {
+    onPreview({ title, bio, layout, align, snsLinks: sns, snsPlacement, titleSize, ...next });
+  }
+  /* 패널을 떠나면(탭 이동·블록 편집 진입·페이지 삭제) 사본을 걷는다 — 폼 상태는
+     언마운트로 사라지는데 미리보기만 그 값을 계속 그리면 화면이 거짓말한다 */
+  useEffect(() => () => onPreview(null), [onPreview]);
 
   /* 서버가 새 값을 주면 입력창을 맞춘다 — 저장 시 서버가 slug 를 소문자화하고
      제목·소개를 자른다. 동기화가 없으면 저장 후에도 옛 값이 남아 되돌려 쓴다.
@@ -910,7 +969,10 @@ function ProfilePanel({
             <button
               key={l.key}
               type="button"
-              onClick={() => setLayout(l.key)}
+              onClick={() => {
+                setLayout(l.key);
+                preview({ layout: l.key });
+              }}
               aria-pressed={layout === l.key}
               className={cn(
                 "trans-state rounded-card border p-2 text-[12px] font-semibold",
@@ -966,7 +1028,16 @@ function ProfilePanel({
         <label htmlFor="p-title" className="block text-[12px] font-medium text-fg-sub">
           타이틀
         </label>
-        <input id="p-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={40} className={`mt-1.5 ${input}`} />
+        <input
+          id="p-title"
+          value={title}
+          onChange={(e) => {
+            setTitle(e.target.value);
+            preview({ title: e.target.value });
+          }}
+          maxLength={40}
+          className={`mt-1.5 ${input}`}
+        />
       </div>
 
       <div>
@@ -976,7 +1047,10 @@ function ProfilePanel({
         <textarea
           id="p-bio"
           value={bio}
-          onChange={(e) => setBio(e.target.value)}
+          onChange={(e) => {
+            setBio(e.target.value);
+            preview({ bio: e.target.value });
+          }}
           rows={2}
           maxLength={160}
           placeholder="한 줄 소개"
@@ -991,7 +1065,10 @@ function ProfilePanel({
             <button
               key={a}
               type="button"
-              onClick={() => setAlign(a)}
+              onClick={() => {
+                setAlign(a);
+                preview({ align: a });
+              }}
               aria-pressed={align === a}
               className={cn(
                 "trans-state rounded-card border px-2 py-1.5 text-[12px] font-semibold",
@@ -1019,7 +1096,10 @@ function ProfilePanel({
             <button
               key={t.key}
               type="button"
-              onClick={() => setTitleSize(t.key)}
+              onClick={() => {
+                setTitleSize(t.key);
+                preview({ titleSize: t.key });
+              }}
               aria-pressed={titleSize === t.key}
               className={cn(
                 "trans-state rounded-card border px-2 py-1.5 font-semibold",
@@ -1045,7 +1125,10 @@ function ProfilePanel({
             <button
               key={o.key}
               type="button"
-              onClick={() => setSnsPlacement(o.key)}
+              onClick={() => {
+                setSnsPlacement(o.key);
+                preview({ snsPlacement: o.key });
+              }}
               aria-pressed={snsPlacement === o.key}
               className={cn(
                 "trans-state rounded-card border px-2 py-1.5 text-[12px] font-semibold",
@@ -1065,7 +1148,11 @@ function ProfilePanel({
             <div key={i} className="flex items-center gap-1.5">
               <select
                 value={s.kind}
-                onChange={(e) => setSns((v) => v.map((x, j) => (j === i ? { ...x, kind: e.target.value } : x)))}
+                onChange={(e) => {
+                  const next = sns.map((x, j) => (j === i ? { ...x, kind: e.target.value } : x));
+                  setSns(next);
+                  preview({ snsLinks: next });
+                }}
                 aria-label={`SNS ${i + 1} 종류`}
                 className="h-10 shrink-0 rounded-card border border-line bg-body px-2 text-[14px] text-fg focus:border-primary focus:outline-none"
               >
@@ -1077,14 +1164,22 @@ function ProfilePanel({
               </select>
               <input
                 value={s.url}
-                onChange={(e) => setSns((v) => v.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))}
+                onChange={(e) => {
+                  const next = sns.map((x, j) => (j === i ? { ...x, url: e.target.value } : x));
+                  setSns(next);
+                  preview({ snsLinks: next });
+                }}
                 placeholder="https://…"
                 aria-label={`SNS ${i + 1} 주소`}
                 className="h-10 min-w-0 flex-1 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
               />
               <button
                 type="button"
-                onClick={() => setSns((v) => v.filter((_, j) => j !== i))}
+                onClick={() => {
+                  const next = sns.filter((_, j) => j !== i);
+                  setSns(next);
+                  preview({ snsLinks: next });
+                }}
                 aria-label="SNS 링크 삭제"
                 className="trans-state rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-negative"
               >
@@ -1093,7 +1188,15 @@ function ProfilePanel({
             </div>
           ))}
           {sns.length < 8 ? (
-            <Button variant="secondary" size="sm" onClick={() => setSns((v) => [...v, { kind: "instagram", url: "" }])}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                const next = [...sns, { kind: "instagram", url: "" }];
+                setSns(next);
+                preview({ snsLinks: next });
+              }}
+            >
               <Plus className="size-3.5" aria-hidden />
               SNS 추가
             </Button>
