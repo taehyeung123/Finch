@@ -406,9 +406,11 @@ export function PhonePreview({
                 );
               })
             ) : (
-              /* edit 없는 draft — 지금 호출부는 없지만, 읽기 전용 초안 표시가
-                 필요해지면 이 분기가 그 자리다(조작 없음 — 그래서 버튼이 아니다) */
-              visible.map((b) => <PreviewBlock key={b.id} block={b} />)
+              /* 읽기 전용 초안(우측 「라이브 미리보기」) — 캔버스와 **같은 관대한 규칙**으로
+                 그린다(주소 없는 블록도 모습 그대로, 도구·캡션만 없음). 공개 규칙(live)로
+                 그리면 아직 주소를 안 넣은 블록이 통째로 빠져 "수정해도 미리보기에 안
+                 나온다"로 보인다(2026-08-20 지적). 공개 여부는 캔버스 캡션·최신 칩이 말한다. */
+              visible.map((b) => <PreviewBlock key={b.id} block={b} mode="edit" />)
             )}
 
             {editable && edit ? (

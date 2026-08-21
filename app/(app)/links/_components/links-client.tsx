@@ -898,9 +898,10 @@ export function LinksClient({
                       : "공개 주소와 같은 모습이에요."
                     : "지금 모습이에요 — 「라이브 반영」을 누르면 공개 주소가 살아나요."}
                 </p>
-                {/* 공개 규칙(mode=live)으로 그린다 — 숨김·주소 없는 블록은 빠지고 도구도 없다.
-                    캔버스와 같은 draft 값이라 수정하는 즉시 여기도 바뀐다. */}
-                <PhonePreview page={draftPageView} blocks={draftBlocksView.filter((b) => b.active)} mode="live" selectedId={null} />
+                {/* 읽기 전용 draft — 캔버스와 같은 값·같은 관대한 규칙(도구만 없음). 꺼진 블록만
+                    뺀다. 수정하는 즉시 여기도 바뀐다. live 로 그리면 주소 없는 블록이 빠져
+                    "미리보기에 안 나온다"가 된다(2026-08-20 지적). */}
+                <PhonePreview page={draftPageView} blocks={draftBlocksView.filter((b) => b.active)} selectedId={null} />
               </>
             )}
           </CardBody>
