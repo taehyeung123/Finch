@@ -386,8 +386,9 @@ export function PhonePreview({
                       className={cn(
                         "trans-state block w-full rounded-[calc(var(--lp-radius)+4px)] text-left outline-offset-2",
                         selectedId === b.id && "outline outline-2 outline-primary",
-                        /* 꺼진 블록은 흐리게 남긴다 — 목록이 없어진 지금, 여기서 안 보이면 다시 켤 길이 없다 */
-                        !b.active && "opacity-40",
+                        /* 꺼진 블록도 **제 색 그대로** 그린다 — 투명도를 깔면 파스텔 테마에서
+                           물 빠진 렌더링 버그처럼 읽힌다(2026-08-20 실계정 지적 "왜 흐릿하게").
+                           숨김 상태는 아래 캡션과 툴바 눈 아이콘이 말한다. */
                       )}
                     >
                       <PreviewBlock block={b} mode="edit" />
