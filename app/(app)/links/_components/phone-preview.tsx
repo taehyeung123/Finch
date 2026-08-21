@@ -184,8 +184,14 @@ export function PhonePreview({
       {/* 폰 프레임 */}
       <div className="overflow-hidden rounded-[32px] border-[6px] border-fg/15 bg-plate shadow-pop">
         <div
-          style={themeVars(theme) as React.CSSProperties}
-          className="max-h-[680px] overflow-y-auto bg-[var(--lp-bg)] px-5 pb-10 pt-8 text-[var(--lp-fg)]"
+          style={
+            {
+              ...themeVars(theme, page.themeCustom),
+              fontFamily: "var(--lp-font)",
+              backgroundImage: "var(--lp-bg-image)",
+            } as React.CSSProperties
+          }
+          className="max-h-[680px] overflow-y-auto bg-[var(--lp-bg)] bg-cover bg-center px-5 pb-10 pt-8 text-[var(--lp-fg)]"
         >
           {/* 커버 — 캔버스 편집에선 눌러서 프로필 설정(사진 교체)으로 */}
           {(page.layout === "cover" || page.layout === "cover_profile") && page.coverPath ? (
@@ -498,7 +504,7 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
               ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]"
               : emphasis === "outline"
                 ? "border-2 border-[var(--lp-accent)] text-[var(--lp-accent)]"
-                : `${card}`,
+                : "border border-[var(--lp-btn-border)] bg-[var(--lp-btn-bg)] text-[var(--lp-btn-fg)] shadow-[var(--lp-shadow)]",
           ].join(" ")}
         >
           {s(d, "emoji") ? <span aria-hidden>{s(d, "emoji")}</span> : null}

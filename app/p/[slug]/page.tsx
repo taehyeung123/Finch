@@ -8,7 +8,7 @@ import { FinchMark } from "@/components/logo";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf } from "@/lib/links";
 import { hiddenReason, type BlockType } from "@/lib/links/blocks";
-import { themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
+import { sanitizeThemeCustom, themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
 import { BlockRenderer, type SnapshotBlock } from "./_components/block-renderer";
 import { LeadForm } from "./_components/lead-form";
 import { ViewBeacon } from "./_components/view-beacon";
@@ -182,6 +182,8 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
   }
 
   const theme = themeByKey(snap.theme);
+  /* 직접 꾸미기 — 스냅샷에 굳은 값. 발행 전 잘못 들어온 값이 있어도 관문을 한 번 더 태운다 */
+  const themeCustom = sanitizeThemeCustom((snap as { themeCustom?: unknown }).themeCustom);
   const align = snap.align === "left" ? "text-left items-start" : snap.align === "right" ? "text-right items-end" : "text-center items-center";
   const titlePx = snap.titleSize === "sm" ? "text-[20px]" : snap.titleSize === "lg" ? "text-[30px]" : "text-[24px]";
   const snsNav =
@@ -209,8 +211,14 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
 
   return (
     <main
-      style={themeVars(theme) as React.CSSProperties}
-      className="min-h-[100dvh] bg-[var(--lp-bg)] text-[var(--lp-fg)]"
+      style={
+        {
+          ...themeVars(theme, themeCustom),
+          fontFamily: "var(--lp-font)",
+          backgroundImage: "var(--lp-bg-image)",
+        } as React.CSSProperties
+      }
+      className="min-h-[100dvh] bg-[var(--lp-bg)] bg-cover bg-center text-[var(--lp-fg)]"
     >
       {/* 방문 집계 — 렌더를 막지 않게 클라이언트에서 한 번만 쏜다.
           개인 식별 정보는 안 보낸다(서버가 익명 토큰만 쿠키로 관리). */}

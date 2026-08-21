@@ -32,9 +32,19 @@ import { SnsIcon } from "@/components/sns-brand-icons";
 import { DualLineChart } from "@/components/ui/charts";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Switch } from "@/components/ui/switch";
+import { FinchLoader } from "@/components/ui/finch-loader";
 import { publicLinkUrl, stableJson } from "@/lib/links";
 import { BLOCK_CATALOG, blockSummary, defaultBlockData, type BlockType, type LinkBlock } from "@/lib/links/blocks";
-import { LAYOUTS, LINK_THEMES, SNS_KINDS } from "@/lib/links/themes";
+import {
+  CUSTOM_BUTTONS,
+  CUSTOM_FONTS,
+  CUSTOM_RADIUS,
+  LAYOUTS,
+  LINK_THEMES,
+  SNS_KINDS,
+  themeByKey,
+  type LinkThemeCustom,
+} from "@/lib/links/themes";
 import { LINK_TEMPLATES, type LinkTemplate } from "@/lib/links/templates";
 import {
   addBlock,
@@ -53,6 +63,7 @@ import {
   updateLinkImages,
   updateLinkProfile,
   updateLinkTheme,
+  updateLinkThemeCustom,
 } from "../actions";
 import type { LinkLead, LinkPageView, LinkSnapshotView, LinkStats } from "@/lib/links/types";
 import { BlockEditor, EDITOR_TITLE_ID } from "./block-editor";
@@ -226,6 +237,25 @@ export function LinksClient({
     setProfileForm(profileFormFrom(page));
   }
   const profileDirty = profileServerKey !== stableJson(profileForm);
+
+  /* 테마 직접 꾸미기 폼 — 프로필 폼과 같은 규칙(부모가 들고, 서버 값 비교 동기화).
+     미리보기는 이 폼을 바로 그려서 색을 고르는 순간 캔버스·우측 미리보기가 같이 바뀐다. */
+  const [customForm, setCustomForm] = useState<LinkThemeCustom>(page?.themeCustom ?? {});
+  const customServerKey = stableJson(page?.themeCustom ?? {});
+  const [prevCustomKey, setPrevCustomKey] = useState(customServerKey);
+  if (customServerKey !== prevCustomKey) {
+    setPrevCustomKey(customServerKey);
+    setCustomForm(page?.themeCustom ?? {});
+  }
+  const customDirty = stableJson(customForm) !== customServerKey;
+  function patchCustom(patch: Partial<LinkThemeCustom>) {
+    setCustomForm((f) => {
+      const next: Record<string, unknown> = { ...f, ...patch };
+      /* undefined 는 "지워라" — 프리셋 값으로 되돌리는 수단 */
+      for (const k of Object.keys(patch)) if ((patch as Record<string, unknown>)[k] === undefined) delete next[k];
+      return next as LinkThemeCustom;
+    });
+  }
   /* 통계 — 편집 탭이 아니라 상단 바에서 여닫는다("만드는 창에 통계가 왜 있냐",
      2026-08-20). 만들기와 성과 보기는 다른 일이다 — 링크팜도 통계는 빌더 밖이다. */
   const [statsOpen, setStatsOpen] = useState(false);
@@ -502,6 +532,7 @@ export function LinksClient({
     snsPlacement: profileForm.snsPlacement,
     titleSize: profileForm.titleSize,
     theme: liveTheme,
+    themeCustom: Object.keys(customForm).length ? customForm : null,
   };
   const draftBlocksView = liveBlocks.map((b) => (b.id === editingId ? { ...b, data: draft } : b));
 
@@ -813,6 +844,12 @@ export function LinksClient({
               />
             ) : drawer === "theme" ? (
               <ThemePanel
+                custom={customForm}
+                customDirty={customDirty}
+                busy={busy}
+                onCustomChange={patchCustom}
+                onCustomReset={() => setCustomForm({})}
+                onCustomSave={() => run(() => updateLinkThemeCustom(customForm))}
                 current={liveTheme}
                 /* 누르는 즉시 칠한다 — 로딩·비활성 없음. 실패하면 트랜지션 종료와 함께
                    서버 값으로 자동 복귀한다(2026-08-20 "굳이 로딩 걸어야 되나") */
@@ -1113,8 +1150,14 @@ function TemplateModal({
       <div
         ref={boxRef}
         tabIndex={-1}
-        className="modal-card-in shadow-pop flex max-h-[92vh] w-full max-w-md flex-col rounded-card border border-line bg-body outline-none"
+        className="modal-card-in shadow-pop relative flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-card border border-line bg-body outline-none"
       >
+        {/* 적용 중 — 핀치 로더(로고 주위로 도는 빛)로 덮는다. 모달을 닫지 않는다 */}
+        {busy ? (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-body/75">
+            <FinchLoader label="템플릿을 적용하는 중…" />
+          </div>
+        ) : null}
         <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
           <div className="min-w-0">
             <h3 className="text-[17px] font-semibold">
@@ -1133,7 +1176,7 @@ function TemplateModal({
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto bg-surface px-5 py-5">
-          <PhonePreview page={{ ...page, theme: template.theme }} blocks={blocks} selectedId={null} />
+          <PhonePreview page={{ ...page, theme: template.theme, themeCustom: null }} blocks={blocks} selectedId={null} />
         </div>
         <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-3">
           <p className="text-[12px] text-fg-sub">적용하면 지금 블록이 이 구성으로 바뀌어요. 작업 중인 화면은 닫기 전까지 그대로예요.</p>
@@ -1630,7 +1673,25 @@ function ProfilePanel({
    테마 패널
    ══════════════════════════════════════════════════════════════════ */
 
-function ThemePanel({ current, onPick }: { current: string; onPick: (k: string) => void }) {
+function ThemePanel({
+  current,
+  custom,
+  customDirty,
+  busy,
+  onPick,
+  onCustomChange,
+  onCustomReset,
+  onCustomSave,
+}: {
+  current: string;
+  custom: LinkThemeCustom;
+  customDirty: boolean;
+  busy: boolean;
+  onPick: (k: string) => void;
+  onCustomChange: (patch: Partial<LinkThemeCustom>) => void;
+  onCustomReset: () => void;
+  onCustomSave: () => void;
+}) {
   const groups = useMemo(() => {
     const m = new Map<string, typeof LINK_THEMES>();
     for (const t of LINK_THEMES) {
@@ -1640,9 +1701,16 @@ function ThemePanel({ current, onPick }: { current: string; onPick: (k: string) 
     }
     return [...m.entries()];
   }, []);
+  const preset = themeByKey(current);
+  const hasCustom = Object.keys(custom).length > 0;
+  const chip = (on: boolean) =>
+    cn(
+      "trans-state rounded-chip px-3 py-1.5 text-[12px] font-semibold",
+      on ? "bg-primary text-on-primary" : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
+    );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <h3 className="text-[15px] font-bold">테마</h3>
       {groups.map(([group, list]) => (
         <div key={group}>
@@ -1659,8 +1727,11 @@ function ThemePanel({ current, onPick }: { current: string; onPick: (k: string) 
                   current === t.key ? "border-2 border-primary" : "border border-line hover:border-line-strong",
                 )}
               >
-                {/* 테마 미니 미리보기 — 실제 색으로 칠한다 */}
-                <span className="block h-16 p-2.5" style={{ background: t.bg }}>
+                {/* 테마 미니 미리보기 — 실제 색(그라데이션 프리셋은 그라데이션 그대로) */}
+                <span
+                  className="block h-16 p-2.5"
+                  style={{ background: t.bg2 ? `linear-gradient(160deg, ${t.bg}, ${t.bg2})` : t.bg }}
+                >
                   <span className="block h-4 w-full rounded-full" style={{ background: t.accent }} aria-hidden />
                   <span
                     className="mt-1.5 block h-4 w-full rounded-full border"
@@ -1674,6 +1745,140 @@ function ThemePanel({ current, onPick }: { current: string; onPick: (k: string) 
           </div>
         </div>
       ))}
+
+      {/* ── 직접 꾸미기 — 프리셋 위에 덮는다(2026-08-20 "에디트 더 자유롭게").
+          값은 폼으로 들고 있고 미리보기에 즉시 비친다. 저장해야 실제 반영·발행에 굳는다. ── */}
+      <div className="space-y-4 border-t border-line pt-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-[15px] font-bold">직접 꾸미기</h3>
+          {hasCustom ? (
+            <button
+              type="button"
+              onClick={onCustomReset}
+              className="trans-state text-[12px] font-medium text-fg-sub underline underline-offset-2 hover:text-fg"
+            >
+              프리셋으로 되돌리기
+            </button>
+          ) : null}
+        </div>
+
+        <div>
+          <p className="text-[12px] font-medium text-fg-sub">색</p>
+          <div className="mt-1.5 grid grid-cols-4 gap-2">
+            {(
+              [
+                { key: "bg", label: "배경" },
+                { key: "accent", label: "강조" },
+                { key: "card", label: "카드" },
+                { key: "fg", label: "글자" },
+              ] as const
+            ).map((c) => (
+              <label key={c.key} className="block text-center text-[11px] text-fg-sub">
+                <input
+                  type="color"
+                  value={custom[c.key] ?? preset[c.key]}
+                  onChange={(e) => onCustomChange({ [c.key]: e.target.value.toUpperCase() })}
+                  aria-label={`${c.label} 색`}
+                  className="block h-9 w-full cursor-pointer rounded-card border border-line bg-body p-0.5"
+                />
+                <span className="mt-1 block">{c.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-[12px] font-medium text-fg-sub">배경</p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              aria-pressed={!!custom.bg2}
+              onClick={() => onCustomChange({ bg2: custom.bg2 ? undefined : (preset.bg2 ?? custom.accent ?? preset.accent) })}
+              className={chip(!!custom.bg2)}
+            >
+              그라데이션
+            </button>
+            {custom.bg2 ? (
+              <label className="flex items-center gap-1.5 text-[12px] text-fg-sub">
+                끝색
+                <input
+                  type="color"
+                  value={custom.bg2}
+                  onChange={(e) => onCustomChange({ bg2: e.target.value.toUpperCase() })}
+                  aria-label="그라데이션 끝색"
+                  className="h-8 w-10 cursor-pointer rounded-card border border-line bg-body p-0.5"
+                />
+              </label>
+            ) : null}
+          </div>
+          <div className="mt-2">
+            <ImageField
+              label="배경 이미지 (선택)"
+              value={custom.bgImage ?? ""}
+              onChange={(v) => onCustomChange({ bgImage: v || undefined })}
+              hint="넣으면 배경색·그라데이션보다 앞에 깔려요 — 글자가 읽히는지 미리보기로 확인하세요"
+            />
+          </div>
+        </div>
+
+        <div>
+          <p className="text-[12px] font-medium text-fg-sub">모서리</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {CUSTOM_RADIUS.map((r) => (
+              <button
+                key={r.key}
+                type="button"
+                aria-pressed={(custom.radius ?? preset.radius) === r.key}
+                onClick={() => onCustomChange({ radius: r.key })}
+                className={chip((custom.radius ?? preset.radius) === r.key)}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-[12px] font-medium text-fg-sub">버튼</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {CUSTOM_BUTTONS.map((b) => (
+              <button
+                key={b.key}
+                type="button"
+                aria-pressed={(custom.button ?? "fill") === b.key}
+                onClick={() => onCustomChange({ button: b.key })}
+                className={chip((custom.button ?? "fill") === b.key)}
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-[12px] font-medium text-fg-sub">글꼴</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {CUSTOM_FONTS.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                aria-pressed={(custom.font ?? "sans") === f.key}
+                onClick={() => onCustomChange({ font: f.key })}
+                className={chip((custom.font ?? "sans") === f.key)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {customDirty ? (
+          <p className="text-[12px] text-fg-sub">저장 안 한 변경이 있어요 — 미리보기엔 보이지만 「저장」해야 실제로 반영됩니다.</p>
+        ) : null}
+        <Button variant="secondary" disabled={busy || !customDirty} onClick={onCustomSave}>
+          {busy ? "저장 중…" : "꾸미기 저장"}
+        </Button>
+      </div>
     </div>
   );
 }

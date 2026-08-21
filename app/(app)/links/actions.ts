@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
 import { SLUG_MESSAGES, normalizeUrl, sliceChars, validateSlug } from "@/lib/links";
 import { BLOCK_TYPES, defaultBlockData, type BlockType } from "@/lib/links/blocks";
-import { DEFAULT_THEME_KEY, themeByKey } from "@/lib/links/themes";
+import { DEFAULT_THEME_KEY, sanitizeThemeCustom, themeByKey } from "@/lib/links/themes";
 import { LINK_TEMPLATES } from "@/lib/links/templates";
 import { parseLittlyHtml } from "@/lib/links/littly";
 import { parseInpockHtml } from "@/lib/links/inpock";
@@ -301,6 +301,29 @@ export async function updateLinkProfile(input: {
     revalidatePath(`/p/${before.slug}`);
     await releaseSlug(before.slug, (before.id as string) ?? null, user.id);
   }
+  return { ok: true };
+}
+
+/**
+ * 테마 직접 꾸미기 저장 — 프리셋 위 오버라이드(0056 theme_custom).
+ * 관문은 sanitizeThemeCustom 하나: hex·허용 열거값·http(s) 이미지만 남는다.
+ * 빈 오버라이드는 null 로 저장(= 프리셋 그대로).
+ */
+export async function updateLinkThemeCustom(input: unknown): Promise<Result> {
+  if (isDemoMode()) return DEMO;
+  const user = await getAuthUser();
+  if (!user) return AUTH;
+  const custom = sanitizeThemeCustom(input);
+  const supabase = await createClient();
+  const { error } = await supabase.from("link_pages").update({ theme_custom: custom }).eq("user_id", user.id);
+  if (error) {
+    if (error.code === "42703" || (/theme_custom/i.test(error.message) && /column|schema/i.test(error.message))) {
+      return { ok: false, error: "직접 꾸미기는 서버 업데이트(0056) 적용 후 저장할 수 있어요." };
+    }
+    console.error("[links] 테마 커스텀 저장 실패:", error.message);
+    return { ok: false, error: "저장하지 못했어요." };
+  }
+  revalidatePath("/links");
   return { ok: true };
 }
 
@@ -1050,8 +1073,12 @@ export async function applyTemplate(key: string): Promise<Result> {
     return { ok: false, error: "적용하지 못했어요." };
   }
 
-  /* 템플릿마다 어울리는 테마가 있다 — 블록만 바뀌고 테마가 그대로면 의도한 인상이 안 난다 */
-  await supabase.from("link_pages").update({ theme: tpl.theme }).eq("id", page.id);
+  /* 템플릿마다 어울리는 테마가 있다 — 블록만 바뀌고 테마가 그대로면 의도한 인상이 안 난다.
+     직접 꾸미기도 함께 비운다(0056 미적용이면 컬럼 없이 재시도). */
+  const themed = await supabase.from("link_pages").update({ theme: tpl.theme, theme_custom: null }).eq("id", page.id);
+  if (themed.error && /theme_custom/i.test(themed.error.message)) {
+    await supabase.from("link_pages").update({ theme: tpl.theme }).eq("id", page.id);
+  }
 
   revalidatePath("/links");
   return { ok: true };
@@ -1067,14 +1094,14 @@ export async function publishLinkPage(): Promise<Result> {
   if (!user) return AUTH;
 
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("link_pages")
-    .select(
-      "id, slug, title, bio, layout, theme, align, avatar_path, cover_path, sns_links, sns_placement, title_size, seo_title, seo_desc",
-    )
-    .eq("user_id", user.id)
-    .maybeSingle();
-  const page = data as (Record<string, unknown> & { id: string }) | null;
+  const PUB_COLS =
+    "id, slug, title, bio, layout, theme, align, avatar_path, cover_path, sns_links, sns_placement, title_size, seo_title, seo_desc";
+  /* theme_custom(0056) 계단식 — 미적용 DB 면 컬럼 없이(스냅샷엔 null 로 굳는다) */
+  let pageRes = await supabase.from("link_pages").select(`${PUB_COLS}, theme_custom`).eq("user_id", user.id).maybeSingle();
+  if (pageRes.error && /theme_custom/i.test(pageRes.error.message)) {
+    pageRes = await supabase.from("link_pages").select(PUB_COLS).eq("user_id", user.id).maybeSingle();
+  }
+  const page = pageRes.data as (Record<string, unknown> & { id: string }) | null;
   if (!page) return { ok: false, error: "프로필 링크가 없어요." };
 
   /* ⚠️ **error 를 반드시 본다.** 앞서는 꺼내지도 않아서, 조회가 실패해 blocks 가 null 이면
@@ -1132,6 +1159,8 @@ export async function publishLinkPage(): Promise<Result> {
     bio: page.bio ?? "",
     layout: page.layout ?? "profile",
     theme: page.theme ?? "basic",
+    /* 직접 꾸미기도 함께 굳는다 — 발행본이 초안과 같은 모습이어야 한다 */
+    themeCustom: sanitizeThemeCustom(page.theme_custom),
     align: page.align ?? "center",
     avatarPath: page.avatar_path ?? null,
     coverPath: page.cover_path ?? null,

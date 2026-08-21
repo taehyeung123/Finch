@@ -1104,6 +1104,7 @@ export const linkWorkspace: LinkWorkspace = {
     seoDesc: "",
     snsPlacement: "profile",
     titleSize: "md",
+    themeCustom: null,
     publishedAt: "2026-08-18T21:00:00+09:00",
     dirty: false,
   },

@@ -1,3 +1,4 @@
+import type { LinkThemeCustom } from "./themes";
 import type { LinkBlock } from "./blocks";
 
 /*
@@ -16,6 +17,8 @@ export interface LinkPageView {
   published: boolean;
   layout: string;
   theme: string;
+  /** 직접 꾸미기 오버라이드(0056) — null 이면 프리셋 그대로 */
+  themeCustom: LinkThemeCustom | null;
   align: string;
   avatarPath: string | null;
   coverPath: string | null;
@@ -52,6 +55,7 @@ export interface LinkSnapshotView {
   snsPlacement?: string;
   /** 프로필 타이틀 크기 — 0051 이후. 없으면 md */
   titleSize?: string;
+  themeCustom?: LinkThemeCustom | null;
   blocks: Array<{ id: string; type: string; data: Record<string, unknown> }>;
 }
 

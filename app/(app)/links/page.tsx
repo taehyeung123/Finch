@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { linkWorkspace } from "@/lib/data";
+import { sanitizeThemeCustom } from "@/lib/links/themes";
 import { blockSummary, type LinkBlock } from "@/lib/links/blocks";
 import type { LinkLead, LinkSnapshotView, LinkStats, LinkWorkspace } from "@/lib/links/types";
 import { LinksClient } from "./_components/links-client";
@@ -70,14 +71,14 @@ async function load(days: number): Promise<Loaded> {
   if (!user) return { ...EMPTY, stats: { ...EMPTY_STATS, days } };
 
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("link_pages")
-    .select(
-      "id, slug, title, bio, published, layout, theme, align, avatar_path, cover_path, sns_links, sns_placement, title_size, seo_title, seo_desc, published_at, published_snapshot, updated_at",
-    )
-    .eq("user_id", user.id)
-    .maybeSingle();
-  const page = data as (Record<string, unknown> & { id: string }) | null;
+  const PAGE_COLS =
+    "id, slug, title, bio, published, layout, theme, align, avatar_path, cover_path, sns_links, sns_placement, title_size, seo_title, seo_desc, published_at, published_snapshot, updated_at";
+  /* theme_custom(0056) 계단식 — 미적용 DB 면 컬럼 없이 다시 읽는다(0052 관례) */
+  let pageRes = await supabase.from("link_pages").select(`${PAGE_COLS}, theme_custom`).eq("user_id", user.id).maybeSingle();
+  if (pageRes.error && /theme_custom/i.test(pageRes.error.message)) {
+    pageRes = await supabase.from("link_pages").select(PAGE_COLS).eq("user_id", user.id).maybeSingle();
+  }
+  const page = pageRes.data as (Record<string, unknown> & { id: string }) | null;
   if (!page) return { ...EMPTY, stats: { ...EMPTY_STATS, days } };
 
   const [{ data: rows }, statsRes, leadRows] = await Promise.all([
@@ -219,6 +220,7 @@ async function load(days: number): Promise<Loaded> {
         snsLinks: Array.isArray(rawSnap.snsLinks) ? rawSnap.snsLinks : [],
         snsPlacement: typeof rawSnap.snsPlacement === "string" ? rawSnap.snsPlacement : "profile",
         titleSize: typeof rawSnap.titleSize === "string" ? rawSnap.titleSize : "md",
+        themeCustom: sanitizeThemeCustom(rawSnap.themeCustom),
         blocks: Array.isArray(rawSnap.blocks) ? rawSnap.blocks : [],
       }
     : null;
@@ -232,6 +234,7 @@ async function load(days: number): Promise<Loaded> {
       published: !!page.published,
       layout: (page.layout as string) ?? "profile",
       theme: (page.theme as string) ?? "basic",
+      themeCustom: sanitizeThemeCustom(page.theme_custom),
       align: (page.align as string) ?? "center",
       avatarPath: (page.avatar_path as string | null) ?? null,
       coverPath: (page.cover_path as string | null) ?? null,

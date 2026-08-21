@@ -72,7 +72,7 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
               ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]"
               : outline
                 ? "border-2 border-[var(--lp-accent)] bg-transparent text-[var(--lp-accent)]"
-                : "border border-[var(--lp-border)] bg-[var(--lp-card)] text-[var(--lp-fg)] shadow-[var(--lp-shadow)]",
+                : "border border-[var(--lp-btn-border)] bg-[var(--lp-btn-bg)] text-[var(--lp-btn-fg)] shadow-[var(--lp-shadow)]",
           ].join(" ")}
         >
           {emoji ? <span aria-hidden>{emoji}</span> : null}
