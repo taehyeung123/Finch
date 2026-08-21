@@ -284,13 +284,17 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
           )}
         </div>
 
-        <footer className="mt-auto pt-14 text-center">
+        {/* 핀치 배지 — 링크팜의 「링크팜에서 내 프로필 꾸미기」 카피(2026-08-20 지시).
+            방문자가 "나도 하나 만들까"로 넘어오는 통로라 마지막 블록 바로 아래 알약으로
+            둔다. 미리보기(phone-preview)도 같은 자리에 같은 모양을 그린다. */}
+        <footer className="mt-10 pb-6 text-center">
           <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--lp-muted)] transition-opacity hover:opacity-70"
+            href="/?utm_source=profile_link&utm_medium=badge"
+            target="_blank"
+            className="inline-flex items-center gap-2 rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-4 py-2 text-[13px] font-semibold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] transition-opacity hover:opacity-80"
           >
-            <FinchMark className="size-3.5" />
-            핀치로 만들었어요
+            <FinchMark className="size-4 text-primary" />
+            핀치에서 내 프로필 꾸미기
           </Link>
         </footer>
       </div>

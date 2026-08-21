@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { FinchMark } from "@/components/logo";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, youtubeEmbed } from "@/lib/links";
 import { themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
@@ -434,6 +435,15 @@ export function PhonePreview({
                 {draggingId ? "여기 놓으면 맨 뒤로" : "블록 추가"}
               </button>
             ) : null}
+          </div>
+
+          {/* 핀치 배지 — 공개 페이지와 같은 자리·같은 모양(app/p/[slug]/page.tsx 와 짝).
+              미리보기에선 누를 수 없는 표시만 — 편집 화면을 떠나면 안 된다. */}
+          <div className="mt-8 text-center">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-3 py-1.5 text-[11px] font-semibold text-[var(--lp-muted)] shadow-[var(--lp-shadow)]">
+              <FinchMark className="size-3 text-primary" />
+              핀치에서 내 프로필 꾸미기
+            </span>
           </div>
         </div>
       </div>
