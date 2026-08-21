@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   BarChart3,
   Check,
+  ChevronDown,
   Copy,
   Download,
   ExternalLink,
@@ -196,10 +197,8 @@ export function LinksClient({
   const [drawer, setDrawer] = useState<Drawer | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
-  /* 미리보기가 그리는 것: 초안(편집 중) / 라이브(마지막 발행본).
-     링크팜은 이 둘을 나란히 두 판으로 보여주는데, 우리 지면에는 한 판 자리라
-     토글로 간다 — 목적(초안과 라이브를 눈으로 비교)은 같다. */
-  const [previewMode, setPreviewMode] = useState<"draft" | "live">("draft");
+  /* 템플릿 스트립 접기 — 링크팜의 「템플릿 적용하기 ^」 상시 스트립 카피 */
+  const [tplOpen, setTplOpen] = useState(true);
   /* 편집 중인 블록 값은 **여기서** 들고 있다 — 편집기 안에 가둬 두면 탭을 누르는
      시점에 부모가 "미저장인가"를 알 수 없다. baseline 은 마지막으로 서버에 반영된 값. */
   const [draft, setDraft] = useState<Record<string, unknown>>({});
@@ -430,11 +429,6 @@ export function LinksClient({
 
   const editing = blocks.find((b) => b.id === editingId) ?? null;
 
-  /* 미리보기 대상은 **파생값**이다. previewMode 상태가 "live" 로 남아 있어도
-     스냅샷이 없으면(페이지를 지웠다 새로 만든 경우 — 같은 컴포넌트 인스턴스가
-     state 를 들고 살아남는다) 초안이다. 상태만 믿으면 토글은 「라이브」가 눌린
-     채로 초안을 그리는, 화면이 스스로 거짓말하는 조합이 생긴다. */
-  const effectivePreview: "draft" | "live" = previewMode === "live" && snapshot ? "live" : "draft";
 
 
   /* ── 상단 바 부품 — 1행(도구 칩)·2행(이력·미리보기 토글)에 꽂는 JSX ── */
@@ -488,42 +482,6 @@ export function LinksClient({
     </>
   );
 
-  const previewToggle = (
-    <div role="group" aria-label="미리보기 대상" className="flex items-center gap-1">
-      {(
-        [
-          { key: "draft", label: "초안" },
-          { key: "live", label: "라이브" },
-        ] as const
-      ).map((m) => (
-        <button
-          key={m.key}
-          type="button"
-          aria-pressed={effectivePreview === m.key}
-          disabled={m.key === "live" && !snapshot}
-          onClick={() => {
-            /* 라이브는 보기 전용 — 편집기·드로어를 연 채 넘어가면 화면에 없는
-               블록을 편집하는 모순이 생긴다(소넷 확정 7). 닫고 간다. */
-            if (m.key === "live") {
-              if (!leaveEditor()) return;
-              setEditingId(null);
-              setDrawer(null);
-              setError(null);
-            }
-            setPreviewMode(m.key);
-          }}
-          className={cn(
-            "trans-state rounded-chip px-3 py-1 text-[12px] font-semibold disabled:opacity-40",
-            effectivePreview === m.key
-              ? "bg-primary text-on-primary"
-              : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
-          )}
-        >
-          {m.label}
-        </button>
-      ))}
-    </div>
-  );
 
   /* 발행본 폰 — 라이브 단독 보기와 넓은 화면 병치가 **같은 것**을 그린다.
      발행본은 프로필·테마까지 초안과 다를 수 있어 스냅샷 값으로 통째로 바꿔 그린다. */
@@ -575,7 +533,6 @@ export function LinksClient({
         onToggleStats={() => setStatsOpen((v) => !v)}
         tools={toolChips}
         history={historyButtons}
-        preview={previewToggle}
       />
 
       {statsOpen ? (
@@ -598,54 +555,58 @@ export function LinksClient({
         {notice}
       </p>
 
-      {/* 빈 캔버스 첫 화면 — 링크팜의 상시 템플릿 스트립. 블록이 생기면 비켜준다
-          (그 뒤에는 「블록 추가」 드로어 안 템플릿이 같은 일을 한다). */}
-      {blocks.length === 0 && drawer !== "add" ? (
-        /* add 드로어에도 같은 템플릿 목록이 있다 — 두 군데 동시 노출 방지(소넷 확정 3) */
-        <div className="card-face flex flex-wrap items-center gap-2 px-4 py-3">
-          <p className="mr-1 text-[14px] font-semibold">✨ 템플릿으로 시작</p>
-          {LINK_TEMPLATES.map((t) => (
+      {/* ── 링크팜 배치 그대로: 좌(템플릿 스트립 + 편집 폰) · 우(상시 라이브 미리보기,
+          드로어가 열리면 그 자리를 대체). 무대 배경 없음 — 폰이 지면 위에 바로 뜬다
+          (2026-08-20 사장님 오더 1·2). ── */}
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_26rem] xl:items-start">
+        <div className="min-w-0 space-y-5">
+          {/* 템플릿 적용하기 — 링크팜 상시 스트립(접이식). 첫 칸은 가져오기. */}
+          <div className="card-face">
             <button
-              key={t.key}
               type="button"
-              disabled={busy}
-              onClick={() => run(() => applyTemplate(t.key), () => clearHistory())}
-              className="trans-state rounded-chip border border-line px-3 py-1.5 text-[14px] font-medium text-fg-sub hover:border-primary hover:bg-tint-hover hover:text-fg disabled:opacity-50"
+              onClick={() => setTplOpen((v) => !v)}
+              aria-expanded={tplOpen}
+              className="flex w-full items-center justify-between px-4 py-2.5 text-[14px] font-semibold"
             >
-              {t.name} <span className="tnum text-[12px] text-fg-faint">{t.blocks.length}블록</span>
+              <span>✨ 템플릿 적용하기</span>
+              <ChevronDown className={cn("size-4 text-fg-sub transition-transform", tplOpen && "rotate-180")} aria-hidden />
             </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => openDrawer("add", true)}
-            className="trans-state rounded-chip px-3 py-1.5 text-[14px] font-medium text-primary hover:bg-tint-hover"
-          >
-            기존 링크 가져오기 →
-          </button>
-        </div>
-      ) : null}
+            {tplOpen ? (
+              <div className="flex gap-2 overflow-x-auto px-4 pb-3">
+                <button
+                  type="button"
+                  onClick={() => openDrawer("add", true)}
+                  className="trans-state w-44 shrink-0 rounded-card border border-dashed border-line px-3 py-2.5 text-left text-[13px] font-medium text-fg-sub hover:border-primary hover:text-fg"
+                >
+                  + 기존 프로필 링크
+                  <br />
+                  복사해오기
+                </button>
+                {LINK_TEMPLATES.map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      /* 스트립이 상시가 되면서 기존 블록 위에서도 눌린다 — 덮어쓰기 확인 */
+                      if (blocks.length > 0 && !window.confirm("지금 블록이 모두 지워지고 템플릿으로 바뀝니다. 계속할까요?")) {
+                        return;
+                      }
+                      run(() => applyTemplate(t.key), () => clearHistory());
+                    }}
+                    className="trans-state w-44 shrink-0 rounded-card border border-line px-3 py-2.5 text-left hover:border-primary hover:bg-tint-hover disabled:opacity-50"
+                  >
+                    <span className="block text-[14px] font-semibold">
+                      {t.name} <span className="tnum text-[12px] font-normal text-fg-sub">{t.blocks.length}블록</span>
+                    </span>
+                    <span className="mt-0.5 block truncate text-[12px] text-fg-sub">{t.hint}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
 
-      <div className={cn("gap-5 xl:items-start", editing || drawer ? "grid xl:grid-cols-[minmax(0,1fr)_26rem]" : "")}>
-        {/* 무대 — 어두운 판 위 밝은 폰. 캔버스가 화면의 주인공이다(링크팜 대비 구조).
-            테마 무관 항상 어둡다(bg-stage) — 그 위 텍스트는 on-scrim 계열. */}
-        <div className="min-w-0 rounded-card bg-stage px-4 py-8 sm:px-8">
-          <p className="mb-5 text-center text-[12px] text-on-scrim/70">
-            {effectivePreview === "live"
-              ? "지금 공개 주소에 걸려 있는 모습이에요."
-              : page.publishedAt
-                ? page.dirty
-                  ? "지금 화면은 초안이에요. 「라이브 반영」을 눌러야 공개 주소에 나갑니다."
-                  : "공개 주소와 같은 상태예요."
-                : "아직 발행하지 않았어요. 「라이브 반영」을 누르면 공개 주소가 살아납니다."}
-          </p>
-
-          <div className="flex flex-wrap items-start justify-center gap-10">
-            {/* 메인 슬롯 — 항상 PhonePreview **한 타입**만 온다. 분기 타입이 갈리면
-                초안↔라이브 토글마다 리마운트돼 "리마운트 아님" 불변식(phone-preview
-                prevMode 리셋의 전제)이 깨진다(소넷 확정 2). 병치는 아래 형제 슬롯. */}
-            {effectivePreview === "live" && livePhone ? (
-              livePhone
-            ) : (
+          {(
               <PhonePreview
                 /* 저장 전 입력의 실시간 반영 — 프로필 폼 사본, 방금 고른 테마,
                    편집 중 블록의 draft 를 **그리기에만** 얹는다 */
@@ -771,17 +732,12 @@ export function LinksClient({
                 }}
               />
             )}
-            {/* 넓은 화면 + 드로어 닫힘 — 발행본 병치(링크팜의 라이브 미리보기) */}
-            {effectivePreview !== "live" && livePhone && !editing && !drawer ? (
-              <div className="hidden 2xl:block">{livePhone}</div>
-            ) : null}
-          </div>
         </div>
 
-        {/* 우측 드로어 — 열렸을 때만. 모바일에선 캔버스보다 먼저 보여야
-            칩을 누른 손이 결과를 바로 본다(order-first). */}
-        {editing || drawer ? (
-        <Card className="order-first xl:order-none xl:sticky xl:top-6">
+        {/* 우측 패널 — 링크팜 구조: 평소엔 「라이브 미리보기」, 드로어·블록 편집이
+            그 자리를 대체한다(✕ 로 닫으면 라이브로 복귀). 모바일에선 편집·드로어가
+            열렸을 때만 캔버스보다 먼저(order-first). */}
+        <Card className={cn("xl:order-none xl:sticky xl:top-6", (editing || drawer) && "order-first")}>
           <CardBody className="space-y-4">
             {!editing && drawer ? (
               <div className="flex items-center justify-between">
@@ -915,7 +871,7 @@ export function LinksClient({
                   )
                 }
               />
-            ) : (
+            ) : drawer === "settings" ? (
               <>
               <PlatformLinks slug={page.slug} origin={origin} />
               <SettingsPanel
@@ -933,10 +889,30 @@ export function LinksClient({
                 }
               />
               </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[15px] font-bold">라이브 미리보기</h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.open(publicLinkUrl(page.slug, origin), "_blank", "noopener,noreferrer")}
+                  >
+                    <ExternalLink className="size-3.5" aria-hidden />
+                    링크 열기
+                  </Button>
+                </div>
+                {livePhone ?? (
+                  <p className="py-16 text-center text-[14px] leading-[1.7] text-fg-sub">
+                    아직 발행 전이에요.
+                    <br />
+                    「라이브 반영」을 누르면 발행본이 여기 보여요.
+                  </p>
+                )}
+              </>
             )}
           </CardBody>
         </Card>
-        ) : null}
       </div>
     </div>
   );
@@ -955,7 +931,6 @@ function TopBar({
   onToggleStats,
   tools,
   history,
-  preview,
 }: {
   page: LinkPageView;
   origin: string;
@@ -967,8 +942,6 @@ function TopBar({
   tools: React.ReactNode;
   /** 2행 왼쪽 — 실행취소/다시실행 */
   history: React.ReactNode;
-  /** 2행 오른쪽 — 초안/라이브 토글 */
-  preview: React.ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
   const [qr, setQr] = useState(false);
@@ -1028,7 +1001,6 @@ function TopBar({
       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2 border-t border-line px-3 py-1.5">
         {history}
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          {preview}
 
       {/* 발행 상태는 **버튼 라벨이 아니라 칩**으로 보여준다(링크팜 실측 반영).
           버튼 글자가 「반영됨」으로 바뀌는 방식은 상태와 액션이 한 몸이라,

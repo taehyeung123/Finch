@@ -181,7 +181,7 @@ export function PhonePreview({
   return (
     <div className="mx-auto w-full max-w-[410px]">
       {/* 폰 프레임 */}
-      <div className="overflow-hidden rounded-[28px] border-4 border-white/15 bg-plate">
+      <div className="overflow-hidden rounded-[28px] border-4 border-fg/10 bg-plate shadow-pop">
         <div
           style={themeVars(theme) as React.CSSProperties}
           className="max-h-[680px] overflow-y-auto bg-[var(--lp-bg)] px-5 pb-10 pt-8 text-[var(--lp-fg)]"
@@ -437,13 +437,10 @@ export function PhonePreview({
           </div>
         </div>
       </div>
-      <p className="mt-2.5 text-center text-[12px] text-on-scrim/70">
-        {mode === "live"
-          ? "마지막 「라이브 반영」 시점의 모습이에요."
-          : editable
-            ? "이름·소개·블록을 이 자리에서 바로 고칠 수 있어요."
-            : "블록을 누르면 바로 편집할 수 있어요."}
-      </p>
+      {/* 캡션은 라이브 패널에서만 — 편집 캔버스는 링크팜처럼 폰만 둔다(오더 2) */}
+      {mode === "live" ? (
+        <p className="mt-2.5 text-center text-[12px] text-fg-sub">마지막 「라이브 반영」 시점의 모습이에요.</p>
+      ) : null}
     </div>
   );
 }
