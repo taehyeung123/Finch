@@ -447,6 +447,7 @@ export function LinksClient({
             key={t.key}
             type="button"
             aria-pressed={on}
+            aria-label={t.label}
             onClick={() => openDrawer(t.key)}
             className={cn(
               "trans-state flex items-center gap-1.5 rounded-chip px-2.5 py-1.5 text-[14px] font-semibold",
@@ -454,7 +455,8 @@ export function LinksClient({
             )}
           >
             <t.icon className="size-4" aria-hidden />
-            {t.label}
+            {/* 좁은 폭에선 아이콘만 — 1행에서 주소·열람 버튼과 자리 다툼을 막는다 */}
+            <span className="hidden lg:inline">{t.label}</span>
           </button>
         );
       })}
@@ -598,7 +600,8 @@ export function LinksClient({
 
       {/* 빈 캔버스 첫 화면 — 링크팜의 상시 템플릿 스트립. 블록이 생기면 비켜준다
           (그 뒤에는 「블록 추가」 드로어 안 템플릿이 같은 일을 한다). */}
-      {blocks.length === 0 ? (
+      {blocks.length === 0 && drawer !== "add" ? (
+        /* add 드로어에도 같은 템플릿 목록이 있다 — 두 군데 동시 노출 방지(소넷 확정 3) */
         <div className="card-face flex flex-wrap items-center gap-2 px-4 py-3">
           <p className="mr-1 text-[14px] font-semibold">✨ 템플릿으로 시작</p>
           {LINK_TEMPLATES.map((t) => (
@@ -637,10 +640,12 @@ export function LinksClient({
           </p>
 
           <div className="flex flex-wrap items-start justify-center gap-10">
+            {/* 메인 슬롯 — 항상 PhonePreview **한 타입**만 온다. 분기 타입이 갈리면
+                초안↔라이브 토글마다 리마운트돼 "리마운트 아님" 불변식(phone-preview
+                prevMode 리셋의 전제)이 깨진다(소넷 확정 2). 병치는 아래 형제 슬롯. */}
             {effectivePreview === "live" && livePhone ? (
               livePhone
             ) : (
-              <>
               <PhonePreview
                 /* 저장 전 입력의 실시간 반영 — 프로필 폼 사본, 방금 고른 테마,
                    편집 중 블록의 draft 를 **그리기에만** 얹는다 */
@@ -765,11 +770,11 @@ export function LinksClient({
                   },
                 }}
               />
-              {/* 넓은 화면 + 드로어 닫힘 — 발행본을 옆에 병치(링크팜의 라이브 미리보기).
-                  초안과 라이브를 한눈에 비교한다. */}
-              {livePhone && !editing && !drawer ? <div className="hidden 2xl:block">{livePhone}</div> : null}
-              </>
             )}
+            {/* 넓은 화면 + 드로어 닫힘 — 발행본 병치(링크팜의 라이브 미리보기) */}
+            {effectivePreview !== "live" && livePhone && !editing && !drawer ? (
+              <div className="hidden 2xl:block">{livePhone}</div>
+            ) : null}
           </div>
         </div>
 
