@@ -277,7 +277,7 @@ export function PhonePreview({
                   <div
                     key={b.id}
                     className={cn(
-                      "relative pt-3",
+                      "group relative",
                       draggingId === b.id && "opacity-50",
                       /* 드롭 대상 표시 — 선택(실선)과 헷갈리지 않게 점선 */
                       overId === b.id && draggingId && draggingId !== b.id && "outline-dashed outline-2 outline-primary",
@@ -294,9 +294,21 @@ export function PhonePreview({
                       dropOn(b.id);
                     }}
                   >
-                    {/* 블록 툴바 — 링크팜의 블록 위 상시 도구(편집·이동·노출·삭제).
+                    {/* 블록 툴바 — **기본 숨김.** 상시로 띄우면 짧은 블록이 연달아
+                        쌓인 화면에서 위 블록 내용을 pills 가 덮는다(2026-08-20 실계정
+                        스크린샷 지적). 그 블록에 호버/포커스했거나 편집 중일 때만,
+                        한 번에 하나만 뜬다. 터치는 탭=편집기라 툴바 없이도 기능이 닿고,
+                        편집 중(선택) 블록엔 항상 떠서 터치에서도 이동·노출·삭제가 된다.
                         스크림 배경이라 어떤 테마 위에서도 보인다. */}
-                    <div className="absolute right-2 top-0 z-10 flex items-center rounded-chip bg-scrim px-1 py-0.5">
+                    <div
+                      className={cn(
+                        "absolute -top-3.5 right-2 z-20 flex items-center rounded-chip bg-scrim px-1 py-0.5",
+                        "trans-state opacity-0 pointer-events-none",
+                        "group-hover:pointer-events-auto group-hover:opacity-100",
+                        "group-focus-within:pointer-events-auto group-focus-within:opacity-100",
+                        selectedId === b.id && "pointer-events-auto opacity-100",
+                      )}
+                    >
                       <button
                         type="button"
                         onClick={() => edit.onEdit(b.id)}
