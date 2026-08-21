@@ -35,7 +35,7 @@ import { Switch } from "@/components/ui/switch";
 import { publicLinkUrl, stableJson } from "@/lib/links";
 import { BLOCK_CATALOG, blockSummary, defaultBlockData, type BlockType, type LinkBlock } from "@/lib/links/blocks";
 import { LAYOUTS, LINK_THEMES, SNS_KINDS } from "@/lib/links/themes";
-import { LINK_TEMPLATES } from "@/lib/links/templates";
+import { LINK_TEMPLATES, type LinkTemplate } from "@/lib/links/templates";
 import {
   addBlock,
   addBlocksBulk,
@@ -199,6 +199,11 @@ export function LinksClient({
   const [notice, setNotice] = useState("");
   /* 템플릿 스트립 접기 — 링크팜의 「템플릿 적용하기 ^」 상시 스트립 카피 */
   const [tplOpen, setTplOpen] = useState(true);
+  /* 템플릿 미리보기(try-on) — 카드를 누르면 **서버 호출 없이** 그 템플릿의 블록·테마를
+     캔버스와 미리보기에 바로 그린다(링크팜 동작, 2026-08-20 지적 "로딩도 없이 바로
+     바뀌는데"). 「이 템플릿 적용」을 눌러야 실제로 교체되고, 그동안도 이미 그려진
+     화면이 유지돼 로딩이 체감되지 않는다. 취소하면 원래 블록으로 돌아온다. */
+  const [tplPreview, setTplPreview] = useState<LinkTemplate | null>(null);
   /* 편집 중인 블록 값은 **여기서** 들고 있다 — 편집기 안에 가둬 두면 탭을 누르는
      시점에 부모가 "미저장인가"를 알 수 없다. baseline 은 마지막으로 서버에 반영된 값. */
   const [draft, setDraft] = useState<Record<string, unknown>>({});
@@ -496,9 +501,11 @@ export function LinksClient({
     snsLinks: profileForm.snsLinks,
     snsPlacement: profileForm.snsPlacement,
     titleSize: profileForm.titleSize,
-    theme: liveTheme,
+    theme: tplPreview ? tplPreview.theme : liveTheme,
   };
-  const draftBlocksView = liveBlocks.map((b) => (b.id === editingId ? { ...b, data: draft } : b));
+  const draftBlocksView: LinkBlock[] = tplPreview
+    ? tplPreview.blocks.map((b, i) => ({ id: `tpl-${i}`, type: b.type, data: b.data, sortOrder: i, active: true }))
+    : liveBlocks.map((b) => (b.id === editingId ? { ...b, data: draft } : b));
 
   return (
     <div className="space-y-4">
@@ -580,17 +587,16 @@ export function LinksClient({
                     key={t.key}
                     type="button"
                     disabled={busy}
-                    onClick={() => {
-                      /* 스트립이 상시가 되면서 기존 블록 위에서도 눌린다 — 덮어쓰기 확인 */
-                      if (blocks.length > 0 && !window.confirm("지금 블록이 모두 지워지고 템플릿으로 바뀝니다. 계속할까요?")) {
-                        return;
-                      }
-                      run(() => applyTemplate(t.key), () => clearHistory());
-                    }}
+                    /* 누르면 즉시 미리보기 — 확정은 캔버스 위 「이 템플릿 적용」 */
+                    onClick={() => setTplPreview(t)}
+                    aria-pressed={tplPreview?.key === t.key}
                     /* 틴트 바탕은 템플릿 고유색(콘텐츠 팔레트) — 글자는 테마 무관 항상 어두운
                        on-primary, 배지는 항상 어두운 scrim: 다크 테마에서도 그대로 읽힌다 */
                     style={{ background: t.tint }}
-                    className="trans-state relative w-44 shrink-0 rounded-card border border-line px-3 py-2.5 text-left hover:border-primary disabled:opacity-50"
+                    className={cn(
+                      "trans-state relative w-44 shrink-0 rounded-card border border-line px-3 py-2.5 text-left hover:border-primary disabled:opacity-50",
+                      tplPreview?.key === t.key && "border-primary ring-2 ring-primary/40",
+                    )}
                   >
                     <span className="tnum absolute right-2 top-2 rounded-chip bg-scrim px-1.5 py-0.5 text-[11px] font-semibold text-on-scrim">
                       {t.blocks.length}블록
@@ -606,7 +612,39 @@ export function LinksClient({
             ) : null}
           </div>
 
-          {(
+          {tplPreview ? (
+            <div className="space-y-3">
+              <div className="card-face flex flex-wrap items-center gap-2 px-4 py-2.5">
+                <span className="min-w-0 flex-1 text-[14px]">
+                  「<b className="font-semibold">{tplPreview.name}</b>」 템플릿 미리보기 중 — 적용하면 지금 블록이 이 구성으로 바뀌어요.
+                </span>
+                <Button
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => {
+                    const t = tplPreview;
+                    /* 화면은 이미 템플릿을 그리고 있다 — 서버가 교체를 끝내면 같은 모습의
+                       실제 블록이 내려와 자리를 잇는다(로딩 체감 0). 실패하면 원래로. */
+                    run(
+                      () => applyTemplate(t.key),
+                      () => {
+                        clearHistory();
+                        setTplPreview(null);
+                        setNotice(`「${t.name}」 템플릿을 적용했어요.`);
+                      },
+                      () => setTplPreview(null),
+                    );
+                  }}
+                >
+                  이 템플릿 적용
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setTplPreview(null)}>
+                  취소
+                </Button>
+              </div>
+              <PhonePreview page={draftPageView} blocks={draftBlocksView} selectedId={null} />
+            </div>
+          ) : (
               <PhonePreview
                 page={draftPageView}
                 /* active 필터를 걸지 않는다 — 꺼진 블록도 캔버스에 남아야 다시 켤 수 있다 */
@@ -809,7 +847,6 @@ export function LinksClient({
             ) : drawer === "add" ? (
               <AddPanel
                 busy={busy}
-                hasBlocks={blocks.length > 0}
                 onAdd={(t) =>
                   run(
                     () => addBlock(t),
@@ -836,14 +873,14 @@ export function LinksClient({
                     },
                   )
                 }
-                onApplyTemplate={(k) =>
-                  run(
-                    () => applyTemplate(k),
-                    /* 템플릿은 블록 전체를 교체한다 — 이전 조작의 역연산이 가리키던
-                       블록들이 통째로 사라지므로 실행취소 이력도 여기서 끊는다 */
-                    () => clearHistory(),
-                  )
-                }
+                /* 드로어의 템플릿도 같은 try-on 경로 — 드로어를 닫아 우측 미리보기까지 보이게 */
+                onApplyTemplate={(k) => {
+                  const t = LINK_TEMPLATES.find((x) => x.key === k);
+                  if (t) {
+                    setTplPreview(t);
+                    setDrawer(null);
+                  }
+                }}
                 onImport={(items, clear) =>
                   run(
                     () => addBlocksBulk(items),
@@ -1139,14 +1176,11 @@ function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
 
 function AddPanel({
   busy,
-  hasBlocks,
   onAdd,
   onApplyTemplate,
   onImport,
 }: {
   busy: boolean;
-  /** 템플릿 적용 확인 문구용 — 기존 블록이 있어야 "지워진다" 경고가 참이 된다 */
-  hasBlocks: boolean;
   onAdd: (t: BlockType) => void;
   onApplyTemplate: (key: string) => void;
   onImport: (items: Array<{ label: string; url: string }>, clear: () => void) => void;
@@ -1193,10 +1227,8 @@ function AddPanel({
               key={t.key}
               type="button"
               disabled={busy}
-              onClick={() => {
-                if (hasBlocks && !window.confirm("지금 블록이 모두 지워지고 템플릿으로 바뀝니다. 계속할까요?")) return;
-                onApplyTemplate(t.key);
-              }}
+              /* 누르면 미리보기로 — 확정은 캔버스 위 「이 템플릿 적용」이 받는다 */
+              onClick={() => onApplyTemplate(t.key)}
               className="trans-state w-full rounded-card border border-line px-3 py-2 text-left hover:border-primary hover:bg-tint-hover disabled:opacity-50"
             >
               <span className="block text-[14px] font-semibold">
