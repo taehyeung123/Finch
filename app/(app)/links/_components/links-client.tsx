@@ -199,10 +199,10 @@ export function LinksClient({
   const [notice, setNotice] = useState("");
   /* 템플릿 스트립 접기 — 링크팜의 「템플릿 적용하기 ^」 상시 스트립 카피 */
   const [tplOpen, setTplOpen] = useState(true);
-  /* 템플릿 미리보기(try-on) — 카드를 누르면 **서버 호출 없이** 그 템플릿의 블록·테마를
-     캔버스와 미리보기에 바로 그린다(링크팜 동작, 2026-08-20 지적 "로딩도 없이 바로
-     바뀌는데"). 「이 템플릿 적용」을 눌러야 실제로 교체되고, 그동안도 이미 그려진
-     화면이 유지돼 로딩이 체감되지 않는다. 취소하면 원래 블록으로 돌아온다. */
+  /* 템플릿 미리보기 — 카드를 누르면 **별도 모달**에서 그 템플릿을 보여준다(링크팜
+     동작). 작업 중인 캔버스·미리보기는 건드리지 않는다 — 화면을 바꿔치기하면
+     "하던 게 날아간" 것처럼 보인다(2026-08-20 지적). 서버 호출은 「이 템플릿 적용」
+     때만. */
   const [tplPreview, setTplPreview] = useState<LinkTemplate | null>(null);
   /* 편집 중인 블록 값은 **여기서** 들고 있다 — 편집기 안에 가둬 두면 탭을 누르는
      시점에 부모가 "미저장인가"를 알 수 없다. baseline 은 마지막으로 서버에 반영된 값. */
@@ -501,11 +501,9 @@ export function LinksClient({
     snsLinks: profileForm.snsLinks,
     snsPlacement: profileForm.snsPlacement,
     titleSize: profileForm.titleSize,
-    theme: tplPreview ? tplPreview.theme : liveTheme,
+    theme: liveTheme,
   };
-  const draftBlocksView: LinkBlock[] = tplPreview
-    ? tplPreview.blocks.map((b, i) => ({ id: `tpl-${i}`, type: b.type, data: b.data, sortOrder: i, active: true }))
-    : liveBlocks.map((b) => (b.id === editingId ? { ...b, data: draft } : b));
+  const draftBlocksView = liveBlocks.map((b) => (b.id === editingId ? { ...b, data: draft } : b));
 
   return (
     <div className="space-y-4">
@@ -529,6 +527,26 @@ export function LinksClient({
         tools={toolChips}
         history={historyButtons}
       />
+
+      {tplPreview ? (
+        <TemplateModal
+          template={tplPreview}
+          page={draftPageView}
+          busy={busy}
+          onClose={() => setTplPreview(null)}
+          onApply={() => {
+            const t = tplPreview;
+            run(
+              () => applyTemplate(t.key),
+              () => {
+                clearHistory();
+                setTplPreview(null);
+                setNotice(`「${t.name}」 템플릿을 적용했어요.`);
+              },
+            );
+          }}
+        />
+      ) : null}
 
       {statsOpen ? (
         <Card>
@@ -612,39 +630,7 @@ export function LinksClient({
             ) : null}
           </div>
 
-          {tplPreview ? (
-            <div className="space-y-3">
-              <div className="card-face flex flex-wrap items-center gap-2 px-4 py-2.5">
-                <span className="min-w-0 flex-1 text-[14px]">
-                  「<b className="font-semibold">{tplPreview.name}</b>」 템플릿 미리보기 중 — 적용하면 지금 블록이 이 구성으로 바뀌어요.
-                </span>
-                <Button
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => {
-                    const t = tplPreview;
-                    /* 화면은 이미 템플릿을 그리고 있다 — 서버가 교체를 끝내면 같은 모습의
-                       실제 블록이 내려와 자리를 잇는다(로딩 체감 0). 실패하면 원래로. */
-                    run(
-                      () => applyTemplate(t.key),
-                      () => {
-                        clearHistory();
-                        setTplPreview(null);
-                        setNotice(`「${t.name}」 템플릿을 적용했어요.`);
-                      },
-                      () => setTplPreview(null),
-                    );
-                  }}
-                >
-                  이 템플릿 적용
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setTplPreview(null)}>
-                  취소
-                </Button>
-              </div>
-              <PhonePreview page={draftPageView} blocks={draftBlocksView} selectedId={null} />
-            </div>
-          ) : (
+          {(
               <PhonePreview
                 page={draftPageView}
                 /* active 필터를 걸지 않는다 — 꺼진 블록도 캔버스에 남아야 다시 켤 수 있다 */
@@ -1071,6 +1057,99 @@ function TopBar({
 /* ══════════════════════════════════════════════════════════════════
    블록 추가 패널 — 카탈로그·템플릿·가져오기 (블록 목록은 캔버스가 대신한다)
    ══════════════════════════════════════════════════════════════════ */
+
+/* 템플릿 미리보기 모달 — 링크팜 카피. 작업 중 캔버스는 그대로 두고 **모달 안 폰**에
+   템플릿을 그린다. 프로필(이름·사진)은 내 것, 블록·테마는 템플릿 것 — "내 페이지가
+   이렇게 된다"가 보인다. 서버 호출은 「이 템플릿 적용」 때만. */
+function TemplateModal({
+  template,
+  page,
+  busy,
+  onClose,
+  onApply,
+}: {
+  template: LinkTemplate;
+  page: LinkPageView;
+  busy: boolean;
+  onClose: () => void;
+  onApply: () => void;
+}) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null;
+    boxRef.current?.focus();
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onCloseRef.current();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      prev?.focus?.();
+    };
+  }, []);
+
+  const blocks: LinkBlock[] = template.blocks.map((b, i) => ({
+    id: `tpl-${i}`,
+    type: b.type,
+    data: b.data,
+    sortOrder: i,
+    active: true,
+  }));
+
+  return (
+    <div
+      className="modal-scrim-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${template.name} 템플릿 미리보기`}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={boxRef}
+        tabIndex={-1}
+        className="modal-card-in shadow-pop flex max-h-[92vh] w-full max-w-md flex-col rounded-card border border-line bg-body outline-none"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
+          <div className="min-w-0">
+            <h3 className="text-[17px] font-semibold">
+              {template.emoji} {template.name}{" "}
+              <span className="tnum text-[14px] font-normal text-fg-sub">{template.blocks.length}블록</span>
+            </h3>
+            <p className="mt-0.5 text-[14px] text-fg-sub">{template.hint}</p>
+          </div>
+          <button
+            type="button"
+            aria-label="닫기"
+            onClick={onClose}
+            className="trans-state rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg"
+          >
+            <X className="size-4" aria-hidden />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto bg-surface px-5 py-5">
+          <PhonePreview page={{ ...page, theme: template.theme }} blocks={blocks} selectedId={null} />
+        </div>
+        <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-3">
+          <p className="text-[12px] text-fg-sub">적용하면 지금 블록이 이 구성으로 바뀌어요. 작업 중인 화면은 닫기 전까지 그대로예요.</p>
+          <div className="flex shrink-0 gap-2">
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              닫기
+            </Button>
+            <Button size="sm" disabled={busy} onClick={onApply}>
+              {busy ? "적용 중…" : "이 템플릿 적용"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* QR 코드 — 링크팜 라이브 미리보기 옆 QR 카피(2026-08-20 대조). 명함·매장·
    오프라인 유입의 표준 통로다. qrcode 는 모달을 열 때만 동적 로드해서
