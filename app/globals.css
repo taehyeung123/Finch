@@ -15,6 +15,7 @@
   --color-tint-hover: var(--tint-hover);
   --color-scrim: var(--scrim);
   --color-on-scrim: var(--on-scrim);
+  --color-stage: var(--stage);
   --color-body: var(--body);
   --color-overlay: var(--overlay);
   --color-line: var(--line);
@@ -180,6 +181,10 @@
      띠가 썸네일 위로 튀어나온다. */
   --scrim: rgba(12, 12, 17, 0.72);
   --on-scrim: #ffffff;
+  /* 편집 캔버스 무대 — 스크림과 같은 논리로 **테마 무관 항상 어둡다.** 그 위에
+     얹히는 건 지면이 아니라 사용자의 페이지(폰)다. 어두운 무대 위 밝은 폰이라는
+     대비가 캔버스를 주인공으로 만든다(2026-08-20 링크팜 대비 구조 이식). */
+  --stage: #16161c;
 
   /* 카드(#FFF) **안**의 한 칸 아래 면 — 중첩 패널·object-contain 썸네일 레터박스.
      지면(--surface)과 같은 톤 계열이되 한 단계 더 눌러, 카드 안에서 확실히 파인다.

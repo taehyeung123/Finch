@@ -437,6 +437,121 @@ export function LinksClient({
   const effectivePreview: "draft" | "live" = previewMode === "live" && snapshot ? "live" : "draft";
 
 
+  /* ── 상단 바 부품 — 1행(도구 칩)·2행(이력·미리보기 토글)에 꽂는 JSX ── */
+  const toolChips = (
+    <>
+      {TOOLS.map((t) => {
+        const on = !editing && drawer === t.key;
+        return (
+          <button
+            key={t.key}
+            type="button"
+            aria-pressed={on}
+            onClick={() => openDrawer(t.key)}
+            className={cn(
+              "trans-state flex items-center gap-1.5 rounded-chip px-2.5 py-1.5 text-[14px] font-semibold",
+              on ? "bg-primary text-on-primary" : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
+            )}
+          >
+            <t.icon className="size-4" aria-hidden />
+            {t.label}
+          </button>
+        );
+      })}
+    </>
+  );
+
+  const historyButtons = (
+    <>
+      <button
+        type="button"
+        onClick={performUndo}
+        disabled={undoStack.length === 0 || busy}
+        aria-label={undoStack.length ? `실행취소: ${undoStack[undoStack.length - 1].label}` : "실행취소"}
+        title={undoStack.length ? `실행취소: ${undoStack[undoStack.length - 1].label}` : undefined}
+        className="trans-state rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg disabled:opacity-30"
+      >
+        <Undo2 className="size-4" aria-hidden />
+      </button>
+      <button
+        type="button"
+        onClick={performRedo}
+        disabled={redoStack.length === 0 || busy}
+        aria-label={redoStack.length ? `다시실행: ${redoStack[redoStack.length - 1].label}` : "다시실행"}
+        title={redoStack.length ? `다시실행: ${redoStack[redoStack.length - 1].label}` : undefined}
+        className="trans-state rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg disabled:opacity-30"
+      >
+        <Redo2 className="size-4" aria-hidden />
+      </button>
+    </>
+  );
+
+  const previewToggle = (
+    <div role="group" aria-label="미리보기 대상" className="flex items-center gap-1">
+      {(
+        [
+          { key: "draft", label: "초안" },
+          { key: "live", label: "라이브" },
+        ] as const
+      ).map((m) => (
+        <button
+          key={m.key}
+          type="button"
+          aria-pressed={effectivePreview === m.key}
+          disabled={m.key === "live" && !snapshot}
+          onClick={() => {
+            /* 라이브는 보기 전용 — 편집기·드로어를 연 채 넘어가면 화면에 없는
+               블록을 편집하는 모순이 생긴다(소넷 확정 7). 닫고 간다. */
+            if (m.key === "live") {
+              if (!leaveEditor()) return;
+              setEditingId(null);
+              setDrawer(null);
+              setError(null);
+            }
+            setPreviewMode(m.key);
+          }}
+          className={cn(
+            "trans-state rounded-chip px-3 py-1 text-[12px] font-semibold disabled:opacity-40",
+            effectivePreview === m.key
+              ? "bg-primary text-on-primary"
+              : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
+          )}
+        >
+          {m.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  /* 발행본 폰 — 라이브 단독 보기와 넓은 화면 병치가 **같은 것**을 그린다.
+     발행본은 프로필·테마까지 초안과 다를 수 있어 스냅샷 값으로 통째로 바꿔 그린다. */
+  const livePhone = snapshot ? (
+    <PhonePreview
+      page={{
+        ...page,
+        title: snapshot.title,
+        bio: snapshot.bio,
+        layout: snapshot.layout,
+        theme: snapshot.theme,
+        align: snapshot.align,
+        avatarPath: snapshot.avatarPath,
+        coverPath: snapshot.coverPath,
+        snsLinks: snapshot.snsLinks,
+        snsPlacement: snapshot.snsPlacement ?? "profile",
+        titleSize: snapshot.titleSize ?? "md",
+      }}
+      blocks={snapshot.blocks.map((b, i) => ({
+        id: b.id,
+        type: b.type as LinkBlock["type"],
+        data: b.data ?? {},
+        sortOrder: i,
+        active: true,
+      }))}
+      mode="live"
+      selectedId={null}
+    />
+  ) : null;
+
   return (
     <div className="space-y-4">
       {/* 데모 모드는 **눌러보기 전에** 알린다 — 저장은 서버 액션이 막는다 */}
@@ -456,6 +571,9 @@ export function LinksClient({
         onPublish={() => run(() => publishLinkPage())}
         statsOpen={statsOpen}
         onToggleStats={() => setStatsOpen((v) => !v)}
+        tools={toolChips}
+        history={historyButtons}
+        preview={previewToggle}
       />
 
       {statsOpen ? (
@@ -478,90 +596,37 @@ export function LinksClient({
         {notice}
       </p>
 
-      {/* 도구 스트립 — 링크팜 상단 칩 줄(2026-08-20 캔버스 개편). 캔버스는 항상
-          보이고, 칩이 우측 드로어를 여닫는다. */}
-      <div className="card-face flex flex-wrap items-center gap-1.5 px-3 py-2">
-        {TOOLS.map((t) => {
-          const on = !editing && drawer === t.key;
-          return (
+      {/* 빈 캔버스 첫 화면 — 링크팜의 상시 템플릿 스트립. 블록이 생기면 비켜준다
+          (그 뒤에는 「블록 추가」 드로어 안 템플릿이 같은 일을 한다). */}
+      {blocks.length === 0 ? (
+        <div className="card-face flex flex-wrap items-center gap-2 px-4 py-3">
+          <p className="mr-1 text-[14px] font-semibold">✨ 템플릿으로 시작</p>
+          {LINK_TEMPLATES.map((t) => (
             <button
               key={t.key}
               type="button"
-              aria-pressed={on}
-              onClick={() => openDrawer(t.key)}
-              className={cn(
-                "trans-state flex items-center gap-1.5 rounded-chip px-3 py-1.5 text-[14px] font-semibold",
-                on ? "bg-primary text-on-primary" : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
-              )}
+              disabled={busy}
+              onClick={() => run(() => applyTemplate(t.key), () => clearHistory())}
+              className="trans-state rounded-chip border border-line px-3 py-1.5 text-[14px] font-medium text-fg-sub hover:border-primary hover:bg-tint-hover hover:text-fg disabled:opacity-50"
             >
-              <t.icon className="size-4" aria-hidden />
-              {t.label}
-            </button>
-          );
-        })}
-
-        <div className="mx-0.5 hidden h-5 w-px bg-line sm:block" aria-hidden />
-        <button
-          type="button"
-          onClick={performUndo}
-          disabled={undoStack.length === 0 || busy}
-          aria-label={undoStack.length ? `실행취소: ${undoStack[undoStack.length - 1].label}` : "실행취소"}
-          title={undoStack.length ? `실행취소: ${undoStack[undoStack.length - 1].label}` : undefined}
-          className="trans-state rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg disabled:opacity-30"
-        >
-          <Undo2 className="size-4" aria-hidden />
-        </button>
-        <button
-          type="button"
-          onClick={performRedo}
-          disabled={redoStack.length === 0 || busy}
-          aria-label={redoStack.length ? `다시실행: ${redoStack[redoStack.length - 1].label}` : "다시실행"}
-          title={redoStack.length ? `다시실행: ${redoStack[redoStack.length - 1].label}` : undefined}
-          className="trans-state rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg disabled:opacity-30"
-        >
-          <Redo2 className="size-4" aria-hidden />
-        </button>
-
-        <div role="group" aria-label="미리보기 대상" className="ml-auto flex items-center gap-1">
-          {(
-            [
-              { key: "draft", label: "초안" },
-              { key: "live", label: "라이브" },
-            ] as const
-          ).map((m) => (
-            <button
-              key={m.key}
-              type="button"
-              aria-pressed={effectivePreview === m.key}
-              disabled={m.key === "live" && !snapshot}
-              onClick={() => {
-                /* 라이브는 보기 전용 — 편집기·드로어를 연 채 넘어가면 화면에 없는
-                   블록을 편집하는 모순이 생긴다(소넷 확정 7). 닫고 간다. */
-                if (m.key === "live") {
-                  if (!leaveEditor()) return;
-                  setEditingId(null);
-                  setDrawer(null);
-                  setError(null);
-                }
-                setPreviewMode(m.key);
-              }}
-              className={cn(
-                "trans-state rounded-chip px-3 py-1 text-[12px] font-semibold disabled:opacity-40",
-                effectivePreview === m.key
-                  ? "bg-primary text-on-primary"
-                  : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
-              )}
-            >
-              {m.label}
+              {t.name} <span className="tnum text-[12px] text-fg-faint">{t.blocks.length}블록</span>
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => openDrawer("add", true)}
+            className="trans-state rounded-chip px-3 py-1.5 text-[14px] font-medium text-primary hover:bg-tint-hover"
+          >
+            기존 링크 가져오기 →
+          </button>
         </div>
-      </div>
+      ) : null}
 
       <div className={cn("gap-5 xl:items-start", editing || drawer ? "grid xl:grid-cols-[minmax(0,1fr)_26rem]" : "")}>
-        {/* 캔버스 — 미리보기가 곧 편집기다. 상태 한 줄이 지금 보는 판을 말해 준다. */}
-        <div className="min-w-0">
-          <p className="mb-3 text-center text-[12px] text-fg-sub">
+        {/* 무대 — 어두운 판 위 밝은 폰. 캔버스가 화면의 주인공이다(링크팜 대비 구조).
+            테마 무관 항상 어둡다(bg-stage) — 그 위 텍스트는 on-scrim 계열. */}
+        <div className="min-w-0 rounded-card bg-stage px-4 py-8 sm:px-8">
+          <p className="mb-5 text-center text-[12px] text-on-scrim/70">
             {effectivePreview === "live"
               ? "지금 공개 주소에 걸려 있는 모습이에요."
               : page.publishedAt
@@ -571,34 +636,11 @@ export function LinksClient({
                 : "아직 발행하지 않았어요. 「라이브 반영」을 누르면 공개 주소가 살아납니다."}
           </p>
 
-            {effectivePreview === "live" && snapshot ? (
-              <PhonePreview
-                /* 발행본은 프로필·테마까지 초안과 다를 수 있다 — 스냅샷의 값으로 통째로
-                   바꿔 그린다. 초안 테마로 그리면 "라이브 모습"이라는 약속이 거짓이 된다. */
-                page={{
-                  ...page,
-                  title: snapshot.title,
-                  bio: snapshot.bio,
-                  layout: snapshot.layout,
-                  theme: snapshot.theme,
-                  align: snapshot.align,
-                  avatarPath: snapshot.avatarPath,
-                  coverPath: snapshot.coverPath,
-                  snsLinks: snapshot.snsLinks,
-                  snsPlacement: snapshot.snsPlacement ?? "profile",
-                  titleSize: snapshot.titleSize ?? "md",
-                }}
-                blocks={snapshot.blocks.map((b, i) => ({
-                  id: b.id,
-                  type: b.type as LinkBlock["type"],
-                  data: b.data ?? {},
-                  sortOrder: i,
-                  active: true,
-                }))}
-                mode="live"
-                selectedId={null}
-              />
+          <div className="flex flex-wrap items-start justify-center gap-10">
+            {effectivePreview === "live" && livePhone ? (
+              livePhone
             ) : (
+              <>
               <PhonePreview
                 /* 저장 전 입력의 실시간 반영 — 프로필 폼 사본, 방금 고른 테마,
                    편집 중 블록의 draft 를 **그리기에만** 얹는다 */
@@ -723,7 +765,12 @@ export function LinksClient({
                   },
                 }}
               />
+              {/* 넓은 화면 + 드로어 닫힘 — 발행본을 옆에 병치(링크팜의 라이브 미리보기).
+                  초안과 라이브를 한눈에 비교한다. */}
+              {livePhone && !editing && !drawer ? <div className="hidden 2xl:block">{livePhone}</div> : null}
+              </>
             )}
+          </div>
         </div>
 
         {/* 우측 드로어 — 열렸을 때만. 모바일에선 캔버스보다 먼저 보여야
@@ -901,6 +948,9 @@ function TopBar({
   onPublish,
   statsOpen,
   onToggleStats,
+  tools,
+  history,
+  preview,
 }: {
   page: LinkPageView;
   origin: string;
@@ -908,6 +958,12 @@ function TopBar({
   onPublish: () => void;
   statsOpen: boolean;
   onToggleStats: () => void;
+  /** 1행 왼쪽 — 드로어 여닫는 도구 칩(부모가 상태를 들고 JSX 로 꽂는다) */
+  tools: React.ReactNode;
+  /** 2행 왼쪽 — 실행취소/다시실행 */
+  history: React.ReactNode;
+  /** 2행 오른쪽 — 초안/라이브 토글 */
+  preview: React.ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
   const [qr, setQr] = useState(false);
@@ -926,8 +982,11 @@ function TopBar({
   return (
     /* card-face — 바로 아래 카드들과 같은 높이로 떠야 한다. bg-body 만 주면
        라이트에서 이 줄만 그림자가 빠져 지면에 눌어붙어 보인다. */
-    <div className="card-face flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-      <code className="min-w-0 flex-1 truncate text-[12px] text-fg-sub">{url}</code>
+    <div className="card-face">
+      {/* 1행 — 도구 칩 · 주소 · 열람 도구(복사/열기/QR) · 통계 (링크팜 실측 배치) */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-3 py-2">
+        {tools}
+        <code className="min-w-0 flex-1 truncate px-1 text-[12px] text-fg-sub">{url}</code>
 
       <span
         className={cn(
@@ -958,6 +1017,13 @@ function TopBar({
         <BarChart3 className="size-3.5" aria-hidden />
         통계
       </Button>
+      </div>
+
+      {/* 2행 — 이력(↩↪) 왼쪽, 초안/라이브·발행 상태·라이브 반영 오른쪽 (링크팜 보조 줄) */}
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2 border-t border-line px-3 py-1.5">
+        {history}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {preview}
 
       {/* 발행 상태는 **버튼 라벨이 아니라 칩**으로 보여준다(링크팜 실측 반영).
           버튼 글자가 「반영됨」으로 바뀌는 방식은 상태와 액션이 한 몸이라,
@@ -989,6 +1055,8 @@ function TopBar({
         <Rocket className="size-3.5" aria-hidden />
         {busy ? "반영 중…" : "라이브 반영"}
       </Button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -179,12 +179,12 @@ export function PhonePreview({
     ) : null;
 
   return (
-    <div className="mx-auto w-full max-w-[380px]">
+    <div className="mx-auto w-full max-w-[410px]">
       {/* 폰 프레임 */}
-      <div className="overflow-hidden rounded-[28px] border-4 border-fg/10 bg-plate shadow-pop">
+      <div className="overflow-hidden rounded-[28px] border-4 border-white/15 bg-plate">
         <div
           style={themeVars(theme) as React.CSSProperties}
-          className="max-h-[620px] overflow-y-auto bg-[var(--lp-bg)] px-5 pb-10 pt-8 text-[var(--lp-fg)]"
+          className="max-h-[680px] overflow-y-auto bg-[var(--lp-bg)] px-5 pb-10 pt-8 text-[var(--lp-fg)]"
         >
           {/* 커버 — 캔버스 편집에선 눌러서 프로필 설정(사진 교체)으로 */}
           {(page.layout === "cover" || page.layout === "cover_profile") && page.coverPath ? (
@@ -437,7 +437,7 @@ export function PhonePreview({
           </div>
         </div>
       </div>
-      <p className="mt-2 text-center text-[12px] text-fg-sub">
+      <p className="mt-2.5 text-center text-[12px] text-on-scrim/70">
         {mode === "live"
           ? "마지막 「라이브 반영」 시점의 모습이에요."
           : editable

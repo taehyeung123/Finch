@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { PageHeader } from "@/components/ui/section-header";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { linkWorkspace } from "@/lib/data";
@@ -266,10 +265,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        title="프로필 링크"
-        description="SNS 프로필에 거는 링크 페이지를 만들고 클릭 성과를 봅니다."
-      />
+      {/* 페이지 제목·설명 없음 — 편집기가 화면 전체의 주인공이다(2026-08-20 무대화).
+          문서 제목은 metadata 가, 위치는 사이드바 활성 항목이 말해 준다. */}
       <LinksClient
         page={page}
         blocks={blocks}
