@@ -42,6 +42,7 @@ import {
   LAYOUTS,
   LINK_THEMES,
   SNS_KINDS,
+  sanitizeThemeCustom,
   themeByKey,
   type LinkThemeCustom,
 } from "@/lib/links/themes";
@@ -849,7 +850,17 @@ export function LinksClient({
                 busy={busy}
                 onCustomChange={patchCustom}
                 onCustomReset={() => setCustomForm({})}
-                onCustomSave={() => run(() => updateLinkThemeCustom(customForm))}
+                onCustomSave={() => {
+                  /* 서버 관문은 틀린 값을 **조용히** 떨군다 — 그러면 저장 직후 미리보기에
+                     있던 배경 이미지가 말없이 사라진다. 보내기 전에 같은 관문을 태워
+                     떨어질 값이 있으면 여기서 알린다(색 인풋·칩은 틀릴 수 없고 주소만 자유 입력). */
+                  const clean = sanitizeThemeCustom(customForm);
+                  if (customForm.bgImage && !clean?.bgImage) {
+                    setError("배경 이미지 주소는 http(s)로 시작해야 하고 공백·따옴표·괄호가 없어야 해요.");
+                    return;
+                  }
+                  run(() => updateLinkThemeCustom(customForm));
+                }}
                 current={liveTheme}
                 /* 누르는 즉시 칠한다 — 로딩·비활성 없음. 실패하면 트랜지션 종료와 함께
                    서버 값으로 자동 복귀한다(2026-08-20 "굳이 로딩 걸어야 되나") */
@@ -1112,15 +1123,20 @@ function TemplateModal({
   onApply: () => void;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
+  /* 적용 중엔 어떤 경로(Esc·배경 클릭·X)로도 닫지 않는다 — 닫힌 줄 알았던 작업이
+     뒤늦게 적용되면 "취소했는데 바뀌었다"가 된다. 로더 오버레이가 버튼은 가리지만
+     키보드·배경은 못 가리므로 여기서 막는다. */
   const onCloseRef = useRef(onClose);
+  const busyRef = useRef(busy);
   useEffect(() => {
     onCloseRef.current = onClose;
+    busyRef.current = busy;
   });
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
     boxRef.current?.focus();
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onCloseRef.current();
+      if (e.key === "Escape" && !busyRef.current) onCloseRef.current();
     }
     document.addEventListener("keydown", onKey);
     return () => {
@@ -1144,7 +1160,7 @@ function TemplateModal({
       aria-modal="true"
       aria-label={`${template.name} 템플릿 미리보기`}
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget && !busy) onClose();
       }}
     >
       <div

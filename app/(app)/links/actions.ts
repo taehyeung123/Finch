@@ -1075,9 +1075,15 @@ export async function applyTemplate(key: string): Promise<Result> {
 
   /* 템플릿마다 어울리는 테마가 있다 — 블록만 바뀌고 테마가 그대로면 의도한 인상이 안 난다.
      직접 꾸미기도 함께 비운다(0056 미적용이면 컬럼 없이 재시도). */
-  const themed = await supabase.from("link_pages").update({ theme: tpl.theme, theme_custom: null }).eq("id", page.id);
+  let themed = await supabase.from("link_pages").update({ theme: tpl.theme, theme_custom: null }).eq("id", page.id);
   if (themed.error && /theme_custom/i.test(themed.error.message)) {
-    await supabase.from("link_pages").update({ theme: tpl.theme }).eq("id", page.id);
+    themed = await supabase.from("link_pages").update({ theme: tpl.theme }).eq("id", page.id);
+  }
+  /* ⚠️ 여기서 error 를 삼키면 블록만 바뀌고 테마는 그대로인데 "적용했어요"가 뜬다 */
+  if (themed.error) {
+    console.error("[links] 템플릿 테마 저장 실패:", themed.error.message);
+    revalidatePath("/links");
+    return { ok: false, error: "블록은 바뀌었지만 테마를 적용하지 못했어요. 테마 탭에서 다시 골라 주세요." };
   }
 
   revalidatePath("/links");
