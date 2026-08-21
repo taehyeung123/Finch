@@ -22,8 +22,11 @@ import type { LinkPageView } from "@/lib/links/types";
   ⚠️⚠️ **숨김 규칙은 공개 렌더러와 같아야 한다.** 앞서는 여기서만 회색 자리표시자를
   그려서, 이미지 없는 이미지 블록·주소 없는 링크가 미리보기에는 멀쩡히 보이고 발행하면
   사라졌다. 지금은 lib/links/blocks.ts 의 hiddenReason() 한 곳이 그 판정을 하고,
-  여기서는 **"이 상태로는 공개 안 됨"이라고 말하는 유령칸**을 그린다 —
-  아무것도 안 그리면 편집 중 블록이 사라진 것처럼 보이고, 멀쩡하게 그리면 거짓말이다.
+  편집 캔버스는 **블록의 실제 모습 + 아래 한 줄 사유 캡션**으로 말한다(2026-08-20
+  개편 — 유령칸 문장 상자는 빈 블록이 연달아 있으면 캔버스를 도배했다). 그릴 것이
+  아예 없는 블록(이미지 없음·항목 0개)만 초대 문구 유령칸으로 남는다.
+  아무것도 안 그리면 편집 중 블록이 사라진 것처럼 보이고, 멀쩡하게 그리면서 사유를
+  숨기면 거짓말이다 — 모습과 사유를 둘 다 보여준다.
 
   타이포가 앱 스케일(11·12·14·15·17·20·28)을 안 따르는 이유: 이건 **공개 페이지를
   축소한 목업**이지 앱 UI 가 아니다. 실제 페이지의 15px 본문이 380px 폭 프레임 안에서
@@ -387,11 +390,14 @@ export function PhonePreview({
                         !b.active && "opacity-40",
                       )}
                     >
-                      <PreviewBlock block={b} />
+                      <PreviewBlock block={b} mode="edit" />
                     </button>
-                    {/* 유령칸(내용 부재 사유)이 이미 뜬 블록엔 숨김 캡션을 겹치지 않는다 —
-                        같은 "안 나감"을 두 말투로 두 번 말하면 헷갈린다(소넷 확정 5) */}
-                    {!b.active && !hidden ? (
+                    {/* 상태 캡션 — 공개 안 되는 사유(주소 없음 등) 또는 숨김을 블록 아래
+                        10px 한 줄로. 유령칸 문장 상자 도배(2026-08-20 실계정 지적)의
+                        대체다. 둘 다면 사유 우선 — 같은 "안 나감"을 두 번 말하지 않는다. */}
+                    {hidden ? (
+                      <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">{hidden}</p>
+                    ) : !b.active ? (
                       <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">숨김 — 공개 페이지에 안 나가요</p>
                     ) : null}
                   </div>
@@ -450,13 +456,20 @@ function Ghost({ reason }: { reason: string }) {
   );
 }
 
-function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "draft" | "live" }) {
+function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "draft" | "live" | "edit" }) {
   const d = block.data ?? {};
 
   /* 공개 렌더러가 숨기는 조건과 **같은 함수**를 쓴다. live 는 부모가 이미 걸렀지만
      혹시 새 숨김 조건이 부모 필터를 놓쳐도 유령칸이 라이브에 새지 않게 한 번 더 막는다. */
   const hidden = hiddenReason(block.type, d);
-  if (hidden) return mode === "live" ? null : <Ghost reason={hidden} />;
+  if (hidden) {
+    if (mode === "live") return null;
+    /* 편집 캔버스(edit)는 유령칸 대신 **블록의 실제 모습**을 그린다 — 빈 블록이
+       연달아 있으면 사유 문장 상자가 캔버스를 도배한다(2026-08-20 실계정 지적).
+       사유는 래퍼가 블록 아래 10px 한 줄 캡션으로 단다. 그릴 것이 아예 없는
+       소수 케이스(이미지 없음·항목 0개)만 아래 case 에서 초대 문구로 떨어진다. */
+    if (mode !== "edit") return <Ghost reason={hidden} />;
+  }
 
   switch (block.type) {
     case "link": {
@@ -507,6 +520,8 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
     case "spacer":
       return <div style={{ height: n(d, "size", 24) }} />;
     case "image":
+      /* edit 전용 도달 — 이미지가 없으면 초대 문구. 사유 캡션과 달리 "하면 된다"로 말한다 */
+      if (!s(d, "imagePath")) return <Ghost reason="이미지를 올리면 여기 보여요" />;
       return (
         // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
         <img src={s(d, "imagePath")} alt="" className="w-full rounded-[var(--lp-radius)] object-cover" />
@@ -545,12 +560,12 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
         </div>
       );
     }
-    case "card_row":
+    case "card_row": {
+      const items = arr(d, "items").filter((it) => mode === "edit" || s(it, "url"));
+      if (mode === "edit" && items.length === 0) return <Ghost reason="항목을 추가해 주세요" />;
       return (
         <div className="space-y-2">
-          {arr(d, "items")
-            .filter((it) => s(it, "url"))
-            .map((it, i) => (
+          {items.map((it, i) => (
               <div key={i} className={`${card} flex items-center gap-2.5 p-2.5`}>
                 {s(it, "imagePath") ? (
                   // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
@@ -570,12 +585,13 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
             ))}
         </div>
       );
-    case "grid":
+    }
+    case "grid": {
+      const items = arr(d, "items").filter((it) => mode === "edit" || s(it, "url"));
+      if (mode === "edit" && items.length === 0) return <Ghost reason="항목을 추가해 주세요" />;
       return (
         <div className={`grid gap-2 ${n(d, "columns", 2) === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
-          {arr(d, "items")
-            .filter((it) => s(it, "url"))
-            .map((it, i) => (
+          {items.map((it, i) => (
               <div key={i} className={`${card} overflow-hidden`}>
                 {s(it, "imagePath") ? (
                   // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
@@ -586,6 +602,7 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
             ))}
         </div>
       );
+    }
     case "notice":
       return (
         <div
