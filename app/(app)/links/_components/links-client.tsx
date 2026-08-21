@@ -18,6 +18,7 @@ import {
   Redo2,
   Rocket,
   Settings,
+  Smartphone,
   Sparkles,
   Trash2,
   Undo2,
@@ -176,7 +177,6 @@ function profileFormFrom(p: LinkPageView | null): ProfileFormState {
 export function LinksClient({
   page,
   blocks,
-  snapshot,
   origin,
   stats,
   leads,
@@ -483,34 +483,22 @@ export function LinksClient({
   );
 
 
-  /* 발행본 폰 — 라이브 단독 보기와 넓은 화면 병치가 **같은 것**을 그린다.
-     발행본은 프로필·테마까지 초안과 다를 수 있어 스냅샷 값으로 통째로 바꿔 그린다. */
-  const livePhone = snapshot ? (
-    <PhonePreview
-      page={{
-        ...page,
-        title: snapshot.title,
-        bio: snapshot.bio,
-        layout: snapshot.layout,
-        theme: snapshot.theme,
-        align: snapshot.align,
-        avatarPath: snapshot.avatarPath,
-        coverPath: snapshot.coverPath,
-        snsLinks: snapshot.snsLinks,
-        snsPlacement: snapshot.snsPlacement ?? "profile",
-        titleSize: snapshot.titleSize ?? "md",
-      }}
-      blocks={snapshot.blocks.map((b, i) => ({
-        id: b.id,
-        type: b.type as LinkBlock["type"],
-        data: b.data ?? {},
-        sortOrder: i,
-        active: true,
-      }))}
-      mode="live"
-      selectedId={null}
-    />
-  ) : null;
+  /* 지금 편집 중인 화면 — 캔버스(도구 포함)와 우측 미리보기(공개 규칙, 도구 없음)가
+     **같은 데이터**를 그린다. 프로필 폼·낙관 테마·낙관 블록·편집 중 draft 를 합친
+     값이라 타이핑하는 즉시 두 군데 다 바뀐다. 링크팜의 라이브 미리보기가 이것이다 —
+     발행본이 아니라 현재 상태(2026-08-20 오더). 발행 여부는 헤더 문구·최신 칩이 말한다. */
+  const draftPageView: LinkPageView = {
+    ...page,
+    title: profileForm.title,
+    bio: profileForm.bio,
+    layout: profileForm.layout,
+    align: profileForm.align,
+    snsLinks: profileForm.snsLinks,
+    snsPlacement: profileForm.snsPlacement,
+    titleSize: profileForm.titleSize,
+    theme: liveTheme,
+  };
+  const draftBlocksView = liveBlocks.map((b) => (b.id === editingId ? { ...b, data: draft } : b));
 
   return (
     <div className="space-y-4">
@@ -576,11 +564,16 @@ export function LinksClient({
                 <button
                   type="button"
                   onClick={() => openDrawer("add", true)}
-                  className="trans-state w-44 shrink-0 rounded-card border border-dashed border-line px-3 py-2.5 text-left text-[13px] font-medium text-fg-sub hover:border-primary hover:text-fg"
+                  className="trans-state w-44 shrink-0 rounded-card border border-dashed border-line bg-plate px-3 py-2.5 text-left hover:border-primary"
                 >
-                  + 기존 프로필 링크
-                  <br />
-                  복사해오기
+                  <span className="flex size-8 items-center justify-center rounded-card bg-body text-fg-sub" aria-hidden>
+                    <Download className="size-4" />
+                  </span>
+                  <span className="mt-2 block text-[13px] font-semibold leading-snug text-fg">
+                    + 기존 프로필 링크
+                    <br />
+                    복사해오기
+                  </span>
                 </button>
                 {LINK_TEMPLATES.map((t) => (
                   <button
@@ -594,12 +587,19 @@ export function LinksClient({
                       }
                       run(() => applyTemplate(t.key), () => clearHistory());
                     }}
-                    className="trans-state w-44 shrink-0 rounded-card border border-line px-3 py-2.5 text-left hover:border-primary hover:bg-tint-hover disabled:opacity-50"
+                    /* 틴트 바탕은 템플릿 고유색(콘텐츠 팔레트) — 글자는 테마 무관 항상 어두운
+                       on-primary, 배지는 항상 어두운 scrim: 다크 테마에서도 그대로 읽힌다 */
+                    style={{ background: t.tint }}
+                    className="trans-state relative w-44 shrink-0 rounded-card border border-line px-3 py-2.5 text-left hover:border-primary disabled:opacity-50"
                   >
-                    <span className="block text-[14px] font-semibold">
-                      {t.name} <span className="tnum text-[12px] font-normal text-fg-sub">{t.blocks.length}블록</span>
+                    <span className="tnum absolute right-2 top-2 rounded-chip bg-scrim px-1.5 py-0.5 text-[11px] font-semibold text-on-scrim">
+                      {t.blocks.length}블록
                     </span>
-                    <span className="mt-0.5 block truncate text-[12px] text-fg-sub">{t.hint}</span>
+                    <span className="flex size-8 items-center justify-center rounded-card bg-white/80 text-[18px]" aria-hidden>
+                      {t.emoji}
+                    </span>
+                    <span className="mt-2 block text-[14px] font-semibold text-on-primary">{t.name}</span>
+                    <span className="mt-0.5 block truncate text-[12px] text-on-primary/70">{t.hint}</span>
                   </button>
                 ))}
               </div>
@@ -608,23 +608,9 @@ export function LinksClient({
 
           {(
               <PhonePreview
-                /* 저장 전 입력의 실시간 반영 — 프로필 폼 사본, 방금 고른 테마,
-                   편집 중 블록의 draft 를 **그리기에만** 얹는다 */
-                page={{
-                  ...page,
-                  /* 폼이 곧 "지금 편집 중인 진실"이다 — 손 안 댔으면 서버 값과 같다 */
-                  title: profileForm.title,
-                  bio: profileForm.bio,
-                  layout: profileForm.layout,
-                  align: profileForm.align,
-                  snsLinks: profileForm.snsLinks,
-                  snsPlacement: profileForm.snsPlacement,
-                  titleSize: profileForm.titleSize,
-                  theme: liveTheme,
-                }}
-                /* active 필터를 걸지 않는다 — 목록 패널이 사라진 캔버스 체제에서
-                   꺼진 블록은 여기 흐리게라도 보여야 다시 켤 수 있다 */
-                blocks={liveBlocks.map((b) => (b.id === editingId ? { ...b, data: draft } : b))}
+                page={draftPageView}
+                /* active 필터를 걸지 않는다 — 꺼진 블록도 캔버스에 남아야 다시 켤 수 있다 */
+                blocks={draftBlocksView}
                 selectedId={editingId}
                 edit={{
                   onEdit: openEditor,
@@ -892,7 +878,10 @@ export function LinksClient({
             ) : (
               <>
                 <div className="flex items-center justify-between">
-                  <h3 className="text-[15px] font-bold">라이브 미리보기</h3>
+                  <h3 className="flex items-center gap-1.5 text-[15px] font-bold">
+                    <Smartphone className="size-4 text-fg-sub" aria-hidden />
+                    라이브 미리보기
+                  </h3>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -902,13 +891,16 @@ export function LinksClient({
                     링크 열기
                   </Button>
                 </div>
-                {livePhone ?? (
-                  <p className="py-16 text-center text-[14px] leading-[1.7] text-fg-sub">
-                    아직 발행 전이에요.
-                    <br />
-                    「라이브 반영」을 누르면 발행본이 여기 보여요.
-                  </p>
-                )}
+                <p className="-mt-2 text-[12px] text-fg-sub">
+                  {page.publishedAt
+                    ? page.dirty
+                      ? "지금 모습이에요 — 「라이브 반영」을 누르면 공개 주소에 반영돼요."
+                      : "공개 주소와 같은 모습이에요."
+                    : "지금 모습이에요 — 「라이브 반영」을 누르면 공개 주소가 살아나요."}
+                </p>
+                {/* 공개 규칙(mode=live)으로 그린다 — 숨김·주소 없는 블록은 빠지고 도구도 없다.
+                    캔버스와 같은 draft 값이라 수정하는 즉시 여기도 바뀐다. */}
+                <PhonePreview page={draftPageView} blocks={draftBlocksView.filter((b) => b.active)} mode="live" selectedId={null} />
               </>
             )}
           </CardBody>
