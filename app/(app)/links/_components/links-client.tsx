@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   BarChart3,
   Check,
   ChevronDown,
@@ -33,7 +34,7 @@ import { DualLineChart } from "@/components/ui/charts";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Switch } from "@/components/ui/switch";
 import { FinchLoader } from "@/components/ui/finch-loader";
-import { publicLinkUrl, stableJson } from "@/lib/links";
+import { normalizeUrl, publicLinkUrl, stableJson } from "@/lib/links";
 import { BLOCK_CATALOG, blockSummary, defaultBlockData, type BlockType, type LinkBlock } from "@/lib/links/blocks";
 import {
   CUSTOM_BUTTONS,
@@ -193,6 +194,7 @@ export function LinksClient({
   stats,
   leads,
   isDemo,
+  loadFailed = false,
 }: {
   page: LinkPageView | null;
   blocks: LinkBlock[];
@@ -201,6 +203,8 @@ export function LinksClient({
   stats: LinkStats;
   leads: LinkLead[];
   isDemo: boolean;
+  /** 조회 자체가 실패 — "없음"이 아니다(감사 #10·#11). 생성 폼 대신 재시도 화면 */
+  loadFailed?: boolean;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -233,9 +237,24 @@ export function LinksClient({
      하므로, 이 동기화가 없으면 저장 후에도 옛 값이 남아 되돌려 쓴다. */
   const profileServerKey = stableJson(profileFormFrom(page));
   const [prevProfileKey, setPrevProfileKey] = useState(profileServerKey);
+  /* 직전 서버 폼도 기억한다 — 3-way 병합의 기준점.
+     통째로 덮어쓰면 캔버스 인라인 이름 저장이 성공하는 순간 드로어에 쓰던 미저장 주소·SEO·SNS 가
+     경고 없이 사라졌다(감사 #2). 필드별로: 서버가 바꾼 값은 받고, 사용자가 고친(미저장) 값은 지킨다. */
+  const [prevServerForm, setPrevServerForm] = useState<ProfileFormState>(() => profileFormFrom(page));
   if (profileServerKey !== prevProfileKey) {
+    const next = profileFormFrom(page);
+    const base = prevServerForm;
     setPrevProfileKey(profileServerKey);
-    setProfileForm(profileFormFrom(page));
+    setPrevServerForm(next);
+    setProfileForm((f) => {
+      const out = { ...f } as Record<string, unknown>;
+      for (const k of Object.keys(next) as Array<keyof ProfileFormState>) {
+        const changedOnServer = stableJson(next[k]) !== stableJson(base[k]);
+        const userEdited = stableJson(f[k]) !== stableJson(base[k]);
+        if (changedOnServer || !userEdited) out[k] = next[k];
+      }
+      return out as ProfileFormState;
+    });
   }
   const profileDirty = profileServerKey !== stableJson(profileForm);
 
@@ -287,6 +306,14 @@ export function LinksClient({
      이미 있고, 발행본은 어차피 안 다친다(draft/publish 분리). */
   const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
   const [redoStack, setRedoStack] = useState<UndoEntry[]>([]);
+  /* 삭제→복원은 **새 id** 를 만든다. 그 전에 기록된 엔트리(내용 저장·노출 토글·추가)가 옛 id 를
+     들고 있으면 0행을 치고 헛돈다(감사 #8). 옛 id → 새 id 별칭을 등록하고 실행 시점에 풀어 쓴다. */
+  const idAlias = useRef(new Map<string, string>());
+  function resolveId(id: string): string {
+    let cur = id;
+    for (let i = 0; i < 32 && idAlias.current.has(cur); i++) cur = idAlias.current.get(cur)!;
+    return cur;
+  }
 
   /* 낙관 상태 — 블록 온오프·테마처럼 잦고 독립적인 조작은 서버 왕복을 기다리지
      않고 즉시 그린다. 트랜지션이 끝나면 서버 props 가 진실을 되돌려주므로
@@ -383,8 +410,10 @@ export function LinksClient({
   function performUndo() {
     const entry = undoStack[undoStack.length - 1];
     if (!entry) return;
+    /* 위치(slice(0,-1))가 아니라 **동일성**으로 뺀다 — fire() 경로의 record 가 undo 서버 왕복 중에
+       끼어들면 엉뚱한 엔트리가 빠지고 같은 undo 가 두 번 실행돼 블록이 복제됐다(감사 #1) */
     run(entry.undo, () => {
-      setUndoStack((s) => s.slice(0, -1));
+      setUndoStack((s) => s.filter((e) => e !== entry));
       setRedoStack((s) => [...s, entry]);
       setNotice(`되돌렸어요: ${entry.label}`);
     });
@@ -394,7 +423,7 @@ export function LinksClient({
     const entry = redoStack[redoStack.length - 1];
     if (!entry) return;
     run(entry.redo, () => {
-      setRedoStack((s) => s.slice(0, -1));
+      setRedoStack((s) => s.filter((e) => e !== entry));
       setUndoStack((s) => [...s, entry]);
       setNotice(`다시 실행했어요: ${entry.label}`);
     });
@@ -444,6 +473,21 @@ export function LinksClient({
     if (focusBackTo) {
       requestAnimationFrame(() => document.getElementById(`blk-${focusBackTo}`)?.focus());
     }
+  }
+
+  if (loadFailed) {
+    return (
+      <EmptyState
+        icon={AlertTriangle}
+        title="프로필 링크를 불러오지 못했어요"
+        description="서버와 잠시 연결이 끊겼어요. 페이지는 그대로 있으니 다시 시도해 주세요."
+        action={
+          <Button variant="secondary" onClick={() => router.refresh()}>
+            다시 시도
+          </Button>
+        }
+      />
+    );
   }
 
   if (!page) {
@@ -679,8 +723,8 @@ export function LinksClient({
                       () =>
                         record({
                           label: active ? "노출 켜기" : "노출 끄기",
-                          undo: () => updateBlock(id, { active: !active }),
-                          redo: () => updateBlock(id, { active }),
+                          undo: () => updateBlock(resolveId(id), { active: !active }),
+                          redo: () => updateBlock(resolveId(id), { active }),
                         }),
                     ),
                   /* 안내는 **성공했을 때만** 나간다 — 연타로 무시된 클릭·서버 실패에
@@ -738,15 +782,15 @@ export function LinksClient({
                           const payload = { type: b.type, data: b.data, sortOrder: b.sortOrder, active: b.active };
                           /* 복원은 **새 행**을 만든다 — 다시실행(재삭제)은 그 새 id 를
                              지워야 하므로 클로저 변수로 따라간다 */
-                          let currentId = id;
                           record({
                             label: `${label} 삭제`,
                             undo: async () => {
                               const r = await restoreBlock(payload);
-                              if (r.ok && r.id) currentId = r.id;
+                              /* 옛 id → 새 id 별칭 — 이 블록을 가리키던 모든 엔트리가 새 행을 따라간다 */
+                              if (r.ok && r.id) idAlias.current.set(resolveId(id), r.id);
                               return r;
                             },
-                            redo: () => deleteBlock(currentId),
+                            redo: () => deleteBlock(resolveId(id)),
                           });
                         }
                         setNotice("블록을 삭제했어요. 상단 ↩ 실행취소로 복원할 수 있어요.");
@@ -825,10 +869,11 @@ export function LinksClient({
                       setBaseline(stableJson(data));
                       /* editing.data 는 저장 직전 렌더의 서버 값 — 역연산의 원본이다 */
                       const prev = editing.data ?? {};
+                      const savedId = editing.id;
                       record({
                         label: `${blockSummary(editing.type, data)} 내용 저장`,
-                        undo: () => updateBlock(editing.id, { data: prev }),
-                        redo: () => updateBlock(editing.id, { data }),
+                        undo: () => updateBlock(resolveId(savedId), { data: prev }),
+                        redo: () => updateBlock(resolveId(savedId), { data }),
                       });
                     },
                   )
@@ -842,7 +887,16 @@ export function LinksClient({
                 busy={busy}
                 error={error}
                 onChange={(patch) => setProfileForm((f) => ({ ...f, ...patch }))}
-                onSave={() => run(() => updateLinkProfile(profileForm))}
+                onSave={() => {
+                  /* 서버와 같은 관문을 먼저 태운다 — 서버가 거절하면 폼은 그대로 남으니
+                     사용자가 어느 줄이 문제인지 바로 고칠 수 있다(감사 #9) */
+                  const bad = profileForm.snsLinks.find((x) => !normalizeUrl(x.url));
+                  if (bad) {
+                    setError(bad.url.trim() ? "SNS 주소는 http(s) 로 시작하는 주소여야 해요." : "비어 있는 SNS 줄은 지워 주세요.");
+                    return;
+                  }
+                  run(() => updateLinkProfile(profileForm));
+                }}
                 onImages={(v) => run(() => updateLinkImages(v))}
               />
             ) : drawer === "theme" ? (
@@ -895,13 +949,13 @@ export function LinksClient({
                           sortOrder: (blocks[blocks.length - 1]?.sortOrder ?? -1) + 1,
                           active: true,
                         };
-                        let currentId = res.id;
+                        const addedId = res.id;
                         record({
                           label: `${BLOCK_CATALOG.find((c) => c.type === t)?.label ?? t} 추가`,
-                          undo: () => deleteBlock(currentId),
+                          undo: () => deleteBlock(resolveId(addedId)),
                           redo: async () => {
                             const r = await restoreBlock(payload);
-                            if (r.ok && r.id) currentId = r.id;
+                            if (r.ok && r.id) idAlias.current.set(resolveId(addedId), r.id);
                             return r;
                           },
                         });
@@ -964,12 +1018,18 @@ export function LinksClient({
                     링크 열기
                   </Button>
                 </div>
+                {/* published(공개 스위치)를 먼저 본다 — 발행만 하고 공개를 안 켠 상태에서
+                    "공개 주소와 같은 모습" 이라고 말하면 방문자는 404 인데 소유자는 모른다(감사 #4) */}
                 <p className="-mt-2 text-[12px] text-fg-sub">
-                  {page.publishedAt
-                    ? page.dirty
-                      ? "지금 모습이에요 — 「라이브 반영」을 누르면 공개 주소에 반영돼요."
-                      : "공개 주소와 같은 모습이에요."
-                    : "지금 모습이에요 — 「라이브 반영」을 누르면 공개 주소가 살아나요."}
+                  {!page.published
+                    ? page.publishedAt
+                      ? "비공개예요 — 설정에서 「공개」를 켜야 방문자가 볼 수 있어요."
+                      : "지금 모습이에요 — 「라이브 반영」 후 설정에서 「공개」를 켜면 주소가 살아나요."
+                    : page.publishedAt
+                      ? page.dirty
+                        ? "지금 모습이에요 — 「라이브 반영」을 누르면 공개 주소에 반영돼요."
+                        : "공개 주소와 같은 모습이에요."
+                      : "지금 모습이에요 — 「라이브 반영」을 누르면 공개 주소가 살아나요."}
                 </p>
                 {/* 읽기 전용 draft — 캔버스와 같은 값·같은 관대한 규칙(도구만 없음). 꺼진 블록만
                     뺀다. 수정하는 즉시 여기도 바뀐다. live 로 그리면 주소 없는 블록이 빠져
@@ -1114,6 +1174,29 @@ function TopBar({
    블록 추가 패널 — 카탈로그·템플릿·가져오기 (블록 목록은 캔버스가 대신한다)
    ══════════════════════════════════════════════════════════════════ */
 
+/** 모달 안에서 Tab 을 가둔다 — aria-modal 은 스크린리더 커서만 제한하고 키보드 포커스는
+    못 막아 Tab 이 스크림 뒤 상단바 칩으로 빠져나가 Enter 로 드로어·실행취소가 실행됐다(감사 #12).
+    rule-wizard.tsx 의 trapFocus 와 같은 패턴. */
+function trapFocus(root: HTMLElement | null, e: React.KeyboardEvent) {
+  if (e.key !== "Tab" || !root) return;
+  const els = [...root.querySelectorAll<HTMLElement>('button, input, textarea, select, a[href], [tabindex]:not([tabindex="-1"])')].filter(
+    (el) => !el.hasAttribute("disabled"),
+  );
+  if (!els.length) {
+    e.preventDefault();
+    return;
+  }
+  const first = els[0];
+  const last = els[els.length - 1];
+  if (e.shiftKey && (document.activeElement === first || document.activeElement === root)) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+}
+
 /* 템플릿 미리보기 모달 — 링크팜 카피. 작업 중 캔버스는 그대로 두고 **모달 안 폰**에
    템플릿을 그린다. 프로필(이름·사진)은 내 것, 블록·테마는 템플릿 것 — "내 페이지가
    이렇게 된다"가 보인다. 서버 호출은 「이 템플릿 적용」 때만. */
@@ -1175,6 +1258,7 @@ function TemplateModal({
         ref={boxRef}
         tabIndex={-1}
         className="modal-card-in shadow-pop relative flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-card border border-line bg-body outline-none"
+        onKeyDown={(e) => trapFocus(boxRef.current, e)}
       >
         {/* 적용 중 — 핀치 로더(로고 주위로 도는 빛)로 덮는다. 모달을 닫지 않는다 */}
         {busy ? (
@@ -1295,7 +1379,12 @@ function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div ref={boxRef} tabIndex={-1} className="modal-card-in shadow-pop w-full max-w-xs rounded-card border border-line bg-body p-5 text-center outline-none">
+      <div
+        ref={boxRef}
+        tabIndex={-1}
+        onKeyDown={(e) => trapFocus(boxRef.current, e)}
+        className="modal-card-in shadow-pop w-full max-w-xs rounded-card border border-line bg-body p-5 text-center outline-none"
+      >
         <h3 className="text-[15px] font-bold">QR 코드</h3>
         <p className="mt-1 text-[12px] text-fg-sub">명함·매장·포스터 어디든 — 찍으면 내 프로필 링크로 와요.</p>
         <div className="mx-auto mt-3 w-fit rounded-card bg-white p-2.5">
@@ -1800,7 +1889,8 @@ function ThemePanel({
               <label key={c.key} className="block text-center text-[11px] text-fg-sub">
                 <input
                   type="color"
-                  value={custom[c.key] ?? preset[c.key]}
+                  /* color 인풋은 #rrggbb 만 받는다 — 8자리(알파) 프리셋 값은 검정으로 새니타이즈된다(감사 #14) */
+                  value={(custom[c.key] ?? preset[c.key]).slice(0, 7)}
                   onChange={(e) => onCustomChange({ [c.key]: e.target.value.toUpperCase() })}
                   aria-label={`${c.label} 색`}
                   className="block h-9 w-full cursor-pointer rounded-card border border-line bg-body p-0.5"

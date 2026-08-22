@@ -6,7 +6,7 @@ import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
 import { linkWorkspace } from "@/lib/data";
 import { FinchMark } from "@/components/logo";
 import { SnsIcon } from "@/components/sns-brand-icons";
-import { initialOf } from "@/lib/links";
+import { initialOf, sanitizeSnsLinks } from "@/lib/links";
 import { hiddenReason, type BlockType } from "@/lib/links/blocks";
 import { sanitizeThemeCustom, themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
 import { BlockRenderer, type SnapshotBlock } from "./_components/block-renderer";
@@ -186,15 +186,18 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
   const themeCustom = sanitizeThemeCustom((snap as { themeCustom?: unknown }).themeCustom);
   const align = snap.align === "left" ? "text-left items-start" : snap.align === "right" ? "text-right items-end" : "text-center items-center";
   const titlePx = snap.titleSize === "sm" ? "text-[20px]" : snap.titleSize === "lg" ? "text-[30px]" : "text-[24px]";
+  /* SNS 줄은 **여기서 한 번 더 거른다** — 스냅샷은 본인 행 직접 PATCH 로 아무 값이나 들어올 수
+     있고, 그대로 <a href> 로 찍으면 javascript: 저장형 XSS 가 된다(감사 #5). themeCustom 과 같은 원칙. */
+  const snsLinks = sanitizeSnsLinks((snap as { snsLinks?: unknown }).snsLinks);
   const snsNav =
-    snap.snsLinks.length > 0 ? (
+    snsLinks.length > 0 ? (
       <nav
         aria-label="SNS"
         className={
           snap.snsPlacement === "links" ? "mb-4 flex flex-wrap justify-center gap-2" : "mt-3.5 flex flex-wrap gap-2"
         }
       >
-        {snap.snsLinks.map((s, i) => (
+        {snsLinks.map((s, i) => (
           <a
             key={i}
             href={s.url}
@@ -211,15 +214,18 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
 
   return (
     <main
-      style={
-        {
-          ...themeVars(theme, themeCustom),
-          fontFamily: "var(--lp-font)",
-          backgroundImage: "var(--lp-bg-image)",
-        } as React.CSSProperties
-      }
-      className="min-h-[100dvh] bg-[var(--lp-bg)] bg-cover bg-center text-[var(--lp-fg)]"
+      style={{ ...themeVars(theme, themeCustom), fontFamily: "var(--lp-font)" } as React.CSSProperties}
+      className="relative isolate min-h-[100dvh] bg-[var(--lp-bg)] text-[var(--lp-fg)]"
     >
+      {/* 배경 이미지·그라데이션은 **뷰포트 크기로 고정된 한 겹**에 깐다. main 에 직접 깔면
+          문서 높이 전체(블록 10개면 2400px)를 cover 하느라 이미지가 세로 띠로 확대되고
+          스크롤에 따라 움직여, 375×812 프레임에 한 번만 cover 하는 미리보기와 달라진다(감사 #19).
+          background-attachment: fixed 는 iOS 가 무시하므로 fixed 레이어로 푼다. */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 -z-10 bg-[var(--lp-bg)] bg-cover bg-center"
+        style={{ backgroundImage: "var(--lp-bg-image)" }}
+      />
       {/* 방문 집계 — 렌더를 막지 않게 클라이언트에서 한 번만 쏜다.
           개인 식별 정보는 안 보낸다(서버가 익명 토큰만 쿠키로 관리). */}
       {published ? <ViewBeacon slug={slug} /> : null}
@@ -262,7 +268,9 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
               </span>
             )
           ) : null}
-          <h1 className={`${titlePx} font-bold leading-[1.3]`}>{snap.title || slug}</h1>
+          {/* 글자색·자간을 명시한다 — globals.css @layer base 의 h1 규칙(--fg-strong, 자간)이
+              테마색 상속을 이겨 다크 프리셋에서 제목이 배경색과 같아졌다(감사 #6). */}
+          <h1 className={`${titlePx} font-bold leading-[1.3] tracking-normal text-[var(--lp-fg)]`}>{snap.title || slug}</h1>
           {snap.bio ? (
             <p className="mt-2 whitespace-pre-wrap text-[15px] leading-[1.6] text-[var(--lp-muted)]">{snap.bio}</p>
           ) : null}
@@ -280,7 +288,12 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
             "정상 블록이 통째로 사라짐"으로 악화된다. 여기서는 문구만 결정한다. */}
         <div className="mt-8 space-y-3">
           {snap.snsPlacement === "links" ? snsNav : null}
-          {snap.blocks.every((b) => hiddenReason(b.type as BlockType, b.data)) ? (
+          {snap.blocks.every(
+            (b) =>
+              hiddenReason(b.type as BlockType, b.data) ||
+              /* 최근 게시물은 연동 전·조회 실패면 렌더러가 null 을 돌려준다 — 문구 판정도 같은 기준 */
+              (b.type === "social_feed" && !(Array.isArray(b.data.cached) && b.data.cached.length > 0)),
+          ) ? (
             <p className="text-center text-[15px] text-[var(--lp-muted)]">아직 등록된 링크가 없어요.</p>
           ) : null}
           {snap.blocks.map((b) =>

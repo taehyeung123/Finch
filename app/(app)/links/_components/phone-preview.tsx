@@ -7,7 +7,7 @@ import { FinchMark } from "@/components/logo";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, youtubeEmbed } from "@/lib/links";
 import { themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
-import { BLOCK_CATALOG, blockSummary, COUPANG_DISCLOSURE, hiddenReason, type LinkBlock } from "@/lib/links/blocks";
+import { BLOCK_CATALOG, blockSummary, COUPANG_DISCLOSURE, hiddenReason, partialReason, type LinkBlock } from "@/lib/links/blocks";
 import type { LinkPageView } from "@/lib/links/types";
 
 /*
@@ -174,12 +174,16 @@ export function PhonePreview({
     page.layout !== "cover" ? (
       page.avatarPath ? (
         // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
-        <img src={page.avatarPath} alt="" className="mb-2.5 size-16 rounded-full object-cover" />
+        <img
+          src={page.avatarPath}
+          alt=""
+          className="mb-2.5 size-16 rounded-full border-2 border-[var(--lp-card)] object-cover shadow-[var(--lp-shadow)]"
+        />
       ) : (
-        /* 사진이 없으면 이니셜 원 — 공개 페이지도 같은 것을 그린다. */
+        /* 사진이 없으면 이니셜 원 — 공개 페이지와 **같은 변수**로 그린다. 프리셋 원본(theme.card)을
+           쓰면 직접 꾸미기 색이 여기만 빠져 발행본과 머리 색이 달라진다(감사 #25). */
         <span
-          className="mb-2.5 flex size-16 items-center justify-center rounded-full text-[20px] font-bold"
-          style={{ background: theme.card, color: theme.muted }}
+          className="mb-2.5 flex size-16 items-center justify-center rounded-full border-2 border-[var(--lp-card)] bg-[var(--lp-card)] text-[20px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)]"
           aria-hidden
         >
           {initialOf(page.title || page.slug)}
@@ -261,7 +265,7 @@ export function PhonePreview({
                 autoFocus
                 value={inlineText}
                 rows={2}
-                maxLength={200}
+                maxLength={160}
                 onChange={(e) => setInlineText(e.target.value)}
                 onBlur={commitInline}
                 onKeyDown={inlineKeys}
@@ -345,21 +349,29 @@ export function PhonePreview({
                       >
                         <Pencil className="size-3.5" aria-hidden />
                       </button>
+                      {/* 경계에서 disabled 로 바꾸면 방금 누른 버튼이 그 자리에서 포커스를 잃고(Chrome)
+                          툴바(group-focus-within)까지 사라진다 — aria-disabled + 가드로(감사 #13) */}
                       <button
                         type="button"
-                        onClick={() => edit.onMove(b.id, "up", label)}
-                        disabled={i === 0}
+                        onClick={() => {
+                          if (i === 0) return;
+                          edit.onMove(b.id, "up", label);
+                        }}
+                        aria-disabled={i === 0}
                         aria-label={`${label} 위로`}
-                        className="trans-state rounded-full p-1 text-on-scrim/85 hover:text-on-scrim disabled:opacity-30"
+                        className="trans-state rounded-full p-1 text-on-scrim/85 hover:text-on-scrim aria-disabled:cursor-default aria-disabled:opacity-30"
                       >
                         <ArrowUp className="size-3.5" aria-hidden />
                       </button>
                       <button
                         type="button"
-                        onClick={() => edit.onMove(b.id, "down", label)}
-                        disabled={i === visible.length - 1}
+                        onClick={() => {
+                          if (i === visible.length - 1) return;
+                          edit.onMove(b.id, "down", label);
+                        }}
+                        aria-disabled={i === visible.length - 1}
                         aria-label={`${label} 아래로`}
-                        className="trans-state rounded-full p-1 text-on-scrim/85 hover:text-on-scrim disabled:opacity-30"
+                        className="trans-state rounded-full p-1 text-on-scrim/85 hover:text-on-scrim aria-disabled:cursor-default aria-disabled:opacity-30"
                       >
                         <ArrowDown className="size-3.5" aria-hidden />
                       </button>
@@ -425,6 +437,9 @@ export function PhonePreview({
                       <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">{hidden}</p>
                     ) : !b.active ? (
                       <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">숨김 — 공개 페이지에 안 나가요</p>
+                    ) : partialReason(b.type, b.data) ? (
+                      /* 항목 일부만 주소가 없는 가로 카드·그리드 — 발행본에선 그 칸만 빠진다(감사 #17) */
+                      <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">{partialReason(b.type, b.data)}</p>
                     ) : null}
                   </div>
                 );

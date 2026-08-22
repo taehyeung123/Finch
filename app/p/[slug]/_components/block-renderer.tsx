@@ -122,7 +122,13 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
         />
       );
       return url ? (
-        <a href={goHref(slug, block.id)} rel="noopener noreferrer nofollow" className="block">
+        /* 대체 텍스트가 비면 링크 이름이 비어 스크린리더가 경로만 읽는다 — 최소한의 이름을 준다(감사 #21) */
+        <a
+          href={goHref(slug, block.id)}
+          rel="noopener noreferrer nofollow"
+          className="block"
+          aria-label={s(d, "alt") ? undefined : "이미지 링크"}
+        >
           {img}
         </a>
       ) : (

@@ -78,10 +78,15 @@ async function load(days: number): Promise<Loaded> {
   if (pageRes.error && /theme_custom/i.test(pageRes.error.message)) {
     pageRes = await supabase.from("link_pages").select(PAGE_COLS).eq("user_id", user.id).maybeSingle();
   }
+  /* 조회 오류 ≠ 페이지 없음. 오류를 "없음"으로 흘리면 생성 폼 → 23505 → 새로고침 → 생성 폼 루프(감사 #10) */
+  if (pageRes.error) {
+    console.error("[links] link_pages 조회 실패:", pageRes.error.message);
+    return { ...EMPTY, loadFailed: true, stats: { ...EMPTY_STATS, days, failed: true } };
+  }
   const page = pageRes.data as (Record<string, unknown> & { id: string }) | null;
   if (!page) return { ...EMPTY, stats: { ...EMPTY_STATS, days } };
 
-  const [{ data: rows }, statsRes, leadRows] = await Promise.all([
+  const [blockRes, statsRes, leadRows] = await Promise.all([
     supabase
       .from("link_blocks")
       .select("id, type, data, sort_order, active, updated_at")
@@ -102,6 +107,12 @@ async function load(days: number): Promise<Loaded> {
       .limit(50),
   ]);
 
+  /* 블록 조회 실패를 빈 배열로 뭉개면 빈 캔버스 + 「초안 수정됨」 + 통계 전부 "지운 블록" 이 된다(감사 #11) */
+  if (blockRes.error) {
+    console.error("[links] 블록 조회 실패:", blockRes.error.message);
+    return { ...EMPTY, loadFailed: true, stats: { ...EMPTY_STATS, days, failed: true } };
+  }
+  const rows = blockRes.data;
   const blocks: LinkBlock[] = (
     (rows ?? []) as Array<{
       id: string; type: string; data: Record<string, unknown>;
@@ -258,7 +269,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
   const asked = Number(sp.days);
   const days = (STATS_RANGES as readonly number[]).includes(asked) ? asked : DEFAULT_DAYS;
 
-  const { page, blocks, snapshot, stats, leads } = await load(days);
+  const { page, blocks, snapshot, stats, leads, loadFailed } = await load(days);
 
   /* 복사 버튼이 주는 주소는 **지금 접속한 도메인** 기준이어야 한다.
      프로덕션 도메인을 하드코딩하면 로컬·프리뷰에서 복사한 주소가 안 열린다. */
@@ -278,6 +289,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
         leads={leads}
         origin={`${proto}://${host}`}
         isDemo={isDemoMode()}
+        loadFailed={!!loadFailed}
       />
     </div>
   );

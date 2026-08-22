@@ -101,28 +101,80 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
   /* 집계 실패가 이동을 막으면 안 된다 — 방문자는 링크를 누른 것이지 통계를
      남기러 온 게 아니다. await 하되 실패는 삼킨다. */
   const admin = createAdminClient();
-  if (admin) {
-    /* 방문 비콘이 심어둔 쿠키를 읽어 "몇 명이 눌렀나"를 셀 수 있게 한다.
-       쿠키가 없으면(첫 진입에 바로 클릭) null — 클릭 수 자체는 그대로 센다. */
-    const raw = request.headers.get("cookie") ?? "";
-    const token = /(?:^|;\s*)finch_lv=([^;]+)/.exec(raw)?.[1] ?? null;
-    let visitorHash: string | null = null;
-    if (token) {
-      const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(decodeURIComponent(token)));
-      visitorHash = Array.from(new Uint8Array(buf))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("")
-        .slice(0, 32);
+  /* 봇(크롤러·링크 미리보기)은 세지 않는다 — 앵커의 rel=nofollow 는 힌트일 뿐이라 크롤러가
+     블록 수만큼 /go 를 따라가 "클릭 > 방문" 역전을 만든다(감사 #16). UA 는 메모리에서만 보고
+     저장하지 않는다(개인정보 방침 그대로). 이동은 봇에게도 정상으로 해 준다. */
+  const ua = request.headers.get("user-agent") ?? "";
+  const isBot =
+    /* WhatsApp 은 넣지 않는다 — 인앱브라우저(진짜 클릭)도 UA 에 같은 토큰을 붙여 구분이 안 된다(소넷 지적) */
+    /bot|crawl|spider|slurp|facebookexternalhit|kakaotalk-scrap|Slackbot|Twitterbot|Discordbot|LinkedInBot|TelegramBot|Googlebot|bingbot/i.test(
+      ua,
+    );
+  if (admin && !isBot) {
+    try {
+      /* 방문 비콘이 심어둔 쿠키를 읽어 "몇 명이 눌렀나"를 셀 수 있게 한다.
+         쿠키가 없으면(첫 진입에 바로 클릭) null — 클릭 수 자체는 그대로 센다.
+         방문 비콘(actions.ts)과 같이 **원문 토큰**을 해시한다 — decodeURIComponent 는 깨진
+         퍼센트 문자열에서 예외를 던져 리다이렉트 자체를 500 으로 만들었다(감사 #24). */
+      const raw = request.headers.get("cookie") ?? "";
+      const token = /(?:^|;\s*)finch_lv=([^;]+)/.exec(raw)?.[1] ?? null;
+      let visitorHash: string | null = null;
+      if (token) {
+        const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+        visitorHash = Array.from(new Uint8Array(buf))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("")
+          .slice(0, 32);
+      }
+
+      /* 방문 비콘과 같은 규칙: 같은 방문자의 같은 링크 연타는 1분에 1건, 해시 없는 요청은
+         페이지 분당 60건, 해시 유무와 무관하게 페이지 분당 600건 천장. 넘으면 기록만 건너뛴다. */
+      const minuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
+      let skip = false;
+      if (visitorHash) {
+        const { data: last } = await admin
+          .from("link_clicks")
+          .select("created_at")
+          .eq("page_id", page.id)
+          .eq("block_id", block.id)
+          .eq("visitor_hash", visitorHash)
+          .gte("created_at", minuteAgo)
+          .limit(1)
+          .maybeSingle();
+        if (last) skip = true;
+      } else {
+        const { count } = await admin
+          .from("link_clicks")
+          .select("id", { count: "exact", head: true })
+          .eq("page_id", page.id)
+          .is("visitor_hash", null)
+          .gte("created_at", minuteAgo);
+        if ((count ?? 0) >= 60) skip = true;
+      }
+      if (!skip) {
+        const { count } = await admin
+          .from("link_clicks")
+          .select("id", { count: "exact", head: true })
+          .eq("page_id", page.id)
+          .gte("created_at", minuteAgo);
+        if ((count ?? 0) >= 600) skip = true;
+      }
+
+      if (!skip) {
+        const { error } = await admin.from("link_clicks").insert({
+          page_id: page.id,
+          /* block_id 는 **스냅샷에 굳은 id** 다. 초안(link_blocks)에서 지운 뒤라도 라이브에는
+             남아 있고, 그 클릭은 반드시 기록돼야 한다 — 그래서 0049 에서 FK 를 뗐다.
+             (0045 의 item_id 는 link_items 와 함께 0049 에서 사라졌다.) */
+          block_id: block.id,
+          visitor_hash: visitorHash,
+        });
+        if (error) console.error("[links] 클릭 기록 실패:", error.message);
+      }
+    } catch (e) {
+      /* 집계 부속 실패는 이동을 막지 않는다 */
+      console.error("[links] 클릭 집계 예외:", e instanceof Error ? e.message : e);
     }
-    const { error } = await admin.from("link_clicks").insert({
-      page_id: page.id,
-      /* block_id 는 **스냅샷에 굳은 id** 다. 초안(link_blocks)에서 지운 뒤라도 라이브에는
-         남아 있고, 그 클릭은 반드시 기록돼야 한다 — 그래서 0049 에서 FK 를 뗐다.
-         (0045 의 item_id 는 link_items 와 함께 0049 에서 사라졌다.) */
-      block_id: block.id,
-      visitor_hash: visitorHash,
-    });
-    if (error) console.error("[links] 클릭 기록 실패:", error.message);
   }
 
   return NextResponse.redirect(dest, { status: 302 });

@@ -85,6 +85,14 @@ const VIEW_WINDOW_MS = 30 * 60 * 1000;
  * 실제 방문을 깎지 않도록 넉넉하게 잡았다 — 목적은 정밀 차단이 아니라 폭주 차단이다.
  */
 const VIEW_ANON_PER_MIN = 60;
+/**
+ * 해시 유무와 **무관한** 페이지 단위 천장 — 분당.
+ *
+ * 쿠키 토큰은 서버가 발급하지만 검증하지 않는다(값을 그대로 해시). 요청마다 다른 쿠키를
+ * 보내면 매번 새 해시가 나와 30분 병합도, 위의 익명 천장도 안 걸렸다(감사 #15).
+ * 진짜 트래픽이 분당 600 방문을 넘는 페이지는 없다시피 하고, 넘어도 "깎이는" 것이지 깨지지 않는다.
+ */
+const VIEW_PAGE_PER_MIN = 600;
 /** 리드: 같은 방문자 10분 5건 / 한 페이지 1시간 30건 */
 const LEAD_VISITOR_WINDOW_MS = 10 * 60 * 1000;
 const LEAD_VISITOR_MAX = 5;
@@ -128,6 +136,15 @@ export async function recordView(slug: string, src?: string): Promise<void> {
       .gte("created_at", new Date(Date.now() - 60 * 1000).toISOString());
     if ((count ?? 0) >= VIEW_ANON_PER_MIN) return;
   }
+  /* 해시가 있어도 페이지 단위 천장은 건다 — 쿠키 값을 요청마다 바꾸는 스크립트 차단 */
+  {
+    const { count } = await admin
+      .from("link_views")
+      .select("id", { count: "exact", head: true })
+      .eq("page_id", pageId)
+      .gte("created_at", new Date(Date.now() - 60 * 1000).toISOString());
+    if ((count ?? 0) >= VIEW_PAGE_PER_MIN) return;
+  }
 
   const h = await headers();
   const row = {
@@ -162,8 +179,23 @@ export async function submitLead(input: {
   if (isDemoMode()) return { ok: false, error: "예시 페이지라 접수되지 않아요." };
   if (!isSupabaseConfigured()) return { ok: false, error: "지금은 접수할 수 없어요." };
 
-  const pageId = await publicPageId(input.slug);
-  if (!pageId) return { ok: false, error: "페이지를 찾을 수 없어요." };
+  /* 페이지뿐 아니라 **발행 스냅샷에 그 폼 블록이 실제로 있는지**까지 본다 — 폼을 두지 않은
+     페이지에 임의 uuid 로 리드를 꽂아 「받은 내용」을 오염시키는 경로를 막는다(감사 #26).
+     /go 경로가 스냅샷에서만 블록을 찾는 것과 같은 기준. */
+  const supabase = await createClient();
+  const { data: pageRow } = await supabase
+    .from("link_pages")
+    .select("id, published_snapshot")
+    .eq("slug", input.slug)
+    .eq("published", true)
+    .maybeSingle();
+  if (!pageRow) return { ok: false, error: "페이지를 찾을 수 없어요." };
+  const pageId = pageRow.id as string;
+  const snapBlocks = (pageRow.published_snapshot as { blocks?: unknown } | null)?.blocks;
+  const target = Array.isArray(snapBlocks)
+    ? (snapBlocks as Array<{ id?: unknown; type?: unknown }>).find((b) => b && b.id === input.blockId)
+    : undefined;
+  if (!target || target.type !== input.kind) return { ok: false, error: "접수할 수 없는 요청이에요." };
 
   const email = (input.email ?? "").trim().slice(0, 160);
   const name = (input.name ?? "").trim().slice(0, 60);

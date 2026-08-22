@@ -47,6 +47,17 @@ export function ImageField({
   const [pending, setPending] = useState<{ dataUrl: string; w: number; h: number } | null>(null);
   /** 보일 창의 위치 0~100 — 세로로 긴 원본이면 위아래, 가로로 길면 좌우 */
   const [offset, setOffset] = useState(50);
+  /* 주소 입력의 로컬 초안 — 부모 value 가 바뀌면(업로드·서버 정규화·지우기) 따라간다 */
+  const [draft, setDraft] = useState(value);
+  const [prevValue, setPrevValue] = useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
+    setDraft(value);
+  }
+  function commit(v: string) {
+    const t = v.trim();
+    if (t !== value) onChange(t);
+  }
 
   async function upload(dataUrl: string) {
     setBusy(true);
@@ -206,10 +217,23 @@ export function ImageField({
 
       <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" hidden onChange={pick} />
 
-      {/* 주소 붙여넣기 — 이미 다른 곳에 올려둔 이미지를 쓰는 경우가 많다 */}
+      {/* 주소 붙여넣기 — 이미 다른 곳에 올려둔 이미지를 쓰는 경우가 많다.
+          ⚠️ 키 입력마다 onChange 를 올리지 않는다. 프로필 패널은 이 값이 서버 액션에 직접 묶여
+          있어 'h' 한 글자가 저장되고 나머지는 busy 로 삼켜졌다(감사 #7). 붙여넣기는 즉시,
+          타이핑은 Enter·포커스 이탈에 확정한다. */}
       <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+        value={draft}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          if ((e.nativeEvent as InputEvent).inputType === "insertFromPaste") commit(e.target.value);
+        }}
+        onBlur={() => commit(draft)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit(draft);
+          }
+        }}
         placeholder="또는 이미지 주소 붙여넣기"
         aria-label={`${label} 주소`}
         className="mt-2 h-9 w-full rounded-card border border-line bg-body px-2.5 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"

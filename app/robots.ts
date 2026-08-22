@@ -28,6 +28,9 @@ const APP_ROUTES = [
   "/discover",
 ];
 
+/* 프로필 링크의 클릭 집계 경로 — 크롤러가 따라가면 클릭이 기록된다. 앱 경로와 의미가 달라 따로 둔다. */
+const TRACKING_ROUTES = ["/p/*/go/"];
+
 const AI_CRAWLERS = [
   "GPTBot",
   "ChatGPT-User",
@@ -43,12 +46,12 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: APP_ROUTES,
+        disallow: [...APP_ROUTES, ...TRACKING_ROUTES],
       },
       ...AI_CRAWLERS.map((userAgent) => ({
         userAgent,
         allow: "/",
-        disallow: APP_ROUTES,
+        disallow: [...APP_ROUTES, ...TRACKING_ROUTES],
       })),
     ],
     sitemap: "https://finch.ai.kr/sitemap.xml",

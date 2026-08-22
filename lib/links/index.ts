@@ -62,6 +62,28 @@ export function normalizeUrl(raw: string): string | null {
   return parsed.toString();
 }
 
+/**
+ * SNS 줄 관문 — **마지막 관문**으로 공개 페이지·발행 스냅샷 양쪽이 같이 쓴다.
+ *
+ * updateLinkProfile 이 이미 거르지만, 본인 행은 PostgREST 로 직접 PATCH 가 가능해
+ * (0045 "own link page" for all) sns_links·published_snapshot 에 아무 값이나 들어갈 수 있다.
+ * 공개 페이지가 그 값을 그대로 <a href> 로 찍으면 javascript: 저장형 XSS 가 된다(감사 #5).
+ * 배열이 아니거나 항목이 이상하면 조용히 비운다 — 방문자 화면이 500 으로 죽지 않게.
+ */
+export function sanitizeSnsLinks(input: unknown): Array<{ kind: string; url: string }> {
+  if (!Array.isArray(input)) return [];
+  const out: Array<{ kind: string; url: string }> = [];
+  for (const s of input) {
+    if (!s || typeof s !== "object") continue;
+    const o = s as Record<string, unknown>;
+    const url = typeof o.url === "string" ? normalizeUrl(o.url) : null;
+    const kind = typeof o.kind === "string" ? o.kind.slice(0, 20) : "";
+    if (url && kind) out.push({ kind, url });
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
 /** 공개 주소 — 화면 여러 곳에서 만들어 쓰므로 한 곳에서 조립한다 */
 export function publicLinkUrl(slug: string, origin?: string): string {
   const base = origin ?? "https://finch.ai.kr";

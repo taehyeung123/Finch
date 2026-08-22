@@ -339,6 +339,18 @@ export function hiddenReason(type: BlockType, data: Record<string, unknown>): st
   }
 }
 
+/**
+ * 항목 **일부**만 공개에서 빠지는 사유 — 가로 카드·그리드에서 주소 없는 항목은 공개
+ * 렌더러가 그 칸만 제거한다. hiddenReason 은 전부 빠질 때만 말하므로, 캔버스에 4칸이
+ * 보이는데 발행본엔 3칸인 불일치를 아무도 알려주지 않았다(감사 #17).
+ */
+export function partialReason(type: BlockType, data: Record<string, unknown>): string | null {
+  if (type !== "card_row" && type !== "grid") return null;
+  const items = Array.isArray(data.items) ? (data.items as Record<string, unknown>[]) : [];
+  const missing = items.filter((it) => !(typeof it.url === "string" && it.url.trim())).length;
+  return missing > 0 && missing < items.length ? `주소 없는 항목 ${missing}개는 공개되지 않아요` : null;
+}
+
 /** 블록 목록을 한 줄 요약으로 — 편집 화면 목록에서 무슨 블록인지 알아야 한다 */
 export function blockSummary(type: BlockType, data: Record<string, unknown>): string {
   const s = (k: string) => (typeof data[k] === "string" ? (data[k] as string) : "");

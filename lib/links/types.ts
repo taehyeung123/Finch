@@ -101,4 +101,9 @@ export interface LinkWorkspace {
   snapshot: LinkSnapshotView | null;
   stats: LinkStats;
   leads: LinkLead[];
+  /**
+   * 페이지·블록 조회 자체가 실패했다 — "페이지 없음"과 **구분**한다.
+   * 뭉개면 생성 폼이 떠서 23505 로 영원히 실패하거나, 빈 캔버스가 "블록이 다 날아갔다"로 읽힌다(감사 #10·#11).
+   */
+  loadFailed?: boolean;
 }

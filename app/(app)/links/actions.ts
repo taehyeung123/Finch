@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
-import { SLUG_MESSAGES, normalizeUrl, sliceChars, validateSlug } from "@/lib/links";
+import { SLUG_MESSAGES, normalizeUrl, sanitizeSnsLinks, sliceChars, validateSlug } from "@/lib/links";
 import { BLOCK_TYPES, defaultBlockData, type BlockType } from "@/lib/links/blocks";
 import { DEFAULT_THEME_KEY, sanitizeThemeCustom, themeByKey } from "@/lib/links/themes";
 import { LINK_TEMPLATES } from "@/lib/links/templates";
@@ -257,11 +257,19 @@ export async function updateLinkProfile(input: {
   const err = validateSlug(clean);
   if (err) return { ok: false, error: SLUG_MESSAGES[err] };
 
-  /* SNS 주소도 http(s) 만 통과시킨다 — 공개 페이지가 그대로 <a href> 로 쓴다 */
+  /* SNS 주소도 http(s) 만 통과시킨다 — 공개 페이지가 그대로 <a href> 로 쓴다.
+     틀린 주소는 **조용히 떨구지 않고 거절한다** — 떨구면 ok 인데 저장 결과가 직전과 같아
+     폼이 동기화되지 않고 "저장 안 한 변경" 이 영원히 남는다(감사 #9). 빈 칸은 "지워 달라" 고 말한다. */
   const sns: Array<{ kind: string; url: string }> = [];
   for (const s of input.snsLinks.slice(0, 8)) {
     const href = normalizeUrl(s.url);
-    if (href) sns.push({ kind: String(s.kind).slice(0, 20), url: href });
+    if (!href) {
+      return {
+        ok: false,
+        error: s.url.trim() ? "SNS 주소는 http(s) 로 시작하는 주소여야 해요." : "비어 있는 SNS 줄은 지워 주세요.",
+      };
+    }
+    sns.push({ kind: String(s.kind).slice(0, 20), url: href });
   }
 
   const supabase = await createClient();
@@ -455,9 +463,27 @@ export async function updateLinkImages(patch: { avatarPath?: string | null; cove
   const user = await getAuthUser();
   if (!user) return AUTH;
 
+  /* 비우기(null/"") 아니면 **이미지로 쓸 수 있는 주소**만 받는다 — 업로드 결과(https 스토리지 URL),
+     붙여넣은 http(s) 주소, 같은 오리진 경로. 검증 없이 저장하면 'h' 한 글자 같은 조각이
+     avatar_path 로 들어가 캔버스·발행본에 깨진 이미지가 뜬다(감사 #7). */
+  const imageHref = (v: string | null | undefined): string | null | false => {
+    if (v === null || v === undefined || v.trim() === "") return null;
+    const t = v.trim();
+    if (t.startsWith("/") && !t.startsWith("//")) return t;
+    const href = normalizeUrl(t);
+    return href ? href.replace(/^http:\/\//, "https://") : false;
+  };
   const fields: Record<string, unknown> = {};
-  if (patch.avatarPath !== undefined) fields.avatar_path = patch.avatarPath;
-  if (patch.coverPath !== undefined) fields.cover_path = patch.coverPath;
+  if (patch.avatarPath !== undefined) {
+    const v = imageHref(patch.avatarPath);
+    if (v === false) return { ok: false, error: "올바른 이미지 주소가 아니에요. http(s) 로 시작하는 주소를 넣어 주세요." };
+    fields.avatar_path = v;
+  }
+  if (patch.coverPath !== undefined) {
+    const v = imageHref(patch.coverPath);
+    if (v === false) return { ok: false, error: "올바른 이미지 주소가 아니에요. http(s) 로 시작하는 주소를 넣어 주세요." };
+    fields.cover_path = v;
+  }
   if (Object.keys(fields).length === 0) return { ok: true };
 
   const supabase = await createClient();
@@ -866,11 +892,17 @@ export async function updateBlock(
   if (Object.keys(fields).length === 0) return { ok: true };
 
   const supabase = await createClient();
-  /* RLS 가 "내 페이지의 블록만"을 이미 강제한다(0048). id 만으로도 남의 것은 0행 매치 */
-  const { error } = await supabase.from("link_blocks").update(fields).eq("id", id);
+  /* RLS 가 "내 페이지의 블록만"을 이미 강제한다(0048). id 만으로도 남의 것은 0행 매치.
+     ⚠️ 0행은 **명시적으로 실패**시킨다 — 삭제→복원으로 id 가 바뀐 블록을 옛 id 로 치는
+     실행취소가 "되돌렸어요" 라고 거짓말하지 않도록(감사 #8). 정렬 undo 와 같은 계약. */
+  const { data: hit, error } = await supabase.from("link_blocks").update(fields).eq("id", id).select("id");
   if (error) {
     console.error("[links] 블록 수정 실패:", error.message);
     return { ok: false, error: "저장하지 못했어요." };
+  }
+  if (!hit || hit.length === 0) {
+    revalidatePath("/links");
+    return { ok: false, error: "블록을 찾지 못했어요. 화면을 새로고침해 주세요." };
   }
   revalidatePath("/links");
   return { ok: true };
@@ -882,10 +914,14 @@ export async function deleteBlock(id: string): Promise<Result> {
   if (!user) return AUTH;
 
   const supabase = await createClient();
-  const { error } = await supabase.from("link_blocks").delete().eq("id", id);
+  const { data: hit, error } = await supabase.from("link_blocks").delete().eq("id", id).select("id");
   if (error) {
     console.error("[links] 블록 삭제 실패:", error.message);
     return { ok: false, error: "삭제하지 못했어요." };
+  }
+  if (!hit || hit.length === 0) {
+    revalidatePath("/links");
+    return { ok: false, error: "블록을 찾지 못했어요. 화면을 새로고침해 주세요." };
   }
   revalidatePath("/links");
   return { ok: true };
@@ -1018,20 +1054,21 @@ export async function moveBlock(id: string, dir: "up" | "down"): Promise<Result>
   const j = dir === "up" ? i - 1 : i + 1;
   if (j < 0 || j >= list.length) return { ok: true }; // 끝에서 더 못 간다 — 오류는 아니다
 
-  /* 두 행을 각각 갱신한다(트랜잭션 아님). **둘 다 성공했는지 확인한다** —
-     첫 UPDATE 만 통과하면 두 블록이 같은 sort_order 를 갖고 순서가 그 자리에서 깨진다. */
-  const a = list[i];
-  const b = list[j];
-  const first = await supabase.from("link_blocks").update({ sort_order: b.sort_order }).eq("id", a.id);
-  if (first.error) {
-    console.error("[links] 순서 이동 실패:", first.error.message);
-    return { ok: false, error: "순서를 바꾸지 못했어요." };
-  }
-  const second = await supabase.from("link_blocks").update({ sort_order: a.sort_order }).eq("id", b.id);
-  if (second.error) {
-    console.error("[links] 순서 이동 실패(복구 시도):", second.error.message);
-    await supabase.from("link_blocks").update({ sort_order: a.sort_order }).eq("id", a.id);
-    return { ok: false, error: "순서를 바꾸지 못했어요." };
+  /* 값을 맞바꾸지 않고 **목표 순서 0..n-1 로 다시 쓴다**(reorderBlock 과 같은 루프).
+     값 스왑은 두 행의 sort_order 가 같을 때(복원 블록이 옛 번호를 그대로 들고 들어오면 생긴다)
+     아무것도 안 바뀌는데 ok 를 돌려줘 "옮겼어요" 와 undo 엔트리가 거짓으로 남았다(감사 #20). */
+  const ids = list.map((x) => x.id);
+  [ids[i], ids[j]] = [ids[j], ids[i]];
+  for (let k = 0; k < ids.length; k++) {
+    const cur = list.find((x) => x.id === ids[k]);
+    if (!cur || cur.sort_order === k) continue;
+    const { error } = await supabase.from("link_blocks").update({ sort_order: k }).eq("id", ids[k]);
+    if (error) {
+      console.error("[links] 순서 이동 실패:", error.message);
+      /* 일부 행은 이미 커밋됐다 — 서버의 실제 순서를 다시 내려보낸다 */
+      revalidatePath("/links");
+      return { ok: false, error: "순서를 바꾸지 못했어요." };
+    }
   }
   revalidatePath("/links");
   return { ok: true };
@@ -1055,11 +1092,15 @@ export async function applyTemplate(key: string): Promise<Result> {
   if (!tpl) return { ok: false, error: "없는 템플릿이에요." };
 
   const supabase = await createClient();
-  const { error: delErr } = await supabase.from("link_blocks").delete().eq("page_id", page.id);
-  if (delErr) {
-    console.error("[links] 템플릿 적용(기존 삭제) 실패:", delErr.message);
+  /* 순서가 중요하다: **먼저 넣고, 나중에 지운다** (트랜잭션이 없다).
+     지우고 나서 넣다가 실패하면 사용자 블록이 통째로 날아가고 되살릴 길이 없다(감사 #3).
+     넣기가 실패하면 옛 블록은 손대지 않은 채 그대로다. */
+  const { data: oldRows, error: listErr } = await supabase.from("link_blocks").select("id").eq("page_id", page.id);
+  if (listErr) {
+    console.error("[links] 템플릿 적용(기존 조회) 실패:", listErr.message);
     return { ok: false, error: "적용하지 못했어요." };
   }
+  const oldIds = (oldRows ?? []).map((r) => r.id as string);
 
   const rows = tpl.blocks.map((b, i) => ({
     page_id: page.id,
@@ -1067,10 +1108,22 @@ export async function applyTemplate(key: string): Promise<Result> {
     data: b.data,
     sort_order: i,
   }));
-  const { error } = await supabase.from("link_blocks").insert(rows);
+  const { data: inserted, error } = await supabase.from("link_blocks").insert(rows).select("id");
   if (error) {
     console.error("[links] 템플릿 적용 실패:", error.message);
     return { ok: false, error: "적용하지 못했어요." };
+  }
+
+  if (oldIds.length) {
+    const { error: delErr } = await supabase.from("link_blocks").delete().in("id", oldIds);
+    if (delErr) {
+      console.error("[links] 템플릿 적용(기존 삭제) 실패 — 새 블록 되돌림:", delErr.message);
+      /* 새 블록만 걷어내 원상 복구. 그래도 실패하면 revalidate 로 실제 DB 상태를 내려보낸다 */
+      const newIds = (inserted ?? []).map((r) => r.id as string);
+      if (newIds.length) await supabase.from("link_blocks").delete().in("id", newIds);
+      revalidatePath("/links");
+      return { ok: false, error: "적용하지 못했어요. 화면을 새로고침해 주세요." };
+    }
   }
 
   /* 템플릿마다 어울리는 테마가 있다 — 블록만 바뀌고 테마가 그대로면 의도한 인상이 안 난다.
@@ -1170,7 +1223,8 @@ export async function publishLinkPage(): Promise<Result> {
     align: page.align ?? "center",
     avatarPath: page.avatar_path ?? null,
     coverPath: page.cover_path ?? null,
-    snsLinks: Array.isArray(page.sns_links) ? page.sns_links : [],
+    /* 굽는 시점에 한 번 더 거른다 — 공개 페이지도 같은 관문을 태운다 */
+    snsLinks: sanitizeSnsLinks(page.sns_links),
     snsPlacement: (page.sns_placement as string) ?? "profile",
     titleSize: (page.title_size as string) ?? "md",
     seoTitle: page.seo_title ?? null,
@@ -1273,7 +1327,9 @@ function sanitizeBlockData(input: Record<string, unknown>): { data?: Record<stri
       if (typeof v !== "string" || !v.trim()) continue;
       const href = normalizeUrl(v);
       if (!href) return { error: URL_ERROR };
-      out[k] = href;
+      /* 이미지는 우리 문서 안에서 로드된다 — CSP img-src 가 https: 뿐이라 http 는 깨진다.
+         링크(url)는 302 로 나가니 http 여도 되지만 이미지는 https 로 올려 저장한다(감사 #23). */
+      out[k] = k === "imagePath" ? href.replace(/^http:\/\//, "https://") : href;
       continue;
     }
 
@@ -1288,7 +1344,7 @@ function sanitizeBlockData(input: Record<string, unknown>): { data?: Record<stri
             if (typeof iv !== "string" || !iv.trim()) continue;
             const href = normalizeUrl(iv);
             if (!href) return { error: URL_ERROR };
-            it[ik] = href;
+            it[ik] = ik === "imagePath" ? href.replace(/^http:\/\//, "https://") : href;
           } else if (typeof iv === "string") {
             it[ik] = sliceChars(iv, Object.hasOwn(TEXT_CAPS, ik) ? TEXT_CAPS[ik] : 200);
           } else if (typeof iv === "number" || typeof iv === "boolean") {
@@ -1305,7 +1361,14 @@ function sanitizeBlockData(input: Record<string, unknown>): { data?: Record<stri
       /* 문의받기가 받을 항목 — 공개 폼(lead-form.tsx)이 이 배열을 그대로 그린다 */
       const allowed = ["name", "email", "phone", "message"];
       const picked = Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && allowed.includes(x)) : [];
-      out.fields = [...new Set(picked)];
+      const uniq = [...new Set(picked)];
+      /* submitLead 는 이메일·연락처 중 하나를 반드시 요구한다 — 둘 다 없는 폼을 저장해 두면
+         방문자가 어떤 값을 넣어도 영원히 제출할 수 없다. 편집기 가드와 같은 불변식을 서버도 지킨다(감사 #27).
+         빈 배열은 공개 폼이 기본 항목으로 폴백하므로 그대로 둔다. */
+      if (uniq.length > 0 && !uniq.includes("email") && !uniq.includes("phone")) {
+        return { error: "이메일·연락처 중 하나는 반드시 받아야 해요." };
+      }
+      out.fields = uniq;
       continue;
     }
 
