@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
+import { useEffect, useLayoutEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -221,6 +221,28 @@ export function LinksClient({
   }, [notice]);
   /* 템플릿 스트립 접기 — 링크팜의 「템플릿 적용하기 ^」 상시 스트립 카피 */
   const [tplOpen, setTplOpen] = useState(true);
+  /* 스트립이 잘리는 쪽을 흐린다 — 카드가 뚝 잘려 "끊긴 화면"으로 보이던 것(2026-08-22 지적).
+     스크롤 위치·폭이 바뀔 때마다 양끝 페이드를 다시 판정한다. */
+  const stripRef = useRef<HTMLDivElement>(null);
+  const [stripFade, setStripFade] = useState({ l: false, r: false });
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    const judge = () => {
+      const r = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+      const l = el.scrollLeft > 4;
+      setStripFade((f) => (f.l === l && f.r === r ? f : { l, r }));
+    };
+    judge();
+    el.addEventListener("scroll", judge, { passive: true });
+    const ro = new ResizeObserver(judge);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", judge);
+      ro.disconnect();
+    };
+  }, []);
+
   /* 템플릿 미리보기 — 카드를 누르면 **별도 모달**에서 그 템플릿을 보여준다(링크팜
      동작). 작업 중인 캔버스·미리보기는 건드리지 않는다 — 화면을 바꿔치기하면
      "하던 게 날아간" 것처럼 보인다(2026-08-20 지적). 서버 호출은 「이 템플릿 적용」
@@ -648,28 +670,30 @@ export function LinksClient({
           드로어·블록 편집은 **그 사이 세 번째 칸**으로 열린다 — 전엔 미리보기 자리를 대체했는데
           "블록 추가·테마 누르면 미리보기가 가려져 불편" (2026-08-22 지시). 패널은 sticky + 내부 스크롤이라
           긴 편집기(그리드 12칸)도 미리보기를 밀어내지 않는다. 모바일(<xl)은 패널이 캔버스 위로. ── */}
-      <div
-        className={cn(
-          "grid gap-5 xl:items-start",
-          editing || drawer
-            ? "xl:grid-cols-[minmax(0,1fr)_22rem_26rem] 2xl:grid-cols-[minmax(0,1fr)_24rem_26rem]"
-            : "xl:grid-cols-[minmax(0,1fr)_26rem]",
-        )}
-      >
-        <div className="min-w-0 space-y-5">
-          {/* 템플릿 적용하기 — 링크팜 상시 스트립(접이식). 첫 칸은 가져오기. */}
-          <div className="card-face">
-            <button
-              type="button"
-              onClick={() => setTplOpen((v) => !v)}
-              aria-expanded={tplOpen}
-              className="flex w-full items-center justify-between px-4 py-2.5 text-[14px] font-semibold"
+      {/* 템플릿 적용하기 — 링크팜 상시 스트립(접이식). **전폭**으로 세 칸 위에 둔다 —
+          캔버스 칸 안에 두면 패널이 열릴 때 칸이 좁아져 카드가 잘린다(2026-08-22 지적).
+          접기는 grid-rows 로 스르륵, 넘치는 쪽은 가장자리 페이드. 첫 칸은 가져오기. */}
+      <div className="card-face">
+        <button
+          type="button"
+          onClick={() => setTplOpen((v) => !v)}
+          aria-expanded={tplOpen}
+          className="flex w-full items-center justify-between px-4 py-2.5 text-[14px] font-semibold"
+        >
+          <span>✨ 템플릿 적용하기</span>
+          <ChevronDown
+            className={cn("size-4 text-fg-sub transition-transform duration-[240ms] ease-[var(--ease-arrive)]", tplOpen && "rotate-180")}
+            aria-hidden
+          />
+        </button>
+        <div className="links-collapse" data-open={tplOpen ? "true" : "false"}>
+          <div>
+            <div
+              ref={stripRef}
+              className="links-strip flex gap-2 overflow-x-auto px-4 pb-3"
+              data-fade-l={stripFade.l ? "true" : "false"}
+              data-fade-r={stripFade.r ? "true" : "false"}
             >
-              <span>✨ 템플릿 적용하기</span>
-              <ChevronDown className={cn("size-4 text-fg-sub transition-transform", tplOpen && "rotate-180")} aria-hidden />
-            </button>
-            {tplOpen ? (
-              <div className="flex gap-2 overflow-x-auto px-4 pb-3">
                 <button
                   type="button"
                   onClick={() => openDrawer("add", true)}
@@ -710,10 +734,14 @@ export function LinksClient({
                     <span className="mt-0.5 block truncate text-[12px] text-on-primary/70">{t.hint}</span>
                   </button>
                 ))}
-              </div>
-            ) : null}
+            </div>
           </div>
+        </div>
+      </div>
 
+      {/* ── 배치: 좌(편집 폰) · 가운데(패널 칸, 열릴 때만 폭을 가짐) · 우(상시 라이브 미리보기). ── */}
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_auto_26rem] xl:items-start">
+        <div className="min-w-0 space-y-5">
           {(
               <PhonePreview
                 page={draftPageView}
@@ -836,11 +864,14 @@ export function LinksClient({
             )}
         </div>
 
-        {/* 편집 패널(가운데 칸) — 드로어·블록 편집. ✕ 로 닫으면 칸이 사라지고 2열로 돌아간다.
+        {/* 편집 패널(가운데 칸) — 드로어·블록 편집. 칸은 항상 렌더되고 data-open 으로 폭이
+            스르륵 열리고 닫힌다(.links-panel-col). 닫히는 동안은 마지막 내용을 잔상으로 보여준다.
             sticky 오프셋은 상단바(h-14=56px) **아래**(top-[4.5rem]). 높이는 뷰포트에 맞추고 안에서 스크롤. */}
-        {editing || drawer ? (
-        <Card className="order-first xl:order-none xl:sticky xl:top-[4.5rem] xl:max-h-[calc(100dvh-5.5rem)] xl:overflow-y-auto">
-          <CardBody className="space-y-4">
+        {(() => {
+          const open = !!(editing || drawer);
+          const panelKey = editing ? `edit:${editing.id}` : drawer ? `drawer:${drawer}` : "none";
+          const body = open ? (
+            <CardBody key={panelKey} className="wizard-step-in space-y-4">
             {!editing && drawer ? (
               <div className="flex items-center justify-between">
                 <h3 className="text-[15px] font-bold">{DRAWER_TITLE[drawer]}</h3>
@@ -1017,9 +1048,10 @@ export function LinksClient({
               />
               </>
             ) : null}
-          </CardBody>
-        </Card>
-        ) : null}
+            </CardBody>
+          ) : null;
+          return <PanelColumn open={open}>{body}</PanelColumn>;
+        })()}
 
         {/* 라이브 미리보기 — **항상** 오른쪽에 있다. 패널이 열려도 가려지지 않는다. */}
         <Card className="xl:sticky xl:top-[4.5rem]">
@@ -1215,6 +1247,27 @@ function TopBar({
 /* ══════════════════════════════════════════════════════════════════
    블록 추가 패널 — 카탈로그·템플릿·가져오기 (블록 목록은 캔버스가 대신한다)
    ══════════════════════════════════════════════════════════════════ */
+
+/* 가운데 패널 칸 — 닫힐 때 **마지막 내용을 잔상으로** 들고 오므라든다. 내용이 먼저 사라지고
+   빈 칸만 줄어들면 "뚝" 끊겨 보인다. 잔상은 레이아웃 이펙트에서 잡아 첫 프레임 공백이 없다.
+   닫히는 동안 pointer-events 는 CSS(.links-panel-col[data-open=false])가 끈다. */
+function PanelColumn({ open, children }: { open: boolean; children: React.ReactNode }) {
+  const prev = useRef<React.ReactNode>(null);
+  const [closing, setClosing] = useState<React.ReactNode>(null);
+  useLayoutEffect(() => {
+    if (open) prev.current = children;
+    else setClosing(prev.current);
+  }, [open, children]);
+  return (
+    <div
+      className="links-panel-col order-first xl:order-none xl:sticky xl:top-[4.5rem]"
+      data-open={open ? "true" : "false"}
+      aria-hidden={open ? undefined : true}
+    >
+      <Card className="xl:w-[22rem] xl:max-h-[calc(100dvh-5.5rem)] xl:overflow-y-auto 2xl:w-[24rem]">{open ? children : closing}</Card>
+    </div>
+  );
+}
 
 /** 모달 안에서 Tab 을 가둔다 — aria-modal 은 스크린리더 커서만 제한하고 키보드 포커스는
     못 막아 Tab 이 스크림 뒤 상단바 칩으로 빠져나가 Enter 로 드로어·실행취소가 실행됐다(감사 #12).
