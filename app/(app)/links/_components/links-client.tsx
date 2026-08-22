@@ -670,10 +670,15 @@ export function LinksClient({
           드로어·블록 편집은 **그 사이 세 번째 칸**으로 열린다 — 전엔 미리보기 자리를 대체했는데
           "블록 추가·테마 누르면 미리보기가 가려져 불편" (2026-08-22 지시). 패널은 sticky + 내부 스크롤이라
           긴 편집기(그리드 12칸)도 미리보기를 밀어내지 않는다. 모바일(<xl)은 패널이 캔버스 위로. ── */}
-      {/* 템플릿 적용하기 — 링크팜 상시 스트립(접이식). **전폭**으로 세 칸 위에 둔다 —
-          캔버스 칸 안에 두면 패널이 열릴 때 칸이 좁아져 카드가 잘린다(2026-08-22 지적).
-          접기는 grid-rows 로 스르륵, 넘치는 쪽은 가장자리 페이드. 첫 칸은 가져오기. */}
-      <div className="card-face">
+      {/* ── 배치(명시적 그리드 좌표):
+            1행: 템플릿 스트립(1~2열) · 라이브 미리보기(3열, 2행에 걸쳐 sticky — 원래 자리인 **상단 오른쪽**)
+            2행: 편집 폰(1열) · 패널 칸(2열, 열릴 때만 폭)
+          스트립이 캔버스+패널 칸을 합친 폭을 쓰므로 패널이 열려도 카드가 잘리지 않고, 미리보기는
+          스트립 옆 제자리에 있다(2026-08-22 "라이브 미리보기 위치 원래대로"). ── */}
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_auto_26rem] xl:items-start">
+      {/* 템플릿 적용하기 — 링크팜 상시 스트립(접이식). 접기는 grid-rows 로 스르륵,
+          넘치는 쪽은 가장자리 페이드. 첫 칸은 가져오기. */}
+      <div className="card-face xl:col-span-2 xl:col-start-1 xl:row-start-1">
         <button
           type="button"
           onClick={() => setTplOpen((v) => !v)}
@@ -739,9 +744,7 @@ export function LinksClient({
         </div>
       </div>
 
-      {/* ── 배치: 좌(편집 폰) · 가운데(패널 칸, 열릴 때만 폭을 가짐) · 우(상시 라이브 미리보기). ── */}
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_auto_26rem] xl:items-start">
-        <div className="min-w-0 space-y-5">
+        <div className="min-w-0 space-y-5 xl:col-start-1 xl:row-start-2">
           {(
               <PhonePreview
                 page={draftPageView}
@@ -1054,7 +1057,7 @@ export function LinksClient({
         })()}
 
         {/* 라이브 미리보기 — **항상** 오른쪽에 있다. 패널이 열려도 가려지지 않는다. */}
-        <Card className="xl:sticky xl:top-[4.5rem]">
+        <Card className="xl:col-start-3 xl:row-span-2 xl:row-start-1 xl:sticky xl:top-[4.5rem]">
           <CardBody className="space-y-4">
               <>
                 <div className="flex items-center justify-between">
@@ -1260,7 +1263,7 @@ function PanelColumn({ open, children }: { open: boolean; children: React.ReactN
   }, [open, children]);
   return (
     <div
-      className="links-panel-col order-first xl:order-none xl:sticky xl:top-[4.5rem]"
+      className="links-panel-col order-first xl:order-none xl:col-start-2 xl:row-start-2 xl:sticky xl:top-[4.5rem]"
       data-open={open ? "true" : "false"}
       aria-hidden={open ? undefined : true}
     >
