@@ -1325,6 +1325,9 @@ body {
   to { opacity: 1; transform: none; }
 }
 .modal-scrim-in { animation: modal-scrim-in 0.18s ease-out both; }
+/* 작업 중 베일(프로필 링크 편집기 등) — 200ms 동안은 투명하게 있다가 나타난다.
+   300ms 안에 끝나는 저장에도 로더가 번쩍이면 화면이 더 불안해 보인다. */
+.busy-veil-in { animation: modal-scrim-in 0.16s ease-out 0.2s both; }
 .modal-card-in { animation: modal-card-in 0.24s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .anim-swap { animation: anim-swap-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
@@ -1338,6 +1341,7 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .modal-scrim-in,
   .modal-card-in,
+  .busy-veil-in,
   .anim-swap,
   .wizard-step-in { animation: none; }
 }

@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
 import { uploadLinkImage } from "../actions";
+import { FinchLoader } from "@/components/ui/finch-loader";
 
 /*
   이미지 입력 — 업로드 또는 주소 붙여넣기.
@@ -207,11 +208,19 @@ export function ImageField({
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={busy}
-          className={`trans-state mt-1.5 flex w-full flex-col items-center justify-center gap-1.5 rounded-card border border-dashed border-line bg-plate text-fg-sub hover:border-primary hover:text-fg disabled:opacity-50 ${aspect}`}
+          /* busy 중엔 로더가 내용이라 흐리게 하지 않는다 */
+          className={`trans-state mt-1.5 flex w-full flex-col items-center justify-center gap-1.5 rounded-card border border-dashed border-line bg-plate text-fg-sub hover:border-primary hover:text-fg ${aspect}`}
         >
-          <ImagePlus className="size-5" aria-hidden />
-          <span className="text-[14px] font-medium">{busy ? "올리는 중…" : "이미지 올리기"}</span>
-          <span className="text-[11px]">PNG·JPG·WEBP · 2MB 이하</span>
+          {busy ? (
+            /* 올리는 동안은 핀치 로더 — "로딩 중이면 로딩 화면" (2026-08-22 지시) */
+            <FinchLoader label="올리는 중…" />
+          ) : (
+            <>
+              <ImagePlus className="size-5" aria-hidden />
+              <span className="text-[14px] font-medium">이미지 올리기</span>
+              <span className="text-[11px]">PNG·JPG·WEBP · 2MB 이하</span>
+            </>
+          )}
         </button>
       )}
 

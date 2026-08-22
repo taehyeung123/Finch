@@ -213,6 +213,12 @@ export function LinksClient({
   const [drawer, setDrawer] = useState<Drawer | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
+  /* 토스트는 4초 뒤 내려간다 — 같은 문구가 연달아 오면 타이머만 다시 돈다 */
+  useEffect(() => {
+    if (!notice) return;
+    const t = window.setTimeout(() => setNotice(""), 4000);
+    return () => window.clearTimeout(t);
+  }, [notice]);
   /* 템플릿 스트립 접기 — 링크팜의 「템플릿 적용하기 ^」 상시 스트립 카피 */
   const [tplOpen, setTplOpen] = useState(true);
   /* 템플릿 미리보기 — 카드를 누르면 **별도 모달**에서 그 템플릿을 보여준다(링크팜
@@ -638,16 +644,18 @@ export function LinksClient({
         </p>
       ) : null}
 
-      {/* 순서 이동 결과를 스크린리더에 알린다 — 화면에서는 목록이 바뀌는 게 보이지만
-          목록 밖에 포커스가 있으면 아무 일도 안 일어난 것과 같다 */}
-      <p aria-live="polite" className="sr-only">
-        {notice}
-      </p>
-
-      {/* ── 링크팜 배치 그대로: 좌(템플릿 스트립 + 편집 폰) · 우(상시 라이브 미리보기,
-          드로어가 열리면 그 자리를 대체). 무대 배경 없음 — 폰이 지면 위에 바로 뜬다
-          (2026-08-20 사장님 오더 1·2). ── */}
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_26rem] xl:items-start">
+      {/* ── 배치: 좌(템플릿 스트립 + 편집 폰) · 우(상시 라이브 미리보기).
+          드로어·블록 편집은 **그 사이 세 번째 칸**으로 열린다 — 전엔 미리보기 자리를 대체했는데
+          "블록 추가·테마 누르면 미리보기가 가려져 불편" (2026-08-22 지시). 패널은 sticky + 내부 스크롤이라
+          긴 편집기(그리드 12칸)도 미리보기를 밀어내지 않는다. 모바일(<xl)은 패널이 캔버스 위로. ── */}
+      <div
+        className={cn(
+          "grid gap-5 xl:items-start",
+          editing || drawer
+            ? "xl:grid-cols-[minmax(0,1fr)_22rem_26rem] 2xl:grid-cols-[minmax(0,1fr)_24rem_26rem]"
+            : "xl:grid-cols-[minmax(0,1fr)_26rem]",
+        )}
+      >
         <div className="min-w-0 space-y-5">
           {/* 템플릿 적용하기 — 링크팜 상시 스트립(접이식). 첫 칸은 가져오기. */}
           <div className="card-face">
@@ -828,12 +836,10 @@ export function LinksClient({
             )}
         </div>
 
-        {/* 우측 패널 — 링크팜 구조: 평소엔 「라이브 미리보기」, 드로어·블록 편집이
-            그 자리를 대체한다(✕ 로 닫으면 라이브로 복귀). 모바일에선 편집·드로어가
-            열렸을 때만 캔버스보다 먼저(order-first). */}
-        {/* sticky 오프셋은 상단바(h-14=56px) **아래**여야 한다 — top-6 이면 고정되는 순간
-            카드 윗줄이 헤더 밑에 깔린다(소넷 확정). 폰 프레임이 고정 높이라 스크롤이 늘 생긴다. */}
-        <Card className={cn("xl:order-none xl:sticky xl:top-[4.5rem]", (editing || drawer) && "order-first")}>
+        {/* 편집 패널(가운데 칸) — 드로어·블록 편집. ✕ 로 닫으면 칸이 사라지고 2열로 돌아간다.
+            sticky 오프셋은 상단바(h-14=56px) **아래**(top-[4.5rem]). 높이는 뷰포트에 맞추고 안에서 스크롤. */}
+        {editing || drawer ? (
+        <Card className="order-first xl:order-none xl:sticky xl:top-[4.5rem] xl:max-h-[calc(100dvh-5.5rem)] xl:overflow-y-auto">
           <CardBody className="space-y-4">
             {!editing && drawer ? (
               <div className="flex items-center justify-between">
@@ -1010,7 +1016,14 @@ export function LinksClient({
                 }
               />
               </>
-            ) : (
+            ) : null}
+          </CardBody>
+        </Card>
+        ) : null}
+
+        {/* 라이브 미리보기 — **항상** 오른쪽에 있다. 패널이 열려도 가려지지 않는다. */}
+        <Card className="xl:sticky xl:top-[4.5rem]">
+          <CardBody className="space-y-4">
               <>
                 <div className="flex items-center justify-between">
                   <h3 className="flex items-center gap-1.5 text-[15px] font-bold">
@@ -1050,9 +1063,30 @@ export function LinksClient({
                   frame="device"
                 />
               </>
-            )}
           </CardBody>
         </Card>
+      </div>
+
+      {/* 작업 중 베일 — 서버 왕복(run)이 도는 동안 핀치 로더. 200ms 안에 끝나면 보이지 않는다.
+          "기능 쓸 때 로딩 중이면 로딩 화면" (2026-08-22 지시). fire() 경로(온오프·테마·드래그)는
+          낙관 반영이라 기다릴 것이 없어 베일을 띄우지 않는다. */}
+      {busy ? (
+        <div
+          className="busy-veil-in fixed inset-0 z-40 flex items-center justify-center bg-surface/70 backdrop-blur-[2px]"
+        >
+          <FinchLoader label="처리하는 중…" />
+        </div>
+      ) : null}
+
+      {/* 토스트 — 조작 결과 안내. 전엔 sr-only 라 "블록을 숨겼어요" 같은 안내가 눈엔 안 보였다. */}
+      <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
+        <p
+          data-open={notice ? "true" : "false"}
+          role="status"
+          className="toast-pop pointer-events-auto max-w-xl rounded-card border border-line-strong bg-overlay px-4 py-2.5 text-[14px] text-fg-sub shadow-pop"
+        >
+          {notice}
+        </p>
       </div>
     </div>
   );
