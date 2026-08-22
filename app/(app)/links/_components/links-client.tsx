@@ -720,12 +720,20 @@ export function LinksClient({
                       () => applyBlockPatch({ kind: "active", id, active }),
                       () => updateBlock(id, { active }),
                       undefined,
-                      () =>
+                      () => {
+                        /* 무슨 일이 났는지 바로 말한다 — 눈 아이콘을 편집 버튼으로 알고 누른 뒤
+                           "미리보기에 왜 안 나오냐"가 됐다(2026-08-22 실계정). 되돌리는 길도 같이. */
+                        setNotice(
+                          active
+                            ? "블록을 다시 켰어요 — 미리보기·공개에 나가요."
+                            : "블록을 숨겼어요 — 미리보기·공개 페이지에서 빠져요. 눈 아이콘이나 ↩ 실행취소로 되돌릴 수 있어요.",
+                        );
                         record({
                           label: active ? "노출 켜기" : "노출 끄기",
                           undo: () => updateBlock(resolveId(id), { active: !active }),
                           redo: () => updateBlock(resolveId(id), { active }),
-                        }),
+                        });
+                      },
                     ),
                   /* 안내는 **성공했을 때만** 나간다 — 연타로 무시된 클릭·서버 실패에
                      「옮겼어요」가 읽히면 안 된다(목록을 눈으로 못 보는 사용자에게는 확정이다) */

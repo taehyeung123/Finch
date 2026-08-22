@@ -415,17 +415,26 @@ export function PhonePreview({
                       </span>
                     </div>
 
+                    {/* 꺼진 블록 표식 — **항상** 보인다. 캡션만으로는 공개 사유에 밀려 안 보였고
+                        눈 아이콘은 호버해야 나와서, 블록 4개를 꺼 놓고도 "미리보기에 왜 안 나오냐"가
+                        됐다(2026-08-22 실계정). 투명도는 쓰지 않는다 — 칩 + 점선 테두리로만. */}
+                    {!b.active ? (
+                      <span className="absolute -top-2.5 left-2 z-10 rounded-chip bg-scrim px-1.5 py-0.5 text-[10px] font-semibold text-on-scrim">
+                        숨김
+                      </span>
+                    ) : null}
                     <button
                       type="button"
                       id={`blk-${b.id}`}
                       onClick={() => edit.onEdit(b.id)}
-                      aria-label={`${BLOCK_CATALOG.find((c) => c.type === b.type)?.label ?? b.type} · ${label} 편집`}
+                      aria-label={`${BLOCK_CATALOG.find((c) => c.type === b.type)?.label ?? b.type} · ${label}${b.active ? "" : " (숨김)"} 편집`}
                       className={cn(
                         "trans-state block w-full rounded-[calc(var(--lp-radius)+4px)] text-left outline-offset-2",
                         selectedId === b.id && "outline outline-2 outline-primary",
                         /* 꺼진 블록도 **제 색 그대로** 그린다 — 투명도를 깔면 파스텔 테마에서
                            물 빠진 렌더링 버그처럼 읽힌다(2026-08-20 실계정 지적 "왜 흐릿하게").
-                           숨김 상태는 아래 캡션과 툴바 눈 아이콘이 말한다. */
+                           대신 점선 테두리로 "지금은 빠져 있다"를 말한다. */
+                        !b.active && selectedId !== b.id && "outline-dashed outline-1 outline-[var(--lp-muted)]",
                       )}
                     >
                       <PreviewBlock block={b} mode="edit" />
@@ -433,10 +442,14 @@ export function PhonePreview({
                     {/* 상태 캡션 — 공개 안 되는 사유(주소 없음 등) 또는 숨김을 블록 아래
                         10px 한 줄로. 유령칸 문장 상자 도배(2026-08-20 실계정 지적)의
                         대체다. 둘 다면 사유 우선 — 같은 "안 나감"을 두 번 말하지 않는다. */}
-                    {hidden ? (
+                    {!b.active ? (
+                      /* 숨김이 사유보다 먼저 — 사용자가 직접 끈 것이라 그걸 먼저 알아야 되돌린다.
+                         사유가 같이 있으면 한 줄에 이어 쓴다(같은 "안 나감"을 두 줄로 말하지 않는다). */
+                      <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">
+                        숨김 — 미리보기·공개에 안 나가요 · 눈 아이콘으로 켜기{hidden ? ` · ${hidden}` : ""}
+                      </p>
+                    ) : hidden ? (
                       <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">{hidden}</p>
-                    ) : !b.active ? (
-                      <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">숨김 — 공개 페이지에 안 나가요</p>
                     ) : partialReason(b.type, b.data) ? (
                       /* 항목 일부만 주소가 없는 가로 카드·그리드 — 발행본에선 그 칸만 빠진다(감사 #17) */
                       <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">{partialReason(b.type, b.data)}</p>
