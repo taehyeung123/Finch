@@ -63,6 +63,7 @@ export function PhonePreview({
   blocks,
   selectedId,
   mode = "draft",
+  frame = "fluid",
   edit,
 }: {
   page: LinkPageView;
@@ -74,6 +75,13 @@ export function PhonePreview({
    *       클릭도 없다(발행본은 여기서 고칠 수 있는 것이 아니다).
    */
   mode?: "draft" | "live";
+  /**
+   * fluid: 칸 너비를 채우고 내용만큼 길어진다(최대 680px) — 편집 캔버스·템플릿 모달.
+   * device: **실제 폰 크기(375×812)로 고정** — 우측 라이브 미리보기(2026-08-22 지시
+   *         "핸드폰 크기로 고정"). 블록이 몇 개든 프레임은 같고 내용은 안에서 스크롤된다.
+   *         짧은 화면에선 높이만 뷰포트에 맞춰 줄고 너비는 그대로다.
+   */
+  frame?: "fluid" | "device";
   /** 있으면 캔버스 직접 편집 — 블록 툴바·이름/소개 인라인 편집·블록 추가가 켜진다 */
   edit?: CanvasEdit;
 }) {
@@ -180,9 +188,16 @@ export function PhonePreview({
     ) : null;
 
   return (
-    <div className="mx-auto w-full max-w-[410px]">
-      {/* 폰 프레임 */}
-      <div className="overflow-hidden rounded-[32px] border-[6px] border-fg/15 bg-plate shadow-pop">
+    <div className={cn("mx-auto", frame === "device" ? "w-[375px] max-w-full" : "w-full max-w-[410px]")}>
+      {/* 폰 프레임 — device 는 프레임(테두리 6px 포함) 자체가 375×812 */}
+      <div
+        className={cn(
+          "overflow-hidden rounded-[32px] border-[6px] border-fg/15 bg-plate shadow-pop",
+          /* 14rem = 상단바 56 + sticky 오프셋 16 + 카드 패딩·테두리 34 + 제목줄 32 + 캡션 2줄 38
+             + 간격 24 ≈ 200px 에 여유 24px — 짧은 화면에서 프레임 아래가 잘리지 않는다 */
+          frame === "device" && "flex h-[812px] max-h-[calc(100dvh-14rem)] flex-col",
+        )}
+      >
         <div
           style={
             {
@@ -191,7 +206,10 @@ export function PhonePreview({
               backgroundImage: "var(--lp-bg-image)",
             } as React.CSSProperties
           }
-          className="max-h-[680px] overflow-y-auto bg-[var(--lp-bg)] bg-cover bg-center px-5 pb-10 pt-8 text-[var(--lp-fg)]"
+          className={cn(
+            "overflow-y-auto bg-[var(--lp-bg)] bg-cover bg-center px-5 pb-10 pt-8 text-[var(--lp-fg)]",
+            frame === "device" ? "min-h-0 flex-1" : "max-h-[680px]",
+          )}
         >
           {/* 커버 — 캔버스 편집에선 눌러서 프로필 설정(사진 교체)으로 */}
           {(page.layout === "cover" || page.layout === "cover_profile") && page.coverPath ? (

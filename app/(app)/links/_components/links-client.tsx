@@ -779,7 +779,9 @@ export function LinksClient({
         {/* 우측 패널 — 링크팜 구조: 평소엔 「라이브 미리보기」, 드로어·블록 편집이
             그 자리를 대체한다(✕ 로 닫으면 라이브로 복귀). 모바일에선 편집·드로어가
             열렸을 때만 캔버스보다 먼저(order-first). */}
-        <Card className={cn("xl:order-none xl:sticky xl:top-6", (editing || drawer) && "order-first")}>
+        {/* sticky 오프셋은 상단바(h-14=56px) **아래**여야 한다 — top-6 이면 고정되는 순간
+            카드 윗줄이 헤더 밑에 깔린다(소넷 확정). 폰 프레임이 고정 높이라 스크롤이 늘 생긴다. */}
+        <Card className={cn("xl:order-none xl:sticky xl:top-[4.5rem]", (editing || drawer) && "order-first")}>
           <CardBody className="space-y-4">
             {!editing && drawer ? (
               <div className="flex items-center justify-between">
@@ -972,7 +974,13 @@ export function LinksClient({
                 {/* 읽기 전용 draft — 캔버스와 같은 값·같은 관대한 규칙(도구만 없음). 꺼진 블록만
                     뺀다. 수정하는 즉시 여기도 바뀐다. live 로 그리면 주소 없는 블록이 빠져
                     "미리보기에 안 나온다"가 된다(2026-08-20 지적). */}
-                <PhonePreview page={draftPageView} blocks={draftBlocksView.filter((b) => b.active)} selectedId={null} />
+                <PhonePreview
+                  page={draftPageView}
+                  blocks={draftBlocksView.filter((b) => b.active)}
+                  selectedId={null}
+                  /* 실제 폰 크기로 고정 — 블록 수와 무관하게 같은 프레임, 내용은 안에서 스크롤 */
+                  frame="device"
+                />
               </>
             )}
           </CardBody>
