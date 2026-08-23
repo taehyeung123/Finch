@@ -116,6 +116,20 @@ export async function deleteAccount(formData: FormData): Promise<void> {
     }
   }
 
+  /* 주소 무덤 기록 — auth.users 삭제가 link_pages 를 cascade 로 지우면서 slug 가 즉시 풀린다(감사3 C3).
+     0050 의 owner_id on delete set null 이 탈퇴 뒤에도 90일 보류를 유지하도록 설계됐지만 행이 먼저 있어야 한다. 실패해도 탈퇴는 진행. */
+  try {
+    const { data: lp } = await admin.from("link_pages").select("slug").eq("user_id", user.id).maybeSingle();
+    if (lp?.slug) {
+      const { error: holdErr } = await admin
+        .from("link_slug_history")
+        .upsert({ slug: lp.slug, page_id: null, owner_id: user.id, released_at: new Date().toISOString() }, { onConflict: "slug" });
+      if (holdErr) console.error("[settings] 탈퇴 시 옛 주소 기록 실패:", holdErr.message);
+    }
+  } catch (e) {
+    console.error("[settings] 탈퇴 시 옛 주소 기록 실패:", e);
+  }
+
   const { error } = await admin.auth.admin.deleteUser(user.id);
   if (error) {
     console.error("[settings] 회원탈퇴 실패:", error.message);

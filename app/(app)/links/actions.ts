@@ -610,7 +610,9 @@ export async function uploadLinkImage(dataUrl: string): Promise<{ ok: boolean; u
   const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
 
   const supabase = await createClient();
+  /* 경로가 uuid 라 불변 — 1년 캐시(감사3 C6). 기본 max-age=3600 은 폰에서 매 시간 다시 받게 한다 */
   const { error } = await supabase.storage.from("link-assets").upload(path, buf, {
+    cacheControl: "31536000",
     contentType: m[1],
     upsert: false,
   });
@@ -716,17 +718,21 @@ export async function finalizeLinkFileUpload(path: string): Promise<{ ok: boolea
   const user = await getAuthUser();
   if (!user) return { ok: false, error: "로그인이 필요해요." };
   if (typeof path !== "string" || !path.startsWith(`${user.id}/files/`)) return { ok: false, error: "올바르지 않은 경로예요." };
-  const supabase = await createClient();
+  /* service_role 로 확인한다 — RLS 와 무관하게(0059 전에도) 실제 크기·형식을 본다. 경로 접두사가 이미 본인 폴더로 묶는다(감사3 C2) */
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "업로드를 확인하지 못했어요." };
   const folder = path.slice(0, path.lastIndexOf("/"));
   const name = path.slice(path.lastIndexOf("/") + 1);
-  const { data: list, error: listErr } = await supabase.storage.from("link-assets").list(folder, { search: name, limit: 1 });
-  const obj = (list ?? []).find((o) => o.name === name) as { metadata?: { size?: number } } | undefined;
-  /* 0059(본인 폴더 select 정책) 미적용이면 목록이 비거나 오류다 — 그땐 버킷 상한에 맡기고 막지 않는다 */
-  if (listErr || !obj) return { ok: true };
+  const { data: list, error: listErr } = await admin.storage.from("link-assets").list(folder, { search: name, limit: 1 });
+  const obj = (list ?? []).find((o) => o.name === name) as { metadata?: { size?: number; mimetype?: string } } | undefined;
+  if (listErr || !obj) return { ok: false, error: "업로드된 파일을 찾지 못했어요. 다시 시도해 주세요." };
   const size = Number(obj.metadata?.size ?? 0);
-  if (size > MAX_FILE_BYTES) {
-    await supabase.storage.from("link-assets").remove([path]);
-    return { ok: false, error: "파일은 20MB 이하만 올릴 수 있어요." };
+  const mime = String(obj.metadata?.mimetype ?? "");
+  const ext = name.split(".").pop() ?? "";
+  const okMime = Object.hasOwn(FILE_EXT_TYPES, ext) && mime === FILE_EXT_TYPES[ext];
+  if (size <= 0 || size > MAX_FILE_BYTES || !okMime) {
+    await admin.storage.from("link-assets").remove([path]);
+    return { ok: false, error: size > MAX_FILE_BYTES ? "파일은 20MB 이하만 올릴 수 있어요." : "허용되지 않는 파일이에요." };
   }
   return { ok: true, size };
 }

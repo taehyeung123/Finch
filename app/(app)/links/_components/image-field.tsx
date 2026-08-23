@@ -84,18 +84,36 @@ export function ImageField({
     r.onerror = () => setError("파일을 읽지 못했어요.");
     r.onload = () => {
       const dataUrl = String(r.result);
-      /* gif(애니)·svg(벡터)는 크롭이 원본을 망가뜨린다 — 그대로 올린다 */
-      if (!cropAspect || /^data:image\/(gif|svg)/.test(dataUrl)) {
+      /* gif(애니)·svg(벡터)는 크롭·축소가 원본을 망가뜨린다 — 그대로 올린다 */
+      if (/^data:image\/(gif|svg)/.test(dataUrl)) {
         void upload(dataUrl);
         return;
       }
       const img = new Image();
       img.onerror = () => setError("이미지를 읽지 못했어요.");
       img.onload = () => {
+        /* 긴 변 1600px 로 줄인다 — 4000px 원본이 480px 폰 화면에 그대로 내려가던 것(감사3 C6). 알파 보존을 위해 원래 형식 유지 */
+        const shrink = (): string => {
+          const longest = Math.max(img.naturalWidth, img.naturalHeight);
+          if (longest <= CROP_MAX_W) return dataUrl;
+          const k = CROP_MAX_W / longest;
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(img.naturalWidth * k));
+          canvas.height = Math.max(1, Math.round(img.naturalHeight * k));
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return dataUrl;
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const mime = /^data:(image\/(?:png|webp))/.exec(dataUrl)?.[1] ?? "image/jpeg";
+          return canvas.toDataURL(mime, 0.85);
+        };
+        if (!cropAspect) {
+          void upload(shrink());
+          return;
+        }
         const ratio = img.naturalWidth / img.naturalHeight;
         /* 이미 맞는 비율(±2%)이면 조정 단계 없이 바로 — 괜히 한 단계 늘리지 않는다 */
         if (Math.abs(ratio - cropAspect) / cropAspect < 0.02) {
-          void upload(dataUrl);
+          void upload(shrink());
           return;
         }
         setOffset(50);

@@ -73,7 +73,10 @@ async function load(days: number): Promise<Loaded> {
      항상 실패하는 폼 하나가 이 화면의 전부였다. 저장은 서버 액션이 막는다. */
   /* days 를 그대로 되비춘다 — 샘플 수치는 그대로여도 기간 토글이 눌린 상태는 맞아야
      한다. 안 그러면 7일을 눌렀는데 30일이 선택된 채로 남아 고장난 것처럼 보인다. */
-  if (isDemoMode()) return { ...linkWorkspace, stats: { ...linkWorkspace.stats, days, daily: linkWorkspace.stats.daily.slice(-days) } };
+  if (isDemoMode()) {
+    /* 샘플 일별 추이는 90일을 깔아 두고 기간만큼 자른다 — 30개뿐이면 90일 토글이 아무것도 안 바꾼다(감사3) */
+    return { ...linkWorkspace, stats: { ...linkWorkspace.stats, days, daily: linkWorkspace.stats.daily.slice(-days) } };
+  }
 
   const user = await getAuthUser();
   if (!user) return { ...EMPTY, stats: { ...EMPTY_STATS, days } };
@@ -97,7 +100,7 @@ async function load(days: number): Promise<Loaded> {
   const page = pageRes.data as (Record<string, unknown> & { id: string }) | null;
   if (!page) return { ...EMPTY, stats: { ...EMPTY_STATS, days } };
 
-  const [blockRes, statsRes, leadRows, guestRes] = await Promise.all([
+  const [blockRes, statsRes, leadRows, guestRes, contactCnt, subscribeCnt, guestCnt] = await Promise.all([
     supabase
       .from("link_blocks")
       .select("id, type, data, sort_order, active, updated_at")
@@ -123,7 +126,17 @@ async function load(days: number): Promise<Loaded> {
       .eq("page_id", page.id)
       .order("created_at", { ascending: false })
       .limit(50),
+    /* 카드 숫자는 **총 건수** — 목록 50건을 세면 구독이 많을 때 문의 0 으로 읽힌다(감사3) */
+    supabase.from("link_leads").select("id", { count: "exact", head: true }).eq("page_id", page.id).eq("kind", "contact"),
+    supabase.from("link_leads").select("id", { count: "exact", head: true }).eq("page_id", page.id).eq("kind", "subscribe"),
+    supabase.from("link_guestbook").select("id", { count: "exact", head: true }).eq("page_id", page.id),
   ]);
+  if (leadRows.error) console.error("[links] 받은 내용 조회 실패:", leadRows.error.message);
+  const leadCounts = {
+    contact: contactCnt.error ? 0 : (contactCnt.count ?? 0),
+    subscribe: subscribeCnt.error ? 0 : (subscribeCnt.count ?? 0),
+    guestbook: guestCnt.error ? 0 : (guestCnt.count ?? 0),
+  };
   const guestbook = ((guestRes.error ? [] : (guestRes.data ?? [])) as Array<{
     id: number; name: string; message: string; reply: string | null; hidden: boolean; created_at: string;
   }>).map((g) => ({ id: g.id, name: g.name, message: g.message, reply: g.reply, hidden: g.hidden, createdAt: g.created_at }));
@@ -286,6 +299,8 @@ async function load(days: number): Promise<Loaded> {
     snapshot,
     stats,
     leads,
+    leadCounts,
+    leadsFailed: !!leadRows.error,
     guestbook,
   };
 }
@@ -295,7 +310,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
   const asked = Number(sp.days);
   const days = (STATS_RANGES as readonly number[]).includes(asked) ? asked : DEFAULT_DAYS;
 
-  const { page, blocks, snapshot, stats, leads, guestbook, loadFailed } = await load(days);
+  const { page, blocks, snapshot, stats, leads, leadCounts, leadsFailed, guestbook, loadFailed } = await load(days);
 
   /* 복사 버튼이 주는 주소는 **지금 접속한 도메인** 기준이어야 한다.
      프로덕션 도메인을 하드코딩하면 로컬·프리뷰에서 복사한 주소가 안 열린다. */
@@ -313,6 +328,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
         snapshot={snapshot}
         stats={stats}
         leads={leads}
+        leadCounts={leadCounts}
+        leadsFailed={leadsFailed}
         guestbook={guestbook ?? []}
         origin={`${proto}://${host}`}
         isDemo={isDemoMode()}

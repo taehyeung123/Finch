@@ -1165,8 +1165,8 @@ export const linkWorkspace: LinkWorkspace = {
     ctr: 26.3,
     returning: 31.5,
     /* 실제 날짜로 — 7/32 같은 없는 날이 CSV 에 찍혔다(감사 L15). 기간 토글은 page.tsx 가 days 만큼 자른다 */
-    daily: Array.from({ length: 30 }, (_, i) => ({
-      date: new Date(Date.UTC(2026, 6, 21) + i * 86_400_000).toISOString().slice(0, 10),
+    daily: Array.from({ length: 90 }, (_, i) => ({
+      date: new Date(Date.UTC(2026, 4, 22) + i * 86_400_000).toISOString().slice(0, 10),
       views: 120 + Math.round(Math.sin(i / 3) * 45) + i * 2,
       clicks: 32 + Math.round(Math.cos(i / 4) * 12) + i,
     })),

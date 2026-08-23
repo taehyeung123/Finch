@@ -36,24 +36,17 @@ async function hashToken(token: string): Promise<string> {
     .slice(0, 32);
 }
 
-/** 쿠키의 방문자 토큰을 읽거나 새로 만든다 */
+/**
+ * 쿠키의 방문자 토큰을 **읽기만** 한다 — 발급은 proxy.ts 가 /p/* 응답에서 한다.
+ * 서버 액션 안에서 쿠키를 쓰면 Next 가 액션 응답에 페이지 전체를 다시 렌더해(DB 읽기 2배) 첫 방문마다 비용이 두 배였다(감사3 C4).
+ * 쿠키가 없으면(프록시를 안 거친 요청·쿠키 차단) null — 재방문 판정만 포기한다.
+ */
 async function visitorHash(): Promise<string | null> {
   try {
     const jar = await cookies();
-    let token = jar.get(VISITOR_COOKIE)?.value;
-    if (!token) {
-      token = crypto.randomUUID();
-      jar.set(VISITOR_COOKIE, token, {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: true,
-        maxAge: 60 * 60 * 24 * 180, // 180일
-        path: "/",
-      });
-    }
-    return await hashToken(token);
+    const token = jar.get(VISITOR_COOKIE)?.value;
+    return token ? await hashToken(token) : null;
   } catch {
-    /* 쿠키를 못 쓰는 컨텍스트여도 방문 자체는 세야 한다 — 재방문 판정만 포기한다 */
     return null;
   }
 }
@@ -105,8 +98,12 @@ const LEAD_PAGE_MAX = 30;
 /** 유입 표식 허용 목록 — 방문자가 URL 에 아무 값이나 달아도 통계 축이 안 오염된다 */
 const VIEW_SRC = new Set(["instagram", "tiktok", "threads", "youtube", "x"]);
 
+/* 크롤러 — /go 와 같은 목록. JS 를 실행하는 봇(Googlebot·Bingbot)이 비콘을 쏘면 조회만 부풀어 조회당 클릭이 낮게 나온다 */
+const BOT_UA = /bot|crawl|spider|slurp|facebookexternalhit|kakaotalk-scrap|Slackbot|Twitterbot|Discordbot|LinkedInBot|TelegramBot|Googlebot|bingbot/i;
+
 export async function recordView(slug: string, src?: string, ref?: string): Promise<void> {
   if (!isSupabaseConfigured()) return;
+  if (BOT_UA.test((await headers()).get("user-agent") ?? "")) return;
   const pageId = await publicPageId(slug);
   if (!pageId) return;
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Lock } from "lucide-react";
 import { unlockLinkPage } from "../actions";
 import type { LpText } from "@/lib/links/i18n";
@@ -15,7 +14,6 @@ export function LockScreen({ slug, message, t, errors }: { slug: string; message
   const [pw, setPw] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const router = useRouter();
   return (
     <form
       onSubmit={(e) => {
@@ -24,7 +22,8 @@ export function LockScreen({ slug, message, t, errors }: { slug: string; message
         start(async () => {
           const r = await unlockLinkPage(slug, pw);
           if (!r.ok) setError(errors[r.code] ?? t.wrong);
-          else router.refresh();
+          /* 소프트 새로고침이 아니라 문서 재로드 — 클라이언트에서 끼워 넣은 <script>(마케팅 픽셀)는 실행되지 않는다(감사3 C5) */
+          else window.location.reload();
         });
       }}
       className="w-full max-w-[360px] rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-card)] p-6 text-center shadow-[var(--lp-shadow)]"

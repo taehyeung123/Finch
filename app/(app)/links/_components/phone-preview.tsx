@@ -801,7 +801,7 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
       return (
         <>
           <Collapsible items={nodes} initial={mode === "edit" ? 0 : n(d, "collapse", 0)} className="space-y-2" />
-          {mode === "edit" && n(d, "collapse", 0) > 0 && items.length > n(d, "collapse", 0) ? (
+          {mode === "edit" && n(d, "collapse", 0) > 0 && arr(d, "items").filter((it) => s(it, "url")).length > n(d, "collapse", 0) ? (
             <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">공개 페이지에선 처음 {n(d, "collapse", 0)}개만 보이고 「더보기」로 접혀요</p>
           ) : null}
         </>
@@ -825,7 +825,7 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
       return (
         <>
           <Collapsible items={nodes} initial={mode === "edit" ? 0 : n(d, "collapse", 0)} className={`grid gap-2 ${n(d, "columns", 2) === 3 ? "grid-cols-3" : "grid-cols-2"}`} />
-          {mode === "edit" && n(d, "collapse", 0) > 0 && items.length > n(d, "collapse", 0) ? (
+          {mode === "edit" && n(d, "collapse", 0) > 0 && arr(d, "items").filter((it) => s(it, "url")).length > n(d, "collapse", 0) ? (
             <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">공개 페이지에선 처음 {n(d, "collapse", 0)}개만 보이고 「더보기」로 접혀요</p>
           ) : null}
         </>

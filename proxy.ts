@@ -40,7 +40,19 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  applySecurityHeaders(response, request.nextUrl.pathname.startsWith("/p/"));
+  const publicLink = request.nextUrl.pathname.startsWith("/p/");
+  /* 방문자 토큰 쿠키 — 공개 프로필 링크 첫 방문에 여기서 발급한다. 서버 액션(recordView)이 발급하면 Next 가
+     액션 응답에 페이지를 통째로 다시 렌더해 첫 방문 비용이 두 배였다(감사3 C4). 값은 임의 토큰이고 DB 엔 해시만 남는다. */
+  if (publicLink && !request.cookies.get("finch_lv")) {
+    response.cookies.set("finch_lv", crypto.randomUUID(), {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: true,
+      maxAge: 60 * 60 * 24 * 180,
+      path: "/",
+    });
+  }
+  applySecurityHeaders(response, publicLink);
   return response;
 }
 

@@ -97,8 +97,83 @@ create policy "public guestbook read" on public.link_guestbook
     )
   );
 
--- ⑥ advisor: function search_path
-alter function public.link_page_stats(uuid, int) set search_path = public;
+-- ⑥ link_page_stats — search_path 고정(advisor) + anon EXECUTE 회수(기본 권한이 anon 에도 붙는다; revoke from public 은 그걸 못 지운다)
+--    + daily 집계를 날짜별 한 번만 묶는다(0055/0058 은 날짜 수만큼 전체 창을 다시 훑어 90일×수만 행이면 초 단위였다).
+create or replace function public.link_page_stats(p_page uuid, p_days int)
+returns jsonb
+language sql
+security invoker
+stable
+set search_path = public
+as $$
+  with bounds as (
+    select date_trunc('day', now() at time zone 'Asia/Seoul')
+             - ((greatest(least(p_days, 365), 1) - 1) || ' days')::interval as since_local
+  ),
+  v as (
+    select * from public.link_views, bounds
+     where page_id = p_page
+       and link_views.created_at >= (bounds.since_local at time zone 'Asia/Seoul')
+  ),
+  c as (
+    select * from public.link_clicks, bounds
+     where page_id = p_page
+       and link_clicks.created_at >= (bounds.since_local at time zone 'Asia/Seoul')
+  ),
+  visitor as (
+    select visitor_hash, count(*) as n from v where visitor_hash is not null group by 1
+  ),
+  days as (
+    select (generate_series(
+             (select since_local from bounds),
+             date_trunc('day', now() at time zone 'Asia/Seoul'),
+             '1 day'
+           ))::date as d
+  ),
+  vd as (select (created_at at time zone 'Asia/Seoul')::date as d, count(*) as n from v group by 1),
+  cd as (select (created_at at time zone 'Asia/Seoul')::date as d, count(*) as n from c group by 1)
+  select jsonb_build_object(
+    'views',   (select count(*) from v),
+    'uniques', (select count(*) from visitor),
+    'repeats', (select count(*) from visitor where n > 1),
+    'clicks',  (select count(*) from c),
+    'daily', (
+      select coalesce(jsonb_agg(jsonb_build_object('d', days.d, 'v', coalesce(vd.n, 0), 'c', coalesce(cd.n, 0)) order by days.d), '[]'::jsonb)
+        from days left join vd on vd.d = days.d left join cd on cd.d = days.d
+    ),
+    'blocks', (
+      select coalesce(jsonb_agg(jsonb_build_object('id', block_id, 'n', n) order by n desc), '[]'::jsonb)
+        from (select block_id, count(*) as n from c where block_id is not null
+               group by 1 order by n desc limit 50) b
+    ),
+    'regions', (
+      select coalesce(jsonb_agg(jsonb_build_object('country', country, 'region', region, 'n', n) order by n desc), '[]'::jsonb)
+        from (
+          select country, region, count(*) as n from v
+           where country is not null group by 1, 2 order by n desc limit 8
+        ) r
+    ),
+    'sources', (
+      select coalesce(jsonb_agg(jsonb_build_object('src', src, 'n', n) order by n desc), '[]'::jsonb)
+        from (select src, count(*) as n from v group by 1 order by n desc limit 8) s
+    ),
+    'devices', (
+      select coalesce(jsonb_agg(jsonb_build_object('device', device, 'n', n) order by n desc), '[]'::jsonb)
+        from (select device, count(*) as n from v group by 1 order by n desc) d
+    ),
+    'referrers', (
+      select coalesce(jsonb_agg(jsonb_build_object('host', referrer_host, 'n', n) order by n desc), '[]'::jsonb)
+        from (select referrer_host, count(*) as n from v group by 1 order by n desc limit 8) r
+    ),
+    'dwell', (
+      select jsonb_build_object('avg_ms', coalesce(round(avg(dwell_ms)), 0), 'n', count(*))
+        from v where dwell_ms is not null
+    )
+  );
+$$;
+revoke execute on function public.link_page_stats(uuid, int) from public, anon;
+grant execute on function public.link_page_stats(uuid, int) to authenticated;
+revoke execute on function public.link_pages_guard_slug_hold() from public, anon, authenticated;
 
 -- ⑦ link-assets 버킷 상한 — 파일 공유 블록이 브라우저에서 Storage 로 **직접** 올리므로(서명 URL) 크기·형식 검사는
 --    버킷이 해야 한다. 서버 액션은 클라이언트가 보낸 이름·크기만 보고 URL 을 내주기 때문(소넷 점검).

@@ -235,6 +235,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
       data-lp-anim={anim}
     >
       {/* 글꼴 — fontsource(jsdelivr). React 19 가 precedence 로 <head> 에 올린다 */}
+      {fonts.length ? <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="" /> : null}
       {fonts.map((href) => (
         <link key={href} rel="stylesheet" href={href} precedence="default" />
       ))}

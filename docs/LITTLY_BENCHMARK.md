@@ -119,6 +119,7 @@ B단계(판매·예약·멤버십·광고·스토어 동기화)는 PG·정산·�
 | 5 | `86225f1` | 페이지 설정(비밀번호·새창·언어 ko/en/ja·OG·파비콘·검색노출) + 관리 탭 + 기기·리퍼러·체류 | **0058** |
 | 감사 | `081ebfd` | 1~5단계 전 영역 감사(5차원 탐색→반박 검증, 확정 13·보조 18 전부 반영) | **0059** |
 | 6 | `081ebfd` | 마케팅 연결 — GA4·Meta 픽셀·TikTok 픽셀(형식 검증 3중, /p/* CSP 한정, 주인 미리보기 미탑재) | — (settings) |
+| 감사2 | `1b22add` | 회귀·흐름·테마·접근성 2라운드(확정 9·보조 17) — 파일 직접 업로드(서명 URL)·프리셋 대비·모바일 편집기 | 0059(버킷 상한·폴더 select) |
 
 설계 메모:
 - 페이지 설정은 **발행(스냅샷)과 무관하게 즉시** 적용(`lib/links/settings.ts`). 비밀번호 해시는 `link_page_secrets`(주인만 읽음),
@@ -126,6 +127,8 @@ B단계(판매·예약·멤버십·광고·스토어 동기화)는 PG·정산·�
   0058 RLS 가 잠긴 행을 주인 외엔 **행 단위로** 숨기므로 anon 키로 REST 를 찔러도 스냅샷이 안 나간다.
 - 방문자 고정 문구만 번역(`lib/links/i18n.ts`) — 주인이 쓴 글은 그대로. 편집기는 항상 한국어.
 - 분석: 원문 UA·리퍼러 URL 은 저장하지 않는다(기기 3분류·호스트명만). 체류는 `pagehide/visibilitychange` keepalive 비콘.
+- 파일 공유 업로드는 **브라우저 → Storage 직접**(`createLinkFileUpload` 가 서명 URL, `finalizeLinkFileUpload` 가 실제 크기 확인) —
+  서버 액션 본문(base64)은 Vercel 함수 상한 4.5MB 에 걸린다. 버킷 `file_size_limit`/`allowed_mime_types` 가 1차 방어(0059 ⑦).
 - 0059 설계: 비밀번호 시도는 `link_unlock_attempts`(service_role 전용, 페이지 천장 30/10분 + 방문자 8/10분), 풀린 주소 보류는
   트리거(`trg_link_pages_slug_hold`), 공개 읽기 정책은 **anon 전용** — 로그인한 방문자는 `loadPublicPage` 가 service_role 로 공개 컬럼만 읽는다.
 - 안 한 것(리틀리 대비): 커스텀 도메인, 멀티/서브 페이지, 국가 지도, 엑셀(xlsx — CSV 로 대체), 수익화(판매·후원 정산), UTM 자동 부착·메타태그.

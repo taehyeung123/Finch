@@ -35,8 +35,8 @@ export function ViewBeacon({ slug }: { slug: string }) {
     const elapsed = () => acc + (visibleSince !== null ? performance.now() - visibleSince : 0);
     const send = () => {
       const ms = Math.round(elapsed());
-      /* 5초 미만 차이는 다시 보내지 않는다 — 탭 전환마다 요청이 가는 걸 막는다 */
-      if (ms < 1000 || ms - lastSent < 5000) return;
+      /* 첫 전송은 1초만 넘으면 보내고, 그 뒤론 5초 이상 늘었을 때만 — 탭 전환마다 요청이 가는 걸 막는다 */
+      if (ms < 1000 || (lastSent > 0 && ms - lastSent < 5000)) return;
       lastSent = ms;
       try {
         void fetch(`/p/${encodeURIComponent(slug)}/dwell`, {

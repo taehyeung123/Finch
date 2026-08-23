@@ -41,13 +41,15 @@ export function FileField({
     setBusy(true);
     try {
       const prep = await createLinkFileUpload(f.name, f.size);
-      if (!prep.ok || !prep.path || !prep.token || !prep.url) {
+      if (!prep.ok || !prep.path || !prep.token || !prep.url || !prep.contentType) {
         setError(prep.error ?? "업로드하지 못했어요.");
         return;
       }
-      const { error: upErr } = await createClient()
-        .storage.from("link-assets")
-        .uploadToSignedUrl(prep.path, prep.token, f, { contentType: prep.contentType, upsert: false });
+      /* storage-js 는 Blob/File 을 multipart 로 보내며 contentType 옵션을 무시한다 — 파트의 Content-Type 은 File.type 이라
+         서버가 정한 형식으로 감싼다. 안 그러면 윈도우의 .zip(x-zip-compressed)·.csv(vnd.ms-excel)·.hwp("") 가
+         버킷 허용 목록(0059)에 걸린다(감사3 C1) */
+      const body = new File([f], f.name, { type: prep.contentType });
+      const { error: upErr } = await createClient().storage.from("link-assets").uploadToSignedUrl(prep.path, prep.token, body, { upsert: false });
       if (upErr) {
         setError(/size|limit|large|too/i.test(upErr.message) ? "파일은 20MB 이하만 올릴 수 있어요." : "업로드하지 못했어요. 잠시 후 다시 시도해 주세요.");
         return;

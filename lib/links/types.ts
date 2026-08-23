@@ -120,6 +120,10 @@ export interface LinkWorkspace {
   snapshot: LinkSnapshotView | null;
   stats: LinkStats;
   leads: LinkLead[];
+  /** 받은 내용 총 건수(종류별) — 목록은 최근 50건이지만 카드 숫자는 전체여야 한다 */
+  leadCounts?: { contact: number; subscribe: number; guestbook: number };
+  /** 받은 내용 조회 실패 — 빈 상태("아직 없어요")와 구분한다 */
+  leadsFailed?: boolean;
   /** 방명록 최근 50건(숨김 포함). 0057 미적용이면 빈 배열 */
   guestbook?: LinkGuestbookEntry[];
   /**

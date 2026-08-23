@@ -276,6 +276,8 @@ export function LinksClient({
   origin,
   stats,
   leads,
+  leadCounts,
+  leadsFailed = false,
   guestbook = [],
   isDemo,
   loadFailed = false,
@@ -286,6 +288,8 @@ export function LinksClient({
   origin: string;
   stats: LinkStats;
   leads: LinkLead[];
+  leadCounts?: { contact: number; subscribe: number; guestbook: number };
+  leadsFailed?: boolean;
   /** 방명록(0057) — 주인용 목록, 숨김 포함 */
   guestbook?: LinkGuestbookEntry[];
   isDemo: boolean;
@@ -341,6 +345,8 @@ export function LinksClient({
      시점에 부모가 "미저장인가"를 알 수 없다. baseline 은 마지막으로 서버에 반영된 값. */
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [baseline, setBaseline] = useState("");
+  /* 페이지 설정 저장 체인 — blur 저장이 연달아 나가도 서버의 읽고-합치고-쓰기가 겹치지 않게 */
+  const settingsChain = useRef<Promise<unknown>>(Promise.resolve());
   const editorDirty = editingId !== null && stableJson(draft) !== baseline;
   /* 편집 중인 블록의 **서버 값**이 바뀌면(↩ 내용 되돌리기·저장 후 서버 정규화) 미저장이 아닐 때만 초안을 다시 심는다 —
      안 그러면 되돌린 뒤에도 편집기·캔버스가 옛 내용을 보여주고 「저장」이 되돌린 값을 다시 쓴다(감사 C4).
@@ -1268,6 +1274,8 @@ export function LinksClient({
             ) : drawer === "manage" ? (
               <ManagePanel
                 leads={leads}
+                leadCounts={leadCounts}
+                leadsFailed={leadsFailed}
                 guestbook={guestbook}
                 busy={busy}
                 onGuestbookReply={(id, reply) => run(() => replyGuestbook(id, reply), () => setNotice("답글을 달았어요."))}
@@ -1296,11 +1304,30 @@ export function LinksClient({
               <SettingsPanel
                 page={page}
                 busy={busy}
-                onSettings={(patch) => run(() => updateLinkSettings(patch), () => setNotice("페이지 설정을 저장했어요. 바로 적용돼요."))}
-                onPassword={(pw) =>
+                /* 텍스트 칸의 blur 저장은 busy 베일을 띄우지 않는다 — 띄우면 blur 를 일으킨 그 클릭(스위치·저장 버튼)이 disabled 로 삼켜졌다(감사3 C7).
+                   settings 는 서버에서 읽고-합치고-쓰기라 클라이언트에서 순서대로 보낸다 */
+                onSettings={(patch) =>
+                  fire(
+                    () => {},
+                    () => {
+                      const p = settingsChain.current.then(() => updateLinkSettings(patch));
+                      settingsChain.current = p.then(
+                        () => {},
+                        () => {},
+                      );
+                      return p;
+                    },
+                    undefined,
+                    () => setNotice("페이지 설정을 저장했어요. 바로 적용돼요."),
+                  )
+                }
+                onPassword={(pw, onDone) =>
                   run(
                     () => setLinkPassword(pw),
-                    () => setNotice(pw === null ? "비밀번호를 풀었어요. 누구나 볼 수 있어요." : "비밀번호를 걸었어요. 방문자는 비밀번호를 넣어야 볼 수 있어요."),
+                    () => {
+                      setNotice(pw === null ? "비밀번호를 풀었어요. 누구나 볼 수 있어요." : "비밀번호를 걸었어요. 방문자는 비밀번호를 넣어야 볼 수 있어요.");
+                      onDone?.();
+                    },
                   )
                 }
                 onPublishToggle={(v) => run(() => setLinkPublished(v))}
@@ -3192,7 +3219,7 @@ function SettingsPanel({
   busy: boolean;
   onPublishToggle: (v: boolean) => void;
   onSettings: (patch: Partial<LinkPageSettings>) => void;
-  onPassword: (pw: string | null) => void;
+  onPassword: (pw: string | null, onDone?: () => void) => void;
   onDelete: () => void;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -3245,6 +3272,8 @@ function SettingsPanel({
 
 function ManagePanel({
   leads,
+  leadCounts,
+  leadsFailed = false,
   guestbook,
   busy,
   onGuestbookReply,
@@ -3253,6 +3282,8 @@ function ManagePanel({
   onExportLeads,
 }: {
   leads: LinkLead[];
+  leadCounts?: { contact: number; subscribe: number; guestbook: number };
+  leadsFailed?: boolean;
   guestbook: LinkGuestbookEntry[];
   busy: boolean;
   onGuestbookReply: (id: number, reply: string) => void;
@@ -3267,12 +3298,15 @@ function ManagePanel({
   const [kindFilter, setKindFilter] = useState<"all" | "contact" | "subscribe">("all");
   const [openLead, setOpenLead] = useState<number | null>(null);
   const shownLeads = kindFilter === "all" ? leads : leads.filter((l) => l.kind === kindFilter);
+  /* 카드는 총 건수(서버 count) — 없으면(데모) 목록을 센다 */
   const counts = {
-    contact: leads.filter((l) => l.kind === "contact").length,
-    subscribe: leads.filter((l) => l.kind === "subscribe").length,
-    guestbook: guestbook.length,
+    contact: leadCounts?.contact ?? leads.filter((l) => l.kind === "contact").length,
+    subscribe: leadCounts?.subscribe ?? leads.filter((l) => l.kind === "subscribe").length,
+    guestbook: leadCounts?.guestbook ?? guestbook.length,
     unreplied: guestbook.filter((g) => !g.reply && !g.hidden).length,
   };
+  /* 날짜는 KST 로 — UTC ISO 를 10자 자르면 새벽 0~9시 접수가 전날로 보인다(감사3) */
+  const dayOf = (iso: string) => new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso)).replace(/\.\s?/g, "-").replace(/-$/, "");
 
   return (
     <div className="space-y-4">
@@ -3292,7 +3326,12 @@ function ManagePanel({
           </div>
         ))}
       </div>
-      <p className="text-[12px] text-fg-sub">최근 50건씩 보여요. 전체는 CSV 로 내려받을 수 있어요.</p>
+      <p className="text-[12px] text-fg-sub">목록은 최근 50건만 보여요(숫자는 전체). 받은 내용 전체는 CSV 로 내려받을 수 있어요.</p>
+      {leadsFailed ? (
+        <p role="alert" className="rounded-card border border-negative/40 bg-negative-weak px-3 py-2 text-[13px] text-negative-strong">
+          받은 내용을 불러오지 못했어요 — 새로고침해 주세요. (아무도 안 보낸 게 아니라 조회가 실패한 거예요.)
+        </p>
+      ) : null}
 
       {/* 받은 내용 — 문의받기·구독신청 블록이 약속한 자리.
           이게 없으면 방문자가 남긴 게 어디로 갔는지 알 수 없다(편집기가 여기를 가리킨다). */}
@@ -3323,7 +3362,7 @@ function ManagePanel({
               ))}
             </div>
           </div>
-          {leads.length > 0 ? (
+          {leads.length > 0 || leadsFailed || (leadCounts?.contact ?? 0) + (leadCounts?.subscribe ?? 0) > 0 ? (
             <button
               type="button"
               disabled={busy}
@@ -3354,7 +3393,7 @@ function ManagePanel({
                       {l.kind === "subscribe" ? "구독" : "문의"}
                     </span>
                     <span className="text-[14px] font-semibold">{l.name || l.email || l.phone || "(이름 없음)"}</span>
-                    <span className="tnum ml-auto text-[12px] text-fg-sub">{l.createdAt.slice(0, 10)}</span>
+                    <span className="tnum ml-auto text-[12px] text-fg-sub">{dayOf(l.createdAt)}</span>
                     <ChevronDown className={cn("trans-state size-3.5 text-fg-faint", open && "rotate-180")} aria-hidden />
                   </button>
                   {l.email || l.phone ? (
@@ -3395,7 +3434,7 @@ function ManagePanel({
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[14px] font-semibold">{g.name}</span>
                   {g.hidden ? <span className="rounded-chip bg-plate px-2 py-0.5 text-[11px] font-semibold text-fg-sub">숨김</span> : null}
-                  <span className="tnum ml-auto text-[12px] text-fg-sub">{g.createdAt.slice(0, 10)}</span>
+                  <span className="tnum ml-auto text-[12px] text-fg-sub">{dayOf(g.createdAt)}</span>
                 </div>
                 <p className="mt-1 whitespace-pre-wrap text-[14px]">{g.message}</p>
                 {g.reply ? <p className="mt-1 rounded-card bg-plate px-2.5 py-1.5 text-[13px] text-fg-sub">↳ {g.reply}</p> : null}
@@ -3452,7 +3491,7 @@ function PageSettingsForm({
   page: LinkPageView;
   busy: boolean;
   onSettings: (patch: Partial<LinkPageSettings>) => void;
-  onPassword: (pw: string | null) => void;
+  onPassword: (pw: string | null, onDone?: () => void) => void;
 }) {
   const st = page.settings;
   /* 텍스트 필드는 초안을 두고 blur/저장에서 확정 — 글자마다 서버 왕복을 돌리지 않는다 */
@@ -3532,9 +3571,12 @@ function PageSettingsForm({
             onSubmit={(e) => {
               e.preventDefault();
               if (pw.trim().length < 4) return;
-              onPassword(pw);
-              setPw("");
-              setPwOpen(false);
+              /* Enter 로 제출하면 안내 문구 칸의 blur 가 안 나온다 — 먼저 확정하고 비밀번호를 보낸다(감사3) */
+              commit("lockMessage", lockMessage);
+              onPassword(pw, () => {
+                setPw("");
+                setPwOpen(false);
+              });
             }}
           >
             <input
