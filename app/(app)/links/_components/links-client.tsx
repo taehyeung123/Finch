@@ -79,6 +79,7 @@ import {
   isScheduledHidden,
   partialReason,
   scheduleCaption,
+  BLOCK_META_KEYS,
   type BlockType,
   type LinkBlock,
 } from "@/lib/links/blocks";
@@ -125,6 +126,7 @@ import {
   deleteGuestbook,
   updateLinkSettings,
   setLinkPassword,
+  exportLeads,
 } from "../actions";
 import { LINK_LANGS, LINK_TARGETS, type LinkPageSettings } from "@/lib/links/settings";
 import type { LinkGuestbookEntry, LinkLead, LinkPageView, LinkSnapshotView, LinkStats } from "@/lib/links/types";
@@ -323,7 +325,8 @@ export function LinksClient({
       el.removeEventListener("scroll", judge);
       ro.disconnect();
     };
-  }, []);
+    /* 스트립은 페이지가 생긴 뒤에야 마운트된다 — 생성 폼에서 바로 넘어오면 같은 인스턴스라 [] 로는 다시 안 붙는다(감사 L10) */
+  }, [page?.id, loadFailed]);
 
   /* 템플릿 미리보기 — 카드를 누르면 **별도 모달**에서 그 템플릿을 보여준다(링크팜
      동작). 작업 중인 캔버스·미리보기는 건드리지 않는다 — 화면을 바꿔치기하면
@@ -337,6 +340,24 @@ export function LinksClient({
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [baseline, setBaseline] = useState("");
   const editorDirty = editingId !== null && stableJson(draft) !== baseline;
+  /* 편집 중인 블록의 **서버 값**이 바뀌면(↩ 내용 되돌리기·저장 후 서버 정규화) 미저장이 아닐 때만 초안을 다시 심는다 —
+     안 그러면 되돌린 뒤에도 편집기·캔버스가 옛 내용을 보여주고 「저장」이 되돌린 값을 다시 쓴다(감사 C4).
+     블록이 사라졌으면(삭제·추가 취소·템플릿) 편집 상태를 비운다 — 남겨두면 없는 편집기에 대한 "나갈까요?" 가 뜬다(감사 L8) */
+  const editingServer = editingId ? blocks.find((b) => b.id === editingId) : undefined;
+  const editingServerKey = editingId ? (editingServer ? stableJson(editingServer.data ?? {}) : "__gone__") : "";
+  const [prevEditingKey, setPrevEditingKey] = useState(editingServerKey);
+  if (editingServerKey !== prevEditingKey) {
+    setPrevEditingKey(editingServerKey);
+    if (editingId && !editingServer) {
+      setEditingId(null);
+      setDraft({});
+      setBaseline("");
+    } else if (editingId && editingServer && !editorDirty) {
+      const data = editingServer.data ?? {};
+      setDraft(data);
+      setBaseline(editingServerKey);
+    }
+  }
 
   /* 프로필 폼 상태 — 패널이 아니라 **여기**서 든다. 패널 안에 두면 탭을 옮기는
      순간 언마운트로 입력이 통째로 사라진다("프로필 쓰다 테마 눌렀더니 초기화",
@@ -551,10 +572,16 @@ export function LinksClient({
   }
 
   function openEditor(id: string) {
+    /* 이미 열린 블록을 캔버스에서 다시 누름 = "보려는" 것 — 편집 중 내용을 버리지 않는다(감사 L9) */
+    if (id === editingId) {
+      requestAnimationFrame(() => document.getElementById(EDITOR_TITLE_ID)?.focus());
+      return;
+    }
     if (!leaveEditor()) return;
     const data = blocks.find((b) => b.id === id)?.data ?? {};
     setDraft(data);
     setBaseline(stableJson(data));
+    setPrevEditingKey(stableJson(data));
     setEditingId(id);
     /* 편집을 닫으면 **캔버스만** 남는다 — 드로어를 연 채 진입하면 닫을 때 이전
        드로어가 재등장하는 뒷문이 생긴다(소넷 확정 4). 여기서 닫아 규칙을 하나로. */
@@ -660,8 +687,9 @@ export function LinksClient({
              무를 뿐이다 — 순서는 늘 정의돼 있어(sort_order,created_at) 안전. */
           record({
             label: `${label} 이동`,
-            undo: chained(() => moveBlock(id, dir === "up" ? "down" : "up")),
-            redo: chained(() => moveBlock(id, dir)),
+            /* 실행 시점에 id 를 푼다 — 삭제→복원 뒤 옛 id 로 부르면 이 엔트리가 영원히 실패해 이력이 막힌다(감사 C7) */
+            undo: chained(() => moveBlock(resolveId(id), dir === "up" ? "down" : "up")),
+            redo: chained(() => moveBlock(resolveId(id), dir)),
           });
         },
       ),
@@ -684,8 +712,8 @@ export function LinksClient({
              스택에 남는다 — 데이터는 안 다치고, 다른 조작이 이력을 밀어낸다. */
           record({
             label: `${label} 이동`,
-            undo: chained(() => reorderBlock(dragId, origBefore)),
-            redo: chained(() => reorderBlock(dragId, beforeId)),
+            undo: chained(() => reorderBlock(resolveId(dragId), origBefore === null ? null : resolveId(origBefore))),
+            redo: chained(() => reorderBlock(resolveId(dragId), beforeId === null ? null : resolveId(beforeId))),
           }),
       );
     },
@@ -805,7 +833,17 @@ export function LinksClient({
     theme: liveTheme,
     themeCustom: Object.keys(customForm).length ? customForm : null,
   };
-  const draftBlocksView = liveBlocks.map((b) => (b.id === editingId ? { ...b, data: draft } : b));
+  /* 편집 중 블록은 초안을 덮되 **메타(강조·예약)는 서버 값**을 따른다 — 초안엔 열 때의 메타가 굳어 있어
+     ★ 를 눌러도 안 바뀌고 다시 누르면 "켜기"를 또 보내 영원히 못 껐다(감사 C4) */
+  const draftBlocksView = liveBlocks.map((b) => {
+    if (b.id !== editingId) return b;
+    const data: Record<string, unknown> = { ...draft };
+    for (const k of BLOCK_META_KEYS) {
+      if (k in b.data) data[k] = b.data[k];
+      else delete data[k];
+    }
+    return { ...b, data };
+  });
 
   return (
     <div className="space-y-4">
@@ -1109,7 +1147,8 @@ export function LinksClient({
                 onSchedule={(id) => setScheduleFor(id)}
                 onDuplicate={(id, label) =>
                   run(
-                    () => duplicateBlock(id),
+                    /* 정렬 번호를 다시 쓰는 조작 — 드래그(fire)와 겹치지 않게 같은 체인을 탄다(감사 L5) */
+                    chained(() => duplicateBlock(id)),
                     (res) => {
                       setNotice(`「${label}」 블록을 복사했어요 — 바로 아래에 들어갔어요.`);
                       if (res.id) {
@@ -1224,6 +1263,19 @@ export function LinksClient({
                   if (!window.confirm("이 방명록 글을 지울까요?")) return;
                   run(() => deleteGuestbook(id), () => setNotice("방명록 글을 지웠어요."));
                 }}
+                onExportLeads={() =>
+                  run(
+                    () => exportLeads(),
+                    (res) => {
+                      const rows = res.rows ?? [];
+                      downloadCsv("핀치-프로필링크-받은내용.csv", [
+                        ["종류", "이름", "이메일", "연락처", "내용", "접수일"],
+                        ...rows.map((l) => [l.kind, l.name, l.email, l.phone, l.message, l.createdAt] as Array<string | number>),
+                      ]);
+                      setNotice(`받은 내용 ${rows.length}건을 CSV 로 내려받았어요.`);
+                    },
+                  )
+                }
               />
             ) : drawer === "settings" ? (
               <>
@@ -3170,6 +3222,7 @@ function ManagePanel({
   onGuestbookReply,
   onGuestbookHide,
   onGuestbookDelete,
+  onExportLeads,
 }: {
   leads: LinkLead[];
   guestbook: LinkGuestbookEntry[];
@@ -3177,6 +3230,8 @@ function ManagePanel({
   onGuestbookReply: (id: number, reply: string) => void;
   onGuestbookHide: (id: number, hidden: boolean) => void;
   onGuestbookDelete: (id: number) => void;
+  /** CSV — 화면의 50건이 아니라 **전체**를 서버에서 받아 내린다(감사 C13) */
+  onExportLeads: () => void;
 }) {
   /* 방명록 답글 작성 중인 글 id 와 초안 */
   const [replyFor, setReplyFor] = useState<number | null>(null);
@@ -3243,25 +3298,11 @@ function ManagePanel({
           {leads.length > 0 ? (
             <button
               type="button"
-              onClick={() =>
-                downloadCsv("핀치-프로필링크-받은내용.csv", [
-                  ["종류", "이름", "이메일", "연락처", "내용", "접수일"],
-                  ...leads.map(
-                    (l) =>
-                      [
-                        l.kind === "subscribe" ? "구독" : "문의",
-                        l.name ?? "",
-                        l.email ?? "",
-                        l.phone ?? "",
-                        l.message ?? "",
-                        l.createdAt,
-                      ] as Array<string | number>,
-                  ),
-                ])
-              }
-              className="trans-state rounded-chip border border-line px-2.5 py-1 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg"
+              disabled={busy}
+              onClick={onExportLeads}
+              className="trans-state rounded-chip border border-line px-2.5 py-1 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg disabled:opacity-50"
             >
-              CSV
+              CSV (전체)
             </button>
           ) : null}
         </div>
@@ -3387,8 +3428,10 @@ function PageSettingsForm({
 }) {
   const st = page.settings;
   /* 텍스트 필드는 초안을 두고 blur/저장에서 확정 — 글자마다 서버 왕복을 돌리지 않는다 */
-  type Staged = Pick<LinkPageSettings, "ogTitle" | "ogImage" | "favicon" | "lockMessage">;
-  const stagedOf = (x: LinkPageSettings): Staged => ({ ogTitle: x.ogTitle, ogImage: x.ogImage, favicon: x.favicon, lockMessage: x.lockMessage });
+  type Staged = Pick<LinkPageSettings, "ogTitle" | "ogImage" | "favicon" | "lockMessage" | "ga4" | "metaPixel" | "tiktokPixel">;
+  const stagedOf = (x: LinkPageSettings): Staged => ({
+    ogTitle: x.ogTitle, ogImage: x.ogImage, favicon: x.favicon, lockMessage: x.lockMessage, ga4: x.ga4, metaPixel: x.metaPixel, tiktokPixel: x.tiktokPixel,
+  });
   const [form, setForm] = useState<Staged>(() => stagedOf(st));
   const [pw, setPw] = useState("");
   const [pwOpen, setPwOpen] = useState(false);
@@ -3412,7 +3455,8 @@ function PageSettingsForm({
       return out;
     });
   }
-  const { ogTitle, ogImage, favicon, lockMessage } = form;
+  const { ogTitle, ogImage, favicon, lockMessage, ga4, metaPixel, tiktokPixel } = form;
+  const setTracker = (k: "ga4" | "metaPixel" | "tiktokPixel", v: string) => setForm((f) => ({ ...f, [k]: v }));
   const setOgTitle = (v: string) => setForm((f) => ({ ...f, ogTitle: v }));
   const setOgImage = (v: string) => setForm((f) => ({ ...f, ogImage: v }));
   const setFavicon = (v: string) => setForm((f) => ({ ...f, favicon: v }));
@@ -3586,6 +3630,37 @@ function PageSettingsForm({
           </div>
           <p className="mt-1 text-[11px] text-fg-sub">브라우저 탭에 뜨는 작은 아이콘. 비우면 핀치 기본 아이콘이에요.</p>
         </div>
+      </div>
+
+      {/* 마케팅 연결 — 리틀리 「마케팅 연결」 카피(6단계). 메타 광고 리타게팅 모수를 프로필 링크에서 쌓는다 */}
+      <div className="space-y-2">
+        <p className="text-[12px] font-medium text-fg-sub">마케팅 연결</p>
+        <p className="-mt-1 text-[11px] text-fg-sub">ID 를 넣으면 공개 페이지에 해당 추적 코드가 실려요. 비우면 아무것도 실리지 않아요. 내 미리보기엔 싣지 않아요.</p>
+        {(
+          [
+            ["ga4", "GA4 측정 ID", "G-XXXXXXXXXX"],
+            ["metaPixel", "Meta 픽셀 ID", "1234567890123456"],
+            ["tiktokPixel", "TikTok 픽셀 ID", "CXXXXXXXXXXXXXXXXX"],
+          ] as const
+        ).map(([k, lab, ph]) => (
+          <div key={k}>
+            <label className={label} htmlFor={`ps-${k}`}>
+              {lab}
+            </label>
+            <input
+              id={`ps-${k}`}
+              value={form[k]}
+              onChange={(e) => setTracker(k, e.target.value)}
+              onBlur={() => commit(k, form[k])}
+              placeholder={ph}
+              maxLength={40}
+              autoComplete="off"
+              spellCheck={false}
+              className={`mt-1.5 ${input} font-mono`}
+            />
+          </div>
+        ))}
+        <p className="text-[11px] text-fg-sub">방문자에게 추적 코드를 싣는 건 주인의 책임이에요 — 개인정보처리방침에 제3자 분석 도구 사용을 적어 두세요.</p>
       </div>
     </div>
   );

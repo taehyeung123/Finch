@@ -8,7 +8,7 @@ import type { LpText } from "@/lib/links/i18n";
   방명록 제출 폼 — 공개 페이지(리틀리 흡수 4단계). 글 목록은 서버가 그린다(block-renderer).
   색은 테마 변수(--lp-*)만. 보내면 페이지를 새로고침해 방금 쓴 글이 목록에 보인다.
 */
-export function GuestbookForm({ slug, blockId, placeholder, isDemo, t }: { slug: string; blockId: string; placeholder: string; isDemo: boolean; t: LpText["guestbook"] }) {
+export function GuestbookForm({ slug, blockId, placeholder, isDemo, t, errors }: { slug: string; blockId: string; placeholder: string; isDemo: boolean; t: LpText["guestbook"]; errors: LpText["errors"] }) {
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
   const [done, setDone] = useState(false);
@@ -28,7 +28,7 @@ export function GuestbookForm({ slug, blockId, placeholder, isDemo, t }: { slug:
         setError(null);
         start(async () => {
           const r = await submitGuestbook({ slug, blockId, name, message });
-          if (!r.ok) setError(r.error ?? t.fail);
+          if (!r.ok) setError(errors[r.code] ?? t.fail);
           else {
             setDone(true);
             window.location.reload();

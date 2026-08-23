@@ -1107,7 +1107,7 @@ export const linkWorkspace: LinkWorkspace = {
     themeCustom: null,
     publishedAt: "2026-08-18T21:00:00+09:00",
     dirty: false,
-    settings: { lang: "ko", target: "blank", robots: "index", ogTitle: "", ogImage: "", favicon: "🐦", lockMessage: "", hasPassword: false },
+    settings: { lang: "ko", target: "blank", robots: "index", ogTitle: "", ogImage: "", favicon: "🐦", lockMessage: "", ga4: "", metaPixel: "", tiktokPixel: "", hasPassword: false },
   },
   blocks: [
     { id: "demo-b1", type: "notice", sortOrder: 0, active: true, data: { text: "이번 주 공구 진행 중이에요!", tone: "primary" } },
@@ -1164,8 +1164,9 @@ export const linkWorkspace: LinkWorkspace = {
     clicks: 1268,
     ctr: 26.3,
     returning: 31.5,
+    /* 실제 날짜로 — 7/32 같은 없는 날이 CSV 에 찍혔다(감사 L15). 기간 토글은 page.tsx 가 days 만큼 자른다 */
     daily: Array.from({ length: 30 }, (_, i) => ({
-      date: `2026-07-${String(21 + i).padStart(2, "0")}`,
+      date: new Date(Date.UTC(2026, 6, 21) + i * 86_400_000).toISOString().slice(0, 10),
       views: 120 + Math.round(Math.sin(i / 3) * 45) + i * 2,
       clicks: 32 + Math.round(Math.cos(i / 4) * 12) + i,
     })),

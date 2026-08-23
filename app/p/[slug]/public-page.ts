@@ -12,11 +12,11 @@ import { unlockCookieName, unlockTokenMatches } from "@/lib/links/password";
   page.tsx · /go/[id] · /vcard/[id] · 리드 제출 · 방명록 제출이 전부 이걸 탄다. 잠금을 page.tsx 에서만
   보면 블록 id 만 알면 /go 로 목적지가 나오고 폼 제출도 받아 "잠김"이 화면 장식이 된다(소넷 점검 5단계 #1).
 
-  1) RLS(익명/내 세션)로 읽는다 — 0058 정책이 잠긴 페이지 행을 **주인 외엔 숨긴다**. 그래서 여기서
-     행이 나왔는데 locked 면 읽은 사람이 주인이다(0058 미적용이면 settings 자체가 없어 잠금도 없다).
-  2) 안 나오면 잠긴 페이지일 수 있다 → service_role 로 settings 만 보고, 잠금이면 열림 쿠키(HMAC)를
-     해시와 대조한다. 열렸으면 스냅샷도 service_role 로 읽는다. 안 열렸으면 locked:true, snapshot:null.
-     주인 세션은 1) 에서 이미 나오므로 2) 는 늘 "남"이다.
+  1) RLS(익명/내 세션)로 읽는다 — 익명은 발행·비잠금 행만, 로그인 세션은 **자기 행만** 본다(0059 부터 공개
+     읽기 정책이 anon 전용 — 로그인한 아무 계정이 남의 초안 컬럼을 REST 로 읽던 구멍, 감사 L1).
+     그래서 여기서 행이 나왔는데 locked 면 읽은 사람이 주인이다.
+  2) 안 나오면 "남"이다(로그인한 방문자거나 잠긴 페이지) → service_role 로 읽되 공개 컬럼만 쓴다.
+     발행·비잠금이면 그대로 방문자에게, 잠금이면 열림 쿠키(HMAC)를 해시와 대조해 열렸을 때만 스냅샷을 준다.
 */
 
 export interface PublicPage {
@@ -101,14 +101,16 @@ export async function loadPublicPage(slug: string, opts: { withOwner?: boolean }
     };
   }
 
-  /* 2) 잠긴 페이지인가 — service_role 로 settings 만 본다 */
+  /* 2) 남의 페이지 — service_role 로 읽는다. 공개 컬럼(COLS+settings)만 select 하므로 초안 컬럼은 안 나간다 */
   const admin = createAdminClient();
   if (!admin) return null;
   const hidden = await readRow(admin, slug);
   if (!hidden || !hidden.published) return null;
   const settings = sanitizeLinkSettings(hidden.settings);
-  /* 발행됐고 잠기지도 않았는데 RLS 가 안 내줬다 — 정책이 어긋난 상태. 열어 주지 않는다(닫힌 쪽으로) */
-  if (!settings.hasPassword) return null;
+  /* 잠기지 않은 발행 페이지 — 로그인한 방문자(0059 부터 RLS 가 안 내준다). 익명 방문자와 똑같이 */
+  if (!settings.hasPassword) {
+    return { id: hidden.id, slug: hidden.slug, published: true, snapshot: hidden.published_snapshot ?? null, settings, locked: false, isOwner: false };
+  }
 
   const { data: secret } = await admin.from("link_page_secrets").select("password_hash").eq("page_id", hidden.id).maybeSingle();
   const stored = (secret?.password_hash as string | undefined) ?? "";

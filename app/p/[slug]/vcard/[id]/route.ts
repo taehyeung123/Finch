@@ -1,4 +1,5 @@
 import { loadPublicPage } from "../../public-page";
+import { isScheduledHidden } from "@/lib/links/blocks";
 
 /*
   연락처 저장 — 「연락처」 블록의 vCard(.vcf) 내려받기(리틀리 흡수 4단계).
@@ -30,7 +31,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string; 
     page && page.published && !page.locked
       ? ((page.snapshot as { blocks?: Array<{ id: string; type: string; data: Record<string, unknown> }> } | null)?.blocks ?? [])
       : [];
-  const data = blocks.find((b) => b.id === id && b.type === "vcard")?.data ?? null;
+  const found = blocks.find((b) => b.id === id && b.type === "vcard");
+  /* 예약 공개 밖이면 페이지에도 없다 — 라우트도 같은 판정(감사 L3) */
+  const data = found && !isScheduledHidden(found.data ?? {}) ? found.data : null;
 
   const vcf = data ? vcardOf(data) : null;
   if (!vcf) return new Response("Not found", { status: 404 });

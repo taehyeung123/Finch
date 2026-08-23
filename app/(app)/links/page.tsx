@@ -73,7 +73,7 @@ async function load(days: number): Promise<Loaded> {
      항상 실패하는 폼 하나가 이 화면의 전부였다. 저장은 서버 액션이 막는다. */
   /* days 를 그대로 되비춘다 — 샘플 수치는 그대로여도 기간 토글이 눌린 상태는 맞아야
      한다. 안 그러면 7일을 눌렀는데 30일이 선택된 채로 남아 고장난 것처럼 보인다. */
-  if (isDemoMode()) return { ...linkWorkspace, stats: { ...linkWorkspace.stats, days } };
+  if (isDemoMode()) return { ...linkWorkspace, stats: { ...linkWorkspace.stats, days, daily: linkWorkspace.stats.daily.slice(-days) } };
 
   const user = await getAuthUser();
   if (!user) return { ...EMPTY, stats: { ...EMPTY_STATS, days } };

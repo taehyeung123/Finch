@@ -20,6 +20,7 @@ export function LeadForm({
   data,
   isDemo = false,
   t,
+  errors,
 }: {
   slug: string;
   blockId: string;
@@ -29,6 +30,8 @@ export function LeadForm({
   isDemo?: boolean;
   /** 페이지 언어 문구(0058) — lib/links/i18n */
   t: LpText["lead"];
+  /** 서버 실패 코드 → 문구(감사 C8) */
+  errors: LpText["errors"];
 }) {
   const FIELD_LABEL: Record<string, string> = { name: t.name, email: t.email, phone: t.phone, message: t.message };
   const s = (k: string) => (typeof data[k] === "string" ? (data[k] as string) : "");
@@ -54,7 +57,7 @@ export function LeadForm({
     setError(null);
     try {
       const res = await submitLead({ slug, blockId, kind, ...values });
-      if (!res.ok) setError(res.error ?? t.fail);
+      if (!res.ok) setError(errors[res.code] ?? t.fail);
       else setDone(true);
     } catch {
       setError(t.failRetry);
@@ -106,6 +109,8 @@ export function LeadForm({
             onChange={(e) => setValues((v) => ({ ...v, [f]: e.target.value }))}
             placeholder={FIELD_LABEL[f]}
             aria-label={FIELD_LABEL[f]}
+            /* 구독은 이메일 하나뿐 — 빈 제출은 브라우저의 현지어 안내로 먼저 막는다(감사 C8) */
+            required={kind === "subscribe" || (fields.length === 1 && f !== "name")}
             maxLength={160}
             className="h-11 w-full rounded-[calc(var(--lp-radius)/1.6)] border border-[var(--lp-border)] bg-[var(--lp-bg)] px-3 text-[15px] text-[var(--lp-fg)] outline-none focus:border-[var(--lp-accent)]"
           />

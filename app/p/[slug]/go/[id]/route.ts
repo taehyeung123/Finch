@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadPublicPage } from "../../public-page";
+import { isScheduledHidden } from "@/lib/links/blocks";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
 import { linkWorkspace } from "@/lib/data";
@@ -86,6 +87,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
   const snap = page.snapshot as { blocks?: SnapBlock[] };
   const block = (snap.blocks ?? []).find((b) => b.id === id);
   if (!block) return back();
+  /* 예약 공개·종료된 블록은 page.tsx 가 안 그린다 — 복사해 둔 /go 주소로도 못 가게 같은 판정(감사 L3) */
+  if (isScheduledHidden(block.data ?? {})) return back();
 
   const iParam = new URL(request.url).searchParams.get("i");
   const idx = iParam !== null && /^\d+$/.test(iParam) ? Number(iParam) : null;
@@ -126,16 +129,28 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
       const minuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
       let skip = false;
       if (visitorHash) {
-        const { data: last } = await admin
+        /* 그룹 블록은 **항목까지** 같아야 연타다 — 블록만 보면 그리드의 두 번째 링크 클릭이 버려진다(감사 C11).
+           item_idx(0059) 미적용이면 컬럼 오류가 나므로 블록 단위로 한 번 더 본다. */
+        const base = admin
           .from("link_clicks")
           .select("created_at")
           .eq("page_id", page.id)
           .eq("block_id", block.id)
           .eq("visitor_hash", visitorHash)
-          .gte("created_at", minuteAgo)
-          .limit(1)
-          .maybeSingle();
-        if (last) skip = true;
+          .gte("created_at", minuteAgo);
+        let lastRes = await (idx === null ? base.is("item_idx", null) : base.eq("item_idx", idx)).limit(1).maybeSingle();
+        if (lastRes.error && /item_idx/i.test(lastRes.error.message)) {
+          lastRes = await admin
+            .from("link_clicks")
+            .select("created_at")
+            .eq("page_id", page.id)
+            .eq("block_id", block.id)
+            .eq("visitor_hash", visitorHash)
+            .gte("created_at", minuteAgo)
+            .limit(1)
+            .maybeSingle();
+        }
+        if (lastRes.data) skip = true;
       } else {
         const { count } = await admin
           .from("link_clicks")
@@ -155,14 +170,16 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
       }
 
       if (!skip) {
-        const { error } = await admin.from("link_clicks").insert({
+        const row = {
           page_id: page.id,
           /* block_id 는 **스냅샷에 굳은 id** 다. 초안(link_blocks)에서 지운 뒤라도 라이브에는
              남아 있고, 그 클릭은 반드시 기록돼야 한다 — 그래서 0049 에서 FK 를 뗐다.
              (0045 의 item_id 는 link_items 와 함께 0049 에서 사라졌다.) */
           block_id: block.id,
           visitor_hash: visitorHash,
-        });
+        };
+        let { error } = await admin.from("link_clicks").insert({ ...row, item_idx: idx });
+        if (error && /item_idx/i.test(error.message)) ({ error } = await admin.from("link_clicks").insert(row));
         if (error) console.error("[links] 클릭 기록 실패:", error.message);
       }
     } catch (e) {

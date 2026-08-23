@@ -35,6 +35,10 @@ export interface LinkPageSettings {
   favicon: string;
   /** 비밀번호 화면에 보여줄 안내 문구 */
   lockMessage: string;
+  /** 마케팅 연결(리틀리 「마케팅 연결」 카피) — 형식이 맞는 ID 만 저장된다. 비우면 아무 스크립트도 안 실린다 */
+  ga4: string;
+  metaPixel: string;
+  tiktokPixel: string;
   /** 비밀번호가 걸려 있는가(settings.locked). 해시는 link_page_secrets 에 */
   hasPassword: boolean;
 }
@@ -47,8 +51,18 @@ export const DEFAULT_LINK_SETTINGS: LinkPageSettings = {
   ogImage: "",
   favicon: "",
   lockMessage: "",
+  ga4: "",
+  metaPixel: "",
+  tiktokPixel: "",
   hasPassword: false,
 };
+
+/* 추적 ID 형식 — 이 정규식을 통과한 값만 공개 페이지 인라인 스크립트에 들어간다(따옴표·태그가 들어올 길이 없다) */
+export const TRACKER_FORMATS = {
+  ga4: /^G-[A-Z0-9]{4,14}$/,
+  metaPixel: /^\d{8,20}$/,
+  tiktokPixel: /^[A-Z0-9]{10,32}$/,
+} as const;
 
 const HTTPS_IMG = /^https:\/\/[^\s"'<>()]+$/;
 
@@ -77,6 +91,9 @@ export function sanitizeLinkSettings(raw: unknown): LinkPageSettings {
     ogImage: HTTPS_IMG.test(ogImage) ? ogImage : "",
     favicon: isSingleEmoji(favicon) || HTTPS_IMG.test(favicon) ? favicon : "",
     lockMessage: str("lockMessage", 200),
+    ga4: TRACKER_FORMATS.ga4.test(str("ga4", 20).toUpperCase()) ? str("ga4", 20).toUpperCase() : "",
+    metaPixel: TRACKER_FORMATS.metaPixel.test(str("metaPixel", 24)) ? str("metaPixel", 24) : "",
+    tiktokPixel: TRACKER_FORMATS.tiktokPixel.test(str("tiktokPixel", 40).toUpperCase()) ? str("tiktokPixel", 40).toUpperCase() : "",
     hasPassword: r.locked === true,
   };
 }

@@ -201,7 +201,7 @@ export function BlockRenderer({
         <div className={`${cardCls} p-4`}>
           <p className="text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "title") || t.guestbook.title}</p>
           <div className="mt-3">
-            <GuestbookForm slug={slug} blockId={block.id} placeholder={s(d, "placeholder") || t.guestbook.placeholder} isDemo={isDemo} t={t.guestbook} />
+            <GuestbookForm slug={slug} blockId={block.id} placeholder={s(d, "placeholder") || t.guestbook.placeholder} isDemo={isDemo} t={t.guestbook} errors={t.errors} />
           </div>
           {entries.length ? (
             <ul className="mt-4 space-y-3 border-t border-[var(--lp-border)] pt-3">
@@ -234,7 +234,7 @@ export function BlockRenderer({
          된" 것으로 보인다. 새 페이지에 기본으로 깔리는 빈 「새 링크」가 그대로
          발행되는 게 가장 흔한 경로다. */
       if (!s(d, "url")) return null;
-      const label = s(d, "label") || "링크";
+      const label = s(d, "label") || t.link;
       const emoji = s(d, "emoji");
       const emphasis = s(d, "emphasis") || "normal";
       const primary = emphasis === "primary";
@@ -535,6 +535,7 @@ export function BlockRenderer({
                 key={i}
                 href={goHref(slug, block.id, i)}
                 {...ext}
+                aria-label={lpN(t.postLink, i + 1)}
                 className="overflow-hidden rounded-[calc(var(--lp-radius)/1.6)]"
               >
                 {inner}

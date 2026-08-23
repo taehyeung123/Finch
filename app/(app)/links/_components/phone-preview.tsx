@@ -260,15 +260,24 @@ export function PhonePreview({
             {
               ...themeVars(theme, page.themeCustom),
               fontFamily: "var(--lp-font)",
-              backgroundImage: "var(--lp-bg-image)",
             } as React.CSSProperties
           }
           className={cn(
-            "relative overflow-y-auto bg-[var(--lp-bg)] bg-cover bg-center px-5 pb-10 pt-8 text-[var(--lp-fg)]",
-            frame === "device" ? "min-h-0 flex-1" : "max-h-[680px]",
+            "relative isolate overflow-hidden bg-[var(--lp-bg)] text-[var(--lp-fg)]",
+            frame === "device" ? "flex min-h-0 flex-1 flex-col" : "",
           )}
           data-lp-fx={page.themeCustom?.effect && page.themeCustom.effect !== "none" ? page.themeCustom.effect : undefined}
           data-lp-anim={page.themeCustom?.anim && page.themeCustom.anim !== "none" ? page.themeCustom.anim : undefined}
+        >
+          {/* 배경 이미지·그라데이션 — 공개 페이지(page.tsx)와 같은 **프레임에 고정된 한 겹 + 블러**. 스크롤 컨테이너에
+              직접 깔면 배경 필터(블러)가 안 먹어 편집기에선 선명한데 방문자에겐 흐린 사진이 나갔다(감사 L13) */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -inset-4 -z-10 bg-[var(--lp-bg)] bg-cover bg-center"
+            style={{ backgroundImage: "var(--lp-bg-image)", filter: "blur(var(--lp-bg-blur))" }}
+          />
+        <div
+          className={cn("relative overflow-y-auto px-5 pb-10 pt-8", frame === "device" ? "min-h-0 flex-1" : "max-h-[680px]")}
         >
           {page.themeCustom?.share ? (
             <span
@@ -537,7 +546,7 @@ export function PhonePreview({
                  나온다"로 보인다(2026-08-20 지적). 공개 여부는 캔버스 캡션·최신 칩이 말한다. */
               visible.map((b) => (
                 <div key={b.id} className="lp-block">
-                  <PreviewBlock block={b} mode="edit" />
+                  <PreviewBlock block={b} mode="draft" />
                 </div>
               ))
             )}
@@ -587,6 +596,7 @@ export function PhonePreview({
               </span>
             </div>
           ) : null}
+        </div>
         </div>
       </div>
     </div>
@@ -642,7 +652,8 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
                 alt=""
                 className={big ? "aspect-[16/9] w-full object-cover" : `${layout === "small" ? "size-10" : "size-16"} shrink-0 rounded-[calc(var(--lp-radius)/1.6)] object-cover`}
               />
-            ) : !big ? (
+            ) : !big && mode === "edit" ? (
+              /* 회색 칸은 캔버스의 "여기 사진 넣으세요" 초대다 — 공개 페이지는 안 그리므로 읽기 전용 미리보기에도 안 그린다(감사 L12) */
               <span className={`${layout === "small" ? "size-10" : "size-16"} shrink-0 rounded-[calc(var(--lp-radius)/1.6)] bg-[var(--lp-border)]`} aria-hidden />
             ) : null}
             <span className={`min-w-0 flex-1 ${big ? "block px-3 py-2.5 text-center" : ""}`}>
@@ -754,9 +765,9 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
                 {s(it, "imagePath") ? (
                   // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
                   <img src={s(it, "imagePath")} alt="" className="aspect-[4/3] w-full object-cover" />
-                ) : (
+                ) : mode === "edit" ? (
                   <span className="block aspect-[4/3] w-full bg-[var(--lp-border)]" aria-hidden />
-                )}
+                ) : null}
                 <span className="block px-2.5 py-2">
                   <span className="block truncate text-[13px] font-semibold">{s(it, "title")}</span>
                   {s(it, "subtitle") ? <span className="block truncate text-[11px] text-[var(--lp-muted)]">{s(it, "subtitle")}</span> : null}

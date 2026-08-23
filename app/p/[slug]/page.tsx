@@ -7,6 +7,7 @@ import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
 import { DEFAULT_LINK_SETTINGS, faviconHref } from "@/lib/links/settings";
 import { lpText } from "@/lib/links/i18n";
 import { LockScreen } from "./_components/lock-screen";
+import { TrackingScripts } from "./_components/tracking-scripts";
 import { loadPublicPage } from "./public-page";
 import { linkWorkspace } from "@/lib/data";
 import { FinchMark } from "@/components/logo";
@@ -142,7 +143,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
         style={themeVars(theme, null) as React.CSSProperties}
         className="relative isolate flex min-h-[100dvh] items-center justify-center bg-[var(--lp-bg)] px-5 text-[var(--lp-fg)]"
       >
-        <LockScreen slug={slug} message={settings.lockMessage} t={t.lock} />
+        <LockScreen slug={slug} message={settings.lockMessage} t={t.lock} errors={t.errors} />
       </main>
     );
   }
@@ -169,7 +170,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
   const visibleBlocks = snap.blocks.filter((b) => !isScheduledHidden(b.data));
   const emphasized = (() => {
     for (const b of visibleBlocks) {
-      const cta = emphasizedCta(b.type as BlockType, b.data);
+      const cta = emphasizedCta(b.type as BlockType, b.data, { donate: t.donate, product: t.product, go: t.go });
       if (cta) return { block: b, cta };
     }
     return null;
@@ -211,8 +212,8 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
   if (isDemoMode()) {
     guestbook = (linkWorkspace.guestbook ?? []).filter((g) => !g.hidden).map((g) => ({ id: g.id, name: g.name, message: g.message, reply: g.reply, createdAt: g.createdAt }));
   } else if (visibleBlocks.some((b) => b.type === "guestbook") && isSupabaseConfigured()) {
-    /* 비밀번호 페이지는 익명 RLS 가 글을 내주지 않는다(0058) — 여기까지 왔으면 이미 열린 요청이므로 service_role 로 읽는다 */
-    const supabase = settings.hasPassword && !isOwner ? createAdminClient() : await createClient();
+    /* 공개 읽기 정책은 anon 전용(0059) — 로그인한 방문자·열린 비밀번호 페이지는 service_role 로 읽는다(숨김 제외는 아래 eq) */
+    const supabase = isOwner ? await createClient() : createAdminClient();
     const { data: rows } = !supabase ? { data: null } : await supabase
       .from("link_guestbook")
       .select("id, name, message, reply, created_at")
@@ -251,15 +252,19 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
       {/* 방문 집계 — 렌더를 막지 않게 클라이언트에서 한 번만 쏜다.
           개인 식별 정보는 안 보낸다(서버가 익명 토큰만 쿠키로 관리). */}
       {published ? <ViewBeacon slug={slug} /> : null}
+      {/* 마케팅 연결(GA4·Meta 픽셀·TikTok 픽셀) — 주인이 ID 를 넣었을 때만, 공개 상태에서만 실린다.
+          주인 미리보기(비공개)엔 안 싣는다 — 자기 방문이 광고 계정 통계를 더럽힌다. */}
+      {published && !isOwner ? <TrackingScripts settings={settings} /> : null}
 
       <div
-        className={
+        className={`${
           split
-            ? "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 pt-10 lg:grid lg:max-w-[980px] lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:items-start lg:gap-x-14 lg:px-8 lg:pt-16"
-            : "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 pt-10"
-        }
+            ? "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:grid lg:max-w-[980px] lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:items-start lg:gap-x-14 lg:px-8 lg:pt-16"
+            : "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14"
+        } ${themeCustom?.share ? "pt-16" : "pt-10"}`}
       >
-        {/* 공유 버튼 — 콘텐츠 칸 기준 오른쪽 위(창 끝이 아니라, 소넷 확정) */}
+        {/* 공유 버튼 — 콘텐츠 칸 기준 오른쪽 위(창 끝이 아니라, 소넷 확정). 켜져 있으면 위 여백을 pt-16 으로 벌려
+            오른쪽 정렬 아바타·제목·주인 배너와 겹치지 않는다(감사 L14) */}
         {themeCustom?.share ? <ShareButton url={publicLinkUrl(slug)} title={snap.title || slug} label={t.share} done={t.copied} /> : null}
         {isOwner && !published ? (
           <p className={`mb-6 rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-card)] px-4 py-2.5 text-center text-[13px] font-medium ${split ? "lg:col-start-1" : ""}`}>
@@ -329,7 +334,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
           {visibleBlocks.map((b) => (
             <div key={b.id} className="lp-block">
               {b.type === "contact" || b.type === "subscribe" ? (
-                <LeadForm slug={slug} blockId={b.id} kind={b.type} data={b.data} isDemo={isDemoMode()} t={t.lead} />
+                <LeadForm slug={slug} blockId={b.id} kind={b.type} data={b.data} isDemo={isDemoMode()} t={t.lead} errors={t.errors} />
               ) : (
                 <BlockRenderer block={b} slug={slug} guestbook={b.type === "guestbook" ? guestbook : undefined} isDemo={isDemoMode()} t={t} ext={ext} />
               )}

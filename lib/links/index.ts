@@ -6,6 +6,10 @@
    이유로 필요하다: 화면은 즉시 피드백, 서버는 신뢰 경계, DB 는 최후 방어.)
 */
 
+import { SNS_CATALOG } from "./sns-catalog";
+
+const SNS_KEY_SET = new Set(SNS_CATALOG.map((s) => s.key));
+
 /** 소문자·숫자·하이픈, 2~30자, 하이픈으로 시작 불가 */
 export const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,29}$/;
 
@@ -97,7 +101,9 @@ export function sanitizeSnsLinks(input: unknown): Array<{ kind: string; url: str
     if (!s || typeof s !== "object") continue;
     const o = s as Record<string, unknown>;
     const url = typeof o.url === "string" ? normalizeSnsUrl(o.url) : null;
-    const kind = typeof o.kind === "string" ? o.kind.slice(0, 20) : "";
+    /* 카탈로그 밖 kind 는 버린다 — "constructor" 같은 프로토타입 이름이 아이콘 맵에서 Object 를 꺼내
+       공개 페이지 SSR 을 통째로 터뜨렸다(감사 L2) */
+    const kind = typeof o.kind === "string" && SNS_KEY_SET.has(o.kind) ? o.kind : "";
     if (url && kind) out.push({ kind, url });
     if (out.length >= 8) break;
   }

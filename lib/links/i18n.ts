@@ -39,8 +39,28 @@ export interface LpText {
   imageLink: string;
   /** {n} 치환 */
   photoLink: string;
+  /** {n} 치환 — 최근 게시물 타일 */
+  postLink: string;
+  /** 링크 버튼 이름이 비었을 때 */
+  link: string;
+  /** 강조 CTA 기본 문구 */
+  go: string;
   lock: { title: string; placeholder: string; submit: string; wrong: string; checking: string };
+  /** 서버 액션 실패 코드 → 문구(감사 C8: 서버가 한국어 문장을 돌려주면 en/ja 페이지에도 한국어가 떴다) */
+  errors: Record<LpErrorCode, string>;
 }
+
+export type LpErrorCode =
+  | "unavailable"
+  | "notFound"
+  | "invalid"
+  | "empty"
+  | "badEmail"
+  | "busy"
+  | "tooMany"
+  | "failed"
+  | "demo"
+  | "wrongPassword";
 
 const ko: LpText = {
   emptyLinks: "아직 등록된 링크가 없어요.",
@@ -72,7 +92,22 @@ const ko: LpText = {
   map: "찾아오시는 길",
   imageLink: "이미지 링크",
   photoLink: "사진 {n} 링크",
+  postLink: "게시물 {n}",
+  link: "링크",
+  go: "바로가기",
   lock: { title: "비밀번호가 있는 페이지예요", placeholder: "비밀번호", submit: "열기", wrong: "비밀번호가 맞지 않아요.", checking: "확인 중…" },
+  errors: {
+    unavailable: "지금은 처리할 수 없어요. 잠시 후 다시 시도해 주세요.",
+    notFound: "페이지를 찾을 수 없어요.",
+    invalid: "접수할 수 없는 요청이에요.",
+    empty: "내용을 입력해 주세요.",
+    badEmail: "이메일 형식이 올바르지 않아요.",
+    busy: "지금은 요청이 몰려 있어요. 잠시 후 다시 시도해 주세요.",
+    tooMany: "너무 자주 시도했어요. 잠시 후 다시 시도해 주세요.",
+    failed: "처리하지 못했어요. 잠시 후 다시 시도해 주세요.",
+    demo: "예시 페이지에서는 할 수 없어요.",
+    wrongPassword: "비밀번호가 맞지 않아요.",
+  },
 };
 
 const en: LpText = {
@@ -105,7 +140,22 @@ const en: LpText = {
   map: "Directions",
   imageLink: "Image link",
   photoLink: "Photo {n} link",
+  postLink: "Post {n}",
+  link: "Link",
+  go: "Open",
   lock: { title: "This page is password-protected", placeholder: "Password", submit: "Open", wrong: "Wrong password.", checking: "Checking…" },
+  errors: {
+    unavailable: "Not available right now. Please try again shortly.",
+    notFound: "Page not found.",
+    invalid: "This request can't be processed.",
+    empty: "Please fill in the required fields.",
+    badEmail: "That email address doesn't look right.",
+    busy: "Too many requests right now. Please try again shortly.",
+    tooMany: "Too many attempts. Please wait a moment and try again.",
+    failed: "Something went wrong. Please try again shortly.",
+    demo: "Not available on the sample page.",
+    wrongPassword: "Wrong password.",
+  },
 };
 
 const ja: LpText = {
@@ -138,7 +188,22 @@ const ja: LpText = {
   map: "アクセス",
   imageLink: "画像リンク",
   photoLink: "写真 {n} のリンク",
+  postLink: "投稿 {n}",
+  link: "リンク",
+  go: "開く",
   lock: { title: "パスワードが必要なページです", placeholder: "パスワード", submit: "開く", wrong: "パスワードが違います。", checking: "確認中…" },
+  errors: {
+    unavailable: "現在ご利用いただけません。しばらくしてからお試しください。",
+    notFound: "ページが見つかりません。",
+    invalid: "このリクエストは処理できません。",
+    empty: "必要な項目を入力してください。",
+    badEmail: "メールアドレスの形式が正しくありません。",
+    busy: "ただいま混み合っています。しばらくしてからお試しください。",
+    tooMany: "試行回数が多すぎます。しばらくしてからお試しください。",
+    failed: "処理できませんでした。しばらくしてからお試しください。",
+    demo: "サンプルページでは利用できません。",
+    wrongPassword: "パスワードが違います。",
+  },
 };
 
 const TEXT: Record<LinkLang, LpText> = { ko, en, ja };

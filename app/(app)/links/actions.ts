@@ -5,11 +5,11 @@ import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
 import { SLUG_MESSAGES, normalizeSnsUrl, normalizeUrl, sanitizeSnsLinks, sliceChars, validateSlug } from "@/lib/links";
-import { snsHref } from "@/lib/links/sns-catalog";
-import { BLOCK_TYPES, EMPHASIS_TYPES, defaultBlockData, type BlockType } from "@/lib/links/blocks";
+import { SNS_CATALOG, snsHref } from "@/lib/links/sns-catalog";
+import { BLOCK_META_KEYS, BLOCK_TYPES, EMPHASIS_TYPES, defaultBlockData, type BlockType } from "@/lib/links/blocks";
 import { SafeFetchError, fetchPublicHtml } from "@/lib/links/safe-fetch";
 import { DEFAULT_THEME_KEY, sanitizeThemeCustom, themeByKey } from "@/lib/links/themes";
-import { LINK_LANGS, isSingleEmoji, type LinkPageSettings } from "@/lib/links/settings";
+import { LINK_LANGS, TRACKER_FORMATS, isSingleEmoji, type LinkPageSettings } from "@/lib/links/settings";
 import { hashPagePassword, validPagePassword } from "@/lib/links/password";
 import { LINK_TEMPLATES } from "@/lib/links/templates";
 import { parseLittlyHtml } from "@/lib/links/littly";
@@ -131,6 +131,10 @@ export async function createLinkPage(slug: string, title: string): Promise<Resul
           ? "이미 프로필 링크가 있어요. 새로고침해 주세요."
           : "이미 사용 중인 주소예요. 다른 주소를 입력해 주세요.",
       };
+    }
+    /* 0059 트리거(풀린 주소 90일 보류) — 앱 사전 검사와 쓰기 사이의 경주도 같은 말로 */
+    if (error.code === "23514" && /다른 사람이 쓰던/.test(error.message)) {
+      return { ok: false, error: "최근까지 다른 사람이 쓰던 주소예요. 다른 주소를 입력해 주세요." };
     }
     console.error("[links] 페이지 생성 실패:", error.message);
     return { ok: false, error: "만들지 못했어요. 잠시 후 다시 시도해 주세요." };
@@ -267,6 +271,7 @@ export async function updateLinkProfile(input: {
   const sns: Array<{ kind: string; url: string }> = [];
   for (const s of input.snsLinks.slice(0, 8)) {
     const kind = String(s.kind).slice(0, 24);
+    if (!SNS_CATALOG.some((c) => c.key === kind)) return { ok: false, error: "지원하지 않는 SNS 종류예요." };
     /* 이메일·전화·문자 칩은 사용자가 주소만 적는다 — 스킴은 여기서 붙인다(snsHref) */
     const href = normalizeSnsUrl(snsHref(kind, s.url));
     if (!href) {
@@ -304,6 +309,9 @@ export async function updateLinkProfile(input: {
     .eq("user_id", user.id);
   if (error) {
     if (error.code === "23505") return { ok: false, error: "이미 사용 중인 주소예요." };
+    if (error.code === "23514" && /다른 사람이 쓰던/.test(error.message)) {
+      return { ok: false, error: "최근까지 다른 사람이 쓰던 주소예요. 다른 주소를 입력해 주세요." };
+    }
     console.error("[links] 프로필 저장 실패:", error.message);
     return { ok: false, error: "저장하지 못했어요." };
   }
@@ -358,7 +366,7 @@ function isSettingsColumnError(error: { code?: string; message: string }): boole
  * 편집기는 "저장됐는데 안 바뀜"보다 "왜 안 되는지"를 알아야 한다.
  */
 export async function updateLinkSettings(
-  patch: Partial<Pick<LinkPageSettings, "lang" | "target" | "robots" | "ogTitle" | "ogImage" | "favicon" | "lockMessage">>,
+  patch: Partial<Pick<LinkPageSettings, "lang" | "target" | "robots" | "ogTitle" | "ogImage" | "favicon" | "lockMessage" | "ga4" | "metaPixel" | "tiktokPixel">>,
 ): Promise<Result> {
   if (isDemoMode()) return DEMO;
   const user = await getAuthUser();
@@ -388,6 +396,19 @@ export async function updateLinkSettings(
     const v = String(patch.favicon).trim();
     if (v && !isSingleEmoji(v) && !HTTPS_IMG.test(v)) return { ok: false, error: "파비콘은 이모지 하나 또는 https 이미지 주소여야 해요." };
     next.favicon = v;
+  }
+  /* 마케팅 연결 — 형식이 틀리면 거절(저장돼도 스크립트가 안 실려 "연결했는데 안 잡힘"이 된다) */
+  const trackers: Array<["ga4" | "metaPixel" | "tiktokPixel", string, boolean]> = [
+    ["ga4", "GA4 측정 ID 는 G-XXXXXXXX 꼴이에요.", true],
+    ["metaPixel", "Meta 픽셀 ID 는 숫자 8~20자리예요.", false],
+    ["tiktokPixel", "TikTok 픽셀 ID 는 영문·숫자 10~32자예요.", true],
+  ];
+  for (const [k, msg, upper] of trackers) {
+    if (patch[k] === undefined) continue;
+    const raw = String(patch[k]).trim();
+    const v = upper ? raw.toUpperCase() : raw;
+    if (v && !TRACKER_FORMATS[k].test(v)) return { ok: false, error: msg };
+    next[k] = v;
   }
   if (Object.keys(next).length === 0) return { ok: true };
 
@@ -447,6 +468,32 @@ export async function setLinkPassword(password: string | null): Promise<Result> 
   if (error) return { ok: false, error: isSettingsColumnError(error) ? SETTINGS_MIGRATION_MSG : "저장하지 못했어요." };
   revalidatePath("/links");
   return { ok: true };
+}
+
+/**
+ * 받은 내용 전체 — CSV 내려받기용(감사 C13: 화면은 최근 50건인데 CSV 가 "전체"라고 했다).
+ * RLS 가 내 페이지 것만 내준다. PostgREST 기본 상한(1000행)을 넘을 수 있어 1000씩 잇는다(최대 20쪽).
+ */
+export async function exportLeads(): Promise<{ ok: boolean; error?: string; rows?: Array<{ kind: string; name: string; email: string; phone: string; message: string; createdAt: string }> }> {
+  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 내려받을 수 없어요." };
+  const page = await myPage();
+  if (!page) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
+  const supabase = await createClient();
+  const rows: Array<{ kind: string; name: string; email: string; phone: string; message: string; createdAt: string }> = [];
+  const PAGE = 1000;
+  for (let from = 0; from < PAGE * 20; from += PAGE) {
+    const { data, error } = await supabase
+      .from("link_leads")
+      .select("kind, name, email, phone, message, created_at")
+      .eq("page_id", page.id)
+      .order("created_at", { ascending: false })
+      .range(from, from + PAGE - 1);
+    if (error) return { ok: false, error: "내려받지 못했어요." };
+    const chunk = (data ?? []) as Array<{ kind: string; name: string | null; email: string | null; phone: string | null; message: string | null; created_at: string }>;
+    for (const r of chunk) rows.push({ kind: r.kind === "subscribe" ? "구독" : "문의", name: r.name ?? "", email: r.email ?? "", phone: r.phone ?? "", message: r.message ?? "", createdAt: r.created_at });
+    if (chunk.length < PAGE) break;
+  }
+  return { ok: true, rows };
 }
 
 export async function updateLinkTheme(theme: string): Promise<Result> {
@@ -1339,6 +1386,8 @@ export async function reorderBlock(id: string, beforeId: string | null): Promise
   const ids = list.map((x) => x.id);
   const from = ids.indexOf(id);
   if (from < 0) return { ok: false, error: "블록을 찾지 못했어요." };
+  /* 자기 앞에 놓기 = 제자리. 걸러내지 않으면 splice(-1) 이 끝에서 두 번째로 보낸다(감사 L4) */
+  if (beforeId === id) return { ok: true };
   /* 드롭 기준 블록이 그 사이 지워졌으면(다른 탭 등) 조용히 엉뚱한 자리로 넣지 않는다 */
   if (beforeId !== null && !ids.includes(beforeId)) {
     return { ok: false, error: "순서를 바꾸지 못했어요. 화면을 새로고침해 주세요." };
@@ -1346,6 +1395,7 @@ export async function reorderBlock(id: string, beforeId: string | null): Promise
 
   ids.splice(from, 1);
   const at = beforeId === null ? ids.length : ids.indexOf(beforeId);
+  if (at < 0) return { ok: false, error: "순서를 바꾸지 못했어요. 화면을 새로고침해 주세요." };
   ids.splice(at, 0, id);
 
   /* 목표 순서 = 0..n-1. 달라진 행만 쓴다 — 대부분의 드래그는 소수 행만 움직인다 */
@@ -1617,13 +1667,13 @@ const TEXT_CAPS: Record<string, number> = {
   alt: 100,
   address: 200,
   emoji: 4,
-  price: 20,
+  price: 40,
   originalPrice: 20,
   message: 140,
   placeholder: 40,
   fileName: 120,
   name: 60,
-  phone: 40,
+  phone: 60,
   email: 160,
   org: 60,
   role: 60,
@@ -1738,8 +1788,6 @@ function decodeEntities(t: string): string {
     .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
     .replace(/&nbsp;/g, " ");
 }
-/** 블록 메타(강조·예약) — 내용 저장이 건드리지 못하는 키. setBlockEmphasized / setBlockSchedule 만 바꾼다 */
-const BLOCK_META_KEYS = ["emphasized", "openAt", "closeAt"] as const;
 
 function sanitizeBlockData(input: Record<string, unknown>): { data?: Record<string, unknown>; error?: string } {
   const out: Record<string, unknown> = {};

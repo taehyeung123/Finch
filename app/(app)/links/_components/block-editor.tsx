@@ -53,7 +53,8 @@ export function BlockEditor({
   /** 블록 목록 행 안에 펼쳐진 경우 — 행 헤더가 제목·닫기 역할을 하므로 자체 헤더를 숨긴다 */
   embedded?: boolean;
   value: Record<string, unknown>;
-  onChange: (next: Record<string, unknown>) => void;
+  /** 함수형 갱신을 받는다 — 업로드·불러오기처럼 몇 초 뒤에 끝나는 갱신이 그 사이의 입력을 덮지 않게(감사 C6) */
+  onChange: (next: Record<string, unknown> | ((cur: Record<string, unknown>) => Record<string, unknown>)) => void;
   busy: boolean;
   /** 저장 실패 사유 — 화면 맨 위 배너만으로는 여기까지 스크롤한 사용자가 못 본다 */
   error: string | null;
@@ -63,17 +64,17 @@ export function BlockEditor({
   onClose: () => void;
 }) {
   const d = value;
-  const set = (k: string, v: unknown) => onChange({ ...d, [k]: v });
+  const set = (k: string, v: unknown) => onChange((cur) => ({ ...cur, [k]: v }));
   const str = (k: string) => (typeof d[k] === "string" ? (d[k] as string) : "");
   const num = (k: string, fb: number) => (typeof d[k] === "number" ? (d[k] as number) : fb);
   const items = Array.isArray(d.items) ? (d.items as Record<string, unknown>[]) : [];
   const fields = Array.isArray(d.fields) ? (d.fields as string[]) : [];
 
   const setItem = (i: number, k: string, v: unknown) =>
-    set(
-      "items",
-      items.map((it, j) => (j === i ? { ...it, [k]: v } : it)),
-    );
+    onChange((cur) => {
+      const its = Array.isArray(cur.items) ? (cur.items as Record<string, unknown>[]) : [];
+      return { ...cur, items: its.map((it, j) => (j === i ? { ...it, [k]: v } : it)) };
+    });
 
   const meta = BLOCK_CATALOG.find((c) => c.type === block.type);
   const tags = Array.isArray(d.tags) ? (d.tags as string[]).filter((t) => typeof t === "string") : [];
@@ -81,11 +82,15 @@ export function BlockEditor({
   /* 주소로 제목·이미지 불러오기 — 어느 칸(블록 자체 = -1, 항목 = i)이 도는 중인가 */
   const [fetching, setFetching] = useState<number | null>(null);
   const [fetchMsg, setFetchMsg] = useState<{ slot: number; text: string } | null>(null);
-  /* 불러오기는 몇 초 걸린다 — 그 사이 고친 다른 칸을 되돌리지 않게 **최신 값**으로 병합한다(소넷 확정) */
-  const latest = useRef(d);
+  /* 불러오기는 몇 초 걸린다 — 끝났을 때 이 편집기가 이미 닫혔거나 다른 블록으로 바뀌었으면 결과를 버린다.
+     안 버리면 A 블록의 결과가 B 블록의 초안에 들어간다(감사 C5). 같은 블록의 그 사이 입력은 함수형 갱신이 지킨다. */
+  const alive = useRef(true);
   useEffect(() => {
-    latest.current = d;
-  });
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
   async function pullMeta(
     url: string,
     apply: (cur: Record<string, unknown>, m: { title?: string; image?: string; description?: string }) => Record<string, unknown>,
@@ -99,15 +104,16 @@ export function BlockEditor({
     setFetchMsg(null);
     try {
       const r = await fetchLinkMeta(url);
+      if (!alive.current) return;
       if (!r.ok) setFetchMsg({ slot, text: r.error ?? "불러오지 못했어요." });
       else {
-        onChange(apply(latest.current, r));
+        onChange((cur) => apply(cur, r));
         setFetchMsg({ slot, text: r.title || r.image ? "제목·이미지를 채웠어요 — 마음에 안 들면 고치세요." : "찾은 정보가 없어요." });
       }
     } catch {
-      setFetchMsg({ slot, text: "불러오지 못했어요." });
+      if (alive.current) setFetchMsg({ slot, text: "불러오지 못했어요." });
     } finally {
-      setFetching(null);
+      if (alive.current) setFetching(null);
     }
   }
   function addTag(raw: string) {
@@ -869,7 +875,7 @@ export function BlockEditor({
           <FileField
             value={str("url")}
             fileName={str("fileName")}
-            onChange={(f) => onChange({ ...d, url: f.url, fileName: f.fileName, fileSize: f.fileSize ?? 0 })}
+            onChange={(f) => onChange((cur) => ({ ...cur, url: f.url, fileName: f.fileName, fileSize: f.fileSize ?? 0 }))}
           />
           <div>
             <label className={label} htmlFor="b-ftitle">

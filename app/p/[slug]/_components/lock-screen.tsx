@@ -11,7 +11,7 @@ import type { LpText } from "@/lib/links/i18n";
   맞으면 서버가 HttpOnly 열림 쿠키를 심고, 여기선 router.refresh() 로 같은 주소를 다시 그린다.
   색은 테마 변수(--lp-*)만 — 방문자의 브랜드 화면이다.
 */
-export function LockScreen({ slug, message, t }: { slug: string; message: string; t: LpText["lock"] }) {
+export function LockScreen({ slug, message, t, errors }: { slug: string; message: string; t: LpText["lock"]; errors: LpText["errors"] }) {
   const [pw, setPw] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -23,7 +23,7 @@ export function LockScreen({ slug, message, t }: { slug: string; message: string
         setError(null);
         start(async () => {
           const r = await unlockLinkPage(slug, pw);
-          if (!r.ok) setError(r.error ?? t.wrong);
+          if (!r.ok) setError(errors[r.code] ?? t.wrong);
           else router.refresh();
         });
       }}

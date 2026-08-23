@@ -472,6 +472,9 @@ export function partialReason(type: BlockType, data: Record<string, unknown>): s
 /** 강조(하단 고정 CTA)가 가능한 타입 — 주소 하나로 가는 버튼형만 */
 export const EMPHASIS_TYPES: readonly BlockType[] = ["link", "coupang", "donation", "image_card"];
 
+/** 블록 메타(강조·예약) — 내용 저장이 건드리지 못하는 키. 서버는 보존하고(updateBlock), 편집기는 초안 위에 서버 값을 덮는다 */
+export const BLOCK_META_KEYS = ["emphasized", "openAt", "closeAt"] as const;
+
 export function blockSchedule(data: Record<string, unknown>): { openAt: string | null; closeAt: string | null } {
   const iso = (v: unknown) => (typeof v === "string" && !Number.isNaN(Date.parse(v)) ? v : null);
   return { openAt: iso(data.openAt), closeAt: iso(data.closeAt) };
@@ -488,11 +491,13 @@ export function isScheduledHidden(data: Record<string, unknown>, now: number = D
 /** 캔버스 캡션용 한 줄 — "8/25 09:00 공개 예정" / "9/1 18:00 까지 공개" / null */
 export function scheduleCaption(data: Record<string, unknown>, now: number = Date.now()): string | null {
   const { openAt, closeAt } = blockSchedule(data);
+  /* 고정 시간대(KST)로 쓴다 — 서버(UTC)와 브라우저(KST)가 다르게 찍으면 하이드레이션이 깨진다(감사 L7) */
   const fmt = (iso: string) => {
     const d = new Date(iso);
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mm = String(d.getMinutes()).padStart(2, "0");
-    return `${d.getMonth() + 1}/${d.getDate()} ${hh}:${mm}`;
+    if (Number.isNaN(d.getTime())) return "";
+    const p = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(d);
+    const g = (t: string) => p.find((x) => x.type === t)?.value ?? "";
+    return `${g("month")}/${g("day")} ${g("hour")}:${g("minute")}`;
   };
   if (openAt && now < Date.parse(openAt)) return `예약 — ${fmt(openAt)} 공개 예정`;
   if (closeAt && now > Date.parse(closeAt)) return `예약 — ${fmt(closeAt)} 에 숨겨졌어요`;
@@ -501,11 +506,16 @@ export function scheduleCaption(data: Record<string, unknown>, now: number = Dat
 }
 
 /** 강조 CTA 로 그릴 라벨·주소 — 없으면 null(타입이 아니거나 주소가 비었거나) */
-export function emphasizedCta(type: BlockType, data: Record<string, unknown>): { label: string } | null {
+export function emphasizedCta(
+  type: BlockType,
+  data: Record<string, unknown>,
+  /* 페이지 언어 문구(공개 페이지) — 없으면 한국어(편집기) */
+  fallback: { donate: string; product: string; go: string } = { donate: "후원하기", product: "상품 보기", go: "바로가기" },
+): { label: string } | null {
   if (!EMPHASIS_TYPES.includes(type) || data.emphasized !== true) return null;
   const s = (k: string) => (typeof data[k] === "string" ? (data[k] as string).trim() : "");
   if (!s("url")) return null;
-  const label = s("label") || s("title") || s("buttonText") || (type === "donation" ? "후원하기" : type === "coupang" ? "상품 보기" : "바로가기");
+  const label = s("label") || s("title") || s("buttonText") || (type === "donation" ? fallback.donate : type === "coupang" ? fallback.product : fallback.go);
   return { label };
 }
 

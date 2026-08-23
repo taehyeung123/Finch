@@ -221,6 +221,7 @@ const ICONS: Record<string, (p: IconProps) => React.ReactNode> = {
 
 /** 채널 키 → 아이콘. 모르는 키면 지구본(링크는 링크다) */
 export function SnsIcon({ kind, className }: { kind: string; className?: string }) {
-  const Icon = ICONS[kind] ?? ICONS.website;
+  /* 자기 키만 — 프로토타입 이름("constructor")이 Object 를 꺼내 렌더를 터뜨리지 않게(감사 L2) */
+  const Icon = Object.hasOwn(ICONS, kind) ? ICONS[kind] : ICONS.website;
   return <>{Icon({ className })}</>;
 }

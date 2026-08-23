@@ -40,11 +40,11 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  applySecurityHeaders(response);
+  applySecurityHeaders(response, request.nextUrl.pathname.startsWith("/p/"));
   return response;
 }
 
-function applySecurityHeaders(response: NextResponse) {
+function applySecurityHeaders(response: NextResponse, publicLink = false) {
   const isDev = process.env.NODE_ENV === "development";
 
   // Supabase 설정 시 클라이언트 SDK의 auth 요청(fetch)을 위해 해당 오리진만 connect-src에 추가
@@ -83,17 +83,24 @@ function applySecurityHeaders(response: NextResponse) {
   /* 프로필 링크 「음악」 블록 임베드(리틀리 흡수 4단계) — 스포티파이·사운드클라우드 */
   const musicEmbeds = "https://open.spotify.com https://w.soundcloud.com";
 
+  // 프로필 링크 「마케팅 연결」(6단계) — 주인이 GA4·Meta 픽셀·TikTok 픽셀 ID 를 넣으면 /p/{slug} 에 스크립트가 실린다.
+  // 공개 페이지 경로에만 연다 — 앱 화면엔 남의 픽셀이 들어올 자리가 없다. ID 가 없는 페이지엔 스크립트 자체가 없다.
+  const trackerScript = publicLink ? " https://www.googletagmanager.com https://connect.facebook.net https://analytics.tiktok.com" : "";
+  const trackerConnect = publicLink
+    ? " https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.facebook.com https://analytics.tiktok.com"
+    : "";
+
   // CSP — Pretendard 웹폰트(jsdelivr CDN)만 외부 허용. 개발 모드는 HMR 때문에 unsafe-eval 필요
   const csp = [
     "default-src 'self'",
-    `script-src 'self' 'unsafe-inline' ${toss}${gaScript}${isDev ? " 'unsafe-eval'" : ""}`,
+    `script-src 'self' 'unsafe-inline' ${toss}${gaScript}${trackerScript}${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
     "font-src 'self' https://cdn.jsdelivr.net",
     // https: 를 통째로 여는 유일한 지시어다. 프로필 링크는 사용자가 **자기 이미지 주소를
     // 붙여넣는** 제품이고(노션·드롭박스·기존 홈페이지에 이미 올려둔 것), 호스트를
     // 열거할 방법이 없다. 이미지는 실행되지 않으므로 여는 대가가 가장 작다.
     `img-src 'self' data: blob: https: ${toss} ${igCdn} ${tiktokCdn}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
-    `connect-src 'self' ${toss}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}${gaConnect}`,
+    `connect-src 'self' ${toss}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}${gaConnect}${trackerConnect}`,
     `frame-src ${toss} ${youtube} ${musicEmbeds}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
