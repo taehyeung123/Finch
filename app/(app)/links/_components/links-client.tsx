@@ -1096,7 +1096,7 @@ export function LinksClient({
                   <span className="flex size-8 items-center justify-center rounded-card bg-body text-fg-sub" aria-hidden>
                     <Download className="size-4" />
                   </span>
-                  <span className="mt-2 block text-[13px] font-semibold leading-snug text-fg">
+                  <span className="mt-2 block text-[14px] font-semibold leading-snug text-fg">
                     + 기존 프로필 링크
                     <br />
                     복사해오기
@@ -2677,12 +2677,12 @@ function ThemePanel({
   useFontStylesheets(LINK_FONTS.flatMap((f) => fontStylesheets(f.key)));
   const chip = (on: boolean) =>
     cn(
-      "trans-state rounded-chip px-3 py-1.5 text-[13px] font-semibold",
+      "trans-state rounded-chip px-3 py-1.5 text-[12px] font-semibold",
       on ? "bg-primary text-on-primary" : "border border-line bg-body text-fg-sub hover:bg-tint-hover hover:text-fg",
     );
   const bgMode: "solid" | "gradient" | "image" = custom.bgImage ? "image" : custom.bg2 || (!custom.bg && preset.bg2) ? "gradient" : "solid";
   const colorInput = (key: "bg" | "accent" | "card" | "fg", label: string) => (
-    <label key={key} className="flex items-center gap-2 rounded-card border border-line bg-body px-2.5 py-2 text-[13px]">
+    <label key={key} className="flex items-center gap-2 rounded-card border border-line bg-body px-2.5 py-2 text-[14px]">
       <input
         type="color"
         /* color 인풋은 #rrggbb 만 받는다 — 8자리(알파) 프리셋 값은 검정으로 새니타이즈된다(감사 #14) */
@@ -2745,7 +2745,7 @@ function ThemePanel({
 
       <DSection title="배경" hint="단색·그라데이션·사진. 사진엔 필터를 덮어 글자를 살려요.">
         <div className="flex flex-wrap gap-1.5">
-          <button type="button" className={chip(bgMode === "solid")} aria-pressed={bgMode === "solid"} onClick={() => onCustomChange({ bg2: undefined, bgImage: undefined, bg: custom.bg ?? preset.bg })}>
+          <button type="button" className={chip(bgMode === "solid")} aria-pressed={bgMode === "solid"} onClick={() => bgMode !== "solid" && onCustomChange({ bg2: undefined, bgImage: undefined, bg: custom.bg ?? preset.bg })}>
             단색
           </button>
           <button
@@ -2753,7 +2753,7 @@ function ThemePanel({
             className={chip(bgMode === "gradient")}
             aria-pressed={bgMode === "gradient"}
             /* 끝색 기본값은 배경에 강조색을 살짝 섞은 색 — 강조색 그대로면 기본·다크 프리셋에서 글자색과 같아 아래쪽 제목이 사라진다(감사2 U7) */
-            onClick={() => onCustomChange({ bgImage: undefined, bg2: custom.bg2 ?? preset.bg2 ?? mixHex(custom.bg ?? preset.bg, custom.accent ?? preset.accent, 0.22) })}
+            onClick={() => bgMode !== "gradient" && onCustomChange({ bgImage: undefined, bg2: custom.bg2 ?? preset.bg2 ?? mixHex(custom.bg ?? preset.bg, custom.accent ?? preset.accent, 0.22) })}
           >
             그라데이션
           </button>
@@ -2764,7 +2764,7 @@ function ThemePanel({
         <div className="flex flex-wrap gap-2">
           {colorInput("bg", bgMode === "gradient" ? "시작색" : "배경색")}
           {bgMode === "gradient" ? (
-            <label className="flex items-center gap-2 rounded-card border border-line bg-body px-2.5 py-2 text-[13px]">
+            <label className="flex items-center gap-2 rounded-card border border-line bg-body px-2.5 py-2 text-[14px]">
               <input type="color" value={custom.bg2 ?? preset.bg2 ?? "#FFFFFF"} onChange={(e) => onCustomChange({ bg2: e.target.value.toUpperCase() })} aria-label="그라데이션 끝색" className="size-7 cursor-pointer rounded-[6px] border-0 bg-transparent p-0" />
               <span className="font-medium">끝색</span>
             </label>
@@ -2805,23 +2805,28 @@ function ThemePanel({
         {(
           [
             ["모서리", CUSTOM_RADIUS, custom.radius ?? preset.radius, (k: string) => onCustomChange({ radius: k as LinkThemeCustom["radius"] })],
-            ["스타일", CUSTOM_BUTTONS, custom.button ?? "fill", (k: string) => onCustomChange({ button: k as LinkThemeCustom["button"] })],
+            ["스타일", CUSTOM_BUTTONS, custom.buttonScope === "all" ? "fill" : (custom.button ?? "fill"), (k: string) => onCustomChange({ button: k as LinkThemeCustom["button"] })],
             ["그림자", CUSTOM_SHADOWS, custom.shadow ?? (preset.shadow ? "soft" : "none"), (k: string) => onCustomChange({ shadow: k as LinkThemeCustom["shadow"] })],
             ["액션", CUSTOM_EFFECTS, custom.effect ?? "none", (k: string) => onCustomChange({ effect: k as LinkThemeCustom["effect"] })],
           ] as const
-        ).map(([lab, opts, cur, set]) => (
-          <div key={lab} className="flex flex-wrap items-center gap-1.5">
-            <span className="mr-1 w-10 text-[12px] text-fg-sub">{lab}</span>
-            {opts.map((o) => (
-              <button key={o.key} type="button" aria-pressed={cur === o.key} onClick={() => set(o.key)} className={chip(cur === o.key)}>
-                {o.label}
-              </button>
-            ))}
-          </div>
-        ))}
+        ).map(([lab, opts, cur, set]) => {
+          /* 전체 적용이면 스타일(채움/외곽선/은은)은 의미가 없다 — 비활성 + 이유 */
+          const off = lab === "스타일" && custom.buttonScope === "all";
+          return (
+            <div key={lab} className="flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 w-10 text-[12px] text-fg-sub">{lab}</span>
+              {opts.map((o) => (
+                <button key={o.key} type="button" disabled={off} aria-pressed={cur === o.key} onClick={() => set(o.key)} className={cn(chip(cur === o.key), off && "opacity-40")}>
+                  {o.label}
+                </button>
+              ))}
+              {off ? <span className="text-[12px] text-fg-faint">— 「전체 적용」이면 모두 채움</span> : null}
+            </div>
+          );
+        })}
       </DSection>
 
-      <DSection title="글꼴" hint="한글 글꼴 30여 종. 이름으로 찾아요.">
+      <DSection title="글꼴" hint="한글 30종 + 영문 11종. 이름으로 찾아요.">
         <input
           value={fontQuery}
           onChange={(e) => setFontQuery(e.target.value)}
@@ -2848,7 +2853,7 @@ function ThemePanel({
               <span className="mt-1 text-[11px] text-fg-sub">{f.label}</span>
             </button>
           ))}
-          {fonts.length === 0 ? <p className="col-span-full py-4 text-center text-[13px] text-fg-sub">찾는 글꼴이 없어요.</p> : null}
+          {fonts.length === 0 ? <p className="col-span-full py-4 text-center text-[14px] text-fg-sub">찾는 글꼴이 없어요.</p> : null}
         </div>
       </DSection>
 
@@ -2920,7 +2925,7 @@ function ThemePanel({
       </DSection>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
-        <p className="text-[13px] text-fg-sub">{customDirty ? "저장 안 한 변경이 있어요 — 미리보기엔 보이지만 「저장」해야 실제로 반영돼요." : "모두 저장됐어요."}</p>
+        <p className="text-[14px] text-fg-sub">{customDirty ? "저장 안 한 변경이 있어요 — 미리보기엔 보이지만 「저장」해야 실제로 반영돼요." : "모두 저장됐어요."}</p>
         <Button disabled={busy || !customDirty} onClick={onCustomSave}>
           {busy ? "저장 중…" : "꾸미기 저장"}
         </Button>
@@ -2941,12 +2946,12 @@ function BarList({ title, rows, empty, hint }: { title: string; rows: Array<{ la
       <div className="rounded-card border border-line bg-body p-4">
         <p className="text-[14px] font-semibold">{title}</p>
         {rows.length === 0 ? (
-          <p className="mt-2 text-[13px] text-fg-sub">{empty}</p>
+          <p className="mt-2 text-[14px] text-fg-sub">{empty}</p>
         ) : (
           <ul className="mt-2 space-y-2">
             {rows.map((r, i) => (
               <li key={i}>
-                <div className="flex items-baseline justify-between gap-2 text-[13px]">
+                <div className="flex items-baseline justify-between gap-2 text-[14px]">
                   <span className="min-w-0 truncate">{r.label}</span>
                   <span className="tnum shrink-0 font-semibold">
                     {n(r.value)} <span className="font-normal text-fg-sub">{total > 0 ? `${Math.round((r.value / total) * 100)}%` : ""}</span>
@@ -3101,7 +3106,11 @@ function StatsPanel({
             </span>
           </span>
         </div>
-        {stats.daily.some((d) => d.views > 0 || d.clicks > 0) ? (
+        {stats.daily.length < 2 ? (
+          <p className="mt-2 text-[14px] text-fg-sub">
+            오늘 페이지뷰 <span className="tnum font-semibold text-fg">{n(stats.daily[0]?.views ?? 0)}</span> · 클릭 <span className="tnum font-semibold text-fg">{n(stats.daily[0]?.clicks ?? 0)}</span> — 추이는 이틀 이상일 때 선으로 보여요.
+          </p>
+        ) : stats.daily.some((d) => d.views > 0 || d.clicks > 0) ? (
           <>
             <DualLineChart
               className="mt-2"
@@ -3128,7 +3137,7 @@ function StatsPanel({
         <div className="rounded-card border border-line bg-body p-4">
           <p className="text-[14px] font-semibold">BEST 클릭</p>
           {best.length === 0 ? (
-            <p className="mt-2 text-[13px] text-fg-sub">아직 클릭이 없어요.</p>
+            <p className="mt-2 text-[14px] text-fg-sub">아직 클릭이 없어요.</p>
           ) : (
             <ol className="mt-2 space-y-2">
               {best.map((b, i) => (
@@ -3158,7 +3167,7 @@ function StatsPanel({
             </div>
           </div>
           {sortedBlocks.length === 0 ? (
-            <p className="mt-2 text-[13px] text-fg-sub">아직 클릭이 없어요.</p>
+            <p className="mt-2 text-[14px] text-fg-sub">아직 클릭이 없어요.</p>
           ) : (
             <ul className="mt-2 space-y-1.5">
               {sortedBlocks.slice(0, 20).map((b) => (
@@ -3364,7 +3373,7 @@ function ManagePanel({
       </div>
       <p className="text-[12px] text-fg-sub">목록은 최근 50건만 보여요(숫자는 전체). 받은 내용 전체는 CSV 로 내려받을 수 있어요.</p>
       {leadsFailed ? (
-        <p role="alert" className="rounded-card border border-negative/40 bg-negative-weak px-3 py-2 text-[13px] text-negative-strong">
+        <p role="alert" className="rounded-card border border-negative/40 bg-negative-weak px-3 py-2 text-[14px] text-negative-strong">
           받은 내용을 불러오지 못했어요 — 새로고침해 주세요. (아무도 안 보낸 게 아니라 조회가 실패한 거예요.)
         </p>
       ) : null}
@@ -3473,7 +3482,7 @@ function ManagePanel({
                   <span className="tnum ml-auto text-[12px] text-fg-sub">{dayOf(g.createdAt)}</span>
                 </div>
                 <p className="mt-1 whitespace-pre-wrap text-[14px]">{g.message}</p>
-                {g.reply ? <p className="mt-1 rounded-card bg-plate px-2.5 py-1.5 text-[13px] text-fg-sub">↳ {g.reply}</p> : null}
+                {g.reply ? <p className="mt-1 rounded-card bg-plate px-2.5 py-1.5 text-[14px] text-fg-sub">↳ {g.reply}</p> : null}
                 {replyFor === g.id ? (
                   <div className="mt-1.5 flex gap-1.5">
                     <input
@@ -3806,7 +3815,7 @@ function MarketingPanel({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h4 className="text-[15px] font-semibold">마케팅 연결</h4>
-            <p className="mt-0.5 text-[13px] text-fg-sub">ID 를 넣으면 공개 페이지에 추적 코드가 실려요. 비우면 아무것도 실리지 않고, 내 미리보기엔 싣지 않아요.</p>
+            <p className="mt-0.5 text-[14px] text-fg-sub">ID 를 넣으면 공개 페이지에 추적 코드가 실려요. 비우면 아무것도 실리지 않고, 내 미리보기엔 싣지 않아요.</p>
           </div>
           <span className={cn("rounded-chip px-2.5 py-1 text-[12px] font-semibold", connected.length ? "bg-positive-weak text-positive-strong" : "bg-plate text-fg-sub")}>
             {connected.length ? `연결됨 · ${connected.join(" · ")}` : "연결 안 됨"}
@@ -3818,7 +3827,7 @@ function MarketingPanel({
       <section className="space-y-3 border-t border-line pt-5">
         <h4 className="text-[15px] font-semibold">퍼뜨리기</h4>
         <div className="flex flex-wrap items-center gap-2">
-          <code className="min-w-0 flex-1 truncate rounded-card border border-line bg-body px-3 py-2 text-[13px] text-fg-sub">{url}</code>
+          <code className="min-w-0 flex-1 truncate rounded-card border border-line bg-body px-3 py-2 text-[14px] text-fg-sub">{url}</code>
           <Button
             variant="secondary"
             size="sm"
@@ -3840,7 +3849,7 @@ function MarketingPanel({
             QR 코드
           </Button>
         </div>
-        <p className="text-[13px] text-fg-sub">인스타 프로필·유튜브 설명란엔 위의 플랫폼별 주소를, 명함·매장엔 QR 을 쓰세요.</p>
+        <p className="text-[14px] text-fg-sub">인스타 프로필·유튜브 설명란엔 위의 플랫폼별 주소를, 명함·매장엔 QR 을 쓰세요.</p>
         {qr ? <QrModal url={url} onClose={() => setQr(false)} /> : null}
       </section>
     </>

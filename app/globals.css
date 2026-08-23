@@ -1022,6 +1022,9 @@ body {
   [data-lp-anim="rise"] .lp-block { animation: lp-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 35%; }
   [data-lp-anim="zoom"] .lp-block { animation: lp-zoom linear both; animation-timeline: view(); animation-range: entry 0% entry 35%; }
 }
+/* 커서 모양(디자인 탭) — UA 의 a{cursor:pointer} 가 상속을 이겨 링크 위에서만 기본 커서로 돌아갔다(소넷). 상속으로 덮는다 */
+[style*="--lp-cursor"] a, [style*="--lp-cursor"] button, [style*="--lp-cursor"] .lp-btn { cursor: inherit; }
+
 @media (prefers-reduced-motion: reduce) {
   [data-lp-fx] .lp-btn, [data-lp-anim] .lp-block { animation: none !important; transition: none !important; transform: none !important; }
   /* 스윕·물결 오버레이는 숨긴다 — transform:none 으로 두면 화면 밖에 쉬던 덧칠이 버튼 위에 상시로 얹힌다(감사2 U9) */

@@ -217,7 +217,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
   const logoPos = themeCustom?.logoPos ?? "bottom";
   const screenFx = themeCustom?.screenFx && themeCustom.screenFx !== "none" ? themeCustom.screenFx : null;
   const logoEl = logoImage ? (
-    <div className={`flex justify-center ${logoPos === "top" ? "mb-5" : "mt-10 pb-6"} ${split ? "lg:col-start-2" : ""}`}>
+    <div className={`flex justify-center ${logoPos === "top" ? "mb-5" : "mt-10 pb-6"} ${split ? (logoPos === "top" ? "lg:col-span-2" : "lg:col-start-2") : ""}`}>
       {/* eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL */}
       <img src={logoImage} alt="" className="max-h-12 max-w-[200px] object-contain" />
     </div>
