@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import { FinchMark } from "@/components/logo";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, youtubeEmbed } from "@/lib/links";
+import { Collapsible } from "@/app/p/[slug]/_components/collapsible";
 import { themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
 import {
   BLOCK_CATALOG,
@@ -50,6 +51,36 @@ const arr = (d: Record<string, unknown>, k: string) =>
   Array.isArray(d[k]) ? (d[k] as Record<string, unknown>[]) : [];
 
 const card = "rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-card)] shadow-[var(--lp-shadow)]";
+
+/** 강조 태그 칩 — 공개 렌더러와 같은 모양(프레임 비율) */
+function PTags({ d, align = "center", inherit = false }: { d: Record<string, unknown>; align?: "center" | "start"; inherit?: boolean }) {
+  const tags = Array.isArray(d.tags) ? (d.tags as unknown[]).filter((t): t is string => typeof t === "string" && !!t.trim()).slice(0, 3) : [];
+  if (!tags.length) return null;
+  return (
+    <span className={`mt-1 flex flex-wrap gap-1 ${align === "start" ? "justify-start" : "justify-center"}`}>
+      {tags.map((t) => (
+        <span
+          key={t}
+          className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${inherit ? "" : "text-[var(--lp-accent)]"}`}
+          style={{ backgroundColor: inherit ? "color-mix(in srgb, currentColor 16%, transparent)" : "color-mix(in srgb, var(--lp-accent) 14%, transparent)" }}
+        >
+          #{t}
+        </span>
+      ))}
+    </span>
+  );
+}
+function PPrice({ d }: { d: Record<string, unknown> }) {
+  const price = s(d, "price");
+  if (!price) return null;
+  const orig = s(d, "originalPrice");
+  return (
+    <span className="tnum mt-0.5 flex items-baseline gap-1 text-[12px]">
+      <span className="font-bold">{price}</span>
+      {orig ? <span className="text-[10px] opacity-70 line-through">{orig}</span> : null}
+    </span>
+  );
+}
 
 const SNS_LABEL = new Map<string, string>(SNS_KINDS.map((k) => [k.key, k.label]));
 
@@ -575,11 +606,40 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
       if (tWeight === "medium") textStyle.fontWeight = 500;
       else if (tWeight === "bold") textStyle.fontWeight = 700;
       if (/^#[0-9a-fA-F]{6}$/.test(s(d, "textColor"))) textStyle.color = s(d, "textColor");
+      const layout = s(d, "layout") || "button";
+      const thumb = s(d, "imagePath");
+      if (layout === "small" || layout === "medium" || layout === "large") {
+        const big = layout === "large";
+        return (
+          <div className={`${card} overflow-hidden ${big ? "" : "flex items-center gap-2.5 p-2.5"}`}>
+            {thumb ? (
+              // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
+              <img
+                src={thumb}
+                alt=""
+                className={big ? "aspect-[16/9] w-full object-cover" : `${layout === "small" ? "size-10" : "size-16"} shrink-0 rounded-[calc(var(--lp-radius)/1.6)] object-cover`}
+              />
+            ) : !big ? (
+              <span className={`${layout === "small" ? "size-10" : "size-16"} shrink-0 rounded-[calc(var(--lp-radius)/1.6)] bg-[var(--lp-border)]`} aria-hidden />
+            ) : null}
+            <span className={`min-w-0 flex-1 ${big ? "block px-3 py-2.5 text-center" : ""}`}>
+              <span style={textStyle} className="block text-[13px] font-semibold">
+                {s(d, "emoji") ? <span aria-hidden>{s(d, "emoji")} </span> : null}
+                {s(d, "label") || "링크"}
+              </span>
+              <PPrice d={d} />
+              <PTags d={d} align={big ? "center" : "start"} />
+            </span>
+          </div>
+        );
+      }
+      const hasExtras = s(d, "price") || (Array.isArray(d.tags) && (d.tags as unknown[]).length > 0);
       return (
         <div
           style={textStyle}
           className={[
             "flex min-h-[44px] items-center justify-center gap-1.5 rounded-[var(--lp-radius-btn)] px-4 py-2.5 text-center text-[13px] font-semibold",
+            hasExtras ? "flex-col gap-0.5" : "",
             emphasis === "primary"
               ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]"
               : emphasis === "outline"
@@ -587,8 +647,16 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
                 : "border border-[var(--lp-btn-border)] bg-[var(--lp-btn-bg)] text-[var(--lp-btn-fg)] shadow-[var(--lp-shadow)]",
           ].join(" ")}
         >
-          {s(d, "emoji") ? <span aria-hidden>{s(d, "emoji")}</span> : null}
-          {s(d, "label") || "링크"}
+          <span className="flex items-center gap-1.5">
+            {s(d, "emoji") ? <span aria-hidden>{s(d, "emoji")}</span> : null}
+            {s(d, "label") || "링크"}
+          </span>
+          {hasExtras ? (
+            <span className="flex flex-col items-center">
+              <PPrice d={d} />
+              <PTags d={d} inherit />
+            </span>
+          ) : null}
         </div>
       );
     }
@@ -655,45 +723,58 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
     case "card_row": {
       const items = arr(d, "items").filter((it) => mode === "edit" || s(it, "url"));
       if (mode === "edit" && items.length === 0) return <Ghost reason="항목을 추가해 주세요" />;
-      return (
-        <div className="space-y-2">
-          {items.map((it, i) => (
-              <div key={i} className={`${card} flex items-center gap-2.5 p-2.5`}>
+      if (s(d, "layout") === "carousel") {
+        return (
+          <div className="-mx-5 flex snap-x gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {items.map((it, i) => (
+              <div key={i} className={`${card} w-[72%] shrink-0 snap-start overflow-hidden`}>
                 {s(it, "imagePath") ? (
                   // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
-                  <img
-                    src={s(it, "imagePath")}
-                    alt=""
-                    className="size-10 shrink-0 rounded-[calc(var(--lp-radius)/1.6)] object-cover"
-                  />
-                ) : null}
-                <span className="min-w-0 flex-1">
+                  <img src={s(it, "imagePath")} alt="" className="aspect-[4/3] w-full object-cover" />
+                ) : (
+                  <span className="block aspect-[4/3] w-full bg-[var(--lp-border)]" aria-hidden />
+                )}
+                <span className="block px-2.5 py-2">
                   <span className="block truncate text-[13px] font-semibold">{s(it, "title")}</span>
-                  {s(it, "subtitle") ? (
-                    <span className="block truncate text-[12px] text-[var(--lp-muted)]">{s(it, "subtitle")}</span>
-                  ) : null}
+                  {s(it, "subtitle") ? <span className="block truncate text-[11px] text-[var(--lp-muted)]">{s(it, "subtitle")}</span> : null}
+                  <PPrice d={it} />
                 </span>
               </div>
             ))}
+          </div>
+        );
+      }
+      const nodes = items.map((it, i) => (
+        <div key={i} className={`${card} flex items-center gap-2.5 p-2.5`}>
+          {s(it, "imagePath") ? (
+            // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
+            <img src={s(it, "imagePath")} alt="" className="size-10 shrink-0 rounded-[calc(var(--lp-radius)/1.6)] object-cover" />
+          ) : null}
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[13px] font-semibold">{s(it, "title")}</span>
+            {s(it, "subtitle") ? <span className="block truncate text-[12px] text-[var(--lp-muted)]">{s(it, "subtitle")}</span> : null}
+            <PPrice d={it} />
+          </span>
         </div>
-      );
+      ));
+      return <Collapsible items={nodes} initial={n(d, "collapse", 0)} className="space-y-2" />;
     }
     case "grid": {
       const items = arr(d, "items").filter((it) => mode === "edit" || s(it, "url"));
       if (mode === "edit" && items.length === 0) return <Ghost reason="항목을 추가해 주세요" />;
-      return (
-        <div className={`grid gap-2 ${n(d, "columns", 2) === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
-          {items.map((it, i) => (
-              <div key={i} className={`${card} overflow-hidden`}>
-                {s(it, "imagePath") ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
-                  <img src={s(it, "imagePath")} alt="" className="aspect-square w-full object-cover" />
-                ) : null}
-                <span className="block px-2 py-1.5 text-center text-[12px] font-medium">{s(it, "title")}</span>
-              </div>
-            ))}
+      const nodes = items.map((it, i) => (
+        <div key={i} className={`${card} overflow-hidden`}>
+          {s(it, "imagePath") ? (
+            // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
+            <img src={s(it, "imagePath")} alt="" className="aspect-square w-full object-cover" />
+          ) : null}
+          <span className="block px-2 py-1.5 text-center text-[12px] font-medium">
+            {s(it, "title")}
+            <PPrice d={it} />
+          </span>
         </div>
-      );
+      ));
+      return <Collapsible items={nodes} initial={n(d, "collapse", 0)} className={`grid gap-2 ${n(d, "columns", 2) === 3 ? "grid-cols-3" : "grid-cols-2"}`} />;
     }
     case "notice":
       return (

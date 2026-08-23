@@ -53,7 +53,29 @@ export interface LinkBlockData {
   textWeight?: "medium" | "semibold" | "bold";
   /** 텍스트 색 — #rrggbb. 비우면 테마가 정한다 */
   textColor?: string;
+  /* ── 리틀리 흡수 2단계(2026-08-22): 썸네일·레이아웃·강조 태그·가격 ── */
+  /** 썸네일 — 카드 레이아웃에서 보인다 */
+  imagePath?: string;
+  /** button(기본 버튼) | small(썸네일 작은 카드) | medium(중간 카드) | large(이미지 위 큰 카드) */
+  layout?: "button" | "small" | "medium" | "large";
+  /** 강조 태그 — 최대 3개, 16자. 버튼 아래 작은 칩 */
+  tags?: string[];
+  /** 표시용 문자열("29,000원") — 계산에 쓰지 않는다 */
+  price?: string;
+  /** 정가 — 있으면 취소선으로 옆에 */
+  originalPrice?: string;
 }
+
+/** 단일 링크 레이아웃 — 편집기 칩과 렌더러가 같은 목록 */
+export const LINK_LAYOUTS = [
+  { key: "button", label: "버튼" },
+  { key: "small", label: "작은 카드" },
+  { key: "medium", label: "중간 카드" },
+  { key: "large", label: "큰 카드" },
+] as const;
+
+/** 그룹(가로 카드·그리드) 접기 — 처음 N개만 보이고 「더보기」. 0 = 전부 */
+export const COLLAPSE_OPTIONS = [0, 2, 3, 4, 6] as const;
 
 /** 링크 버튼 텍스트 색 스와치 — 링크팜 편집기의 8색 카피.
     ⚠️ 앱 UI 토큰 아님: 방문자 페이지에 찍히는 **사용자 콘텐츠 팔레트**라
@@ -121,15 +143,20 @@ export interface VideoBlockData {
   title?: string;
 }
 
-/** 가로 카드(썸네일 좌측 + 텍스트) 여러 장 — 링크팜 "가로 카드" */
+/** 가로 카드(썸네일 좌측 + 텍스트) 여러 장 — 링크팜 "가로 카드". 리틀리 「그룹 링크」의 기본 배치 */
 export interface CardRowBlockData {
-  items: Array<{ imagePath?: string; title: string; subtitle?: string; url: string }>;
+  items: Array<{ imagePath?: string; title: string; subtitle?: string; url: string; price?: string; originalPrice?: string }>;
+  /** list(세로 목록, 기본) | carousel(가로 스크롤 카드) */
+  layout?: "list" | "carousel";
+  /** 처음 N개만 보이고 「더보기」. 0/없음 = 전부 */
+  collapse?: 0 | 2 | 3 | 4 | 6;
 }
 
 /** 2·3열 그리드 — 링크팜 "그리드" */
 export interface GridBlockData {
   columns?: 2 | 3;
-  items: Array<{ imagePath?: string; title: string; url: string }>;
+  items: Array<{ imagePath?: string; title: string; url: string; price?: string; originalPrice?: string }>;
+  collapse?: 0 | 2 | 3 | 4 | 6;
 }
 
 /** 공지/배너 — 링크팜 "공지/배너" */

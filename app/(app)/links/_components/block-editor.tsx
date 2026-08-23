@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { sliceChars } from "@/lib/links";
-import { BLOCK_CATALOG, CONTACT_FIELDS, COUPANG_DISCLOSURE, LINK_TEXT_COLORS, type LinkBlock } from "@/lib/links/blocks";
+import { BLOCK_CATALOG, COLLAPSE_OPTIONS, CONTACT_FIELDS, COUPANG_DISCLOSURE, LINK_LAYOUTS, LINK_TEXT_COLORS, type LinkBlock } from "@/lib/links/blocks";
 import { ImageField } from "./image-field";
+import { fetchLinkMeta } from "../actions";
 
 /*
   블록 편집기 — 블록 타입마다 다른 필드를 그린다.
@@ -73,6 +75,47 @@ export function BlockEditor({
     );
 
   const meta = BLOCK_CATALOG.find((c) => c.type === block.type);
+  const tags = Array.isArray(d.tags) ? (d.tags as string[]).filter((t) => typeof t === "string") : [];
+  const [tagDraft, setTagDraft] = useState("");
+  /* 주소로 제목·이미지 불러오기 — 어느 칸(블록 자체 = -1, 항목 = i)이 도는 중인가 */
+  const [fetching, setFetching] = useState<number | null>(null);
+  const [fetchMsg, setFetchMsg] = useState<{ slot: number; text: string } | null>(null);
+  /* 불러오기는 몇 초 걸린다 — 그 사이 고친 다른 칸을 되돌리지 않게 **최신 값**으로 병합한다(소넷 확정) */
+  const latest = useRef(d);
+  useEffect(() => {
+    latest.current = d;
+  });
+  async function pullMeta(
+    url: string,
+    apply: (cur: Record<string, unknown>, m: { title?: string; image?: string; description?: string }) => Record<string, unknown>,
+    slot: number,
+  ) {
+    if (!url.trim()) {
+      setFetchMsg({ slot, text: "먼저 주소를 넣어 주세요." });
+      return;
+    }
+    setFetching(slot);
+    setFetchMsg(null);
+    try {
+      const r = await fetchLinkMeta(url);
+      if (!r.ok) setFetchMsg({ slot, text: r.error ?? "불러오지 못했어요." });
+      else {
+        onChange(apply(latest.current, r));
+        setFetchMsg({ slot, text: r.title || r.image ? "제목·이미지를 채웠어요 — 마음에 안 들면 고치세요." : "찾은 정보가 없어요." });
+      }
+    } catch {
+      setFetchMsg({ slot, text: "불러오지 못했어요." });
+    } finally {
+      setFetching(null);
+    }
+  }
+  function addTag(raw: string) {
+    const t = raw.replace(/^#/, "").trim().slice(0, 16);
+    if (!t || tags.includes(t) || tags.length >= 3) return;
+    set("tags", [...tags, t]);
+    setTagDraft("");
+  }
+  const fetchBtn = "trans-state shrink-0 rounded-card border border-line px-2.5 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg disabled:opacity-50";
 
   return (
     <div className="space-y-3">
@@ -115,7 +158,104 @@ export function BlockEditor({
             <label className={label} htmlFor="b-url">
               링크 주소
             </label>
-            <input id="b-url" value={str("url")} onChange={(e) => set("url", e.target.value)} placeholder="https://example.com" className={`mt-1.5 ${input}`} />
+            <div className="mt-1.5 flex gap-1.5">
+              <input id="b-url" value={str("url")} onChange={(e) => set("url", e.target.value)} placeholder="https://example.com" className={input} />
+              {/* 리틀리 카피 — 주소를 넣으면 제목·썸네일을 OG 로 채운다(비어 있는 칸만) */}
+              <button
+                type="button"
+                disabled={fetching !== null}
+                onClick={() =>
+                  pullMeta(
+                    str("url"),
+                    (cur, m) => ({
+                      ...cur,
+                      label: (typeof cur.label === "string" && cur.label) || m.title || "",
+                      imagePath: (typeof cur.imagePath === "string" && cur.imagePath) || m.image || "",
+                    }),
+                    -1,
+                  )
+                }
+                className={fetchBtn}
+              >
+                {fetching === -1 ? "불러오는 중…" : "불러오기"}
+              </button>
+            </div>
+            {fetchMsg?.slot === -1 ? <p className="mt-1 text-[12px] text-fg-sub">{fetchMsg.text}</p> : null}
+          </div>
+
+          {/* 레이아웃 — 리틀리 작은/중간/큰 카드 카피. 카드형이면 썸네일이 보인다 */}
+          <div>
+            <span className={label}>레이아웃</span>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {LINK_LAYOUTS.map((l) => (
+                <button
+                  key={l.key}
+                  type="button"
+                  onClick={() => set("layout", l.key)}
+                  aria-pressed={(str("layout") || "button") === l.key}
+                  className={
+                    (str("layout") || "button") === l.key
+                      ? "rounded-chip bg-primary px-3 py-1.5 text-[12px] font-semibold text-on-primary"
+                      : "trans-state rounded-chip border border-line px-3 py-1.5 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg"
+                  }
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {(str("layout") || "button") !== "button" ? (
+            <ImageField label="썸네일 (선택)" value={str("imagePath")} onChange={(v) => set("imagePath", v)} aspect="aspect-[16/9]" />
+          ) : null}
+
+          {/* 강조 태그 — 최대 3개. 버튼 아래 작은 칩 */}
+          <div>
+            <label className={label} htmlFor="b-tag">
+              강조 태그 <span className="font-normal text-fg-faint">(최대 3개)</span>
+            </label>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {tags.map((t) => (
+                <span key={t} className="inline-flex items-center gap-1 rounded-chip bg-plate px-2 py-1 text-[12px] font-semibold text-fg">
+                  #{t}
+                  <button type="button" aria-label={`태그 ${t} 삭제`} onClick={() => set("tags", tags.filter((x) => x !== t))} className="text-fg-faint hover:text-fg">
+                    <X className="size-3" aria-hidden />
+                  </button>
+                </span>
+              ))}
+              {tags.length < 3 ? (
+                <input
+                  id="b-tag"
+                  value={tagDraft}
+                  onChange={(e) => setTagDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === ",") {
+                      e.preventDefault();
+                      addTag(tagDraft);
+                    }
+                  }}
+                  onBlur={() => addTag(tagDraft)}
+                  placeholder="입력 후 Enter"
+                  maxLength={16}
+                  className="h-8 min-w-[120px] flex-1 rounded-card border border-line bg-body px-2.5 text-[13px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
+                />
+              ) : null}
+            </div>
+          </div>
+
+          {/* 판매가·정가 — 표시용 문자열. 정가가 있으면 취소선으로 옆에 */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className={label} htmlFor="b-price">
+                판매가 (선택)
+              </label>
+              <input id="b-price" value={str("price")} onChange={(e) => set("price", e.target.value)} placeholder="29,000원" maxLength={20} className={`mt-1.5 ${input}`} />
+            </div>
+            <div>
+              <label className={label} htmlFor="b-oprice">
+                정가 (선택)
+              </label>
+              <input id="b-oprice" value={str("originalPrice")} onChange={(e) => set("originalPrice", e.target.value)} placeholder="39,000원" maxLength={20} className={`mt-1.5 ${input}`} />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -472,17 +612,42 @@ export function BlockEditor({
       {/* ── 배열형(가로 카드·그리드) ── */}
       {block.type === "card_row" || block.type === "grid" ? (
         <>
-          {block.type === "grid" ? (
+          <div className="grid grid-cols-2 gap-2">
+            {block.type === "grid" ? (
+              <div>
+                <label className={label} htmlFor="b-cols">
+                  열 수
+                </label>
+                <select id="b-cols" value={String(num("columns", 2))} onChange={(e) => set("columns", Number(e.target.value))} className={`mt-1.5 ${input}`}>
+                  <option value="2">2열</option>
+                  <option value="3">3열</option>
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className={label} htmlFor="b-layout">
+                  배치
+                </label>
+                <select id="b-layout" value={str("layout") || "list"} onChange={(e) => set("layout", e.target.value)} className={`mt-1.5 ${input}`}>
+                  <option value="list">세로 목록</option>
+                  <option value="carousel">가로 캐러셀</option>
+                </select>
+              </div>
+            )}
             <div>
-              <label className={label} htmlFor="b-cols">
-                열 수
+              <label className={label} htmlFor="b-collapse">
+                링크 나열
               </label>
-              <select id="b-cols" value={String(num("columns", 2))} onChange={(e) => set("columns", Number(e.target.value))} className={`mt-1.5 ${input}`}>
-                <option value="2">2열</option>
-                <option value="3">3열</option>
+              {/* 리틀리 「전부 나열 / 접기 적용」 — 처음 N개만 보이고 「더보기」 */}
+              <select id="b-collapse" value={String(num("collapse", 0))} onChange={(e) => set("collapse", Number(e.target.value))} className={`mt-1.5 ${input}`}>
+                {COLLAPSE_OPTIONS.map((c) => (
+                  <option key={c} value={String(c)}>
+                    {c === 0 ? "전부 나열" : `${c}개만 보이고 접기`}
+                  </option>
+                ))}
               </select>
             </div>
-          ) : null}
+          </div>
 
           <div className="space-y-3">
             {items.map((it, i) => (
@@ -516,13 +681,58 @@ export function BlockEditor({
                     className={input}
                   />
                 ) : null}
-                <input
-                  value={typeof it.url === "string" ? it.url : ""}
-                  onChange={(e) => setItem(i, "url", e.target.value)}
-                  placeholder="https://…"
-                  aria-label={`항목 ${i + 1} 주소`}
-                  className={input}
-                />
+                <div className="flex gap-1.5">
+                  <input
+                    value={typeof it.url === "string" ? it.url : ""}
+                    onChange={(e) => setItem(i, "url", e.target.value)}
+                    placeholder="https://…"
+                    aria-label={`항목 ${i + 1} 주소`}
+                    className={input}
+                  />
+                  <button
+                    type="button"
+                    disabled={fetching !== null}
+                    onClick={() =>
+                      pullMeta(
+                        typeof it.url === "string" ? it.url : "",
+                        (cur, m) => {
+                          const curItems = Array.isArray(cur.items) ? (cur.items as Record<string, unknown>[]) : [];
+                          return {
+                            ...cur,
+                            items: curItems.map((x, j) =>
+                              j === i
+                                ? { ...x, title: (typeof x.title === "string" && x.title) || m.title || "", imagePath: (typeof x.imagePath === "string" && x.imagePath) || m.image || "" }
+                                : x,
+                            ),
+                          };
+                        },
+                        i,
+                      )
+                    }
+                    className={fetchBtn}
+                  >
+                    {fetching === i ? "…" : "불러오기"}
+                  </button>
+                </div>
+                {fetchMsg?.slot === i ? <p className="text-[12px] text-fg-sub">{fetchMsg.text}</p> : null}
+                <div className="grid grid-cols-2 gap-1.5">
+                  <input
+                    value={typeof it.price === "string" ? it.price : ""}
+                    onChange={(e) => setItem(i, "price", e.target.value)}
+                    placeholder="판매가 (선택)"
+                    aria-label={`항목 ${i + 1} 판매가`}
+                    maxLength={20}
+                    className={input}
+                  />
+                  <input
+                    value={typeof it.originalPrice === "string" ? it.originalPrice : ""}
+                    onChange={(e) => setItem(i, "originalPrice", e.target.value)}
+                    placeholder="정가 (선택)"
+                    aria-label={`항목 ${i + 1} 정가`}
+                    maxLength={20}
+                    className={input}
+                  />
+                </div>
                 <ImageField
                   label={`항목 ${i + 1} 이미지`}
                   value={typeof it.imagePath === "string" ? it.imagePath : ""}

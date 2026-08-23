@@ -1,6 +1,7 @@
 import { youtubeEmbed } from "@/lib/links";
 import type { BlockType } from "@/lib/links/blocks";
 import { COUPANG_DISCLOSURE } from "@/lib/links/blocks";
+import { Collapsible } from "./collapsible";
 
 /*
   공개 페이지 블록 렌더러.
@@ -34,6 +35,39 @@ function goHref(slug: string, blockId: string, idx?: number): string {
 const cardCls =
   "block rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-card)] shadow-[var(--lp-shadow)]";
 
+/** 강조 태그 칩 — 링크·항목 아래. 비어 있으면 null */
+function Tags({ d, align = "center", inherit = false }: { d: Record<string, unknown>; align?: "center" | "start"; inherit?: boolean }) {
+  const tags = Array.isArray(d.tags) ? (d.tags as unknown[]).filter((t): t is string => typeof t === "string" && !!t.trim()).slice(0, 3) : [];
+  if (!tags.length) return null;
+  return (
+    <span className={`mt-1.5 flex flex-wrap gap-1 ${align === "start" ? "justify-start" : "justify-center"}`}>
+      {tags.map((t) => (
+        <span
+          key={t}
+          /* 버튼(채움/외곽선) 위에서는 글자색을 **상속**한다 — accent 배경 위 accent 글자는 안 보인다(소넷 확정) */
+          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${inherit ? "" : "text-[var(--lp-accent)]"}`}
+          style={{ backgroundColor: inherit ? "color-mix(in srgb, currentColor 16%, transparent)" : "color-mix(in srgb, var(--lp-accent) 14%, transparent)" }}
+        >
+          #{t}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** 판매가·정가 — 표시용 문자열 그대로. 정가는 취소선 */
+function Price({ d, size = "md", inherit = false }: { d: Record<string, unknown>; size?: "sm" | "md"; inherit?: boolean }) {
+  const price = s(d, "price");
+  if (!price) return null;
+  const orig = s(d, "originalPrice");
+  return (
+    <span className={`tnum mt-1 flex items-baseline gap-1.5 ${size === "sm" ? "text-[13px]" : "text-[15px]"}`}>
+      <span className={`font-bold ${inherit ? "" : "text-[var(--lp-fg)]"}`}>{price}</span>
+      {orig ? <span className={`text-[12px] line-through ${inherit ? "opacity-70" : "text-[var(--lp-muted)]"}`}>{orig}</span> : null}
+    </span>
+  );
+}
+
 export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: string }) {
   const d = block.data ?? {};
   const type = block.type as BlockType;
@@ -61,6 +95,39 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
       if (tWeight === "medium") textStyle.fontWeight = 500;
       else if (tWeight === "bold") textStyle.fontWeight = 700;
       if (/^#[0-9a-fA-F]{6}$/.test(s(d, "textColor"))) textStyle.color = s(d, "textColor");
+      const layout = s(d, "layout") || "button";
+      const thumb = s(d, "imagePath");
+      /* 카드 레이아웃(리틀리 작은/중간/큰 카드) — 썸네일·태그·가격이 함께 보인다 */
+      if (layout === "small" || layout === "medium" || layout === "large") {
+        const big = layout === "large";
+        const thumbCls = layout === "small" ? "size-14" : "size-[88px]";
+        return (
+          <a
+            href={goHref(slug, block.id)}
+            rel="noopener noreferrer nofollow"
+            className={`${cardCls} overflow-hidden transition-opacity hover:opacity-90 ${big ? "" : "flex items-center gap-3 p-3"}`}
+          >
+            {thumb ? (
+              // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
+              <img
+                src={thumb}
+                alt=""
+                className={big ? "aspect-[16/9] w-full object-cover" : `${thumbCls} shrink-0 rounded-[calc(var(--lp-radius)/1.6)] object-cover`}
+                loading="lazy"
+              />
+            ) : null}
+            <span className={`min-w-0 flex-1 ${big ? "block px-4 py-3 text-center" : ""}`}>
+              <span style={textStyle} className="block text-[15px] font-semibold text-[var(--lp-fg)]">
+                {emoji ? <span aria-hidden>{emoji} </span> : null}
+                {label}
+              </span>
+              <Price d={d} size={big ? "md" : "sm"} />
+              <Tags d={d} align={big ? "center" : "start"} />
+            </span>
+          </a>
+        );
+      }
+      const hasExtras = s(d, "price") || (Array.isArray(d.tags) && (d.tags as unknown[]).length > 0);
       return (
         <a
           href={goHref(slug, block.id)}
@@ -68,6 +135,7 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
           style={textStyle}
           className={[
             "flex min-h-[52px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] px-5 py-3 text-center text-[15px] font-semibold transition-opacity hover:opacity-85",
+            hasExtras ? "flex-col gap-0.5" : "",
             primary
               ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]"
               : outline
@@ -75,8 +143,16 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
                 : "border border-[var(--lp-btn-border)] bg-[var(--lp-btn-bg)] text-[var(--lp-btn-fg)] shadow-[var(--lp-shadow)]",
           ].join(" ")}
         >
-          {emoji ? <span aria-hidden>{emoji}</span> : null}
-          {label}
+          <span className="flex items-center gap-2">
+            {emoji ? <span aria-hidden>{emoji}</span> : null}
+            {label}
+          </span>
+          {hasExtras ? (
+            <span className="flex flex-col items-center">
+              <Price d={d} size="sm" inherit />
+              <Tags d={d} inherit />
+            </span>
+          ) : null}
         </a>
       );
     }
@@ -209,38 +285,45 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
          /go/{id}?i=N 이 스냅샷의 엉뚱한 항목을 가리킨다. */
       const items = arr(d, "items").map((it, i) => ({ it, i })).filter(({ it }) => s(it, "url"));
       if (items.length === 0) return null;
-      return (
-        <div className="space-y-2.5">
-          {items.map(({ it, i }) => (
-            <a
-              key={i}
-              href={goHref(slug, block.id, i)}
-              rel="noopener noreferrer nofollow"
-              className={`${cardCls} flex items-center gap-3 p-3`}
-            >
-              {s(it, "imagePath") ? (
-                // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
-                <img
-                  src={s(it, "imagePath")}
-                  alt=""
-                  className="size-14 shrink-0 rounded-[calc(var(--lp-radius)/1.6)] object-cover"
-                  loading="lazy"
-                />
-              ) : null}
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[15px] font-semibold text-[var(--lp-fg)]">
-                  {s(it, "title")}
-                </span>
-                {s(it, "subtitle") ? (
-                  <span className="mt-0.5 block truncate text-[14px] text-[var(--lp-muted)]">
-                    {s(it, "subtitle")}
-                  </span>
+      /* 캐러셀 — 가로 스크롤·스냅. 접기는 목록 배치에서만(캐러셀은 이미 한 화면에 몇 장만 보인다) */
+      if (s(d, "layout") === "carousel") {
+        return (
+          <div className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {items.map(({ it, i }) => (
+              <a
+                key={i}
+                href={goHref(slug, block.id, i)}
+                rel="noopener noreferrer nofollow"
+                className={`${cardCls} w-[72%] shrink-0 snap-start overflow-hidden`}
+              >
+                {s(it, "imagePath") ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
+                  <img src={s(it, "imagePath")} alt="" className="aspect-[4/3] w-full object-cover" loading="lazy" />
                 ) : null}
-              </span>
-            </a>
-          ))}
-        </div>
-      );
+                <span className="block px-3 py-2.5">
+                  <span className="block truncate text-[15px] font-semibold text-[var(--lp-fg)]">{s(it, "title")}</span>
+                  {s(it, "subtitle") ? <span className="mt-0.5 block truncate text-[13px] text-[var(--lp-muted)]">{s(it, "subtitle")}</span> : null}
+                  <Price d={it} size="sm" />
+                </span>
+              </a>
+            ))}
+          </div>
+        );
+      }
+      const nodes = items.map(({ it, i }) => (
+        <a key={i} href={goHref(slug, block.id, i)} rel="noopener noreferrer nofollow" className={`${cardCls} flex items-center gap-3 p-3`}>
+          {s(it, "imagePath") ? (
+            // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
+            <img src={s(it, "imagePath")} alt="" className="size-14 shrink-0 rounded-[calc(var(--lp-radius)/1.6)] object-cover" loading="lazy" />
+          ) : null}
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15px] font-semibold text-[var(--lp-fg)]">{s(it, "title")}</span>
+            {s(it, "subtitle") ? <span className="mt-0.5 block truncate text-[14px] text-[var(--lp-muted)]">{s(it, "subtitle")}</span> : null}
+            <Price d={it} size="sm" />
+          </span>
+        </a>
+      ));
+      return <Collapsible items={nodes} initial={n(d, "collapse", 0)} className="space-y-2.5" />;
     }
 
     case "grid": {
@@ -248,26 +331,19 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
       const items = arr(d, "items").map((it, i) => ({ it, i })).filter(({ it }) => s(it, "url"));
       if (items.length === 0) return null;
       const cols = n(d, "columns", 2) === 3 ? "grid-cols-3" : "grid-cols-2";
-      return (
-        <div className={`grid gap-2.5 ${cols}`}>
-          {items.map(({ it, i }) => (
-            <a
-              key={i}
-              href={goHref(slug, block.id, i)}
-              rel="noopener noreferrer nofollow"
-              className={`${cardCls} overflow-hidden`}
-            >
-              {s(it, "imagePath") ? (
-                // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
-                <img src={s(it, "imagePath")} alt="" className="aspect-square w-full object-cover" loading="lazy" />
-              ) : null}
-              <span className="block px-2.5 py-2 text-center text-[14px] font-medium text-[var(--lp-fg)]">
-                {s(it, "title")}
-              </span>
-            </a>
-          ))}
-        </div>
-      );
+      const nodes = items.map(({ it, i }) => (
+        <a key={i} href={goHref(slug, block.id, i)} rel="noopener noreferrer nofollow" className={`${cardCls} overflow-hidden`}>
+          {s(it, "imagePath") ? (
+            // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
+            <img src={s(it, "imagePath")} alt="" className="aspect-square w-full object-cover" loading="lazy" />
+          ) : null}
+          <span className="block px-2.5 py-2 text-center text-[14px] font-medium text-[var(--lp-fg)]">
+            {s(it, "title")}
+            <Price d={it} size="sm" />
+          </span>
+        </a>
+      ));
+      return <Collapsible items={nodes} initial={n(d, "collapse", 0)} className={`grid gap-2.5 ${cols}`} />;
     }
 
     case "notice": {

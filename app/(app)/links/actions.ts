@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
 import { SLUG_MESSAGES, normalizeUrl, sanitizeSnsLinks, sliceChars, validateSlug } from "@/lib/links";
 import { BLOCK_TYPES, EMPHASIS_TYPES, defaultBlockData, type BlockType } from "@/lib/links/blocks";
+import { SafeFetchError, fetchPublicHtml } from "@/lib/links/safe-fetch";
 import { DEFAULT_THEME_KEY, sanitizeThemeCustom, themeByKey } from "@/lib/links/themes";
 import { LINK_TEMPLATES } from "@/lib/links/templates";
 import { parseLittlyHtml } from "@/lib/links/littly";
@@ -1419,10 +1420,13 @@ const TEXT_CAPS: Record<string, number> = {
   address: 200,
   emoji: 4,
   price: 20,
+  originalPrice: 20,
   message: 140,
 };
 const ENUMS: Record<string, readonly string[]> = {
   emphasis: ["normal", "primary", "outline"],
+  /* layout 은 타입마다 의미가 다르다(link: button/small/medium/large, card_row: list/carousel) — 렌더러가 제 것만 읽는다 */
+  layout: ["button", "small", "medium", "large", "list", "carousel"],
   textSize: ["sm", "md", "lg"],
   textWeight: ["medium", "semibold", "bold"],
   align: ["left", "center"],
@@ -1433,6 +1437,7 @@ const ENUMS: Record<string, readonly string[]> = {
 /** 숫자 필드는 화이트리스트다 — spacer.size 는 렌더러가 그 값을 그대로 px 높이로 쓴다 */
 const NUM_ENUMS: Record<string, readonly number[]> = {
   size: [8, 16, 24, 40],
+  collapse: [0, 2, 3, 4, 6],
   columns: [2, 3],
   count: [3, 6, 9],
 };
@@ -1440,6 +1445,92 @@ const NUM_ENUMS: Record<string, readonly number[]> = {
 const MAX_BLOCK_CHARS = 8192;
 
 const URL_ERROR = "http 또는 https 로 시작하는 주소만 넣을 수 있어요.";
+
+/* ══════════════════════════════════════════════════════════════════
+   주소로 제목·이미지 불러오기 (OG) — 리틀리 「그룹 링크」의 자동 채움 카피(2단계)
+
+   lib/links/index.ts 가 "서버가 남의 URL 을 fetch 하지 않는다" 고 정한 데 대한 **유일한 예외**다.
+   그 주석이 요구한 방식으로만 연다: lib/links/safe-fetch.ts 가 node:http(s) + 커스텀 lookup 으로
+   소켓이 붙을 IP 를 직접 고르고 검사한다(DNS 리바인딩 무력화). global fetch 는 쓰지 않는다.
+   ══════════════════════════════════════════════════════════════════ */
+
+/** 사용자별 분당 호출 상한 — 인스턴스 메모리라 서버리스에선 최선의 노력. 로그인 사용자만 부를 수 있다 */
+const metaCalls = new Map<string, number[]>();
+const META_PER_MIN = 20;
+function metaRateLimited(userId: string): boolean {
+  const now = Date.now();
+  const recent = (metaCalls.get(userId) ?? []).filter((t) => now - t < 60_000);
+  if (recent.length >= META_PER_MIN) return true;
+  recent.push(now);
+  metaCalls.set(userId, recent);
+  return false;
+}
+
+export async function fetchLinkMeta(raw: string): Promise<{
+  ok: boolean;
+  error?: string;
+  title?: string;
+  image?: string;
+  description?: string;
+}> {
+  if (isDemoMode()) return { ok: false, error: "예시 페이지에서는 불러올 수 없어요." };
+  const user = await getAuthUser();
+  if (!user) return AUTH;
+  if (metaRateLimited(user.id)) return { ok: false, error: "잠시 후 다시 시도해 주세요." };
+  const href = normalizeUrl(raw);
+  if (!href) return { ok: false, error: URL_ERROR };
+
+  let page: { url: URL; html: string };
+  try {
+    page = await fetchPublicHtml(new URL(href));
+  } catch (e) {
+    const code = e instanceof SafeFetchError ? e.message : "";
+    const msg = code.startsWith("status:")
+      ? `페이지를 열지 못했어요 (${code.slice(7)}).`
+      : code === "private" || code === "scheme" || code === "port"
+        ? "불러올 수 없는 주소예요."
+        : code === "not-html"
+          ? "웹 페이지가 아니라 제목을 읽을 수 없어요."
+          : code === "timeout"
+            ? "응답이 너무 느려요. 잠시 후 다시 시도해 주세요."
+            : "주소에 연결하지 못했어요.";
+    return { ok: false, error: msg };
+  }
+  const { url, html } = page;
+
+  const meta = (prop: string): string | null => {
+    const re = new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]*>`, "i");
+    const tag = re.exec(html)?.[0];
+    if (!tag) return null;
+    const c = /content=["']([^"']*)["']/i.exec(tag)?.[1];
+    return c ? decodeEntities(c).trim() : null;
+  };
+  const titleTag = /<title[^>]*>([^<]*)<\/title>/i.exec(html)?.[1];
+  const title = sliceChars(meta("og:title") ?? (titleTag ? decodeEntities(titleTag).trim() : ""), 60);
+  const description = sliceChars(meta("og:description") ?? meta("description") ?? "", 80);
+  let image = meta("og:image") ?? meta("twitter:image") ?? "";
+  if (image) {
+    try {
+      const abs = new URL(image, url);
+      image = abs.protocol === "http:" || abs.protocol === "https:" ? abs.toString().replace(/^http:\/\//, "https://") : "";
+    } catch {
+      image = "";
+    }
+  }
+  if (!title && !image) return { ok: false, error: "이 페이지에서는 제목·이미지를 찾지 못했어요." };
+  return { ok: true, title: title || undefined, image: image || undefined, description: description || undefined };
+}
+
+function decodeEntities(t: string): string {
+  return t
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&nbsp;/g, " ");
+}
 /** 블록 메타(강조·예약) — 내용 저장이 건드리지 못하는 키. setBlockEmphasized / setBlockSchedule 만 바꾼다 */
 const BLOCK_META_KEYS = ["emphasized", "openAt", "closeAt"] as const;
 
@@ -1474,6 +1565,18 @@ function sanitizeBlockData(input: Record<string, unknown>): { data?: Record<stri
       /* 이미지는 우리 문서 안에서 로드된다 — CSP img-src 가 https: 뿐이라 http 는 깨진다.
          링크(url)는 302 로 나가니 http 여도 되지만 이미지는 https 로 올려 저장한다(감사 #23). */
       out[k] = k === "imagePath" ? href.replace(/^http:\/\//, "https://") : href;
+      continue;
+    }
+
+    if (k === "tags") {
+      /* 강조 태그 — 문자열 최대 3개, 16자. 빈 값은 뺀다 */
+      if (!Array.isArray(v)) continue;
+      const tags = v
+        .filter((x): x is string => typeof x === "string")
+        .map((x) => sliceChars(x.trim(), 16))
+        .filter(Boolean)
+        .slice(0, 3);
+      if (tags.length) out.tags = tags;
       continue;
     }
 
