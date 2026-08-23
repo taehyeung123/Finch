@@ -1063,7 +1063,9 @@ body {
   [data-lp-anim="zoom"] .lp-block { animation: lp-zoom linear both; animation-timeline: view(); animation-range: entry 0% entry 35%; }
 }
 @media (prefers-reduced-motion: reduce) {
-  [data-lp-fx] .lp-btn, [data-lp-fx] .lp-btn::after, [data-lp-anim] .lp-block { animation: none !important; transition: none !important; transform: none !important; }
+  [data-lp-fx] .lp-btn, [data-lp-anim] .lp-block { animation: none !important; transition: none !important; transform: none !important; }
+  /* 스윕·물결 오버레이는 숨긴다 — transform:none 으로 두면 화면 밖에 쉬던 덧칠이 버튼 위에 상시로 얹힌다(감사2 U9) */
+  [data-lp-fx] .lp-btn::after { content: none !important; }
 }
 
 /* 토스트 — 문서 흐름 밖. 현행 library-client.tsx의 mt-4 인라인 <p>는

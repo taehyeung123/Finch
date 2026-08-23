@@ -188,7 +188,11 @@ export async function createLinkPageWithStart(input: {
 
   const linkRows: Array<{ type: BlockType; data: Record<string, unknown> }> = [];
   if (!tpl) {
-    for (const it of (input.links ?? []).slice(0, MAX_BLOCKS)) {
+    /* 조용히 자르지 않는다 — 66개를 골랐는데 50개로 만들어 놓고 "만들었어요" 하면 16개가 사라진 줄 모른다(감사2 U5). addBlocksBulk 와 같은 규칙 */
+    if ((input.links ?? []).length > MAX_BLOCKS) {
+      return { ok: false, error: `링크는 ${MAX_BLOCKS}개까지 한 번에 넣을 수 있어요. ${(input.links ?? []).length}개를 고르셨어요 — 몇 개를 빼 주세요.` };
+    }
+    for (const it of input.links ?? []) {
       const cleaned = sanitizeBlockData({ label: it.label || "링크", url: it.url, emphasis: "normal" });
       if (cleaned.error) return { ok: false, error: cleaned.error };
       if (cleaned.data?.url) linkRows.push({ type: "link", data: cleaned.data });
@@ -657,42 +661,74 @@ export async function updateLinkImages(patch: { avatarPath?: string | null; cove
   return { ok: true };
 }
 
-/** 파일 공유 블록 업로드(리틀리 흡수 4단계) — 문서·압축만, 20MB. 같은 공개 버킷 files/ 아래 */
+/**
+ * 파일 공유 블록 업로드(리틀리 흡수 4단계) — **브라우저가 Storage 로 직접** 올린다(서명 업로드 URL).
+ * 서버 액션 본문으로 base64 를 실어 보내면 20MB 가 28MB 로 부풀어 Next 본문 상한(25mb)·Vercel 함수 상한(4.5MB)에
+ * 걸려 "업로드하지 못했어요"만 떴다(감사2 C3). 여기선 이름·크기만 검사해 경로·토큰을 내주고, 브라우저가
+ * uploadToSignedUrl 로 바이트를 보낸다. 확장자는 **파일 이름**으로 판정한다 — 브라우저 MIME 은 OS 마다 달라
+ * (.hwp → "", .csv → vnd.ms-excel) 광고한 형식을 거절했다(감사2 C2). Content-Type 도 서버가 정한 값만 쓴다.
+ */
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
-const FILE_TYPES: Record<string, string> = {
-  "application/pdf": "pdf",
-  "application/zip": "zip",
-  "application/x-zip-compressed": "zip",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
-  "application/x-hwp": "hwp",
-  "application/haansofthwp": "hwp",
-  "text/plain": "txt",
-  "text/csv": "csv",
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/webp": "webp",
+const FILE_EXT_TYPES: Record<string, string> = {
+  pdf: "application/pdf",
+  zip: "application/zip",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  hwp: "application/x-hwp",
+  txt: "text/plain",
+  csv: "text/csv",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
 };
-export async function uploadLinkFile(dataUrl: string, fileName: string): Promise<{ ok: boolean; url?: string; error?: string; size?: number }> {
+export async function createLinkFileUpload(
+  fileName: string,
+  size: number,
+): Promise<{ ok: boolean; error?: string; path?: string; token?: string; contentType?: string; url?: string }> {
   if (isDemoMode()) return { ok: false, error: "데모 모드에서는 올릴 수 없어요." };
   const user = await getAuthUser();
   if (!user) return { ok: false, error: "로그인이 필요해요." };
-  const m = /^data:([a-zA-Z0-9.+/-]+);base64,(.+)$/.exec(dataUrl);
-  if (!m || !FILE_TYPES[m[1]]) return { ok: false, error: "PDF·ZIP·DOCX·PPTX·XLSX·HWP·TXT·CSV·이미지만 올릴 수 있어요." };
-  const buf = Buffer.from(m[2], "base64");
-  if (buf.byteLength > MAX_FILE_BYTES) return { ok: false, error: "파일은 20MB 이하만 올릴 수 있어요." };
-  const ext = FILE_TYPES[m[1]];
+  const nameExt = String(fileName ?? "").toLowerCase().split(".").pop() ?? "";
+  const contentType = Object.hasOwn(FILE_EXT_TYPES, nameExt) ? FILE_EXT_TYPES[nameExt] : null;
+  if (!contentType) return { ok: false, error: "PDF·ZIP·DOCX·PPTX·XLSX·HWP·TXT·CSV·이미지만 올릴 수 있어요." };
+  if (!Number.isFinite(size) || size <= 0) return { ok: false, error: "빈 파일은 올릴 수 없어요." };
+  if (size > MAX_FILE_BYTES) return { ok: false, error: "파일은 20MB 이하만 올릴 수 있어요." };
+  const ext = nameExt === "jpeg" ? "jpg" : nameExt;
   const path = `${user.id}/files/${crypto.randomUUID()}.${ext}`;
   const supabase = await createClient();
-  const { error } = await supabase.storage.from("link-assets").upload(path, buf, { contentType: m[1], upsert: false });
-  if (error) {
-    console.error("[links] 파일 업로드 실패:", error.message);
-    return { ok: false, error: "업로드하지 못했어요. 잠시 후 다시 시도해 주세요." };
+  const { data, error } = await supabase.storage.from("link-assets").createSignedUploadUrl(path);
+  if (error || !data) {
+    console.error("[links] 파일 업로드 URL 실패:", error?.message);
+    return { ok: false, error: "업로드를 준비하지 못했어요. 잠시 후 다시 시도해 주세요." };
   }
-  const { data } = supabase.storage.from("link-assets").getPublicUrl(path);
-  void fileName;
-  return { ok: true, url: data.publicUrl, size: buf.byteLength };
+  const { data: pub } = supabase.storage.from("link-assets").getPublicUrl(path);
+  return { ok: true, path, token: data.token, contentType, url: pub.publicUrl };
+}
+
+/**
+ * 업로드 뒤 실제 크기 확인 — 서명 URL 은 클라이언트가 보낸 크기만 보고 내줬다. 버킷 상한(0059)이 1차 방어지만
+ * 여기서 한 번 더 읽어 상한을 넘긴 객체는 지운다(소넷 점검).
+ */
+export async function finalizeLinkFileUpload(path: string): Promise<{ ok: boolean; error?: string; size?: number }> {
+  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 올릴 수 없어요." };
+  const user = await getAuthUser();
+  if (!user) return { ok: false, error: "로그인이 필요해요." };
+  if (typeof path !== "string" || !path.startsWith(`${user.id}/files/`)) return { ok: false, error: "올바르지 않은 경로예요." };
+  const supabase = await createClient();
+  const folder = path.slice(0, path.lastIndexOf("/"));
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  const { data: list, error: listErr } = await supabase.storage.from("link-assets").list(folder, { search: name, limit: 1 });
+  const obj = (list ?? []).find((o) => o.name === name) as { metadata?: { size?: number } } | undefined;
+  /* 0059(본인 폴더 select 정책) 미적용이면 목록이 비거나 오류다 — 그땐 버킷 상한에 맡기고 막지 않는다 */
+  if (listErr || !obj) return { ok: true };
+  const size = Number(obj.metadata?.size ?? 0);
+  if (size > MAX_FILE_BYTES) {
+    await supabase.storage.from("link-assets").remove([path]);
+    return { ok: false, error: "파일은 20MB 이하만 올릴 수 있어요." };
+  }
+  return { ok: true, size };
 }
 
 /* ── 방명록 관리(주인) — 답글·숨김·삭제. 방문자 글 넣기는 app/p/[slug]/actions.ts(service_role) ── */

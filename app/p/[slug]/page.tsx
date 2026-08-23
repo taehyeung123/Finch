@@ -193,7 +193,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
             key={i}
             href={s.url}
             {...ext}
-            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-3 py-1.5 text-[13px] font-medium"
+            className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-3.5 py-2 text-[13px] font-medium"
           >
             <SnsIcon kind={s.kind} className="size-3.5 shrink-0" />
             {SNS_LABEL.get(s.kind) ?? s.kind}

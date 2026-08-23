@@ -27,9 +27,13 @@ export function ShareButton({ url, title, label = "이 페이지 공유", done: 
       type="button"
       onClick={share}
       aria-label={done ? doneLabel : label}
-      className="absolute right-5 top-4 z-20 flex size-10 items-center justify-center rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] text-[var(--lp-fg)] shadow-[var(--lp-shadow)] transition-opacity hover:opacity-80"
+      className="absolute right-5 top-4 z-20 flex size-11 items-center justify-center rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] text-[var(--lp-fg)] shadow-[var(--lp-shadow)] transition-opacity hover:opacity-80"
     >
       {done ? <Check className="size-4" aria-hidden /> : <Share2 className="size-4" aria-hidden />}
+      {/* 복사 완료를 소리로도 — aria-label 교체만으론 스크린리더가 공지하지 않는다(감사2 U15) */}
+      <span role="status" className="sr-only">
+        {done ? doneLabel : ""}
+      </span>
     </button>
   );
 }

@@ -99,3 +99,24 @@ create policy "public guestbook read" on public.link_guestbook
 
 -- ⑥ advisor: function search_path
 alter function public.link_page_stats(uuid, int) set search_path = public;
+
+-- ⑦ link-assets 버킷 상한 — 파일 공유 블록이 브라우저에서 Storage 로 **직접** 올리므로(서명 URL) 크기·형식 검사는
+--    버킷이 해야 한다. 서버 액션은 클라이언트가 보낸 이름·크기만 보고 URL 을 내주기 때문(소넷 점검).
+--    이미지 업로드(uploadLinkImage)가 쓰는 형식도 함께 허용한다.
+update storage.buckets
+   set file_size_limit = 20 * 1024 * 1024,
+       allowed_mime_types = array[
+         'application/pdf', 'application/zip',
+         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+         'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+         'application/x-hwp', 'text/plain', 'text/csv',
+         'image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml'
+       ]
+ where id = 'link-assets';
+
+-- 본인 폴더 목록 읽기 — 업로드 뒤 실제 크기 확인(finalizeLinkFileUpload)에 필요. 0048 은 insert/update/delete 만 줬다.
+drop policy if exists "own link assets read" on storage.objects;
+create policy "own link assets read" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'link-assets' and (storage.foldername(name))[1] = auth.uid()::text);

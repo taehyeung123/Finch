@@ -81,8 +81,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
 
   /* 공개 조회는 loadPublicPage 한 곳 — RLS 가 비공개·잠긴 페이지를 숨기고, 잠긴 페이지는 열림 쿠키가
      맞을 때만 스냅샷이 온다. 비밀번호 페이지의 블록 id 를 직접 찔러도 목적지가 안 나온다(소넷 5단계 #1). */
-  const page = await loadPublicPage(slug);
-  if (!page || !page.published || page.locked || !page.snapshot) return back();
+  const page = await loadPublicPage(slug, { withOwner: true });
+  /* 주인은 비공개 미리보기에서도 링크가 가야 한다 — 전부 제자리로 튀면 "내 링크가 고장났다"로 읽힌다(감사2 U2). 집계는 공개일 때만 */
+  if (!page || page.locked || !page.snapshot || (!page.published && !page.isOwner)) return back();
 
   const snap = page.snapshot as { blocks?: SnapBlock[] };
   const block = (snap.blocks ?? []).find((b) => b.id === id);
@@ -107,7 +108,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
     /bot|crawl|spider|slurp|facebookexternalhit|kakaotalk-scrap|Slackbot|Twitterbot|Discordbot|LinkedInBot|TelegramBot|Googlebot|bingbot/i.test(
       ua,
     );
-  if (admin && !isBot) {
+  /* 주인의 비공개 미리보기 클릭은 세지 않는다 — 공개 페이지의 성과가 아니다 */
+  if (admin && !isBot && page.published) {
     try {
       /* 방문 비콘이 심어둔 쿠키를 읽어 "몇 명이 눌렀나"를 셀 수 있게 한다.
          쿠키가 없으면(첫 진입에 바로 클릭) null — 클릭 수 자체는 그대로 센다.

@@ -360,7 +360,7 @@ export async function submitLead(input: {
   const message = (input.message ?? "").trim().slice(0, 2000);
 
   /* 최소 하나는 연락 가능한 값이어야 한다 — 빈 제출이 쌓이면 목록이 쓸모없어진다 */
-  if (!email && !phone) return fail("empty", "이메일 또는 연락처를 입력해 주세요.");
+  if (!email && !phone) return fail("needContact", "이메일 또는 연락처를 입력해 주세요.");
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return fail("badEmail", "이메일 형식이 올바르지 않아요.");
   }

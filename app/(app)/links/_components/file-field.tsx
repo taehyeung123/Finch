@@ -2,12 +2,15 @@
 
 import { useRef, useState } from "react";
 import { FileDown, Paperclip, X } from "lucide-react";
-import { uploadLinkFile } from "../actions";
+import { createLinkFileUpload, finalizeLinkFileUpload } from "../actions";
+import { createClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { FinchLoader } from "@/components/ui/finch-loader";
 
 /*
-  파일 입력 — 「파일 공유」 블록(리틀리 흡수 4단계). 서버 액션이 Storage(link-assets/files/)에 올리고
-  공개 URL 을 돌려준다. 20MB · PDF/ZIP/오피스/HWP/TXT/CSV/이미지.
+  파일 입력 — 「파일 공유」 블록(리틀리 흡수 4단계). 서버 액션이 경로·서명 토큰만 내주고
+  **브라우저가 Storage 에 직접** 올린다(link-assets/files/) — 서버 액션 본문으로 보내면 base64 로 부풀어
+  본문 상한에 걸렸다(감사2 C3). 20MB · PDF/ZIP/오피스/HWP/TXT/CSV/이미지(파일 이름의 확장자로 판정).
 */
 export function FileField({
   value,
@@ -22,7 +25,7 @@ export function FileField({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function pick(e: React.ChangeEvent<HTMLInputElement>) {
+  async function pick(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
@@ -31,21 +34,36 @@ export function FileField({
       setError("파일은 20MB 이하만 올릴 수 있어요.");
       return;
     }
-    const r = new FileReader();
-    r.onerror = () => setError("파일을 읽지 못했어요.");
-    r.onload = async () => {
-      setBusy(true);
-      try {
-        const res = await uploadLinkFile(String(r.result), f.name);
-        if (!res.ok || !res.url) setError(res.error ?? "업로드하지 못했어요.");
-        else onChange({ url: res.url, fileName: f.name, fileSize: res.size });
-      } catch {
-        setError("업로드하지 못했어요.");
-      } finally {
-        setBusy(false);
+    if (!isSupabaseConfigured()) {
+      setError("데모 모드에서는 올릴 수 없어요.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const prep = await createLinkFileUpload(f.name, f.size);
+      if (!prep.ok || !prep.path || !prep.token || !prep.url) {
+        setError(prep.error ?? "업로드하지 못했어요.");
+        return;
       }
-    };
-    r.readAsDataURL(f);
+      const { error: upErr } = await createClient()
+        .storage.from("link-assets")
+        .uploadToSignedUrl(prep.path, prep.token, f, { contentType: prep.contentType, upsert: false });
+      if (upErr) {
+        setError(/size|limit|large|too/i.test(upErr.message) ? "파일은 20MB 이하만 올릴 수 있어요." : "업로드하지 못했어요. 잠시 후 다시 시도해 주세요.");
+        return;
+      }
+      /* 서버가 실제 크기를 다시 본다 — 상한을 넘겼으면 지우고 거절한다 */
+      const done = await finalizeLinkFileUpload(prep.path);
+      if (!done.ok) {
+        setError(done.error ?? "업로드하지 못했어요.");
+        return;
+      }
+      onChange({ url: prep.url, fileName: f.name, fileSize: done.size ?? f.size });
+    } catch {
+      setError("업로드하지 못했어요. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -77,7 +95,7 @@ export function FileField({
           )}
         </button>
       )}
-      <input ref={ref} type="file" hidden onChange={pick} accept=".pdf,.zip,.docx,.pptx,.xlsx,.hwp,.txt,.csv,image/png,image/jpeg,image/webp" />
+      <input ref={ref} type="file" hidden onChange={pick} accept=".pdf,.zip,.docx,.pptx,.xlsx,.hwp,.txt,.csv,.png,.jpg,.jpeg,.webp" />
       {error ? (
         <p role="alert" className="mt-1 text-[12px] text-negative-strong">
           {error}

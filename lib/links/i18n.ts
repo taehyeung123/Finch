@@ -41,6 +41,8 @@ export interface LpText {
   photoLink: string;
   /** {n} 치환 — 최근 게시물 타일 */
   postLink: string;
+  /** {n} 치환 — 제목 없는 카드·그리드 항목 */
+  itemLink: string;
   /** 링크 버튼 이름이 비었을 때 */
   link: string;
   /** 강조 CTA 기본 문구 */
@@ -55,6 +57,7 @@ export type LpErrorCode =
   | "notFound"
   | "invalid"
   | "empty"
+  | "needContact"
   | "badEmail"
   | "busy"
   | "tooMany"
@@ -93,6 +96,7 @@ const ko: LpText = {
   imageLink: "이미지 링크",
   photoLink: "사진 {n} 링크",
   postLink: "게시물 {n}",
+  itemLink: "항목 {n} 링크",
   link: "링크",
   go: "바로가기",
   lock: { title: "비밀번호가 있는 페이지예요", placeholder: "비밀번호", submit: "열기", wrong: "비밀번호가 맞지 않아요.", checking: "확인 중…" },
@@ -101,6 +105,7 @@ const ko: LpText = {
     notFound: "페이지를 찾을 수 없어요.",
     invalid: "접수할 수 없는 요청이에요.",
     empty: "내용을 입력해 주세요.",
+    needContact: "이메일 또는 연락처를 입력해 주세요.",
     badEmail: "이메일 형식이 올바르지 않아요.",
     busy: "지금은 요청이 몰려 있어요. 잠시 후 다시 시도해 주세요.",
     tooMany: "너무 자주 시도했어요. 잠시 후 다시 시도해 주세요.",
@@ -141,6 +146,7 @@ const en: LpText = {
   imageLink: "Image link",
   photoLink: "Photo {n} link",
   postLink: "Post {n}",
+  itemLink: "Item {n} link",
   link: "Link",
   go: "Open",
   lock: { title: "This page is password-protected", placeholder: "Password", submit: "Open", wrong: "Wrong password.", checking: "Checking…" },
@@ -149,6 +155,7 @@ const en: LpText = {
     notFound: "Page not found.",
     invalid: "This request can't be processed.",
     empty: "Please fill in the required fields.",
+    needContact: "Please enter an email or phone number.",
     badEmail: "That email address doesn't look right.",
     busy: "Too many requests right now. Please try again shortly.",
     tooMany: "Too many attempts. Please wait a moment and try again.",
@@ -189,6 +196,7 @@ const ja: LpText = {
   imageLink: "画像リンク",
   photoLink: "写真 {n} のリンク",
   postLink: "投稿 {n}",
+  itemLink: "項目 {n} のリンク",
   link: "リンク",
   go: "開く",
   lock: { title: "パスワードが必要なページです", placeholder: "パスワード", submit: "開く", wrong: "パスワードが違います。", checking: "確認中…" },
@@ -197,6 +205,7 @@ const ja: LpText = {
     notFound: "ページが見つかりません。",
     invalid: "このリクエストは処理できません。",
     empty: "必要な項目を入力してください。",
+    needContact: "メールアドレスか電話番号を入力してください。",
     badEmail: "メールアドレスの形式が正しくありません。",
     busy: "ただいま混み合っています。しばらくしてからお試しください。",
     tooMany: "試行回数が多すぎます。しばらくしてからお試しください。",

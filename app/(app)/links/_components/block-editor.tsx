@@ -664,7 +664,7 @@ export function BlockEditor({
                   <button
                     type="button"
                     onClick={() => set("items", items.filter((_, j) => j !== i))}
-                    aria-label="항목 삭제"
+                    aria-label={`항목 ${i + 1} 삭제`}
                     className="trans-state rounded-card p-1 text-fg-faint hover:bg-tint-hover hover:text-negative"
                   >
                     <Trash2 className="size-3.5" />
@@ -789,7 +789,7 @@ export function BlockEditor({
               <div key={i} className="space-y-2 rounded-card border border-line p-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[12px] font-semibold text-fg-sub">사진 {i + 1}</span>
-                  <button type="button" onClick={() => set("items", items.filter((_, j) => j !== i))} aria-label="사진 삭제" className="trans-state rounded-card p-1 text-fg-faint hover:bg-tint-hover hover:text-negative">
+                  <button type="button" onClick={() => set("items", items.filter((_, j) => j !== i))} aria-label={`사진 ${i + 1} 삭제`} className="trans-state rounded-card p-1 text-fg-faint hover:bg-tint-hover hover:text-negative">
                     <Trash2 className="size-3.5" />
                   </button>
                 </div>

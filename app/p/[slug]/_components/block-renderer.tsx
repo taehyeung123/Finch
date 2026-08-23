@@ -58,7 +58,7 @@ function Tags({ d, align = "center", inherit = false }: { d: Record<string, unkn
         <span
           key={t}
           /* 버튼(채움/외곽선) 위에서는 글자색을 **상속**한다 — accent 배경 위 accent 글자는 안 보인다(소넷 확정) */
-          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${inherit ? "" : "text-[var(--lp-accent)]"}`}
+          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${inherit ? "" : "text-[var(--lp-accent-text)]"}`}
           style={{ backgroundColor: inherit ? "color-mix(in srgb, currentColor 16%, transparent)" : "color-mix(in srgb, var(--lp-accent) 14%, transparent)" }}
         >
           #{t}
@@ -293,7 +293,7 @@ export function BlockRenderer({
             primary
               ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]"
               : outline
-                ? "border-2 border-[var(--lp-accent)] bg-transparent text-[var(--lp-accent)]"
+                ? "border-2 border-[var(--lp-accent)] bg-transparent text-[var(--lp-accent-text)]"
                 : "border border-[var(--lp-btn-border)] bg-[var(--lp-btn-bg)] text-[var(--lp-btn-fg)] shadow-[var(--lp-shadow)]",
           ].join(" ")}
         >
@@ -394,7 +394,7 @@ export function BlockRenderer({
         </div>
       );
       return url ? (
-        <a href={goHref(slug, block.id)} {...ext} className="block">
+        <a href={goHref(slug, block.id)} {...ext} aria-label={s(d, "title") || s(d, "subtitle") || s(d, "ctaLabel") ? undefined : t.imageLink} className="block">
           {inner}
         </a>
       ) : (
@@ -448,6 +448,7 @@ export function BlockRenderer({
                 key={i}
                 href={goHref(slug, block.id, i)}
                 {...ext}
+                aria-label={s(it, "title") ? undefined : lpN(t.itemLink, i + 1)}
                 className={`lp-btn ${cardCls} w-[72%] shrink-0 snap-start overflow-hidden`}
               >
                 {s(it, "imagePath") ? (
@@ -465,7 +466,7 @@ export function BlockRenderer({
         );
       }
       const nodes = items.map(({ it, i }) => (
-        <a key={i} href={goHref(slug, block.id, i)} {...ext} className={`lp-btn ${cardCls} flex items-center gap-3 p-3`}>
+        <a key={i} href={goHref(slug, block.id, i)} {...ext} aria-label={s(it, "title") ? undefined : lpN(t.itemLink, i + 1)} className={`lp-btn ${cardCls} flex items-center gap-3 p-3`}>
           {s(it, "imagePath") ? (
             // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
             <img src={s(it, "imagePath")} alt="" className="size-14 shrink-0 rounded-[calc(var(--lp-radius)/1.6)] object-cover" loading="lazy" />
@@ -486,7 +487,7 @@ export function BlockRenderer({
       if (items.length === 0) return null;
       const cols = n(d, "columns", 2) === 3 ? "grid-cols-3" : "grid-cols-2";
       const nodes = items.map(({ it, i }) => (
-        <a key={i} href={goHref(slug, block.id, i)} {...ext} className={`lp-btn ${cardCls} overflow-hidden`}>
+        <a key={i} href={goHref(slug, block.id, i)} {...ext} aria-label={s(it, "title") ? undefined : lpN(t.itemLink, i + 1)} className={`lp-btn ${cardCls} overflow-hidden`}>
           {s(it, "imagePath") ? (
             // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
             <img src={s(it, "imagePath")} alt="" className="aspect-square w-full object-cover" loading="lazy" />

@@ -60,6 +60,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { trapFocus } from "@/components/ui/trap-focus";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { SnsIcon } from "@/components/sns-brand-icons";
@@ -95,6 +96,7 @@ import {
   CUSTOM_RADIUS,
   LAYOUTS,
   LINK_THEMES,
+  mixHex,
   sanitizeThemeCustom,
   themeByKey,
   type LinkThemeCustom,
@@ -862,6 +864,7 @@ export function LinksClient({
         busy={busy}
         /* 발행은 초안을 스냅샷으로 복사할 뿐 — 초안 조작의 실행취소는 그대로 유효하다 */
         onPublish={() => run(() => publishLinkPage())}
+        hasFeed={blocks.some((b) => b.active && b.type === "social_feed")}
         statsOpen={statsOpen}
         onToggleStats={() => setStatsOpen((v) => !v)}
         tools={toolChips}
@@ -872,6 +875,7 @@ export function LinksClient({
         <ScheduleModal
           block={blocks.find((b) => b.id === scheduleFor) ?? null}
           busy={busy}
+          error={error}
           onClose={() => setScheduleFor(null)}
           onSave={(openAt, closeAt) => {
             const b = blocks.find((x) => x.id === scheduleFor);
@@ -899,6 +903,7 @@ export function LinksClient({
           template={tplPreview}
           page={draftPageView}
           busy={busy}
+          error={error}
           onClose={() => setTplPreview(null)}
           onApply={() => {
             const t = tplPreview;
@@ -937,10 +942,12 @@ export function LinksClient({
             2행: 편집 폰(1열) · 패널 칸(2열, 열릴 때만 폭)
           스트립이 캔버스+패널 칸을 합친 폭을 쓰므로 패널이 열려도 카드가 잘리지 않고, 미리보기는
           스트립 옆 제자리에 있다(2026-08-22 "라이브 미리보기 위치 원래대로"). ── */}
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_auto_26rem] xl:items-start">
+      {/* xl 미만은 한 칸 — minmax(0,1fr) 로 못 박는다. 암묵 auto 칸은 어느 항목의 min-content(409px)를 따라가 폰에서 카드가 뷰포트 밖으로 새어 나갔다 */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,1fr)_auto_26rem] xl:items-start">
       {/* 템플릿 적용하기 — 링크팜 상시 스트립(접이식). 접기는 grid-rows 로 스르륵,
           넘치는 쪽은 가장자리 페이드. 첫 칸은 가져오기. */}
-      <div className="card-face xl:col-span-2 xl:col-start-1 xl:row-start-1">
+      {/* min-w-0 — 스트립 카드(shrink-0)의 min-content 가 그리드 칸을 밀어 폰에서 카드가 뷰포트 밖으로 새어 나갔다(실측 409/390px) */}
+      <div className="card-face min-w-0 xl:col-span-2 xl:col-start-1 xl:row-start-1">
         <button
           type="button"
           onClick={() => setTplOpen((v) => !v)}
@@ -980,8 +987,11 @@ export function LinksClient({
                     key={t.key}
                     type="button"
                     disabled={busy}
-                    /* 누르면 즉시 미리보기 — 확정은 캔버스 위 「이 템플릿 적용」 */
-                    onClick={() => setTplPreview(t)}
+                    /* 누르면 즉시 미리보기 — 확정은 캔버스 위 「이 템플릿 적용」. 앞선 조작의 오류는 이 모달 것이 아니다 */
+                    onClick={() => {
+                      setError(null);
+                      setTplPreview(t);
+                    }}
                     aria-pressed={tplPreview?.key === t.key}
                     /* 틴트 바탕은 템플릿 고유색(콘텐츠 팔레트) — 글자는 테마 무관 항상 어두운
                        on-primary, 배지는 항상 어두운 scrim: 다크 테마에서도 그대로 읽힌다 */
@@ -1144,7 +1154,10 @@ export function LinksClient({
                     },
                   );
                 }}
-                onSchedule={(id) => setScheduleFor(id)}
+                onSchedule={(id) => {
+                  setError(null);
+                  setScheduleFor(id);
+                }}
                 onDuplicate={(id, label) =>
                   run(
                     /* 정렬 번호를 다시 쓰는 조작 — 드래그(fire)와 겹치지 않게 같은 체인을 탄다(감사 L5) */
@@ -1180,7 +1193,7 @@ export function LinksClient({
                      떨어질 값이 있으면 여기서 알린다(색 인풋·칩은 틀릴 수 없고 주소만 자유 입력). */
                   const clean = sanitizeThemeCustom(customForm);
                   if (customForm.bgImage && !clean?.bgImage) {
-                    setError("배경 이미지 주소는 http(s)로 시작해야 하고 공백·따옴표·괄호가 없어야 해요.");
+                    setError("배경 이미지 주소는 http(s)로 시작해야 하고 공백·따옴표·괄호·역슬래시가 없어야 해요.");
                     return;
                   }
                   run(() => updateLinkThemeCustom(customForm));
@@ -1328,7 +1341,9 @@ export function LinksClient({
                 {/* published(공개 스위치)를 먼저 본다 — 발행만 하고 공개를 안 켠 상태에서
                     "공개 주소와 같은 모습" 이라고 말하면 방문자는 404 인데 소유자는 모른다(감사 #4) */}
                 <p className="-mt-2 text-[12px] text-fg-sub">
-                  {!page.published
+                  {profileDirty || customDirty || editorDirty
+                    ? "저장하지 않은 편집이 보여요 — 저장한 뒤 「라이브 반영」을 누르면 공개 주소에 반영돼요."
+                    : !page.published
                     ? page.publishedAt
                       ? "비공개예요 — 설정에서 「공개」를 켜야 방문자가 볼 수 있어요."
                       : "지금 모습이에요 — 「라이브 반영」 후 설정에서 「공개」를 켜면 주소가 살아나요."
@@ -1365,7 +1380,8 @@ export function LinksClient({
       ) : null}
 
       {/* 토스트 — 조작 결과 안내. 전엔 sr-only 라 "블록을 숨겼어요" 같은 안내가 눈엔 안 보였다. */}
-      <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
+      {/* 모바일(<md)에선 하단 탭바(약 58px + safe-area) 위로 띄운다 — 같은 z-40 이라 탭바 뒤에 깔려 한 픽셀도 안 보였다(감사2 C9) */}
+      <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-50 flex justify-center px-4 md:bottom-6">
         <p
           data-open={notice ? "true" : "false"}
           role="status"
@@ -1387,6 +1403,7 @@ function TopBar({
   origin,
   busy,
   onPublish,
+  hasFeed = false,
   statsOpen,
   onToggleStats,
   tools,
@@ -1396,6 +1413,8 @@ function TopBar({
   origin: string;
   busy: boolean;
   onPublish: () => void;
+  /** 켜진 「최근 게시물」 블록이 있는가 — 있으면 초안이 깨끗해도 발행(피드 새로고침)을 막지 않는다 */
+  hasFeed?: boolean;
   statsOpen: boolean;
   onToggleStats: () => void;
   /** 1행 왼쪽 — 드로어 여닫는 도구 칩(부모가 상태를 들고 JSX 로 꽂는다) */
@@ -1487,10 +1506,16 @@ function TopBar({
         )}
       </span>
 
-      {/* 라이브 반영 — 초안을 공개 스냅샷으로. 바뀐 게 없으면 눌러도 의미가 없다 */}
-      <Button size="sm" onClick={onPublish} disabled={busy || (!page.dirty && !!page.publishedAt)}>
+      {/* 라이브 반영 — 초안을 공개 스냅샷으로. 바뀐 게 없으면 눌러도 의미가 없다.
+          단, 「최근 게시물」이 켜져 있으면 늘 누를 수 있다 — 피드는 발행 시점에 구워지므로 새 글을 반영할 길이 이것뿐이다(감사2 U3) */}
+      <Button
+        size="sm"
+        onClick={onPublish}
+        disabled={busy || (!page.dirty && !!page.publishedAt && !hasFeed)}
+        title={!page.dirty && !!page.publishedAt && hasFeed ? "최근 게시물을 다시 불러와 반영해요" : undefined}
+      >
         <Rocket className="size-3.5" aria-hidden />
-        {busy ? "반영 중…" : "라이브 반영"}
+        {busy ? "반영 중…" : !page.dirty && !!page.publishedAt && hasFeed ? "피드 새로고침" : "라이브 반영"}
       </Button>
         </div>
       </div>
@@ -1707,7 +1732,8 @@ function BlockListPanel({
                   aria-label={`${summary} 강조`}
                   title="강조 — 페이지 아래 고정 버튼"
                   disabled={busy}
-                  className={cn(iconBtn, emph && "text-primary-ink")}
+                  /* 좁은 화면(<md)에선 ⋯ 메뉴로 — 375px 에서 행의 이름 칸이 39px 로 줄어 블록 이름이 다 잘렸다(감사2 U16) */
+                  className={cn(iconBtn, "hidden md:inline-flex", emph && "text-primary-ink")}
                 >
                   <Star className={cn("size-4", emph && "fill-current")} aria-hidden />
                 </button>
@@ -1718,7 +1744,7 @@ function BlockListPanel({
                 aria-label={`${summary} 예약 공개`}
                 title="예약 공개 — 날짜에 맞춰 보이거나 숨기기"
                 disabled={busy}
-                className={cn(iconBtn, "relative", hasSched && "text-primary-ink")}
+                className={cn(iconBtn, "relative hidden md:inline-flex", hasSched && "text-primary-ink")}
               >
                 <Clock className="size-4" aria-hidden />
                 {hasSched ? <span className="absolute right-1 top-1 size-1.5 rounded-full bg-primary" aria-hidden /> : null}
@@ -1742,6 +1768,9 @@ function BlockListPanel({
                     className="modal-card-in shadow-pop absolute right-0 top-full z-20 mt-1 w-36 rounded-card border border-line bg-overlay p-1"
                   >
                     {[
+                      /* <md 에서만 보이는 항목 — 위 ★·🕐 버튼이 숨겨진 자리 */
+                      ...(canEmph ? [{ k: "emph", label: emph ? "강조 해제" : "강조", icon: Star, run: () => onEmphasize(b.id, !emph), disabled: false, narrow: true }] : []),
+                      { k: "sched", label: hasSched ? "예약 공개 수정" : "예약 공개", icon: Clock, run: () => onSchedule(b.id), disabled: false, narrow: true },
                       { k: "copy", label: "블록 복사", icon: CopyIcon, run: () => onDuplicate(b.id, summary), disabled: false },
                       { k: "up", label: "위로", icon: ArrowUp, run: () => onMove(b.id, "up", summary), disabled: i === 0 },
                       { k: "down", label: "아래로", icon: ArrowDown, run: () => onMove(b.id, "down", summary), disabled: i === blocks.length - 1 },
@@ -1759,6 +1788,7 @@ function BlockListPanel({
                         className={cn(
                           "trans-state flex w-full items-center gap-2 rounded-card px-2.5 py-1.5 text-left text-[14px] hover:bg-tint-hover disabled:opacity-40",
                           m.danger ? "text-negative" : "text-fg",
+                          m.narrow && "md:hidden",
                         )}
                       >
                         <m.icon className="size-3.5" aria-hidden />
@@ -1815,11 +1845,14 @@ function BlockListPanel({
 function ScheduleModal({
   block,
   busy,
+  error,
   onClose,
   onSave,
 }: {
   block: LinkBlock | null;
   busy: boolean;
+  /** 저장 실패 사유 — 모달 안에 보여야 한다(감사2 U6) */
+  error?: string | null;
   onClose: () => void;
   onSave: (openAt: string | null, closeAt: string | null) => void;
 }) {
@@ -1892,6 +1925,11 @@ function ScheduleModal({
           <input type="datetime-local" value={closeAt} onChange={(e) => setCloseAt(e.target.value)} className={field} />
         </label>
         {bad ? <p className="mt-2 text-[12px] text-negative-strong">숨김 날짜는 공개 날짜보다 뒤여야 해요.</p> : null}
+        {error && !bad ? (
+          <p role="alert" className="mt-2 text-[12px] text-negative-strong">
+            {error}
+          </p>
+        ) : null}
         <div className="mt-4 flex items-center justify-between gap-2">
           <Button variant="ghost" size="sm" disabled={busy || (!init.openAt && !init.closeAt)} onClick={() => onSave(null, null)}>
             예약 해제
@@ -1934,26 +1972,6 @@ function PanelColumn({ open, children }: { open: boolean; children: React.ReactN
 /** 모달 안에서 Tab 을 가둔다 — aria-modal 은 스크린리더 커서만 제한하고 키보드 포커스는
     못 막아 Tab 이 스크림 뒤 상단바 칩으로 빠져나가 Enter 로 드로어·실행취소가 실행됐다(감사 #12).
     rule-wizard.tsx 의 trapFocus 와 같은 패턴. */
-function trapFocus(root: HTMLElement | null, e: React.KeyboardEvent) {
-  if (e.key !== "Tab" || !root) return;
-  const els = [...root.querySelectorAll<HTMLElement>('button, input, textarea, select, a[href], [tabindex]:not([tabindex="-1"])')].filter(
-    (el) => !el.hasAttribute("disabled"),
-  );
-  if (!els.length) {
-    e.preventDefault();
-    return;
-  }
-  const first = els[0];
-  const last = els[els.length - 1];
-  if (e.shiftKey && (document.activeElement === first || document.activeElement === root)) {
-    e.preventDefault();
-    last.focus();
-  } else if (!e.shiftKey && document.activeElement === last) {
-    e.preventDefault();
-    first.focus();
-  }
-}
-
 /* 템플릿 미리보기 모달 — 링크팜 카피. 작업 중 캔버스는 그대로 두고 **모달 안 폰**에
    템플릿을 그린다. 프로필(이름·사진)은 내 것, 블록·테마는 템플릿 것 — "내 페이지가
    이렇게 된다"가 보인다. 서버 호출은 「이 템플릿 적용」 때만. */
@@ -1961,12 +1979,15 @@ function TemplateModal({
   template,
   page,
   busy,
+  error,
   onClose,
   onApply,
 }: {
   template: LinkTemplate;
   page: LinkPageView;
   busy: boolean;
+  /** 적용 실패 사유 — 페이지 위 배너는 스크림 뒤라 안 보인다(감사2 U6) */
+  error?: string | null;
   onClose: () => void;
   onApply: () => void;
 }) {
@@ -2044,7 +2065,13 @@ function TemplateModal({
           <PhonePreview page={{ ...page, theme: template.theme, themeCustom: null }} blocks={blocks} selectedId={null} />
         </div>
         <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-3">
-          <p className="text-[12px] text-fg-sub">적용하면 지금 블록이 이 구성으로 바뀌어요. 작업 중인 화면은 닫기 전까지 그대로예요.</p>
+          {error ? (
+            <p role="alert" className="text-[12px] text-negative-strong">
+              {error}
+            </p>
+          ) : (
+            <p className="text-[12px] text-fg-sub">적용하면 지금 블록이 이 구성으로 바뀌어요. 작업 중인 화면은 닫기 전까지 그대로예요.</p>
+          )}
           <div className="flex shrink-0 gap-2">
             <Button variant="ghost" size="sm" onClick={onClose}>
               닫기
@@ -2677,7 +2704,8 @@ function ThemePanel({
             <button
               type="button"
               aria-pressed={!!custom.bg2}
-              onClick={() => onCustomChange({ bg2: custom.bg2 ? undefined : (preset.bg2 ?? custom.accent ?? preset.accent) })}
+              /* 끝색 기본값은 배경에 강조색을 살짝 섞은 색 — 강조색 그대로면 기본·다크 프리셋에서 글자색과 같아 아래쪽 제목이 사라진다(감사2 U7) */
+              onClick={() => onCustomChange({ bg2: custom.bg2 ? undefined : (preset.bg2 ?? mixHex(custom.bg ?? preset.bg, custom.accent ?? preset.accent, 0.22)) })}
               className={chip(!!custom.bg2)}
             >
               그라데이션
@@ -3455,7 +3483,7 @@ function PageSettingsForm({
       return out;
     });
   }
-  const { ogTitle, ogImage, favicon, lockMessage, ga4, metaPixel, tiktokPixel } = form;
+  const { ogTitle, ogImage, favicon, lockMessage } = form;
   const setTracker = (k: "ga4" | "metaPixel" | "tiktokPixel", v: string) => setForm((f) => ({ ...f, [k]: v }));
   const setOgTitle = (v: string) => setForm((f) => ({ ...f, ogTitle: v }));
   const setOgImage = (v: string) => setForm((f) => ({ ...f, ogImage: v }));

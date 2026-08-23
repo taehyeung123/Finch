@@ -149,18 +149,39 @@ export const CUSTOM_BUTTONS = [
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 /* 배경 이미지 주소 — http(s)·공백/따옴표/괄호 금지(url("...") 로 CSS 에 들어간다) */
-const IMG_URL = /^https?:\/\/[^\s"'()]{1,500}$/;
+const IMG_URL = /^https?:\/\/[^\s"'()\\]{1,500}$/;
 
 export function isHex(v: unknown): v is string {
   return typeof v === "string" && HEX.test(v);
 }
 
-/** 강조색 위 글자 — 밝은 강조면 어둡게, 어두우면 희게(YIQ) */
+/** WCAG 상대 휘도 */
+function luminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5]
+    .map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** WCAG 대비 — hex 둘. hex 가 아니면(color-mix 등) 계산 불가 → 0 */
+export function contrastRatio(a: string, b: string): number {
+  if (!HEX.test(a) || !HEX.test(b)) return 0;
+  const la = luminance(a);
+  const lb = luminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/** 두 hex 를 t(0~1) 비율로 섞는다 — 그라데이션 끝색 기본값 등 */
+export function mixHex(a: string, b: string, t: number): string {
+  if (!HEX.test(a) || !HEX.test(b)) return a;
+  const ch = (i: number) => Math.round(parseInt(a.slice(i, i + 2), 16) + (parseInt(b.slice(i, i + 2), 16) - parseInt(a.slice(i, i + 2), 16)) * t);
+  return `#${[1, 3, 5].map((i) => ch(i).toString(16).padStart(2, "0")).join("").toUpperCase()}`;
+}
+
+/** 강조색 위 글자 — 흰/어두운 글자 중 WCAG 대비가 큰 쪽. YIQ 는 채도 높은 주황·파랑에서 흰 글자를 골라 2.8:1 이 났다(감사2 C6) */
 function onAccentFor(hex: string): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return (r * 299 + g * 587 + b * 114) / 1000 >= 150 ? "#16161C" : "#FFFFFF";
+  /* 흰 글자 대비 1.05/(L+.05) 와 #16161C(L≈0.0083) 대비 (L+.05)/0.0583 가 같아지는 지점 L≈0.197 */
+  return luminance(hex) > 0.197 ? "#16161C" : "#FFFFFF";
 }
 
 /**
@@ -194,7 +215,7 @@ export const LINK_THEMES: LinkTheme[] = [
     name: "기본",
     bg: "#F7F8FA",
     fg: "#16161C",
-    muted: "#6B7280",
+    muted: "#69707E",
     card: "#FFFFFF",
     border: "#E8EBEF",
     accent: "#16161C",
@@ -208,7 +229,7 @@ export const LINK_THEMES: LinkTheme[] = [
     name: "포슬린",
     bg: "#F4F1EC",
     fg: "#2A2622",
-    muted: "#7A7167",
+    muted: "#746B61",
     card: "#FFFDF9",
     border: "#E3DDD3",
     accent: "#2A2622",
@@ -222,7 +243,7 @@ export const LINK_THEMES: LinkTheme[] = [
     name: "노션",
     bg: "#FFFFFF",
     fg: "#191919",
-    muted: "#787774",
+    muted: "#767572",
     card: "#FFFFFF",
     border: "#E3E2E0",
     accent: "#191919",
@@ -278,7 +299,7 @@ export const LINK_THEMES: LinkTheme[] = [
     name: "코랄",
     bg: "#FFF6F3",
     fg: "#2B1A15",
-    muted: "#8A6A60",
+    muted: "#88685E",
     card: "#FFFFFF",
     border: "#FBDDD3",
     accent: "#FF6B4A",
@@ -307,11 +328,11 @@ export const DEFAULT_THEME_KEY = "basic";
 /* 2026-08-20 추가 7종 — "테마 종류 더 자유롭게". 그라데이션(bg2)·네온·미드나잇 등
    프리셋 8종이 전부 단색·중성이라 "다 비슷하다"는 인상을 깨는 쪽으로 골랐다. */
 LINK_THEMES.push(
-  { key: "sunset", group: "VIVID", name: "선셋", bg: "#FFE8D6", bg2: "#FFD0DD", fg: "#2A1B12", muted: "#8A6A5A", card: "#FFFFFF", border: "#F2D6C6", accent: "#E25822", onAccent: "#FFFFFF", radius: "full", shadow: true },
-  { key: "lavender", group: "VIVID", name: "라벤더", bg: "#F1ECFA", bg2: "#E3DCFF", fg: "#221B3A", muted: "#6F6790", card: "#FFFFFF", border: "#E0D8F2", accent: "#6D4AFF", onAccent: "#FFFFFF", radius: "md", shadow: true },
-  { key: "peach", group: "VIVID", name: "피치", bg: "#FFF1E6", fg: "#2B2118", muted: "#8C7668", card: "#FFFFFF", border: "#F5DCCB", accent: "#FF7A59", onAccent: "#FFFFFF", radius: "md", shadow: true },
-  { key: "sage", group: "MINIMAL", name: "세이지", bg: "#EEF3EC", fg: "#1F2A22", muted: "#64736A", card: "#FFFFFF", border: "#DCE5DC", accent: "#4F7C5A", onAccent: "#FFFFFF", radius: "sm", shadow: false },
-  { key: "ocean", group: "PROFESSIONAL", name: "오션", bg: "#E9F4F8", bg2: "#DDEBF5", fg: "#0F2430", muted: "#587383", card: "#FFFFFF", border: "#D2E4EC", accent: "#0E7490", onAccent: "#FFFFFF", radius: "md", shadow: true },
+  { key: "sunset", group: "VIVID", name: "선셋", bg: "#FFE8D6", bg2: "#FFD0DD", fg: "#2A1B12", muted: "#75594A", card: "#FFFFFF", border: "#F2D6C6", accent: "#C74D1E", onAccent: "#FFFFFF", radius: "full", shadow: true },
+  { key: "lavender", group: "VIVID", name: "라벤더", bg: "#F1ECFA", bg2: "#E3DCFF", fg: "#221B3A", muted: "#645C84", card: "#FFFFFF", border: "#E0D8F2", accent: "#6D4AFF", onAccent: "#FFFFFF", radius: "md", shadow: true },
+  { key: "peach", group: "VIVID", name: "피치", bg: "#FFF1E6", fg: "#2B2118", muted: "#7E6A5D", card: "#FFFFFF", border: "#F5DCCB", accent: "#FF7A59", onAccent: "#2B2118", radius: "md", shadow: true },
+  { key: "sage", group: "MINIMAL", name: "세이지", bg: "#EEF3EC", fg: "#1F2A22", muted: "#617067", card: "#FFFFFF", border: "#DCE5DC", accent: "#4F7C5A", onAccent: "#FFFFFF", radius: "sm", shadow: false },
+  { key: "ocean", group: "PROFESSIONAL", name: "오션", bg: "#E9F4F8", bg2: "#DDEBF5", fg: "#0F2430", muted: "#516B7B", card: "#FFFFFF", border: "#D2E4EC", accent: "#0E7490", onAccent: "#FFFFFF", radius: "md", shadow: true },
   { key: "midnight", group: "PROFESSIONAL", name: "미드나잇", bg: "#0B1220", bg2: "#1B2A4A", fg: "#E6EDF7", muted: "#93A4BD", card: "#14203A", border: "#24345A", accent: "#6EA8FF", onAccent: "#0B1220", radius: "md", shadow: false },
   { key: "neon", group: "VIVID", name: "네온", bg: "#0A0A0F", fg: "#F2F2F7", muted: "#9A9AAB", card: "#15151F", border: "#26263A", accent: "#39FF88", onAccent: "#0A0A0F", radius: "full", shadow: false },
 );
@@ -329,7 +350,7 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
   const accent = c.accent ?? t.accent;
   /* 파생색 — 사용자가 기준색을 건드렸을 때만 다시 계산한다(안 건드리면 프리셋 값 그대로) */
   const onAccent = c.accent ? onAccentFor(accent) : t.onAccent;
-  const muted = c.fg || c.bg ? `color-mix(in srgb, ${fg} 62%, ${bg})` : t.muted;
+  const muted = c.fg || c.bg || c.bg2 ? `color-mix(in srgb, ${fg} 68%, ${bg})` : t.muted;
   const border = c.card || c.fg || c.bg ? `color-mix(in srgb, ${fg} 14%, transparent)` : t.border;
   const radius = c.radius ?? t.radius;
   /* 배경: 이미지 > 그라데이션 > 단색. 사용자가 단색을 새로 골랐으면 프리셋 그라데이션은 버린다 */
@@ -339,8 +360,9 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
   const filter = c.bgImage ? (c.bgFilter ?? "none") : "none";
   const overlay =
     filter === "light" ? "rgba(255,255,255,.35)" : filter === "dark" ? "rgba(0,0,0,.42)" : filter === "blur" ? "rgba(255,255,255,.22)" : filter === "darkBlur" ? "rgba(0,0,0,.42)" : null;
+  /* url("…") 안에 들어간다 — 관문(IMG_URL)이 역슬래시·따옴표를 막지만 직렬화도 따로 안전하게(감사2 C5) */
   const bgImage = c.bgImage
-    ? `${overlay ? `linear-gradient(${overlay}, ${overlay}), ` : ""}url("${c.bgImage}")`
+    ? `${overlay ? `linear-gradient(${overlay}, ${overlay}), ` : ""}url("${c.bgImage.replace(/[\\"]/g, (m) => `\\${m}`)}")`
     : bg2
       ? `linear-gradient(160deg, ${bg}, ${bg2})`
       : "none";
@@ -359,7 +381,10 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
   /* 버튼 스타일 — 링크 버튼의 "기본" 변형이 따른다(채움/외곽선/은은하게) */
   const btn = c.button ?? "fill";
   const btnBg = btn === "fill" ? card : btn === "outline" ? "transparent" : `color-mix(in srgb, ${accent} 14%, transparent)`;
-  const btnFg = btn === "fill" ? fg : accent;
+  /* 외곽선·은은하게의 글자는 강조색인데, 코랄·피치처럼 밝은 강조색은 배경 위에서 2.3~3.1:1 이다 — 안 읽히면 본문색으로(감사2 U8) */
+  const accentReadable = contrastRatio(accent, bg) >= 4.5;
+  const accentText = accentReadable ? accent : fg;
+  const btnFg = btn === "fill" ? fg : accentText;
   const btnBorder = btn === "fill" ? border : btn === "outline" ? accent : "transparent";
   return {
     "--lp-bg": bg,
@@ -374,6 +399,8 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
     "--lp-card": card,
     "--lp-border": border,
     "--lp-accent": accent,
+    /* 배경 위 글자로 쓸 강조색 — 대비 4.5 미만이면 본문색. 외곽선 강조 버튼·태그 칩이 쓴다 */
+    "--lp-accent-text": accentText,
     "--lp-on-accent": onAccent,
     /* 모서리는 **두 갈래**다.
        radius 의 이름이 「버튼 모서리」인데(위 인터페이스 주석), 값 하나를 이미지·카드·

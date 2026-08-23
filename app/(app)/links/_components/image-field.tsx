@@ -196,7 +196,7 @@ export function ImageField({
             <button
               type="button"
               onClick={() => onChange("")}
-              aria-label="이미지 제거"
+              aria-label={`${label} 제거`}
               className="trans-state absolute right-2 top-2 rounded-card bg-scrim p-1.5 text-on-scrim hover:opacity-80"
             >
               <X className="size-3.5" />
@@ -208,6 +208,7 @@ export function ImageField({
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={busy}
+          aria-label={`${label} 올리기`}
           /* busy 중엔 로더가 내용이라 흐리게 하지 않는다 */
           className={`trans-state mt-1.5 flex w-full flex-col items-center justify-center gap-1.5 rounded-card border border-dashed border-line bg-plate text-fg-sub hover:border-primary hover:text-fg ${aspect}`}
         >

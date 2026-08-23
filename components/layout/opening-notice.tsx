@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { trapFocus } from "@/components/ui/trap-focus";
 import { X } from "lucide-react";
 import { FinchMark } from "@/components/logo";
 import { Button } from "@/components/ui/button";
@@ -42,8 +43,25 @@ function dismissToday() {
 export function OpeningNotice() {
   const notDismissedToday = useSyncExternalStore(subscribe, getSnapshot, () => false);
   const [closedThisSession, setClosedThisSession] = useState(false);
+  const open = notDismissedToday && !closedThisSession;
+  const boxRef = useRef<HTMLDivElement>(null);
+  /* 모달 관문 — 초기 포커스·Escape·닫힌 뒤 포커스 복원. 없으면 키보드가 스크림 뒤 사이드바로 들어가고
+     Escape 도 안 먹었다(감사2 C7). 레이아웃이 리마운트되지 않으므로 open 에 의존한다. */
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.activeElement as HTMLElement | null;
+    boxRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setClosedThisSession(true);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      prev?.focus?.();
+    };
+  }, [open]);
 
-  if (!notDismissedToday || closedThisSession) return null;
+  if (!open) return null;
 
   return (
     <div
@@ -55,7 +73,12 @@ export function OpeningNotice() {
         if (e.target === e.currentTarget) setClosedThisSession(true);
       }}
     >
-      <div className="modal-card-in shadow-pop w-full max-w-md rounded-card border border-line bg-overlay">
+      <div
+        ref={boxRef}
+        tabIndex={-1}
+        onKeyDown={(e) => trapFocus(boxRef.current, e)}
+        className="modal-card-in shadow-pop w-full max-w-md rounded-card border border-line bg-overlay outline-none"
+      >
         <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
           <span className="inline-flex items-center gap-2 font-bold">
             <FinchMark className="size-5 text-primary" />

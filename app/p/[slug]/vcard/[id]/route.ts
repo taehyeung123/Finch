@@ -26,9 +26,9 @@ function vcardOf(d: Record<string, unknown>): string | null {
 export async function GET(_req: Request, ctx: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = await ctx.params;
   /* 공개 조회는 loadPublicPage 한 곳 — 잠긴 페이지는 열림 쿠키가 맞을 때만 스냅샷이 온다(데모도 여기서 처리) */
-  const page = await loadPublicPage(slug);
+  const page = await loadPublicPage(slug, { withOwner: true });
   const blocks =
-    page && page.published && !page.locked
+    page && (page.published || page.isOwner) && !page.locked
       ? ((page.snapshot as { blocks?: Array<{ id: string; type: string; data: Record<string, unknown> }> } | null)?.blocks ?? [])
       : [];
   const found = blocks.find((b) => b.id === id && b.type === "vcard");

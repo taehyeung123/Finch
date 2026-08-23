@@ -63,7 +63,7 @@ function PTags({ d, align = "center", inherit = false }: { d: Record<string, unk
       {tags.map((t) => (
         <span
           key={t}
-          className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${inherit ? "" : "text-[var(--lp-accent)]"}`}
+          className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${inherit ? "" : "text-[var(--lp-accent-text)]"}`}
           style={{ backgroundColor: inherit ? "color-mix(in srgb, currentColor 16%, transparent)" : "color-mix(in srgb, var(--lp-accent) 14%, transparent)" }}
         >
           #{t}
@@ -386,7 +386,8 @@ export function PhonePreview({
                     key={b.id}
                     className={cn(
                       "lp-block group relative",
-                      draggingId === b.id && "opacity-50",
+                      /* !important — 스크롤 애니메이션(animation) 이 일반 선언의 opacity 를 이긴다(감사2 U11) */
+                      draggingId === b.id && "!opacity-50",
                       /* 드롭 대상 표시 — 선택(실선)과 헷갈리지 않게 점선 */
                       overId === b.id && draggingId && draggingId !== b.id && "outline-dashed outline-2 outline-primary",
                     )}
@@ -546,7 +547,7 @@ export function PhonePreview({
                  나온다"로 보인다(2026-08-20 지적). 공개 여부는 캔버스 캡션·최신 칩이 말한다. */
               visible.map((b) => (
                 <div key={b.id} className="lp-block">
-                  <PreviewBlock block={b} mode="draft" />
+                  <PreviewBlock block={b} mode="preview" />
                 </div>
               ))
             )}
@@ -612,8 +613,13 @@ function Ghost({ reason }: { reason: string }) {
   );
 }
 
-function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "draft" | "live" | "edit" }) {
+/*
+  mode — live: 공개 규칙(숨김은 아예 안 그림) · draft: 유령칸 · edit: 캔버스(관대, 회색 자리표시·사유 캡션)
+       · preview: 우측 읽기 전용 미리보기 — edit 처럼 관대하게 실제 모습을 그리되 회색 자리표시(업로드 초대)는 없다(감사2 C1).
+*/
+function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "draft" | "live" | "edit" | "preview" }) {
   const d = block.data ?? {};
+  const lenient = mode === "edit" || mode === "preview";
 
   /* 공개 렌더러가 숨기는 조건과 **같은 함수**를 쓴다. live 는 부모가 이미 걸렀지만
      혹시 새 숨김 조건이 부모 필터를 놓쳐도 유령칸이 라이브에 새지 않게 한 번 더 막는다. */
@@ -624,7 +630,7 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
        연달아 있으면 사유 문장 상자가 캔버스를 도배한다(2026-08-20 실계정 지적).
        사유는 래퍼가 블록 아래 10px 한 줄 캡션으로 단다. 그릴 것이 아예 없는
        소수 케이스(이미지 없음·항목 0개)만 아래 case 에서 초대 문구로 떨어진다. */
-    if (mode !== "edit") return <Ghost reason={hidden} />;
+    if (!lenient) return <Ghost reason={hidden} />;
   }
 
   switch (block.type) {
@@ -677,7 +683,7 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
             emphasis === "primary"
               ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]"
               : emphasis === "outline"
-                ? "border-2 border-[var(--lp-accent)] text-[var(--lp-accent)]"
+                ? "border-2 border-[var(--lp-accent)] text-[var(--lp-accent-text)]"
                 : "border border-[var(--lp-btn-border)] bg-[var(--lp-btn-bg)] text-[var(--lp-btn-fg)] shadow-[var(--lp-shadow)]",
           ].join(" ")}
         >
@@ -755,8 +761,8 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
       );
     }
     case "card_row": {
-      const items = arr(d, "items").filter((it) => mode === "edit" || s(it, "url"));
-      if (mode === "edit" && items.length === 0) return <Ghost reason="항목을 추가해 주세요" />;
+      const items = arr(d, "items").filter((it) => lenient || s(it, "url"));
+      if (lenient && items.length === 0) return <Ghost reason="항목을 추가해 주세요" />;
       if (s(d, "layout") === "carousel") {
         return (
           <div className="-mx-5 flex snap-x gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -791,11 +797,19 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
           </span>
         </div>
       ));
-      return <Collapsible items={nodes} initial={n(d, "collapse", 0)} className="space-y-2" />;
+      /* 캔버스의 블록은 <button> 이라 그 안에 「더보기」 <button> 을 넣을 수 없다(무효 DOM·하이드레이션 불일치, 감사2 C8) — 캔버스에선 접지 않고 캡션으로 말한다 */
+      return (
+        <>
+          <Collapsible items={nodes} initial={mode === "edit" ? 0 : n(d, "collapse", 0)} className="space-y-2" />
+          {mode === "edit" && n(d, "collapse", 0) > 0 && items.length > n(d, "collapse", 0) ? (
+            <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">공개 페이지에선 처음 {n(d, "collapse", 0)}개만 보이고 「더보기」로 접혀요</p>
+          ) : null}
+        </>
+      );
     }
     case "grid": {
-      const items = arr(d, "items").filter((it) => mode === "edit" || s(it, "url"));
-      if (mode === "edit" && items.length === 0) return <Ghost reason="항목을 추가해 주세요" />;
+      const items = arr(d, "items").filter((it) => lenient || s(it, "url"));
+      if (lenient && items.length === 0) return <Ghost reason="항목을 추가해 주세요" />;
       const nodes = items.map((it, i) => (
         <div key={i} className={`${card} overflow-hidden`}>
           {s(it, "imagePath") ? (
@@ -808,7 +822,14 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
           </span>
         </div>
       ));
-      return <Collapsible items={nodes} initial={n(d, "collapse", 0)} className={`grid gap-2 ${n(d, "columns", 2) === 3 ? "grid-cols-3" : "grid-cols-2"}`} />;
+      return (
+        <>
+          <Collapsible items={nodes} initial={mode === "edit" ? 0 : n(d, "collapse", 0)} className={`grid gap-2 ${n(d, "columns", 2) === 3 ? "grid-cols-3" : "grid-cols-2"}`} />
+          {mode === "edit" && n(d, "collapse", 0) > 0 && items.length > n(d, "collapse", 0) ? (
+            <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">공개 페이지에선 처음 {n(d, "collapse", 0)}개만 보이고 「더보기」로 접혀요</p>
+          ) : null}
+        </>
+      );
     }
     case "notice":
       return (
