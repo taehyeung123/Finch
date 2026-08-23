@@ -22,8 +22,6 @@ import {
   Heading,
   Inbox,
   Lock,
-  Monitor,
-  Tablet,
   Image as ImageIcon,
   LayoutGrid,
   Mail,
@@ -2935,6 +2933,37 @@ function ThemePanel({
    통계 패널
    ══════════════════════════════════════════════════════════════════ */
 
+/** 비율 막대 목록 — 유입·기기·지역 공통(분석 탭) */
+function BarList({ title, rows, empty, hint }: { title: string; rows: Array<{ label: string; value: number }>; empty: string; hint?: string }) {
+  const n = (v: number) => v.toLocaleString("ko-KR");
+    const total = rows.reduce((a, r) => a + r.value, 0);
+    return (
+      <div className="rounded-card border border-line bg-body p-4">
+        <p className="text-[14px] font-semibold">{title}</p>
+        {rows.length === 0 ? (
+          <p className="mt-2 text-[13px] text-fg-sub">{empty}</p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {rows.map((r, i) => (
+              <li key={i}>
+                <div className="flex items-baseline justify-between gap-2 text-[13px]">
+                  <span className="min-w-0 truncate">{r.label}</span>
+                  <span className="tnum shrink-0 font-semibold">
+                    {n(r.value)} <span className="font-normal text-fg-sub">{total > 0 ? `${Math.round((r.value / total) * 100)}%` : ""}</span>
+                  </span>
+                </div>
+                <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-plate" aria-hidden>
+                  <span className="block h-full rounded-full bg-primary" style={{ width: `${total > 0 ? Math.round((r.value / total) * 100) : 0}%` }} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {hint ? <p className="mt-2 text-[11px] text-fg-sub">{hint}</p> : null}
+      </div>
+    );
+  }
+
 const STAT_RANGES: Array<{ days: number; label: string }> = [
   { days: 1, label: "오늘" },
   { days: 7, label: "7일" },
@@ -2968,36 +2997,6 @@ function StatsPanel({
   const best = stats.blocks.slice(0, 3);
   const rangeLabel = STAT_RANGES.find((r) => r.days === stats.days)?.label ?? `${stats.days}일`;
   const n = (v: number) => v.toLocaleString("ko-KR");
-
-  /** 비율 막대 목록 — 유입·기기·지역 공통 */
-  const BarList = ({ title, rows, empty, hint }: { title: string; rows: Array<{ label: string; value: number }>; empty: string; hint?: string }) => {
-    const total = rows.reduce((a, r) => a + r.value, 0);
-    return (
-      <div className="rounded-card border border-line bg-body p-4">
-        <p className="text-[14px] font-semibold">{title}</p>
-        {rows.length === 0 ? (
-          <p className="mt-2 text-[13px] text-fg-sub">{empty}</p>
-        ) : (
-          <ul className="mt-2 space-y-2">
-            {rows.map((r, i) => (
-              <li key={i}>
-                <div className="flex items-baseline justify-between gap-2 text-[13px]">
-                  <span className="min-w-0 truncate">{r.label}</span>
-                  <span className="tnum shrink-0 font-semibold">
-                    {n(r.value)} <span className="font-normal text-fg-sub">{total > 0 ? `${Math.round((r.value / total) * 100)}%` : ""}</span>
-                  </span>
-                </div>
-                <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-plate" aria-hidden>
-                  <span className="block h-full rounded-full bg-primary" style={{ width: `${total > 0 ? Math.round((r.value / total) * 100) : 0}%` }} />
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {hint ? <p className="mt-2 text-[11px] text-fg-sub">{hint}</p> : null}
-      </div>
-    );
-  };
 
   return (
     <div className="space-y-6">
