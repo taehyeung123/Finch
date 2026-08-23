@@ -70,13 +70,33 @@ export function normalizeUrl(raw: string): string | null {
  * 공개 페이지가 그 값을 그대로 <a href> 로 찍으면 javascript: 저장형 XSS 가 된다(감사 #5).
  * 배열이 아니거나 항목이 이상하면 조용히 비운다 — 방문자 화면이 500 으로 죽지 않게.
  */
+/**
+ * 연락 스킴(mailto:·tel:·sms:) — SNS 줄의 이메일·전화·문자 칩 전용. 형식이 엄격해야 한다:
+ * 이메일은 한 칸 규칙, 번호는 +·숫자·하이픈 3~20자. 그 밖은 null(javascript: 류가 스킴 검사를 못 타게).
+ */
+export function normalizeContactHref(raw: string): string | null {
+  const v = raw.trim();
+  const m = /^(mailto|tel|sms):(.*)$/i.exec(v);
+  if (!m) return null;
+  const scheme = m[1].toLowerCase();
+  const rest = m[2].trim();
+  if (scheme === "mailto") return /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(rest) ? `mailto:${rest}` : null;
+  const num = rest.replace(/[\s()]/g, "");
+  return /^\+?[\d-]{3,20}$/.test(num) ? `${scheme}:${num}` : null;
+}
+
+/** SNS 줄 주소 — http(s) 또는 연락 스킴 */
+export function normalizeSnsUrl(raw: string): string | null {
+  return normalizeContactHref(raw) ?? normalizeUrl(raw);
+}
+
 export function sanitizeSnsLinks(input: unknown): Array<{ kind: string; url: string }> {
   if (!Array.isArray(input)) return [];
   const out: Array<{ kind: string; url: string }> = [];
   for (const s of input) {
     if (!s || typeof s !== "object") continue;
     const o = s as Record<string, unknown>;
-    const url = typeof o.url === "string" ? normalizeUrl(o.url) : null;
+    const url = typeof o.url === "string" ? normalizeSnsUrl(o.url) : null;
     const kind = typeof o.kind === "string" ? o.kind.slice(0, 20) : "";
     if (url && kind) out.push({ kind, url });
     if (out.length >= 8) break;

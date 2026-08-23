@@ -1,66 +1,222 @@
-import { AtSign, Globe, MessageCircle } from "lucide-react";
+import {
+  AtSign,
+  BookOpen,
+  Coffee,
+  Globe,
+  GraduationCap,
+  HandHeart,
+  Headphones,
+  Mail,
+  MapPin,
+  MessageCircle,
+  MessageSquare,
+  Music2,
+  Palette,
+  Phone,
+  Radio,
+  ShoppingBag,
+  Sparkles,
+  Store,
+  Users,
+  UtensilsCrossed,
+  Video,
+  Wallet,
+} from "lucide-react";
+import {
+  siAirbnb,
+  siApplemusic,
+  siApplepodcasts,
+  siAppstore,
+  siArtstation,
+  siBandcamp,
+  siBehance,
+  siBilibili,
+  siBluesky,
+  siBuymeacoffee,
+  siDiscord,
+  siDribbble,
+  siEtsy,
+  siFacebook,
+  siGithub,
+  siGoogleplay,
+  siGooglemaps,
+  siInstagram,
+  siKakao,
+  siKakaotalk,
+  siKick,
+  siKofi,
+  siLine,
+  siMastodon,
+  siMedium,
+  siMessenger,
+  siNaver,
+  siNotion,
+  siPatreon,
+  siPaypal,
+  siPinterest,
+  siPixiv,
+  siReddit,
+  siSinaweibo,
+  siSnapchat,
+  siSoundcloud,
+  siSpotify,
+  siSubstack,
+  siTelegram,
+  siThreads,
+  siTiktok,
+  siTistory,
+  siTripadvisor,
+  siTumblr,
+  siTwitch,
+  siUnsplash,
+  siVelog,
+  siVimeo,
+  siVk,
+  siWechat,
+  siWhatsapp,
+  siX,
+  siXiaohongshu,
+  siYoutube,
+  siYoutubemusic,
+} from "simple-icons";
 
 /*
-  SNS 채널 아이콘 — 공개 프로필 링크의 SNS 칩과 편집 미리보기가 함께 쓴다.
+  SNS 채널 아이콘 — 공개 프로필 링크의 SNS 칩과 편집 미리보기·SNS 선택기가 함께 쓴다.
+  리틀리 흡수 4단계(2026-08-22): lib/links/sns-catalog.ts 의 채널 키와 1:1.
 
-  lucide 1.24 는 브랜드 아이콘(instagram·youtube·tiktok…)을 전량 제거했다.
-  그래서 **필요한 4개만 손으로 그렸다** — 아이콘 팩을 새로 들이면 방문자 번들이
-  커진다(lib/links/blocks.ts 의 방침). 나머지 셋은 lucide 의 일반 아이콘으로 충분하다:
-  threads 로고는 @ 모양이고(AtSign), website 는 지구본(Globe), kakao 는 말풍선
-  (MessageCircle)이 브랜드 로고보다 낫다 — 카카오 공식 로고는 노란 배경을 요구하는데
-  이 칩은 사용자 테마 색 위에 얹힌다.
-
-  전부 currentColor + lucide 와 같은 24 뷰박스·스트로크 문법이라 한 줄에 섞여도
-  이질감이 없다. "use client" 없음 — 서버 컴포넌트에서는 정적 SVG 로 렌더돼
-  방문자에게 JS 를 한 바이트도 보내지 않는다.
+  브랜드 로고는 simple-icons(CC0) 의 **path 문자열**만 가져와 24 뷰박스 SVG 로 그린다 —
+  "use client" 가 없어 서버 컴포넌트에서는 정적 SVG 로 렌더되고 방문자에게 JS 를 보내지 않는다.
+  상표 문제로 simple-icons 에 없는 브랜드(링크드인·아마존·토스·쿠팡·치지직 …)는 lucide 일반 아이콘.
+  전부 currentColor 라 사용자 테마 위에 그대로 얹힌다(카카오 공식 노란 배경은 쓰지 않는다).
 */
 
 type IconProps = { className?: string };
+type Si = { path: string };
 
-function InstagramIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
-      <rect x="3" y="3" width="18" height="18" rx="5" />
-      <circle cx="12" cy="12" r="4" />
-      <line x1="17.2" y1="6.8" x2="17.21" y2="6.8" strokeWidth={2.6} />
-    </svg>
-  );
+function brand(icon: Si) {
+  return function BrandIcon({ className }: IconProps) {
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+        <path d={icon.path} />
+      </svg>
+    );
+  };
 }
-
-function YoutubeIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
-      <rect x="2.5" y="5.5" width="19" height="13" rx="3.5" />
-      <polygon points="10.4,9.2 15.2,12 10.4,14.8" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
-function TiktokIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" className={className} aria-hidden>
-      <path d="M13.7 2.5h3c.3 2 1.6 3.6 3.8 3.9v3c-1.4 0-2.7-.4-3.8-1.2v6.2a5.7 5.7 0 1 1-5.7-5.7c.3 0 .7 0 1 .1v3.1a2.7 2.7 0 1 0 1.7 2.5V2.5z" />
-    </svg>
-  );
-}
-
-function XIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" className={className} aria-hidden>
-      <path d="M4.5 4.5l15 15" />
-      <path d="M19.5 4.5l-15 15" />
-    </svg>
-  );
-}
+const lucide = (Icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>) =>
+  function LucideIcon({ className }: IconProps) {
+    return <Icon className={className} aria-hidden />;
+  };
 
 const ICONS: Record<string, (p: IconProps) => React.ReactNode> = {
-  instagram: InstagramIcon,
-  youtube: YoutubeIcon,
-  tiktok: TiktokIcon,
-  x: XIcon,
-  threads: ({ className }) => <AtSign className={className} aria-hidden />,
-  website: ({ className }) => <Globe className={className} aria-hidden />,
-  kakao: ({ className }) => <MessageCircle className={className} aria-hidden />,
+  /* 기본 */
+  website: lucide(Globe),
+  email: lucide(Mail),
+  phone: lucide(Phone),
+  sms: lucide(MessageSquare),
+  /* 소셜 */
+  instagram: brand(siInstagram),
+  threads: brand(siThreads),
+  x: brand(siX),
+  facebook: brand(siFacebook),
+  bluesky: brand(siBluesky),
+  mastodon: brand(siMastodon),
+  snapchat: brand(siSnapchat),
+  pinterest: brand(siPinterest),
+  tumblr: brand(siTumblr),
+  reddit: brand(siReddit),
+  linkedin: lucide(Users),
+  xiaohongshu: brand(siXiaohongshu),
+  weibo: brand(siSinaweibo),
+  vk: brand(siVk),
+  /* 영상·방송 */
+  youtube: brand(siYoutube),
+  tiktok: brand(siTiktok),
+  twitch: brand(siTwitch),
+  chzzk: lucide(Radio),
+  soop: lucide(Radio),
+  kick: brand(siKick),
+  vimeo: brand(siVimeo),
+  bilibili: brand(siBilibili),
+  navertv: brand(siNaver),
+  /* 음악·팟캐스트 */
+  spotify: brand(siSpotify),
+  applemusic: brand(siApplemusic),
+  youtubemusic: brand(siYoutubemusic),
+  soundcloud: brand(siSoundcloud),
+  melon: lucide(Music2),
+  genie: lucide(Music2),
+  bugs: lucide(Music2),
+  applepodcasts: brand(siApplepodcasts),
+  podbbang: lucide(Headphones),
+  bandcamp: brand(siBandcamp),
+  /* 글·블로그 */
+  naverblog: brand(siNaver),
+  tistory: brand(siTistory),
+  brunch: lucide(BookOpen),
+  velog: brand(siVelog),
+  medium: brand(siMedium),
+  substack: brand(siSubstack),
+  notion: brand(siNotion),
+  naverpost: brand(siNaver),
+  /* 메신저·커뮤니티 */
+  kakao: brand(siKakaotalk),
+  kakaochannel: brand(siKakaotalk),
+  line: brand(siLine),
+  telegram: brand(siTelegram),
+  discord: brand(siDiscord),
+  whatsapp: brand(siWhatsapp),
+  wechat: brand(siWechat),
+  naverband: brand(siNaver),
+  navercafe: brand(siNaver),
+  daumcafe: lucide(MessageCircle),
+  messenger: brand(siMessenger),
+  /* 쇼핑·판매 */
+  smartstore: brand(siNaver),
+  coupang: lucide(ShoppingBag),
+  kakaostore: brand(siKakao),
+  kakaogift: brand(siKakao),
+  musinsa: lucide(ShoppingBag),
+  oliveyoung: lucide(Sparkles),
+  idus: lucide(Store),
+  etsy: brand(siEtsy),
+  amazon: lucide(ShoppingBag),
+  kmong: lucide(Store),
+  soomgo: lucide(Store),
+  class101: lucide(GraduationCap),
+  wadiz: lucide(HandHeart),
+  tumblbug: lucide(HandHeart),
+  googleplay: brand(siGoogleplay),
+  appstore: brand(siAppstore),
+  /* 창작·개발 */
+  github: brand(siGithub),
+  behance: brand(siBehance),
+  dribbble: brand(siDribbble),
+  pixiv: brand(siPixiv),
+  artstation: brand(siArtstation),
+  unsplash: brand(siUnsplash),
+  notefolio: lucide(Palette),
+  grafolio: lucide(Palette),
+  /* 후원·결제 */
+  toss: lucide(Wallet),
+  kakaopay: brand(siKakao),
+  paypal: brand(siPaypal),
+  patreon: brand(siPatreon),
+  kofi: brand(siKofi),
+  buymeacoffee: brand(siBuymeacoffee),
+  /* 여행·장소 */
+  navermap: brand(siNaver),
+  kakaomap: brand(siKakao),
+  googlemaps: brand(siGooglemaps),
+  naverreservation: brand(siNaver),
+  catchtable: lucide(UtensilsCrossed),
+  airbnb: brand(siAirbnb),
+  tripadvisor: brand(siTripadvisor),
+  baemin: lucide(UtensilsCrossed),
+  /* 예전 키 — 저장된 값과 호환 */
+  video: lucide(Video),
+  coffee: lucide(Coffee),
+  at: lucide(AtSign),
+  map: lucide(MapPin),
 };
 
 /** 채널 키 → 아이콘. 모르는 키면 지구본(링크는 링크다) */

@@ -35,6 +35,13 @@ export const BLOCK_TYPES = [
   "map",
   "coupang",
   "donation",
+  /* 리틀리 흡수 4단계(0057) */
+  "gallery",
+  "music",
+  "vcard",
+  "search",
+  "file",
+  "guestbook",
 ] as const;
 
 export type BlockType = (typeof BLOCK_TYPES)[number];
@@ -223,6 +230,54 @@ export interface DonationBlockData {
 export const COUPANG_DISCLOSURE =
   "이 게시물은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.";
 
+/* ── 리틀리 흡수 4단계 블록 ── */
+
+/** 갤러리 — 이미지 여러 장. items 키를 쓴다(sanitize 의 items 경로를 그대로 탄다) */
+export interface GalleryBlockData {
+  items: Array<{ imagePath: string; alt?: string; url?: string }>;
+  /** grid(썸네일) | list(목록) | slide(한 장씩) | carousel | masonry(자유) */
+  layout?: "grid" | "list" | "slide" | "carousel" | "masonry";
+  /** square(정사각) | intrinsic(개별 비율) */
+  aspect?: "square" | "intrinsic";
+}
+
+/** 음악 — 스포티파이·사운드클라우드·유튜브 뮤직 임베드 */
+export interface MusicBlockData {
+  url: string;
+  title?: string;
+}
+
+/** 연락처 — vCard 내려받기 버튼 */
+export interface VcardBlockData {
+  name: string;
+  phone?: string;
+  email?: string;
+  org?: string;
+  role?: string;
+  website?: string;
+  label?: string;
+}
+
+/** 페이지 내부 검색 — 입력하면 블록을 글자로 거른다 */
+export interface SearchBlockData {
+  placeholder?: string;
+}
+
+/** 파일 공유 — Storage 에 올린 파일. url 이 파일 주소라 /go 집계를 그대로 탄다 */
+export interface FileBlockData {
+  title: string;
+  url: string;
+  fileName?: string;
+  fileSize?: number;
+  description?: string;
+}
+
+/** 방명록 — 글은 link_guestbook 표에 쌓인다(0057) */
+export interface GuestbookBlockData {
+  title?: string;
+  placeholder?: string;
+}
+
 export interface MapBlockData {
   address: string;
   label?: string;
@@ -245,7 +300,13 @@ export type BlockData =
   | ({ type: "subscribe" } & SubscribeBlockData)
   | ({ type: "map" } & MapBlockData)
   | ({ type: "coupang" } & CoupangBlockData)
-  | ({ type: "donation" } & DonationBlockData);
+  | ({ type: "donation" } & DonationBlockData)
+  | ({ type: "gallery" } & GalleryBlockData)
+  | ({ type: "music" } & MusicBlockData)
+  | ({ type: "vcard" } & VcardBlockData)
+  | ({ type: "search" } & SearchBlockData)
+  | ({ type: "file" } & FileBlockData)
+  | ({ type: "guestbook" } & GuestbookBlockData);
 
 export interface LinkBlock {
   id: string;
@@ -272,6 +333,9 @@ export const BLOCK_CATALOG: Array<{
   { type: "grid", label: "그리드", hint: "2·3열로 여러 개를 한눈에", group: "기본" },
 
   { type: "image", label: "이미지", hint: "배너·포스터 한 장", group: "콘텐츠" },
+  { type: "gallery", label: "갤러리", hint: "사진 여러 장 — 썸네일·캐러셀·자유 배치", group: "콘텐츠" },
+  { type: "music", label: "음악", hint: "스포티파이·사운드클라우드·유튜브 뮤직", group: "콘텐츠" },
+  { type: "file", label: "파일 공유", hint: "PDF·자료를 올리고 내려받게", group: "콘텐츠" },
   /* 임베드는 유튜브만 된다 — 틱톡·인스타는 임베드 정책이 자주 바뀌어
      block-renderer 가 링크 버튼으로 폴백한다. 힌트가 그걸 그대로 말한다. */
   { type: "video", label: "동영상", hint: "유튜브는 바로 재생, 나머지는 링크로", group: "콘텐츠" },
@@ -283,9 +347,12 @@ export const BLOCK_CATALOG: Array<{
   { type: "divider", label: "구분선", hint: "섹션을 나눕니다", group: "레이아웃" },
   { type: "spacer", label: "빈 공간", hint: "간격을 넓힙니다", group: "레이아웃" },
   { type: "map", label: "지도·주소", hint: "오프라인 매장 위치", group: "레이아웃" },
+  { type: "search", label: "검색", hint: "페이지 안에서 링크 찾기", group: "레이아웃" },
 
   { type: "contact", label: "문의받기", hint: "이름·연락처를 받습니다", group: "받기" },
   { type: "subscribe", label: "구독신청", hint: "이메일을 모읍니다", group: "받기" },
+  { type: "vcard", label: "연락처 저장", hint: "내 연락처를 방문자 폰에 바로", group: "받기" },
+  { type: "guestbook", label: "방명록", hint: "방문자 한마디 + 내 답글", group: "받기" },
 ];
 
 /** 새 블록의 기본값 — 추가하자마자 화면에 뭔가 보여야 한다(빈 블록은 실수처럼 보인다) */
@@ -325,6 +392,18 @@ export function defaultBlockData(type: BlockType): Record<string, unknown> {
       return { url: "", title: "", price: "", imagePath: "" };
     case "donation":
       return { url: "", label: "후원하기", emoji: "💛", message: "" };
+    case "gallery":
+      return { items: [], layout: "grid", aspect: "square" };
+    case "music":
+      return { url: "", title: "" };
+    case "vcard":
+      return { name: "", phone: "", email: "", org: "", label: "연락처 저장" };
+    case "search":
+      return { placeholder: "무엇을 찾으세요?" };
+    case "file":
+      return { title: "", url: "", fileName: "", description: "" };
+    case "guestbook":
+      return { title: "방명록", placeholder: "한마디 남겨 주세요" };
     default:
       return {};
   }
@@ -356,6 +435,14 @@ export function hiddenReason(type: BlockType, data: Record<string, unknown>): st
     case "card_row":
     case "grid":
       return withUrl > 0 ? null : "링크가 있는 항목이 없어 공개되지 않아요";
+    case "gallery":
+      return items.some((it) => typeof it.imagePath === "string" && it.imagePath.trim()) ? null : "이미지가 없어 공개되지 않아요";
+    case "music":
+      return musicEmbed(s("url")) ? null : "스포티파이·사운드클라우드·유튜브 뮤직 주소가 있어야 공개돼요";
+    case "vcard":
+      return s("name").trim() ? null : "이름이 비어 공개되지 않아요";
+    case "file":
+      return s("url") ? null : "파일을 올리면 공개돼요";
     case "social_feed":
       /* 발행 시 인스타그램이 아니면 빈 배열이 구워지고, 렌더러가 그 블록을 통째로 숨긴다 */
       return s("channel") && s("channel") !== "instagram"
@@ -460,7 +547,49 @@ export function blockSummary(type: BlockType, data: Record<string, unknown>): st
       return `빈 공간 · ${typeof data.size === "number" ? data.size : 24}px`;
     case "image":
       return s("alt") || (s("imagePath") ? "이미지" : "(이미지 없음)");
+    case "gallery":
+      return `사진 ${n("items")}장`;
+    case "music":
+      return s("title") || s("url") || "(주소 없음)";
+    case "vcard":
+      return s("name") || "(이름 없음)";
+    case "search":
+      return "페이지 검색";
+    case "file":
+      return s("title") || s("fileName") || "(파일 없음)";
+    case "guestbook":
+      return s("title") || "방명록";
     default:
       return "";
   }
+}
+
+
+/* ── 음악 임베드 주소 — 스포티파이 / 사운드클라우드 / 유튜브 뮤직 ──
+   공개 렌더러·미리보기·hiddenReason 이 같은 함수를 쓴다. 모르는 주소면 null(임베드하지 않는다). */
+export function musicEmbed(raw: string): { src: string; provider: "spotify" | "soundcloud" | "youtube"; height: number } | null {
+  let u: URL;
+  try {
+    u = new URL(raw.trim());
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:") return null;
+  const host = u.hostname.replace(/^www\./, "");
+  if (host === "open.spotify.com") {
+    const m = /^\/(?:intl-[a-z]+\/)?(track|album|playlist|episode|show|artist)\/([A-Za-z0-9]+)/.exec(u.pathname);
+    if (!m) return null;
+    return { src: `https://open.spotify.com/embed/${m[1]}/${m[2]}`, provider: "spotify", height: m[1] === "track" || m[1] === "episode" ? 152 : 352 };
+  }
+  if (host === "soundcloud.com" || host === "on.soundcloud.com") {
+    return { src: `https://w.soundcloud.com/player/?url=${encodeURIComponent(u.toString())}&color=%23ff5a36&auto_play=false&show_comments=false&visual=false`, provider: "soundcloud", height: 166 };
+  }
+  if (host === "music.youtube.com" || host === "youtube.com" || host === "youtu.be" || host === "m.youtube.com") {
+    const id = host === "youtu.be" ? u.pathname.slice(1).split("/")[0] : u.searchParams.get("v");
+    const list = u.searchParams.get("list");
+    if (list && !id) return { src: `https://www.youtube-nocookie.com/embed/videoseries?list=${encodeURIComponent(list)}`, provider: "youtube", height: 200 };
+    if (!id || !/^[A-Za-z0-9_-]{6,}$/.test(id)) return null;
+    return { src: `https://www.youtube-nocookie.com/embed/${id}`, provider: "youtube", height: 200 };
+  }
+  return null;
 }

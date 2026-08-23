@@ -86,7 +86,7 @@ async function load(days: number): Promise<Loaded> {
   const page = pageRes.data as (Record<string, unknown> & { id: string }) | null;
   if (!page) return { ...EMPTY, stats: { ...EMPTY_STATS, days } };
 
-  const [blockRes, statsRes, leadRows] = await Promise.all([
+  const [blockRes, statsRes, leadRows, guestRes] = await Promise.all([
     supabase
       .from("link_blocks")
       .select("id, type, data, sort_order, active, updated_at")
@@ -105,7 +105,17 @@ async function load(days: number): Promise<Loaded> {
       .eq("page_id", page.id)
       .order("created_at", { ascending: false })
       .limit(50),
+    /* 방명록(0057) — 미적용 DB 면 error 가 오고 빈 배열로 둔다 */
+    supabase
+      .from("link_guestbook")
+      .select("id, name, message, reply, hidden, created_at")
+      .eq("page_id", page.id)
+      .order("created_at", { ascending: false })
+      .limit(50),
   ]);
+  const guestbook = ((guestRes.error ? [] : (guestRes.data ?? [])) as Array<{
+    id: number; name: string; message: string; reply: string | null; hidden: boolean; created_at: string;
+  }>).map((g) => ({ id: g.id, name: g.name, message: g.message, reply: g.reply, hidden: g.hidden, createdAt: g.created_at }));
 
   /* 블록 조회 실패를 빈 배열로 뭉개면 빈 캔버스 + 「초안 수정됨」 + 통계 전부 "지운 블록" 이 된다(감사 #11) */
   if (blockRes.error) {
@@ -261,6 +271,7 @@ async function load(days: number): Promise<Loaded> {
     snapshot,
     stats,
     leads,
+    guestbook,
   };
 }
 
@@ -269,7 +280,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
   const asked = Number(sp.days);
   const days = (STATS_RANGES as readonly number[]).includes(asked) ? asked : DEFAULT_DAYS;
 
-  const { page, blocks, snapshot, stats, leads, loadFailed } = await load(days);
+  const { page, blocks, snapshot, stats, leads, guestbook, loadFailed } = await load(days);
 
   /* 복사 버튼이 주는 주소는 **지금 접속한 도메인** 기준이어야 한다.
      프로덕션 도메인을 하드코딩하면 로컬·프리뷰에서 복사한 주소가 안 열린다. */
@@ -287,6 +298,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
         snapshot={snapshot}
         stats={stats}
         leads={leads}
+        guestbook={guestbook ?? []}
         origin={`${proto}://${host}`}
         isDemo={isDemoMode()}
         loadFailed={!!loadFailed}

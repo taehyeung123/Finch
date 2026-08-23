@@ -80,6 +80,8 @@ function applySecurityHeaders(response: NextResponse) {
   // 다시 조립하므로 www.youtube.com 은 쓰이지 않는다. 방문자는 이 페이지 주인의
   // 손님이지 구글에 쿠키를 받으러 온 사람이 아니다.
   const youtube = "https://www.youtube-nocookie.com";
+  /* 프로필 링크 「음악」 블록 임베드(리틀리 흡수 4단계) — 스포티파이·사운드클라우드 */
+  const musicEmbeds = "https://open.spotify.com https://w.soundcloud.com";
 
   // CSP — Pretendard 웹폰트(jsdelivr CDN)만 외부 허용. 개발 모드는 HMR 때문에 unsafe-eval 필요
   const csp = [
@@ -92,7 +94,7 @@ function applySecurityHeaders(response: NextResponse) {
     // 열거할 방법이 없다. 이미지는 실행되지 않으므로 여는 대가가 가장 작다.
     `img-src 'self' data: blob: https: ${toss} ${igCdn} ${tiktokCdn}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
     `connect-src 'self' ${toss}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}${gaConnect}`,
-    `frame-src ${toss} ${youtube}`,
+    `frame-src ${toss} ${youtube} ${musicEmbeds}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",

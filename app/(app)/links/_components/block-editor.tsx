@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { sliceChars } from "@/lib/links";
 import { BLOCK_CATALOG, COLLAPSE_OPTIONS, CONTACT_FIELDS, COUPANG_DISCLOSURE, LINK_LAYOUTS, LINK_TEXT_COLORS, type LinkBlock } from "@/lib/links/blocks";
 import { ImageField } from "./image-field";
+import { FileField } from "./file-field";
 import { fetchLinkMeta } from "../actions";
 
 /*
@@ -748,6 +749,159 @@ export function BlockEditor({
               </Button>
             ) : null}
           </div>
+        </>
+      ) : null}
+
+      {/* ── 리틀리 흡수 4단계: 갤러리 ── */}
+      {block.type === "gallery" ? (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className={label} htmlFor="b-glayout">
+                레이아웃
+              </label>
+              <select id="b-glayout" value={str("layout") || "grid"} onChange={(e) => set("layout", e.target.value)} className={`mt-1.5 ${input}`}>
+                <option value="grid">썸네일 보기</option>
+                <option value="list">목록</option>
+                <option value="slide">한 장씩 보기</option>
+                <option value="carousel">캐러셀</option>
+                <option value="masonry">자유</option>
+              </select>
+            </div>
+            <div>
+              <label className={label} htmlFor="b-aspect">
+                이미지 비율
+              </label>
+              <select id="b-aspect" value={str("aspect") || "square"} onChange={(e) => set("aspect", e.target.value)} className={`mt-1.5 ${input}`}>
+                <option value="square">정사각형</option>
+                <option value="intrinsic">개별 비율 유지</option>
+              </select>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {items.map((it, i) => (
+              <div key={i} className="space-y-2 rounded-card border border-line p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[12px] font-semibold text-fg-sub">사진 {i + 1}</span>
+                  <button type="button" onClick={() => set("items", items.filter((_, j) => j !== i))} aria-label="사진 삭제" className="trans-state rounded-card p-1 text-fg-faint hover:bg-tint-hover hover:text-negative">
+                    <Trash2 className="size-3.5" />
+                  </button>
+                </div>
+                <ImageField label={`사진 ${i + 1}`} value={typeof it.imagePath === "string" ? it.imagePath : ""} onChange={(v) => setItem(i, "imagePath", v)} aspect="aspect-[4/3]" />
+                <input value={typeof it.url === "string" ? it.url : ""} onChange={(e) => setItem(i, "url", e.target.value)} placeholder="누르면 갈 주소 (선택)" aria-label={`사진 ${i + 1} 링크`} className={input} />
+              </div>
+            ))}
+            {items.length < 30 ? (
+              <Button variant="secondary" size="sm" onClick={() => set("items", [...items, { imagePath: "" }])}>
+                <Plus className="size-3.5" aria-hidden />
+                사진 추가 <span className="font-normal text-fg-sub">({items.length}/30)</span>
+              </Button>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+
+      {/* ── 음악 ── */}
+      {block.type === "music" ? (
+        <>
+          <div>
+            <label className={label} htmlFor="b-murl">
+              음악 주소
+            </label>
+            <input id="b-murl" value={str("url")} onChange={(e) => set("url", e.target.value)} placeholder="https://open.spotify.com/… · soundcloud.com/… · music.youtube.com/…" className={`mt-1.5 ${input}`} />
+            <p className="mt-1 text-[12px] text-fg-sub">스포티파이(트랙·앨범·플레이리스트)·사운드클라우드·유튜브 뮤직 주소를 넣으면 플레이어로 보여요.</p>
+          </div>
+          <div>
+            <label className={label} htmlFor="b-mtitle">
+              제목 (선택)
+            </label>
+            <input id="b-mtitle" value={str("title")} onChange={(e) => set("title", e.target.value)} maxLength={60} className={`mt-1.5 ${input}`} />
+          </div>
+        </>
+      ) : null}
+
+      {/* ── 연락처 저장(vCard) ── */}
+      {block.type === "vcard" ? (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                ["name", "이름 *", "홍길동"],
+                ["phone", "전화", "010-0000-0000"],
+                ["email", "이메일", "hello@example.com"],
+                ["org", "회사·브랜드", "핀치"],
+                ["role", "직함", "대표"],
+                ["website", "웹사이트", "https://"],
+              ] as const
+            ).map(([k, lab, ph]) => (
+              <div key={k}>
+                <label className={label} htmlFor={`b-v-${k}`}>
+                  {lab}
+                </label>
+                <input id={`b-v-${k}`} value={str(k)} onChange={(e) => set(k, e.target.value)} placeholder={ph} maxLength={60} className={`mt-1.5 ${input}`} />
+              </div>
+            ))}
+          </div>
+          <div>
+            <label className={label} htmlFor="b-vlabel">
+              버튼 문구
+            </label>
+            <input id="b-vlabel" value={str("label")} onChange={(e) => set("label", e.target.value)} placeholder="연락처 저장" maxLength={40} className={`mt-1.5 ${input}`} />
+          </div>
+          <p className="text-[12px] text-fg-sub">누르면 방문자 폰에 연락처(vCard)로 저장돼요.</p>
+        </>
+      ) : null}
+
+      {/* ── 검색 ── */}
+      {block.type === "search" ? (
+        <div>
+          <label className={label} htmlFor="b-sph">
+            안내 문구
+          </label>
+          <input id="b-sph" value={str("placeholder")} onChange={(e) => set("placeholder", e.target.value)} placeholder="무엇을 찾으세요?" maxLength={40} className={`mt-1.5 ${input}`} />
+          <p className="mt-1 text-[12px] text-fg-sub">방문자가 글자를 치면 페이지 안 블록을 바로 걸러 보여줘요.</p>
+        </div>
+      ) : null}
+
+      {/* ── 파일 공유 ── */}
+      {block.type === "file" ? (
+        <>
+          <FileField
+            value={str("url")}
+            fileName={str("fileName")}
+            onChange={(f) => onChange({ ...d, url: f.url, fileName: f.fileName, fileSize: f.fileSize ?? 0 })}
+          />
+          <div>
+            <label className={label} htmlFor="b-ftitle">
+              제목
+            </label>
+            <input id="b-ftitle" value={str("title")} onChange={(e) => set("title", e.target.value)} placeholder="예: 2026 카탈로그 PDF" maxLength={60} className={`mt-1.5 ${input}`} />
+          </div>
+          <div>
+            <label className={label} htmlFor="b-fdesc">
+              설명 (선택)
+            </label>
+            <input id="b-fdesc" value={str("description")} onChange={(e) => set("description", e.target.value)} maxLength={80} className={`mt-1.5 ${input}`} />
+          </div>
+        </>
+      ) : null}
+
+      {/* ── 방명록 ── */}
+      {block.type === "guestbook" ? (
+        <>
+          <div>
+            <label className={label} htmlFor="b-gtitle">
+              제목
+            </label>
+            <input id="b-gtitle" value={str("title")} onChange={(e) => set("title", e.target.value)} placeholder="방명록" maxLength={40} className={`mt-1.5 ${input}`} />
+          </div>
+          <div>
+            <label className={label} htmlFor="b-gph">
+              입력칸 안내
+            </label>
+            <input id="b-gph" value={str("placeholder")} onChange={(e) => set("placeholder", e.target.value)} placeholder="한마디 남겨 주세요" maxLength={40} className={`mt-1.5 ${input}`} />
+          </div>
+          <p className="text-[12px] text-fg-sub">방문자 글은 「설정」 탭 방명록에서 답글·숨김·삭제할 수 있어요.</p>
         </>
       ) : null}
 

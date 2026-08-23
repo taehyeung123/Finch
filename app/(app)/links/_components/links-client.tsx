@@ -7,6 +7,12 @@ import {
   ArrowDown,
   ArrowUp,
   BarChart3,
+  BookOpen,
+  Contact,
+  FileDown,
+  Images,
+  Music2,
+  Search,
   CalendarClock,
   Clock,
   Copy as CopyIcon,
@@ -57,7 +63,8 @@ import { DualLineChart } from "@/components/ui/charts";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Switch } from "@/components/ui/switch";
 import { FinchLoader } from "@/components/ui/finch-loader";
-import { normalizeUrl, publicLinkUrl, stableJson } from "@/lib/links";
+import { normalizeSnsUrl, publicLinkUrl, stableJson } from "@/lib/links";
+import { SNS_CATALOG, snsHref } from "@/lib/links/sns-catalog";
 import {
   BLOCK_CATALOG,
   EMPHASIS_TYPES,
@@ -83,7 +90,6 @@ import {
   CUSTOM_RADIUS,
   LAYOUTS,
   LINK_THEMES,
-  SNS_KINDS,
   sanitizeThemeCustom,
   themeByKey,
   type LinkThemeCustom,
@@ -110,8 +116,11 @@ import {
   setBlockEmphasized,
   setBlockSchedule,
   duplicateBlock,
+  replyGuestbook,
+  setGuestbookHidden,
+  deleteGuestbook,
 } from "../actions";
-import type { LinkLead, LinkPageView, LinkSnapshotView, LinkStats } from "@/lib/links/types";
+import type { LinkGuestbookEntry, LinkLead, LinkPageView, LinkSnapshotView, LinkStats } from "@/lib/links/types";
 import { BlockEditor, EDITOR_TITLE_ID } from "./block-editor";
 import { ImageField } from "./image-field";
 import { ImportLinks, ImportLinksBody } from "./import-links";
@@ -146,6 +155,8 @@ const TOOLS: Array<{ key: Drawer; label: string; icon: typeof User }> = [
   { key: "add", label: "블록 추가", icon: Plus },
   { key: "settings", label: "설정", icon: Settings },
 ];
+
+const SNS_GROUPS = [...new Set(SNS_CATALOG.map((c) => c.group))];
 
 const DRAWER_TITLE: Record<Drawer, string> = {
   profile: "프로필 설정",
@@ -238,6 +249,7 @@ export function LinksClient({
   origin,
   stats,
   leads,
+  guestbook = [],
   isDemo,
   loadFailed = false,
 }: {
@@ -247,6 +259,8 @@ export function LinksClient({
   origin: string;
   stats: LinkStats;
   leads: LinkLead[];
+  /** 방명록(0057) — 주인용 목록, 숨김 포함 */
+  guestbook?: LinkGuestbookEntry[];
   isDemo: boolean;
   /** 조회 자체가 실패 — "없음"이 아니다(감사 #10·#11). 생성 폼 대신 재시도 화면 */
   loadFailed?: boolean;
@@ -994,9 +1008,9 @@ export function LinksClient({
                       error={error}
                       onChange={(patch) => setProfileForm((f) => ({ ...f, ...patch }))}
                       onSave={() => {
-                        const bad = profileForm.snsLinks.find((x) => !normalizeUrl(x.url));
+                        const bad = profileForm.snsLinks.find((x) => !normalizeSnsUrl(snsHref(x.kind, x.url)));
                         if (bad) {
-                          setError(bad.url.trim() ? "SNS 주소는 http(s) 로 시작하는 주소여야 해요." : "비어 있는 SNS 줄은 지워 주세요.");
+                          setError(bad.url.trim() ? "SNS 주소가 올바르지 않아요 — http(s) 주소, 이메일, 전화번호만 넣을 수 있어요." : "비어 있는 SNS 줄은 지워 주세요.");
                           return;
                         }
                         run(() => updateLinkProfile(profileForm));
@@ -1182,7 +1196,14 @@ export function LinksClient({
               <SettingsPanel
                 page={page}
                 leads={leads}
+                guestbook={guestbook}
                 busy={busy}
+                onGuestbookReply={(id, reply) => run(() => replyGuestbook(id, reply), () => setNotice("답글을 달았어요."))}
+                onGuestbookHide={(id, hidden) => run(() => setGuestbookHidden(id, hidden))}
+                onGuestbookDelete={(id) => {
+                  if (!window.confirm("이 방명록 글을 지울까요?")) return;
+                  run(() => deleteGuestbook(id), () => setNotice("방명록 글을 지웠어요."));
+                }}
                 onPublishToggle={(v) => run(() => setLinkPublished(v))}
                 onDelete={() =>
                   run(
@@ -1420,6 +1441,12 @@ const BLOCK_ICON: Record<BlockType, React.ComponentType<{ className?: string }>>
   map: MapPin,
   coupang: ShoppingBag,
   donation: Heart,
+  gallery: Images,
+  music: Music2,
+  vcard: Contact,
+  search: Search,
+  file: FileDown,
+  guestbook: BookOpen,
 };
 
 function BlockListPanel({
@@ -2329,24 +2356,34 @@ function ProfilePanel({
       <div>
         <p className="text-[12px] font-medium text-fg-sub">SNS 링크</p>
         <div className="mt-1.5 space-y-2">
-          {sns.map((s, i) => (
+          {sns.map((s, i) => {
+            const entry = SNS_CATALOG.find((c) => c.key === s.kind);
+            return (
             <div key={i} className="flex items-center gap-1.5">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-card bg-plate text-fg-sub" aria-hidden>
+                <SnsIcon kind={s.kind} className="size-4" />
+              </span>
+              {/* 90여 채널 — 그룹별 optgroup(리틀리 흡수 4단계) */}
               <select
                 value={s.kind}
                 onChange={(e) => onChange({ snsLinks: sns.map((x, j) => (j === i ? { ...x, kind: e.target.value } : x)) })}
                 aria-label={`SNS ${i + 1} 종류`}
-                className="h-10 shrink-0 rounded-card border border-line bg-body px-2 text-[14px] text-fg focus:border-primary focus:outline-none"
+                className="h-10 w-[9.5rem] shrink-0 rounded-card border border-line bg-body px-2 text-[14px] text-fg focus:border-primary focus:outline-none"
               >
-                {SNS_KINDS.map((k) => (
-                  <option key={k.key} value={k.key}>
-                    {k.label}
-                  </option>
+                {SNS_GROUPS.map((g) => (
+                  <optgroup key={g} label={g}>
+                    {SNS_CATALOG.filter((c) => c.group === g).map((k) => (
+                      <option key={k.key} value={k.key}>
+                        {k.label}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
               <input
                 value={s.url}
                 onChange={(e) => onChange({ snsLinks: sns.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)) })}
-                placeholder="https://…"
+                placeholder={entry?.placeholder ?? "https://…"}
                 aria-label={`SNS ${i + 1} 주소`}
                 className="h-10 min-w-0 flex-1 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
               />
@@ -2359,7 +2396,8 @@ function ProfilePanel({
                 <Trash2 className="size-4" />
               </button>
             </div>
-          ))}
+            );
+          })}
           {sns.length < 8 ? (
             <Button
               variant="secondary"
@@ -2976,17 +3014,28 @@ function PlatformLinks({ slug, origin }: { slug: string; origin: string }) {
 function SettingsPanel({
   page,
   leads,
+  guestbook,
   busy,
   onPublishToggle,
   onDelete,
+  onGuestbookReply,
+  onGuestbookHide,
+  onGuestbookDelete,
 }: {
   page: LinkPageView;
   leads: LinkLead[];
+  guestbook: LinkGuestbookEntry[];
   busy: boolean;
   onPublishToggle: (v: boolean) => void;
   onDelete: () => void;
+  onGuestbookReply: (id: number, reply: string) => void;
+  onGuestbookHide: (id: number, hidden: boolean) => void;
+  onGuestbookDelete: (id: number) => void;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  /* 방명록 답글 작성 중인 글 id 와 초안 */
+  const [replyFor, setReplyFor] = useState<number | null>(null);
+  const [replyDraft, setReplyDraft] = useState("");
 
   return (
     <div className="space-y-4">
@@ -3049,6 +3098,58 @@ function SettingsPanel({
                   <p className="mt-0.5 text-[12px] text-fg-sub">{[l.email, l.phone].filter(Boolean).join(" · ")}</p>
                 ) : null}
                 {l.message ? <p className="mt-1 line-clamp-2 text-[14px]">{l.message}</p> : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* 방명록 — 방문자 글에 답글·숨김·삭제(리틀리 「답글 및 삭제」 카피, 4단계) */}
+      <div>
+        <p className="text-[12px] font-medium text-fg-sub">방명록 {guestbook.length ? <span className="tnum">{guestbook.length}</span> : null}</p>
+        {guestbook.length === 0 ? (
+          <p className="mt-1.5 text-[14px] text-fg-sub">방명록 블록을 두면 방문자 글이 여기에 쌓여요. 답글을 달면 공개 페이지에 함께 보여요.</p>
+        ) : (
+          <ul className="mt-1.5 max-h-72 divide-y divide-line overflow-y-auto">
+            {guestbook.map((g) => (
+              <li key={g.id} className={cn("py-2.5", g.hidden && "opacity-60")}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[14px] font-semibold">{g.name}</span>
+                  {g.hidden ? <span className="rounded-chip bg-plate px-2 py-0.5 text-[11px] font-semibold text-fg-sub">숨김</span> : null}
+                  <span className="tnum ml-auto text-[12px] text-fg-sub">{g.createdAt.slice(0, 10)}</span>
+                </div>
+                <p className="mt-1 whitespace-pre-wrap text-[14px]">{g.message}</p>
+                {g.reply ? <p className="mt-1 rounded-card bg-plate px-2.5 py-1.5 text-[13px] text-fg-sub">↳ {g.reply}</p> : null}
+                {replyFor === g.id ? (
+                  <div className="mt-1.5 flex gap-1.5">
+                    <input
+                      value={replyDraft}
+                      onChange={(e) => setReplyDraft(e.target.value)}
+                      maxLength={500}
+                      placeholder="답글"
+                      aria-label="답글 내용"
+                      className="h-9 min-w-0 flex-1 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg focus:border-primary focus:outline-none"
+                    />
+                    <Button size="sm" disabled={busy} onClick={() => { onGuestbookReply(g.id, replyDraft); setReplyFor(null); }}>
+                      저장
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setReplyFor(null)}>
+                      취소
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setReplyFor(g.id); setReplyDraft(g.reply ?? ""); }}>
+                      {g.reply ? "답글 수정" : "답글"}
+                    </Button>
+                    <Button variant="ghost" size="sm" disabled={busy} onClick={() => onGuestbookHide(g.id, !g.hidden)}>
+                      {g.hidden ? "다시 보이기" : "숨기기"}
+                    </Button>
+                    <Button variant="ghost" size="sm" disabled={busy} onClick={() => onGuestbookDelete(g.id)}>
+                      삭제
+                    </Button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

@@ -16,6 +16,7 @@ import {
   emphasizedCta,
   hiddenReason,
   isScheduledHidden,
+  musicEmbed,
   partialReason,
   scheduleCaption,
   type LinkBlock,
@@ -894,6 +895,84 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
         <div className={`${card} px-3 py-2.5`}>
           <p className="text-[13px] font-semibold">{s(d, "label") || "찾아오시는 길"}</p>
           <p className="mt-0.5 text-[12px] text-[var(--lp-muted)]">{s(d, "address")}</p>
+        </div>
+      );
+
+    /* ── 리틀리 흡수 4단계 블록 — 공개 렌더러(block-renderer.tsx)와 같은 모양(프레임 비율) ── */
+    case "gallery": {
+      const items = arr(d, "items").filter((it) => s(it, "imagePath"));
+      if (items.length === 0) return <Ghost reason="사진을 올리면 여기 보여요" />;
+      const layout = s(d, "layout") || "grid";
+      const square = (s(d, "aspect") || "square") === "square";
+      const img = (it: Record<string, unknown>, i: number) => (
+        // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
+        <img key={i} src={s(it, "imagePath")} alt="" className={`w-full rounded-[calc(var(--lp-radius)/1.6)] object-cover ${square ? "aspect-square" : ""}`} />
+      );
+      if (layout === "carousel" || layout === "slide") {
+        return (
+          <div className="-mx-5 flex snap-x gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {items.map((it, i) => (
+              <div key={i} className={`${layout === "slide" ? "w-full" : "w-[78%]"} shrink-0 snap-center`}>
+                {img(it, i)}
+              </div>
+            ))}
+          </div>
+        );
+      }
+      if (layout === "list") return <div className="space-y-2">{items.map(img)}</div>;
+      if (layout === "masonry") return <div className="columns-2 gap-2 [&>*]:mb-2 [&>*]:break-inside-avoid">{items.map(img)}</div>;
+      return <div className="grid grid-cols-3 gap-1.5">{items.map(img)}</div>;
+    }
+    case "music": {
+      const em = musicEmbed(s(d, "url"));
+      return (
+        <div className={`${card} flex items-center gap-2.5 px-3 py-2.5`}>
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--lp-accent)] text-[var(--lp-on-accent)]" aria-hidden>
+            ♪
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-[13px] font-semibold">{s(d, "title") || "음악"}</span>
+            <span className="block text-[11px] text-[var(--lp-muted)]">
+              {em ? `${em.provider === "spotify" ? "스포티파이" : em.provider === "soundcloud" ? "사운드클라우드" : "유튜브 뮤직"} 플레이어가 여기 들어가요` : "지원하는 주소를 넣으면 플레이어가 보여요"}
+            </span>
+          </span>
+        </div>
+      );
+    }
+    case "vcard":
+      return (
+        <div className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-[var(--lp-radius-btn)] border border-[var(--lp-btn-border)] bg-[var(--lp-btn-bg)] px-4 py-2.5 text-[13px] font-semibold text-[var(--lp-btn-fg)] shadow-[var(--lp-shadow)]">
+          👤 {s(d, "label") || "연락처 저장"}
+          {s(d, "name") ? <span className="text-[11px] font-normal text-[var(--lp-muted)]">· {s(d, "name")}</span> : null}
+        </div>
+      );
+    case "search":
+      return (
+        <div className={`${card} flex min-h-[40px] items-center gap-2 px-3 text-[12px] text-[var(--lp-muted)]`}>
+          🔍 {s(d, "placeholder") || "무엇을 찾으세요?"}
+        </div>
+      );
+    case "file":
+      if (!s(d, "url")) return <Ghost reason="파일을 올리면 여기 보여요" />;
+      return (
+        <div className={`${card} flex items-center gap-2.5 p-2.5`}>
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-[calc(var(--lp-radius)/1.6)] bg-[var(--lp-accent)] text-[var(--lp-on-accent)]" aria-hidden>
+            ⤓
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[13px] font-semibold">{s(d, "title") || s(d, "fileName") || "파일"}</span>
+            <span className="block truncate text-[11px] text-[var(--lp-muted)]">{[s(d, "description"), s(d, "fileName")].filter(Boolean).join(" · ")}</span>
+          </span>
+        </div>
+      );
+    case "guestbook":
+      return (
+        <div className={`${card} p-3`}>
+          <p className="text-[13px] font-semibold">{s(d, "title") || "방명록"}</p>
+          <div className="mt-2 h-8 rounded-[var(--lp-radius)] border border-[var(--lp-border)]" aria-hidden />
+          <div className="mt-1.5 h-14 rounded-[var(--lp-radius)] border border-[var(--lp-border)] px-2 py-1.5 text-[11px] text-[var(--lp-muted)]">{s(d, "placeholder") || "한마디 남겨 주세요"}</div>
+          <div className="mt-1.5 flex h-8 items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] text-[12px] font-semibold text-[var(--lp-on-accent)]">남기기</div>
+          <p className="mt-2 text-center text-[10px] text-[var(--lp-muted)]">방문자 글과 내 답글이 아래에 쌓여요</p>
         </div>
       );
     default:

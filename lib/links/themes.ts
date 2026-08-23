@@ -13,6 +13,8 @@
    테마 데이터라 값 자체가 데이터다. 앱 UI 에는 이 값을 쓰지 않는다.)
 */
 
+import { SNS_CATALOG } from "./sns-catalog";
+
 export interface LinkTheme {
   key: string;
   group: "MINIMAL" | "PROFESSIONAL" | "VIVID";
@@ -396,14 +398,7 @@ export const LAYOUTS = [
 export type LayoutKey = (typeof LAYOUTS)[number]["key"];
 
 /** SNS 아이콘 줄에서 지원하는 채널 */
-export const SNS_KINDS = [
-  { key: "website", label: "웹사이트" },
-  { key: "instagram", label: "인스타그램" },
-  { key: "youtube", label: "유튜브" },
-  { key: "tiktok", label: "틱톡" },
-  { key: "threads", label: "스레드" },
-  { key: "x", label: "X" },
-  { key: "kakao", label: "카카오톡" },
-] as const;
+/** SNS 채널 — 목록의 단일 출처는 lib/links/sns-catalog.ts(리틀리 흡수 4단계, 90여 채널) */
+export const SNS_KINDS: ReadonlyArray<{ key: string; label: string }> = SNS_CATALOG.map((s) => ({ key: s.key, label: s.label }));
 
-export type SnsKind = (typeof SNS_KINDS)[number]["key"];
+export type SnsKind = string;

@@ -1115,6 +1115,16 @@ export const linkWorkspace: LinkWorkspace = {
     { id: "demo-b4", type: "heading", sortOrder: 3, active: true, data: { text: "채널" } },
     { id: "demo-b5", type: "grid", sortOrder: 4, active: true, data: { columns: 2, items: [{ title: "인스타그램", url: "https://instagram.com/finch" }, { title: "유튜브", url: "https://youtube.com/@finch" }] } },
     { id: "demo-b6", type: "contact", sortOrder: 5, active: true, data: { title: "협업 문의", description: "브랜드 협업은 여기로 남겨주세요.", fields: ["name", "email", "message"] } },
+    /* 리틀리 흡수 4단계 블록 — 외부 파일이 필요 없는 네 종만 샘플에 넣는다(갤러리·파일은 업로드가 있어야 보인다) */
+    { id: "demo-b7", type: "vcard", sortOrder: 6, active: true, data: { name: "핀치 데모", phone: "02-000-0000", email: "hello@finch.ai.kr", org: "핀치", role: "대표", website: "https://finch.ai.kr", label: "연락처 저장" } },
+    { id: "demo-b8", type: "music", sortOrder: 7, active: true, data: { url: "https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT", title: "요즘 듣는 노래" } },
+    { id: "demo-b9", type: "search", sortOrder: 8, active: true, data: { placeholder: "무엇을 찾으세요?" } },
+    { id: "demo-b10", type: "guestbook", sortOrder: 9, active: true, data: { title: "방명록", placeholder: "한마디 남겨 주세요" } },
+  ],
+  guestbook: [
+    { id: 1, name: "민지", message: "공구 잘 받았어요! 다음 공구도 기다릴게요 🙌", reply: "고마워요, 다음 주에 또 열어요!", hidden: false, createdAt: "2026-08-21T10:12:00+09:00" },
+    { id: 2, name: "J", message: "협업 메일 보냈습니다. 확인 부탁드려요.", reply: null, hidden: false, createdAt: "2026-08-22T18:40:00+09:00" },
+    { id: 3, name: "익명", message: "(숨김 처리된 글)", reply: null, hidden: true, createdAt: "2026-08-22T19:02:00+09:00" },
   ],
   /* 발행본 — 데모는 초안=발행본(dirty:false)이므로 같은 내용을 담는다.
      「라이브」 미리보기 토글이 이걸 그린다. */
@@ -1139,6 +1149,10 @@ export const linkWorkspace: LinkWorkspace = {
       { id: "demo-b4", type: "heading", data: { text: "채널" } },
       { id: "demo-b5", type: "grid", data: { columns: 2, items: [{ title: "인스타그램", url: "https://instagram.com/finch" }, { title: "유튜브", url: "https://youtube.com/@finch" }] } },
       { id: "demo-b6", type: "contact", data: { title: "협업 문의", description: "브랜드 협업은 여기로 남겨주세요.", fields: ["name", "email", "message"] } },
+      { id: "demo-b7", type: "vcard", data: { name: "핀치 데모", phone: "02-000-0000", email: "hello@finch.ai.kr", org: "핀치", role: "대표", website: "https://finch.ai.kr", label: "연락처 저장" } },
+      { id: "demo-b8", type: "music", data: { url: "https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT", title: "요즘 듣는 노래" } },
+      { id: "demo-b9", type: "search", data: { placeholder: "무엇을 찾으세요?" } },
+      { id: "demo-b10", type: "guestbook", data: { title: "방명록", placeholder: "한마디 남겨 주세요" } },
     ],
   },
   stats: {

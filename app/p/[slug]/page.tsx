@@ -10,7 +10,7 @@ import { initialOf, publicLinkUrl, sanitizeSnsLinks } from "@/lib/links";
 import { emphasizedCta, hiddenReason, isScheduledHidden, type BlockType } from "@/lib/links/blocks";
 import { fontStylesheets, sanitizeThemeCustom, themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
 import { ShareButton } from "./_components/share-button";
-import { BlockRenderer, type SnapshotBlock } from "./_components/block-renderer";
+import { BlockRenderer, type GuestbookPublicEntry, type SnapshotBlock } from "./_components/block-renderer";
 import { LeadForm } from "./_components/lead-form";
 import { ViewBeacon } from "./_components/view-beacon";
 
@@ -165,7 +165,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
   const data = await load(slug);
   if (!data) notFound();
 
-  const { published, isOwner, snap } = data;
+  const { pageId, published, isOwner, snap } = data;
 
   /* 소유자인데 아직 한 번도 발행 안 한 경우 — 404 대신 무엇을 해야 하는지 알린다 */
   if (!snap) {
@@ -227,6 +227,23 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
   const anim = themeCustom?.anim && themeCustom.anim !== "none" ? themeCustom.anim : undefined;
   const split = themeCustom?.desktop === "split" && snap.layout !== "cover";
   const fonts = fontStylesheets(themeCustom?.font);
+  /* 방명록 블록이 있으면 공개 글(숨김 제외, 최근 20)을 읽는다 — 0057 미적용이면 빈 배열 */
+  let guestbook: GuestbookPublicEntry[] = [];
+  if (isDemoMode()) {
+    guestbook = (linkWorkspace.guestbook ?? []).filter((g) => !g.hidden).map((g) => ({ id: g.id, name: g.name, message: g.message, reply: g.reply, createdAt: g.createdAt }));
+  } else if (visibleBlocks.some((b) => b.type === "guestbook") && isSupabaseConfigured()) {
+    const supabase = await createClient();
+    const { data: rows } = await supabase
+      .from("link_guestbook")
+      .select("id, name, message, reply, created_at")
+      .eq("page_id", pageId)
+      .eq("hidden", false)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    guestbook = ((rows ?? []) as Array<{ id: number; name: string; message: string; reply: string | null; created_at: string }>).map((g) => ({
+      id: g.id, name: g.name, message: g.message, reply: g.reply, createdAt: g.created_at,
+    }));
+  }
 
   return (
     <main
@@ -333,7 +350,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
               {b.type === "contact" || b.type === "subscribe" ? (
                 <LeadForm slug={slug} blockId={b.id} kind={b.type} data={b.data} isDemo={isDemoMode()} />
               ) : (
-                <BlockRenderer block={b} slug={slug} />
+                <BlockRenderer block={b} slug={slug} guestbook={b.type === "guestbook" ? guestbook : undefined} isDemo={isDemoMode()} />
               )}
             </div>
           ))}

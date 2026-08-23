@@ -1,6 +1,7 @@
 "use server";
 
 import { cookies, headers } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
@@ -249,5 +250,66 @@ export async function submitLead(input: {
     console.error("[links] 리드 저장 실패:", error.message);
     return { ok: false, error: "접수하지 못했어요. 잠시 후 다시 시도해 주세요." };
   }
+  return { ok: true };
+}
+
+/* ── 방명록(리틀리 흡수 4단계, 0057) ── */
+const GUEST_VISITOR_WINDOW_MS = 10 * 60 * 1000;
+const GUEST_VISITOR_MAX = 3;
+const GUEST_PAGE_WINDOW_MS = 60 * 60 * 1000;
+const GUEST_PAGE_MAX = 40;
+
+export async function submitGuestbook(input: { slug: string; blockId: string; name: string; message: string }): Promise<{ ok: boolean; error?: string }> {
+  if (isDemoMode()) return { ok: false, error: "예시 페이지라 남길 수 없어요." };
+  if (!isSupabaseConfigured()) return { ok: false, error: "지금은 남길 수 없어요." };
+
+  const name = (input.name ?? "").trim().slice(0, 40);
+  const message = (input.message ?? "").trim().slice(0, 500);
+  if (!name || !message) return { ok: false, error: "이름과 내용을 적어 주세요." };
+
+  /* 리드와 같은 기준 — 발행 스냅샷에 그 방명록 블록이 실제로 있을 때만 받는다 */
+  const supabase = await createClient();
+  const { data: pageRow } = await supabase
+    .from("link_pages")
+    .select("id, published_snapshot")
+    .eq("slug", input.slug)
+    .eq("published", true)
+    .maybeSingle();
+  if (!pageRow) return { ok: false, error: "페이지를 찾을 수 없어요." };
+  const pageId = pageRow.id as string;
+  const snapBlocks = (pageRow.published_snapshot as { blocks?: unknown } | null)?.blocks;
+  const target = Array.isArray(snapBlocks)
+    ? (snapBlocks as Array<{ id?: unknown; type?: unknown }>).find((b) => b && b.id === input.blockId)
+    : undefined;
+  if (!target || target.type !== "guestbook") return { ok: false, error: "접수할 수 없는 요청이에요." };
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "지금은 남길 수 없어요." };
+
+  const { count: pageCount, error: cntErr } = await admin
+    .from("link_guestbook")
+    .select("id", { count: "exact", head: true })
+    .eq("page_id", pageId)
+    .gte("created_at", new Date(Date.now() - GUEST_PAGE_WINDOW_MS).toISOString());
+  if (cntErr) return { ok: false, error: "지금은 남길 수 없어요." };
+  if ((pageCount ?? 0) >= GUEST_PAGE_MAX) return { ok: false, error: "지금은 글이 몰려 있어요. 잠시 후 다시 시도해 주세요." };
+
+  const hash = await visitorHash();
+  if (hash) {
+    const { count: mine } = await admin
+      .from("link_guestbook")
+      .select("id", { count: "exact", head: true })
+      .eq("page_id", pageId)
+      .eq("visitor_hash", hash)
+      .gte("created_at", new Date(Date.now() - GUEST_VISITOR_WINDOW_MS).toISOString());
+    if ((mine ?? 0) >= GUEST_VISITOR_MAX) return { ok: false, error: "너무 자주 남겼어요. 잠시 후 다시 시도해 주세요." };
+  }
+
+  const { error } = await admin.from("link_guestbook").insert({ page_id: pageId, block_id: input.blockId, visitor_hash: hash, name, message });
+  if (error) {
+    console.error("[links] 방명록 저장 실패:", error.message);
+    return { ok: false, error: "남기지 못했어요. 잠시 후 다시 시도해 주세요." };
+  }
+  revalidatePath(`/p/${input.slug}`);
   return { ok: true };
 }

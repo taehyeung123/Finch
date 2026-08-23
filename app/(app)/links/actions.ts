@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
-import { SLUG_MESSAGES, normalizeUrl, sanitizeSnsLinks, sliceChars, validateSlug } from "@/lib/links";
+import { SLUG_MESSAGES, normalizeSnsUrl, normalizeUrl, sanitizeSnsLinks, sliceChars, validateSlug } from "@/lib/links";
+import { snsHref } from "@/lib/links/sns-catalog";
 import { BLOCK_TYPES, EMPHASIS_TYPES, defaultBlockData, type BlockType } from "@/lib/links/blocks";
 import { SafeFetchError, fetchPublicHtml } from "@/lib/links/safe-fetch";
 import { DEFAULT_THEME_KEY, sanitizeThemeCustom, themeByKey } from "@/lib/links/themes";
@@ -263,14 +264,16 @@ export async function updateLinkProfile(input: {
      폼이 동기화되지 않고 "저장 안 한 변경" 이 영원히 남는다(감사 #9). 빈 칸은 "지워 달라" 고 말한다. */
   const sns: Array<{ kind: string; url: string }> = [];
   for (const s of input.snsLinks.slice(0, 8)) {
-    const href = normalizeUrl(s.url);
+    const kind = String(s.kind).slice(0, 24);
+    /* 이메일·전화·문자 칩은 사용자가 주소만 적는다 — 스킴은 여기서 붙인다(snsHref) */
+    const href = normalizeSnsUrl(snsHref(kind, s.url));
     if (!href) {
       return {
         ok: false,
-        error: s.url.trim() ? "SNS 주소는 http(s) 로 시작하는 주소여야 해요." : "비어 있는 SNS 줄은 지워 주세요.",
+        error: s.url.trim() ? "SNS 주소가 올바르지 않아요 — http(s) 주소, 이메일, 전화번호만 넣을 수 있어요." : "비어 있는 SNS 줄은 지워 주세요.",
       };
     }
-    sns.push({ kind: String(s.kind).slice(0, 20), url: href });
+    sns.push({ kind, url: href });
   }
 
   const supabase = await createClient();
@@ -497,9 +500,93 @@ export async function updateLinkImages(patch: { avatarPath?: string | null; cove
   return { ok: true };
 }
 
+/** 파일 공유 블록 업로드(리틀리 흡수 4단계) — 문서·압축만, 20MB. 같은 공개 버킷 files/ 아래 */
+const MAX_FILE_BYTES = 20 * 1024 * 1024;
+const FILE_TYPES: Record<string, string> = {
+  "application/pdf": "pdf",
+  "application/zip": "zip",
+  "application/x-zip-compressed": "zip",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+  "application/x-hwp": "hwp",
+  "application/haansofthwp": "hwp",
+  "text/plain": "txt",
+  "text/csv": "csv",
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+};
+export async function uploadLinkFile(dataUrl: string, fileName: string): Promise<{ ok: boolean; url?: string; error?: string; size?: number }> {
+  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 올릴 수 없어요." };
+  const user = await getAuthUser();
+  if (!user) return { ok: false, error: "로그인이 필요해요." };
+  const m = /^data:([a-zA-Z0-9.+/-]+);base64,(.+)$/.exec(dataUrl);
+  if (!m || !FILE_TYPES[m[1]]) return { ok: false, error: "PDF·ZIP·DOCX·PPTX·XLSX·HWP·TXT·CSV·이미지만 올릴 수 있어요." };
+  const buf = Buffer.from(m[2], "base64");
+  if (buf.byteLength > MAX_FILE_BYTES) return { ok: false, error: "파일은 20MB 이하만 올릴 수 있어요." };
+  const ext = FILE_TYPES[m[1]];
+  const path = `${user.id}/files/${crypto.randomUUID()}.${ext}`;
+  const supabase = await createClient();
+  const { error } = await supabase.storage.from("link-assets").upload(path, buf, { contentType: m[1], upsert: false });
+  if (error) {
+    console.error("[links] 파일 업로드 실패:", error.message);
+    return { ok: false, error: "업로드하지 못했어요. 잠시 후 다시 시도해 주세요." };
+  }
+  const { data } = supabase.storage.from("link-assets").getPublicUrl(path);
+  void fileName;
+  return { ok: true, url: data.publicUrl, size: buf.byteLength };
+}
+
+/* ── 방명록 관리(주인) — 답글·숨김·삭제. 방문자 글 넣기는 app/p/[slug]/actions.ts(service_role) ── */
+export async function replyGuestbook(id: number, reply: string): Promise<Result> {
+  if (isDemoMode()) return DEMO;
+  const user = await getAuthUser();
+  if (!user) return AUTH;
+  const text = sliceChars(reply.trim(), 500);
+  const supabase = await createClient();
+  const { data: hit, error } = await supabase
+    .from("link_guestbook")
+    .update({ reply: text || null, replied_at: text ? new Date().toISOString() : null })
+    .eq("id", id)
+    .select("id");
+  if (error) {
+    console.error("[links] 방명록 답글 실패:", error.message);
+    return { ok: false, error: /link_guestbook/i.test(error.message) ? "서버 업데이트(0057) 적용 후 쓸 수 있어요." : "저장하지 못했어요." };
+  }
+  if (!hit || hit.length === 0) return { ok: false, error: "글을 찾지 못했어요." };
+  revalidatePath("/links");
+  return { ok: true };
+}
+export async function setGuestbookHidden(id: number, hidden: boolean): Promise<Result> {
+  if (isDemoMode()) return DEMO;
+  const user = await getAuthUser();
+  if (!user) return AUTH;
+  const supabase = await createClient();
+  const { data: hit, error } = await supabase.from("link_guestbook").update({ hidden }).eq("id", id).select("id");
+  if (error) return { ok: false, error: "바꾸지 못했어요." };
+  if (!hit || hit.length === 0) return { ok: false, error: "글을 찾지 못했어요." };
+  revalidatePath("/links");
+  return { ok: true };
+}
+export async function deleteGuestbook(id: number): Promise<Result> {
+  if (isDemoMode()) return DEMO;
+  const user = await getAuthUser();
+  if (!user) return AUTH;
+  const supabase = await createClient();
+  const { data: hit, error } = await supabase.from("link_guestbook").delete().eq("id", id).select("id");
+  if (error) return { ok: false, error: "지우지 못했어요." };
+  if (!hit || hit.length === 0) return { ok: false, error: "글을 찾지 못했어요." };
+  revalidatePath("/links");
+  return { ok: true };
+}
+
 /* ══════════════════════════════════════════════════════════════════
    블록
    ══════════════════════════════════════════════════════════════════ */
+
+/** 0057(리틀리 흡수 4단계)에서 추가된 타입 — check 위반 시 어느 마이그레이션인지 안내 */
+const STAGE4_TYPES = new Set<BlockType>(["gallery", "music", "vcard", "search", "file", "guestbook"]);
 
 export async function addBlock(type: BlockType): Promise<Result & { id?: string }> {
   if (isDemoMode()) return DEMO;
@@ -541,7 +628,8 @@ export async function addBlock(type: BlockType): Promise<Result & { id?: string 
     /* 0054(수익화 블록 타입) 미적용 DB — check 위반을 사용자 언어로.
        조용히 "추가하지 못했어요"만 내면 코드 버그처럼 읽힌다(계단식 폴백 관례). */
     if (error.code === "23514" || /link_blocks_type_check/.test(error.message)) {
-      return { ok: false, error: "이 블록은 서버 업데이트(0054) 적용 후 쓸 수 있어요." };
+      const mig = STAGE4_TYPES.has(type) ? "0057" : "0054";
+      return { ok: false, error: `이 블록은 서버 업데이트(${mig}) 적용 후 쓸 수 있어요.` };
     }
     console.error("[links] 블록 추가 실패:", error.message);
     return { ok: false, error: "추가하지 못했어요." };
@@ -1422,11 +1510,20 @@ const TEXT_CAPS: Record<string, number> = {
   price: 20,
   originalPrice: 20,
   message: 140,
+  placeholder: 40,
+  fileName: 120,
+  name: 60,
+  phone: 40,
+  email: 160,
+  org: 60,
+  role: 60,
+  website: 200,
 };
 const ENUMS: Record<string, readonly string[]> = {
   emphasis: ["normal", "primary", "outline"],
   /* layout 은 타입마다 의미가 다르다(link: button/small/medium/large, card_row: list/carousel) — 렌더러가 제 것만 읽는다 */
-  layout: ["button", "small", "medium", "large", "list", "carousel"],
+  layout: ["button", "small", "medium", "large", "list", "carousel", "grid", "slide", "masonry"],
+  aspect: ["square", "intrinsic"],
   textSize: ["sm", "md", "lg"],
   textWeight: ["medium", "semibold", "bold"],
   align: ["left", "center"],
@@ -1583,7 +1680,7 @@ function sanitizeBlockData(input: Record<string, unknown>): { data?: Record<stri
     if (k === "items") {
       if (!Array.isArray(v)) continue;
       const items: unknown[] = [];
-      for (const raw of v.slice(0, 12)) {
+      for (const raw of v.slice(0, 30)) {
         if (!raw || typeof raw !== "object") continue;
         const it: Record<string, unknown> = {};
         for (const [ik, iv] of Object.entries(raw as Record<string, unknown>)) {
@@ -1634,7 +1731,10 @@ function sanitizeBlockData(input: Record<string, unknown>): { data?: Record<stri
     }
 
     if (typeof v === "string") {
-      out[k] = sliceChars(v, Object.hasOwn(TEXT_CAPS, k) ? TEXT_CAPS[k] : 500);
+      /* 연락처(vCard)·파일 이름은 앞뒤 공백을 떼고 저장 — 공백만 있는 이름은 렌더러가 버튼을
+         그리는데 /vcard 라우트는 trim 뒤 빈 이름으로 404 를 낸다(소넷 점검 4단계 #3) */
+      const sv = k === "name" || k === "fileName" ? v.trim() : v;
+      out[k] = sliceChars(sv, Object.hasOwn(TEXT_CAPS, k) ? TEXT_CAPS[k] : 500);
     } else if (typeof v === "number" || typeof v === "boolean") {
       out[k] = v;
     }

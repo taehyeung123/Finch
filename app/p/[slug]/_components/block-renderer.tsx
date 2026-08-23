@@ -1,7 +1,19 @@
 import { youtubeEmbed } from "@/lib/links";
 import type { BlockType } from "@/lib/links/blocks";
-import { COUPANG_DISCLOSURE } from "@/lib/links/blocks";
+import { COUPANG_DISCLOSURE, musicEmbed } from "@/lib/links/blocks";
 import { Collapsible } from "./collapsible";
+import { GuestbookForm } from "./guestbook-form";
+import { SearchBlock } from "./search-block";
+import { Download, UserPlus } from "lucide-react";
+
+/** 방명록 글(공개분) — 페이지가 읽어서 렌더러에 넘긴다 */
+export interface GuestbookPublicEntry {
+  id: number;
+  name: string;
+  message: string;
+  reply: string | null;
+  createdAt: string;
+}
 
 /*
   공개 페이지 블록 렌더러.
@@ -68,11 +80,144 @@ function Price({ d, size = "md", inherit = false }: { d: Record<string, unknown>
   );
 }
 
-export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: string }) {
+export function BlockRenderer({
+  block,
+  slug,
+  guestbook,
+  isDemo = false,
+}: {
+  block: SnapshotBlock;
+  slug: string;
+  /** 방명록 블록일 때 — 공개 글 목록 */
+  guestbook?: GuestbookPublicEntry[];
+  isDemo?: boolean;
+}) {
   const d = block.data ?? {};
   const type = block.type as BlockType;
 
   switch (type) {
+    /* ── 리틀리 흡수 4단계 블록 ─────────────────────────────── */
+    case "gallery": {
+      const items = arr(d, "items").map((it, i) => ({ it, i })).filter(({ it }) => s(it, "imagePath"));
+      if (items.length === 0) return null;
+      const layout = s(d, "layout") || "grid";
+      const square = (s(d, "aspect") || "square") === "square";
+      const imgCls = `w-full object-cover ${square ? "aspect-square" : ""}`;
+      const cell = ({ it, i }: { it: Record<string, unknown>; i: number }) => {
+        const img = (
+          // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
+          <img src={s(it, "imagePath")} alt={s(it, "alt")} className={`${imgCls} rounded-[calc(var(--lp-radius)/1.6)]`} loading="lazy" />
+        );
+        return s(it, "url") ? (
+          <a key={i} href={goHref(slug, block.id, i)} rel="noopener noreferrer nofollow" className="lp-btn block overflow-hidden rounded-[calc(var(--lp-radius)/1.6)]" aria-label={s(it, "alt") || `사진 ${i + 1} 링크`}>
+            {img}
+          </a>
+        ) : (
+          <div key={i}>{img}</div>
+        );
+      };
+      if (layout === "carousel" || layout === "slide") {
+        return (
+          <div className={`-mx-5 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}>
+            {items.map(({ it, i }) => (
+              <div key={i} className={`${layout === "slide" ? "w-full" : "w-[78%]"} shrink-0 snap-center`}>
+                {cell({ it, i })}
+              </div>
+            ))}
+          </div>
+        );
+      }
+      if (layout === "list") return <div className="space-y-2.5">{items.map(cell)}</div>;
+      if (layout === "masonry") return <div className="columns-2 gap-2.5 [&>*]:mb-2.5 [&>*]:break-inside-avoid">{items.map(cell)}</div>;
+      return <div className="grid grid-cols-3 gap-2">{items.map(cell)}</div>;
+    }
+
+    case "music": {
+      const em = musicEmbed(s(d, "url"));
+      if (!em) return null;
+      return (
+        <div className={`${cardCls} overflow-hidden`}>
+          {s(d, "title") ? <p className="px-3 pt-2.5 text-[14px] font-semibold text-[var(--lp-fg)]">{s(d, "title")}</p> : null}
+          <iframe
+            src={em.src}
+            title={s(d, "title") || "음악"}
+            height={em.height}
+            loading="lazy"
+            allow="autoplay; clipboard-write; encrypted-media; picture-in-picture"
+            className="block w-full border-0"
+          />
+        </div>
+      );
+    }
+
+    case "vcard": {
+      if (!s(d, "name").trim()) return null;
+      return (
+        <a
+          href={`/p/${slug}/vcard/${block.id}`}
+          className="lp-btn flex min-h-[52px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] border border-[var(--lp-btn-border)] bg-[var(--lp-btn-bg)] px-5 py-3 text-[15px] font-semibold text-[var(--lp-btn-fg)] shadow-[var(--lp-shadow)] transition-opacity hover:opacity-85"
+        >
+          <UserPlus className="size-4" aria-hidden />
+          {s(d, "label") || "연락처 저장"}
+          <span className="text-[12px] font-normal text-[var(--lp-muted)]">· {s(d, "name")}</span>
+        </a>
+      );
+    }
+
+    case "search":
+      return <SearchBlock placeholder={s(d, "placeholder") || "무엇을 찾으세요?"} />;
+
+    case "file": {
+      if (!s(d, "url")) return null;
+      const size = n(d, "fileSize", 0);
+      const sizeLabel = size > 0 ? (size >= 1024 * 1024 ? `${(size / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(size / 1024))}KB`) : "";
+      return (
+        <a href={goHref(slug, block.id)} rel="noopener noreferrer nofollow" className={`lp-btn ${cardCls} flex items-center gap-3 p-3 transition-opacity hover:opacity-90`}>
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-[calc(var(--lp-radius)/1.6)] bg-[var(--lp-accent)] text-[var(--lp-on-accent)]" aria-hidden>
+            <Download className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "title") || s(d, "fileName") || "파일"}</span>
+            <span className="block truncate text-[13px] text-[var(--lp-muted)]">
+              {[s(d, "description"), s(d, "fileName"), sizeLabel].filter(Boolean).join(" · ")}
+            </span>
+          </span>
+        </a>
+      );
+    }
+
+    case "guestbook": {
+      const entries = guestbook ?? [];
+      return (
+        <div className={`${cardCls} p-4`}>
+          <p className="text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "title") || "방명록"}</p>
+          <div className="mt-3">
+            <GuestbookForm slug={slug} blockId={block.id} placeholder={s(d, "placeholder") || "한마디 남겨 주세요"} isDemo={isDemo} />
+          </div>
+          {entries.length ? (
+            <ul className="mt-4 space-y-3 border-t border-[var(--lp-border)] pt-3">
+              {entries.map((g) => (
+                <li key={g.id}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[14px] font-semibold text-[var(--lp-fg)]">{g.name}</span>
+                    <span className="tnum text-[11px] text-[var(--lp-muted)]">{g.createdAt.slice(0, 10)}</span>
+                  </div>
+                  <p className="mt-0.5 whitespace-pre-wrap text-[14px] text-[var(--lp-fg)]">{g.message}</p>
+                  {g.reply ? (
+                    <p className="mt-1.5 rounded-[calc(var(--lp-radius)/1.6)] px-2.5 py-1.5 text-[13px] text-[var(--lp-muted)]" style={{ backgroundColor: "color-mix(in srgb, var(--lp-accent) 10%, transparent)" }}>
+                      ↳ {g.reply}
+                    </p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-center text-[13px] text-[var(--lp-muted)]">아직 남겨진 글이 없어요. 첫 글을 남겨 보세요.</p>
+          )}
+        </div>
+      );
+    }
+
     /* ── 링크 버튼 ─────────────────────────────────────────── */
     case "link": {
       /* 주소가 비면 **아예 그리지 않는다.** <a> 로 그리면 /p/{slug}/go/{id} 가

@@ -93,6 +93,16 @@ export interface LinkLead {
   createdAt: string;
 }
 
+/** 방명록 글(주인용 — 숨김 포함). 0057 */
+export interface LinkGuestbookEntry {
+  id: number;
+  name: string;
+  message: string;
+  reply: string | null;
+  hidden: boolean;
+  createdAt: string;
+}
+
 /** /links 화면 한 벌 — 실제 모드는 DB 에서, 데모 모드는 샘플에서 온다 */
 export interface LinkWorkspace {
   page: LinkPageView | null;
@@ -101,6 +111,8 @@ export interface LinkWorkspace {
   snapshot: LinkSnapshotView | null;
   stats: LinkStats;
   leads: LinkLead[];
+  /** 방명록 최근 50건(숨김 포함). 0057 미적용이면 빈 배열 */
+  guestbook?: LinkGuestbookEntry[];
   /**
    * 페이지·블록 조회 자체가 실패했다 — "페이지 없음"과 **구분**한다.
    * 뭉개면 생성 폼이 떠서 23505 로 영원히 실패하거나, 빈 캔버스가 "블록이 다 날아갔다"로 읽힌다(감사 #10·#11).
