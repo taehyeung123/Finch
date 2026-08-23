@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Pencil, Plus, Share2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { FinchMark } from "@/components/logo";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, youtubeEmbed } from "@/lib/links";
 import { Collapsible } from "@/app/p/[slug]/_components/collapsible";
-import { themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
+import { fontStylesheets, themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
+import { useFontStylesheets } from "./use-font-stylesheets";
 import {
   BLOCK_CATALOG,
   blockSummary,
@@ -127,6 +128,7 @@ export function PhonePreview({
   edit?: CanvasEdit;
 }) {
   const theme = themeByKey(page.theme);
+  useFontStylesheets(fontStylesheets(page.themeCustom?.font));
   const align =
     page.align === "left" ? "items-start text-left" : page.align === "right" ? "items-end text-right" : "items-center text-center";
 
@@ -261,10 +263,20 @@ export function PhonePreview({
             } as React.CSSProperties
           }
           className={cn(
-            "overflow-y-auto bg-[var(--lp-bg)] bg-cover bg-center px-5 pb-10 pt-8 text-[var(--lp-fg)]",
+            "relative overflow-y-auto bg-[var(--lp-bg)] bg-cover bg-center px-5 pb-10 pt-8 text-[var(--lp-fg)]",
             frame === "device" ? "min-h-0 flex-1" : "max-h-[680px]",
           )}
+          data-lp-fx={page.themeCustom?.effect && page.themeCustom.effect !== "none" ? page.themeCustom.effect : undefined}
+          data-lp-anim={page.themeCustom?.anim && page.themeCustom.anim !== "none" ? page.themeCustom.anim : undefined}
         >
+          {page.themeCustom?.share ? (
+            <span
+              aria-hidden
+              className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] text-[var(--lp-fg)] shadow-[var(--lp-shadow)]"
+            >
+              <Share2 className="size-3.5" />
+            </span>
+          ) : null}
           {/* 커버 — 캔버스 편집에선 눌러서 프로필 설정(사진 교체)으로 */}
           {(page.layout === "cover" || page.layout === "cover_profile") && page.coverPath ? (
             editable ? (
@@ -350,7 +362,11 @@ export function PhonePreview({
                 {mode === "live" ? "라이브에 보이는 블록이 없어요." : "블록을 추가하면 여기에 보여요."}
               </p>
             ) : mode === "live" ? (
-              visible.map((b) => <PreviewBlock key={b.id} block={b} mode="live" />)
+              visible.map((b) => (
+                <div key={b.id} className="lp-block">
+                  <PreviewBlock block={b} mode="live" />
+                </div>
+              ))
             ) : editable && edit ? (
               visible.map((b, i) => {
                 const label = blockSummary(b.type, b.data);
@@ -359,7 +375,7 @@ export function PhonePreview({
                   <div
                     key={b.id}
                     className={cn(
-                      "group relative",
+                      "lp-block group relative",
                       draggingId === b.id && "opacity-50",
                       /* 드롭 대상 표시 — 선택(실선)과 헷갈리지 않게 점선 */
                       overId === b.id && draggingId && draggingId !== b.id && "outline-dashed outline-2 outline-primary",
@@ -518,7 +534,11 @@ export function PhonePreview({
                  그린다(주소 없는 블록도 모습 그대로, 도구·캡션만 없음). 공개 규칙(live)로
                  그리면 아직 주소를 안 넣은 블록이 통째로 빠져 "수정해도 미리보기에 안
                  나온다"로 보인다(2026-08-20 지적). 공개 여부는 캔버스 캡션·최신 칩이 말한다. */
-              visible.map((b) => <PreviewBlock key={b.id} block={b} mode="edit" />)
+              visible.map((b) => (
+                <div key={b.id} className="lp-block">
+                  <PreviewBlock block={b} mode="edit" />
+                </div>
+              ))
             )}
 
             {editable && edit ? (
@@ -549,12 +569,14 @@ export function PhonePreview({
 
           {/* 핀치 배지 — 공개 페이지와 같은 자리·같은 모양(app/p/[slug]/page.tsx 와 짝).
               미리보기에선 누를 수 없는 표시만 — 편집 화면을 떠나면 안 된다. */}
+          {page.themeCustom?.badge === "hide" ? null : (
           <div className="mt-8 text-center">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-3 py-1.5 text-[11px] font-semibold text-[var(--lp-muted)] shadow-[var(--lp-shadow)]">
               <FinchMark className="size-3 text-primary" />
               핀치에서 내 프로필 꾸미기
             </span>
           </div>
+          )}
 
           {/* 강조 블록 하단 고정 CTA — 공개 페이지와 같은 모양·같은 자리(흐름 맨 뒤, 프레임 안 sticky) */}
           {emphasized ? (
@@ -611,7 +633,7 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
       if (layout === "small" || layout === "medium" || layout === "large") {
         const big = layout === "large";
         return (
-          <div className={`${card} overflow-hidden ${big ? "" : "flex items-center gap-2.5 p-2.5"}`}>
+          <div className={`lp-btn ${card} overflow-hidden ${big ? "" : "flex items-center gap-2.5 p-2.5"}`}>
             {thumb ? (
               // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
               <img
@@ -638,7 +660,7 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
         <div
           style={textStyle}
           className={[
-            "flex min-h-[44px] items-center justify-center gap-1.5 rounded-[var(--lp-radius-btn)] px-4 py-2.5 text-center text-[13px] font-semibold",
+            "lp-btn flex min-h-[44px] items-center justify-center gap-1.5 rounded-[var(--lp-radius-btn)] px-4 py-2.5 text-center text-[13px] font-semibold",
             hasExtras ? "flex-col gap-0.5" : "",
             emphasis === "primary"
               ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]"

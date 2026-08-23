@@ -55,8 +55,83 @@ export interface LinkThemeCustom {
   fg?: string;
   radius?: "sm" | "md" | "lg" | "full";
   button?: "fill" | "outline" | "soft";
-  font?: "sans" | "serif" | "mono";
+  /** 글꼴 — LINK_FONTS 의 key(sans/serif/mono 는 예전 값과 호환) */
+  font?: string;
+  /* ── 리틀리 흡수 3단계(2026-08-22) ── */
+  /** 배경 이미지 필터 — 없음/밝게/어둡게/밝은 블러/어두운 블러 */
+  bgFilter?: "none" | "light" | "dark" | "blur" | "darkBlur";
+  /** 버튼 액션(호버 효과) */
+  effect?: "none" | "circle" | "wave" | "flip" | "swipe";
+  /** 카드·버튼 그림자 */
+  shadow?: "none" | "soft" | "strong";
+  /** 스크롤 애니메이션 — 블록이 화면에 들어올 때 */
+  anim?: "none" | "rise" | "zoom";
+  /** PC 레이아웃 — phone(가운데 한 줄) | split(왼쪽 프로필 · 오른쪽 블록) */
+  desktop?: "phone" | "split";
+  /** 상단 공유 버튼 */
+  share?: boolean;
+  /** 하단 핀치 배지 — hide 는 추후 플랜 게이트 */
+  badge?: "show" | "hide";
 }
+
+/** 글꼴 목록 — fontsource(jsdelivr) 로 싣는다. CSP 가 이미 cdn.jsdelivr.net 의 style/font 를 허용한다.
+    pkg 가 null 이면 시스템 글꼴(추가 로드 없음). bold 는 700.css 가 있는 패키지. */
+export const LINK_FONTS: ReadonlyArray<{ key: string; label: string; family: string; pkg: string | null; bold: boolean }> = [
+  { key: "sans", label: "기본 고딕", family: "inherit", pkg: null, bold: false },
+  { key: "noto-sans", label: "노토 산스", family: '"Noto Sans KR", sans-serif', pkg: "noto-sans-kr", bold: true },
+  { key: "ibm-plex", label: "IBM 플렉스", family: '"IBM Plex Sans KR", sans-serif', pkg: "ibm-plex-sans-kr", bold: true },
+  { key: "nanum-gothic", label: "나눔고딕", family: '"Nanum Gothic", sans-serif', pkg: "nanum-gothic", bold: true },
+  { key: "gowun-dodum", label: "고운돋움", family: '"Gowun Dodum", sans-serif', pkg: "gowun-dodum", bold: false },
+  { key: "sunflower", label: "해바라기", family: '"Sunflower", sans-serif', pkg: "sunflower", bold: true },
+  { key: "serif", label: "명조", family: '"Noto Serif KR", "Apple Myungjo", "Nanum Myeongjo", Georgia, serif', pkg: "noto-serif-kr", bold: true },
+  { key: "nanum-myeongjo", label: "나눔명조", family: '"Nanum Myeongjo", serif', pkg: "nanum-myeongjo", bold: true },
+  { key: "gowun-batang", label: "고운바탕", family: '"Gowun Batang", serif', pkg: "gowun-batang", bold: true },
+  { key: "hahmlet", label: "함렛", family: '"Hahmlet", serif', pkg: "hahmlet", bold: true },
+  { key: "song-myung", label: "송명", family: '"Song Myung", serif', pkg: "song-myung", bold: false },
+  { key: "do-hyeon", label: "도현", family: '"Do Hyeon", sans-serif', pkg: "do-hyeon", bold: false },
+  { key: "jua", label: "주아", family: '"Jua", sans-serif', pkg: "jua", bold: false },
+  { key: "black-han", label: "검은고딕", family: '"Black Han Sans", sans-serif', pkg: "black-han-sans", bold: false },
+  { key: "gaegu", label: "개구", family: '"Gaegu", cursive', pkg: "gaegu", bold: true },
+  { key: "nanum-pen", label: "나눔손글씨 펜", family: '"Nanum Pen Script", cursive', pkg: "nanum-pen-script", bold: false },
+  { key: "mono", label: "모노", family: 'ui-monospace, "D2Coding", "Cascadia Code", Consolas, monospace', pkg: null, bold: false },
+];
+
+/** 글꼴 스타일시트 주소 — 공개 페이지·편집 미리보기가 <link rel="stylesheet"> 로 싣는다 */
+export function fontStylesheets(fontKey: string | undefined): string[] {
+  const f = LINK_FONTS.find((x) => x.key === fontKey);
+  if (!f || !f.pkg) return [];
+  const base = `https://cdn.jsdelivr.net/npm/@fontsource/${f.pkg}@5`;
+  return f.bold ? [`${base}/index.css`, `${base}/700.css`] : [`${base}/index.css`];
+}
+
+export const CUSTOM_FILTERS = [
+  { key: "none", label: "없음" },
+  { key: "light", label: "밝게" },
+  { key: "dark", label: "어둡게" },
+  { key: "blur", label: "밝은 블러" },
+  { key: "darkBlur", label: "어두운 블러" },
+] as const;
+export const CUSTOM_EFFECTS = [
+  { key: "none", label: "없음" },
+  { key: "circle", label: "원 채움" },
+  { key: "wave", label: "물결" },
+  { key: "flip", label: "기울임" },
+  { key: "swipe", label: "스와이프" },
+] as const;
+export const CUSTOM_SHADOWS = [
+  { key: "none", label: "없음" },
+  { key: "soft", label: "은은하게" },
+  { key: "strong", label: "진하게" },
+] as const;
+export const CUSTOM_ANIMS = [
+  { key: "none", label: "없음" },
+  { key: "rise", label: "아래에서" },
+  { key: "zoom", label: "확대" },
+] as const;
+export const CUSTOM_DESKTOP = [
+  { key: "phone", label: "가운데 한 줄" },
+  { key: "split", label: "프로필 분리" },
+] as const;
 
 export const CUSTOM_RADIUS = [
   { key: "sm", label: "각진" },
@@ -68,11 +143,6 @@ export const CUSTOM_BUTTONS = [
   { key: "fill", label: "채움" },
   { key: "outline", label: "외곽선" },
   { key: "soft", label: "은은하게" },
-] as const;
-export const CUSTOM_FONTS = [
-  { key: "sans", label: "고딕" },
-  { key: "serif", label: "명조" },
-  { key: "mono", label: "모노" },
 ] as const;
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
@@ -104,7 +174,14 @@ export function sanitizeThemeCustom(input: unknown): LinkThemeCustom | null {
   if (typeof i.bgImage === "string" && IMG_URL.test(i.bgImage)) out.bgImage = i.bgImage;
   if (CUSTOM_RADIUS.some((r) => r.key === i.radius)) out.radius = i.radius as LinkThemeCustom["radius"];
   if (CUSTOM_BUTTONS.some((b) => b.key === i.button)) out.button = i.button as LinkThemeCustom["button"];
-  if (CUSTOM_FONTS.some((f) => f.key === i.font)) out.font = i.font as LinkThemeCustom["font"];
+  if (LINK_FONTS.some((f) => f.key === i.font)) out.font = i.font as string;
+  if (CUSTOM_FILTERS.some((f) => f.key === i.bgFilter)) out.bgFilter = i.bgFilter as LinkThemeCustom["bgFilter"];
+  if (CUSTOM_EFFECTS.some((f) => f.key === i.effect)) out.effect = i.effect as LinkThemeCustom["effect"];
+  if (CUSTOM_SHADOWS.some((f) => f.key === i.shadow)) out.shadow = i.shadow as LinkThemeCustom["shadow"];
+  if (CUSTOM_ANIMS.some((f) => f.key === i.anim)) out.anim = i.anim as LinkThemeCustom["anim"];
+  if (CUSTOM_DESKTOP.some((f) => f.key === i.desktop)) out.desktop = i.desktop as LinkThemeCustom["desktop"];
+  if (i.share === true) out.share = true;
+  if (i.badge === "hide") out.badge = "hide";
   return Object.keys(out).length ? out : null;
 }
 
@@ -255,13 +332,28 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
   const radius = c.radius ?? t.radius;
   /* 배경: 이미지 > 그라데이션 > 단색. 사용자가 단색을 새로 골랐으면 프리셋 그라데이션은 버린다 */
   const bg2 = c.bg2 ?? (c.bg ? undefined : t.bg2);
-  const bgImage = c.bgImage ? `url("${c.bgImage}")` : bg2 ? `linear-gradient(160deg, ${bg}, ${bg2})` : "none";
-  const font =
-    c.font === "serif"
-      ? '"Noto Serif KR", "Apple Myungjo", "Nanum Myeongjo", Georgia, serif'
-      : c.font === "mono"
-        ? 'ui-monospace, "D2Coding", "Cascadia Code", Consolas, monospace'
-        : "inherit";
+  /* 배경 필터 — 이미지 위에 덮는 반투명 겹. 그라데이션으로 쌓아 같은 변수 하나로 공개·미리보기가 같다.
+     블러는 공개 페이지가 별도 레이어에서만 건다(--lp-bg-blur). */
+  const filter = c.bgImage ? (c.bgFilter ?? "none") : "none";
+  const overlay =
+    filter === "light" ? "rgba(255,255,255,.35)" : filter === "dark" ? "rgba(0,0,0,.42)" : filter === "blur" ? "rgba(255,255,255,.22)" : filter === "darkBlur" ? "rgba(0,0,0,.42)" : null;
+  const bgImage = c.bgImage
+    ? `${overlay ? `linear-gradient(${overlay}, ${overlay}), ` : ""}url("${c.bgImage}")`
+    : bg2
+      ? `linear-gradient(160deg, ${bg}, ${bg2})`
+      : "none";
+  const bgBlur = filter === "blur" || filter === "darkBlur" ? "10px" : "0px";
+  const font = LINK_FONTS.find((f) => f.key === c.font)?.family ?? "inherit";
+  const shadowVal =
+    c.shadow === "none"
+      ? "none"
+      : c.shadow === "strong"
+        ? "0 2px 6px rgba(15,23,42,.12), 0 14px 32px rgba(15,23,42,.12)"
+        : c.shadow === "soft"
+          ? "0 1px 3px rgba(15,23,42,.08), 0 6px 14px rgba(15,23,42,.04)"
+          : t.shadow
+            ? "0 1px 3px rgba(15,23,42,.08), 0 6px 14px rgba(15,23,42,.04)"
+            : "none";
   /* 버튼 스타일 — 링크 버튼의 "기본" 변형이 따른다(채움/외곽선/은은하게) */
   const btn = c.button ?? "fill";
   const btnBg = btn === "fill" ? card : btn === "outline" ? "transparent" : `color-mix(in srgb, ${accent} 14%, transparent)`;
@@ -270,6 +362,7 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
   return {
     "--lp-bg": bg,
     "--lp-bg-image": bgImage,
+    "--lp-bg-blur": bgBlur,
     "--lp-font": font,
     "--lp-btn-bg": btnBg,
     "--lp-btn-fg": btnFg,
@@ -289,7 +382,7 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
          --lp-radius     : 면(카드·이미지·썸네일·커버) — full 이어도 16px 로 눌러둔다 */
     "--lp-radius-btn": radius === "full" ? "999px" : radius === "sm" ? "8px" : radius === "lg" ? "20px" : "14px",
     "--lp-radius": radius === "full" ? "16px" : radius === "sm" ? "8px" : radius === "lg" ? "18px" : "14px",
-    "--lp-shadow": t.shadow ? "0 1px 3px rgba(15,23,42,.08), 0 6px 14px rgba(15,23,42,.04)" : "none",
+    "--lp-shadow": shadowVal,
   };
 }
 

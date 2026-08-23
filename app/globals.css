@@ -1014,6 +1014,58 @@ body {
   .links-panel-col, .links-collapse, .links-strip { transition: none; scroll-behavior: auto; }
 }
 
+/* ───────────────────────────────────────────────────────────────
+   공개 프로필 링크 페이지(/p/[slug])·편집 미리보기 — 버튼 액션 · 스크롤 애니메이션
+   (리틀리 흡수 3단계). 색은 전부 테마 변수(--lp-*), 앱 토큰 금지(방문자 화면).
+   .lp-btn          : 링크 버튼/카드/고정 CTA 에 붙는다. data-lp-fx 가 효과를 고른다.
+   .lp-block        : 블록 래퍼. data-lp-anim 이 스크롤 진입 애니를 고른다(scroll-driven,
+                      미지원 브라우저는 그냥 보인다).
+─────────────────────────────────────────────────────────────── */
+.lp-btn { position: relative; }
+[data-lp-fx] .lp-btn { transition: transform var(--dur-2) var(--ease-arrive), opacity var(--dur-2) var(--ease-arrive); }
+/* 원 채움 — 가운데서 원이 번진다 */
+[data-lp-fx="circle"] .lp-btn { overflow: hidden; isolation: isolate; }
+/* 오버레이는 z-index 1 — 이미지가 카드를 덮는 블록(그리드·큰 카드)에서 z-index -1 은 이미지 뒤에 숨는다(소넷 확정).
+   반투명 틴트라 글자 위에 얹혀도 읽힌다. pointer-events 는 끈다. */
+[data-lp-fx="circle"] .lp-btn::after {
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; margin: auto; width: 0; height: 0; border-radius: 9999px;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  transition: width var(--dur-4) var(--ease-arrive), height var(--dur-4) var(--ease-arrive);
+}
+[data-lp-fx="circle"] .lp-btn:hover::after { width: 160%; height: 400%; }
+/* 물결 — 빛이 한 번 지나간다 */
+[data-lp-fx="wave"] .lp-btn { overflow: hidden; isolation: isolate; }
+[data-lp-fx="wave"] .lp-btn::after {
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; transform: translateX(-120%) skewX(-18deg);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, currentColor 18%, transparent), transparent);
+}
+/* 전용 키프레임 — 스켈레톤용 shimmer-sweep 은 skew 를 덮어써 기울기가 사라졌다(소넷 확정) */
+@keyframes lp-sweep { from { transform: translateX(-120%) skewX(-18deg); } to { transform: translateX(220%) skewX(-18deg); } }
+[data-lp-fx="wave"] .lp-btn:hover::after { animation: lp-sweep 0.9s var(--ease-arrive) both; }
+/* 기울임 — 살짝 들려 기운다 */
+[data-lp-fx="flip"] .lp-btn { transform-style: preserve-3d; }
+[data-lp-fx="flip"] .lp-btn:hover { transform: perspective(600px) rotateX(7deg) translateY(-2px); }
+/* 스와이프 — 아래 띠가 왼쪽에서 채워진다 */
+[data-lp-fx="swipe"] .lp-btn { overflow: hidden; isolation: isolate; }
+[data-lp-fx="swipe"] .lp-btn::after {
+  content: ""; position: absolute; left: 0; bottom: 0; height: 100%; width: 100%; z-index: 1; pointer-events: none;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  transform: translateX(-101%); transition: transform var(--dur-3) var(--ease-arrive);
+}
+[data-lp-fx="swipe"] .lp-btn:hover::after { transform: translateX(0); }
+[data-lp-fx] .lp-btn:active { transform: scale(0.985); }
+[data-lp-fx="flip"] .lp-btn:active { transform: perspective(600px) rotateX(7deg) translateY(-1px) scale(0.985); }
+
+@keyframes lp-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes lp-zoom { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: none; } }
+@supports (animation-timeline: view()) {
+  [data-lp-anim="rise"] .lp-block { animation: lp-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 35%; }
+  [data-lp-anim="zoom"] .lp-block { animation: lp-zoom linear both; animation-timeline: view(); animation-range: entry 0% entry 35%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-lp-fx] .lp-btn, [data-lp-fx] .lp-btn::after, [data-lp-anim] .lp-block { animation: none !important; transition: none !important; transform: none !important; }
+}
+
 /* 토스트 — 문서 흐름 밖. 현행 library-client.tsx의 mt-4 인라인 <p>는
    결과 그리드를 즉시 40px 아래로 밀어내는, 이 화면의 유일한 실측 CLS다. */
 .toast-pop {

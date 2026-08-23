@@ -105,7 +105,7 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
           <a
             href={goHref(slug, block.id)}
             rel="noopener noreferrer nofollow"
-            className={`${cardCls} overflow-hidden transition-opacity hover:opacity-90 ${big ? "" : "flex items-center gap-3 p-3"}`}
+            className={`lp-btn ${cardCls} overflow-hidden transition-opacity hover:opacity-90 ${big ? "" : "flex items-center gap-3 p-3"}`}
           >
             {thumb ? (
               // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
@@ -134,7 +134,7 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
           rel="noopener noreferrer nofollow"
           style={textStyle}
           className={[
-            "flex min-h-[52px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] px-5 py-3 text-center text-[15px] font-semibold transition-opacity hover:opacity-85",
+            "lp-btn flex min-h-[52px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] px-5 py-3 text-center text-[15px] font-semibold transition-opacity hover:opacity-85",
             hasExtras ? "flex-col gap-0.5" : "",
             primary
               ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]"
@@ -294,7 +294,7 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
                 key={i}
                 href={goHref(slug, block.id, i)}
                 rel="noopener noreferrer nofollow"
-                className={`${cardCls} w-[72%] shrink-0 snap-start overflow-hidden`}
+                className={`lp-btn ${cardCls} w-[72%] shrink-0 snap-start overflow-hidden`}
               >
                 {s(it, "imagePath") ? (
                   // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
@@ -311,7 +311,7 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
         );
       }
       const nodes = items.map(({ it, i }) => (
-        <a key={i} href={goHref(slug, block.id, i)} rel="noopener noreferrer nofollow" className={`${cardCls} flex items-center gap-3 p-3`}>
+        <a key={i} href={goHref(slug, block.id, i)} rel="noopener noreferrer nofollow" className={`lp-btn ${cardCls} flex items-center gap-3 p-3`}>
           {s(it, "imagePath") ? (
             // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
             <img src={s(it, "imagePath")} alt="" className="size-14 shrink-0 rounded-[calc(var(--lp-radius)/1.6)] object-cover" loading="lazy" />
@@ -332,7 +332,7 @@ export function BlockRenderer({ block, slug }: { block: SnapshotBlock; slug: str
       if (items.length === 0) return null;
       const cols = n(d, "columns", 2) === 3 ? "grid-cols-3" : "grid-cols-2";
       const nodes = items.map(({ it, i }) => (
-        <a key={i} href={goHref(slug, block.id, i)} rel="noopener noreferrer nofollow" className={`${cardCls} overflow-hidden`}>
+        <a key={i} href={goHref(slug, block.id, i)} rel="noopener noreferrer nofollow" className={`lp-btn ${cardCls} overflow-hidden`}>
           {s(it, "imagePath") ? (
             // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
             <img src={s(it, "imagePath")} alt="" className="aspect-square w-full object-cover" loading="lazy" />

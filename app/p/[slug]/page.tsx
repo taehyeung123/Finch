@@ -6,9 +6,10 @@ import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
 import { linkWorkspace } from "@/lib/data";
 import { FinchMark } from "@/components/logo";
 import { SnsIcon } from "@/components/sns-brand-icons";
-import { initialOf, sanitizeSnsLinks } from "@/lib/links";
+import { initialOf, publicLinkUrl, sanitizeSnsLinks } from "@/lib/links";
 import { emphasizedCta, hiddenReason, isScheduledHidden, type BlockType } from "@/lib/links/blocks";
-import { sanitizeThemeCustom, themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
+import { fontStylesheets, sanitizeThemeCustom, themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
+import { ShareButton } from "./_components/share-button";
 import { BlockRenderer, type SnapshotBlock } from "./_components/block-renderer";
 import { LeadForm } from "./_components/lead-form";
 import { ViewBeacon } from "./_components/view-beacon";
@@ -221,27 +222,49 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
       </nav>
     ) : null;
 
+  /* 3단계 디자인 옵션 — 값이 없으면 전부 예전과 같은 모양 */
+  const fx = themeCustom?.effect && themeCustom.effect !== "none" ? themeCustom.effect : undefined;
+  const anim = themeCustom?.anim && themeCustom.anim !== "none" ? themeCustom.anim : undefined;
+  const split = themeCustom?.desktop === "split" && snap.layout !== "cover";
+  const fonts = fontStylesheets(themeCustom?.font);
+
   return (
     <main
       style={{ ...themeVars(theme, themeCustom), fontFamily: "var(--lp-font)" } as React.CSSProperties}
       className="relative isolate min-h-[100dvh] bg-[var(--lp-bg)] text-[var(--lp-fg)]"
+      data-lp-fx={fx}
+      data-lp-anim={anim}
     >
+      {/* 글꼴 — fontsource(jsdelivr). React 19 가 precedence 로 <head> 에 올린다 */}
+      {fonts.map((href) => (
+        <link key={href} rel="stylesheet" href={href} precedence="default" />
+      ))}
       {/* 배경 이미지·그라데이션은 **뷰포트 크기로 고정된 한 겹**에 깐다. main 에 직접 깔면
           문서 높이 전체(블록 10개면 2400px)를 cover 하느라 이미지가 세로 띠로 확대되고
           스크롤에 따라 움직여, 375×812 프레임에 한 번만 cover 하는 미리보기와 달라진다(감사 #19).
-          background-attachment: fixed 는 iOS 가 무시하므로 fixed 레이어로 푼다. */}
+          background-attachment: fixed 는 iOS 가 무시하므로 fixed 레이어로 푼다.
+          블러 필터는 레이어를 살짝 키워(-inset) 가장자리 번짐을 숨긴다. */}
       <div
         aria-hidden
-        className="pointer-events-none fixed inset-0 -z-10 bg-[var(--lp-bg)] bg-cover bg-center"
-        style={{ backgroundImage: "var(--lp-bg-image)" }}
+        className="pointer-events-none fixed -inset-4 -z-10 bg-[var(--lp-bg)] bg-cover bg-center"
+        style={{ backgroundImage: "var(--lp-bg-image)", filter: "blur(var(--lp-bg-blur))" }}
       />
+
       {/* 방문 집계 — 렌더를 막지 않게 클라이언트에서 한 번만 쏜다.
           개인 식별 정보는 안 보낸다(서버가 익명 토큰만 쿠키로 관리). */}
       {published ? <ViewBeacon slug={slug} /> : null}
 
-      <div className="mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 pt-10">
+      <div
+        className={
+          split
+            ? "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 pt-10 lg:grid lg:max-w-[980px] lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:items-start lg:gap-x-14 lg:px-8 lg:pt-16"
+            : "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 pt-10"
+        }
+      >
+        {/* 공유 버튼 — 콘텐츠 칸 기준 오른쪽 위(창 끝이 아니라, 소넷 확정) */}
+        {themeCustom?.share ? <ShareButton url={publicLinkUrl(slug)} title={snap.title || slug} /> : null}
         {isOwner && !published ? (
-          <p className="mb-6 rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-card)] px-4 py-2.5 text-center text-[13px] font-medium">
+          <p className={`mb-6 rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-card)] px-4 py-2.5 text-center text-[13px] font-medium ${split ? "lg:col-start-1" : ""}`}>
             비공개 미리보기예요. 나에게만 보입니다.
           </p>
         ) : null}
@@ -252,12 +275,12 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
           <img
             src={snap.coverPath}
             alt=""
-            className="mb-4 aspect-[3/1] w-full rounded-[var(--lp-radius)] object-cover"
+            className={`mb-4 aspect-[3/1] w-full rounded-[var(--lp-radius)] object-cover ${split ? "lg:col-start-1" : ""}`}
           />
         ) : null}
 
-        {/* 프로필 */}
-        <header className={`flex flex-col ${align}`}>
+        {/* 프로필 — 분리 배치에선 왼쪽 칸 고정(명시하지 않으면 앞 항목에 밀려 오른쪽 칸으로 튄다, 소넷 확정) */}
+        <header className={`flex flex-col ${align} ${split ? "lg:col-start-1 lg:sticky lg:top-16 lg:self-start" : ""}`}>
           {snap.layout !== "cover" ? (
             snap.avatarPath ? (
               // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
@@ -295,7 +318,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
             ⚠️ hiddenReason 으로 **렌더 목록 자체를 거르지는 않는다.** 이 함수와 렌더러가
             1:1 이 아니라(social_feed 등), 판정이 갈리는 순간 "문구 누락"이
             "정상 블록이 통째로 사라짐"으로 악화된다. 여기서는 문구만 결정한다. */}
-        <div className="mt-8 space-y-3">
+        <div className={`mt-8 space-y-3 ${split ? "lg:col-start-2 lg:row-span-3 lg:mt-0" : ""}`}>
           {snap.snsPlacement === "links" ? snsNav : null}
           {visibleBlocks.every(
             (b) =>
@@ -305,19 +328,22 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
           ) ? (
             <p className="text-center text-[15px] text-[var(--lp-muted)]">아직 등록된 링크가 없어요.</p>
           ) : null}
-          {visibleBlocks.map((b) =>
-            b.type === "contact" || b.type === "subscribe" ? (
-              <LeadForm key={b.id} slug={slug} blockId={b.id} kind={b.type} data={b.data} isDemo={isDemoMode()} />
-            ) : (
-              <BlockRenderer key={b.id} block={b} slug={slug} />
-            ),
-          )}
+          {visibleBlocks.map((b) => (
+            <div key={b.id} className="lp-block">
+              {b.type === "contact" || b.type === "subscribe" ? (
+                <LeadForm slug={slug} blockId={b.id} kind={b.type} data={b.data} isDemo={isDemoMode()} />
+              ) : (
+                <BlockRenderer block={b} slug={slug} />
+              )}
+            </div>
+          ))}
         </div>
 
         {/* 핀치 배지 — 링크팜의 「링크팜에서 내 프로필 꾸미기」 카피(2026-08-20 지시).
             방문자가 "나도 하나 만들까"로 넘어오는 통로라 마지막 블록 바로 아래 알약으로
             둔다. 미리보기(phone-preview)도 같은 자리에 같은 모양을 그린다. */}
-        <footer className="mt-10 pb-6 text-center">
+        {themeCustom?.badge === "hide" ? null : (
+        <footer className={`mt-10 pb-6 text-center ${split ? "lg:col-start-2" : ""}`}>
           <Link
             href="/?utm_source=profile_link&utm_medium=badge"
             target="_blank"
@@ -327,16 +353,17 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
             핀치에서 내 프로필 꾸미기
           </Link>
         </footer>
+        )}
 
         {/* 강조 블록 — 페이지 하단에 **고정 CTA** 로 한 번 더(리틀리 흡수 1단계). 본문 자리에도 그대로 있다.
             흐름의 **맨 마지막**에 두고 sticky bottom — 스크롤 중엔 화면 아래에 붙고, 끝까지 내리면 제자리로
             내려와 배지를 덮지 않는다(소넷 지적). */}
         {emphasized ? (
-          <div className="pointer-events-none sticky bottom-4 z-10 mt-4 flex justify-center">
+          <div className={`pointer-events-none sticky bottom-4 z-10 mt-4 flex justify-center ${split ? "lg:col-start-2" : ""}`}>
             <a
               href={`/p/${slug}/go/${emphasized.block.id}`}
               rel="noopener noreferrer nofollow"
-              className="pointer-events-auto inline-flex min-h-[48px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-6 text-[15px] font-bold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)]"
+              className="lp-btn pointer-events-auto inline-flex min-h-[48px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-6 text-[15px] font-bold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)]"
             >
               {emphasized.cta.label}
             </a>

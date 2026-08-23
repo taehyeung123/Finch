@@ -73,7 +73,13 @@ import {
 } from "@/lib/links/blocks";
 import {
   CUSTOM_BUTTONS,
-  CUSTOM_FONTS,
+  CUSTOM_ANIMS,
+  CUSTOM_DESKTOP,
+  CUSTOM_EFFECTS,
+  CUSTOM_FILTERS,
+  CUSTOM_SHADOWS,
+  LINK_FONTS,
+  fontStylesheets,
   CUSTOM_RADIUS,
   LAYOUTS,
   LINK_THEMES,
@@ -110,6 +116,7 @@ import { BlockEditor, EDITOR_TITLE_ID } from "./block-editor";
 import { ImageField } from "./image-field";
 import { ImportLinks, ImportLinksBody } from "./import-links";
 import { PhonePreview, type CanvasEdit } from "./phone-preview";
+import { useFontStylesheets } from "./use-font-stylesheets";
 
 /*
   프로필 링크 편집기 — 링크팜 빌더 구조를 실측 조사해 재구성(2026-08-17),
@@ -2453,6 +2460,8 @@ function ThemePanel({
   }, []);
   const preset = themeByKey(current);
   const hasCustom = Object.keys(custom).length > 0;
+  /* 패널이 열려 있는 동안 전 글꼴을 비차단으로 싣는다 — 목록의 각 줄이 제 글꼴로 보인다 */
+  useFontStylesheets(LINK_FONTS.flatMap((f) => fontStylesheets(f.key)));
   const chip = (on: boolean) =>
     cn(
       "trans-state rounded-chip px-3 py-1.5 text-[12px] font-semibold",
@@ -2606,21 +2615,107 @@ function ThemePanel({
           </div>
         </div>
 
+        {/* 배경 이미지 필터 — 이미지가 있을 때만 의미 있다 */}
+        {custom.bgImage ? (
+          <div>
+            <p className="text-[12px] font-medium text-fg-sub">배경 필터</p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {CUSTOM_FILTERS.map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  aria-pressed={(custom.bgFilter ?? "none") === f.key}
+                  onClick={() => onCustomChange({ bgFilter: f.key })}
+                  className={chip((custom.bgFilter ?? "none") === f.key)}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <div>
           <p className="text-[12px] font-medium text-fg-sub">글꼴</p>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {CUSTOM_FONTS.map((f) => (
+          <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+            {LINK_FONTS.map((f) => (
               <button
                 key={f.key}
                 type="button"
                 aria-pressed={(custom.font ?? "sans") === f.key}
                 onClick={() => onCustomChange({ font: f.key })}
-                className={chip((custom.font ?? "sans") === f.key)}
+                className={cn(
+                  "trans-state flex items-center justify-between rounded-card border px-3 py-2 text-left text-[14px]",
+                  (custom.font ?? "sans") === f.key ? "border-primary bg-primary/10 text-fg" : "border-line text-fg hover:bg-tint-hover",
+                )}
+              >
+                {/* 견본만 그 글꼴 — 이름표는 앱 글꼴 그대로 */}
+                <span style={{ fontFamily: f.family }}>안녕하세요</span>
+                <span className="text-[11px] text-fg-sub">{f.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-[12px] font-medium text-fg-sub">버튼 액션 <span className="font-normal text-fg-faint">— 마우스를 올리면</span></p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {CUSTOM_EFFECTS.map((f) => (
+              <button key={f.key} type="button" aria-pressed={(custom.effect ?? "none") === f.key} onClick={() => onCustomChange({ effect: f.key })} className={chip((custom.effect ?? "none") === f.key)}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-[12px] font-medium text-fg-sub">그림자</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {CUSTOM_SHADOWS.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                aria-pressed={(custom.shadow ?? (preset.shadow ? "soft" : "none")) === f.key}
+                onClick={() => onCustomChange({ shadow: f.key })}
+                className={chip((custom.shadow ?? (preset.shadow ? "soft" : "none")) === f.key)}
               >
                 {f.label}
               </button>
             ))}
           </div>
+        </div>
+
+        <div>
+          <p className="text-[12px] font-medium text-fg-sub">스크롤 애니메이션 <span className="font-normal text-fg-faint">— 공개 페이지에서</span></p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {CUSTOM_ANIMS.map((f) => (
+              <button key={f.key} type="button" aria-pressed={(custom.anim ?? "none") === f.key} onClick={() => onCustomChange({ anim: f.key })} className={chip((custom.anim ?? "none") === f.key)}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-[12px] font-medium text-fg-sub">PC 레이아웃 <span className="font-normal text-fg-faint">— 넓은 화면에서</span></p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {CUSTOM_DESKTOP.map((f) => (
+              <button key={f.key} type="button" aria-pressed={(custom.desktop ?? "phone") === f.key} onClick={() => onCustomChange({ desktop: f.key })} className={chip((custom.desktop ?? "phone") === f.key)}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-4">
+          <label className="flex items-center gap-2 text-[14px]">
+            <Switch checked={!!custom.share} onChange={(v) => onCustomChange({ share: v ? true : undefined })} label="상단 공유 버튼" />
+            상단 공유 버튼
+          </label>
+          <label className="flex items-center gap-2 text-[14px]">
+            <Switch checked={custom.badge !== "hide"} onChange={(v) => onCustomChange({ badge: v ? undefined : "hide" })} label="핀치 배지" />
+            핀치 배지
+          </label>
         </div>
 
         {customDirty ? (
