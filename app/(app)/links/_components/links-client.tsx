@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -61,6 +61,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { trapFocus } from "@/components/ui/trap-focus";
+import { ModalShell } from "@/components/ui/modal-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { SnsIcon } from "@/components/sns-brand-icons";
@@ -156,28 +157,24 @@ import { useFontStylesheets } from "./use-font-stylesheets";
   부르지 않는다** — 부르면 같은 집계 질의가 한 조작에 두 번 돈다.
 */
 
-type Drawer = "profile" | "theme" | "add" | "manage" | "settings";
+/* 편집 보조 패널 — 프로필 행 펼침 · 블록 카탈로그 모달 */
+type Drawer = "profile" | "add";
+
+/* 상단 탭 5개 — 리틀리와 같은 정보 구조(2026-08-23 사장님 지시 "페이지·디자인·분석·관리·마케팅 깔끔하게").
+   페이지 설정(주소·공개·비밀번호·언어·OG·파비콘·삭제)은 ⚙ 모달. */
+type Tab = "page" | "design" | "analytics" | "manage" | "marketing";
+const TABS: Array<{ key: Tab; label: string; icon: typeof User }> = [
+  { key: "page", label: "페이지", icon: LayoutGrid },
+  { key: "design", label: "디자인", icon: Palette },
+  { key: "analytics", label: "분석", icon: BarChart3 },
+  { key: "manage", label: "관리", icon: Inbox },
+  { key: "marketing", label: "마케팅", icon: Megaphone },
+];
 
 /* 상단 도구 칩 — 링크팜 실측 순서(2026-08-20 캔버스 개편). 칩은 우측 드로어를
    여닫고, 캔버스(폰)는 항상 보인다. 블록 목록 패널은 없다 — 캔버스가 목록이다. */
-const TOOLS: Array<{ key: Drawer; label: string; icon: typeof User }> = [
-  { key: "profile", label: "프로필", icon: User },
-  { key: "theme", label: "테마", icon: Palette },
-  { key: "add", label: "블록 추가", icon: Plus },
-  /* 관리 — 리틀리 「관리」 탭 카피(5단계): 문의·구독·방명록이 한 곳에. 전엔 설정 드로어 안에 묻혀 있었다 */
-  { key: "manage", label: "관리", icon: Inbox },
-  { key: "settings", label: "설정", icon: Settings },
-];
-
 const SNS_GROUPS = [...new Set(SNS_CATALOG.map((c) => c.group))];
 
-const DRAWER_TITLE: Record<Drawer, string> = {
-  profile: "프로필 설정",
-  theme: "테마 선택",
-  add: "블록 추가",
-  manage: "관리",
-  settings: "설정",
-};
 
 const LEAVE_WARNING = "저장하지 않은 편집 내용이 사라져요. 그래도 나갈까요?";
 
@@ -301,6 +298,8 @@ export function LinksClient({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [drawer, setDrawer] = useState<Drawer | null>(null);
+  const [tab, setTab] = useState<Tab>("page");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   /* 토스트는 4초 뒤 내려간다 — 같은 문구가 연달아 오면 타이머만 다시 돈다 */
@@ -419,7 +418,7 @@ export function LinksClient({
   }
   /* 통계 — 편집 탭이 아니라 상단 바에서 여닫는다("만드는 창에 통계가 왜 있냐",
      2026-08-20). 만들기와 성과 보기는 다른 일이다 — 링크팜도 통계는 빌더 밖이다. */
-  const [statsOpen, setStatsOpen] = useState(false);
+
 
   /* 순서 계열 직렬화 — 드래그(fire)와 ↑↓·undo/redo(run)는 서로의 잠금을 모른다.
      순서를 바꾸는 서버 호출(SELECT→계산→UPDATE, TOCTOU 취약)은 **전부** 이 체인을
@@ -570,8 +569,19 @@ export function LinksClient({
     });
   }
 
-  /** 도구 칩·캔버스에서 드로어 열기 — 같은 칩을 다시 누르면 닫힌다(forceOpen 은 토글 없이 연다) */
+  /** 상단 탭 — 편집 중이면 나가기 관문을 지난다. 탭을 바꾸면 블록 편집·보조 패널은 닫힌다 */
+  function switchTab(next: Tab) {
+    if (next === tab) return;
+    if (!leaveEditor()) return;
+    setEditingId(null);
+    setDrawer(null);
+    setError(null);
+    setTab(next);
+  }
+
+  /** 보조 패널 열기 — 같은 것을 다시 누르면 닫힌다(forceOpen 은 토글 없이 연다). 페이지 탭으로 돌아온다 */
   function openDrawer(key: Drawer, forceOpen = false) {
+    if (tab !== "page") setTab("page");
     if (!leaveEditor()) return;
     setEditingId(null);
     /* 오류는 그 조작에 붙은 것 — 드로어를 옮기면 함께 사라져야 한다 */
@@ -773,32 +783,7 @@ export function LinksClient({
     },
   };
 
-  /* ── 상단 바 부품 — 1행(도구 칩)·2행(이력·미리보기 토글)에 꽂는 JSX ── */
-  const toolChips = (
-    <>
-      {TOOLS.map((t) => {
-        const on = !editing && drawer === t.key;
-        return (
-          <button
-            key={t.key}
-            type="button"
-            aria-pressed={on}
-            aria-label={t.label}
-            onClick={() => openDrawer(t.key)}
-            className={cn(
-              "trans-state flex items-center gap-1.5 rounded-chip px-2.5 py-1.5 text-[14px] font-semibold",
-              on ? "bg-primary text-on-primary" : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
-            )}
-          >
-            <t.icon className="size-4" aria-hidden />
-            {/* 좁은 폭에선 아이콘만 — 1행에서 주소·열람 버튼과 자리 다툼을 막는다 */}
-            <span className="hidden lg:inline">{t.label}</span>
-          </button>
-        );
-      })}
-    </>
-  );
-
+  /* ── 상단 바 2행(이력) ── */
   const historyButtons = (
     <>
       <button
@@ -863,18 +848,21 @@ export function LinksClient({
         </p>
       ) : null}
 
-      {/* 상단 바 — 주소·복사·열기 + 라이브 반영 */}
+      {/* 상단 바 — 탭 5개 · 주소 도구 · ⚙ 페이지 설정 · 공개 · 라이브 반영 */}
       <TopBar
         page={page}
         origin={origin}
         busy={busy}
+        tab={tab}
+        onTab={switchTab}
+        onOpenSettings={() => {
+          setError(null);
+          setSettingsOpen(true);
+        }}
         /* 발행은 초안을 스냅샷으로 복사할 뿐 — 초안 조작의 실행취소는 그대로 유효하다 */
         onPublish={() => run(() => publishLinkPage())}
         hasFeed={blocks.some((b) => b.active && b.type === "social_feed")}
-        statsOpen={statsOpen}
-        onToggleStats={() => setStatsOpen((v) => !v)}
-        tools={toolChips}
-        history={historyButtons}
+        history={tab === "page" ? historyButtons : null}
       />
 
       {scheduleFor ? (
@@ -925,12 +913,135 @@ export function LinksClient({
         />
       ) : null}
 
-      {statsOpen ? (
-        <Card>
-          <CardBody>
-            <StatsPanel stats={stats} onRange={(d) => router.push(`/links?days=${d}`, { scroll: false })} busy={busy} />
-          </CardBody>
-        </Card>
+      {drawer === "add" ? (
+        <ModalShell
+          label="블록 추가"
+          title="블록 추가"
+          description="누르면 맨 아래에 들어가요. 캔버스나 목록에서 바로 고칠 수 있어요."
+          size="xl"
+          busy={busy}
+          onClose={() => {
+            setDrawer(null);
+            setError(null);
+          }}
+        >
+              <AddPanel
+                busy={busy}
+                onAdd={(t) =>
+                  run(
+                    () => addBlock(t),
+                    (res) => {
+                      setNotice("블록을 추가했어요. 캔버스의 블록을 누르면 바로 고칠 수 있어요.");
+                      if (res.id) {
+                        const payload = {
+                          type: t,
+                          data: defaultBlockData(t),
+                          sortOrder: (blocks[blocks.length - 1]?.sortOrder ?? -1) + 1,
+                          active: true,
+                        };
+                        const addedId = res.id;
+                        record({
+                          label: `${BLOCK_CATALOG.find((c) => c.type === t)?.label ?? t} 추가`,
+                          undo: () => deleteBlock(resolveId(addedId)),
+                          redo: async () => {
+                            const r = await restoreBlock(payload);
+                            if (r.ok && r.id) idAlias.current.set(resolveId(addedId), r.id);
+                            return r;
+                          },
+                        });
+                      }
+                    },
+                  )
+                }
+                /* 드로어의 템플릿도 같은 try-on 경로 — 드로어를 닫아 우측 미리보기까지 보이게 */
+                onApplyTemplate={(k) => {
+                  const t = LINK_TEMPLATES.find((x) => x.key === k);
+                  if (t) {
+                    setTplPreview(t);
+                    setDrawer(null);
+                  }
+                }}
+                onImport={(items, clear) =>
+                  run(
+                    () => addBlocksBulk(items),
+                    () => {
+                      /* 성공했을 때만 표를 비운다 — 실패하면 고른 목록·고친 이름이
+                         남아 있어야 한다(붙여넣기 원문은 textarea 에 없어서 여기서
+                         날리면 원래 서비스로 돌아가 다시 복사해 와야 한다). */
+                      clear();
+                      setNotice(`링크 ${items.length}개를 추가했어요.`);
+                    },
+                  )
+                }
+              />
+        </ModalShell>
+      ) : null}
+
+      {settingsOpen ? (
+        <ModalShell
+          label="페이지 설정"
+          title="페이지 설정"
+          description="주소·공개·비밀번호·언어·공유 카드. 여기 값은 「라이브 반영」 없이 바로 적용돼요."
+          size="lg"
+          busy={busy}
+          onClose={() => {
+            setSettingsOpen(false);
+            setError(null);
+          }}
+        >
+          {error ? (
+            <p role="alert" className="mb-3 rounded-card border border-negative/40 bg-negative-weak px-3 py-2 text-[14px] text-negative-strong">
+              {error}
+            </p>
+          ) : null}
+              <SettingsPanel
+                page={page}
+                busy={busy}
+                /* 텍스트 칸의 blur 저장은 busy 베일을 띄우지 않는다 — 띄우면 blur 를 일으킨 그 클릭(스위치·저장 버튼)이 disabled 로 삼켜졌다(감사3 C7).
+                   settings 는 서버에서 읽고-합치고-쓰기라 클라이언트에서 순서대로 보낸다 */
+                onSettings={(patch) =>
+                  fire(
+                    () => {},
+                    () => {
+                      const p = settingsChain.current.then(() => updateLinkSettings(patch));
+                      settingsChain.current = p.then(
+                        () => {},
+                        () => {},
+                      );
+                      return p;
+                    },
+                    undefined,
+                    () => setNotice("페이지 설정을 저장했어요. 바로 적용돼요."),
+                  )
+                }
+                onPassword={(pw, onDone) =>
+                  run(
+                    /* 잠금 문구 blur 저장(체인)과 같은 줄에 세운다 — 서버도 원자 패치지만 순서까지 지킨다 */
+                    () => {
+                      const p = settingsChain.current.then(() => setLinkPassword(pw));
+                      settingsChain.current = p.then(
+                        () => {},
+                        () => {},
+                      );
+                      return p;
+                    },
+                    () => {
+                      setNotice(pw === null ? "비밀번호를 풀었어요. 누구나 볼 수 있어요." : "비밀번호를 걸었어요. 방문자는 비밀번호를 넣어야 볼 수 있어요.");
+                      onDone?.();
+                    },
+                  )
+                }
+                onPublishToggle={(v) => run(() => setLinkPublished(v))}
+                onDelete={() =>
+                  run(
+                    () => deleteLinkPage(),
+                    /* 페이지가 사라지면 역연산 대상도 없다 — 같은 컴포넌트 인스턴스가
+                       살아남아 새 페이지에 옛 블록을 꽂는 사고를 막는다 */
+                    () => clearHistory(),
+                  )
+                }
+              />
+        </ModalShell>
       ) : null}
 
       {error ? (
@@ -939,21 +1050,15 @@ export function LinksClient({
         </p>
       ) : null}
 
-      {/* ── 배치: 좌(템플릿 스트립 + 편집 폰) · 우(상시 라이브 미리보기).
-          드로어·블록 편집은 **그 사이 세 번째 칸**으로 열린다 — 전엔 미리보기 자리를 대체했는데
-          "블록 추가·테마 누르면 미리보기가 가려져 불편" (2026-08-22 지시). 패널은 sticky + 내부 스크롤이라
-          긴 편집기(그리드 12칸)도 미리보기를 밀어내지 않는다. 모바일(<xl)은 패널이 캔버스 위로. ── */}
-      {/* ── 배치(명시적 그리드 좌표):
-            1행: 템플릿 스트립(1~2열) · 라이브 미리보기(3열, 2행에 걸쳐 sticky — 원래 자리인 **상단 오른쪽**)
-            2행: 편집 폰(1열) · 패널 칸(2열, 열릴 때만 폭)
-          스트립이 캔버스+패널 칸을 합친 폭을 쓰므로 패널이 열려도 카드가 잘리지 않고, 미리보기는
-          스트립 옆 제자리에 있다(2026-08-22 "라이브 미리보기 위치 원래대로"). ── */}
-      {/* xl 미만은 한 칸 — minmax(0,1fr) 로 못 박는다. 암묵 auto 칸은 어느 항목의 min-content(409px)를 따라가 폰에서 카드가 뷰포트 밖으로 새어 나갔다 */}
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,1fr)_auto_26rem] xl:items-start">
-      {/* 템플릿 적용하기 — 링크팜 상시 스트립(접이식). 접기는 grid-rows 로 스르륵,
-          넘치는 쪽은 가장자리 페이드. 첫 칸은 가져오기. */}
-      {/* min-w-0 — 스트립 카드(shrink-0)의 min-content 가 그리드 칸을 밀어 폰에서 카드가 뷰포트 밖으로 새어 나갔다(실측 409/390px) */}
-      <div className="card-face min-w-0 xl:col-span-2 xl:col-start-1 xl:row-start-1">
+      {/* ── 배치: 좌(탭 콘텐츠) · 우(라이브 미리보기 폰 — 페이지 탭에선 눌러서 바로 편집).
+            폰은 **하나**다. 전엔 편집 폰 + 미리보기 폰 둘이었는데 같은 것을 두 번 보여 화면만 복잡했다(2026-08-23 재편).
+            xl 미만은 한 칸으로 쌓이고, 칸은 minmax(0,1fr) 로 못 박는다. ── */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,1fr)_26rem] xl:items-start">
+        <div className="min-w-0 space-y-4">
+          {tab === "page" ? (
+            <>
+              {/* 템플릿 적용하기 — 접이식 스트립. 넘치는 쪽은 가장자리 페이드. 첫 칸은 가져오기. */}
+              <div className="card-face min-w-0">
         <button
           type="button"
           onClick={() => setTplOpen((v) => !v)}
@@ -1022,48 +1127,8 @@ export function LinksClient({
         </div>
       </div>
 
-        <div className="min-w-0 space-y-5 xl:col-start-1 xl:row-start-2">
-          {(
-              <PhonePreview
-                page={draftPageView}
-                /* active 필터를 걸지 않는다 — 꺼진 블록도 캔버스에 남아야 다시 켤 수 있다 */
-                blocks={draftBlocksView}
-                selectedId={editingId}
-                edit={canvasEdit}
-              />
-            )}
-        </div>
-
-        {/* 편집 패널(가운데 칸) — 드로어·블록 편집. 칸은 항상 렌더되고 data-open 으로 폭이
-            스르륵 열리고 닫힌다(.links-panel-col). 닫히는 동안은 마지막 내용을 잔상으로 보여준다.
-            sticky 오프셋은 상단바(h-14=56px) **아래**(top-[4.5rem]). 높이는 뷰포트에 맞추고 안에서 스크롤. */}
-        {(() => {
-          /* 목록 모드(기본) — 블록 아코디언. 블록 편집·프로필은 **목록 안 행이 펼쳐지는** 것이고,
-             테마·블록 추가·설정만 목록을 대체한다(✕ 로 목록 복귀). 리틀리 흡수 1단계. */
-          const listMode = !drawer || drawer === "profile" || !!editing;
-          const panelKey = listMode ? "list" : `drawer:${drawer}`;
-          const body = (
-            <CardBody key={panelKey} className="wizard-step-in space-y-4">
-            {!listMode && drawer ? (
-              <div className="flex items-center justify-between">
-                <h3 className="text-[15px] font-bold">{DRAWER_TITLE[drawer]}</h3>
-                <button
-                  type="button"
-                  aria-label="패널 닫기"
-                  /* 오류는 그 패널의 조작에 붙은 것 — 패널만 닫고 배너를 남기면
-                     무관한 다음 작업 위에 유령처럼 얹힌다(소넷 확정 3) */
-                  onClick={() => {
-                    setDrawer(null);
-                    setError(null);
-                  }}
-                  className="trans-state rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg"
-                >
-                  <X className="size-4" aria-hidden />
-                </button>
-              </div>
-            ) : null}
-
-            {listMode ? (
+              <Card>
+                <CardBody className="space-y-4">
               <BlockListPanel
                 blocks={draftBlocksView}
                 editingId={editingId}
@@ -1186,7 +1251,14 @@ export function LinksClient({
                   )
                 }
               />
-            ) : drawer === "theme" ? (
+                </CardBody>
+              </Card>
+            </>
+          ) : null}
+
+          {tab === "design" ? (
+            <Card>
+              <CardBody className="space-y-4">
               <ThemePanel
                 custom={customForm}
                 customDirty={customDirty}
@@ -1221,57 +1293,21 @@ export function LinksClient({
                   );
                 }}
               />
-            ) : drawer === "add" ? (
-              <AddPanel
-                busy={busy}
-                onAdd={(t) =>
-                  run(
-                    () => addBlock(t),
-                    (res) => {
-                      setNotice("블록을 추가했어요. 캔버스의 블록을 누르면 바로 고칠 수 있어요.");
-                      if (res.id) {
-                        const payload = {
-                          type: t,
-                          data: defaultBlockData(t),
-                          sortOrder: (blocks[blocks.length - 1]?.sortOrder ?? -1) + 1,
-                          active: true,
-                        };
-                        const addedId = res.id;
-                        record({
-                          label: `${BLOCK_CATALOG.find((c) => c.type === t)?.label ?? t} 추가`,
-                          undo: () => deleteBlock(resolveId(addedId)),
-                          redo: async () => {
-                            const r = await restoreBlock(payload);
-                            if (r.ok && r.id) idAlias.current.set(resolveId(addedId), r.id);
-                            return r;
-                          },
-                        });
-                      }
-                    },
-                  )
-                }
-                /* 드로어의 템플릿도 같은 try-on 경로 — 드로어를 닫아 우측 미리보기까지 보이게 */
-                onApplyTemplate={(k) => {
-                  const t = LINK_TEMPLATES.find((x) => x.key === k);
-                  if (t) {
-                    setTplPreview(t);
-                    setDrawer(null);
-                  }
-                }}
-                onImport={(items, clear) =>
-                  run(
-                    () => addBlocksBulk(items),
-                    () => {
-                      /* 성공했을 때만 표를 비운다 — 실패하면 고른 목록·고친 이름이
-                         남아 있어야 한다(붙여넣기 원문은 textarea 에 없어서 여기서
-                         날리면 원래 서비스로 돌아가 다시 복사해 와야 한다). */
-                      clear();
-                      setNotice(`링크 ${items.length}개를 추가했어요.`);
-                    },
-                  )
-                }
-              />
-            ) : drawer === "manage" ? (
+              </CardBody>
+            </Card>
+          ) : null}
+
+          {tab === "analytics" ? (
+            <Card>
+              <CardBody>
+                <StatsPanel stats={stats} onRange={(d) => router.push(`/links?days=${d}`, { scroll: false })} busy={busy} />
+              </CardBody>
+            </Card>
+          ) : null}
+
+          {tab === "manage" ? (
+            <Card>
+              <CardBody className="space-y-4">
               <ManagePanel
                 leads={leads}
                 leadCounts={leadCounts}
@@ -1298,84 +1334,54 @@ export function LinksClient({
                   )
                 }
               />
-            ) : drawer === "settings" ? (
-              <>
-              <PlatformLinks slug={page.slug} origin={origin} />
-              <SettingsPanel
-                page={page}
-                busy={busy}
-                /* 텍스트 칸의 blur 저장은 busy 베일을 띄우지 않는다 — 띄우면 blur 를 일으킨 그 클릭(스위치·저장 버튼)이 disabled 로 삼켜졌다(감사3 C7).
-                   settings 는 서버에서 읽고-합치고-쓰기라 클라이언트에서 순서대로 보낸다 */
-                onSettings={(patch) =>
-                  fire(
-                    () => {},
-                    () => {
-                      const p = settingsChain.current.then(() => updateLinkSettings(patch));
-                      settingsChain.current = p.then(
-                        () => {},
-                        () => {},
-                      );
-                      return p;
-                    },
-                    undefined,
-                    () => setNotice("페이지 설정을 저장했어요. 바로 적용돼요."),
-                  )
-                }
-                onPassword={(pw, onDone) =>
-                  run(
-                    /* 잠금 문구 blur 저장(체인)과 같은 줄에 세운다 — 서버도 원자 패치지만 순서까지 지킨다 */
-                    () => {
-                      const p = settingsChain.current.then(() => setLinkPassword(pw));
-                      settingsChain.current = p.then(
-                        () => {},
-                        () => {},
-                      );
-                      return p;
-                    },
-                    () => {
-                      setNotice(pw === null ? "비밀번호를 풀었어요. 누구나 볼 수 있어요." : "비밀번호를 걸었어요. 방문자는 비밀번호를 넣어야 볼 수 있어요.");
-                      onDone?.();
-                    },
-                  )
-                }
-                onPublishToggle={(v) => run(() => setLinkPublished(v))}
-                onDelete={() =>
-                  run(
-                    () => deleteLinkPage(),
-                    /* 페이지가 사라지면 역연산 대상도 없다 — 같은 컴포넌트 인스턴스가
-                       살아남아 새 페이지에 옛 블록을 꽂는 사고를 막는다 */
-                    () => clearHistory(),
-                  )
-                }
-              />
-              </>
-            ) : null}
-            </CardBody>
-          );
-          return <PanelColumn open>{body}</PanelColumn>;
-        })()}
+              </CardBody>
+            </Card>
+          ) : null}
 
-        {/* 라이브 미리보기 — **항상** 오른쪽에 있다. 패널이 열려도 가려지지 않는다. */}
-        <Card className="xl:col-start-3 xl:row-span-2 xl:row-start-1 xl:sticky xl:top-[4.5rem]">
-          <CardBody className="space-y-4">
-              <>
-                <div className="flex items-center justify-between">
-                  <h3 className="flex items-center gap-1.5 text-[15px] font-bold">
-                    <Smartphone className="size-4 text-fg-sub" aria-hidden />
-                    라이브 미리보기
-                  </h3>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => window.open(publicLinkUrl(page.slug, origin), "_blank", "noopener,noreferrer")}
-                  >
-                    <ExternalLink className="size-3.5" aria-hidden />
-                    링크 열기
-                  </Button>
-                </div>
-                {/* published(공개 스위치)를 먼저 본다 — 발행만 하고 공개를 안 켠 상태에서
-                    "공개 주소와 같은 모습" 이라고 말하면 방문자는 404 인데 소유자는 모른다(감사 #4) */}
-                <p className="-mt-2 text-[12px] text-fg-sub">
+          {tab === "marketing" ? (
+            <Card>
+              <CardBody className="space-y-5">
+                <MarketingPanel
+                  page={page}
+                  origin={origin}
+                  busy={busy}
+                  onSettings={(patch) =>
+                    fire(
+                      () => {},
+                      () => {
+                        const p = settingsChain.current.then(() => updateLinkSettings(patch));
+                        settingsChain.current = p.then(
+                          () => {},
+                          () => {},
+                        );
+                        return p;
+                      },
+                      undefined,
+                      () => setNotice("마케팅 연결을 저장했어요. 공개 페이지에 바로 실려요."),
+                    )
+                  }
+                />
+              </CardBody>
+            </Card>
+          ) : null}
+        </div>
+
+        {/* 라이브 미리보기 — 항상 오른쪽. 페이지 탭에선 **편집 캔버스**(누르면 목록의 그 행이 펼쳐진다), 다른 탭에선 읽기 전용 */}
+        <Card className="xl:sticky xl:top-[4.5rem]">
+          <CardBody className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="flex items-center gap-1.5 text-[15px] font-bold">
+                <Smartphone className="size-4 text-fg-sub" aria-hidden />
+                {tab === "page" ? "미리보기 · 눌러서 편집" : "라이브 미리보기"}
+              </h3>
+              <Button variant="ghost" size="sm" onClick={() => window.open(publicLinkUrl(page.slug, origin), "_blank", "noopener,noreferrer")}>
+                <ExternalLink className="size-3.5" aria-hidden />
+                링크 열기
+              </Button>
+            </div>
+            {/* published(공개 스위치)를 먼저 본다 — 발행만 하고 공개를 안 켠 상태에서
+                "공개 주소와 같은 모습" 이라고 말하면 방문자는 404 인데 소유자는 모른다(감사 #4) */}
+                <p className="text-[12px] text-fg-sub">
                   {profileDirty || customDirty || editorDirty
                     ? "저장하지 않은 편집이 보여요 — 저장한 뒤 「라이브 반영」을 누르면 공개 주소에 반영돼요."
                     : !page.published
@@ -1388,17 +1394,24 @@ export function LinksClient({
                         : "공개 주소와 같은 모습이에요."
                       : "지금 모습이에요 — 「라이브 반영」을 누르면 공개 주소가 살아나요."}
                 </p>
-                {/* 읽기 전용 draft — 캔버스와 같은 값·같은 관대한 규칙(도구만 없음). 꺼진 블록만
-                    뺀다. 수정하는 즉시 여기도 바뀐다. live 로 그리면 주소 없는 블록이 빠져
-                    "미리보기에 안 나온다"가 된다(2026-08-20 지적). */}
-                <PhonePreview
-                  page={draftPageView}
-                  blocks={draftBlocksView.filter((b) => b.active && !isScheduledHidden(b.data))}
-                  selectedId={null}
-                  /* 실제 폰 크기로 고정 — 블록 수와 무관하게 같은 프레임, 내용은 안에서 스크롤 */
-                  frame="device"
-                />
-              </>
+            {tab === "page" ? (
+              <PhonePreview
+                page={draftPageView}
+                /* active 필터를 걸지 않는다 — 꺼진 블록도 캔버스에 남아야 다시 켤 수 있다 */
+                blocks={draftBlocksView}
+                selectedId={editingId}
+                edit={canvasEdit}
+                frame="device"
+              />
+            ) : (
+              /* 읽기 전용 draft — 캔버스와 같은 값·같은 관대한 규칙(도구만 없음). 꺼진 블록만 뺀다 */
+              <PhonePreview
+                page={draftPageView}
+                blocks={draftBlocksView.filter((b) => b.active && !isScheduledHidden(b.data))}
+                selectedId={null}
+                frame="device"
+              />
+            )}
           </CardBody>
         </Card>
       </div>
@@ -1437,25 +1450,24 @@ function TopBar({
   page,
   origin,
   busy,
+  tab,
+  onTab,
+  onOpenSettings,
   onPublish,
   hasFeed = false,
-  statsOpen,
-  onToggleStats,
-  tools,
   history,
 }: {
   page: LinkPageView;
   origin: string;
   busy: boolean;
+  tab: Tab;
+  onTab: (t: Tab) => void;
+  onOpenSettings: () => void;
   onPublish: () => void;
   /** 켜진 「최근 게시물」 블록이 있는가 — 있으면 초안이 깨끗해도 발행(피드 새로고침)을 막지 않는다 */
   hasFeed?: boolean;
-  statsOpen: boolean;
-  onToggleStats: () => void;
-  /** 1행 왼쪽 — 드로어 여닫는 도구 칩(부모가 상태를 들고 JSX 로 꽂는다) */
-  tools: React.ReactNode;
-  /** 2행 왼쪽 — 실행취소/다시실행 */
-  history: React.ReactNode;
+  /** 2행 왼쪽 — 실행취소/다시실행(페이지 탭에서만) */
+  history?: React.ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
   const [qr, setQr] = useState(false);
@@ -1471,87 +1483,95 @@ function TopBar({
     }
   }
 
+  const publishable = page.dirty || !page.publishedAt || hasFeed;
+
   return (
-    /* card-face — 바로 아래 카드들과 같은 높이로 떠야 한다. bg-body 만 주면
-       라이트에서 이 줄만 그림자가 빠져 지면에 눌어붙어 보인다. */
     <div className="card-face">
-      {/* 1행 — 도구 칩 · 주소 · 열람 도구(복사/열기/QR) · 통계 (링크팜 실측 배치) */}
+      {/* 1행 — 탭 · 주소 · 열람 도구(복사/열기/QR) · ⚙ · 공개 · 라이브 반영 */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-3 py-2">
-        {tools}
+        <nav aria-label="편집 영역" className="flex items-center gap-0.5 rounded-card bg-plate p-0.5">
+          {TABS.map((t) => {
+            const on = tab === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                aria-current={on ? "page" : undefined}
+                onClick={() => onTab(t.key)}
+                className={cn(
+                  "trans-state flex items-center gap-1.5 rounded-[10px] px-3 py-1.5 text-[14px] font-semibold",
+                  on ? "bg-body text-fg shadow-[var(--shadow-card)]" : "text-fg-sub hover:text-fg",
+                )}
+              >
+                <t.icon className="size-4" aria-hidden />
+                <span className="hidden md:inline">{t.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
         <code className="min-w-0 flex-1 truncate px-1 text-[12px] text-fg-sub">{url}</code>
 
-      <span
-        className={cn(
-          "inline-flex shrink-0 items-center gap-1.5 rounded-chip px-2.5 py-1 text-[12px] font-semibold",
-          page.published ? "bg-positive-weak text-positive-strong" : "bg-plate text-fg-sub",
-        )}
-      >
-        {page.published ? <Eye className="size-3" aria-hidden /> : <EyeOff className="size-3" aria-hidden />}
-        {page.published ? "공개" : "비공개"}
-      </span>
-
-      <Button variant="secondary" size="sm" onClick={copy}>
-        {copied ? <Check className="size-3.5" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
-        {copied ? "복사됨" : "복사"}
-      </Button>
-      <Button variant="ghost" size="sm" onClick={() => window.open(url, "_blank", "noopener,noreferrer")}>
-        <ExternalLink className="size-3.5" aria-hidden />
-        열기
-      </Button>
-      <Button variant="ghost" size="sm" onClick={() => setQr(true)}>
-        <QrCode className="size-3.5" aria-hidden />
-        QR
-      </Button>
-      {qr ? <QrModal url={url} onClose={() => setQr(false)} /> : null}
-
-      {/* 통계 — 편집 탭이 아니라 여기. 만드는 도구와 성과 보기를 섞지 않는다 */}
-      <Button variant={statsOpen ? "secondary" : "ghost"} size="sm" onClick={onToggleStats} aria-expanded={statsOpen}>
-        <BarChart3 className="size-3.5" aria-hidden />
-        통계
-      </Button>
+        <Button variant="secondary" size="sm" onClick={copy}>
+          {copied ? <Check className="size-3.5" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
+          {copied ? "복사됨" : "복사"}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => window.open(url, "_blank", "noopener,noreferrer")}>
+          <ExternalLink className="size-3.5" aria-hidden />
+          열기
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => setQr(true)}>
+          <QrCode className="size-3.5" aria-hidden />
+          QR
+        </Button>
+        {qr ? <QrModal url={url} onClose={() => setQr(false)} /> : null}
+        <Button variant="ghost" size="sm" onClick={onOpenSettings} aria-haspopup="dialog">
+          <Settings className="size-3.5" aria-hidden />
+          페이지 설정
+        </Button>
       </div>
 
-      {/* 2행 — 이력(↩↪) 왼쪽, 초안/라이브·발행 상태·라이브 반영 오른쪽 (링크팜 보조 줄) */}
+      {/* 2행 — 이력(↩↪) 왼쪽, 공개·발행 상태·라이브 반영 오른쪽 */}
       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2 border-t border-line px-3 py-1.5">
         {history}
         <div className="ml-auto flex flex-wrap items-center gap-2">
-
-      {/* 발행 상태는 **버튼 라벨이 아니라 칩**으로 보여준다(링크팜 실측 반영).
-          버튼 글자가 「반영됨」으로 바뀌는 방식은 상태와 액션이 한 몸이라,
-          "지금 라이브가 최신인가"를 버튼이 비활성화된 이유에서 역산해야 했다. */}
-      <span
-        className={cn(
-          "inline-flex shrink-0 items-center gap-1 rounded-chip px-2.5 py-1 text-[12px] font-semibold",
-          !page.publishedAt
-            ? "bg-plate text-fg-sub"
-            : page.dirty
-              ? "bg-warning-weak text-warning-strong"
-              : "bg-positive-weak text-positive-strong",
-        )}
-      >
-        {!page.publishedAt ? (
-          "발행 전"
-        ) : page.dirty ? (
-          "초안 수정됨"
-        ) : (
-          <>
-            <Check className="size-3" aria-hidden />
-            최신
-          </>
-        )}
-      </span>
-
-      {/* 라이브 반영 — 초안을 공개 스냅샷으로. 바뀐 게 없으면 눌러도 의미가 없다.
-          단, 「최근 게시물」이 켜져 있으면 늘 누를 수 있다 — 피드는 발행 시점에 구워지므로 새 글을 반영할 길이 이것뿐이다(감사2 U3) */}
-      <Button
-        size="sm"
-        onClick={onPublish}
-        disabled={busy || (!page.dirty && !!page.publishedAt && !hasFeed)}
-        title={!page.dirty && !!page.publishedAt && hasFeed ? "최근 게시물을 다시 불러와 반영해요" : undefined}
-      >
-        <Rocket className="size-3.5" aria-hidden />
-        {busy ? "반영 중…" : !page.dirty && !!page.publishedAt && hasFeed ? "피드 새로고침" : "라이브 반영"}
-      </Button>
+          <span
+            className={cn(
+              "inline-flex shrink-0 items-center gap-1.5 rounded-chip px-2.5 py-1 text-[12px] font-semibold",
+              page.published ? "bg-positive-weak text-positive-strong" : "bg-plate text-fg-sub",
+            )}
+          >
+            {page.published ? <Eye className="size-3" aria-hidden /> : <EyeOff className="size-3" aria-hidden />}
+            {page.published ? "공개" : "비공개"}
+          </span>
+          {/* 발행 상태는 **버튼 라벨이 아니라 칩**으로 — 상태와 액션을 한 몸으로 두면 "지금 라이브가 최신인가"를 역산해야 한다 */}
+          <span
+            className={cn(
+              "inline-flex shrink-0 items-center gap-1 rounded-chip px-2.5 py-1 text-[12px] font-semibold",
+              !page.publishedAt ? "bg-plate text-fg-sub" : page.dirty ? "bg-warning-weak text-warning-strong" : "bg-positive-weak text-positive-strong",
+            )}
+          >
+            {!page.publishedAt ? (
+              "발행 전"
+            ) : page.dirty ? (
+              "초안 수정됨"
+            ) : (
+              <>
+                <Check className="size-3" aria-hidden />
+                최신
+              </>
+            )}
+          </span>
+          {/* 라이브 반영 — 초안을 공개 스냅샷으로. 「최근 게시물」이 켜져 있으면 늘 누를 수 있다(피드는 발행 시점에 구워진다) */}
+          <Button
+            size="sm"
+            onClick={onPublish}
+            disabled={busy || !publishable}
+            title={!page.dirty && !!page.publishedAt && hasFeed ? "최근 게시물을 다시 불러와 반영해요" : undefined}
+          >
+            <Rocket className="size-3.5" aria-hidden />
+            {busy ? "반영 중…" : !page.dirty && !!page.publishedAt && hasFeed ? "피드 새로고침" : "라이브 반영"}
+          </Button>
         </div>
       </div>
     </div>
@@ -1986,27 +2006,6 @@ function ScheduleModal({
 /* 가운데 패널 칸 — 닫힐 때 **마지막 내용을 잔상으로** 들고 오므라든다. 내용이 먼저 사라지고
    빈 칸만 줄어들면 "뚝" 끊겨 보인다. 잔상은 레이아웃 이펙트에서 잡아 첫 프레임 공백이 없다.
    닫히는 동안 pointer-events 는 CSS(.links-panel-col[data-open=false])가 끈다. */
-function PanelColumn({ open, children }: { open: boolean; children: React.ReactNode }) {
-  const prev = useRef<React.ReactNode>(null);
-  const [closing, setClosing] = useState<React.ReactNode>(null);
-  useLayoutEffect(() => {
-    if (open) prev.current = children;
-    else setClosing(prev.current);
-  }, [open, children]);
-  return (
-    <div
-      className="links-panel-col order-first xl:order-none xl:col-start-2 xl:row-start-2 xl:sticky xl:top-[4.5rem]"
-      data-open={open ? "true" : "false"}
-      aria-hidden={open ? undefined : true}
-    >
-      <Card className="xl:w-[22rem] xl:max-h-[calc(100dvh-5.5rem)] xl:overflow-y-auto 2xl:w-[24rem]">{open ? children : closing}</Card>
-    </div>
-  );
-}
-
-/** 모달 안에서 Tab 을 가둔다 — aria-modal 은 스크린리더 커서만 제한하고 키보드 포커스는
-    못 막아 Tab 이 스크림 뒤 상단바 칩으로 빠져나가 Enter 로 드로어·실행취소가 실행됐다(감사 #12).
-    rule-wizard.tsx 의 trapFocus 와 같은 패턴. */
 /* 템플릿 미리보기 모달 — 링크팜 카피. 작업 중 캔버스는 그대로 두고 **모달 안 폰**에
    템플릿을 그린다. 프로필(이름·사진)은 내 것, 블록·테마는 템플릿 것 — "내 페이지가
    이렇게 된다"가 보인다. 서버 호출은 「이 템플릿 적용」 때만. */
@@ -3234,8 +3233,6 @@ function SettingsPanel({
 
   return (
     <div className="space-y-4">
-      <h3 className="text-[15px] font-bold">설정</h3>
-
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-plate px-4 py-3">
         <div className="min-w-0">
           <p className="text-[14px] font-semibold">{page.published ? "공개 중" : "비공개"}</p>
@@ -3495,11 +3492,14 @@ function PageSettingsForm({
   busy,
   onSettings,
   onPassword,
+  section = "page",
 }: {
   page: LinkPageView;
   busy: boolean;
   onSettings: (patch: Partial<LinkPageSettings>) => void;
   onPassword: (pw: string | null, onDone?: () => void) => void;
+  /** page: 비밀번호·언어·링크 열기·검색·공유 카드·파비콘 / marketing: 추적 ID 만(마케팅 탭) */
+  section?: "page" | "marketing";
 }) {
   const st = page.settings;
   /* 텍스트 필드는 초안을 두고 blur/저장에서 확정 — 글자마다 서버 왕복을 돌리지 않는다 */
@@ -3545,11 +3545,40 @@ function PageSettingsForm({
     onSettings({ [k]: v.trim() } as Partial<LinkPageSettings>);
   };
 
+  if (section === "marketing") {
+    return (
+      <div className="space-y-3">
+        {(
+          [
+            ["ga4", "GA4 측정 ID", "G-XXXXXXXXXX"],
+            ["metaPixel", "Meta 픽셀 ID", "1234567890123456"],
+            ["tiktokPixel", "TikTok 픽셀 ID", "CXXXXXXXXXXXXXXXXX"],
+          ] as const
+        ).map(([k, lab, ph]) => (
+          <div key={k}>
+            <label className={label} htmlFor={`ps-${k}`}>
+              {lab}
+            </label>
+            <input
+              id={`ps-${k}`}
+              value={form[k]}
+              onChange={(e) => setTracker(k, e.target.value)}
+              onBlur={() => commit(k, form[k])}
+              placeholder={ph}
+              maxLength={40}
+              autoComplete="off"
+              spellCheck={false}
+              className={`mt-1.5 ${input} font-mono`}
+            />
+          </div>
+        ))}
+        <p className="text-[12px] text-fg-sub">방문자에게 추적 코드를 싣는 건 주인의 책임이에요 — 개인정보처리방침에 제3자 분석 도구 사용을 적어 두세요.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <p className="text-[12px] font-medium text-fg-sub">페이지 설정</p>
-      <p className="-mt-3 text-[12px] text-fg-sub">여기 값은 「라이브 반영」 없이 바로 적용돼요.</p>
-
       {/* 비밀번호 */}
       <div className="rounded-card border border-line bg-plate px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -3710,37 +3739,80 @@ function PageSettingsForm({
         </div>
       </div>
 
-      {/* 마케팅 연결 — 리틀리 「마케팅 연결」 카피(6단계). 메타 광고 리타게팅 모수를 프로필 링크에서 쌓는다 */}
-      <div className="space-y-2">
-        <p className="text-[12px] font-medium text-fg-sub">마케팅 연결</p>
-        <p className="-mt-1 text-[11px] text-fg-sub">ID 를 넣으면 공개 페이지에 해당 추적 코드가 실려요. 비우면 아무것도 실리지 않아요. 내 미리보기엔 싣지 않아요.</p>
-        {(
-          [
-            ["ga4", "GA4 측정 ID", "G-XXXXXXXXXX"],
-            ["metaPixel", "Meta 픽셀 ID", "1234567890123456"],
-            ["tiktokPixel", "TikTok 픽셀 ID", "CXXXXXXXXXXXXXXXXX"],
-          ] as const
-        ).map(([k, lab, ph]) => (
-          <div key={k}>
-            <label className={label} htmlFor={`ps-${k}`}>
-              {lab}
-            </label>
-            <input
-              id={`ps-${k}`}
-              value={form[k]}
-              onChange={(e) => setTracker(k, e.target.value)}
-              onBlur={() => commit(k, form[k])}
-              placeholder={ph}
-              maxLength={40}
-              autoComplete="off"
-              spellCheck={false}
-              className={`mt-1.5 ${input} font-mono`}
-            />
-          </div>
-        ))}
-        <p className="text-[11px] text-fg-sub">방문자에게 추적 코드를 싣는 건 주인의 책임이에요 — 개인정보처리방침에 제3자 분석 도구 사용을 적어 두세요.</p>
-      </div>
     </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   마케팅 탭 — 리틀리 「마케팅」 카피: 플랫폼별 추적 링크 · 마케팅 연결(픽셀) · QR · 공유
+   ══════════════════════════════════════════════════════════════════ */
+
+function MarketingPanel({
+  page,
+  origin,
+  busy,
+  onSettings,
+}: {
+  page: LinkPageView;
+  origin: string;
+  busy: boolean;
+  onSettings: (patch: Partial<LinkPageSettings>) => void;
+}) {
+  const [qr, setQr] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const url = publicLinkUrl(page.slug, origin);
+  const connected = [page.settings.ga4 && "GA4", page.settings.metaPixel && "Meta 픽셀", page.settings.tiktokPixel && "TikTok 픽셀"].filter(Boolean) as string[];
+  return (
+    <>
+      <div>
+        <h3 className="text-[17px] font-semibold">마케팅</h3>
+        <p className="mt-0.5 text-[14px] text-fg-sub">어디서 왔는지 재고, 광고 계정에 방문자를 쌓고, 오프라인에도 퍼뜨려요.</p>
+      </div>
+
+      <PlatformLinks slug={page.slug} origin={origin} />
+
+      <section className="space-y-3 border-t border-line pt-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h4 className="text-[15px] font-semibold">마케팅 연결</h4>
+            <p className="mt-0.5 text-[13px] text-fg-sub">ID 를 넣으면 공개 페이지에 추적 코드가 실려요. 비우면 아무것도 실리지 않고, 내 미리보기엔 싣지 않아요.</p>
+          </div>
+          <span className={cn("rounded-chip px-2.5 py-1 text-[12px] font-semibold", connected.length ? "bg-positive-weak text-positive-strong" : "bg-plate text-fg-sub")}>
+            {connected.length ? `연결됨 · ${connected.join(" · ")}` : "연결 안 됨"}
+          </span>
+        </div>
+        <PageSettingsForm page={page} busy={busy} onSettings={onSettings} onPassword={() => {}} section="marketing" />
+      </section>
+
+      <section className="space-y-3 border-t border-line pt-5">
+        <h4 className="text-[15px] font-semibold">퍼뜨리기</h4>
+        <div className="flex flex-wrap items-center gap-2">
+          <code className="min-w-0 flex-1 truncate rounded-card border border-line bg-body px-3 py-2 text-[13px] text-fg-sub">{url}</code>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(url);
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1600);
+              } catch {
+                /* 비보안 컨텍스트 — 주소가 보이니 손으로 */
+              }
+            }}
+          >
+            {copied ? <Check className="size-3.5" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
+            {copied ? "복사됨" : "주소 복사"}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => setQr(true)}>
+            <QrCode className="size-3.5" aria-hidden />
+            QR 코드
+          </Button>
+        </div>
+        <p className="text-[13px] text-fg-sub">인스타 프로필·유튜브 설명란엔 위의 플랫폼별 주소를, 명함·매장엔 QR 을 쓰세요.</p>
+        {qr ? <QrModal url={url} onClose={() => setQr(false)} /> : null}
+      </section>
+    </>
   );
 }
 
