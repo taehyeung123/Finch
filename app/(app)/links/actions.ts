@@ -365,6 +365,24 @@ function isSettingsColumnError(error: { code?: string; message: string }): boole
 }
 
 /**
+ * settings 부분 갱신 — **원자적**(0059 RPC: jsonb ||). 읽고-합치고-쓰기는 잠금 문구 저장과 비밀번호 걸기가 겹칠 때
+ * locked 를 되돌릴 수 있다(소넷 점검). RPC 가 없으면(0059 미적용) 읽고-합치고-쓰기로 폴백한다.
+ */
+async function patchSettings(userId: string, patch: Record<string, unknown>): Promise<{ error: { code?: string; message: string } | null }> {
+  const supabase = await createClient();
+  const rpc = await supabase.rpc("link_pages_patch_settings", { p_patch: patch });
+  if (!rpc.error) return { error: null };
+  const missingFn = rpc.error.code === "42883" || rpc.error.code === "PGRST202" || /link_pages_patch_settings/i.test(rpc.error.message);
+  if (!missingFn) return { error: rpc.error };
+  const { data: row, error: readErr } = await supabase.from("link_pages").select("id, settings").eq("user_id", userId).maybeSingle();
+  if (readErr) return { error: readErr };
+  if (!row) return { error: { message: "no page" } };
+  const cur = (row.settings && typeof row.settings === "object" ? row.settings : {}) as Record<string, unknown>;
+  const { error } = await supabase.from("link_pages").update({ settings: { ...cur, ...patch } }).eq("id", row.id);
+  return { error };
+}
+
+/**
  * 비밀이 아닌 설정값 저장 — 받은 키만 골라 덮어쓴다(locked 는 여기서 못 바꾼다: setLinkPassword 전용).
  * 값 검증은 sanitizeLinkSettings 와 같은 규칙이되, 잘못된 값은 조용히 기본값으로 떨어뜨리지 않고 **거절**한다 —
  * 편집기는 "저장됐는데 안 바뀜"보다 "왜 안 되는지"를 알아야 한다.
@@ -416,15 +434,9 @@ export async function updateLinkSettings(
   }
   if (Object.keys(next).length === 0) return { ok: true };
 
-  const supabase = await createClient();
-  const { data: row, error: readErr } = await supabase.from("link_pages").select("id, settings").eq("user_id", user.id).maybeSingle();
-  if (readErr) {
-    if (isSettingsColumnError(readErr)) return { ok: false, error: SETTINGS_MIGRATION_MSG };
-    return { ok: false, error: "저장하지 못했어요." };
-  }
-  if (!row) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
-  const cur = (row.settings && typeof row.settings === "object" ? row.settings : {}) as Record<string, unknown>;
-  const { error } = await supabase.from("link_pages").update({ settings: { ...cur, ...next } }).eq("id", row.id);
+  const page = await myPage();
+  if (!page) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
+  const { error } = await patchSettings(user.id, next);
   if (error) {
     if (isSettingsColumnError(error)) return { ok: false, error: SETTINGS_MIGRATION_MSG };
     console.error("[links] 페이지 설정 저장 실패:", error.message);
@@ -443,15 +455,14 @@ export async function setLinkPassword(password: string | null): Promise<Result> 
   const user = await getAuthUser();
   if (!user) return AUTH;
   const supabase = await createClient();
-  const { data: row, error: readErr } = await supabase.from("link_pages").select("id, settings").eq("user_id", user.id).maybeSingle();
-  if (readErr) return { ok: false, error: isSettingsColumnError(readErr) ? SETTINGS_MIGRATION_MSG : "저장하지 못했어요." };
+  const { data: row, error: readErr } = await supabase.from("link_pages").select("id").eq("user_id", user.id).maybeSingle();
+  if (readErr) return { ok: false, error: "저장하지 못했어요." };
   if (!row) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
-  const cur = (row.settings && typeof row.settings === "object" ? row.settings : {}) as Record<string, unknown>;
 
   if (password === null) {
     const { error: delErr } = await supabase.from("link_page_secrets").delete().eq("page_id", row.id);
     if (delErr && !/link_page_secrets/i.test(delErr.message)) return { ok: false, error: "해제하지 못했어요." };
-    const { error } = await supabase.from("link_pages").update({ settings: { ...cur, locked: false } }).eq("id", row.id);
+    const { error } = await patchSettings(user.id, { locked: false });
     if (error) return { ok: false, error: "해제하지 못했어요." };
     revalidatePath("/links");
     return { ok: true };
@@ -468,7 +479,7 @@ export async function setLinkPassword(password: string | null): Promise<Result> 
     console.error("[links] 비밀번호 저장 실패:", upErr.message);
     return { ok: false, error: "저장하지 못했어요." };
   }
-  const { error } = await supabase.from("link_pages").update({ settings: { ...cur, locked: true } }).eq("id", row.id);
+  const { error } = await patchSettings(user.id, { locked: true });
   if (error) return { ok: false, error: isSettingsColumnError(error) ? SETTINGS_MIGRATION_MSG : "저장하지 못했어요." };
   revalidatePath("/links");
   return { ok: true };

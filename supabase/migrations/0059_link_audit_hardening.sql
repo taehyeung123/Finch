@@ -175,6 +175,23 @@ revoke execute on function public.link_page_stats(uuid, int) from public, anon;
 grant execute on function public.link_page_stats(uuid, int) to authenticated;
 revoke execute on function public.link_pages_guard_slug_hold() from public, anon, authenticated;
 
+-- ⑧ settings 원자 패치 — 앱이 "읽고-합치고-쓰기"를 하면 잠금 문구 저장과 비밀번호 걸기가 겹칠 때 한쪽이 사라진다
+--    (locked:true 가 되돌아가 "걸었어요" 토스트 뒤에 페이지가 열려 있는 최악의 경우, 소넷 점검). jsonb || 로 한 문장에 합친다.
+create or replace function public.link_pages_patch_settings(p_patch jsonb)
+returns jsonb
+language sql
+security invoker
+volatile
+set search_path = public
+as $$
+  update public.link_pages
+     set settings = coalesce(settings, '{}'::jsonb) || coalesce(p_patch, '{}'::jsonb)
+   where user_id = auth.uid()
+  returning settings;
+$$;
+revoke execute on function public.link_pages_patch_settings(jsonb) from public, anon;
+grant execute on function public.link_pages_patch_settings(jsonb) to authenticated;
+
 -- ⑦ link-assets 버킷 상한 — 파일 공유 블록이 브라우저에서 Storage 로 **직접** 올리므로(서명 URL) 크기·형식 검사는
 --    버킷이 해야 한다. 서버 액션은 클라이언트가 보낸 이름·크기만 보고 URL 을 내주기 때문(소넷 점검).
 --    이미지 업로드(uploadLinkImage)가 쓰는 형식도 함께 허용한다.

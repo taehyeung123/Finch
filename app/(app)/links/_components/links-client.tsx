@@ -1323,7 +1323,15 @@ export function LinksClient({
                 }
                 onPassword={(pw, onDone) =>
                   run(
-                    () => setLinkPassword(pw),
+                    /* 잠금 문구 blur 저장(체인)과 같은 줄에 세운다 — 서버도 원자 패치지만 순서까지 지킨다 */
+                    () => {
+                      const p = settingsChain.current.then(() => setLinkPassword(pw));
+                      settingsChain.current = p.then(
+                        () => {},
+                        () => {},
+                      );
+                      return p;
+                    },
                     () => {
                       setNotice(pw === null ? "비밀번호를 풀었어요. 누구나 볼 수 있어요." : "비밀번호를 걸었어요. 방문자는 비밀번호를 넣어야 볼 수 있어요.");
                       onDone?.();
