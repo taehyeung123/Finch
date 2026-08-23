@@ -9,7 +9,7 @@ import { Search } from "lucide-react";
   범위는 **자기 블록 목록(형제 .lp-block)** 으로 한정한다 — 문서 전체를 고르면 검색 블록이 둘일 때
   서로의 결과를 덮어쓴다(소넷 점검 4단계 #2). 검색 블록끼리는 항상 보인다.
 */
-export function SearchBlock({ placeholder }: { placeholder: string }) {
+export function SearchBlock({ placeholder, t }: { placeholder: string; t: { empty: string; aria: string } }) {
   const [q, setQ] = useState("");
   const [noHit, setNoHit] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -36,13 +36,13 @@ export function SearchBlock({ placeholder }: { placeholder: string }) {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder={placeholder}
-          aria-label="페이지 안 검색"
+          aria-label={t.aria}
           className="min-w-0 flex-1 bg-transparent text-[15px] text-[var(--lp-fg)] placeholder:text-[var(--lp-muted)] focus:outline-none"
         />
       </label>
       {noHit ? (
         <p role="status" className="mt-2 text-center text-[13px] text-[var(--lp-muted)]">
-          찾는 내용이 없어요.
+          {t.empty}
         </p>
       ) : null}
     </div>

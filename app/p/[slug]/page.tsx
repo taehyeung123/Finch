@@ -1,14 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createClient, getAuthUser } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
+import { DEFAULT_LINK_SETTINGS, faviconHref } from "@/lib/links/settings";
+import { lpText } from "@/lib/links/i18n";
+import { LockScreen } from "./_components/lock-screen";
+import { loadPublicPage } from "./public-page";
 import { linkWorkspace } from "@/lib/data";
 import { FinchMark } from "@/components/logo";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, publicLinkUrl, sanitizeSnsLinks } from "@/lib/links";
 import { emphasizedCta, hiddenReason, isScheduledHidden, type BlockType } from "@/lib/links/blocks";
-import { fontStylesheets, sanitizeThemeCustom, themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
+import { DEFAULT_THEME_KEY as DEFAULT_LINK_THEME_KEY, fontStylesheets, sanitizeThemeCustom, themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
 import { ShareButton } from "./_components/share-button";
 import { BlockRenderer, type GuestbookPublicEntry, type SnapshotBlock } from "./_components/block-renderer";
 import { LeadForm } from "./_components/lead-form";
@@ -51,86 +56,43 @@ interface Snapshot {
 }
 
 /**
- * 데모 모드에서 샘플 페이지를 공개 주소로도 연다.
- *
- * 안 하면 /links 는 샘플 페이지를 보여주는데 그 「열기」 버튼이 404 로 떨어진다 —
- * 둘러보러 온 사람에게 제품이 고장난 것으로 읽힌다. 초안을 스냅샷 모양으로 굽는 건
- * publishLinkPage 가 하는 일과 같다(social_feed 의 cached 만 없다 — 연동이 없으므로).
+ * 페이지 한 벌 — 조회·소유자·잠금 판정은 public-page.ts(loadPublicPage)가 한다.
+ * /go·/vcard·리드·방명록 제출도 같은 함수를 타므로 잠금 규칙이 한 곳에만 있다.
+ * 데모 모드는 샘플 페이지를 공개 주소로도 연다(안 하면 /links 의 「열기」가 404 로 떨어진다).
  */
-function demoSnapshot(slug: string): { pageId: string; published: boolean; isOwner: boolean; snap: Snapshot } | null {
-  const p = linkWorkspace.page;
-  if (!p || p.slug !== slug) return null;
-  return {
-    pageId: p.id,
-    published: true,
-    isOwner: false,
-    snap: {
-      v: 1,
-      title: p.title,
-      bio: p.bio,
-      layout: p.layout,
-      theme: p.theme,
-      align: p.align,
-      avatarPath: p.avatarPath,
-      coverPath: p.coverPath,
-      snsLinks: p.snsLinks,
-      snsPlacement: p.snsPlacement,
-      titleSize: p.titleSize,
-      seoTitle: p.seoTitle || null,
-      seoDesc: p.seoDesc || null,
-      blocks: linkWorkspace.blocks
-        .filter((b) => b.active)
-        .map((b) => ({ id: b.id, type: b.type, data: b.data })),
-    },
-  };
-}
-
 async function load(slug: string) {
-  if (isDemoMode()) return demoSnapshot(slug);
-  if (!isSupabaseConfigured()) return null;
-  const supabase = await createClient();
-
-  /* published 조건을 코드에 걸지 않는다 — RLS 가 이미 그 일을 한다(0045).
-     여기서 또 걸면 소유자조차 자기 비공개 페이지를 못 봐서, "일단 공개로 켜서
-     확인하고 아니면 끄기"를 강요하게 된다. */
-  const { data: page } = await supabase
-    .from("link_pages")
-    .select("id, slug, published, published_snapshot")
-    .eq("slug", slug)
-    .maybeSingle();
-  if (!page) return null;
-
-  /* 소유자 판정에 user_id 를 **가져오지 않는다.** 이 조회는 익명 세션으로도 도는데
-     select 에 user_id 를 넣으면 아무나 소유자의 auth.users.id 를 받아간다.
-     대신 "내 페이지의 id"를 따로 읽어 비교한다 — RLS 가 자기 행만 내주므로
-     이 조회 자체가 소유 증명이 된다. */
-  const me = await getAuthUser();
-  let isOwner = false;
-  if (me) {
-    const { data: mine } = await supabase.from("link_pages").select("id").eq("user_id", me.id).maybeSingle();
-    isOwner = !!mine && mine.id === page.id;
-  }
-
-  if (!page.published && !isOwner) return null;
-
-  const snap = page.published_snapshot as Snapshot | null;
-  /* 한 번도 라이브 반영을 안 했으면 보여줄 게 없다. 방문자에겐 404,
-     소유자에겐 안내(아래에서 분기)로 나눈다. */
-  if (!snap && !isOwner) return null;
-
-  return { pageId: page.id as string, published: !!page.published, isOwner, snap };
+  const p = await loadPublicPage(slug, { withOwner: true });
+  if (!p) return null;
+  /* published 조건을 코드에 걸지 않는다 — RLS 가 이미 그 일을 한다(0045). 여기서 또 걸면
+     소유자조차 자기 비공개 페이지를 못 봐서 "일단 공개로 켜서 확인"을 강요하게 된다. */
+  if (!p.published && !p.isOwner) return null;
+  const snap = (p.snapshot as Snapshot | null) ?? null;
+  /* 한 번도 라이브 반영을 안 했으면 보여줄 게 없다. 방문자에겐 404, 소유자에겐 안내(아래에서 분기).
+     잠긴 페이지는 snap 이 null 이어도 잠금 화면을 그려야 하므로 통과시킨다. */
+  if (!snap && !p.isOwner && !p.locked) return null;
+  return { pageId: p.id, published: p.published, isOwner: p.isOwner, locked: p.locked, settings: p.settings, snap };
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const data = await load(slug);
+  if (data?.locked) {
+    /* 잠긴 페이지 — 제목·소개는 스냅샷 안에 있고 스냅샷은 열기 전엔 안 읽는다. 카드에도 아무것도 안 새게 */
+    const lt = lpText(data.settings.lang);
+    return { title: { absolute: lt.lock.title }, robots: { index: false, follow: false }, openGraph: { title: lt.lock.title, images: [] } };
+  }
   if (!data?.snap) return { title: "페이지를 찾을 수 없어요", robots: { index: false, follow: false } };
   const s = data.snap;
+  const st = data.settings ?? DEFAULT_LINK_SETTINGS;
 
   const title = s.seoTitle || s.title || slug;
   const description = s.seoDesc || s.bio || undefined;
-  /* 커버가 있으면 커버, 없으면 프로필 사진. 둘 다 없으면 이미지를 **명시적으로 비운다** */
-  const image = s.coverPath || s.avatarPath || null;
+  /* 공유 카드(OG) — 페이지 설정이 우선(0058). 없으면 커버 → 프로필 사진. 둘 다 없으면 이미지를 **명시적으로 비운다** */
+  const ogTitle = st.ogTitle || title;
+  const image = st.ogImage || s.coverPath || s.avatarPath || null;
+  const icon = faviconHref(st.favicon);
+  /* 비공개·비밀번호·검색 비노출 페이지는 색인되면 안 된다 */
+  const noindex = !data.published || data.locked || st.robots === "noindex";
 
   return {
     /* absolute 로 루트 레이아웃의 `%s | 핀치 (Finch)` 접미사를 끊는다.
@@ -144,19 +106,19 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     openGraph: {
       type: "profile",
       siteName: s.title || slug,
-      title,
+      title: ogTitle,
       description,
       url: `/p/${slug}`,
       images: image ? [image] : [],
     },
     twitter: {
       card: image ? "summary_large_image" : "summary",
-      title,
+      title: ogTitle,
       description,
       images: image ? [image] : [],
     },
-    /* 비공개 페이지(소유자 미리보기)는 색인되면 안 된다 */
-    robots: data.published ? undefined : { index: false, follow: false },
+    icons: icon ? { icon: [{ url: icon }] } : undefined,
+    robots: noindex ? { index: false, follow: false } : undefined,
   };
 }
 
@@ -165,7 +127,25 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
   const data = await load(slug);
   if (!data) notFound();
 
-  const { pageId, published, isOwner, snap } = data;
+  const { pageId, published, isOwner, snap, locked, settings } = data;
+  const t = lpText(settings.lang);
+  /* 링크 열기 방식(0058) — 새 창이 기본. 현재 창은 앱 내부 브라우저용 */
+  const ext = settings.target === "self" ? { rel: "noopener noreferrer nofollow" } : { target: "_blank", rel: "noopener noreferrer nofollow" };
+
+  /* 비밀번호 페이지 — 스냅샷(제목·테마 포함)은 열기 전엔 읽지 않으므로 기본 테마로 잠금 화면만.
+     방문 집계도 열린 뒤에 */
+  if (locked) {
+    const theme = themeByKey(DEFAULT_LINK_THEME_KEY);
+    return (
+      <main
+        lang={settings.lang}
+        style={themeVars(theme, null) as React.CSSProperties}
+        className="relative isolate flex min-h-[100dvh] items-center justify-center bg-[var(--lp-bg)] px-5 text-[var(--lp-fg)]"
+      >
+        <LockScreen slug={slug} message={settings.lockMessage} t={t.lock} />
+      </main>
+    );
+  }
 
   /* 소유자인데 아직 한 번도 발행 안 한 경우 — 404 대신 무엇을 해야 하는지 알린다 */
   if (!snap) {
@@ -211,8 +191,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
           <a
             key={i}
             href={s.url}
-            target="_blank"
-            rel="noopener noreferrer nofollow"
+            {...ext}
             className="inline-flex items-center gap-1.5 rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-3 py-1.5 text-[13px] font-medium"
           >
             <SnsIcon kind={s.kind} className="size-3.5 shrink-0" />
@@ -232,8 +211,9 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
   if (isDemoMode()) {
     guestbook = (linkWorkspace.guestbook ?? []).filter((g) => !g.hidden).map((g) => ({ id: g.id, name: g.name, message: g.message, reply: g.reply, createdAt: g.createdAt }));
   } else if (visibleBlocks.some((b) => b.type === "guestbook") && isSupabaseConfigured()) {
-    const supabase = await createClient();
-    const { data: rows } = await supabase
+    /* 비밀번호 페이지는 익명 RLS 가 글을 내주지 않는다(0058) — 여기까지 왔으면 이미 열린 요청이므로 service_role 로 읽는다 */
+    const supabase = settings.hasPassword && !isOwner ? createAdminClient() : await createClient();
+    const { data: rows } = !supabase ? { data: null } : await supabase
       .from("link_guestbook")
       .select("id, name, message, reply, created_at")
       .eq("page_id", pageId)
@@ -247,6 +227,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
 
   return (
     <main
+      lang={settings.lang}
       style={{ ...themeVars(theme, themeCustom), fontFamily: "var(--lp-font)" } as React.CSSProperties}
       className="relative isolate min-h-[100dvh] bg-[var(--lp-bg)] text-[var(--lp-fg)]"
       data-lp-fx={fx}
@@ -279,7 +260,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
         }
       >
         {/* 공유 버튼 — 콘텐츠 칸 기준 오른쪽 위(창 끝이 아니라, 소넷 확정) */}
-        {themeCustom?.share ? <ShareButton url={publicLinkUrl(slug)} title={snap.title || slug} /> : null}
+        {themeCustom?.share ? <ShareButton url={publicLinkUrl(slug)} title={snap.title || slug} label={t.share} done={t.copied} /> : null}
         {isOwner && !published ? (
           <p className={`mb-6 rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-card)] px-4 py-2.5 text-center text-[13px] font-medium ${split ? "lg:col-start-1" : ""}`}>
             비공개 미리보기예요. 나에게만 보입니다.
@@ -343,14 +324,14 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
               /* 최근 게시물은 연동 전·조회 실패면 렌더러가 null 을 돌려준다 — 문구 판정도 같은 기준 */
               (b.type === "social_feed" && !(Array.isArray(b.data.cached) && b.data.cached.length > 0)),
           ) ? (
-            <p className="text-center text-[15px] text-[var(--lp-muted)]">아직 등록된 링크가 없어요.</p>
+            <p className="text-center text-[15px] text-[var(--lp-muted)]">{t.emptyLinks}</p>
           ) : null}
           {visibleBlocks.map((b) => (
             <div key={b.id} className="lp-block">
               {b.type === "contact" || b.type === "subscribe" ? (
-                <LeadForm slug={slug} blockId={b.id} kind={b.type} data={b.data} isDemo={isDemoMode()} />
+                <LeadForm slug={slug} blockId={b.id} kind={b.type} data={b.data} isDemo={isDemoMode()} t={t.lead} />
               ) : (
-                <BlockRenderer block={b} slug={slug} guestbook={b.type === "guestbook" ? guestbook : undefined} isDemo={isDemoMode()} />
+                <BlockRenderer block={b} slug={slug} guestbook={b.type === "guestbook" ? guestbook : undefined} isDemo={isDemoMode()} t={t} ext={ext} />
               )}
             </div>
           ))}
@@ -367,7 +348,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
             className="inline-flex items-center gap-2 rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-4 py-2 text-[13px] font-semibold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] transition-opacity hover:opacity-80"
           >
             <FinchMark className="size-4 text-primary" />
-            핀치에서 내 프로필 꾸미기
+            {t.badge}
           </Link>
         </footer>
         )}
@@ -379,7 +360,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
           <div className={`pointer-events-none sticky bottom-4 z-10 mt-4 flex justify-center ${split ? "lg:col-start-2" : ""}`}>
             <a
               href={`/p/${slug}/go/${emphasized.block.id}`}
-              rel="noopener noreferrer nofollow"
+              {...ext}
               className="lp-btn pointer-events-auto inline-flex min-h-[48px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-6 text-[15px] font-bold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)]"
             >
               {emphasized.cta.label}

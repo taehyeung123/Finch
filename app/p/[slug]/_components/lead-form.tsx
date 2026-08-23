@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { submitLead } from "../actions";
+import type { LpText } from "@/lib/links/i18n";
 
 /*
   문의받기 / 구독신청 폼 — 공개 페이지의 유일한 입력 지점.
@@ -12,19 +13,13 @@ import { submitLead } from "../actions";
 
   색은 전부 테마 변수(--lp-*) — 이 화면은 방문자의 브랜드 화면이다.
 */
-const FIELD_LABEL: Record<string, string> = {
-  name: "이름",
-  email: "이메일",
-  phone: "연락처",
-  message: "문의 내용",
-};
-
 export function LeadForm({
   slug,
   blockId,
   kind,
   data,
   isDemo = false,
+  t,
 }: {
   slug: string;
   blockId: string;
@@ -32,7 +27,10 @@ export function LeadForm({
   data: Record<string, unknown>;
   /** 예시 페이지인가 — 제출이 저장되지 않는다는 걸 **채워 넣기 전에** 알린다 */
   isDemo?: boolean;
+  /** 페이지 언어 문구(0058) — lib/links/i18n */
+  t: LpText["lead"];
 }) {
+  const FIELD_LABEL: Record<string, string> = { name: t.name, email: t.email, phone: t.phone, message: t.message };
   const s = (k: string) => (typeof data[k] === "string" ? (data[k] as string) : "");
   /* 표시 순서는 **항상 이름·이메일·연락처·내용**이다. 저장된 배열 순서는 사장님이
      체크박스를 누른 순서라, 그대로 쓰면 폼 순서가 페이지마다 제멋대로가 된다. */
@@ -56,10 +54,10 @@ export function LeadForm({
     setError(null);
     try {
       const res = await submitLead({ slug, blockId, kind, ...values });
-      if (!res.ok) setError(res.error ?? "접수하지 못했어요.");
+      if (!res.ok) setError(res.error ?? t.fail);
       else setDone(true);
     } catch {
-      setError("접수하지 못했어요. 잠시 후 다시 시도해 주세요.");
+      setError(t.failRetry);
     } finally {
       setBusy(false);
     }
@@ -72,9 +70,9 @@ export function LeadForm({
     return (
       <div className={`${box} px-4 py-5 text-center`}>
         <p className="text-[15px] font-semibold">
-          {kind === "subscribe" ? "구독 신청이 접수됐어요" : "문의가 접수됐어요"}
+          {kind === "subscribe" ? t.doneSubscribe : t.doneContact}
         </p>
-        <p className="mt-1 text-[14px] text-[var(--lp-muted)]">확인 후 연락드릴게요. 고맙습니다!</p>
+        <p className="mt-1 text-[14px] text-[var(--lp-muted)]">{t.doneNote}</p>
       </div>
     );
   }
@@ -82,7 +80,7 @@ export function LeadForm({
   return (
     <form onSubmit={submit} className={`${box} space-y-2.5 p-4`}>
       <p className="text-[15px] font-semibold">
-        {s("title") || (kind === "subscribe" ? "새 소식 받기" : "문의하기")}
+        {s("title") || (kind === "subscribe" ? t.titleSubscribe : t.titleContact)}
       </p>
       {s("description") ? (
         <p className="text-[14px] leading-[1.6] text-[var(--lp-muted)]">{s("description")}</p>
@@ -122,7 +120,7 @@ export function LeadForm({
 
       {isDemo ? (
         <p className="text-[13px] leading-[1.6] text-[var(--lp-muted)]">
-          예시 폼이에요 — 실제로 접수되지는 않습니다.
+          {t.demo}
         </p>
       ) : null}
 
@@ -131,7 +129,7 @@ export function LeadForm({
         disabled={busy || isDemo}
         className="min-h-11 w-full rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-5 text-[15px] font-semibold text-[var(--lp-on-accent)] transition-opacity hover:opacity-85 disabled:opacity-50"
       >
-        {busy ? "보내는 중…" : s("buttonLabel") || (kind === "subscribe" ? "구독하기" : "보내기")}
+        {busy ? t.sending : s("buttonLabel") || (kind === "subscribe" ? t.subscribe : t.send)}
       </button>
     </form>
   );

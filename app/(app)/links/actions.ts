@@ -9,6 +9,8 @@ import { snsHref } from "@/lib/links/sns-catalog";
 import { BLOCK_TYPES, EMPHASIS_TYPES, defaultBlockData, type BlockType } from "@/lib/links/blocks";
 import { SafeFetchError, fetchPublicHtml } from "@/lib/links/safe-fetch";
 import { DEFAULT_THEME_KEY, sanitizeThemeCustom, themeByKey } from "@/lib/links/themes";
+import { LINK_LANGS, isSingleEmoji, type LinkPageSettings } from "@/lib/links/settings";
+import { hashPagePassword, validPagePassword } from "@/lib/links/password";
 import { LINK_TEMPLATES } from "@/lib/links/templates";
 import { parseLittlyHtml } from "@/lib/links/littly";
 import { parseInpockHtml } from "@/lib/links/inpock";
@@ -335,6 +337,114 @@ export async function updateLinkThemeCustom(input: unknown): Promise<Result> {
     console.error("[links] 테마 커스텀 저장 실패:", error.message);
     return { ok: false, error: "저장하지 못했어요." };
   }
+  revalidatePath("/links");
+  return { ok: true };
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   페이지 설정(0058) — 리틀리 ⚙ 페이지 설정 모달 카피(5단계). 발행과 무관하게 즉시 적용.
+   ══════════════════════════════════════════════════════════════════ */
+
+const SETTINGS_MIGRATION_MSG = "페이지 설정은 서버 업데이트(0058) 적용 후 저장할 수 있어요.";
+const HTTPS_IMG = /^https:\/\/[^\s"'<>()]+$/;
+
+function isSettingsColumnError(error: { code?: string; message: string }): boolean {
+  return error.code === "42703" || (/settings/i.test(error.message) && /column|schema/i.test(error.message));
+}
+
+/**
+ * 비밀이 아닌 설정값 저장 — 받은 키만 골라 덮어쓴다(locked 는 여기서 못 바꾼다: setLinkPassword 전용).
+ * 값 검증은 sanitizeLinkSettings 와 같은 규칙이되, 잘못된 값은 조용히 기본값으로 떨어뜨리지 않고 **거절**한다 —
+ * 편집기는 "저장됐는데 안 바뀜"보다 "왜 안 되는지"를 알아야 한다.
+ */
+export async function updateLinkSettings(
+  patch: Partial<Pick<LinkPageSettings, "lang" | "target" | "robots" | "ogTitle" | "ogImage" | "favicon" | "lockMessage">>,
+): Promise<Result> {
+  if (isDemoMode()) return DEMO;
+  const user = await getAuthUser();
+  if (!user) return AUTH;
+
+  const next: Record<string, unknown> = {};
+  if (patch.lang !== undefined) {
+    if (!LINK_LANGS.some((l) => l.key === patch.lang)) return { ok: false, error: "지원하지 않는 언어예요." };
+    next.lang = patch.lang;
+  }
+  if (patch.target !== undefined) {
+    if (patch.target !== "blank" && patch.target !== "self") return { ok: false, error: "링크 열기 방식이 올바르지 않아요." };
+    next.target = patch.target;
+  }
+  if (patch.robots !== undefined) {
+    if (patch.robots !== "index" && patch.robots !== "noindex") return { ok: false, error: "검색 노출 값이 올바르지 않아요." };
+    next.robots = patch.robots;
+  }
+  if (patch.ogTitle !== undefined) next.ogTitle = sliceChars(String(patch.ogTitle).trim(), 80);
+  if (patch.lockMessage !== undefined) next.lockMessage = sliceChars(String(patch.lockMessage).trim(), 200);
+  if (patch.ogImage !== undefined) {
+    const v = String(patch.ogImage).trim();
+    if (v && !HTTPS_IMG.test(v)) return { ok: false, error: "공유 이미지 주소는 https 로 시작해야 해요." };
+    next.ogImage = v;
+  }
+  if (patch.favicon !== undefined) {
+    const v = String(patch.favicon).trim();
+    if (v && !isSingleEmoji(v) && !HTTPS_IMG.test(v)) return { ok: false, error: "파비콘은 이모지 하나 또는 https 이미지 주소여야 해요." };
+    next.favicon = v;
+  }
+  if (Object.keys(next).length === 0) return { ok: true };
+
+  const supabase = await createClient();
+  const { data: row, error: readErr } = await supabase.from("link_pages").select("id, settings").eq("user_id", user.id).maybeSingle();
+  if (readErr) {
+    if (isSettingsColumnError(readErr)) return { ok: false, error: SETTINGS_MIGRATION_MSG };
+    return { ok: false, error: "저장하지 못했어요." };
+  }
+  if (!row) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
+  const cur = (row.settings && typeof row.settings === "object" ? row.settings : {}) as Record<string, unknown>;
+  const { error } = await supabase.from("link_pages").update({ settings: { ...cur, ...next } }).eq("id", row.id);
+  if (error) {
+    if (isSettingsColumnError(error)) return { ok: false, error: SETTINGS_MIGRATION_MSG };
+    console.error("[links] 페이지 설정 저장 실패:", error.message);
+    return { ok: false, error: "저장하지 못했어요." };
+  }
+  revalidatePath("/links");
+  return { ok: true };
+}
+
+/**
+ * 비밀번호 걸기/풀기 — 해시는 link_page_secrets(주인만 읽음), jsonb 엔 locked 만.
+ * null 이면 해제. 바꾸면 해시가 달라져 방문자들의 「열림」 쿠키가 전부 무효가 된다.
+ */
+export async function setLinkPassword(password: string | null): Promise<Result> {
+  if (isDemoMode()) return DEMO;
+  const user = await getAuthUser();
+  if (!user) return AUTH;
+  const supabase = await createClient();
+  const { data: row, error: readErr } = await supabase.from("link_pages").select("id, settings").eq("user_id", user.id).maybeSingle();
+  if (readErr) return { ok: false, error: isSettingsColumnError(readErr) ? SETTINGS_MIGRATION_MSG : "저장하지 못했어요." };
+  if (!row) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
+  const cur = (row.settings && typeof row.settings === "object" ? row.settings : {}) as Record<string, unknown>;
+
+  if (password === null) {
+    const { error: delErr } = await supabase.from("link_page_secrets").delete().eq("page_id", row.id);
+    if (delErr && !/link_page_secrets/i.test(delErr.message)) return { ok: false, error: "해제하지 못했어요." };
+    const { error } = await supabase.from("link_pages").update({ settings: { ...cur, locked: false } }).eq("id", row.id);
+    if (error) return { ok: false, error: "해제하지 못했어요." };
+    revalidatePath("/links");
+    return { ok: true };
+  }
+
+  if (!validPagePassword(password)) return { ok: false, error: "비밀번호는 4~32자로 정해 주세요." };
+  const password_hash = await hashPagePassword(password.trim());
+  /* 해시를 먼저 쓰고 locked 를 켠다 — 반대 순서면 잠겼는데 대조할 해시가 없는 찰나가 생긴다(그땐 아무도 못 연다) */
+  const { error: upErr } = await supabase
+    .from("link_page_secrets")
+    .upsert({ page_id: row.id, password_hash, updated_at: new Date().toISOString() }, { onConflict: "page_id" });
+  if (upErr) {
+    if (/link_page_secrets/i.test(upErr.message) || upErr.code === "42P01") return { ok: false, error: SETTINGS_MIGRATION_MSG };
+    console.error("[links] 비밀번호 저장 실패:", upErr.message);
+    return { ok: false, error: "저장하지 못했어요." };
+  }
+  const { error } = await supabase.from("link_pages").update({ settings: { ...cur, locked: true } }).eq("id", row.id);
+  if (error) return { ok: false, error: isSettingsColumnError(error) ? SETTINGS_MIGRATION_MSG : "저장하지 못했어요." };
   revalidatePath("/links");
   return { ok: true };
 }

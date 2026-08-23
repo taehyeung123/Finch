@@ -901,7 +901,7 @@ export function BlockEditor({
             </label>
             <input id="b-gph" value={str("placeholder")} onChange={(e) => set("placeholder", e.target.value)} placeholder="한마디 남겨 주세요" maxLength={40} className={`mt-1.5 ${input}`} />
           </div>
-          <p className="text-[12px] text-fg-sub">방문자 글은 「설정」 탭 방명록에서 답글·숨김·삭제할 수 있어요.</p>
+          <p className="text-[12px] text-fg-sub">방문자 글은 「관리」 탭 방명록에서 답글·숨김·삭제할 수 있어요.</p>
         </>
       ) : null}
 
@@ -1012,7 +1012,7 @@ export function BlockEditor({
           ) : null}
 
           <p className="text-[12px] leading-snug text-fg-sub">
-            받은 내용은 <strong className="font-semibold">「설정」 탭</strong>의 「받은 내용」에서 확인할 수 있어요.
+            받은 내용은 <strong className="font-semibold">「관리」 탭</strong>의 「받은 내용」에서 확인할 수 있어요.
           </p>
         </>
       ) : null}

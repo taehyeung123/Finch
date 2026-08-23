@@ -4,6 +4,7 @@ import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { linkWorkspace } from "@/lib/data";
 import { sanitizeThemeCustom } from "@/lib/links/themes";
+import { sanitizeLinkSettings } from "@/lib/links/settings";
 import { blockSummary, type LinkBlock } from "@/lib/links/blocks";
 import type { LinkLead, LinkSnapshotView, LinkStats, LinkWorkspace } from "@/lib/links/types";
 import { LinksClient } from "./_components/links-client";
@@ -42,6 +43,9 @@ const EMPTY_STATS: LinkStats = {
   blocks: [],
   regions: [],
   sources: [],
+  devices: [],
+  referrers: [],
+  dwell: { avgMs: 0, n: 0 },
 };
 
 const EMPTY: Loaded = { page: null, blocks: [], snapshot: null, stats: EMPTY_STATS, leads: [] };
@@ -57,6 +61,10 @@ interface RawStats {
   regions: Array<{ country: string | null; region: string | null; n: number }>;
   /** 0055 이후에만 온다 — 옛 함수 응답엔 없다 */
   sources?: Array<{ src: string | null; n: number }>;
+  /** 0058 이후 */
+  devices?: Array<{ device: string | null; n: number }>;
+  referrers?: Array<{ host: string | null; n: number }>;
+  dwell?: { avg_ms: number; n: number };
 }
 
 async function load(days: number): Promise<Loaded> {
@@ -73,8 +81,11 @@ async function load(days: number): Promise<Loaded> {
   const supabase = await createClient();
   const PAGE_COLS =
     "id, slug, title, bio, published, layout, theme, align, avatar_path, cover_path, sns_links, sns_placement, title_size, seo_title, seo_desc, published_at, published_snapshot, updated_at";
-  /* theme_custom(0056) 계단식 — 미적용 DB 면 컬럼 없이 다시 읽는다(0052 관례) */
-  let pageRes = await supabase.from("link_pages").select(`${PAGE_COLS}, theme_custom`).eq("user_id", user.id).maybeSingle();
+  /* settings(0058)·theme_custom(0056) 계단식 — 미적용 DB 면 그 컬럼 없이 다시 읽는다(0052 관례) */
+  let pageRes = await supabase.from("link_pages").select(`${PAGE_COLS}, theme_custom, settings`).eq("user_id", user.id).maybeSingle();
+  if (pageRes.error && /settings/i.test(pageRes.error.message)) {
+    pageRes = await supabase.from("link_pages").select(`${PAGE_COLS}, theme_custom`).eq("user_id", user.id).maybeSingle();
+  }
   if (pageRes.error && /theme_custom/i.test(pageRes.error.message)) {
     pageRes = await supabase.from("link_pages").select(PAGE_COLS).eq("user_id", user.id).maybeSingle();
   }
@@ -208,6 +219,9 @@ async function load(days: number): Promise<Loaded> {
       views: x.n,
     })),
     sources: (raw?.sources ?? []).map((x) => ({ src: x.src, views: x.n })),
+    devices: (raw?.devices ?? []).map((x) => ({ device: x.device, views: x.n })),
+    referrers: (raw?.referrers ?? []).map((x) => ({ host: x.host, views: x.n })),
+    dwell: { avgMs: Number(raw?.dwell?.avg_ms ?? 0), n: Number(raw?.dwell?.n ?? 0) },
   };
 
   const leads: LinkLead[] = (
@@ -266,6 +280,7 @@ async function load(days: number): Promise<Loaded> {
       titleSize: (page.title_size as string) ?? "md",
       publishedAt,
       dirty,
+      settings: sanitizeLinkSettings(page.settings),
     },
     blocks,
     snapshot,

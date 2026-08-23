@@ -2,9 +2,10 @@
 
 import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
+import { unlockCookieName, unlockToken, verifyPagePassword } from "@/lib/links/password";
+import { loadPublicPage } from "./public-page";
 
 /*
   공개 페이지의 방문자 액션 — 방문 기록 / 리드 제출.
@@ -13,7 +14,8 @@ import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
   아무나 통계를 부풀리고 스팸을 넣을 수 있다(0048 에 INSERT 정책이 없는 이유).
 
   개인 식별 정보를 저장하지 않는다:
-   · IP·UA·리퍼러 미저장
+   · IP·UA 원문·리퍼러 전체 URL 미저장 — 0058 부터 **기기 3분류**(UA 에서 판정만)와
+     **리퍼러 호스트명**(경로·쿼리 없이)만 남긴다. 둘 다 개인을 가리키지 못하는 집계 단위다.
    · 재방문 판정은 **서버가 만든 임의 토큰**을 쿠키에 심고 그 해시만 남긴다.
      원문 토큰은 방문자 브라우저에만 있으므로 역추적이 불가능하고, 쿠키를 지우면 리셋된다.
 */
@@ -51,16 +53,10 @@ async function visitorHash(): Promise<string | null> {
   }
 }
 
-/** 슬러그 → 공개된 페이지 id. RLS 를 타므로 비공개 페이지는 여기서 걸러진다 */
+/** 슬러그 → 이 요청이 볼 수 있는 공개 페이지 id. 비공개·잠긴(열지 못한) 페이지는 null — loadPublicPage 와 같은 규칙 */
 async function publicPageId(slug: string): Promise<string | null> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("link_pages")
-    .select("id")
-    .eq("slug", slug)
-    .eq("published", true)
-    .maybeSingle();
-  return (data?.id as string | undefined) ?? null;
+  const p = await loadPublicPage(slug);
+  return p && p.published && !p.locked ? p.id : null;
 }
 
 /* ── 유입 제한 ──────────────────────────────────────────────────────
@@ -156,12 +152,115 @@ export async function recordView(slug: string, src?: string): Promise<void> {
     region: h.get("x-vercel-ip-city") ?? null,
   };
   const cleanSrc = src && VIEW_SRC.has(src) ? src : null;
-  /* 0055(src 컬럼) 미적용 DB 폴백 — 계단식, 의미 유실은 유입 표식뿐이다 */
-  let { error } = await admin.from("link_views").insert({ ...row, src: cleanSrc });
-  if (error && (error.code === "42703" || (/src/i.test(error.message) && /column|schema/i.test(error.message)))) {
+  /* 0058 — 기기 3분류·리퍼러 호스트. 원문은 판정에만 쓰고 버린다 */
+  const extra = { device: deviceOf(h.get("user-agent")), referrer_host: referrerHostOf(h.get("referer"), h.get("host")) };
+  const isColErr = (e: { code?: string; message: string }, col: RegExp) =>
+    e.code === "42703" || (col.test(e.message) && /column|schema/i.test(e.message));
+  /* 미적용 DB 폴백 — 계단식: 0058 컬럼 → 0055 컬럼 → 0048 원형. 의미 유실은 그 단계의 지표뿐이다 */
+  let { error } = await admin.from("link_views").insert({ ...row, src: cleanSrc, ...extra });
+  if (error && isColErr(error, /device|referrer_host|dwell_ms/i)) {
+    ({ error } = await admin.from("link_views").insert({ ...row, src: cleanSrc }));
+  }
+  if (error && isColErr(error, /src/i)) {
     ({ error } = await admin.from("link_views").insert(row));
   }
   if (error) console.error("[links] 방문 기록 실패:", error.message);
+}
+
+/** UA → mobile | tablet | desktop | null. 원문은 저장하지 않는다 */
+function deviceOf(ua: string | null): "mobile" | "tablet" | "desktop" | null {
+  if (!ua) return null;
+  if (/ipad|tablet|(android(?!.*mobile))/i.test(ua)) return "tablet";
+  if (/mobile|iphone|ipod|android|windows phone/i.test(ua)) return "mobile";
+  return "desktop";
+}
+
+/** 리퍼러 → 호스트명만(www. 제거). 우리 자신·빈 값은 null */
+function referrerHostOf(ref: string | null, ownHost: string | null): string | null {
+  if (!ref) return null;
+  try {
+    const host = new URL(ref).hostname.toLowerCase().replace(/^www\./, "");
+    if (!host || (ownHost && host === ownHost.toLowerCase().replace(/^www\./, ""))) return null;
+    return host.slice(0, 80);
+  } catch {
+    return null;
+  }
+}
+
+/* ── 체류시간(0058) — 페이지를 떠날 때 비콘이 닿으면 같은 방문자의 최근 방문 행에 적는다 ── */
+const DWELL_MAX_MS = 30 * 60 * 1000;
+
+export async function recordDwell(slug: string, ms: number): Promise<void> {
+  if (!isSupabaseConfigured() || isDemoMode()) return;
+  if (!Number.isFinite(ms) || ms < 1000) return;
+  const pageId = await publicPageId(slug);
+  if (!pageId) return;
+  const hash = await visitorHash();
+  if (!hash) return; // 해시 없는 방문은 어느 행인지 알 수 없다
+  const admin = createAdminClient();
+  if (!admin) return;
+  const { data: last } = await admin
+    .from("link_views")
+    .select("id, dwell_ms")
+    .eq("page_id", pageId)
+    .eq("visitor_hash", hash)
+    .gte("created_at", new Date(Date.now() - VIEW_WINDOW_MS).toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!last) return;
+  const next = Math.min(DWELL_MAX_MS, Math.round(ms));
+  if (typeof last.dwell_ms === "number" && last.dwell_ms >= next) return;
+  const { error } = await admin.from("link_views").update({ dwell_ms: next }).eq("id", last.id);
+  /* 0058 미적용이면 dwell_ms 컬럼이 없다 — 조용히 포기(통계 화면도 그 섹션을 안 그린다) */
+  if (error && error.code !== "42703" && !/dwell_ms/i.test(error.message)) console.error("[links] 체류 기록 실패:", error.message);
+}
+
+/* ── 비밀번호 페이지(0058) ─────────────────────────────────────────── */
+/* 시도 제한 — 인스턴스 메모리(서버리스라 완벽하진 않지만 PBKDF2 100k 비용과 합쳐 무차별 대입을 느리게 한다) */
+const UNLOCK_TRIES = new Map<string, { n: number; until: number }>();
+const UNLOCK_WINDOW_MS = 10 * 60 * 1000;
+const UNLOCK_MAX = 8;
+
+/** 비밀번호 대조 → 맞으면 열림 쿠키. 해시는 service_role 로만 읽는다(주인 외 아무도 못 읽는 표) */
+export async function unlockLinkPage(slug: string, password: string): Promise<{ ok: boolean; error?: string }> {
+  if (isDemoMode()) return { ok: true };
+  if (!isSupabaseConfigured()) return { ok: false, error: "지금은 열 수 없어요." };
+  const pw = (password ?? "").trim();
+  if (!pw) return { ok: false, error: "비밀번호를 입력해 주세요." };
+  /* 잠긴 페이지는 RLS 가 숨기므로(0058) id 는 service_role 로 찾는다 — 발행된 페이지만 */
+  const admin0 = createAdminClient();
+  if (!admin0) return { ok: false, error: "지금은 열 수 없어요." };
+  const { data: pageRow } = await admin0.from("link_pages").select("id").eq("slug", slug).eq("published", true).maybeSingle();
+  const pageId = (pageRow?.id as string | undefined) ?? null;
+  if (!pageId) return { ok: false, error: "페이지를 찾을 수 없어요." };
+
+  const hash = (await visitorHash()) ?? "anon";
+  const key = `${pageId}:${hash}`;
+  const now = Date.now();
+  const tries = UNLOCK_TRIES.get(key);
+  if (tries && tries.until > now && tries.n >= UNLOCK_MAX) return { ok: false, error: "시도가 너무 많아요. 잠시 후 다시 해 주세요." };
+  if (UNLOCK_TRIES.size > 5000) UNLOCK_TRIES.clear();
+  UNLOCK_TRIES.set(key, tries && tries.until > now ? { n: tries.n + 1, until: tries.until } : { n: 1, until: now + UNLOCK_WINDOW_MS });
+
+  const { data: secret } = await admin0.from("link_page_secrets").select("password_hash").eq("page_id", pageId).maybeSingle();
+  const stored = (secret?.password_hash as string | undefined) ?? "";
+  if (!stored || !(await verifyPagePassword(pw, stored))) return { ok: false, error: "비밀번호가 맞지 않아요." };
+
+  try {
+    const jar = await cookies();
+    jar.set(unlockCookieName(pageId), unlockToken(pageId, stored), {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: true,
+      maxAge: 60 * 60 * 24, // 하루
+      path: `/p/${slug}`,
+    });
+  } catch {
+    return { ok: false, error: "지금은 열 수 없어요." };
+  }
+  UNLOCK_TRIES.delete(key);
+  return { ok: true };
 }
 
 /** 문의·구독 제출 */
@@ -183,16 +282,11 @@ export async function submitLead(input: {
   /* 페이지뿐 아니라 **발행 스냅샷에 그 폼 블록이 실제로 있는지**까지 본다 — 폼을 두지 않은
      페이지에 임의 uuid 로 리드를 꽂아 「받은 내용」을 오염시키는 경로를 막는다(감사 #26).
      /go 경로가 스냅샷에서만 블록을 찾는 것과 같은 기준. */
-  const supabase = await createClient();
-  const { data: pageRow } = await supabase
-    .from("link_pages")
-    .select("id, published_snapshot")
-    .eq("slug", input.slug)
-    .eq("published", true)
-    .maybeSingle();
-  if (!pageRow) return { ok: false, error: "페이지를 찾을 수 없어요." };
-  const pageId = pageRow.id as string;
-  const snapBlocks = (pageRow.published_snapshot as { blocks?: unknown } | null)?.blocks;
+  /* 잠긴 페이지(0058)는 열림 쿠키가 맞을 때만 스냅샷이 온다 — 비밀번호 없이 폼만 꽂는 길을 막는다 */
+  const pageRow = await loadPublicPage(input.slug);
+  if (!pageRow || !pageRow.published || pageRow.locked) return { ok: false, error: "페이지를 찾을 수 없어요." };
+  const pageId = pageRow.id;
+  const snapBlocks = (pageRow.snapshot as { blocks?: unknown } | null)?.blocks;
   const target = Array.isArray(snapBlocks)
     ? (snapBlocks as Array<{ id?: unknown; type?: unknown }>).find((b) => b && b.id === input.blockId)
     : undefined;
@@ -267,17 +361,11 @@ export async function submitGuestbook(input: { slug: string; blockId: string; na
   const message = (input.message ?? "").trim().slice(0, 500);
   if (!name || !message) return { ok: false, error: "이름과 내용을 적어 주세요." };
 
-  /* 리드와 같은 기준 — 발행 스냅샷에 그 방명록 블록이 실제로 있을 때만 받는다 */
-  const supabase = await createClient();
-  const { data: pageRow } = await supabase
-    .from("link_pages")
-    .select("id, published_snapshot")
-    .eq("slug", input.slug)
-    .eq("published", true)
-    .maybeSingle();
-  if (!pageRow) return { ok: false, error: "페이지를 찾을 수 없어요." };
-  const pageId = pageRow.id as string;
-  const snapBlocks = (pageRow.published_snapshot as { blocks?: unknown } | null)?.blocks;
+  /* 리드와 같은 기준 — 발행 스냅샷에 그 방명록 블록이 실제로 있을 때만 받는다. 잠긴 페이지는 열린 요청만 */
+  const pageRow = await loadPublicPage(input.slug);
+  if (!pageRow || !pageRow.published || pageRow.locked) return { ok: false, error: "페이지를 찾을 수 없어요." };
+  const pageId = pageRow.id;
+  const snapBlocks = (pageRow.snapshot as { blocks?: unknown } | null)?.blocks;
   const target = Array.isArray(snapBlocks)
     ? (snapBlocks as Array<{ id?: unknown; type?: unknown }>).find((b) => b && b.id === input.blockId)
     : undefined;

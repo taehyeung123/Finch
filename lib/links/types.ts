@@ -1,5 +1,6 @@
 import type { LinkThemeCustom } from "./themes";
 import type { LinkBlock } from "./blocks";
+import type { LinkPageSettings } from "./settings";
 
 /*
   프로필 링크 **화면 모델** — 서버(page.tsx)가 만들고 클라이언트가 그리는 형태.
@@ -33,6 +34,8 @@ export interface LinkPageView {
   publishedAt: string | null;
   /** 초안이 마지막 발행본과 다른가 — "라이브 반영" 버튼의 상태를 정한다 */
   dirty: boolean;
+  /** 페이지 설정(0058) — 발행과 무관하게 즉시 적용. 미적용 DB 면 기본값 */
+  settings: LinkPageSettings;
 }
 
 /**
@@ -81,6 +84,12 @@ export interface LinkStats {
   regions: Array<{ country: string; region: string; views: number }>;
   /** 유입 채널(?src=) — null 은 직접·표식 없는 링크. 0055 미적용 서버는 빈 배열 */
   sources: Array<{ src: string | null; views: number }>;
+  /** 기기(0058) — null 은 판정 불가·0058 이전 기록. 미적용 서버는 빈 배열 */
+  devices: Array<{ device: string | null; views: number }>;
+  /** 유입 리퍼러 호스트(0058) — null 은 직접 입력·앱 내부 브라우저. 미적용 서버는 빈 배열 */
+  referrers: Array<{ host: string | null; views: number }>;
+  /** 평균 체류(0058) — 비콘이 닿은 방문(n)만. n=0 이면 모름 */
+  dwell: { avgMs: number; n: number };
 }
 
 export interface LinkLead {

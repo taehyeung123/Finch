@@ -1,6 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
-import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
-import { linkWorkspace } from "@/lib/data";
+import { loadPublicPage } from "../../public-page";
 
 /*
   연락처 저장 — 「연락처」 블록의 vCard(.vcf) 내려받기(리틀리 흡수 4단계).
@@ -26,16 +24,13 @@ function vcardOf(d: Record<string, unknown>): string | null {
 
 export async function GET(_req: Request, ctx: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = await ctx.params;
-  let data: Record<string, unknown> | null = null;
-
-  if (isDemoMode()) {
-    data = linkWorkspace.blocks.find((b) => b.id === id && b.type === "vcard")?.data ?? null;
-  } else if (isSupabaseConfigured()) {
-    const supabase = await createClient();
-    const { data: page } = await supabase.from("link_pages").select("published_snapshot").eq("slug", slug).eq("published", true).maybeSingle();
-    const blocks = (page?.published_snapshot as { blocks?: Array<{ id: string; type: string; data: Record<string, unknown> }> } | null)?.blocks ?? [];
-    data = blocks.find((b) => b.id === id && b.type === "vcard")?.data ?? null;
-  }
+  /* 공개 조회는 loadPublicPage 한 곳 — 잠긴 페이지는 열림 쿠키가 맞을 때만 스냅샷이 온다(데모도 여기서 처리) */
+  const page = await loadPublicPage(slug);
+  const blocks =
+    page && page.published && !page.locked
+      ? ((page.snapshot as { blocks?: Array<{ id: string; type: string; data: Record<string, unknown> }> } | null)?.blocks ?? [])
+      : [];
+  const data = blocks.find((b) => b.id === id && b.type === "vcard")?.data ?? null;
 
   const vcf = data ? vcardOf(data) : null;
   if (!vcf) return new Response("Not found", { status: 404 });

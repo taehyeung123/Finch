@@ -5,6 +5,7 @@ import { Collapsible } from "./collapsible";
 import { GuestbookForm } from "./guestbook-form";
 import { SearchBlock } from "./search-block";
 import { Download, UserPlus } from "lucide-react";
+import { lpText, lpN, type LpText } from "@/lib/links/i18n";
 
 /** 방명록 글(공개분) — 페이지가 읽어서 렌더러에 넘긴다 */
 export interface GuestbookPublicEntry {
@@ -80,17 +81,25 @@ function Price({ d, size = "md", inherit = false }: { d: Record<string, unknown>
   );
 }
 
+const EXT_BLANK = { target: "_blank", rel: "noopener noreferrer nofollow" };
+
 export function BlockRenderer({
   block,
   slug,
   guestbook,
   isDemo = false,
+  t = lpText("ko"),
+  ext = EXT_BLANK,
 }: {
   block: SnapshotBlock;
   slug: string;
   /** 방명록 블록일 때 — 공개 글 목록 */
   guestbook?: GuestbookPublicEntry[];
   isDemo?: boolean;
+  /** 페이지 언어 문구(0058) */
+  t?: LpText;
+  /** 외부 링크 속성 — 새 창/현재 창(0058). SNS 줄·고정 CTA 와 같은 값을 받는다 */
+  ext?: { target?: string; rel: string };
 }) {
   const d = block.data ?? {};
   const type = block.type as BlockType;
@@ -109,7 +118,7 @@ export function BlockRenderer({
           <img src={s(it, "imagePath")} alt={s(it, "alt")} className={`${imgCls} rounded-[calc(var(--lp-radius)/1.6)]`} loading="lazy" />
         );
         return s(it, "url") ? (
-          <a key={i} href={goHref(slug, block.id, i)} rel="noopener noreferrer nofollow" className="lp-btn block overflow-hidden rounded-[calc(var(--lp-radius)/1.6)]" aria-label={s(it, "alt") || `사진 ${i + 1} 링크`}>
+          <a key={i} href={goHref(slug, block.id, i)} {...ext} className="lp-btn block overflow-hidden rounded-[calc(var(--lp-radius)/1.6)]" aria-label={s(it, "alt") || lpN(t.photoLink, i + 1)}>
             {img}
           </a>
         ) : (
@@ -140,7 +149,7 @@ export function BlockRenderer({
           {s(d, "title") ? <p className="px-3 pt-2.5 text-[14px] font-semibold text-[var(--lp-fg)]">{s(d, "title")}</p> : null}
           <iframe
             src={em.src}
-            title={s(d, "title") || "음악"}
+            title={s(d, "title") || t.music}
             height={em.height}
             loading="lazy"
             allow="autoplay; clipboard-write; encrypted-media; picture-in-picture"
@@ -158,26 +167,26 @@ export function BlockRenderer({
           className="lp-btn flex min-h-[52px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] border border-[var(--lp-btn-border)] bg-[var(--lp-btn-bg)] px-5 py-3 text-[15px] font-semibold text-[var(--lp-btn-fg)] shadow-[var(--lp-shadow)] transition-opacity hover:opacity-85"
         >
           <UserPlus className="size-4" aria-hidden />
-          {s(d, "label") || "연락처 저장"}
+          {s(d, "label") || t.vcard}
           <span className="text-[12px] font-normal text-[var(--lp-muted)]">· {s(d, "name")}</span>
         </a>
       );
     }
 
     case "search":
-      return <SearchBlock placeholder={s(d, "placeholder") || "무엇을 찾으세요?"} />;
+      return <SearchBlock placeholder={s(d, "placeholder") || t.search.placeholder} t={t.search} />;
 
     case "file": {
       if (!s(d, "url")) return null;
       const size = n(d, "fileSize", 0);
       const sizeLabel = size > 0 ? (size >= 1024 * 1024 ? `${(size / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(size / 1024))}KB`) : "";
       return (
-        <a href={goHref(slug, block.id)} rel="noopener noreferrer nofollow" className={`lp-btn ${cardCls} flex items-center gap-3 p-3 transition-opacity hover:opacity-90`}>
+        <a href={goHref(slug, block.id)} {...ext} className={`lp-btn ${cardCls} flex items-center gap-3 p-3 transition-opacity hover:opacity-90`}>
           <span className="flex size-11 shrink-0 items-center justify-center rounded-[calc(var(--lp-radius)/1.6)] bg-[var(--lp-accent)] text-[var(--lp-on-accent)]" aria-hidden>
             <Download className="size-5" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "title") || s(d, "fileName") || "파일"}</span>
+            <span className="block truncate text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "title") || s(d, "fileName") || t.file}</span>
             <span className="block truncate text-[13px] text-[var(--lp-muted)]">
               {[s(d, "description"), s(d, "fileName"), sizeLabel].filter(Boolean).join(" · ")}
             </span>
@@ -190,9 +199,9 @@ export function BlockRenderer({
       const entries = guestbook ?? [];
       return (
         <div className={`${cardCls} p-4`}>
-          <p className="text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "title") || "방명록"}</p>
+          <p className="text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "title") || t.guestbook.title}</p>
           <div className="mt-3">
-            <GuestbookForm slug={slug} blockId={block.id} placeholder={s(d, "placeholder") || "한마디 남겨 주세요"} isDemo={isDemo} />
+            <GuestbookForm slug={slug} blockId={block.id} placeholder={s(d, "placeholder") || t.guestbook.placeholder} isDemo={isDemo} t={t.guestbook} />
           </div>
           {entries.length ? (
             <ul className="mt-4 space-y-3 border-t border-[var(--lp-border)] pt-3">
@@ -212,7 +221,7 @@ export function BlockRenderer({
               ))}
             </ul>
           ) : (
-            <p className="mt-3 text-center text-[13px] text-[var(--lp-muted)]">아직 남겨진 글이 없어요. 첫 글을 남겨 보세요.</p>
+            <p className="mt-3 text-center text-[13px] text-[var(--lp-muted)]">{t.guestbook.empty}</p>
           )}
         </div>
       );
@@ -249,7 +258,7 @@ export function BlockRenderer({
         return (
           <a
             href={goHref(slug, block.id)}
-            rel="noopener noreferrer nofollow"
+            {...ext}
             className={`lp-btn ${cardCls} overflow-hidden transition-opacity hover:opacity-90 ${big ? "" : "flex items-center gap-3 p-3"}`}
           >
             {thumb ? (
@@ -276,7 +285,7 @@ export function BlockRenderer({
       return (
         <a
           href={goHref(slug, block.id)}
-          rel="noopener noreferrer nofollow"
+          {...ext}
           style={textStyle}
           className={[
             "lp-btn flex min-h-[52px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] px-5 py-3 text-center text-[15px] font-semibold transition-opacity hover:opacity-85",
@@ -346,9 +355,9 @@ export function BlockRenderer({
         /* 대체 텍스트가 비면 링크 이름이 비어 스크린리더가 경로만 읽는다 — 최소한의 이름을 준다(감사 #21) */
         <a
           href={goHref(slug, block.id)}
-          rel="noopener noreferrer nofollow"
+          {...ext}
           className="block"
-          aria-label={s(d, "alt") ? undefined : "이미지 링크"}
+          aria-label={s(d, "alt") ? undefined : t.imageLink}
         >
           {img}
         </a>
@@ -385,7 +394,7 @@ export function BlockRenderer({
         </div>
       );
       return url ? (
-        <a href={goHref(slug, block.id)} rel="noopener noreferrer nofollow" className="block">
+        <a href={goHref(slug, block.id)} {...ext} className="block">
           {inner}
         </a>
       ) : (
@@ -403,10 +412,10 @@ export function BlockRenderer({
         return (
           <a
             href={goHref(slug, block.id)}
-            rel="noopener noreferrer nofollow"
+            {...ext}
             className={`${cardCls} flex min-h-[52px] items-center justify-center px-5 py-3 text-[15px] font-semibold text-[var(--lp-fg)]`}
           >
-            ▶ {s(d, "title") || "영상 보러 가기"}
+            ▶ {s(d, "title") || t.video}
           </a>
         );
       }
@@ -414,7 +423,7 @@ export function BlockRenderer({
         <div className={`${cardCls} overflow-hidden`}>
           <iframe
             src={embed}
-            title={s(d, "title") || "동영상"}
+            title={s(d, "title") || t.video}
             allow="accelerometer; clipboard-write; encrypted-media; picture-in-picture"
             allowFullScreen
             loading="lazy"
@@ -438,7 +447,7 @@ export function BlockRenderer({
               <a
                 key={i}
                 href={goHref(slug, block.id, i)}
-                rel="noopener noreferrer nofollow"
+                {...ext}
                 className={`lp-btn ${cardCls} w-[72%] shrink-0 snap-start overflow-hidden`}
               >
                 {s(it, "imagePath") ? (
@@ -456,7 +465,7 @@ export function BlockRenderer({
         );
       }
       const nodes = items.map(({ it, i }) => (
-        <a key={i} href={goHref(slug, block.id, i)} rel="noopener noreferrer nofollow" className={`lp-btn ${cardCls} flex items-center gap-3 p-3`}>
+        <a key={i} href={goHref(slug, block.id, i)} {...ext} className={`lp-btn ${cardCls} flex items-center gap-3 p-3`}>
           {s(it, "imagePath") ? (
             // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
             <img src={s(it, "imagePath")} alt="" className="size-14 shrink-0 rounded-[calc(var(--lp-radius)/1.6)] object-cover" loading="lazy" />
@@ -468,7 +477,7 @@ export function BlockRenderer({
           </span>
         </a>
       ));
-      return <Collapsible items={nodes} initial={n(d, "collapse", 0)} className="space-y-2.5" />;
+      return <Collapsible moreLabel={t.more} lessLabel={t.less} items={nodes} initial={n(d, "collapse", 0)} className="space-y-2.5" />;
     }
 
     case "grid": {
@@ -477,7 +486,7 @@ export function BlockRenderer({
       if (items.length === 0) return null;
       const cols = n(d, "columns", 2) === 3 ? "grid-cols-3" : "grid-cols-2";
       const nodes = items.map(({ it, i }) => (
-        <a key={i} href={goHref(slug, block.id, i)} rel="noopener noreferrer nofollow" className={`lp-btn ${cardCls} overflow-hidden`}>
+        <a key={i} href={goHref(slug, block.id, i)} {...ext} className={`lp-btn ${cardCls} overflow-hidden`}>
           {s(it, "imagePath") ? (
             // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
             <img src={s(it, "imagePath")} alt="" className="aspect-square w-full object-cover" loading="lazy" />
@@ -488,7 +497,7 @@ export function BlockRenderer({
           </span>
         </a>
       ));
-      return <Collapsible items={nodes} initial={n(d, "collapse", 0)} className={`grid gap-2.5 ${cols}`} />;
+      return <Collapsible moreLabel={t.more} lessLabel={t.less} items={nodes} initial={n(d, "collapse", 0)} className={`grid gap-2.5 ${cols}`} />;
     }
 
     case "notice": {
@@ -525,7 +534,7 @@ export function BlockRenderer({
               <a
                 key={i}
                 href={goHref(slug, block.id, i)}
-                rel="noopener noreferrer nofollow"
+                {...ext}
                 className="overflow-hidden rounded-[calc(var(--lp-radius)/1.6)]"
               >
                 {inner}
@@ -562,14 +571,14 @@ export function BlockRenderer({
             <span className="inline-block rounded-full bg-[var(--lp-accent)] px-2.5 py-0.5 text-[11px] font-bold text-[var(--lp-on-accent)]">
               쿠팡 파트너스
             </span>
-            <p className="mt-1.5 text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "title") || "상품 보러 가기"}</p>
+            <p className="mt-1.5 text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "title") || t.product}</p>
             {s(d, "price") ? <p className="tnum mt-0.5 text-[17px] font-bold text-[var(--lp-fg)]">{s(d, "price")}</p> : null}
             <a
               href={goHref(slug, block.id)}
-              rel="noopener noreferrer nofollow"
+              {...ext}
               className="mt-2.5 flex min-h-[44px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-4 text-[14px] font-semibold text-[var(--lp-on-accent)] transition-opacity hover:opacity-85"
             >
-              쿠팡에서 보기
+              {t.coupangView}
             </a>
             <p className="mt-2 text-[11px] leading-[1.6] text-[var(--lp-muted)]">{COUPANG_DISCLOSURE}</p>
           </div>
@@ -584,11 +593,11 @@ export function BlockRenderer({
         <div>
           <a
             href={goHref(slug, block.id)}
-            rel="noopener noreferrer nofollow"
+            {...ext}
             className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-5 py-3 text-center text-[15px] font-semibold text-[var(--lp-on-accent)] transition-opacity hover:opacity-85"
           >
             {s(d, "emoji") ? <span aria-hidden>{s(d, "emoji")}</span> : null}
-            {s(d, "label") || "후원하기"}
+            {s(d, "label") || t.donate}
           </a>
           {s(d, "message") ? <p className="mt-1.5 text-center text-[12px] text-[var(--lp-muted)]">{s(d, "message")}</p> : null}
         </div>
@@ -601,11 +610,10 @@ export function BlockRenderer({
       return (
         <a
           href={`https://map.kakao.com/link/search/${encodeURIComponent(address)}`}
-          target="_blank"
-          rel="noopener noreferrer nofollow"
+          {...ext}
           className={`${cardCls} block px-4 py-3.5`}
         >
-          <p className="text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "label") || "찾아오시는 길"}</p>
+          <p className="text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "label") || t.map}</p>
           <p className="mt-1 text-[14px] text-[var(--lp-muted)]">{address}</p>
         </a>
       );

@@ -11,12 +11,17 @@ export function Collapsible({
   items,
   initial,
   className,
+  moreLabel = "더보기 ({n}개)",
+  lessLabel = "접기",
 }: {
   items: React.ReactNode[];
   /** 처음에 보일 개수. 0 이거나 전체보다 크면 접지 않는다 */
   initial: number;
   /** 항목 컨테이너 클래스(grid·space-y 등) */
   className?: string;
+  /** 페이지 언어(0058) — {n} 이 남은 개수로 치환된다. 편집 미리보기는 기본값(한국어) */
+  moreLabel?: string;
+  lessLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const folds = initial > 0 && items.length > initial;
@@ -31,7 +36,7 @@ export function Collapsible({
           aria-expanded={open}
           className="mt-2 flex min-h-[40px] w-full items-center justify-center rounded-[var(--lp-radius-btn)] border border-[var(--lp-border)] bg-[var(--lp-card)] text-[13px] font-semibold text-[var(--lp-muted)] transition-opacity hover:opacity-80"
         >
-          {open ? "접기" : `더보기 (${items.length - initial}개)`}
+          {open ? lessLabel : moreLabel.replace("{n}", String(items.length - initial))}
         </button>
       ) : null}
     </div>

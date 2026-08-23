@@ -1107,6 +1107,7 @@ export const linkWorkspace: LinkWorkspace = {
     themeCustom: null,
     publishedAt: "2026-08-18T21:00:00+09:00",
     dirty: false,
+    settings: { lang: "ko", target: "blank", robots: "index", ogTitle: "", ogImage: "", favicon: "🐦", lockMessage: "", hasPassword: false },
   },
   blocks: [
     { id: "demo-b1", type: "notice", sortOrder: 0, active: true, data: { text: "이번 주 공구 진행 중이에요!", tone: "primary" } },
@@ -1185,6 +1186,18 @@ export const linkWorkspace: LinkWorkspace = {
       { src: "youtube", views: 604 },
       { src: null, views: 1213 },
     ],
+    devices: [
+      { device: "mobile", views: 4012 },
+      { device: "desktop", views: 611 },
+      { device: "tablet", views: 197 },
+    ],
+    referrers: [
+      { host: "l.instagram.com", views: 2088 },
+      { host: "youtube.com", views: 590 },
+      { host: "t.co", views: 142 },
+      { host: null, views: 2000 },
+    ],
+    dwell: { avgMs: 47_300, n: 3550 },
   },
   leads: [
     { id: 1, kind: "contact", name: "김서연", email: "seoyeon@example.com", phone: null, message: "뷰티 브랜드 협업 제안드립니다. 상세 자료 보내드릴게요.", createdAt: "2026-08-18T14:22:00+09:00" },

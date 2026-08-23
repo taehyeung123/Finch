@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { loadPublicPage } from "../../public-page";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
 import { linkWorkspace } from "@/lib/data";
@@ -78,18 +78,12 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
 
   if (!isSupabaseConfigured()) return back();
 
-  /* 익명 세션으로 읽는다 — RLS 가 published=true 만 내보내므로 비공개 페이지의
-     블록 id 를 직접 찔러도 목적지가 안 나온다. service_role 로 읽으면 그 방어가 사라진다. */
-  const supabase = await createClient();
-  const { data: page } = await supabase
-    .from("link_pages")
-    .select("id, published_snapshot")
-    .eq("slug", slug)
-    .eq("published", true)
-    .maybeSingle();
-  if (!page?.published_snapshot) return back();
+  /* 공개 조회는 loadPublicPage 한 곳 — RLS 가 비공개·잠긴 페이지를 숨기고, 잠긴 페이지는 열림 쿠키가
+     맞을 때만 스냅샷이 온다. 비밀번호 페이지의 블록 id 를 직접 찔러도 목적지가 안 나온다(소넷 5단계 #1). */
+  const page = await loadPublicPage(slug);
+  if (!page || !page.published || page.locked || !page.snapshot) return back();
 
-  const snap = page.published_snapshot as { blocks?: SnapBlock[] };
+  const snap = page.snapshot as { blocks?: SnapBlock[] };
   const block = (snap.blocks ?? []).find((b) => b.id === id);
   if (!block) return back();
 

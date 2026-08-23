@@ -20,6 +20,10 @@ import {
   GripVertical,
   Heart,
   Heading,
+  Inbox,
+  Lock,
+  Monitor,
+  Tablet,
   Image as ImageIcon,
   LayoutGrid,
   Mail,
@@ -119,7 +123,10 @@ import {
   replyGuestbook,
   setGuestbookHidden,
   deleteGuestbook,
+  updateLinkSettings,
+  setLinkPassword,
 } from "../actions";
+import { LINK_LANGS, LINK_TARGETS, type LinkPageSettings } from "@/lib/links/settings";
 import type { LinkGuestbookEntry, LinkLead, LinkPageView, LinkSnapshotView, LinkStats } from "@/lib/links/types";
 import { BlockEditor, EDITOR_TITLE_ID } from "./block-editor";
 import { ImageField } from "./image-field";
@@ -145,7 +152,7 @@ import { useFontStylesheets } from "./use-font-stylesheets";
   부르지 않는다** — 부르면 같은 집계 질의가 한 조작에 두 번 돈다.
 */
 
-type Drawer = "profile" | "theme" | "add" | "settings";
+type Drawer = "profile" | "theme" | "add" | "manage" | "settings";
 
 /* 상단 도구 칩 — 링크팜 실측 순서(2026-08-20 캔버스 개편). 칩은 우측 드로어를
    여닫고, 캔버스(폰)는 항상 보인다. 블록 목록 패널은 없다 — 캔버스가 목록이다. */
@@ -153,6 +160,8 @@ const TOOLS: Array<{ key: Drawer; label: string; icon: typeof User }> = [
   { key: "profile", label: "프로필", icon: User },
   { key: "theme", label: "테마", icon: Palette },
   { key: "add", label: "블록 추가", icon: Plus },
+  /* 관리 — 리틀리 「관리」 탭 카피(5단계): 문의·구독·방명록이 한 곳에. 전엔 설정 드로어 안에 묻혀 있었다 */
+  { key: "manage", label: "관리", icon: Inbox },
   { key: "settings", label: "설정", icon: Settings },
 ];
 
@@ -162,6 +171,7 @@ const DRAWER_TITLE: Record<Drawer, string> = {
   profile: "프로필 설정",
   theme: "테마 선택",
   add: "블록 추가",
+  manage: "관리",
   settings: "설정",
 };
 
@@ -186,6 +196,19 @@ const SRC_PLATFORMS = [
   { key: "x", label: "X" },
 ] as const;
 const SRC_LABEL = new Map<string, string>(SRC_PLATFORMS.map((p) => [p.key, p.label]));
+const DEVICE_LABEL = new Map<string, string>([
+  ["mobile", "모바일"],
+  ["tablet", "태블릿"],
+  ["desktop", "PC"],
+]);
+/** ms → "1분 12초" / "48초" */
+function dwellLabel(ms: number): string {
+  const sec = Math.round(ms / 1000);
+  if (sec < 60) return `${sec}초`;
+  const m = Math.floor(sec / 60);
+  const r = sec % 60;
+  return r ? `${m}분 ${r}초` : `${m}분`;
+}
 
 /**
  * CSV 를 만들어 내려준다 — 서버 왕복 없음. 화면이 이미 든 데이터가 전부다.
@@ -1190,11 +1213,8 @@ export function LinksClient({
                   )
                 }
               />
-            ) : drawer === "settings" ? (
-              <>
-              <PlatformLinks slug={page.slug} origin={origin} />
-              <SettingsPanel
-                page={page}
+            ) : drawer === "manage" ? (
+              <ManagePanel
                 leads={leads}
                 guestbook={guestbook}
                 busy={busy}
@@ -1204,6 +1224,20 @@ export function LinksClient({
                   if (!window.confirm("이 방명록 글을 지울까요?")) return;
                   run(() => deleteGuestbook(id), () => setNotice("방명록 글을 지웠어요."));
                 }}
+              />
+            ) : drawer === "settings" ? (
+              <>
+              <PlatformLinks slug={page.slug} origin={origin} />
+              <SettingsPanel
+                page={page}
+                busy={busy}
+                onSettings={(patch) => run(() => updateLinkSettings(patch), () => setNotice("페이지 설정을 저장했어요. 바로 적용돼요."))}
+                onPassword={(pw) =>
+                  run(
+                    () => setLinkPassword(pw),
+                    () => setNotice(pw === null ? "비밀번호를 풀었어요. 누구나 볼 수 있어요." : "비밀번호를 걸었어요. 방문자는 비밀번호를 넣어야 볼 수 있어요."),
+                  )
+                }
                 onPublishToggle={(v) => run(() => setLinkPublished(v))}
                 onDelete={() =>
                   run(
@@ -2817,6 +2851,13 @@ function StatsPanel({
                     ...stats.sources.map((x) => [(x.src && SRC_LABEL.get(x.src)) ?? "직접·기타", x.views] as Array<string | number>),
                   ]
                 : []),
+              ...(stats.devices.length
+                ? [[], ["기기", "조회수"], ...stats.devices.map((x) => [DEVICE_LABEL.get(x.device ?? "") ?? "알 수 없음", x.views] as Array<string | number>)]
+                : []),
+              ...(stats.referrers.length
+                ? [[], ["유입 경로", "조회수"], ...stats.referrers.map((x) => [x.host ?? "직접 입력·앱 내부", x.views] as Array<string | number>)]
+                : []),
+              ...(stats.dwell.n > 0 ? [[], ["평균 체류(초)", Math.round(stats.dwell.avgMs / 1000)], ["체류 표본", stats.dwell.n]] : []),
             ])
           }
           className="trans-state rounded-chip border border-line px-2.5 py-1 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg"
@@ -2872,6 +2913,54 @@ function StatsPanel({
         사람이 30분 안에 다시 와도 조회는 1로 세고 클릭은 전부 세요 — 그래서 「조회당 클릭」은 100%를 넘을 수 있어요.
         쿠키를 지운 방문은 사람 수를 셀 수 없어 방문자 집계에서 빠집니다.
       </p>
+
+      {/* 기기·리퍼러·체류(0058) — 리틀리 분석 탭 카피(5단계). 미적용 서버는 빈 배열이라 섹션이 안 나온다 */}
+      {stats.devices.length > 0 || stats.dwell.n > 0 ? (
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-card border border-line bg-plate px-3 py-2.5">
+            <p className="text-[12px] text-fg-sub">기기</p>
+            {stats.devices.length === 0 ? (
+              <p className="mt-1 text-[14px] text-fg-sub">—</p>
+            ) : (
+              <ul className="mt-1.5 space-y-1">
+                {stats.devices.map((d) => {
+                  const total = stats.devices.reduce((a, x) => a + x.views, 0);
+                  const Icon = d.device === "desktop" ? Monitor : d.device === "tablet" ? Tablet : Smartphone;
+                  return (
+                    <li key={d.device ?? "unknown"} className="flex items-center justify-between gap-2 text-[14px]">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        {d.device ? <Icon className="size-3.5 text-fg-sub" aria-hidden /> : null}
+                        {DEVICE_LABEL.get(d.device ?? "") ?? "알 수 없음"}
+                      </span>
+                      <span className="tnum font-semibold">{total > 0 ? `${Math.round((d.views / total) * 100)}%` : "—"}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+          <div className="rounded-card border border-line bg-plate px-3 py-2.5">
+            <p className="text-[12px] text-fg-sub">평균 체류</p>
+            <p className="tnum mt-1 text-[20px] font-bold leading-none">{stats.dwell.n > 0 ? dwellLabel(stats.dwell.avgMs) : "—"}</p>
+            <p className="mt-1 text-[11px] text-fg-sub">{stats.dwell.n > 0 ? `방문 ${stats.dwell.n.toLocaleString("ko-KR")}건 기준` : "아직 측정된 방문이 없어요"}</p>
+          </div>
+        </div>
+      ) : null}
+
+      {stats.referrers.length > 0 ? (
+        <div>
+          <p className="text-[12px] font-medium text-fg-sub">유입 경로</p>
+          <ul className="mt-1.5 space-y-1">
+            {stats.referrers.map((x) => (
+              <li key={x.host ?? "direct"} className="flex items-center justify-between gap-2 text-[14px]">
+                <span className="min-w-0 truncate">{x.host ?? "직접 입력·앱 내부"}</span>
+                <span className="tnum font-semibold">{x.views.toLocaleString("ko-KR")}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-[11px] text-fg-sub">브라우저가 알려준 이전 페이지 주소(호스트만)예요. 인스타·카톡 앱 안에서 온 방문은 대개 「직접 입력·앱 내부」로 잡혀요.</p>
+        </div>
+      ) : null}
 
       {stats.sources.length > 0 ? (
         <div>
@@ -3013,29 +3102,20 @@ function PlatformLinks({ slug, origin }: { slug: string; origin: string }) {
 
 function SettingsPanel({
   page,
-  leads,
-  guestbook,
   busy,
   onPublishToggle,
+  onSettings,
+  onPassword,
   onDelete,
-  onGuestbookReply,
-  onGuestbookHide,
-  onGuestbookDelete,
 }: {
   page: LinkPageView;
-  leads: LinkLead[];
-  guestbook: LinkGuestbookEntry[];
   busy: boolean;
   onPublishToggle: (v: boolean) => void;
+  onSettings: (patch: Partial<LinkPageSettings>) => void;
+  onPassword: (pw: string | null) => void;
   onDelete: () => void;
-  onGuestbookReply: (id: number, reply: string) => void;
-  onGuestbookHide: (id: number, hidden: boolean) => void;
-  onGuestbookDelete: (id: number) => void;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
-  /* 방명록 답글 작성 중인 글 id 와 초안 */
-  const [replyFor, setReplyFor] = useState<number | null>(null);
-  const [replyDraft, setReplyDraft] = useState("");
 
   return (
     <div className="space-y-4">
@@ -3051,11 +3131,115 @@ function SettingsPanel({
         <Switch checked={page.published} onChange={onPublishToggle} label="공개" disabled={busy} />
       </div>
 
+      <PageSettingsForm page={page} busy={busy} onSettings={onSettings} onPassword={onPassword} />
+
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+        {confirmDelete ? (
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="text-[12px] text-negative-strong">블록·클릭 기록이 모두 사라져요.</span>
+            <Button variant="danger" size="sm" disabled={busy} onClick={onDelete}>
+              삭제
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>
+              취소
+            </Button>
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            className="trans-state text-[12px] text-fg-sub underline underline-offset-2 hover:text-negative-strong"
+          >
+            프로필 링크 삭제
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   관리 패널 — 리틀리 「관리」 탭 카피(5단계): 문의·구독·방명록 한눈에
+   ══════════════════════════════════════════════════════════════════ */
+
+function ManagePanel({
+  leads,
+  guestbook,
+  busy,
+  onGuestbookReply,
+  onGuestbookHide,
+  onGuestbookDelete,
+}: {
+  leads: LinkLead[];
+  guestbook: LinkGuestbookEntry[];
+  busy: boolean;
+  onGuestbookReply: (id: number, reply: string) => void;
+  onGuestbookHide: (id: number, hidden: boolean) => void;
+  onGuestbookDelete: (id: number) => void;
+}) {
+  /* 방명록 답글 작성 중인 글 id 와 초안 */
+  const [replyFor, setReplyFor] = useState<number | null>(null);
+  const [replyDraft, setReplyDraft] = useState("");
+  const [kindFilter, setKindFilter] = useState<"all" | "contact" | "subscribe">("all");
+  const [openLead, setOpenLead] = useState<number | null>(null);
+  const shownLeads = kindFilter === "all" ? leads : leads.filter((l) => l.kind === kindFilter);
+  const counts = {
+    contact: leads.filter((l) => l.kind === "contact").length,
+    subscribe: leads.filter((l) => l.kind === "subscribe").length,
+    guestbook: guestbook.length,
+    unreplied: guestbook.filter((g) => !g.reply && !g.hidden).length,
+  };
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-[15px] font-bold">관리</h3>
+
+      {/* 건수 요약 — 리틀리 관리 탭 상단 카드 */}
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { label: "문의", value: counts.contact },
+          { label: "구독", value: counts.subscribe },
+          { label: "방명록", value: counts.guestbook, sub: counts.unreplied ? `답글 없음 ${counts.unreplied}` : undefined },
+        ].map((c) => (
+          <div key={c.label} className="rounded-card border border-line bg-plate px-3 py-2.5">
+            <p className="text-[12px] text-fg-sub">{c.label}</p>
+            <p className="tnum mt-1 text-[20px] font-bold leading-none">{c.value.toLocaleString("ko-KR")}</p>
+            {c.sub ? <p className="mt-1 text-[11px] text-primary-ink">{c.sub}</p> : null}
+          </div>
+        ))}
+      </div>
+      <p className="text-[12px] text-fg-sub">최근 50건씩 보여요. 전체는 CSV 로 내려받을 수 있어요.</p>
+
       {/* 받은 내용 — 문의받기·구독신청 블록이 약속한 자리.
           이게 없으면 방문자가 남긴 게 어디로 갔는지 알 수 없다(편집기가 여기를 가리킨다). */}
       <div>
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[12px] font-medium text-fg-sub">받은 내용</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <p className="text-[12px] font-medium text-fg-sub">받은 내용</p>
+            <div className="flex gap-1" role="group" aria-label="종류">
+              {(
+                [
+                  ["all", "전체"],
+                  ["contact", "문의"],
+                  ["subscribe", "구독"],
+                ] as const
+              ).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={kindFilter === k}
+                  onClick={() => setKindFilter(k)}
+                  className={cn(
+                    "trans-state rounded-chip px-2 py-0.5 text-[11px] font-semibold",
+                    kindFilter === k ? "bg-primary text-on-primary" : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           {leads.length > 0 ? (
             <button
               type="button"
@@ -3081,25 +3265,51 @@ function SettingsPanel({
             </button>
           ) : null}
         </div>
-        {leads.length === 0 ? (
-          <p className="mt-1.5 text-[14px] text-fg-sub">문의받기·구독신청 블록으로 들어온 내용이 여기에 쌓여요.</p>
+        {shownLeads.length === 0 ? (
+          <p className="mt-1.5 text-[14px] text-fg-sub">
+            {leads.length === 0 ? "문의받기·구독신청 블록으로 들어온 내용이 여기에 쌓여요." : "이 종류로 들어온 내용이 아직 없어요."}
+          </p>
         ) : (
-          <ul className="mt-1.5 max-h-64 divide-y divide-line overflow-y-auto">
-            {leads.map((l) => (
-              <li key={l.id} className="py-2.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-chip bg-plate px-2 py-0.5 text-[11px] font-semibold text-fg-sub">
-                    {l.kind === "subscribe" ? "구독" : "문의"}
-                  </span>
-                  <span className="text-[14px] font-semibold">{l.name || l.email || l.phone || "(이름 없음)"}</span>
-                  <span className="tnum ml-auto text-[12px] text-fg-sub">{l.createdAt.slice(0, 10)}</span>
-                </div>
-                {l.email || l.phone ? (
-                  <p className="mt-0.5 text-[12px] text-fg-sub">{[l.email, l.phone].filter(Boolean).join(" · ")}</p>
-                ) : null}
-                {l.message ? <p className="mt-1 line-clamp-2 text-[14px]">{l.message}</p> : null}
-              </li>
-            ))}
+          <ul className="mt-1.5 max-h-80 divide-y divide-line overflow-y-auto">
+            {shownLeads.map((l) => {
+              const open = openLead === l.id;
+              return (
+                <li key={l.id} className="py-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setOpenLead(open ? null : l.id)}
+                    aria-expanded={open}
+                    className="flex w-full flex-wrap items-center gap-2 text-left"
+                  >
+                    <span className="rounded-chip bg-plate px-2 py-0.5 text-[11px] font-semibold text-fg-sub">
+                      {l.kind === "subscribe" ? "구독" : "문의"}
+                    </span>
+                    <span className="text-[14px] font-semibold">{l.name || l.email || l.phone || "(이름 없음)"}</span>
+                    <span className="tnum ml-auto text-[12px] text-fg-sub">{l.createdAt.slice(0, 10)}</span>
+                    <ChevronDown className={cn("trans-state size-3.5 text-fg-faint", open && "rotate-180")} aria-hidden />
+                  </button>
+                  {l.email || l.phone ? (
+                    <p className="mt-0.5 text-[12px] text-fg-sub">{[l.email, l.phone].filter(Boolean).join(" · ")}</p>
+                  ) : null}
+                  {l.message ? <p className={cn("mt-1 whitespace-pre-wrap text-[14px]", !open && "line-clamp-2")}>{l.message}</p> : null}
+                  {open ? (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {l.email ? (
+                        <a href={`mailto:${l.email}`} className="trans-state rounded-chip border border-line px-2.5 py-1 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg">
+                          메일 보내기
+                        </a>
+                      ) : null}
+                      {l.phone ? (
+                        <a href={`tel:${l.phone}`} className="trans-state rounded-chip border border-line px-2.5 py-1 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg">
+                          전화
+                        </a>
+                      ) : null}
+                      <p className="tnum w-full text-[11px] text-fg-sub">접수 {new Date(l.createdAt).toLocaleString("ko-KR")}</p>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -3156,26 +3366,226 @@ function SettingsPanel({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-        {confirmDelete ? (
-          <span className="flex flex-wrap items-center gap-2">
-            <span className="text-[12px] text-negative-strong">블록·클릭 기록이 모두 사라져요.</span>
-            <Button variant="danger" size="sm" disabled={busy} onClick={onDelete}>
-              삭제
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   페이지 설정 폼 — 리틀리 ⚙ 페이지 설정 모달 카피(5단계). 발행과 무관하게 즉시 적용
+   ══════════════════════════════════════════════════════════════════ */
+
+function PageSettingsForm({
+  page,
+  busy,
+  onSettings,
+  onPassword,
+}: {
+  page: LinkPageView;
+  busy: boolean;
+  onSettings: (patch: Partial<LinkPageSettings>) => void;
+  onPassword: (pw: string | null) => void;
+}) {
+  const st = page.settings;
+  /* 텍스트 필드는 초안을 두고 blur/저장에서 확정 — 글자마다 서버 왕복을 돌리지 않는다 */
+  type Staged = Pick<LinkPageSettings, "ogTitle" | "ogImage" | "favicon" | "lockMessage">;
+  const stagedOf = (x: LinkPageSettings): Staged => ({ ogTitle: x.ogTitle, ogImage: x.ogImage, favicon: x.favicon, lockMessage: x.lockMessage });
+  const [form, setForm] = useState<Staged>(() => stagedOf(st));
+  const [pw, setPw] = useState("");
+  const [pwOpen, setPwOpen] = useState(false);
+  /* 서버 값이 바뀌면 **필드별** 3-way 병합 — 서버가 바꾼 필드는 받고, 사용자가 고친(미저장) 필드는 지킨다.
+     통째로 덮으면 제목을 쓰다 「검색 노출」을 켜는 순간 쓰던 글이 사라진다(프로필 폼의 감사 #2 와 같은 버그, 소넷 5단계 #2) */
+  const serverKey = stableJson(stagedOf(st));
+  const [prevKey, setPrevKey] = useState(serverKey);
+  const [prevServer, setPrevServer] = useState<Staged>(() => stagedOf(st));
+  if (serverKey !== prevKey) {
+    const next = stagedOf(st);
+    const base = prevServer;
+    setPrevKey(serverKey);
+    setPrevServer(next);
+    setForm((f) => {
+      const out = { ...f };
+      for (const k of Object.keys(next) as Array<keyof Staged>) {
+        const changedOnServer = next[k] !== base[k];
+        const userEdited = f[k] !== base[k];
+        if (changedOnServer || !userEdited) out[k] = next[k];
+      }
+      return out;
+    });
+  }
+  const { ogTitle, ogImage, favicon, lockMessage } = form;
+  const setOgTitle = (v: string) => setForm((f) => ({ ...f, ogTitle: v }));
+  const setOgImage = (v: string) => setForm((f) => ({ ...f, ogImage: v }));
+  const setFavicon = (v: string) => setForm((f) => ({ ...f, favicon: v }));
+  const setLockMessage = (v: string) => setForm((f) => ({ ...f, lockMessage: v }));
+
+  const input =
+    "h-10 w-full rounded-card border border-line bg-body px-3 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none";
+  const label = "block text-[12px] font-medium text-fg-sub";
+  const commit = (k: keyof LinkPageSettings, v: string) => {
+    if (v.trim() === (st[k] as string)) return;
+    onSettings({ [k]: v.trim() } as Partial<LinkPageSettings>);
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[12px] font-medium text-fg-sub">페이지 설정</p>
+      <p className="-mt-3 text-[12px] text-fg-sub">여기 값은 「라이브 반영」 없이 바로 적용돼요.</p>
+
+      {/* 비밀번호 */}
+      <div className="rounded-card border border-line bg-plate px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 text-[14px] font-semibold">
+              <Lock className="size-3.5 text-fg-sub" aria-hidden />
+              {st.hasPassword ? "비밀번호로 잠겨 있어요" : "비밀번호 없음"}
+            </p>
+            <p className="mt-0.5 text-[12px] text-fg-sub">
+              {st.hasPassword ? "방문자는 비밀번호를 넣어야 볼 수 있어요. 검색에도 안 잡혀요." : "걸어두면 아는 사람만 볼 수 있어요(4~32자)."}
+            </p>
+          </div>
+          <div className="flex gap-1.5">
+            {st.hasPassword ? (
+              <Button variant="ghost" size="sm" disabled={busy} onClick={() => onPassword(null)}>
+                풀기
+              </Button>
+            ) : null}
+            <Button variant="secondary" size="sm" disabled={busy} onClick={() => setPwOpen((v) => !v)}>
+              {st.hasPassword ? "바꾸기" : "걸기"}
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>
-              취소
-            </Button>
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(true)}
-            className="trans-state text-[12px] text-fg-sub underline underline-offset-2 hover:text-negative-strong"
+          </div>
+        </div>
+        {pwOpen ? (
+          <form
+            className="mt-3 space-y-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (pw.trim().length < 4) return;
+              onPassword(pw);
+              setPw("");
+              setPwOpen(false);
+            }}
           >
-            프로필 링크 삭제
-          </button>
-        )}
+            <input
+              type="password"
+              value={pw}
+              onChange={(e) => setPw(e.target.value)}
+              placeholder="새 비밀번호 (4~32자)"
+              aria-label="새 비밀번호"
+              autoComplete="new-password"
+              minLength={4}
+              maxLength={32}
+              className={input}
+            />
+            <label className={label} htmlFor="ps-lockmsg">
+              잠금 화면 안내 문구 (선택)
+            </label>
+            <input
+              id="ps-lockmsg"
+              value={lockMessage}
+              onChange={(e) => setLockMessage(e.target.value)}
+              onBlur={() => commit("lockMessage", lockMessage)}
+              placeholder="예: 멤버십 회원에게 공유한 비밀번호를 넣어 주세요"
+              maxLength={200}
+              className={input}
+            />
+            <div className="flex gap-1.5">
+              <Button size="sm" type="submit" disabled={busy || pw.trim().length < 4}>
+                저장
+              </Button>
+              <Button variant="ghost" size="sm" type="button" onClick={() => { setPwOpen(false); setPw(""); }}>
+                취소
+              </Button>
+            </div>
+          </form>
+        ) : null}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className={label} htmlFor="ps-lang">
+            페이지 언어
+          </label>
+          <select id="ps-lang" value={st.lang} disabled={busy} onChange={(e) => onSettings({ lang: e.target.value as LinkPageSettings["lang"] })} className={`mt-1.5 ${input}`}>
+            {LINK_LANGS.map((l) => (
+              <option key={l.key} value={l.key}>
+                {l.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-fg-sub">폼 라벨·버튼 같은 고정 문구가 바뀌어요. 내가 쓴 글은 그대로예요.</p>
+        </div>
+        <div>
+          <label className={label} htmlFor="ps-target">
+            링크 열기
+          </label>
+          <select id="ps-target" value={st.target} disabled={busy} onChange={(e) => onSettings({ target: e.target.value as LinkPageSettings["target"] })} className={`mt-1.5 ${input}`}>
+            {LINK_TARGETS.map((t) => (
+              <option key={t.key} value={t.key}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-fg-sub">{LINK_TARGETS.find((t) => t.key === st.target)?.hint}</p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-plate px-4 py-3">
+        <div className="min-w-0">
+          <p className="text-[14px] font-semibold">검색·AI 노출</p>
+          <p className="mt-0.5 text-[12px] text-fg-sub">{st.robots === "index" ? "구글·네이버·AI 검색이 이 페이지를 찾을 수 있어요." : "검색 결과에 나오지 않게 막아요(주소를 아는 사람만)."}</p>
+        </div>
+        <Switch checked={st.robots === "index"} onChange={(v) => onSettings({ robots: v ? "index" : "noindex" })} label="검색 노출" disabled={busy} />
+      </div>
+
+      {/* 공유 카드(OG) */}
+      <div className="space-y-2">
+        <div>
+          <label className={label} htmlFor="ps-ogtitle">
+            공유 카드 제목 (선택)
+          </label>
+          <input
+            id="ps-ogtitle"
+            value={ogTitle}
+            onChange={(e) => setOgTitle(e.target.value)}
+            onBlur={() => commit("ogTitle", ogTitle)}
+            placeholder={page.seoTitle || page.title || "페이지 제목"}
+            maxLength={80}
+            className={`mt-1.5 ${input}`}
+          />
+          <p className="mt-1 text-[11px] text-fg-sub">카카오톡·인스타 DM 에 붙여 넣었을 때 보이는 제목. 비우면 SEO 제목 → 페이지 제목 순이에요.</p>
+        </div>
+        <ImageField
+          label="공유 카드 이미지 (선택)"
+          value={ogImage}
+          onChange={(v) => {
+            setOgImage(v);
+            commit("ogImage", v);
+          }}
+          hint="비우면 커버 → 프로필 사진 순. 1200×630 비율이 가장 잘 맞아요."
+          aspect="aspect-[1.91/1]"
+        />
+        <div>
+          <label className={label} htmlFor="ps-favicon">
+            파비콘 (선택)
+          </label>
+          <div className="mt-1.5 flex gap-2">
+            <input
+              id="ps-favicon"
+              value={favicon}
+              onChange={(e) => setFavicon(e.target.value)}
+              onBlur={() => commit("favicon", favicon)}
+              placeholder="이모지 하나 (예: 🐦) 또는 https 이미지 주소"
+              maxLength={300}
+              className={input}
+            />
+            {favicon && !/^https:/.test(favicon) ? (
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-card border border-line bg-body text-[20px]" aria-hidden>
+                {favicon}
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-1 text-[11px] text-fg-sub">브라우저 탭에 뜨는 작은 아이콘. 비우면 핀치 기본 아이콘이에요.</p>
+        </div>
       </div>
     </div>
   );

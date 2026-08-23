@@ -134,6 +134,6 @@ export const linkWorkspace: LinkWorkspace = {
   page: null,
   blocks: [],
   snapshot: null,
-  stats: { days: 30, failed: false, views: 0, uniques: 0, clicks: 0, ctr: 0, returning: 0, daily: [], blocks: [], regions: [], sources: [] },
+  stats: { days: 30, failed: false, views: 0, uniques: 0, clicks: 0, ctr: 0, returning: 0, daily: [], blocks: [], regions: [], sources: [], devices: [], referrers: [], dwell: { avgMs: 0, n: 0 } },
   leads: [],
 };
