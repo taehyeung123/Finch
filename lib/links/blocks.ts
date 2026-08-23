@@ -351,6 +351,50 @@ export function partialReason(type: BlockType, data: Record<string, unknown>): s
   return missing > 0 && missing < items.length ? `주소 없는 항목 ${missing}개는 공개되지 않아요` : null;
 }
 
+/* ── 블록 공통 기능(리틀리 흡수 1단계, 2026-08-22) — data 에 담는다(마이그레이션 없음).
+   emphasized : 페이지 하단 고정 CTA. 페이지당 하나 — 서버 액션이 다른 블록의 것을 지운다.
+   openAt / closeAt : 예약 공개·숨김(ISO). 공개 페이지가 **요청 시점**에 판정한다(force-dynamic). */
+
+/** 강조(하단 고정 CTA)가 가능한 타입 — 주소 하나로 가는 버튼형만 */
+export const EMPHASIS_TYPES: readonly BlockType[] = ["link", "coupang", "donation", "image_card"];
+
+export function blockSchedule(data: Record<string, unknown>): { openAt: string | null; closeAt: string | null } {
+  const iso = (v: unknown) => (typeof v === "string" && !Number.isNaN(Date.parse(v)) ? v : null);
+  return { openAt: iso(data.openAt), closeAt: iso(data.closeAt) };
+}
+
+/** 지금 시각 기준으로 예약 때문에 숨겨지는가 */
+export function isScheduledHidden(data: Record<string, unknown>, now: number = Date.now()): boolean {
+  const { openAt, closeAt } = blockSchedule(data);
+  if (openAt && now < Date.parse(openAt)) return true;
+  if (closeAt && now > Date.parse(closeAt)) return true;
+  return false;
+}
+
+/** 캔버스 캡션용 한 줄 — "8/25 09:00 공개 예정" / "9/1 18:00 까지 공개" / null */
+export function scheduleCaption(data: Record<string, unknown>, now: number = Date.now()): string | null {
+  const { openAt, closeAt } = blockSchedule(data);
+  const fmt = (iso: string) => {
+    const d = new Date(iso);
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${d.getMonth() + 1}/${d.getDate()} ${hh}:${mm}`;
+  };
+  if (openAt && now < Date.parse(openAt)) return `예약 — ${fmt(openAt)} 공개 예정`;
+  if (closeAt && now > Date.parse(closeAt)) return `예약 — ${fmt(closeAt)} 에 숨겨졌어요`;
+  if (closeAt) return `예약 — ${fmt(closeAt)} 까지 공개`;
+  return null;
+}
+
+/** 강조 CTA 로 그릴 라벨·주소 — 없으면 null(타입이 아니거나 주소가 비었거나) */
+export function emphasizedCta(type: BlockType, data: Record<string, unknown>): { label: string } | null {
+  if (!EMPHASIS_TYPES.includes(type) || data.emphasized !== true) return null;
+  const s = (k: string) => (typeof data[k] === "string" ? (data[k] as string).trim() : "");
+  if (!s("url")) return null;
+  const label = s("label") || s("title") || s("buttonText") || (type === "donation" ? "후원하기" : type === "coupang" ? "상품 보기" : "바로가기");
+  return { label };
+}
+
 /** 블록 목록을 한 줄 요약으로 — 편집 화면 목록에서 무슨 블록인지 알아야 한다 */
 export function blockSummary(type: BlockType, data: Record<string, unknown>): string {
   const s = (k: string) => (typeof data[k] === "string" ? (data[k] as string) : "");

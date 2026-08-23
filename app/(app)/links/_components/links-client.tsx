@@ -4,7 +4,30 @@ import { useEffect, useLayoutEffect, useMemo, useOptimistic, useRef, useState, u
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   BarChart3,
+  CalendarClock,
+  Clock,
+  Copy as CopyIcon,
+  Ellipsis,
+  GripVertical,
+  Heart,
+  Heading,
+  Image as ImageIcon,
+  LayoutGrid,
+  Mail,
+  MapPin,
+  Megaphone,
+  MessageSquare,
+  Minus,
+  MoveVertical,
+  Play,
+  Rss,
+  ShoppingBag,
+  Star,
+  Type,
+  GalleryHorizontal,
   Check,
   ChevronDown,
   Copy,
@@ -35,7 +58,19 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Switch } from "@/components/ui/switch";
 import { FinchLoader } from "@/components/ui/finch-loader";
 import { normalizeUrl, publicLinkUrl, stableJson } from "@/lib/links";
-import { BLOCK_CATALOG, blockSummary, defaultBlockData, type BlockType, type LinkBlock } from "@/lib/links/blocks";
+import {
+  BLOCK_CATALOG,
+  EMPHASIS_TYPES,
+  blockSchedule,
+  blockSummary,
+  defaultBlockData,
+  hiddenReason,
+  isScheduledHidden,
+  partialReason,
+  scheduleCaption,
+  type BlockType,
+  type LinkBlock,
+} from "@/lib/links/blocks";
 import {
   CUSTOM_BUTTONS,
   CUSTOM_FONTS,
@@ -66,12 +101,15 @@ import {
   updateLinkProfile,
   updateLinkTheme,
   updateLinkThemeCustom,
+  setBlockEmphasized,
+  setBlockSchedule,
+  duplicateBlock,
 } from "../actions";
 import type { LinkLead, LinkPageView, LinkSnapshotView, LinkStats } from "@/lib/links/types";
 import { BlockEditor, EDITOR_TITLE_ID } from "./block-editor";
 import { ImageField } from "./image-field";
 import { ImportLinks, ImportLinksBody } from "./import-links";
-import { PhonePreview } from "./phone-preview";
+import { PhonePreview, type CanvasEdit } from "./phone-preview";
 
 /*
   프로필 링크 편집기 — 링크팜 빌더 구조를 실측 조사해 재구성(2026-08-17),
@@ -248,6 +286,8 @@ export function LinksClient({
      "하던 게 날아간" 것처럼 보인다(2026-08-20 지적). 서버 호출은 「이 템플릿 적용」
      때만. */
   const [tplPreview, setTplPreview] = useState<LinkTemplate | null>(null);
+  /* 예약 공개 모달 — 어느 블록의 예약을 고치는 중인가 */
+  const [scheduleFor, setScheduleFor] = useState<string | null>(null);
   /* 편집 중인 블록 값은 **여기서** 들고 있다 — 편집기 안에 가둬 두면 탭을 누르는
      시점에 부모가 "미저장인가"를 알 수 없다. baseline 은 마지막으로 서버에 반영된 값. */
   const [draft, setDraft] = useState<Record<string, unknown>>({});
@@ -539,6 +579,120 @@ export function LinksClient({
 
 
 
+  /* 캔버스·블록 목록이 **같은 핸들러**를 쓴다 — 두 화면이 같은 일을 다르게 하면 안 된다 */
+  const canvasEdit: CanvasEdit = {
+    onEdit: openEditor,
+    /* 온오프는 낙관 즉시 반영 — 스위치가 서버 왕복을 기다리면 고장처럼 보인다 */
+    onToggle: (id, active) =>
+      fire(
+        () => applyBlockPatch({ kind: "active", id, active }),
+        () => updateBlock(id, { active }),
+        undefined,
+        () => {
+          /* 무슨 일이 났는지 바로 말한다 — 눈 아이콘을 편집 버튼으로 알고 누른 뒤
+             "미리보기에 왜 안 나오냐"가 됐다(2026-08-22 실계정). 되돌리는 길도 같이. */
+          setNotice(
+            active
+              ? "블록을 다시 켰어요 — 미리보기·공개에 나가요."
+              : "블록을 숨겼어요 — 미리보기·공개 페이지에서 빠져요. 눈 아이콘이나 ↩ 실행취소로 되돌릴 수 있어요.",
+          );
+          record({
+            label: active ? "노출 켜기" : "노출 끄기",
+            undo: () => updateBlock(resolveId(id), { active: !active }),
+            redo: () => updateBlock(resolveId(id), { active }),
+          });
+        },
+      ),
+    /* 안내는 **성공했을 때만** 나간다 — 연타로 무시된 클릭·서버 실패에
+       「옮겼어요」가 읽히면 안 된다(목록을 눈으로 못 보는 사용자에게는 확정이다) */
+    onMove: (id, dir, label) =>
+      run(
+        chained(() => moveBlock(id, dir)),
+        () => {
+          setNotice(`${label} 블록을 ${dir === "up" ? "위로" : "아래로"} 옮겼어요.`);
+          /* 한계(소넷 확정 3, 수용): 역연산은 "그때의 이웃"이 아니라 실행
+             시점의 이웃과 스왑한다(moveBlock 이 현재 목록을 다시 읽는다).
+             사이에 다른 이동이 끼면 원래 배치 복원이 아니라 한 칸 이동을
+             무를 뿐이다 — 순서는 늘 정의돼 있어(sort_order,created_at) 안전. */
+          record({
+            label: `${label} 이동`,
+            undo: chained(() => moveBlock(id, dir === "up" ? "down" : "up")),
+            redo: chained(() => moveBlock(id, dir)),
+          });
+        },
+      ),
+    /* 드래그 정렬 — 낙관으로 즉시 재배치, 성공 시에만 역연산 기록.
+       origBefore(원래 바로 뒤 블록)가 복원 좌표다. */
+    onReorder: (dragId, beforeId, label) => {
+      const from = liveBlocks.findIndex((b) => b.id === dragId);
+      if (from < 0) return;
+      const origBefore = liveBlocks[from + 1]?.id ?? null;
+      /* 제자리 드롭은 조작이 아니다 — 서버 왕복도 이력도 만들지 않는다 */
+      if (beforeId === dragId || beforeId === origBefore) return;
+      fire(
+        () => applyBlockPatch({ kind: "order", id: dragId, beforeId }),
+        chained(() => reorderBlock(dragId, beforeId)),
+        undefined,
+        () =>
+          /* 한계(이동 undo 와 같은 수용, 소넷 확정 4): undo 좌표(origBefore)는
+             드래그 시점 스냅샷이다. 그 블록이 그 사이 삭제되면 undo 는
+             "화면을 새로고침해 주세요"로 명시적으로 실패하고 엔트리는
+             스택에 남는다 — 데이터는 안 다치고, 다른 조작이 이력을 밀어낸다. */
+          record({
+            label: `${label} 이동`,
+            undo: chained(() => reorderBlock(dragId, origBefore)),
+            redo: chained(() => reorderBlock(dragId, beforeId)),
+          }),
+      );
+    },
+    onDelete: (id, label) => {
+      /* 삭제는 물리 삭제 — 확인 후 지우고, 직전 1건은 되돌리기 바가 복원한다 */
+      if (!window.confirm(`「${label}」 블록을 삭제할까요?`)) return;
+      const b = blocks.find((x) => x.id === id);
+      run(
+        () => deleteBlock(id),
+        () => {
+          if (b) {
+            /* 복원 경로는 전역 실행취소 **하나**다 — 인라인 되돌리기 바와
+               이중으로 기록하면 같은 블록이 두 번 복원된다(소넷 확정 1). */
+            const payload = { type: b.type, data: b.data, sortOrder: b.sortOrder, active: b.active };
+            /* 복원은 **새 행**을 만든다 — 다시실행(재삭제)은 그 새 id 를
+               지워야 하므로 클로저 변수로 따라간다 */
+            record({
+              label: `${label} 삭제`,
+              undo: async () => {
+                const r = await restoreBlock(payload);
+                /* 옛 id → 새 id 별칭 — 이 블록을 가리키던 모든 엔트리가 새 행을 따라간다 */
+                if (r.ok && r.id) idAlias.current.set(resolveId(id), r.id);
+                return r;
+              },
+              redo: () => deleteBlock(resolveId(id)),
+            });
+          }
+          setNotice("블록을 삭제했어요. 상단 ↩ 실행취소로 복원할 수 있어요.");
+        },
+      );
+    },
+    onAdd: () => openDrawer("add", true),
+    onOpenProfile: () => openDrawer("profile", true),
+    onProfileCommit: (patch) => {
+      /* 인라인 편집은 **그 필드만** 확정한다. 서버에는 「마지막 서버
+         확정값 + 이번 패치」를 보낸다 — profileForm 전체를 보내면
+         드로어에 남아 있던 미저장 주소·SEO 가 저장 버튼 없이 딸려
+         나간다(소넷 확정 1). 실패하면 그 필드만 폼에서 되돌린다 —
+         서버 값이 안 바뀌는 실패에선 serverKey 동기화가 영원히
+         깨어나지 않기 때문이다(확정 2). */
+      const before: Partial<ProfileFormState> = {};
+      for (const k of Object.keys(patch) as Array<keyof typeof patch>) before[k] = profileForm[k];
+      setProfileForm((f) => ({ ...f, ...patch }));
+      fire(
+        () => {},
+        () => updateLinkProfile({ ...profileFormFrom(page), ...patch }),
+        () => setProfileForm((f) => ({ ...f, ...before })),
+      );
+    },
+  };
+
   /* ── 상단 바 부품 — 1행(도구 칩)·2행(이력·미리보기 토글)에 꽂는 JSX ── */
   const toolChips = (
     <>
@@ -631,6 +785,32 @@ export function LinksClient({
         tools={toolChips}
         history={historyButtons}
       />
+
+      {scheduleFor ? (
+        <ScheduleModal
+          block={blocks.find((b) => b.id === scheduleFor) ?? null}
+          busy={busy}
+          onClose={() => setScheduleFor(null)}
+          onSave={(openAt, closeAt) => {
+            const b = blocks.find((x) => x.id === scheduleFor);
+            if (!b) return;
+            const prev = blockSchedule(b.data);
+            const id = b.id;
+            run(
+              () => setBlockSchedule(id, openAt, closeAt),
+              () => {
+                setScheduleFor(null);
+                setNotice(openAt || closeAt ? "예약을 저장했어요 — 공개 페이지가 날짜에 맞춰 보이거나 숨겨요." : "예약을 해제했어요.");
+                record({
+                  label: "예약 공개 변경",
+                  undo: () => setBlockSchedule(resolveId(id), prev.openAt, prev.closeAt),
+                  redo: () => setBlockSchedule(resolveId(id), openAt, closeAt),
+                });
+              },
+            );
+          }}
+        />
+      ) : null}
 
       {tplPreview ? (
         <TemplateModal
@@ -751,118 +931,7 @@ export function LinksClient({
                 /* active 필터를 걸지 않는다 — 꺼진 블록도 캔버스에 남아야 다시 켤 수 있다 */
                 blocks={draftBlocksView}
                 selectedId={editingId}
-                edit={{
-                  onEdit: openEditor,
-                  /* 온오프는 낙관 즉시 반영 — 스위치가 서버 왕복을 기다리면 고장처럼 보인다 */
-                  onToggle: (id, active) =>
-                    fire(
-                      () => applyBlockPatch({ kind: "active", id, active }),
-                      () => updateBlock(id, { active }),
-                      undefined,
-                      () => {
-                        /* 무슨 일이 났는지 바로 말한다 — 눈 아이콘을 편집 버튼으로 알고 누른 뒤
-                           "미리보기에 왜 안 나오냐"가 됐다(2026-08-22 실계정). 되돌리는 길도 같이. */
-                        setNotice(
-                          active
-                            ? "블록을 다시 켰어요 — 미리보기·공개에 나가요."
-                            : "블록을 숨겼어요 — 미리보기·공개 페이지에서 빠져요. 눈 아이콘이나 ↩ 실행취소로 되돌릴 수 있어요.",
-                        );
-                        record({
-                          label: active ? "노출 켜기" : "노출 끄기",
-                          undo: () => updateBlock(resolveId(id), { active: !active }),
-                          redo: () => updateBlock(resolveId(id), { active }),
-                        });
-                      },
-                    ),
-                  /* 안내는 **성공했을 때만** 나간다 — 연타로 무시된 클릭·서버 실패에
-                     「옮겼어요」가 읽히면 안 된다(목록을 눈으로 못 보는 사용자에게는 확정이다) */
-                  onMove: (id, dir, label) =>
-                    run(
-                      chained(() => moveBlock(id, dir)),
-                      () => {
-                        setNotice(`${label} 블록을 ${dir === "up" ? "위로" : "아래로"} 옮겼어요.`);
-                        /* 한계(소넷 확정 3, 수용): 역연산은 "그때의 이웃"이 아니라 실행
-                           시점의 이웃과 스왑한다(moveBlock 이 현재 목록을 다시 읽는다).
-                           사이에 다른 이동이 끼면 원래 배치 복원이 아니라 한 칸 이동을
-                           무를 뿐이다 — 순서는 늘 정의돼 있어(sort_order,created_at) 안전. */
-                        record({
-                          label: `${label} 이동`,
-                          undo: chained(() => moveBlock(id, dir === "up" ? "down" : "up")),
-                          redo: chained(() => moveBlock(id, dir)),
-                        });
-                      },
-                    ),
-                  /* 드래그 정렬 — 낙관으로 즉시 재배치, 성공 시에만 역연산 기록.
-                     origBefore(원래 바로 뒤 블록)가 복원 좌표다. */
-                  onReorder: (dragId, beforeId, label) => {
-                    const from = liveBlocks.findIndex((b) => b.id === dragId);
-                    if (from < 0) return;
-                    const origBefore = liveBlocks[from + 1]?.id ?? null;
-                    /* 제자리 드롭은 조작이 아니다 — 서버 왕복도 이력도 만들지 않는다 */
-                    if (beforeId === dragId || beforeId === origBefore) return;
-                    fire(
-                      () => applyBlockPatch({ kind: "order", id: dragId, beforeId }),
-                      chained(() => reorderBlock(dragId, beforeId)),
-                      undefined,
-                      () =>
-                        /* 한계(이동 undo 와 같은 수용, 소넷 확정 4): undo 좌표(origBefore)는
-                           드래그 시점 스냅샷이다. 그 블록이 그 사이 삭제되면 undo 는
-                           "화면을 새로고침해 주세요"로 명시적으로 실패하고 엔트리는
-                           스택에 남는다 — 데이터는 안 다치고, 다른 조작이 이력을 밀어낸다. */
-                        record({
-                          label: `${label} 이동`,
-                          undo: chained(() => reorderBlock(dragId, origBefore)),
-                          redo: chained(() => reorderBlock(dragId, beforeId)),
-                        }),
-                    );
-                  },
-                  onDelete: (id, label) => {
-                    /* 삭제는 물리 삭제 — 확인 후 지우고, 직전 1건은 되돌리기 바가 복원한다 */
-                    if (!window.confirm(`「${label}」 블록을 삭제할까요?`)) return;
-                    const b = blocks.find((x) => x.id === id);
-                    run(
-                      () => deleteBlock(id),
-                      () => {
-                        if (b) {
-                          /* 복원 경로는 전역 실행취소 **하나**다 — 인라인 되돌리기 바와
-                             이중으로 기록하면 같은 블록이 두 번 복원된다(소넷 확정 1). */
-                          const payload = { type: b.type, data: b.data, sortOrder: b.sortOrder, active: b.active };
-                          /* 복원은 **새 행**을 만든다 — 다시실행(재삭제)은 그 새 id 를
-                             지워야 하므로 클로저 변수로 따라간다 */
-                          record({
-                            label: `${label} 삭제`,
-                            undo: async () => {
-                              const r = await restoreBlock(payload);
-                              /* 옛 id → 새 id 별칭 — 이 블록을 가리키던 모든 엔트리가 새 행을 따라간다 */
-                              if (r.ok && r.id) idAlias.current.set(resolveId(id), r.id);
-                              return r;
-                            },
-                            redo: () => deleteBlock(resolveId(id)),
-                          });
-                        }
-                        setNotice("블록을 삭제했어요. 상단 ↩ 실행취소로 복원할 수 있어요.");
-                      },
-                    );
-                  },
-                  onAdd: () => openDrawer("add", true),
-                  onOpenProfile: () => openDrawer("profile", true),
-                  onProfileCommit: (patch) => {
-                    /* 인라인 편집은 **그 필드만** 확정한다. 서버에는 「마지막 서버
-                       확정값 + 이번 패치」를 보낸다 — profileForm 전체를 보내면
-                       드로어에 남아 있던 미저장 주소·SEO 가 저장 버튼 없이 딸려
-                       나간다(소넷 확정 1). 실패하면 그 필드만 폼에서 되돌린다 —
-                       서버 값이 안 바뀌는 실패에선 serverKey 동기화가 영원히
-                       깨어나지 않기 때문이다(확정 2). */
-                    const before: Partial<ProfileFormState> = {};
-                    for (const k of Object.keys(patch) as Array<keyof typeof patch>) before[k] = profileForm[k];
-                    setProfileForm((f) => ({ ...f, ...patch }));
-                    fire(
-                      () => {},
-                      () => updateLinkProfile({ ...profileFormFrom(page), ...patch }),
-                      () => setProfileForm((f) => ({ ...f, ...before })),
-                    );
-                  },
-                }}
+                edit={canvasEdit}
               />
             )}
         </div>
@@ -871,11 +940,13 @@ export function LinksClient({
             스르륵 열리고 닫힌다(.links-panel-col). 닫히는 동안은 마지막 내용을 잔상으로 보여준다.
             sticky 오프셋은 상단바(h-14=56px) **아래**(top-[4.5rem]). 높이는 뷰포트에 맞추고 안에서 스크롤. */}
         {(() => {
-          const open = !!(editing || drawer);
-          const panelKey = editing ? `edit:${editing.id}` : drawer ? `drawer:${drawer}` : "none";
-          const body = open ? (
+          /* 목록 모드(기본) — 블록 아코디언. 블록 편집·프로필은 **목록 안 행이 펼쳐지는** 것이고,
+             테마·블록 추가·설정만 목록을 대체한다(✕ 로 목록 복귀). 리틀리 흡수 1단계. */
+          const listMode = !drawer || drawer === "profile" || !!editing;
+          const panelKey = listMode ? "list" : `drawer:${drawer}`;
+          const body = (
             <CardBody key={panelKey} className="wizard-step-in space-y-4">
-            {!editing && drawer ? (
+            {!listMode && drawer ? (
               <div className="flex items-center justify-between">
                 <h3 className="text-[15px] font-bold">{DRAWER_TITLE[drawer]}</h3>
                 <button
@@ -894,8 +965,43 @@ export function LinksClient({
               </div>
             ) : null}
 
-            {editing ? (
+            {listMode ? (
+              <BlockListPanel
+                blocks={draftBlocksView}
+                editingId={editingId}
+                busy={busy}
+                profileOpen={drawer === "profile"}
+                onToggleProfile={() => {
+                  if (drawer === "profile") {
+                    setDrawer(null);
+                    setError(null);
+                  } else openDrawer("profile", true);
+                }}
+                profile={
+                  drawer === "profile" ? (
+                    <ProfilePanel
+                      page={page}
+                      form={profileForm}
+                      dirty={profileDirty}
+                      busy={busy}
+                      error={error}
+                      onChange={(patch) => setProfileForm((f) => ({ ...f, ...patch }))}
+                      onSave={() => {
+                        const bad = profileForm.snsLinks.find((x) => !normalizeUrl(x.url));
+                        if (bad) {
+                          setError(bad.url.trim() ? "SNS 주소는 http(s) 로 시작하는 주소여야 해요." : "비어 있는 SNS 줄은 지워 주세요.");
+                          return;
+                        }
+                        run(() => updateLinkProfile(profileForm));
+                      }}
+                      onImages={(v) => run(() => updateLinkImages(v))}
+                    />
+                  ) : null
+                }
+                editor={
+                  editing ? (
               <BlockEditor
+                embedded
                 block={editing}
                 value={draft}
                 onChange={setDraft}
@@ -927,25 +1033,56 @@ export function LinksClient({
                   )
                 }
               />
-            ) : drawer === "profile" ? (
-              <ProfilePanel
-                page={page}
-                form={profileForm}
-                dirty={profileDirty}
-                busy={busy}
-                error={error}
-                onChange={(patch) => setProfileForm((f) => ({ ...f, ...patch }))}
-                onSave={() => {
-                  /* 서버와 같은 관문을 먼저 태운다 — 서버가 거절하면 폼은 그대로 남으니
-                     사용자가 어느 줄이 문제인지 바로 고칠 수 있다(감사 #9) */
-                  const bad = profileForm.snsLinks.find((x) => !normalizeUrl(x.url));
-                  if (bad) {
-                    setError(bad.url.trim() ? "SNS 주소는 http(s) 로 시작하는 주소여야 해요." : "비어 있는 SNS 줄은 지워 주세요.");
-                    return;
-                  }
-                  run(() => updateLinkProfile(profileForm));
+                  ) : null
+                }
+                onExpand={(id) => openEditor(id)}
+                onCollapse={() => closeEditor()}
+                onToggle={canvasEdit.onToggle}
+                onMove={canvasEdit.onMove}
+                onReorder={canvasEdit.onReorder}
+                onDelete={canvasEdit.onDelete}
+                onAdd={() => openDrawer("add", true)}
+                onEmphasize={(id, on) => {
+                  /* 켜면 다른 블록의 강조가 풀린다 — 되돌리기는 "그 전에 강조였던 블록"을 복원한다 */
+                  const prevEmph = liveBlocks.find((b) => b.data.emphasized === true && b.id !== id)?.id ?? null;
+                  run(
+                    () => setBlockEmphasized(id, on),
+                    () => {
+                      setNotice(on ? "이 블록을 강조했어요 — 페이지 아래에 고정 버튼으로 떠요." : "강조를 풀었어요.");
+                      record({
+                        label: on ? "강조 켜기" : "강조 끄기",
+                        undo: () =>
+                          on
+                            ? prevEmph
+                              ? setBlockEmphasized(resolveId(prevEmph), true)
+                              : setBlockEmphasized(resolveId(id), false)
+                            : setBlockEmphasized(resolveId(id), true),
+                        redo: () => setBlockEmphasized(resolveId(id), on),
+                      });
+                    },
+                  );
                 }}
-                onImages={(v) => run(() => updateLinkImages(v))}
+                onSchedule={(id) => setScheduleFor(id)}
+                onDuplicate={(id, label) =>
+                  run(
+                    () => duplicateBlock(id),
+                    (res) => {
+                      setNotice(`「${label}」 블록을 복사했어요 — 바로 아래에 들어갔어요.`);
+                      if (res.id) {
+                        const newId = res.id;
+                        record({
+                          label: `${label} 복사`,
+                          undo: () => deleteBlock(resolveId(newId)),
+                          redo: async () => {
+                            const r = await duplicateBlock(resolveId(id));
+                            if (r.ok && r.id) idAlias.current.set(resolveId(newId), r.id);
+                            return r;
+                          },
+                        });
+                      }
+                    },
+                  )
+                }
               />
             ) : drawer === "theme" ? (
               <ThemePanel
@@ -1052,8 +1189,8 @@ export function LinksClient({
               </>
             ) : null}
             </CardBody>
-          ) : null;
-          return <PanelColumn open={open}>{body}</PanelColumn>;
+          );
+          return <PanelColumn open>{body}</PanelColumn>;
         })()}
 
         {/* 라이브 미리보기 — **항상** 오른쪽에 있다. 패널이 열려도 가려지지 않는다. */}
@@ -1092,7 +1229,7 @@ export function LinksClient({
                     "미리보기에 안 나온다"가 된다(2026-08-20 지적). */}
                 <PhonePreview
                   page={draftPageView}
-                  blocks={draftBlocksView.filter((b) => b.active)}
+                  blocks={draftBlocksView.filter((b) => b.active && !isScheduledHidden(b.data))}
                   selectedId={null}
                   /* 실제 폰 크기로 고정 — 블록 수와 무관하게 같은 프레임, 내용은 안에서 스크롤 */
                   frame="device"
@@ -1250,6 +1387,408 @@ function TopBar({
 /* ══════════════════════════════════════════════════════════════════
    블록 추가 패널 — 카탈로그·템플릿·가져오기 (블록 목록은 캔버스가 대신한다)
    ══════════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════════════
+   블록 목록 아코디언 — 리틀리 흡수 1단계(2026-08-22).
+   행 헤더: 핸들 · ON/OFF · 아이콘+요약 · 강조★ · 예약🕐 · ⋯(복사/위/아래/삭제) · 펼침.
+   펼친 행 안에 편집기가 그 자리에서 열린다. 맨 위 「프로필」 행은 프로필 패널을 연다.
+   캔버스와 같은 핸들러(canvasEdit)를 쓴다 — 두 화면이 같은 일을 다르게 하지 않는다.
+   ══════════════════════════════════════════════════════════════════ */
+
+const BLOCK_ICON: Record<BlockType, React.ComponentType<{ className?: string }>> = {
+  link: Link2,
+  heading: Heading,
+  text: Type,
+  divider: Minus,
+  spacer: MoveVertical,
+  image: ImageIcon,
+  image_card: ShoppingBag,
+  video: Play,
+  card_row: GalleryHorizontal,
+  grid: LayoutGrid,
+  notice: Megaphone,
+  social_feed: Rss,
+  contact: MessageSquare,
+  subscribe: Mail,
+  map: MapPin,
+  coupang: ShoppingBag,
+  donation: Heart,
+};
+
+function BlockListPanel({
+  blocks,
+  editingId,
+  busy,
+  profileOpen,
+  onToggleProfile,
+  profile,
+  editor,
+  onExpand,
+  onCollapse,
+  onToggle,
+  onMove,
+  onReorder,
+  onDelete,
+  onAdd,
+  onEmphasize,
+  onSchedule,
+  onDuplicate,
+}: {
+  blocks: LinkBlock[];
+  editingId: string | null;
+  busy: boolean;
+  profileOpen: boolean;
+  onToggleProfile: () => void;
+  profile: React.ReactNode;
+  editor: React.ReactNode;
+  onExpand: (id: string) => void;
+  onCollapse: () => void;
+  onToggle: CanvasEdit["onToggle"];
+  onMove: CanvasEdit["onMove"];
+  onReorder: CanvasEdit["onReorder"];
+  onDelete: CanvasEdit["onDelete"];
+  onAdd: () => void;
+  onEmphasize: (id: string, on: boolean) => void;
+  onSchedule: (id: string) => void;
+  onDuplicate: (id: string, label: string) => void;
+}) {
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  /* ⋯ 메뉴는 바깥 클릭·Esc 로 닫힌다 */
+  useEffect(() => {
+    if (!menuFor) return;
+    const close = () => setMenuFor(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuFor]);
+
+  function dropOn(beforeId: string | null) {
+    if (!draggingId) return;
+    const label = blockSummary(blocks.find((b) => b.id === draggingId)?.type ?? "link", blocks.find((b) => b.id === draggingId)?.data ?? {});
+    onReorder(draggingId, beforeId, label);
+    setDraggingId(null);
+    setOverId(null);
+  }
+
+  const iconBtn = "trans-state rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg disabled:opacity-40";
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[15px] font-bold">
+          블록 <span className="tnum text-[12px] font-medium text-fg-sub">{blocks.length}</span>
+        </h3>
+        <Button size="sm" onClick={onAdd} disabled={busy}>
+          <Plus className="size-3.5" aria-hidden />
+          블록 추가
+        </Button>
+      </div>
+
+      {/* 프로필 행 — 리틀리처럼 목록 맨 위 */}
+      <div className={cn("rounded-card border bg-body", profileOpen ? "border-primary" : "border-line")}>
+        <button
+          type="button"
+          onClick={onToggleProfile}
+          aria-expanded={profileOpen}
+          className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
+        >
+          <span className="flex size-7 items-center justify-center rounded-card bg-plate text-fg-sub" aria-hidden>
+            <User className="size-4" />
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">프로필</span>
+          <ChevronDown
+            className={cn("size-4 text-fg-sub transition-transform duration-[240ms] ease-[var(--ease-arrive)]", profileOpen && "rotate-180")}
+            aria-hidden
+          />
+        </button>
+        {profileOpen ? <div className="anim-swap border-t border-line px-3 py-3">{profile}</div> : null}
+      </div>
+
+      {blocks.map((b, i) => {
+        const Icon = BLOCK_ICON[b.type] ?? Link2;
+        const meta = BLOCK_CATALOG.find((c) => c.type === b.type);
+        const summary = blockSummary(b.type, b.data);
+        const expanded = editingId === b.id;
+        const emph = b.data.emphasized === true;
+        const canEmph = EMPHASIS_TYPES.includes(b.type);
+        const sched = blockSchedule(b.data);
+        const hasSched = !!(sched.openAt || sched.closeAt);
+        const status = !b.active
+          ? "숨김 — 미리보기·공개에 안 나가요"
+          : (scheduleCaption(b.data) ?? hiddenReason(b.type, b.data) ?? partialReason(b.type, b.data));
+        return (
+          <div
+            key={b.id}
+            className={cn(
+              "rounded-card border bg-body",
+              expanded ? "border-primary" : "border-line",
+              draggingId === b.id && "opacity-50",
+              overId === b.id && draggingId && draggingId !== b.id && "outline-dashed outline-2 outline-primary",
+            )}
+            onDragOver={(e) => {
+              if (draggingId && draggingId !== b.id) {
+                e.preventDefault();
+                setOverId(b.id);
+              }
+            }}
+            onDragLeave={() => setOverId((v) => (v === b.id ? null : v))}
+            onDrop={(e) => {
+              e.preventDefault();
+              dropOn(b.id);
+            }}
+          >
+            <div className="flex items-center gap-1.5 px-2 py-2">
+              {/* 드래그 핸들 — 마우스 전용(키보드·터치는 ⋯ 의 위/아래) */}
+              <span
+                draggable
+                aria-hidden="true"
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = "move";
+                  e.dataTransfer.setData("text/plain", b.id);
+                  setDraggingId(b.id);
+                }}
+                onDragEnd={() => {
+                  setDraggingId(null);
+                  setOverId(null);
+                }}
+                className="cursor-grab rounded-card p-1 text-fg-faint hover:text-fg active:cursor-grabbing"
+              >
+                <GripVertical className="size-4" />
+              </span>
+              <Switch checked={b.active} onChange={(next) => onToggle(b.id, next)} label={`${summary} 노출`} />
+              <button
+                type="button"
+                id={`row-${b.id}`}
+                onClick={() => (expanded ? onCollapse() : onExpand(b.id))}
+                aria-expanded={expanded}
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-card px-1 py-1 text-left hover:bg-tint-hover"
+              >
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-card bg-plate text-fg-sub" aria-hidden>
+                  <Icon className="size-4" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[14px] font-semibold">{meta?.label ?? b.type}</span>
+                  <span className="block truncate text-[12px] text-fg-sub">{summary}</span>
+                </span>
+              </button>
+              {canEmph ? (
+                <button
+                  type="button"
+                  onClick={() => onEmphasize(b.id, !emph)}
+                  aria-pressed={emph}
+                  aria-label={`${summary} 강조`}
+                  title="강조 — 페이지 아래 고정 버튼"
+                  disabled={busy}
+                  className={cn(iconBtn, emph && "text-primary-ink")}
+                >
+                  <Star className={cn("size-4", emph && "fill-current")} aria-hidden />
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => onSchedule(b.id)}
+                aria-label={`${summary} 예약 공개`}
+                title="예약 공개 — 날짜에 맞춰 보이거나 숨기기"
+                disabled={busy}
+                className={cn(iconBtn, "relative", hasSched && "text-primary-ink")}
+              >
+                <Clock className="size-4" aria-hidden />
+                {hasSched ? <span className="absolute right-1 top-1 size-1.5 rounded-full bg-primary" aria-hidden /> : null}
+              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => setMenuFor((v) => (v === b.id ? null : b.id))}
+                  aria-haspopup="menu"
+                  aria-expanded={menuFor === b.id}
+                  aria-label={`${summary} 더보기`}
+                  className={iconBtn}
+                >
+                  <Ellipsis className="size-4" aria-hidden />
+                </button>
+                {menuFor === b.id ? (
+                  <div
+                    role="menu"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    className="modal-card-in shadow-pop absolute right-0 top-full z-20 mt-1 w-36 rounded-card border border-line bg-overlay p-1"
+                  >
+                    {[
+                      { k: "copy", label: "블록 복사", icon: CopyIcon, run: () => onDuplicate(b.id, summary), disabled: false },
+                      { k: "up", label: "위로", icon: ArrowUp, run: () => onMove(b.id, "up", summary), disabled: i === 0 },
+                      { k: "down", label: "아래로", icon: ArrowDown, run: () => onMove(b.id, "down", summary), disabled: i === blocks.length - 1 },
+                      { k: "del", label: "삭제", icon: Trash2, run: () => onDelete(b.id, summary), disabled: false, danger: true },
+                    ].map((m) => (
+                      <button
+                        key={m.k}
+                        role="menuitem"
+                        type="button"
+                        disabled={m.disabled || busy}
+                        onClick={() => {
+                          setMenuFor(null);
+                          m.run();
+                        }}
+                        className={cn(
+                          "trans-state flex w-full items-center gap-2 rounded-card px-2.5 py-1.5 text-left text-[14px] hover:bg-tint-hover disabled:opacity-40",
+                          m.danger ? "text-negative" : "text-fg",
+                        )}
+                      >
+                        <m.icon className="size-3.5" aria-hidden />
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => (expanded ? onCollapse() : onExpand(b.id))}
+                aria-label={expanded ? `${summary} 접기` : `${summary} 펼치기`}
+                className={iconBtn}
+              >
+                <ChevronDown
+                  className={cn("size-4 transition-transform duration-[240ms] ease-[var(--ease-arrive)]", expanded && "rotate-180")}
+                  aria-hidden
+                />
+              </button>
+            </div>
+            {status ? <p className="px-3 pb-2 text-[11px] text-fg-sub">{status}</p> : null}
+            {expanded ? <div className="anim-swap border-t border-line px-3 py-3">{editor}</div> : null}
+          </div>
+        );
+      })}
+
+      {/* 맨 뒤 드롭 영역 */}
+      <div
+        onDragOver={(e) => {
+          if (draggingId) {
+            e.preventDefault();
+            setOverId("__end__");
+          }
+        }}
+        onDragLeave={() => setOverId((v) => (v === "__end__" ? null : v))}
+        onDrop={(e) => {
+          e.preventDefault();
+          dropOn(null);
+        }}
+        className={cn(
+          "rounded-card border border-dashed border-line px-3 py-2 text-center text-[12px] text-fg-sub",
+          draggingId ? "block" : "hidden",
+          overId === "__end__" && "outline-dashed outline-2 outline-primary",
+        )}
+      >
+        여기 놓으면 맨 뒤로
+      </div>
+    </div>
+  );
+}
+
+/* 예약 공개 모달 — 공개 날짜 / 숨김 날짜(둘 다 선택). 비우면 해제. */
+function ScheduleModal({
+  block,
+  busy,
+  onClose,
+  onSave,
+}: {
+  block: LinkBlock | null;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (openAt: string | null, closeAt: string | null) => void;
+}) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const init = block ? blockSchedule(block.data) : { openAt: null, closeAt: null };
+  /* datetime-local 은 로컬 시각 "YYYY-MM-DDTHH:mm" 을 쓴다 — ISO(UTC) 와 서로 변환 */
+  const toLocal = (iso: string | null) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  const [openAt, setOpenAt] = useState(toLocal(init.openAt));
+  const [closeAt, setCloseAt] = useState(toLocal(init.closeAt));
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null;
+    boxRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCloseRef.current();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      prev?.focus?.();
+    };
+  }, []);
+  const bad = openAt && closeAt && new Date(openAt).getTime() >= new Date(closeAt).getTime();
+  const toIso = (v: string) => (v ? new Date(v).toISOString() : null);
+  const field = "mt-1.5 h-10 w-full rounded-card border border-line bg-body px-3 text-[14px] text-fg focus:border-primary focus:outline-none";
+
+  return (
+    <div
+      className="modal-scrim-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="예약 공개 설정"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={boxRef}
+        tabIndex={-1}
+        onKeyDown={(e) => trapFocus(boxRef.current, e)}
+        className="modal-card-in shadow-pop w-full max-w-sm rounded-card border border-line bg-body p-5 outline-none"
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="flex items-center gap-1.5 text-[15px] font-bold">
+            <CalendarClock className="size-4 text-fg-sub" aria-hidden />
+            예약 공개
+          </h3>
+          <button type="button" aria-label="닫기" onClick={onClose} className="trans-state rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg">
+            <X className="size-4" aria-hidden />
+          </button>
+        </div>
+        <p className="mt-1 text-[12px] text-fg-sub">
+          {block ? `「${blockSummary(block.type, block.data)}」 — ` : ""}
+          정한 날짜에 맞춰 공개 페이지에서 보이거나 숨겨져요. 비워 두면 제한이 없어요.
+        </p>
+        <label className="mt-4 block text-[12px] font-medium text-fg-sub">
+          공개 날짜 (이때부터 보여요)
+          <input type="datetime-local" value={openAt} onChange={(e) => setOpenAt(e.target.value)} className={field} />
+        </label>
+        <label className="mt-3 block text-[12px] font-medium text-fg-sub">
+          숨김 날짜 (이때부터 숨겨요)
+          <input type="datetime-local" value={closeAt} onChange={(e) => setCloseAt(e.target.value)} className={field} />
+        </label>
+        {bad ? <p className="mt-2 text-[12px] text-negative-strong">숨김 날짜는 공개 날짜보다 뒤여야 해요.</p> : null}
+        <div className="mt-4 flex items-center justify-between gap-2">
+          <Button variant="ghost" size="sm" disabled={busy || (!init.openAt && !init.closeAt)} onClick={() => onSave(null, null)}>
+            예약 해제
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              취소
+            </Button>
+            <Button size="sm" disabled={busy || !!bad} onClick={() => onSave(toIso(openAt), toIso(closeAt))}>
+              {busy ? "저장 중…" : "저장"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* 가운데 패널 칸 — 닫힐 때 **마지막 내용을 잔상으로** 들고 오므라든다. 내용이 먼저 사라지고
    빈 칸만 줄어들면 "뚝" 끊겨 보인다. 잔상은 레이아웃 이펙트에서 잡아 첫 프레임 공백이 없다.

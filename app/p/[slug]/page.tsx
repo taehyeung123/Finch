@@ -7,7 +7,7 @@ import { linkWorkspace } from "@/lib/data";
 import { FinchMark } from "@/components/logo";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, sanitizeSnsLinks } from "@/lib/links";
-import { hiddenReason, type BlockType } from "@/lib/links/blocks";
+import { emphasizedCta, hiddenReason, isScheduledHidden, type BlockType } from "@/lib/links/blocks";
 import { sanitizeThemeCustom, themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
 import { BlockRenderer, type SnapshotBlock } from "./_components/block-renderer";
 import { LeadForm } from "./_components/lead-form";
@@ -184,6 +184,15 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
   const theme = themeByKey(snap.theme);
   /* 직접 꾸미기 — 스냅샷에 굳은 값. 발행 전 잘못 들어온 값이 있어도 관문을 한 번 더 태운다 */
   const themeCustom = sanitizeThemeCustom((snap as { themeCustom?: unknown }).themeCustom);
+  /* 예약 공개·숨김은 **요청 시점**에 판정한다(이 페이지는 force-dynamic). 스냅샷은 그대로 두고 그리는 목록만 거른다 */
+  const visibleBlocks = snap.blocks.filter((b) => !isScheduledHidden(b.data));
+  const emphasized = (() => {
+    for (const b of visibleBlocks) {
+      const cta = emphasizedCta(b.type as BlockType, b.data);
+      if (cta) return { block: b, cta };
+    }
+    return null;
+  })();
   const align = snap.align === "left" ? "text-left items-start" : snap.align === "right" ? "text-right items-end" : "text-center items-center";
   const titlePx = snap.titleSize === "sm" ? "text-[20px]" : snap.titleSize === "lg" ? "text-[30px]" : "text-[24px]";
   /* SNS 줄은 **여기서 한 번 더 거른다** — 스냅샷은 본인 행 직접 PATCH 로 아무 값이나 들어올 수
@@ -288,7 +297,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
             "정상 블록이 통째로 사라짐"으로 악화된다. 여기서는 문구만 결정한다. */}
         <div className="mt-8 space-y-3">
           {snap.snsPlacement === "links" ? snsNav : null}
-          {snap.blocks.every(
+          {visibleBlocks.every(
             (b) =>
               hiddenReason(b.type as BlockType, b.data) ||
               /* 최근 게시물은 연동 전·조회 실패면 렌더러가 null 을 돌려준다 — 문구 판정도 같은 기준 */
@@ -296,7 +305,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
           ) ? (
             <p className="text-center text-[15px] text-[var(--lp-muted)]">아직 등록된 링크가 없어요.</p>
           ) : null}
-          {snap.blocks.map((b) =>
+          {visibleBlocks.map((b) =>
             b.type === "contact" || b.type === "subscribe" ? (
               <LeadForm key={b.id} slug={slug} blockId={b.id} kind={b.type} data={b.data} isDemo={isDemoMode()} />
             ) : (
@@ -318,6 +327,21 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
             핀치에서 내 프로필 꾸미기
           </Link>
         </footer>
+
+        {/* 강조 블록 — 페이지 하단에 **고정 CTA** 로 한 번 더(리틀리 흡수 1단계). 본문 자리에도 그대로 있다.
+            흐름의 **맨 마지막**에 두고 sticky bottom — 스크롤 중엔 화면 아래에 붙고, 끝까지 내리면 제자리로
+            내려와 배지를 덮지 않는다(소넷 지적). */}
+        {emphasized ? (
+          <div className="pointer-events-none sticky bottom-4 z-10 mt-4 flex justify-center">
+            <a
+              href={`/p/${slug}/go/${emphasized.block.id}`}
+              rel="noopener noreferrer nofollow"
+              className="pointer-events-auto inline-flex min-h-[48px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-6 text-[15px] font-bold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)]"
+            >
+              {emphasized.cta.label}
+            </a>
+          </div>
+        ) : null}
       </div>
     </main>
   );

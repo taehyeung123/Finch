@@ -7,7 +7,17 @@ import { FinchMark } from "@/components/logo";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, youtubeEmbed } from "@/lib/links";
 import { themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
-import { BLOCK_CATALOG, blockSummary, COUPANG_DISCLOSURE, hiddenReason, partialReason, type LinkBlock } from "@/lib/links/blocks";
+import {
+  BLOCK_CATALOG,
+  blockSummary,
+  COUPANG_DISCLOSURE,
+  emphasizedCta,
+  hiddenReason,
+  isScheduledHidden,
+  partialReason,
+  scheduleCaption,
+  type LinkBlock,
+} from "@/lib/links/blocks";
 import type { LinkPageView } from "@/lib/links/types";
 
 /*
@@ -138,7 +148,16 @@ export function PhonePreview({
   const editable = mode !== "live" && !!edit;
   /* live 는 공개 렌더러가 숨기는 블록을 **여기서도 뺀다**. draft 는 전부 그린다 —
      캔버스 편집에선 꺼진(active=false) 블록도 흐리게 그려야 다시 켤 수 있다. */
-  const visible = mode === "live" ? blocks.filter((b) => !hiddenReason(b.type, b.data)) : blocks;
+  const visible = mode === "live" ? blocks.filter((b) => !hiddenReason(b.type, b.data) && !isScheduledHidden(b.data)) : blocks;
+  /* 강조 블록(하단 고정 CTA) — 공개 페이지와 같은 규칙. 꺼진·예약 숨김 블록은 후보가 아니다 */
+  const emphasized = (() => {
+    for (const b of visible) {
+      if (!b.active || isScheduledHidden(b.data)) continue;
+      const cta = emphasizedCta(b.type, b.data);
+      if (cta) return { block: b, cta };
+    }
+    return null;
+  })();
   /* 공개 페이지의 20/24/30px 를 380px 프레임 비율로 줄인 값 */
   const titlePx = page.titleSize === "sm" ? "text-[16px]" : page.titleSize === "lg" ? "text-[24px]" : "text-[19px]";
   const snsChips =
@@ -422,6 +441,10 @@ export function PhonePreview({
                       <span className="absolute -top-2.5 left-2 z-10 rounded-chip bg-scrim px-1.5 py-0.5 text-[10px] font-semibold text-on-scrim">
                         숨김
                       </span>
+                    ) : b.data.emphasized === true ? (
+                      <span className="absolute -top-2.5 left-2 z-10 rounded-chip bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-on-primary">
+                        ★ 강조
+                      </span>
                     ) : null}
                     <button
                       type="button"
@@ -448,6 +471,8 @@ export function PhonePreview({
                       <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">
                         숨김 — 미리보기·공개에 안 나가요 · 눈 아이콘으로 켜기{hidden ? ` · ${hidden}` : ""}
                       </p>
+                    ) : scheduleCaption(b.data) ? (
+                      <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">{scheduleCaption(b.data)}</p>
                     ) : hidden ? (
                       <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">{hidden}</p>
                     ) : partialReason(b.type, b.data) ? (
@@ -499,6 +524,15 @@ export function PhonePreview({
               핀치에서 내 프로필 꾸미기
             </span>
           </div>
+
+          {/* 강조 블록 하단 고정 CTA — 공개 페이지와 같은 모양·같은 자리(흐름 맨 뒤, 프레임 안 sticky) */}
+          {emphasized ? (
+            <div className="pointer-events-none sticky bottom-3 z-10 mt-4 flex justify-center">
+              <span className="inline-flex min-h-[44px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-5 text-[14px] font-bold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)]">
+                {emphasized.cta.label}
+              </span>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

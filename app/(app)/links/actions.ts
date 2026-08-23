@@ -5,7 +5,7 @@ import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
 import { SLUG_MESSAGES, normalizeUrl, sanitizeSnsLinks, sliceChars, validateSlug } from "@/lib/links";
-import { BLOCK_TYPES, defaultBlockData, type BlockType } from "@/lib/links/blocks";
+import { BLOCK_TYPES, EMPHASIS_TYPES, defaultBlockData, type BlockType } from "@/lib/links/blocks";
 import { DEFAULT_THEME_KEY, sanitizeThemeCustom, themeByKey } from "@/lib/links/themes";
 import { LINK_TEMPLATES } from "@/lib/links/templates";
 import { parseLittlyHtml } from "@/lib/links/littly";
@@ -881,17 +881,25 @@ export async function updateBlock(
   if (!user) return AUTH;
 
   const fields: Record<string, unknown> = {};
+  const supabase = await createClient();
   if (patch.data !== undefined) {
     /* URL 이 들어 있는 필드는 전부 정규화·검증한다. javascript: 를 그대로 두면
        공개 페이지의 <a href> 가 방문자 브라우저에서 그걸 실행한다(저장형 XSS). */
     const cleaned = sanitizeBlockData(patch.data);
-    if (cleaned.error) return { ok: false, error: cleaned.error };
+    if (cleaned.error || !cleaned.data) return { ok: false, error: cleaned.error ?? "저장하지 못했어요." };
+    /* 강조·예약(메타)은 편집기 draft 가 아니라 **행의 현재 값**을 따른다 — 행을 펼친 뒤 ★ 를 켜고
+       저장하면 오래된 draft 가 메타를 지워 버렸다(소넷 확정 1). 메타는 전용 액션만 바꾼다. */
+    const { data: row } = await supabase.from("link_blocks").select("data").eq("id", id).maybeSingle();
+    const current = (row?.data ?? {}) as Record<string, unknown>;
+    for (const k of BLOCK_META_KEYS) {
+      if (k in current) cleaned.data[k] = current[k];
+      else delete cleaned.data[k];
+    }
     fields.data = cleaned.data;
   }
   if (patch.active !== undefined) fields.active = patch.active;
   if (Object.keys(fields).length === 0) return { ok: true };
 
-  const supabase = await createClient();
   /* RLS 가 "내 페이지의 블록만"을 이미 강제한다(0048). id 만으로도 남의 것은 0행 매치.
      ⚠️ 0행은 **명시적으로 실패**시킨다 — 삭제→복원으로 id 가 바뀐 블록을 옛 id 로 치는
      실행취소가 "되돌렸어요" 라고 거짓말하지 않도록(감사 #8). 정렬 undo 와 같은 계약. */
@@ -925,6 +933,130 @@ export async function deleteBlock(id: string): Promise<Result> {
   }
   revalidatePath("/links");
   return { ok: true };
+}
+
+/* ── 블록 공통 기능(리틀리 흡수 1단계): 강조 · 예약 공개 · 복사 ── */
+
+/**
+ * 강조(하단 고정 CTA) — 페이지당 **하나**. 켜면 다른 블록의 강조를 지운다.
+ * 읽고-바꾸고-쓰기(서버 값 기준) — 클라이언트 draft 와 섞이지 않게 data 의 그 키만 만진다.
+ */
+export async function setBlockEmphasized(id: string, on: boolean): Promise<Result> {
+  if (isDemoMode()) return DEMO;
+  const page = await myPage();
+  if (!page) return { ok: false, error: "프로필 링크가 없어요." };
+  const supabase = await createClient();
+  const { data: rows, error: readErr } = await supabase.from("link_blocks").select("id, type, data").eq("page_id", page.id);
+  if (readErr || !rows) return { ok: false, error: "블록을 읽지 못했어요." };
+  const target = rows.find((r) => r.id === id);
+  if (!target) return { ok: false, error: "블록을 찾지 못했어요. 화면을 새로고침해 주세요." };
+  if (on && !EMPHASIS_TYPES.includes(target.type as BlockType)) {
+    return { ok: false, error: "강조는 링크·상품·후원 블록만 할 수 있어요." };
+  }
+  const strip = (d: unknown) => {
+    const o = { ...((d ?? {}) as Record<string, unknown>) };
+    delete o.emphasized;
+    return o;
+  };
+  for (const r of rows) {
+    const cur = (r.data ?? {}) as Record<string, unknown>;
+    const wantOn = on && r.id === id;
+    if (cur.emphasized === true && !wantOn) {
+      const { error } = await supabase.from("link_blocks").update({ data: strip(cur) }).eq("id", r.id);
+      if (error) {
+        console.error("[links] 강조 해제 실패:", error.message);
+        revalidatePath("/links");
+        return { ok: false, error: "강조를 바꾸지 못했어요." };
+      }
+    } else if (wantOn && cur.emphasized !== true) {
+      const { error } = await supabase.from("link_blocks").update({ data: { ...cur, emphasized: true } }).eq("id", r.id);
+      if (error) {
+        console.error("[links] 강조 설정 실패:", error.message);
+        revalidatePath("/links");
+        return { ok: false, error: "강조를 바꾸지 못했어요." };
+      }
+    }
+  }
+  revalidatePath("/links");
+  return { ok: true };
+}
+
+/** 예약 공개·숨김 — 둘 다 null 이면 예약 해제. 공개 페이지는 요청 시점에 판정한다 */
+export async function setBlockSchedule(id: string, openAt: string | null, closeAt: string | null): Promise<Result> {
+  if (isDemoMode()) return DEMO;
+  const user = await getAuthUser();
+  if (!user) return AUTH;
+  const parse = (v: string | null): string | null | false => {
+    if (v === null || v === "") return null;
+    const t = Date.parse(v);
+    return Number.isNaN(t) ? false : new Date(t).toISOString();
+  };
+  const o = parse(openAt);
+  const c = parse(closeAt);
+  if (o === false || c === false) return { ok: false, error: "잘못된 날짜예요." };
+  if (o && c && Date.parse(o) >= Date.parse(c)) return { ok: false, error: "숨김 날짜는 공개 날짜보다 뒤여야 해요." };
+  const supabase = await createClient();
+  const { data: row, error: readErr } = await supabase.from("link_blocks").select("id, data").eq("id", id).maybeSingle();
+  if (readErr || !row) return { ok: false, error: "블록을 찾지 못했어요. 화면을 새로고침해 주세요." };
+  const next = { ...((row.data ?? {}) as Record<string, unknown>) };
+  if (o) next.openAt = o;
+  else delete next.openAt;
+  if (c) next.closeAt = c;
+  else delete next.closeAt;
+  const { error } = await supabase.from("link_blocks").update({ data: next }).eq("id", id);
+  if (error) {
+    console.error("[links] 예약 설정 실패:", error.message);
+    return { ok: false, error: "예약을 저장하지 못했어요." };
+  }
+  revalidatePath("/links");
+  return { ok: true };
+}
+
+/** 블록 복사 — 바로 아래에 같은 내용으로. 강조·예약은 복사하지 않는다(강조는 하나뿐, 예약은 의도가 다를 수 있다) */
+export async function duplicateBlock(id: string): Promise<Result & { id?: string }> {
+  if (isDemoMode()) return DEMO;
+  const page = await myPage();
+  if (!page) return { ok: false, error: "프로필 링크가 없어요." };
+  const supabase = await createClient();
+  const { data: rows, error: readErr } = await supabase
+    .from("link_blocks")
+    .select("id, type, data, sort_order, active")
+    .eq("page_id", page.id)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (readErr || !rows) return { ok: false, error: "블록을 읽지 못했어요." };
+  if (rows.length >= MAX_BLOCKS) return { ok: false, error: `블록은 ${MAX_BLOCKS}개까지예요.` };
+  const i = rows.findIndex((r) => r.id === id);
+  if (i < 0) return { ok: false, error: "블록을 찾지 못했어요. 화면을 새로고침해 주세요." };
+  const src = rows[i];
+  const data = { ...((src.data ?? {}) as Record<string, unknown>) };
+  delete data.emphasized;
+  delete data.openAt;
+  delete data.closeAt;
+  /* 목표 순서: 원본 바로 뒤. 먼저 끼워 넣고 0..n-1 로 다시 쓴다(moveBlock 과 같은 루프) */
+  const { data: created, error } = await supabase
+    .from("link_blocks")
+    .insert({ page_id: page.id, type: src.type, data, sort_order: i + 1, active: src.active })
+    .select("id")
+    .single();
+  if (error || !created) {
+    console.error("[links] 블록 복사 실패:", error?.message);
+    return { ok: false, error: "복사하지 못했어요." };
+  }
+  const newId = created.id as string;
+  const ids = rows.map((r) => r.id as string);
+  ids.splice(i + 1, 0, newId);
+  for (let k = 0; k < ids.length; k++) {
+    const cur = rows.find((r) => r.id === ids[k]);
+    if (cur ? cur.sort_order === k : k === i + 1) continue;
+    const { error: e2 } = await supabase.from("link_blocks").update({ sort_order: k }).eq("id", ids[k]);
+    if (e2) {
+      console.error("[links] 복사 후 정렬 실패:", e2.message);
+      break;
+    }
+  }
+  revalidatePath("/links");
+  return { ok: true, id: newId };
 }
 
 /**
@@ -1308,6 +1440,8 @@ const NUM_ENUMS: Record<string, readonly number[]> = {
 const MAX_BLOCK_CHARS = 8192;
 
 const URL_ERROR = "http 또는 https 로 시작하는 주소만 넣을 수 있어요.";
+/** 블록 메타(강조·예약) — 내용 저장이 건드리지 못하는 키. setBlockEmphasized / setBlockSchedule 만 바꾼다 */
+const BLOCK_META_KEYS = ["emphasized", "openAt", "closeAt"] as const;
 
 function sanitizeBlockData(input: Record<string, unknown>): { data?: Record<string, unknown>; error?: string } {
   const out: Record<string, unknown> = {};
@@ -1316,6 +1450,16 @@ function sanitizeBlockData(input: Record<string, unknown>): { data?: Record<stri
     /* cached 는 「라이브 반영」이 채우는 서버 생성 값이다. 클라이언트가 보낸 걸 그대로
        두면 연동하지 않은 계정의 썸네일·링크를 스냅샷에 심을 수 있다 — 발행 때 다시 채운다. */
     if (k === "cached") continue;
+
+    if (k === "openAt" || k === "closeAt") {
+      /* 예약 공개·숨김 — 날짜로 읽히는 문자열만, ISO 로 정규화. 공개 페이지가 요청 시점에 비교한다 */
+      if (typeof v === "string" && v.trim() && !Number.isNaN(Date.parse(v))) out[k] = new Date(v).toISOString();
+      continue;
+    }
+    if (k === "emphasized") {
+      if (v === true) out[k] = true; // false 는 키 자체를 없앤다 — "없음" 이 기본
+      continue;
+    }
 
     if (k === "textColor") {
       /* 색은 #rrggbb 만 — 임의 문자열이 공개 페이지 inline style 로 나가면 안 된다 */

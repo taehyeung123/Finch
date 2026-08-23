@@ -44,8 +44,11 @@ export function BlockEditor({
   onSave,
   onRevert,
   onClose,
+  embedded = false,
 }: {
   block: LinkBlock;
+  /** 블록 목록 행 안에 펼쳐진 경우 — 행 헤더가 제목·닫기 역할을 하므로 자체 헤더를 숨긴다 */
+  embedded?: boolean;
   value: Record<string, unknown>;
   onChange: (next: Record<string, unknown>) => void;
   busy: boolean;
@@ -73,6 +76,12 @@ export function BlockEditor({
 
   return (
     <div className="space-y-3">
+      {embedded ? (
+        /* 포커스 목적지는 남긴다 — 부모가 EDITOR_TITLE_ID 로 포커스를 옮겨 화면이 바뀐 걸 알린다 */
+        <h3 id={EDITOR_TITLE_ID} tabIndex={-1} className="sr-only outline-none">
+          {meta?.label ?? block.type} 편집
+        </h3>
+      ) : (
       <div className="flex items-center justify-between gap-2">
         {/* 편집기가 열리면 부모가 이 제목으로 포커스를 옮긴다(id 로 찾는다) — 목록에서
             엔터를 눌렀는데 포커스가 그 자리에 남아 있으면 키보드·스크린리더 사용자는
@@ -91,6 +100,7 @@ export function BlockEditor({
           <X className="size-4" />
         </button>
       </div>
+      )}
 
       {/* ── 링크 버튼 ── */}
       {block.type === "link" ? (
