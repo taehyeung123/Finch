@@ -23,7 +23,7 @@ const input =
   "h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none";
 const area =
   "w-full rounded-card border border-line bg-body px-3 py-2 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none";
-const label = "block text-[12px] font-medium text-fg-sub";
+const label = "block text-[14px] font-medium text-fg";
 
 /** 편집기가 열릴 때 부모가 포커스를 옮길 자리 */
 export const EDITOR_TITLE_ID = "block-editor-title";

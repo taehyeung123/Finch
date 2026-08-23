@@ -87,6 +87,11 @@ import {
 } from "@/lib/links/blocks";
 import {
   CUSTOM_BUTTONS,
+  CUSTOM_BUTTON_SCOPE,
+  CUSTOM_TOPBAR,
+  CUSTOM_LOGO_POS,
+  CUSTOM_CURSORS,
+  CUSTOM_SCREEN_FX,
   CUSTOM_ANIMS,
   CUSTOM_DESKTOP,
   CUSTOM_EFFECTS,
@@ -1260,6 +1265,7 @@ export function LinksClient({
             <Card>
               <CardBody className="space-y-4">
               <ThemePanel
+                hasSubscribeBlock={blocks.some((b) => b.active && b.type === "subscribe")}
                 custom={customForm}
                 customDirty={customDirty}
                 busy={busy}
@@ -2334,7 +2340,7 @@ function ProfilePanel({
       <h3 className="text-[15px] font-bold">프로필</h3>
 
       <div>
-        <p className="text-[12px] font-medium text-fg-sub">레이아웃</p>
+        <p className="text-[14px] font-semibold text-fg">레이아웃</p>
         {/* 글자 대신 **그림**으로 고른다(링크팜 실측 반영) — "커버+프로필"이라는 말보다
             배너 위에 원이 얹힌 그림이 한눈에 들어온다. 그림은 순수 CSS. */}
         <div className="mt-1.5 grid grid-cols-3 gap-2">
@@ -2427,7 +2433,7 @@ function ProfilePanel({
       </div>
 
       <div>
-        <p className="text-[12px] font-medium text-fg-sub">정렬</p>
+        <p className="text-[14px] font-semibold text-fg">정렬</p>
         <div className="mt-1.5 grid grid-cols-3 gap-2">
           {(["left", "center", "right"] as const).map((a) => (
             <button
@@ -2449,7 +2455,7 @@ function ProfilePanel({
       {/* 타이틀 크기·SNS 위치 — 링크팜 프로필 설정 실측(2026-08-19)에서 가져온 둘.
           링크팜의 「드래그」 배치는 안 가져온다 — 우리는 드래그 정렬 자체를 뺐다. */}
       <div>
-        <p className="text-[12px] font-medium text-fg-sub">타이틀 크기</p>
+        <p className="text-[14px] font-semibold text-fg">타이틀 크기</p>
         <div className="mt-1.5 grid grid-cols-3 gap-2">
           {(
             [
@@ -2476,7 +2482,7 @@ function ProfilePanel({
       </div>
 
       <div>
-        <p className="text-[12px] font-medium text-fg-sub">SNS 아이콘 위치</p>
+        <p className="text-[14px] font-semibold text-fg">SNS 아이콘 위치</p>
         <div className="mt-1.5 grid grid-cols-2 gap-2">
           {(
             [
@@ -2501,7 +2507,7 @@ function ProfilePanel({
       </div>
 
       <div>
-        <p className="text-[12px] font-medium text-fg-sub">SNS 링크</p>
+        <p className="text-[14px] font-semibold text-fg">SNS 링크</p>
         <div className="mt-1.5 space-y-2">
           {sns.map((s, i) => {
             const entry = SNS_CATALOG.find((c) => c.key === s.kind);
@@ -2615,11 +2621,24 @@ function ProfilePanel({
    테마 패널
    ══════════════════════════════════════════════════════════════════ */
 
+function DSection({ title, hint, children, first = false }: { title: string; hint?: string; children: React.ReactNode; first?: boolean }) {
+  return (
+    <section className={cn("grid gap-3 md:grid-cols-[11rem_minmax(0,1fr)] md:gap-6", !first && "border-t border-line pt-6")}>
+      <div>
+        <h4 className="text-[15px] font-semibold">{title}</h4>
+        {hint ? <p className="mt-0.5 text-[12px] leading-[1.5] text-fg-sub">{hint}</p> : null}
+      </div>
+      <div className="min-w-0 space-y-3">{children}</div>
+    </section>
+  );
+}
+
 function ThemePanel({
   current,
   custom,
   customDirty,
   busy,
+  hasSubscribeBlock,
   onPick,
   onCustomChange,
   onCustomReset,
@@ -2629,6 +2648,8 @@ function ThemePanel({
   custom: LinkThemeCustom;
   customDirty: boolean;
   busy: boolean;
+  /** 구독신청 블록이 켜져 있는가 — 상단 구독 버튼은 그 블록으로 스크롤한다 */
+  hasSubscribeBlock: boolean;
   onPick: (k: string) => void;
   onCustomChange: (patch: Partial<LinkThemeCustom>) => void;
   onCustomReset: () => void;
@@ -2645,269 +2666,260 @@ function ThemePanel({
   }, []);
   const preset = themeByKey(current);
   const hasCustom = Object.keys(custom).length > 0;
+  const [fontQuery, setFontQuery] = useState("");
+  const fonts = useMemo(() => {
+    const q = fontQuery.trim().toLowerCase();
+    return q ? LINK_FONTS.filter((f) => f.label.toLowerCase().includes(q) || f.key.includes(q) || f.family.toLowerCase().includes(q)) : LINK_FONTS;
+  }, [fontQuery]);
   /* 패널이 열려 있는 동안 전 글꼴을 비차단으로 싣는다 — 목록의 각 줄이 제 글꼴로 보인다 */
   useFontStylesheets(LINK_FONTS.flatMap((f) => fontStylesheets(f.key)));
   const chip = (on: boolean) =>
     cn(
-      "trans-state rounded-chip px-3 py-1.5 text-[12px] font-semibold",
-      on ? "bg-primary text-on-primary" : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
+      "trans-state rounded-chip px-3 py-1.5 text-[13px] font-semibold",
+      on ? "bg-primary text-on-primary" : "border border-line bg-body text-fg-sub hover:bg-tint-hover hover:text-fg",
     );
+  const bgMode: "solid" | "gradient" | "image" = custom.bgImage ? "image" : custom.bg2 || (!custom.bg && preset.bg2) ? "gradient" : "solid";
+  const colorInput = (key: "bg" | "accent" | "card" | "fg", label: string) => (
+    <label key={key} className="flex items-center gap-2 rounded-card border border-line bg-body px-2.5 py-2 text-[13px]">
+      <input
+        type="color"
+        /* color 인풋은 #rrggbb 만 받는다 — 8자리(알파) 프리셋 값은 검정으로 새니타이즈된다(감사 #14) */
+        value={(custom[key] ?? preset[key]).slice(0, 7)}
+        onChange={(e) => onCustomChange({ [key]: e.target.value.toUpperCase() })}
+        aria-label={`${label} 색`}
+        className="size-7 cursor-pointer rounded-[6px] border-0 bg-transparent p-0"
+      />
+      <span className="font-medium">{label}</span>
+      <span className="tnum ml-auto text-[11px] text-fg-faint">{(custom[key] ?? preset[key]).slice(0, 7)}</span>
+    </label>
+  );
 
   return (
-    <div className="space-y-5">
-      <h3 className="text-[15px] font-bold">테마</h3>
-      {groups.map(([group, list]) => (
-        <div key={group}>
-          <p className="text-[11px] font-bold tracking-[0.08em] text-fg-sub">{group}</p>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            {list.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => onPick(t.key)}
-                aria-pressed={current === t.key}
-                className={cn(
-                  "trans-state overflow-hidden rounded-card border text-left disabled:opacity-50",
-                  current === t.key ? "border-2 border-primary" : "border border-line hover:border-line-strong",
-                )}
-              >
-                {/* 테마 미니 미리보기 — 실제 색(그라데이션 프리셋은 그라데이션 그대로) */}
-                <span
-                  className="block h-16 p-2.5"
-                  style={{ background: t.bg2 ? `linear-gradient(160deg, ${t.bg}, ${t.bg2})` : t.bg }}
-                >
-                  <span className="block h-4 w-full rounded-full" style={{ background: t.accent }} aria-hidden />
-                  <span
-                    className="mt-1.5 block h-4 w-full rounded-full border"
-                    style={{ background: t.card, borderColor: t.border }}
-                    aria-hidden
-                  />
-                </span>
-                <span className="block px-2.5 py-1.5 text-[14px] font-semibold">{t.name}</span>
-              </button>
-            ))}
-          </div>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-[17px] font-semibold">디자인</h3>
+          <p className="mt-0.5 text-[14px] text-fg-sub">고르는 즉시 오른쪽 미리보기에 비쳐요. 테마는 바로 저장되고, 직접 꾸미기는 아래 「저장」으로 굳어요.</p>
         </div>
-      ))}
-
-      {/* ── 직접 꾸미기 — 프리셋 위에 덮는다(2026-08-20 "에디트 더 자유롭게").
-          값은 폼으로 들고 있고 미리보기에 즉시 비친다. 저장해야 실제 반영·발행에 굳는다. ── */}
-      <div className="space-y-4 border-t border-line pt-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-[15px] font-bold">직접 꾸미기</h3>
+        <div className="flex items-center gap-2">
           {hasCustom ? (
-            <button
-              type="button"
-              onClick={onCustomReset}
-              className="trans-state text-[12px] font-medium text-fg-sub underline underline-offset-2 hover:text-fg"
-            >
+            <Button variant="ghost" size="sm" onClick={onCustomReset} disabled={busy}>
               프리셋으로 되돌리기
-            </button>
+            </Button>
           ) : null}
+          <Button size="sm" disabled={busy || !customDirty} onClick={onCustomSave}>
+            {busy ? "저장 중…" : customDirty ? "꾸미기 저장" : "저장됨"}
+          </Button>
         </div>
+      </div>
 
-        <div>
-          <p className="text-[12px] font-medium text-fg-sub">색</p>
-          <div className="mt-1.5 grid grid-cols-4 gap-2">
-            {(
-              [
-                { key: "bg", label: "배경" },
-                { key: "accent", label: "강조" },
-                { key: "card", label: "카드" },
-                { key: "fg", label: "글자" },
-              ] as const
-            ).map((c) => (
-              <label key={c.key} className="block text-center text-[11px] text-fg-sub">
-                <input
-                  type="color"
-                  /* color 인풋은 #rrggbb 만 받는다 — 8자리(알파) 프리셋 값은 검정으로 새니타이즈된다(감사 #14) */
-                  value={(custom[c.key] ?? preset[c.key]).slice(0, 7)}
-                  onChange={(e) => onCustomChange({ [c.key]: e.target.value.toUpperCase() })}
-                  aria-label={`${c.label} 색`}
-                  className="block h-9 w-full cursor-pointer rounded-card border border-line bg-body p-0.5"
-                />
-                <span className="mt-1 block">{c.label}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <p className="text-[12px] font-medium text-fg-sub">배경</p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              aria-pressed={!!custom.bg2}
-              /* 끝색 기본값은 배경에 강조색을 살짝 섞은 색 — 강조색 그대로면 기본·다크 프리셋에서 글자색과 같아 아래쪽 제목이 사라진다(감사2 U7) */
-              onClick={() => onCustomChange({ bg2: custom.bg2 ? undefined : (preset.bg2 ?? mixHex(custom.bg ?? preset.bg, custom.accent ?? preset.accent, 0.22)) })}
-              className={chip(!!custom.bg2)}
-            >
-              그라데이션
-            </button>
-            {custom.bg2 ? (
-              <label className="flex items-center gap-1.5 text-[12px] text-fg-sub">
-                끝색
-                <input
-                  type="color"
-                  value={custom.bg2}
-                  onChange={(e) => onCustomChange({ bg2: e.target.value.toUpperCase() })}
-                  aria-label="그라데이션 끝색"
-                  className="h-8 w-10 cursor-pointer rounded-card border border-line bg-body p-0.5"
-                />
-              </label>
-            ) : null}
-          </div>
-          <div className="mt-2">
-            <ImageField
-              label="배경 이미지 (선택)"
-              value={custom.bgImage ?? ""}
-              onChange={(v) => onCustomChange({ bgImage: v || undefined })}
-              hint="넣으면 배경색·그라데이션보다 앞에 깔려요 — 글자가 읽히는지 미리보기로 확인하세요"
-            />
-          </div>
-        </div>
-
-        <div>
-          <p className="text-[12px] font-medium text-fg-sub">모서리</p>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {CUSTOM_RADIUS.map((r) => (
-              <button
-                key={r.key}
-                type="button"
-                aria-pressed={(custom.radius ?? preset.radius) === r.key}
-                onClick={() => onCustomChange({ radius: r.key })}
-                className={chip((custom.radius ?? preset.radius) === r.key)}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <p className="text-[12px] font-medium text-fg-sub">버튼</p>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {CUSTOM_BUTTONS.map((b) => (
-              <button
-                key={b.key}
-                type="button"
-                aria-pressed={(custom.button ?? "fill") === b.key}
-                onClick={() => onCustomChange({ button: b.key })}
-                className={chip((custom.button ?? "fill") === b.key)}
-              >
-                {b.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* 배경 이미지 필터 — 이미지가 있을 때만 의미 있다 */}
-        {custom.bgImage ? (
-          <div>
-            <p className="text-[12px] font-medium text-fg-sub">배경 필터</p>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {CUSTOM_FILTERS.map((f) => (
+      <DSection first title="테마" hint="출발점. 고른 뒤 아래에서 뭐든 바꿀 수 있어요.">
+        {groups.map(([group, list]) => (
+          <div key={group}>
+            <p className="text-[11px] font-bold tracking-[0.08em] text-fg-sub">{group}</p>
+            <div className="mt-1.5 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+              {list.map((t) => (
                 <button
-                  key={f.key}
+                  key={t.key}
                   type="button"
-                  aria-pressed={(custom.bgFilter ?? "none") === f.key}
-                  onClick={() => onCustomChange({ bgFilter: f.key })}
-                  className={chip((custom.bgFilter ?? "none") === f.key)}
+                  onClick={() => onPick(t.key)}
+                  aria-pressed={current === t.key}
+                  className={cn(
+                    "trans-state overflow-hidden rounded-card border bg-body text-left disabled:opacity-50",
+                    current === t.key ? "border-primary ring-2 ring-primary/30" : "border-line hover:border-line-strong",
+                  )}
                 >
-                  {f.label}
+                  <span className="block h-11 p-2" style={{ background: t.bg2 ? `linear-gradient(160deg, ${t.bg}, ${t.bg2})` : t.bg }}>
+                    <span className="block h-3 w-full rounded-full" style={{ background: t.accent }} aria-hidden />
+                    <span className="mt-1 block h-3 w-full rounded-full border" style={{ background: t.card, borderColor: t.border }} aria-hidden />
+                  </span>
+                  <span className="block truncate px-2 py-1.5 text-[12px] font-semibold">{t.name}</span>
                 </button>
               ))}
             </div>
           </div>
+        ))}
+      </DSection>
+
+      <DSection title="배경" hint="단색·그라데이션·사진. 사진엔 필터를 덮어 글자를 살려요.">
+        <div className="flex flex-wrap gap-1.5">
+          <button type="button" className={chip(bgMode === "solid")} aria-pressed={bgMode === "solid"} onClick={() => onCustomChange({ bg2: undefined, bgImage: undefined, bg: custom.bg ?? preset.bg })}>
+            단색
+          </button>
+          <button
+            type="button"
+            className={chip(bgMode === "gradient")}
+            aria-pressed={bgMode === "gradient"}
+            /* 끝색 기본값은 배경에 강조색을 살짝 섞은 색 — 강조색 그대로면 기본·다크 프리셋에서 글자색과 같아 아래쪽 제목이 사라진다(감사2 U7) */
+            onClick={() => onCustomChange({ bgImage: undefined, bg2: custom.bg2 ?? preset.bg2 ?? mixHex(custom.bg ?? preset.bg, custom.accent ?? preset.accent, 0.22) })}
+          >
+            그라데이션
+          </button>
+          <button type="button" className={chip(bgMode === "image")} aria-pressed={bgMode === "image"} onClick={() => document.getElementById("ds-bgimage")?.scrollIntoView({ block: "nearest" })}>
+            사진
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {colorInput("bg", bgMode === "gradient" ? "시작색" : "배경색")}
+          {bgMode === "gradient" ? (
+            <label className="flex items-center gap-2 rounded-card border border-line bg-body px-2.5 py-2 text-[13px]">
+              <input type="color" value={custom.bg2 ?? preset.bg2 ?? "#FFFFFF"} onChange={(e) => onCustomChange({ bg2: e.target.value.toUpperCase() })} aria-label="그라데이션 끝색" className="size-7 cursor-pointer rounded-[6px] border-0 bg-transparent p-0" />
+              <span className="font-medium">끝색</span>
+            </label>
+          ) : null}
+        </div>
+        <div id="ds-bgimage">
+          <ImageField label="배경 사진 (선택)" value={custom.bgImage ?? ""} onChange={(v) => onCustomChange({ bgImage: v || undefined })} hint="넣으면 배경색·그라데이션보다 앞에 깔려요 — 글자가 읽히는지 미리보기로 확인하세요" aspect="aspect-[3/1]" />
+        </div>
+        {custom.bgImage ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-[12px] text-fg-sub">사진 필터</span>
+            {CUSTOM_FILTERS.map((f) => (
+              <button key={f.key} type="button" aria-pressed={(custom.bgFilter ?? "none") === f.key} onClick={() => onCustomChange({ bgFilter: f.key })} className={chip((custom.bgFilter ?? "none") === f.key)}>
+                {f.label}
+              </button>
+            ))}
+          </div>
         ) : null}
+      </DSection>
 
-        <div>
-          <p className="text-[12px] font-medium text-fg-sub">글꼴</p>
-          <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-            {LINK_FONTS.map((f) => (
-              <button
-                key={f.key}
-                type="button"
-                aria-pressed={(custom.font ?? "sans") === f.key}
-                onClick={() => onCustomChange({ font: f.key })}
-                className={cn(
-                  "trans-state flex items-center justify-between rounded-card border px-3 py-2 text-left text-[14px]",
-                  (custom.font ?? "sans") === f.key ? "border-primary bg-primary/10 text-fg" : "border-line text-fg hover:bg-tint-hover",
-                )}
-              >
-                {/* 견본만 그 글꼴 — 이름표는 앱 글꼴 그대로 */}
-                <span style={{ fontFamily: f.family }}>안녕하세요</span>
-                <span className="text-[11px] text-fg-sub">{f.label}</span>
+      <DSection title="색상" hint="강조색은 주요 버튼·CTA 에, 글자색은 제목·본문에 쓰여요. 대비가 낮으면 자동으로 읽히는 쪽으로 바꿔요.">
+        <div className="flex flex-wrap gap-2">
+          {colorInput("accent", "강조")}
+          {colorInput("card", "카드")}
+          {colorInput("fg", "글자")}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[12px] text-fg-sub">강조색 적용</span>
+          {CUSTOM_BUTTON_SCOPE.map((f) => (
+            <button key={f.key} type="button" title={f.hint} aria-pressed={(custom.buttonScope ?? "partial") === f.key} onClick={() => onCustomChange({ buttonScope: f.key === "partial" ? undefined : f.key })} className={chip((custom.buttonScope ?? "partial") === f.key)}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </DSection>
+
+      <DSection title="버튼" hint="링크 버튼의 모양·스타일·그림자·마우스 올렸을 때 움직임.">
+        {(
+          [
+            ["모서리", CUSTOM_RADIUS, custom.radius ?? preset.radius, (k: string) => onCustomChange({ radius: k as LinkThemeCustom["radius"] })],
+            ["스타일", CUSTOM_BUTTONS, custom.button ?? "fill", (k: string) => onCustomChange({ button: k as LinkThemeCustom["button"] })],
+            ["그림자", CUSTOM_SHADOWS, custom.shadow ?? (preset.shadow ? "soft" : "none"), (k: string) => onCustomChange({ shadow: k as LinkThemeCustom["shadow"] })],
+            ["액션", CUSTOM_EFFECTS, custom.effect ?? "none", (k: string) => onCustomChange({ effect: k as LinkThemeCustom["effect"] })],
+          ] as const
+        ).map(([lab, opts, cur, set]) => (
+          <div key={lab} className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 w-10 text-[12px] text-fg-sub">{lab}</span>
+            {opts.map((o) => (
+              <button key={o.key} type="button" aria-pressed={cur === o.key} onClick={() => set(o.key)} className={chip(cur === o.key)}>
+                {o.label}
               </button>
             ))}
           </div>
-        </div>
+        ))}
+      </DSection>
 
-        <div>
-          <p className="text-[12px] font-medium text-fg-sub">버튼 액션 <span className="font-normal text-fg-faint">— 마우스를 올리면</span></p>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {CUSTOM_EFFECTS.map((f) => (
-              <button key={f.key} type="button" aria-pressed={(custom.effect ?? "none") === f.key} onClick={() => onCustomChange({ effect: f.key })} className={chip((custom.effect ?? "none") === f.key)}>
-                {f.label}
-              </button>
-            ))}
-          </div>
+      <DSection title="글꼴" hint="한글 글꼴 30여 종. 이름으로 찾아요.">
+        <input
+          value={fontQuery}
+          onChange={(e) => setFontQuery(e.target.value)}
+          placeholder="글꼴 검색 — 예: 명조, 손글씨, Inter"
+          aria-label="글꼴 검색"
+          className="h-10 w-full rounded-card border border-line bg-body px-3 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
+        />
+        <div className="grid max-h-72 grid-cols-2 gap-1.5 overflow-y-auto pr-1 md:grid-cols-3">
+          {fonts.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              aria-pressed={(custom.font ?? "sans") === f.key}
+              onClick={() => onCustomChange({ font: f.key === "sans" ? undefined : f.key })}
+              className={cn(
+                "trans-state flex flex-col items-start rounded-card border px-3 py-2 text-left",
+                (custom.font ?? "sans") === f.key ? "border-primary bg-primary/10" : "border-line bg-body hover:bg-tint-hover",
+              )}
+            >
+              {/* 견본만 그 글꼴 — 이름표는 앱 글꼴 그대로 */}
+              <span className="text-[16px] leading-tight" style={{ fontFamily: f.family }}>
+                안녕하세요 Aa
+              </span>
+              <span className="mt-1 text-[11px] text-fg-sub">{f.label}</span>
+            </button>
+          ))}
+          {fonts.length === 0 ? <p className="col-span-full py-4 text-center text-[13px] text-fg-sub">찾는 글꼴이 없어요.</p> : null}
         </div>
+      </DSection>
 
-        <div>
-          <p className="text-[12px] font-medium text-fg-sub">그림자</p>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {CUSTOM_SHADOWS.map((f) => (
-              <button
-                key={f.key}
-                type="button"
-                aria-pressed={(custom.shadow ?? (preset.shadow ? "soft" : "none")) === f.key}
-                onClick={() => onCustomChange({ shadow: f.key })}
-                className={chip((custom.shadow ?? (preset.shadow ? "soft" : "none")) === f.key)}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
+      <DSection title="상단 메뉴 · 로고" hint="스크롤해도 붙어 있는 제목 줄, 공유·구독 버튼, 페이지 아래 로고.">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[12px] text-fg-sub">상단 메뉴</span>
+          {CUSTOM_TOPBAR.map((f) => (
+            <button key={f.key} type="button" aria-pressed={(custom.topbar ?? "none") === f.key} onClick={() => onCustomChange({ topbar: f.key === "none" ? undefined : f.key })} className={chip((custom.topbar ?? "none") === f.key)}>
+              {f.label}
+            </button>
+          ))}
         </div>
-
-        <div>
-          <p className="text-[12px] font-medium text-fg-sub">스크롤 애니메이션 <span className="font-normal text-fg-faint">— 공개 페이지에서</span></p>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {CUSTOM_ANIMS.map((f) => (
-              <button key={f.key} type="button" aria-pressed={(custom.anim ?? "none") === f.key} onClick={() => onCustomChange({ anim: f.key })} className={chip((custom.anim ?? "none") === f.key)}>
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <p className="text-[12px] font-medium text-fg-sub">PC 레이아웃 <span className="font-normal text-fg-faint">— 넓은 화면에서</span></p>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {CUSTOM_DESKTOP.map((f) => (
-              <button key={f.key} type="button" aria-pressed={(custom.desktop ?? "phone") === f.key} onClick={() => onCustomChange({ desktop: f.key })} className={chip((custom.desktop ?? "phone") === f.key)}>
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-4">
+        <div className="flex flex-wrap gap-x-6 gap-y-2">
           <label className="flex items-center gap-2 text-[14px]">
-            <Switch checked={!!custom.share} onChange={(v) => onCustomChange({ share: v ? true : undefined })} label="상단 공유 버튼" />
-            상단 공유 버튼
+            <Switch checked={!!custom.share} onChange={(v) => onCustomChange({ share: v ? true : undefined })} label="공유 버튼" />
+            공유 버튼
+          </label>
+          <label className={cn("flex items-center gap-2 text-[14px]", !hasSubscribeBlock && "text-fg-sub")}>
+            <Switch checked={!!custom.subscribe} onChange={(v) => onCustomChange({ subscribe: v ? true : undefined })} label="구독 버튼" disabled={!hasSubscribeBlock} />
+            구독 버튼
+            {!hasSubscribeBlock ? <span className="text-[12px] text-fg-faint">— 구독신청 블록을 먼저 추가하세요</span> : null}
           </label>
           <label className="flex items-center gap-2 text-[14px]">
-            <Switch checked={custom.badge !== "hide"} onChange={(v) => onCustomChange({ badge: v ? undefined : "hide" })} label="핀치 배지" />
+            <Switch checked={custom.badge !== "hide"} onChange={(v) => onCustomChange({ badge: v ? undefined : "hide" })} label="핀치 배지" disabled={!!custom.logoImage} />
             핀치 배지
           </label>
         </div>
+        <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+          <ImageField label="내 로고 (선택)" value={custom.logoImage ?? ""} onChange={(v) => onCustomChange({ logoImage: v || undefined })} hint="넣으면 핀치 배지 대신 로고가 보여요. PNG 투명 배경 권장" aspect="aspect-[4/1]" />
+          {custom.logoImage ? (
+            <div className="flex gap-1.5">
+              {CUSTOM_LOGO_POS.map((f) => (
+                <button key={f.key} type="button" aria-pressed={(custom.logoPos ?? "bottom") === f.key} onClick={() => onCustomChange({ logoPos: f.key === "bottom" ? undefined : f.key })} className={chip((custom.logoPos ?? "bottom") === f.key)}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </DSection>
 
-        {customDirty ? (
-          <p className="text-[12px] text-fg-sub">저장 안 한 변경이 있어요 — 미리보기엔 보이지만 「저장」해야 실제로 반영됩니다.</p>
-        ) : null}
-        <Button variant="secondary" disabled={busy || !customDirty} onClick={onCustomSave}>
+      <DSection title="효과" hint="스크롤 애니메이션·커서·화면 효과는 공개 페이지에서만 움직여요(미리보기는 모양만).">
+        {(
+          [
+            ["스크롤", CUSTOM_ANIMS, custom.anim ?? "none", (k: string) => onCustomChange({ anim: k === "none" ? undefined : (k as LinkThemeCustom["anim"]) })],
+            ["커서", CUSTOM_CURSORS, custom.cursor ?? "default", (k: string) => onCustomChange({ cursor: k === "default" ? undefined : (k as LinkThemeCustom["cursor"]) })],
+            ["화면", CUSTOM_SCREEN_FX, custom.screenFx ?? "none", (k: string) => onCustomChange({ screenFx: k === "none" ? undefined : (k as LinkThemeCustom["screenFx"]) })],
+          ] as const
+        ).map(([lab, opts, cur, set]) => (
+          <div key={lab} className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 w-10 text-[12px] text-fg-sub">{lab}</span>
+            {opts.map((o) => (
+              <button key={o.key} type="button" aria-pressed={cur === o.key} onClick={() => set(o.key)} className={chip(cur === o.key)}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+        ))}
+      </DSection>
+
+      <DSection title="PC 레이아웃" hint="넓은 화면에서 프로필을 왼쪽에 떼어 두 칸으로 보여줄 수 있어요.">
+        <div className="flex flex-wrap gap-1.5">
+          {CUSTOM_DESKTOP.map((f) => (
+            <button key={f.key} type="button" aria-pressed={(custom.desktop ?? "phone") === f.key} onClick={() => onCustomChange({ desktop: f.key === "phone" ? undefined : f.key })} className={chip((custom.desktop ?? "phone") === f.key)}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </DSection>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
+        <p className="text-[13px] text-fg-sub">{customDirty ? "저장 안 한 변경이 있어요 — 미리보기엔 보이지만 「저장」해야 실제로 반영돼요." : "모두 저장됐어요."}</p>
+        <Button disabled={busy || !customDirty} onClick={onCustomSave}>
           {busy ? "저장 중…" : "꾸미기 저장"}
         </Button>
       </div>
@@ -3016,7 +3028,7 @@ function StatsPanel({
              눌러보면 첫 화면이 800% 가 된다. 「클릭률」이라는 이름이 그걸 오류로 보이게 한다. */
           { label: "조회당 클릭", value: ratio(stats.ctr, stats.views) },
         ].map((s) => (
-          <div key={s.label} className="rounded-card border border-line bg-plate px-3 py-2.5">
+          <div key={s.label} className="rounded-card border border-line bg-body px-3 py-2.5">
             <p className="text-[12px] text-fg-sub">{s.label}</p>
             <p className="tnum mt-1 text-[20px] font-bold leading-none">{s.value}</p>
           </div>
@@ -3031,7 +3043,7 @@ function StatsPanel({
       {/* 기기·리퍼러·체류(0058) — 리틀리 분석 탭 카피(5단계). 미적용 서버는 빈 배열이라 섹션이 안 나온다 */}
       {stats.devices.length > 0 || stats.dwell.n > 0 ? (
         <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-card border border-line bg-plate px-3 py-2.5">
+          <div className="rounded-card border border-line bg-body px-3 py-2.5">
             <p className="text-[12px] text-fg-sub">기기</p>
             {stats.devices.length === 0 ? (
               <p className="mt-1 text-[14px] text-fg-sub">—</p>
@@ -3053,7 +3065,7 @@ function StatsPanel({
               </ul>
             )}
           </div>
-          <div className="rounded-card border border-line bg-plate px-3 py-2.5">
+          <div className="rounded-card border border-line bg-body px-3 py-2.5">
             <p className="text-[12px] text-fg-sub">평균 체류</p>
             <p className="tnum mt-1 text-[20px] font-bold leading-none">{stats.dwell.n > 0 ? dwellLabel(stats.dwell.avgMs) : "—"}</p>
             <p className="mt-1 text-[11px] text-fg-sub">{stats.dwell.n > 0 ? `방문 ${stats.dwell.n.toLocaleString("ko-KR")}건 기준` : "아직 측정된 방문이 없어요"}</p>
@@ -3063,7 +3075,7 @@ function StatsPanel({
 
       {stats.referrers.length > 0 ? (
         <div>
-          <p className="text-[12px] font-medium text-fg-sub">유입 경로</p>
+          <p className="text-[14px] font-semibold text-fg">유입 경로</p>
           <ul className="mt-1.5 space-y-1">
             {stats.referrers.map((x) => (
               <li key={x.host ?? "direct"} className="flex items-center justify-between gap-2 text-[14px]">
@@ -3078,7 +3090,7 @@ function StatsPanel({
 
       {stats.sources.length > 0 ? (
         <div>
-          <p className="text-[12px] font-medium text-fg-sub">유입 채널</p>
+          <p className="text-[14px] font-semibold text-fg">유입 채널</p>
           <ul className="mt-1.5 space-y-1">
             {stats.sources.map((x) => (
               <li key={x.src ?? "direct"} className="flex items-center justify-between gap-2 text-[14px]">
@@ -3094,7 +3106,7 @@ function StatsPanel({
       {/* 추이 */}
       <div>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-[12px] font-medium text-fg-sub">조회수 · 클릭 추이</p>
+          <p className="text-[14px] font-semibold text-fg">조회수 · 클릭 추이</p>
           <span className="flex items-center gap-2.5 text-[11px] text-fg-sub">
             <span className="flex items-center gap-1">
               <span className="inline-block size-2 rounded-full bg-primary" aria-hidden />
@@ -3130,7 +3142,7 @@ function StatsPanel({
       {/* 블록별 클릭 — "총 클릭 320" 이 아니라 "어느 링크가 320 중 몇을 가져갔나"가
           이 화면의 존재 이유다. 성과 없는 블록을 찾아야 페이지를 고칠 수 있다. */}
       <div>
-        <p className="text-[12px] font-medium text-fg-sub">블록별 클릭</p>
+        <p className="text-[14px] font-semibold text-fg">블록별 클릭</p>
         {stats.blocks.length === 0 ? (
           <p className="mt-1.5 text-[14px] text-fg-sub">아직 클릭이 없어요.</p>
         ) : (
@@ -3157,7 +3169,7 @@ function StatsPanel({
 
       {/* 지역 — 0048 이 쌓기만 하고 아무도 안 읽던 값이다 */}
       <div>
-        <p className="text-[12px] font-medium text-fg-sub">지역</p>
+        <p className="text-[14px] font-semibold text-fg">지역</p>
         {stats.regions.length === 0 ? (
           <p className="mt-1.5 text-[14px] text-fg-sub">아직 지역 정보가 없어요.</p>
         ) : (
@@ -3233,7 +3245,7 @@ function SettingsPanel({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-plate px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-body px-4 py-3">
         <div className="min-w-0">
           <p className="text-[14px] font-semibold">{page.published ? "공개 중" : "비공개"}</p>
           <p className="mt-0.5 text-[12px] text-fg-sub">
@@ -3324,7 +3336,7 @@ function ManagePanel({
           { label: "구독", value: counts.subscribe },
           { label: "방명록", value: counts.guestbook, sub: counts.unreplied ? `답글 없음 ${counts.unreplied}` : undefined },
         ].map((c) => (
-          <div key={c.label} className="rounded-card border border-line bg-plate px-3 py-2.5">
+          <div key={c.label} className="rounded-card border border-line bg-body px-3 py-2.5">
             <p className="text-[12px] text-fg-sub">{c.label}</p>
             <p className="tnum mt-1 text-[20px] font-bold leading-none">{c.value.toLocaleString("ko-KR")}</p>
             {c.sub ? <p className="mt-1 text-[11px] text-primary-ink">{c.sub}</p> : null}
@@ -3343,7 +3355,7 @@ function ManagePanel({
       <div>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
-            <p className="text-[12px] font-medium text-fg-sub">받은 내용</p>
+            <p className="text-[14px] font-semibold text-fg">받은 내용</p>
             <div className="flex gap-1" role="group" aria-label="종류">
               {(
                 [
@@ -3429,7 +3441,7 @@ function ManagePanel({
 
       {/* 방명록 — 방문자 글에 답글·숨김·삭제(리틀리 「답글 및 삭제」 카피, 4단계) */}
       <div>
-        <p className="text-[12px] font-medium text-fg-sub">방명록 {guestbook.length ? <span className="tnum">{guestbook.length}</span> : null}</p>
+        <p className="text-[14px] font-semibold text-fg">방명록 {guestbook.length ? <span className="tnum">{guestbook.length}</span> : null}</p>
         {guestbook.length === 0 ? (
           <p className="mt-1.5 text-[14px] text-fg-sub">방명록 블록을 두면 방문자 글이 여기에 쌓여요. 답글을 달면 공개 페이지에 함께 보여요.</p>
         ) : (
@@ -3539,7 +3551,7 @@ function PageSettingsForm({
 
   const input =
     "h-10 w-full rounded-card border border-line bg-body px-3 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none";
-  const label = "block text-[12px] font-medium text-fg-sub";
+  const label = "block text-[14px] font-medium text-fg";
   const commit = (k: keyof LinkPageSettings, v: string) => {
     if (v.trim() === (st[k] as string)) return;
     onSettings({ [k]: v.trim() } as Partial<LinkPageSettings>);
@@ -3580,7 +3592,7 @@ function PageSettingsForm({
   return (
     <div className="space-y-4">
       {/* 비밀번호 */}
-      <div className="rounded-card border border-line bg-plate px-4 py-3">
+      <div className="rounded-card border border-line bg-body px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 text-[14px] font-semibold">
@@ -3680,7 +3692,7 @@ function PageSettingsForm({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-plate px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-body px-4 py-3">
         <div className="min-w-0">
           <p className="text-[14px] font-semibold">검색·AI 노출</p>
           <p className="mt-0.5 text-[12px] text-fg-sub">{st.robots === "index" ? "구글·네이버·AI 검색이 이 페이지를 찾을 수 있어요." : "검색 결과에 나오지 않게 막아요(주소를 아는 사람만)."}</p>

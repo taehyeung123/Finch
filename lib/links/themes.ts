@@ -74,6 +74,58 @@ export interface LinkThemeCustom {
   share?: boolean;
   /** 하단 핀치 배지 — hide 는 추후 플랜 게이트 */
   badge?: "show" | "hide";
+  /* ── 디자인 탭 보완(2026-08-23, 리틀리 디자인 탭 대조) ── */
+  /** 버튼색 적용 범위 — partial(강조 버튼만) | all(모든 링크 버튼을 강조색으로 채움) */
+  buttonScope?: "partial" | "all";
+  /** 내 로고(이미지) — 있으면 핀치 배지 자리에 이 이미지. logoPos 로 위/아래 */
+  logoImage?: string;
+  logoPos?: "top" | "bottom";
+  /** 상단 메뉴 — none | bar(스크롤해도 붙어 있는 제목 줄 + 공유/구독 버튼) */
+  topbar?: "none" | "bar";
+  /** 상단 구독 버튼 — 첫 구독신청 블록으로 스크롤 */
+  subscribe?: boolean;
+  /** 커서 모양 */
+  cursor?: "default" | "dot" | "heart" | "star";
+  /** 화면 효과 — 들어올 때 한 번(confetti) 또는 계속(snow·sparkle) */
+  screenFx?: "none" | "confetti" | "snow" | "sparkle";
+}
+
+export const CUSTOM_BUTTON_SCOPE = [
+  { key: "partial", label: "강조 버튼만", hint: "일반 링크는 카드색, 강조한 것만 강조색" },
+  { key: "all", label: "전체 적용", hint: "모든 링크 버튼을 강조색으로 채워요" },
+] as const;
+export const CUSTOM_TOPBAR = [
+  { key: "none", label: "없음" },
+  { key: "bar", label: "제목 줄 고정" },
+] as const;
+export const CUSTOM_LOGO_POS = [
+  { key: "top", label: "맨 위" },
+  { key: "bottom", label: "맨 아래" },
+] as const;
+export const CUSTOM_CURSORS = [
+  { key: "default", label: "기본" },
+  { key: "dot", label: "점" },
+  { key: "heart", label: "하트" },
+  { key: "star", label: "별" },
+] as const;
+export const CUSTOM_SCREEN_FX = [
+  { key: "none", label: "없음" },
+  { key: "confetti", label: "색종이(입장 시)" },
+  { key: "snow", label: "눈" },
+  { key: "sparkle", label: "반짝임" },
+] as const;
+
+/** 커서 SVG — 데이터 URL. 현재색(currentColor)은 못 쓰므로 검정 윤곽 + 흰 채움으로 어느 배경에서도 보인다 */
+export function cursorCss(kind: LinkThemeCustom["cursor"]): string {
+  if (!kind || kind === "default") return "auto";
+  const shape =
+    kind === "dot"
+      ? '<circle cx="12" cy="12" r="6" fill="#fff" stroke="#000" stroke-width="2"/>'
+      : kind === "heart"
+        ? '<path d="M12 21s-7-4.6-9.3-9A5.2 5.2 0 0 1 12 6.4a5.2 5.2 0 0 1 9.3 5.6C19 16.4 12 21 12 21z" fill="#ff5d8f" stroke="#000" stroke-width="1.5"/>'
+        : '<path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.3 6.1 20.5l1.2-6.5L2.5 9.4l6.6-.9z" fill="#ffd84c" stroke="#000" stroke-width="1.5"/>';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">${shape}</svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 12 12, auto`;
 }
 
 /** 글꼴 목록 — fontsource(jsdelivr) 로 싣는다. CSP 가 이미 cdn.jsdelivr.net 의 style/font 를 허용한다.
@@ -96,6 +148,32 @@ export const LINK_FONTS: ReadonlyArray<{ key: string; label: string; family: str
   { key: "gaegu", label: "개구", family: '"Gaegu", cursive', pkg: "gaegu", bold: true },
   { key: "nanum-pen", label: "나눔손글씨 펜", family: '"Nanum Pen Script", cursive', pkg: "nanum-pen-script", bold: false },
   { key: "mono", label: "모노", family: 'ui-monospace, "D2Coding", "Cascadia Code", Consolas, monospace', pkg: null, bold: false },
+  /* 2026-08-23 확장(디자인 탭 글꼴 검색) — jsdelivr 에 index.css 존재 확인 */
+  { key: "gothic-a1", label: "고딕 A1", family: '"Gothic A1", sans-serif', pkg: "gothic-a1", bold: true },
+  { key: "dongle", label: "동글", family: '"Dongle", sans-serif', pkg: "dongle", bold: true },
+  { key: "stylish", label: "스타일리시", family: '"Stylish", sans-serif', pkg: "stylish", bold: false },
+  { key: "gugi", label: "구기", family: '"Gugi", cursive', pkg: "gugi", bold: false },
+  { key: "hi-melody", label: "하이멜로디", family: '"Hi Melody", cursive', pkg: "hi-melody", bold: false },
+  { key: "poor-story", label: "푸어스토리", family: '"Poor Story", cursive', pkg: "poor-story", bold: false },
+  { key: "yeon-sung", label: "연성", family: '"Yeon Sung", cursive', pkg: "yeon-sung", bold: false },
+  { key: "single-day", label: "싱글데이", family: '"Single Day", cursive', pkg: "single-day", bold: false },
+  { key: "kirang-haerang", label: "기랑해랑", family: '"Kirang Haerang", cursive', pkg: "kirang-haerang", bold: false },
+  { key: "gamja-flower", label: "감자꽃", family: '"Gamja Flower", cursive', pkg: "gamja-flower", bold: false },
+  { key: "east-sea-dokdo", label: "동해독도", family: '"East Sea Dokdo", cursive', pkg: "east-sea-dokdo", bold: false },
+  { key: "cute-font", label: "귀여운 글꼴", family: '"Cute Font", cursive', pkg: "cute-font", bold: false },
+  { key: "nanum-brush", label: "나눔손글씨 붓", family: '"Nanum Brush Script", cursive', pkg: "nanum-brush-script", bold: false },
+  { key: "nanum-coding", label: "나눔고딕코딩", family: '"Nanum Gothic Coding", monospace', pkg: "nanum-gothic-coding", bold: true },
+  { key: "inter", label: "Inter", family: '"Inter", sans-serif', pkg: "inter", bold: true },
+  { key: "montserrat", label: "Montserrat", family: '"Montserrat", sans-serif', pkg: "montserrat", bold: true },
+  { key: "poppins", label: "Poppins", family: '"Poppins", sans-serif', pkg: "poppins", bold: true },
+  { key: "raleway", label: "Raleway", family: '"Raleway", sans-serif', pkg: "raleway", bold: true },
+  { key: "space-grotesk", label: "Space Grotesk", family: '"Space Grotesk", sans-serif', pkg: "space-grotesk", bold: true },
+  { key: "playfair", label: "Playfair Display", family: '"Playfair Display", serif', pkg: "playfair-display", bold: true },
+  { key: "lora", label: "Lora", family: '"Lora", serif', pkg: "lora", bold: true },
+  { key: "dm-serif", label: "DM Serif Display", family: '"DM Serif Display", serif', pkg: "dm-serif-display", bold: false },
+  { key: "bebas", label: "Bebas Neue", family: '"Bebas Neue", sans-serif', pkg: "bebas-neue", bold: false },
+  { key: "pacifico", label: "Pacifico", family: '"Pacifico", cursive', pkg: "pacifico", bold: false },
+  { key: "caveat", label: "Caveat", family: '"Caveat", cursive', pkg: "caveat", bold: true },
 ];
 
 /** 글꼴 스타일시트 주소 — 공개 페이지·편집 미리보기가 <link rel="stylesheet"> 로 싣는다 */
@@ -205,6 +283,13 @@ export function sanitizeThemeCustom(input: unknown): LinkThemeCustom | null {
   if (CUSTOM_DESKTOP.some((f) => f.key === i.desktop)) out.desktop = i.desktop as LinkThemeCustom["desktop"];
   if (i.share === true) out.share = true;
   if (i.badge === "hide") out.badge = "hide";
+  if (CUSTOM_BUTTON_SCOPE.some((f) => f.key === i.buttonScope)) out.buttonScope = i.buttonScope as LinkThemeCustom["buttonScope"];
+  if (typeof i.logoImage === "string" && IMG_URL.test(i.logoImage)) out.logoImage = i.logoImage;
+  if (CUSTOM_LOGO_POS.some((f) => f.key === i.logoPos)) out.logoPos = i.logoPos as LinkThemeCustom["logoPos"];
+  if (CUSTOM_TOPBAR.some((f) => f.key === i.topbar)) out.topbar = i.topbar as LinkThemeCustom["topbar"];
+  if (i.subscribe === true) out.subscribe = true;
+  if (CUSTOM_CURSORS.some((f) => f.key === i.cursor)) out.cursor = i.cursor as LinkThemeCustom["cursor"];
+  if (CUSTOM_SCREEN_FX.some((f) => f.key === i.screenFx)) out.screenFx = i.screenFx as LinkThemeCustom["screenFx"];
   return Object.keys(out).length ? out : null;
 }
 
@@ -380,12 +465,14 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
             : "none";
   /* 버튼 스타일 — 링크 버튼의 "기본" 변형이 따른다(채움/외곽선/은은하게) */
   const btn = c.button ?? "fill";
-  const btnBg = btn === "fill" ? card : btn === "outline" ? "transparent" : `color-mix(in srgb, ${accent} 14%, transparent)`;
+  /* 전체 적용(리틀리 buttonColorLayout=inverted) — 모든 링크 버튼이 강조색 채움 */
+  const all = c.buttonScope === "all";
+  const btnBg = all ? accent : btn === "fill" ? card : btn === "outline" ? "transparent" : `color-mix(in srgb, ${accent} 14%, transparent)`;
   /* 외곽선·은은하게의 글자는 강조색인데, 코랄·피치처럼 밝은 강조색은 배경 위에서 2.3~3.1:1 이다 — 안 읽히면 본문색으로(감사2 U8) */
   const accentReadable = contrastRatio(accent, bg) >= 4.5;
   const accentText = accentReadable ? accent : fg;
-  const btnFg = btn === "fill" ? fg : accentText;
-  const btnBorder = btn === "fill" ? border : btn === "outline" ? accent : "transparent";
+  const btnFg = all ? onAccent : btn === "fill" ? fg : accentText;
+  const btnBorder = all ? accent : btn === "fill" ? border : btn === "outline" ? accent : "transparent";
   return {
     "--lp-bg": bg,
     "--lp-bg-image": bgImage,
@@ -394,6 +481,7 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
     "--lp-btn-bg": btnBg,
     "--lp-btn-fg": btnFg,
     "--lp-btn-border": btnBorder,
+    "--lp-cursor": cursorCss(c.cursor),
     "--lp-fg": fg,
     "--lp-muted": muted,
     "--lp-card": card,

@@ -16,6 +16,8 @@ import { initialOf, publicLinkUrl, sanitizeSnsLinks } from "@/lib/links";
 import { emphasizedCta, hiddenReason, isScheduledHidden, type BlockType } from "@/lib/links/blocks";
 import { DEFAULT_THEME_KEY as DEFAULT_LINK_THEME_KEY, fontStylesheets, sanitizeThemeCustom, themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
 import { ShareButton } from "./_components/share-button";
+import { SubscribeButton } from "./_components/subscribe-button";
+import { ScreenEffect } from "./_components/screen-effect";
 import { BlockRenderer, type GuestbookPublicEntry, type SnapshotBlock } from "./_components/block-renderer";
 import { LeadForm } from "./_components/lead-form";
 import { ViewBeacon } from "./_components/view-beacon";
@@ -207,6 +209,19 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
   const anim = themeCustom?.anim && themeCustom.anim !== "none" ? themeCustom.anim : undefined;
   const split = themeCustom?.desktop === "split" && snap.layout !== "cover";
   const fonts = fontStylesheets(themeCustom?.font);
+  /* 디자인 탭 보완(2026-08-23): 상단 메뉴 줄·구독 버튼·내 로고·커서·화면 효과 */
+  const topbar = themeCustom?.topbar === "bar";
+  const hasSubscribeBlock = visibleBlocks.some((b) => b.type === "subscribe");
+  const subscribeOn = !!themeCustom?.subscribe && hasSubscribeBlock;
+  const logoImage = themeCustom?.logoImage ?? null;
+  const logoPos = themeCustom?.logoPos ?? "bottom";
+  const screenFx = themeCustom?.screenFx && themeCustom.screenFx !== "none" ? themeCustom.screenFx : null;
+  const logoEl = logoImage ? (
+    <div className={`flex justify-center ${logoPos === "top" ? "mb-5" : "mt-10 pb-6"} ${split ? "lg:col-start-2" : ""}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL */}
+      <img src={logoImage} alt="" className="max-h-12 max-w-[200px] object-contain" />
+    </div>
+  ) : null;
   /* 방명록 블록이 있으면 공개 글(숨김 제외, 최근 20)을 읽는다 — 0057 미적용이면 빈 배열 */
   let guestbook: GuestbookPublicEntry[] = [];
   if (isDemoMode()) {
@@ -229,7 +244,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
   return (
     <main
       lang={settings.lang}
-      style={{ ...themeVars(theme, themeCustom), fontFamily: "var(--lp-font)" } as React.CSSProperties}
+      style={{ ...themeVars(theme, themeCustom), fontFamily: "var(--lp-font)", cursor: "var(--lp-cursor)" } as React.CSSProperties}
       className="relative isolate min-h-[100dvh] bg-[var(--lp-bg)] text-[var(--lp-fg)]"
       data-lp-fx={fx}
       data-lp-anim={anim}
@@ -253,6 +268,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
       {/* 방문 집계 — 렌더를 막지 않게 클라이언트에서 한 번만 쏜다.
           개인 식별 정보는 안 보낸다(서버가 익명 토큰만 쿠키로 관리). */}
       {published ? <ViewBeacon slug={slug} /> : null}
+      {screenFx ? <ScreenEffect kind={screenFx} /> : null}
       {/* 마케팅 연결(GA4·Meta 픽셀·TikTok 픽셀) — 주인이 ID 를 넣었을 때만, 공개 상태에서만 실린다.
           주인 미리보기(비공개)엔 안 싣는다 — 자기 방문이 광고 계정 통계를 더럽힌다. */}
       {published && !isOwner ? <TrackingScripts settings={settings} /> : null}
@@ -262,11 +278,28 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
           split
             ? "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:grid lg:max-w-[980px] lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:items-start lg:gap-x-14 lg:px-8 lg:pt-16"
             : "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14"
-        } ${themeCustom?.share ? "pt-16" : "pt-10"}`}
+        } ${topbar ? "pt-4" : themeCustom?.share || subscribeOn ? "pt-16" : "pt-10"}`}
       >
-        {/* 공유 버튼 — 콘텐츠 칸 기준 오른쪽 위(창 끝이 아니라, 소넷 확정). 켜져 있으면 위 여백을 pt-16 으로 벌려
-            오른쪽 정렬 아바타·제목·주인 배너와 겹치지 않는다(감사 L14) */}
-        {themeCustom?.share ? <ShareButton url={publicLinkUrl(slug)} title={snap.title || slug} label={t.share} done={t.copied} /> : null}
+        {/* 상단 메뉴 줄 — 스크롤해도 붙어 있는 제목 + 공유/구독(리틀리 「상단 메뉴」). 없으면 버튼은 모서리에 떠 있는다 */}
+        {topbar ? (
+          <div className={`sticky top-0 z-20 -mx-5 mb-5 flex items-center gap-3 border-b border-[var(--lp-border)] px-5 py-2.5 backdrop-blur ${split ? "lg:col-span-2 lg:-mx-8 lg:px-8" : ""}`} style={{ backgroundColor: "color-mix(in srgb, var(--lp-bg) 88%, transparent)" }}>
+            {snap.avatarPath ? (
+              // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
+              <img src={snap.avatarPath} alt="" className="size-7 rounded-full object-cover" />
+            ) : null}
+            <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{snap.title || slug}</span>
+            {subscribeOn ? <SubscribeButton label={t.lead.subscribe} inline /> : null}
+            {themeCustom?.share ? <ShareButton url={publicLinkUrl(slug)} title={snap.title || slug} label={t.share} done={t.copied} inline /> : null}
+          </div>
+        ) : (
+          <>
+            {/* 공유 버튼 — 콘텐츠 칸 기준 오른쪽 위(창 끝이 아니라, 소넷 확정). 켜져 있으면 위 여백을 pt-16 으로 벌려
+                오른쪽 정렬 아바타·제목·주인 배너와 겹치지 않는다(감사 L14) */}
+            {themeCustom?.share ? <ShareButton url={publicLinkUrl(slug)} title={snap.title || slug} label={t.share} done={t.copied} /> : null}
+            {subscribeOn ? <SubscribeButton label={t.lead.subscribe} /> : null}
+          </>
+        )}
+        {logoPos === "top" ? logoEl : null}
         {isOwner && !published ? (
           <p className={`mb-6 rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-card)] px-4 py-2.5 text-center text-[13px] font-medium ${split ? "lg:col-start-1" : ""}`}>
             비공개 미리보기예요. 나에게만 보입니다.
@@ -333,7 +366,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
             <p className="text-center text-[15px] text-[var(--lp-muted)]">{t.emptyLinks}</p>
           ) : null}
           {visibleBlocks.map((b) => (
-            <div key={b.id} className="lp-block">
+            <div key={b.id} className="lp-block" data-lp-subscribe={b.type === "subscribe" ? "" : undefined}>
               {b.type === "contact" || b.type === "subscribe" ? (
                 <LeadForm slug={slug} blockId={b.id} kind={b.type} data={b.data} isDemo={isDemoMode()} t={t.lead} errors={t.errors} />
               ) : (
@@ -346,7 +379,9 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
         {/* 핀치 배지 — 링크팜의 「링크팜에서 내 프로필 꾸미기」 카피(2026-08-20 지시).
             방문자가 "나도 하나 만들까"로 넘어오는 통로라 마지막 블록 바로 아래 알약으로
             둔다. 미리보기(phone-preview)도 같은 자리에 같은 모양을 그린다. */}
-        {themeCustom?.badge === "hide" ? null : (
+        {logoPos === "bottom" ? logoEl : null}
+        {/* 핀치 배지 — 내 로고가 있으면 대신 로고, 숨김이면 아무것도 */}
+        {themeCustom?.badge === "hide" || logoImage ? null : (
         <footer className={`mt-10 pb-6 text-center ${split ? "lg:col-start-2" : ""}`}>
           <Link
             href="/?utm_source=profile_link&utm_medium=badge"

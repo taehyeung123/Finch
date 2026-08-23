@@ -260,6 +260,7 @@ export function PhonePreview({
             {
               ...themeVars(theme, page.themeCustom),
               fontFamily: "var(--lp-font)",
+              cursor: "var(--lp-cursor)",
             } as React.CSSProperties
           }
           className={cn(
@@ -279,13 +280,43 @@ export function PhonePreview({
         <div
           className={cn("relative overflow-y-auto px-5 pb-10 pt-8", frame === "device" ? "min-h-0 flex-1" : "max-h-[680px]")}
         >
-          {page.themeCustom?.share ? (
-            <span
-              aria-hidden
-              className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] text-[var(--lp-fg)] shadow-[var(--lp-shadow)]"
-            >
-              <Share2 className="size-3.5" />
-            </span>
+          {/* 상단 메뉴 줄 / 모서리 공유·구독 버튼 — 공개 페이지와 같은 자리(모양만, 동작 없음) */}
+          {page.themeCustom?.topbar === "bar" ? (
+            <div className="sticky top-0 z-20 -mx-5 -mt-8 mb-4 flex items-center gap-2 border-b border-[var(--lp-border)] px-4 py-2 backdrop-blur" style={{ backgroundColor: "color-mix(in srgb, var(--lp-bg) 88%, transparent)" }} aria-hidden>
+              {page.avatarPath ? (
+                // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
+                <img src={page.avatarPath} alt="" className="size-6 rounded-full object-cover" />
+              ) : null}
+              <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">{page.title || "제목"}</span>
+              {page.themeCustom?.subscribe && blocks.some((b) => b.type === "subscribe") ? (
+                <span className="inline-flex h-7 items-center gap-1 rounded-full bg-[var(--lp-accent)] px-2.5 text-[11px] font-semibold text-[var(--lp-on-accent)]">✉ 구독</span>
+              ) : null}
+              {page.themeCustom?.share ? (
+                <span className="flex size-7 items-center justify-center rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] text-[var(--lp-fg)]">
+                  <Share2 className="size-3" />
+                </span>
+              ) : null}
+            </div>
+          ) : (
+            <>
+              {page.themeCustom?.share ? (
+                <span
+                  aria-hidden
+                  className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] text-[var(--lp-fg)] shadow-[var(--lp-shadow)]"
+                >
+                  <Share2 className="size-3.5" />
+                </span>
+              ) : null}
+              {page.themeCustom?.subscribe && blocks.some((b) => b.type === "subscribe") ? (
+                <span aria-hidden className="absolute left-3 top-3 inline-flex h-8 items-center gap-1 rounded-full bg-[var(--lp-accent)] px-3 text-[11px] font-semibold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)]">
+                  ✉ 구독
+                </span>
+              ) : null}
+            </>
+          )}
+          {page.themeCustom?.logoImage && (page.themeCustom.logoPos ?? "bottom") === "top" ? (
+            // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
+            <img src={page.themeCustom.logoImage} alt="" className="mx-auto mb-4 max-h-10 max-w-[160px] object-contain" />
           ) : null}
           {/* 커버 — 캔버스 편집에선 눌러서 프로필 설정(사진 교체)으로 */}
           {(page.layout === "cover" || page.layout === "cover_profile") && page.coverPath ? (
@@ -580,7 +611,11 @@ export function PhonePreview({
 
           {/* 핀치 배지 — 공개 페이지와 같은 자리·같은 모양(app/p/[slug]/page.tsx 와 짝).
               미리보기에선 누를 수 없는 표시만 — 편집 화면을 떠나면 안 된다. */}
-          {page.themeCustom?.badge === "hide" ? null : (
+          {page.themeCustom?.logoImage && (page.themeCustom.logoPos ?? "bottom") === "bottom" ? (
+            // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
+            <img src={page.themeCustom.logoImage} alt="" className="mx-auto mt-8 max-h-10 max-w-[160px] object-contain" />
+          ) : null}
+          {page.themeCustom?.badge === "hide" || page.themeCustom?.logoImage ? null : (
           <div className="mt-8 text-center">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-3 py-1.5 text-[11px] font-semibold text-[var(--lp-muted)] shadow-[var(--lp-shadow)]">
               <FinchMark className="size-3 text-primary" />
