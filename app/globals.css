@@ -943,50 +943,10 @@ body {
 
 /* ───────────────────────────────────────────────────────────────
    프로필 링크 편집기 — 가운데 패널 칸·템플릿 스트립 (2026-08-22 "모션 전부 스르륵")
-   .links-panel-col : 캔버스와 미리보기 **사이** 칸. 폭·왼쪽 마진·불투명도를 함께
-                      움직여 양옆이 자리를 내주며 열리고, 닫힐 때는 그 반대로 오므라든다.
-                      layer-* 와 같은 display allow-discrete + @starting-style 패턴 —
-                      상시 렌더 + data-open 토글이라 퇴장 애니메이션이 된다.
-                      xl 미만(쌓임 배치)에서는 폭 애니메이션 없이 보였다/사라졌다만.
    .links-collapse  : 접이식 줄(템플릿 스트립) — grid-template-rows 0fr↔1fr.
    .links-strip     : 가로 스크롤 스트립 — 잘리는 쪽 가장자리를 마스크로 흐린다
                       (data-fade-l / data-fade-r 는 스크롤 위치로 JS 가 켠다).
 ─────────────────────────────────────────────────────────────── */
-.links-panel-col {
-  display: block;
-  min-width: 0;
-}
-.links-panel-col[data-open="false"] {
-  display: none;
-}
-@media (min-width: 80rem) {
-  .links-panel-col {
-    overflow: hidden;
-    width: 22rem;
-    margin-left: 0;
-    opacity: 1;
-    transition:
-      width var(--dur-4) var(--ease-arrive),
-      margin-left var(--dur-4) var(--ease-arrive),
-      opacity var(--dur-3) var(--ease-arrive),
-      display var(--dur-4) allow-discrete;
-  }
-  @starting-style {
-    .links-panel-col[data-open="true"] { width: 0; margin-left: -1.25rem; opacity: 0; }
-  }
-  .links-panel-col[data-open="false"] {
-    display: none;
-    width: 0;
-    margin-left: -1.25rem; /* = 그리드 gap-5 — 닫히면 캔버스·미리보기 사이가 원래 간격으로 */
-    opacity: 0;
-    pointer-events: none;
-    transition-timing-function: var(--ease-depart);
-  }
-}
-@media (min-width: 96rem) {
-  .links-panel-col { width: 24rem; }
-}
-
 .links-collapse {
   display: grid;
   grid-template-rows: 1fr;
@@ -1011,7 +971,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .links-panel-col, .links-collapse, .links-strip { transition: none; scroll-behavior: auto; }
+  .links-collapse, .links-strip { transition: none; scroll-behavior: auto; }
 }
 
 /* ───────────────────────────────────────────────────────────────

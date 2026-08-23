@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 */
 
 /** 통계 조회 창 — 링크팜과 같은 3단 */
-const STATS_RANGES = [7, 30, 90] as const;
+const STATS_RANGES = [1, 7, 30, 90, 180, 365] as const;
 const DEFAULT_DAYS = 30;
 
 type Loaded = LinkWorkspace;

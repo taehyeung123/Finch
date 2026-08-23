@@ -930,6 +930,11 @@ export function LinksClient({
             setError(null);
           }}
         >
+          {error ? (
+            <p role="alert" className="mb-3 rounded-card border border-negative/40 bg-negative-weak px-3 py-2 text-[14px] text-negative-strong">
+              {error}
+            </p>
+          ) : null}
               <AddPanel
                 busy={busy}
                 onAdd={(t) =>
@@ -1049,7 +1054,8 @@ export function LinksClient({
         </ModalShell>
       ) : null}
 
-      {error ? (
+      {/* 모달이 자기 오류를 보여주는 동안은 페이지 배너를 안 띄운다 — 같은 문장이 둘(스크림 뒤 하나) 이 된다(소넷) */}
+      {error && !settingsOpen && drawer !== "add" && !scheduleFor && !tplPreview ? (
         <p role="alert" className="rounded-card border border-negative/40 bg-negative-weak p-4 text-[15px] text-negative-strong">
           {error}
         </p>
@@ -1306,7 +1312,7 @@ export function LinksClient({
           {tab === "analytics" ? (
             <Card>
               <CardBody>
-                <StatsPanel stats={stats} onRange={(d) => router.push(`/links?days=${d}`, { scroll: false })} busy={busy} />
+                <StatsPanel stats={stats} blocks={blocks} onRange={(d) => router.push(`/links?days=${d}`, { scroll: false })} busy={busy} />
               </CardBody>
             </Card>
           ) : null}
@@ -1427,7 +1433,7 @@ export function LinksClient({
           낙관 반영이라 기다릴 것이 없어 베일을 띄우지 않는다. */}
       {busy ? (
         <div
-          className="busy-veil-in fixed inset-0 z-40 flex items-center justify-center bg-surface/70 backdrop-blur-[2px]"
+          className="busy-veil-in fixed inset-0 z-[60] flex items-center justify-center bg-surface/70 backdrop-blur-[2px]"
         >
           <FinchLoader label="처리하는 중…" />
         </div>
@@ -1435,7 +1441,7 @@ export function LinksClient({
 
       {/* 토스트 — 조작 결과 안내. 전엔 sr-only 라 "블록을 숨겼어요" 같은 안내가 눈엔 안 보였다. */}
       {/* 모바일(<md)에선 하단 탭바(약 58px + safe-area) 위로 띄운다 — 같은 z-40 이라 탭바 뒤에 깔려 한 픽셀도 안 보였다(감사2 C9) */}
-      <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-50 flex justify-center px-4 md:bottom-6">
+      <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[70] flex justify-center px-4 md:bottom-6">
         <p
           data-open={notice ? "true" : "false"}
           role="status"
@@ -1503,6 +1509,7 @@ function TopBar({
                 key={t.key}
                 type="button"
                 aria-current={on ? "page" : undefined}
+                aria-label={t.label}
                 onClick={() => onTab(t.key)}
                 className={cn(
                   "trans-state flex items-center gap-1.5 rounded-[10px] px-3 py-1.5 text-[14px] font-semibold",
@@ -1531,7 +1538,7 @@ function TopBar({
           QR
         </Button>
         {qr ? <QrModal url={url} onClose={() => setQr(false)} /> : null}
-        <Button variant="ghost" size="sm" onClick={onOpenSettings} aria-haspopup="dialog">
+        <Button variant="ghost" size="sm" onClick={onOpenSettings} aria-haspopup="dialog" disabled={busy}>
           <Settings className="size-3.5" aria-hidden />
           페이지 설정
         </Button>
@@ -2009,9 +2016,6 @@ function ScheduleModal({
   );
 }
 
-/* 가운데 패널 칸 — 닫힐 때 **마지막 내용을 잔상으로** 들고 오므라든다. 내용이 먼저 사라지고
-   빈 칸만 줄어들면 "뚝" 끊겨 보인다. 잔상은 레이아웃 이펙트에서 잡아 첫 프레임 공백이 없다.
-   닫히는 동안 pointer-events 는 CSS(.links-panel-col[data-open=false])가 끈다. */
 /* 템플릿 미리보기 모달 — 링크팜 카피. 작업 중 캔버스는 그대로 두고 **모달 안 폰**에
    템플릿을 그린다. 프로필(이름·사진)은 내 것, 블록·테마는 템플릿 것 — "내 페이지가
    이렇게 된다"가 보인다. 서버 호출은 「이 템플릿 적용」 때만. */
@@ -2931,82 +2935,127 @@ function ThemePanel({
    통계 패널
    ══════════════════════════════════════════════════════════════════ */
 
+const STAT_RANGES: Array<{ days: number; label: string }> = [
+  { days: 1, label: "오늘" },
+  { days: 7, label: "7일" },
+  { days: 30, label: "30일" },
+  { days: 90, label: "3개월" },
+  { days: 180, label: "6개월" },
+  { days: 365, label: "1년" },
+];
+
 function StatsPanel({
   stats,
+  blocks,
   onRange,
   busy,
 }: {
   stats: LinkStats;
+  /** 초안 블록 순서 — 블록별 클릭을 「페이지 순서」로 정렬할 때 기준 */
+  blocks: LinkBlock[];
   onRange: (days: number) => void;
   busy: boolean;
 }) {
   /* 분모가 0이면 비율은 "0%"가 아니라 **모름**이다. 0% 로 찍으면 성과가 나쁜 것처럼 읽힌다 */
   const ratio = (v: number, denom: number) => (denom > 0 ? `${v}%` : "—");
   const maxBlock = Math.max(1, ...stats.blocks.map((b) => b.clicks));
+  const [blockSort, setBlockSort] = useState<"clicks" | "order">("clicks");
+  const order = new Map(blocks.map((b, i) => [b.id, i]));
+  const sortedBlocks =
+    blockSort === "clicks"
+      ? stats.blocks
+      : [...stats.blocks].sort((a, b) => (order.get(a.id) ?? 9999) - (order.get(b.id) ?? 9999));
+  const best = stats.blocks.slice(0, 3);
+  const rangeLabel = STAT_RANGES.find((r) => r.days === stats.days)?.label ?? `${stats.days}일`;
+  const n = (v: number) => v.toLocaleString("ko-KR");
+
+  /** 비율 막대 목록 — 유입·기기·지역 공통 */
+  const BarList = ({ title, rows, empty, hint }: { title: string; rows: Array<{ label: string; value: number }>; empty: string; hint?: string }) => {
+    const total = rows.reduce((a, r) => a + r.value, 0);
+    return (
+      <div className="rounded-card border border-line bg-body p-4">
+        <p className="text-[14px] font-semibold">{title}</p>
+        {rows.length === 0 ? (
+          <p className="mt-2 text-[13px] text-fg-sub">{empty}</p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {rows.map((r, i) => (
+              <li key={i}>
+                <div className="flex items-baseline justify-between gap-2 text-[13px]">
+                  <span className="min-w-0 truncate">{r.label}</span>
+                  <span className="tnum shrink-0 font-semibold">
+                    {n(r.value)} <span className="font-normal text-fg-sub">{total > 0 ? `${Math.round((r.value / total) * 100)}%` : ""}</span>
+                  </span>
+                </div>
+                <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-plate" aria-hidden>
+                  <span className="block h-full rounded-full bg-primary" style={{ width: `${total > 0 ? Math.round((r.value / total) * 100) : 0}%` }} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {hint ? <p className="mt-2 text-[11px] text-fg-sub">{hint}</p> : null}
+      </div>
+    );
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-[15px] font-bold">통계</h3>
-        <div className="flex items-center gap-1.5">
-        {/* CSV — 링크팜 통계 모달의 다운로드에 해당. 화면이 든 데이터를 그대로 내린다 */}
-        <button
-          type="button"
-          onClick={() =>
-            downloadCsv(`핀치-프로필링크-통계-${stats.days}일.csv`, [
-              ["구분", "값"],
-              ["기간", `${stats.days}일`],
-              ["조회수", stats.views],
-              ["방문자", stats.uniques],
-              ["클릭", stats.clicks],
-              ["조회당 클릭(%)", stats.ctr],
-              ["재방문율(%)", stats.returning],
-              [],
-              ["날짜", "조회수", "클릭"],
-              ...stats.daily.map((d) => [d.date, d.views, d.clicks] as Array<string | number>),
-              [],
-              ["블록", "클릭", "상태"],
-              ...stats.blocks.map((b) => [b.label, b.clicks, b.removed ? "지운 블록" : ""] as Array<string | number>),
-              [],
-              ["지역", "국가", "조회수"],
-              ...stats.regions.map((r) => [r.region, r.country, r.views] as Array<string | number>),
-              ...(stats.sources.length
-                ? [
-                    [],
-                    ["유입 채널", "조회수"],
-                    ...stats.sources.map((x) => [(x.src && SRC_LABEL.get(x.src)) ?? "직접·기타", x.views] as Array<string | number>),
-                  ]
-                : []),
-              ...(stats.devices.length
-                ? [[], ["기기", "조회수"], ...stats.devices.map((x) => [DEVICE_LABEL.get(x.device ?? "") ?? "알 수 없음", x.views] as Array<string | number>)]
-                : []),
-              ...(stats.referrers.length
-                ? [[], ["유입 경로", "조회수"], ...stats.referrers.map((x) => [x.host ?? "직접 입력·앱 내부", x.views] as Array<string | number>)]
-                : []),
-              ...(stats.dwell.n > 0 ? [[], ["평균 체류(초)", Math.round(stats.dwell.avgMs / 1000)], ["체류 표본", stats.dwell.n]] : []),
-            ])
-          }
-          className="trans-state rounded-chip border border-line px-2.5 py-1 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg"
-        >
-          CSV
-        </button>
-        <div className="flex gap-1" role="group" aria-label="조회 기간">
-          {[7, 30, 90].map((d) => (
-            <button
-              key={d}
-              type="button"
-              disabled={busy}
-              onClick={() => onRange(d)}
-              aria-pressed={stats.days === d}
-              className={cn(
-                "trans-state tnum rounded-chip px-2.5 py-1 text-[12px] font-semibold disabled:opacity-50",
-                stats.days === d ? "bg-primary text-on-primary" : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
-              )}
-            >
-              {d}일
-            </button>
-          ))}
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-[17px] font-semibold">분석</h3>
+          <p className="mt-0.5 text-[14px] text-fg-sub">누가 얼마나 와서 무엇을 눌렀는지. 기간은 한국 시간 자정 기준이에요.</p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap gap-1" role="group" aria-label="조회 기간">
+            {STAT_RANGES.map((r) => (
+              <button
+                key={r.days}
+                type="button"
+                disabled={busy}
+                onClick={() => onRange(r.days)}
+                aria-pressed={stats.days === r.days}
+                className={cn(
+                  "trans-state tnum rounded-chip px-2.5 py-1 text-[12px] font-semibold disabled:opacity-50",
+                  stats.days === r.days ? "bg-primary text-on-primary" : "border border-line bg-body text-fg-sub hover:bg-tint-hover hover:text-fg",
+                )}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+          {/* CSV — 화면이 든 데이터를 그대로 내린다 */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() =>
+              downloadCsv(`핀치-프로필링크-분석-${rangeLabel}.csv`, [
+                ["구분", "값"],
+                ["기간", rangeLabel],
+                ["조회수", stats.views],
+                ["방문자", stats.uniques],
+                ["클릭", stats.clicks],
+                ["조회당 클릭(%)", stats.ctr],
+                ["재방문율(%)", stats.returning],
+                ...(stats.dwell.n > 0 ? [["평균 체류(초)", Math.round(stats.dwell.avgMs / 1000)], ["체류 표본", stats.dwell.n]] : []),
+                [],
+                ["날짜", "조회수", "클릭"],
+                ...stats.daily.map((d) => [d.date, d.views, d.clicks] as Array<string | number>),
+                [],
+                ["블록", "클릭", "상태"],
+                ...stats.blocks.map((b) => [b.label, b.clicks, b.removed ? "지운 블록" : ""] as Array<string | number>),
+                [],
+                ["지역", "국가", "조회수"],
+                ...stats.regions.map((r) => [r.region, r.country, r.views] as Array<string | number>),
+                ...(stats.sources.length ? [[], ["유입 채널", "조회수"], ...stats.sources.map((x) => [(x.src && SRC_LABEL.get(x.src)) ?? "직접·기타", x.views] as Array<string | number>)] : []),
+                ...(stats.devices.length ? [[], ["기기", "조회수"], ...stats.devices.map((x) => [DEVICE_LABEL.get(x.device ?? "") ?? "알 수 없음", x.views] as Array<string | number>)] : []),
+                ...(stats.referrers.length ? [[], ["유입 경로", "조회수"], ...stats.referrers.map((x) => [x.host ?? "직접 입력·앱 내부", x.views] as Array<string | number>)] : []),
+              ])
+            }
+          >
+            <Download className="size-3.5" aria-hidden />
+            CSV
+          </Button>
         </div>
       </div>
 
@@ -3017,100 +3066,35 @@ function StatsPanel({
         </p>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-2">
+      {/* 요약 6칸 */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         {[
-          { label: "조회수", value: stats.views.toLocaleString("ko-KR") },
-          { label: "방문자", value: stats.uniques.toLocaleString("ko-KR") },
-          { label: "클릭", value: stats.clicks.toLocaleString("ko-KR") },
-          /* 「클릭률」이 아니라 「조회당 클릭」이다. 분자·분모의 세는 규칙이 다르다 —
-             같은 사람이 30분 안에 다시 오면 조회는 1로 묶지만 클릭은 전부 센다.
-             그래서 100% 를 넘을 수 있고, 실제로 주인이 자기 페이지를 열어 블록마다
-             눌러보면 첫 화면이 800% 가 된다. 「클릭률」이라는 이름이 그걸 오류로 보이게 한다. */
+          { label: "페이지뷰", value: n(stats.views) },
+          { label: "방문자", value: n(stats.uniques) },
+          { label: "클릭", value: n(stats.clicks) },
+          /* 「클릭률」이 아니라 「조회당 클릭」 — 같은 사람이 30분 안에 다시 오면 조회는 1로 묶지만 클릭은 전부 센다. 100% 를 넘을 수 있다 */
           { label: "조회당 클릭", value: ratio(stats.ctr, stats.views) },
-        ].map((s) => (
-          <div key={s.label} className="rounded-card border border-line bg-body px-3 py-2.5">
-            <p className="text-[12px] text-fg-sub">{s.label}</p>
-            <p className="tnum mt-1 text-[20px] font-bold leading-none">{s.value}</p>
+          { label: "재방문율", value: ratio(stats.returning, stats.uniques) },
+          { label: "평균 체류", value: stats.dwell.n > 0 ? dwellLabel(stats.dwell.avgMs) : "—" },
+        ].map((c) => (
+          <div key={c.label} className="rounded-card border border-line bg-body px-3 py-3">
+            <p className="text-[12px] text-fg-sub">{c.label}</p>
+            <p className="tnum mt-1 text-[20px] font-bold leading-none">{c.value}</p>
           </div>
         ))}
       </div>
-      <p className="text-[12px] leading-relaxed text-fg-sub">
-        재방문율 <span className="tnum font-semibold text-fg">{ratio(stats.returning, stats.uniques)}</span> · 같은
-        사람이 30분 안에 다시 와도 조회는 1로 세고 클릭은 전부 세요 — 그래서 「조회당 클릭」은 100%를 넘을 수 있어요.
-        쿠키를 지운 방문은 사람 수를 셀 수 없어 방문자 집계에서 빠집니다.
+      <p className="-mt-3 text-[12px] leading-relaxed text-fg-sub">
+        같은 사람이 30분 안에 다시 와도 조회는 1로 세고 클릭은 전부 세요 — 그래서 「조회당 클릭」은 100%를 넘을 수 있어요. 쿠키를 지운 방문은 방문자 집계에서 빠집니다.
       </p>
 
-      {/* 기기·리퍼러·체류(0058) — 리틀리 분석 탭 카피(5단계). 미적용 서버는 빈 배열이라 섹션이 안 나온다 */}
-      {stats.devices.length > 0 || stats.dwell.n > 0 ? (
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-card border border-line bg-body px-3 py-2.5">
-            <p className="text-[12px] text-fg-sub">기기</p>
-            {stats.devices.length === 0 ? (
-              <p className="mt-1 text-[14px] text-fg-sub">—</p>
-            ) : (
-              <ul className="mt-1.5 space-y-1">
-                {stats.devices.map((d) => {
-                  const total = stats.devices.reduce((a, x) => a + x.views, 0);
-                  const Icon = d.device === "desktop" ? Monitor : d.device === "tablet" ? Tablet : Smartphone;
-                  return (
-                    <li key={d.device ?? "unknown"} className="flex items-center justify-between gap-2 text-[14px]">
-                      <span className="flex min-w-0 items-center gap-1.5">
-                        {d.device ? <Icon className="size-3.5 text-fg-sub" aria-hidden /> : null}
-                        {DEVICE_LABEL.get(d.device ?? "") ?? "알 수 없음"}
-                      </span>
-                      <span className="tnum font-semibold">{total > 0 ? `${Math.round((d.views / total) * 100)}%` : "—"}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-          <div className="rounded-card border border-line bg-body px-3 py-2.5">
-            <p className="text-[12px] text-fg-sub">평균 체류</p>
-            <p className="tnum mt-1 text-[20px] font-bold leading-none">{stats.dwell.n > 0 ? dwellLabel(stats.dwell.avgMs) : "—"}</p>
-            <p className="mt-1 text-[11px] text-fg-sub">{stats.dwell.n > 0 ? `방문 ${stats.dwell.n.toLocaleString("ko-KR")}건 기준` : "아직 측정된 방문이 없어요"}</p>
-          </div>
-        </div>
-      ) : null}
-
-      {stats.referrers.length > 0 ? (
-        <div>
-          <p className="text-[14px] font-semibold text-fg">유입 경로</p>
-          <ul className="mt-1.5 space-y-1">
-            {stats.referrers.map((x) => (
-              <li key={x.host ?? "direct"} className="flex items-center justify-between gap-2 text-[14px]">
-                <span className="min-w-0 truncate">{x.host ?? "직접 입력·앱 내부"}</span>
-                <span className="tnum font-semibold">{x.views.toLocaleString("ko-KR")}</span>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-1 text-[11px] text-fg-sub">브라우저가 알려준 이전 페이지 주소(호스트만)예요. 인스타·카톡 앱 안에서 온 방문은 대개 「직접 입력·앱 내부」로 잡혀요.</p>
-        </div>
-      ) : null}
-
-      {stats.sources.length > 0 ? (
-        <div>
-          <p className="text-[14px] font-semibold text-fg">유입 채널</p>
-          <ul className="mt-1.5 space-y-1">
-            {stats.sources.map((x) => (
-              <li key={x.src ?? "direct"} className="flex items-center justify-between gap-2 text-[14px]">
-                <span className="min-w-0 truncate">{(x.src && SRC_LABEL.get(x.src)) ?? "직접·기타"}</span>
-                <span className="tnum font-semibold">{x.views.toLocaleString("ko-KR")}</span>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-1 text-[11px] text-fg-sub">설정의 「플랫폼별 링크」로 복사한 주소로 들어온 방문이에요.</p>
-        </div>
-      ) : null}
-
       {/* 추이 */}
-      <div>
+      <div className="rounded-card border border-line bg-body p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-[14px] font-semibold text-fg">조회수 · 클릭 추이</p>
+          <p className="text-[14px] font-semibold">일별 추이</p>
           <span className="flex items-center gap-2.5 text-[11px] text-fg-sub">
             <span className="flex items-center gap-1">
               <span className="inline-block size-2 rounded-full bg-primary" aria-hidden />
-              조회수
+              페이지뷰
             </span>
             <span className="flex items-center gap-1">
               <span className="inline-block size-2 rounded-full bg-positive" aria-hidden />
@@ -3118,19 +3102,20 @@ function StatsPanel({
             </span>
           </span>
         </div>
-        {/* daily 는 항상 days+1 행이라 length 만 보면 빈 상태에 도달하지 못한다 —
-            "아직 데이터가 없어요" 자리에 바닥 직선 한 줄이 그려지고 그 밑에
-            "모양(추세)을 보세요" 가 붙었다. 값의 합으로 판정한다. */}
         {stats.daily.some((d) => d.views > 0 || d.clicks > 0) ? (
           <>
             <DualLineChart
               className="mt-2"
-              height={140}
+              height={180}
               series={[
                 { data: stats.daily.map((d) => d.views), stroke: "var(--color-primary)" },
                 { data: stats.daily.map((d) => d.clicks), stroke: "var(--color-positive)" },
               ]}
             />
+            <div className="mt-1 flex justify-between text-[11px] text-fg-sub">
+              <span className="tnum">{stats.daily[0]?.date ?? ""}</span>
+              <span className="tnum">{stats.daily[stats.daily.length - 1]?.date ?? ""}</span>
+            </div>
             {/* 두 계열을 각자 min/max 로 정규화해 그린다 — 높이를 서로 비교하면 안 된다 */}
             <p className="mt-1 text-[12px] text-fg-sub">두 선은 각자의 범위로 그려요. 모양(추세)을 보세요.</p>
           </>
@@ -3139,49 +3124,84 @@ function StatsPanel({
         )}
       </div>
 
-      {/* 블록별 클릭 — "총 클릭 320" 이 아니라 "어느 링크가 320 중 몇을 가져갔나"가
-          이 화면의 존재 이유다. 성과 없는 블록을 찾아야 페이지를 고칠 수 있다. */}
-      <div>
-        <p className="text-[14px] font-semibold text-fg">블록별 클릭</p>
-        {stats.blocks.length === 0 ? (
-          <p className="mt-1.5 text-[14px] text-fg-sub">아직 클릭이 없어요.</p>
-        ) : (
-          <ul className="mt-1.5 space-y-1.5">
-            {stats.blocks.slice(0, 12).map((b) => (
-              <li key={b.id}>
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className={cn("min-w-0 truncate text-[14px]", b.removed && "text-fg-faint line-through")}>
-                    {b.label}
+      {/* BEST 클릭 + 블록별 클릭 */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+        <div className="rounded-card border border-line bg-body p-4">
+          <p className="text-[14px] font-semibold">BEST 클릭</p>
+          {best.length === 0 ? (
+            <p className="mt-2 text-[13px] text-fg-sub">아직 클릭이 없어요.</p>
+          ) : (
+            <ol className="mt-2 space-y-2">
+              {best.map((b, i) => (
+                <li key={b.id} className="flex items-center gap-3">
+                  <span className={cn("tnum flex size-7 shrink-0 items-center justify-center rounded-full text-[12px] font-bold", i === 0 ? "bg-primary text-on-primary" : "bg-plate text-fg-sub")}>{i + 1}</span>
+                  <span className={cn("min-w-0 flex-1 truncate text-[14px]", b.removed && "text-fg-faint line-through")}>{b.label}</span>
+                  <span className="tnum shrink-0 text-[14px] font-semibold">{n(b.clicks)}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+        <div className="rounded-card border border-line bg-body p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[14px] font-semibold">블록별 클릭</p>
+            <div className="flex gap-1" role="group" aria-label="정렬">
+              {(
+                [
+                  ["clicks", "클릭순"],
+                  ["order", "페이지 순서"],
+                ] as const
+              ).map(([k, lab]) => (
+                <button key={k} type="button" aria-pressed={blockSort === k} onClick={() => setBlockSort(k)} className={cn("trans-state rounded-chip px-2.5 py-1 text-[12px] font-semibold", blockSort === k ? "bg-primary text-on-primary" : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg")}>
+                  {lab}
+                </button>
+              ))}
+            </div>
+          </div>
+          {sortedBlocks.length === 0 ? (
+            <p className="mt-2 text-[13px] text-fg-sub">아직 클릭이 없어요.</p>
+          ) : (
+            <ul className="mt-2 space-y-1.5">
+              {sortedBlocks.slice(0, 20).map((b) => (
+                <li key={b.id}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className={cn("min-w-0 truncate text-[14px]", b.removed && "text-fg-faint line-through")}>{b.label}</span>
+                    <span className="tnum shrink-0 text-[14px] font-semibold">{n(b.clicks)}</span>
+                  </div>
+                  <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-plate" aria-hidden>
+                    <span className="block h-full rounded-full bg-primary" style={{ width: `${Math.round((b.clicks / maxBlock) * 100)}%` }} />
                   </span>
-                  <span className="tnum shrink-0 text-[14px] font-semibold">{b.clicks.toLocaleString("ko-KR")}</span>
-                </div>
-                <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-plate" aria-hidden>
-                  <span
-                    className="block h-full rounded-full bg-primary"
-                    style={{ width: `${Math.round((b.clicks / maxBlock) * 100)}%` }}
-                  />
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-2 text-[11px] text-fg-sub">취소선은 초안에서 지웠지만 라이브에서 눌린 블록이에요.</p>
+        </div>
       </div>
 
-      {/* 지역 — 0048 이 쌓기만 하고 아무도 안 읽던 값이다 */}
-      <div>
-        <p className="text-[14px] font-semibold text-fg">지역</p>
-        {stats.regions.length === 0 ? (
-          <p className="mt-1.5 text-[14px] text-fg-sub">아직 지역 정보가 없어요.</p>
-        ) : (
-          <ul className="mt-1.5 divide-y divide-line">
-            {stats.regions.map((r, i) => (
-              <li key={i} className="flex items-center justify-between gap-2 py-1.5">
-                <span className="min-w-0 truncate text-[14px]">{[r.region, r.country].filter(Boolean).join(", ")}</span>
-                <span className="tnum shrink-0 text-[14px] font-semibold">{r.views.toLocaleString("ko-KR")}</span>
-              </li>
-            ))}
-          </ul>
-        )}
+      {/* 유입 4칸 */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <BarList
+          title="유입 채널"
+          rows={stats.sources.map((x) => ({ label: (x.src && SRC_LABEL.get(x.src)) ?? "직접·기타", value: x.views }))}
+          empty="마케팅 탭의 「플랫폼별 링크」로 복사한 주소로 들어온 방문이 여기 잡혀요."
+        />
+        <BarList
+          title="유입 경로"
+          rows={stats.referrers.map((x) => ({ label: x.host ?? "직접 입력·앱 내부", value: x.views }))}
+          empty="아직 유입 경로 정보가 없어요."
+          hint="브라우저가 알려준 이전 페이지(호스트만). 인스타·카톡 앱 안에서 온 방문은 대개 「직접 입력·앱 내부」예요."
+        />
+        <BarList
+          title="기기"
+          rows={stats.devices.map((x) => ({ label: DEVICE_LABEL.get(x.device ?? "") ?? "알 수 없음", value: x.views }))}
+          empty="아직 기기 정보가 없어요."
+        />
+        <BarList
+          title="지역"
+          rows={stats.regions.map((r) => ({ label: [r.region, r.country].filter(Boolean).join(", "), value: r.views }))}
+          empty="아직 지역 정보가 없어요."
+        />
       </div>
     </div>
   );
