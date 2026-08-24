@@ -8,37 +8,21 @@ import {
   ArrowUp,
   BarChart3,
   BookOpen,
-  Contact,
-  FileDown,
-  Images,
-  Music2,
-  Search,
   CalendarClock,
   Clock,
   Copy as CopyIcon,
   Ellipsis,
   GripVertical,
-  Heart,
-  Heading,
   Inbox,
   MousePointerClick,
   Percent,
   RotateCcw,
   Lock,
-  Image as ImageIcon,
   LayoutGrid,
   Mail,
-  MapPin,
   Megaphone,
   MessageSquare,
-  Minus,
-  MoveVertical,
-  Play,
-  Rss,
-  ShoppingBag,
   Star,
-  Type,
-  GalleryHorizontal,
   Check,
   ChevronDown,
   Copy,
@@ -142,6 +126,7 @@ import type { LinkGuestbookEntry, LinkLead, LinkPageView, LinkSnapshotView, Link
 import { BlockEditor, EDITOR_TITLE_ID } from "./block-editor";
 import { ImageField } from "./image-field";
 import { ImportLinks, ImportLinksBody } from "./import-links";
+import { BLOCK_ICON } from "./block-icons";
 import { PhonePreview, type CanvasEdit } from "./phone-preview";
 import { useFontStylesheets } from "./use-font-stylesheets";
 
@@ -1654,31 +1639,7 @@ const BLOCK_TINT: Record<BlockType, string> = {
   guestbook: "bg-tint-blue text-tint-blue-ink",
 };
 
-const BLOCK_ICON: Record<BlockType, React.ComponentType<{ className?: string }>> = {
-  link: Link2,
-  heading: Heading,
-  text: Type,
-  divider: Minus,
-  spacer: MoveVertical,
-  image: ImageIcon,
-  image_card: ShoppingBag,
-  video: Play,
-  card_row: GalleryHorizontal,
-  grid: LayoutGrid,
-  notice: Megaphone,
-  social_feed: Rss,
-  contact: MessageSquare,
-  subscribe: Mail,
-  map: MapPin,
-  coupang: ShoppingBag,
-  donation: Heart,
-  gallery: Images,
-  music: Music2,
-  vcard: Contact,
-  search: Search,
-  file: FileDown,
-  guestbook: BookOpen,
-};
+/* 블록 아이콘 — 캔버스 자리표시자(phone-preview)와 공유(2026-08-24) */
 
 function BlockListPanel({
   blocks,

@@ -7,9 +7,10 @@ import { FinchMark } from "@/components/logo";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, youtubeEmbed } from "@/lib/links";
 import { Collapsible } from "@/app/p/[slug]/_components/collapsible";
+import { BLOCK_ICON } from "./block-icons";
 import { fontStylesheets, themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
 import { useFontStylesheets } from "./use-font-stylesheets";
-import {
+import { type BlockType,
   BLOCK_CATALOG,
   blockSummary,
   COUPANG_DISCLOSURE,
@@ -412,7 +413,6 @@ export function PhonePreview({
             ) : editable && edit ? (
               visible.map((b, i) => {
                 const label = blockSummary(b.type, b.data);
-                const hidden = hiddenReason(b.type, b.data);
                 return (
                   <div
                     key={b.id}
@@ -556,15 +556,13 @@ export function PhonePreview({
                         10px 한 줄로. 유령칸 문장 상자 도배(2026-08-20 실계정 지적)의
                         대체다. 둘 다면 사유 우선 — 같은 "안 나감"을 두 번 말하지 않는다. */}
                     {!b.active ? (
-                      /* 숨김이 사유보다 먼저 — 사용자가 직접 끈 것이라 그걸 먼저 알아야 되돌린다.
-                         사유가 같이 있으면 한 줄에 이어 쓴다(같은 "안 나감"을 두 줄로 말하지 않는다). */
+                      /* 숨김이 먼저 — 사용자가 직접 끈 것이라 그걸 먼저 알아야 되돌린다.
+                         빈 블록 사유는 자리표시자 카드(GhostCard)가 이미 말하므로 여기선 안 겹친다 */
                       <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">
-                        숨김 — 미리보기·공개에 안 나가요 · 눈 아이콘으로 켜기{hidden ? ` · ${hidden}` : ""}
+                        숨김 — 미리보기·공개에 안 나가요 · 눈 아이콘으로 켜기
                       </p>
                     ) : scheduleCaption(b.data) ? (
                       <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">{scheduleCaption(b.data)}</p>
-                    ) : hidden ? (
-                      <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">{hidden}</p>
                     ) : partialReason(b.type, b.data) ? (
                       /* 항목 일부만 주소가 없는 가로 카드·그리드 — 발행본에선 그 칸만 빠진다(감사 #17) */
                       <p className="mt-1 text-center text-[10px] text-[var(--lp-muted)]">{partialReason(b.type, b.data)}</p>
@@ -641,6 +639,55 @@ export function PhonePreview({
 }
 
 /** 이 상태로는 발행돼도 공개 페이지에 안 나온다는 표시 */
+/* 빈 블록의 초대 문구(타입별) — hiddenReason 의 "…해서 공개되지 않아요"를
+   "…하면 보여요"로 뒤집은 것. 자리표시자는 경고가 아니라 다음 할 일을 말해야 한다 */
+const GHOST_HINT: Partial<Record<string, string>> = {
+  link: "주소를 넣으면 공개돼요",
+  card_row: "링크 있는 항목을 추가하면 보여요",
+  grid: "링크 있는 항목을 추가하면 보여요",
+  image: "사진을 올리면 보여요",
+  gallery: "사진을 올리면 보여요",
+  image_card: "이미지를 올리면 보여요",
+  video: "영상 주소를 넣으면 보여요",
+  music: "음악 주소를 넣으면 보여요",
+  map: "주소를 넣으면 지도가 보여요",
+  vcard: "이름을 채우면 보여요",
+  file: "파일을 올리면 보여요",
+  coupang: "상품 주소를 넣으면 공개돼요",
+  donation: "후원 주소를 넣으면 공개돼요",
+  social_feed: "채널을 연동하고 라이브 반영하면 최근 게시물이 보여요",
+};
+
+/* 리틀리식 자리표시자 카드(2026-08-24 사장님 지적 "리틀리 기본 화면과 차이가 너무 심하다") —
+   빈 블록을 실제 모습 흉내 + 경고 캡션으로 그리면 새 계정 첫 화면이 공사장이 된다.
+   점선 카드 + 강조색 아이콘 칩 + 사용자가 쓴 이름 + 초대 한 줄이면, 연달아 있어도
+   "채워 넣을 페이지 개요"로 읽힌다(리틀리 「블록이 생성될 위치입니다」 문법). */
+function GhostCard({ type, data }: { type: BlockType; data: Record<string, unknown> }) {
+  const Icon = BLOCK_ICON[type] ?? BLOCK_ICON.link;
+  const cat = BLOCK_CATALOG.find((c) => c.type === type)?.label ?? type;
+  /* 사용자가 붙인 이름이 최우선 — 요약이 주소·개수 같은 파생값인 타입(지도 등)도
+     이름을 쓰면 "매장 위치"처럼 본인 말로 읽힌다 */
+  const own = typeof data.label === "string" && data.label.trim() ? data.label : typeof data.title === "string" && data.title.trim() ? data.title : "";
+  const raw = own || blockSummary(type, data);
+  const label = raw && !raw.startsWith("(") ? raw : cat;
+  const hint = GHOST_HINT[type] ?? hiddenReason(type, data) ?? "내용을 채우면 공개돼요";
+  return (
+    <div className="flex min-h-[56px] items-center gap-3 rounded-[var(--lp-radius)] border border-dashed border-[var(--lp-muted)]/40 bg-[var(--lp-card)] px-3.5 py-3">
+      <span
+        className="flex size-9 shrink-0 items-center justify-center rounded-[calc(var(--lp-radius)/1.4)] text-[var(--lp-accent-text)]"
+        style={{ backgroundColor: "color-mix(in srgb, var(--lp-accent) 13%, transparent)" }}
+        aria-hidden
+      >
+        <Icon className="size-4" />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-[13px] font-semibold text-[var(--lp-fg)]">{label}</span>
+        <span className="mt-0.5 block text-[11px] text-[var(--lp-muted)]">{hint}</span>
+      </span>
+    </div>
+  );
+}
+
 function Ghost({ reason }: { reason: string }) {
   return (
     <div className="flex min-h-[44px] items-center justify-center rounded-[var(--lp-radius)] border border-dashed border-[var(--lp-border)] px-3 py-2.5 text-center text-[12px] text-[var(--lp-muted)]">
@@ -662,11 +709,11 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
   const hidden = hiddenReason(block.type, d);
   if (hidden) {
     if (mode === "live") return null;
-    /* 편집 캔버스(edit)는 유령칸 대신 **블록의 실제 모습**을 그린다 — 빈 블록이
-       연달아 있으면 사유 문장 상자가 캔버스를 도배한다(2026-08-20 실계정 지적).
-       사유는 래퍼가 블록 아래 10px 한 줄 캡션으로 단다. 그릴 것이 아예 없는
-       소수 케이스(이미지 없음·항목 0개)만 아래 case 에서 초대 문구로 떨어진다. */
-    if (!lenient) return <Ghost reason={hidden} />;
+    /* 빈 블록은 어느 모드에서든 자리표시자 카드로(2026-08-24, 리틀리 문법).
+       "실제 모습 + 경고 캡션"(2026-08-20 방식)은 새 계정 첫 화면 — 템플릿 골격만
+       깔린 상태 — 을 경고 더미로 만들었다. 카드가 이름을 크게 들고 있어
+       연달아 있어도 개요로 읽힌다. 사유 캡션은 래퍼에서 함께 뗐다. */
+    return <GhostCard type={block.type} data={d} />;
   }
 
   switch (block.type) {
@@ -919,17 +966,23 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
           {s(d, "description") ? (
             <p className="text-[12px] leading-[1.6] text-[var(--lp-muted)]">{s(d, "description")}</p>
           ) : null}
+          {/* 칸엔 라벨, 버튼엔 문구 — 빈 테두리 + 무지 버튼은 렌더링 사고로 읽힌다(2026-08-24 사장님 지적).
+              라벨·버튼 문구는 공개 폼(lead-form.tsx)의 ko 기본값과 같은 값 */}
           {fields.map((f) => (
             <span
               key={f}
               className={cn(
-                "block rounded-[calc(var(--lp-radius)/1.6)] border border-[var(--lp-border)]",
-                f === "message" ? "h-14" : "h-9",
+                "flex rounded-[calc(var(--lp-radius)/1.6)] border border-[var(--lp-border)] bg-[var(--lp-bg)] px-2.5 text-[12px] text-[var(--lp-muted)]",
+                f === "message" ? "h-14 pt-2" : "h-9 items-center",
               )}
               aria-hidden
-            />
+            >
+              {f === "name" ? "이름" : f === "email" ? "이메일" : f === "phone" ? "연락처" : "문의 내용"}
+            </span>
           ))}
-          <span className="block h-9 rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)]" aria-hidden />
+          <span className="flex h-9 items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] text-[12px] font-semibold text-[var(--lp-on-accent)]" aria-hidden>
+            {s(d, "buttonLabel") || (block.type === "subscribe" ? "구독하기" : "보내기")}
+          </span>
         </div>
       );
     }
@@ -1043,7 +1096,7 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
       return (
         <div className={`${card} p-3`}>
           <p className="text-[13px] font-semibold">{s(d, "title") || "방명록"}</p>
-          <div className="mt-2 h-8 rounded-[var(--lp-radius)] border border-[var(--lp-border)]" aria-hidden />
+          <div className="mt-2 flex h-8 items-center rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-bg)] px-2 text-[11px] text-[var(--lp-muted)]" aria-hidden>이름</div>
           <div className="mt-1.5 h-14 rounded-[var(--lp-radius)] border border-[var(--lp-border)] px-2 py-1.5 text-[11px] text-[var(--lp-muted)]">{s(d, "placeholder") || "한마디 남겨 주세요"}</div>
           <div className="mt-1.5 flex h-8 items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] text-[12px] font-semibold text-[var(--lp-on-accent)]">남기기</div>
           <p className="mt-2 text-center text-[10px] text-[var(--lp-muted)]">방문자 글과 내 답글이 아래에 쌓여요</p>
