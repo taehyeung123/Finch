@@ -45,6 +45,13 @@ function goHref(slug: string, blockId: string, idx?: number): string {
   return idx === undefined ? `/p/${slug}/go/${blockId}` : `/p/${slug}/go/${blockId}?i=${idx}`;
 }
 
+/*
+  카드 리듬(2026-08-24 비평 반영) — 블록마다 여백·간격·가격 크기가 제각각이라
+  같은 성격의 카드가 서로 다른 밀도로 나왔다. 세 가지만 쓴다.
+   · 카드 안쪽 여백: 사진이 꽉 찬 카드는 px-4 py-3.5, 손바닥만 한 셀은 px-3 py-2.5
+   · 사진 격자 간격: gap-2(8px) 하나 — 갤러리·그리드·최근 게시물이 같은 밀도
+   · 가격: 카드 본문 17px / 목록·셀 13px (부제 14px 보다 작아지지 않는다)
+*/
 const cardCls =
   "block rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-card)] shadow-[var(--lp-shadow)]";
 
@@ -138,7 +145,7 @@ export function BlockRenderer({
         );
       }
       if (layout === "list") return <div className="space-y-2.5">{items.map(cell)}</div>;
-      if (layout === "masonry") return <div className="columns-2 gap-2.5 [&>*]:mb-2.5 [&>*]:break-inside-avoid">{items.map(cell)}</div>;
+      if (layout === "masonry") return <div className="columns-2 gap-2 [&>*]:mb-2 [&>*]:break-inside-avoid">{items.map(cell)}</div>;
       return <div className="grid grid-cols-3 gap-2">{items.map(cell)}</div>;
     }
 
@@ -327,7 +334,8 @@ export function BlockRenderer({
 
     /* ── 레이아웃 ──────────────────────────────────────────── */
     case "heading":
-      return <h2 className="pt-3 text-[16px] font-bold tracking-[-0.01em] text-[var(--lp-fg)]">{s(d, "text")}</h2>;
+      /* 링크 라벨(15px semibold)과 1px 차이라 구획이 안 읽혔다 — 크기·자간·여백으로 확실히 가른다 */
+      return <h2 className="pt-5 pb-0.5 text-[17px] font-bold tracking-[-0.02em] text-[var(--lp-fg)]">{s(d, "text")}</h2>;
 
     case "text":
       return (
@@ -493,7 +501,8 @@ export function BlockRenderer({
             <img src={s(it, "imagePath")} alt="" className="size-14 shrink-0 rounded-[calc(var(--lp-radius)/1.6)] object-cover" loading="lazy" />
           ) : null}
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[15px] font-semibold text-[var(--lp-fg)]">{s(it, "title")}</span>
+            {/* 390px 에서 한글 15자를 넘기면 잘렸다 — 두 줄까지 보여준다(그리드 셀은 원래 안 자른다) */}
+            <span className="line-clamp-2 block text-[15px] font-semibold text-[var(--lp-fg)]">{s(it, "title")}</span>
             {s(it, "subtitle") ? <span className="mt-0.5 block truncate text-[14px] text-[var(--lp-muted)]">{s(it, "subtitle")}</span> : null}
             <Price d={it} size="sm" />
           </span>
@@ -516,14 +525,15 @@ export function BlockRenderer({
           {/* 사진 없는 셀은 라벨만이라 40px 이었다 — 그때만 터치 최소치(44px)를 바닥으로 준다.
               사진 있는 셀까지 밀면 짧은 제목 아래 빈 칸이 생겨 격자 리듬이 헐거워진다(소넷 확정) */}
           <span
-            className={`flex flex-col items-center justify-center px-2.5 py-2 text-center text-[14px] font-medium text-[var(--lp-fg)] ${s(it, "imagePath") ? "" : "min-h-11"}`}
+            className={`flex flex-col items-center justify-center px-3 py-2.5 text-center text-[14px] font-medium text-[var(--lp-fg)] ${s(it, "imagePath") ? "" : "min-h-11"}`}
           >
-            {s(it, "title")}
+            {/* 3열에서 제목이 2~3줄로 흘러 격자 밑변이 들쭉날쭉했다 — 두 줄까지만 */}
+            <span className="line-clamp-2">{s(it, "title")}</span>
             <Price d={it} size="sm" align="center" />
           </span>
         </a>
       ));
-      return <Collapsible moreLabel={t.more} lessLabel={t.less} items={nodes} initial={n(d, "collapse", 0)} className={`grid gap-2.5 ${cols}`} />;
+      return <Collapsible moreLabel={t.more} lessLabel={t.less} items={nodes} initial={n(d, "collapse", 0)} className={`grid gap-2 ${cols}`} />;
     }
 
     case "notice": {
@@ -531,10 +541,11 @@ export function BlockRenderer({
       return (
         <div
           className={[
-            "rounded-[var(--lp-radius)] px-4 py-3 text-[14px] leading-[1.6]",
+            "rounded-[var(--lp-radius)] px-4 py-3.5 text-[14px] leading-[1.6] shadow-[var(--lp-shadow)]",
             tone === "primary"
               ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]"
-              : "border border-[var(--lp-border)] bg-[var(--lp-card)] text-[var(--lp-fg)]",
+              /* 일반 카드와 구분이 안 됐다 — 왼쪽에 강조색 띠를 세워 "안내"로 읽히게(2026-08-24 비평) */
+              : "border border-l-[3px] border-[var(--lp-border)] border-l-[var(--lp-accent)] bg-[var(--lp-card)] text-[var(--lp-fg)]",
           ].join(" ")}
         >
           {s(d, "text")}
@@ -547,7 +558,7 @@ export function BlockRenderer({
       const cached = arr(d, "cached");
       if (cached.length === 0) return null;
       return (
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid grid-cols-3 gap-2">
           {cached.slice(0, 9).map((it, i) => {
             const thumb = s(it, "thumbUrl");
             const inner = thumb ? (
@@ -595,7 +606,11 @@ export function BlockRenderer({
             <img src={s(d, "imagePath")} alt={s(d, "title")} className="aspect-[16/9] w-full object-cover" />
           ) : null}
           <div className="px-4 py-3">
-            <span className="inline-block rounded-full bg-[var(--lp-accent)] px-2.5 py-0.5 text-[11px] font-bold text-[var(--lp-on-accent)]">
+            {/* 배지와 CTA 가 둘 다 강조색이면 24px 안에서 시선이 두 번 터진다 — 배지는 틴트로 낮춘다(2026-08-24 비평) */}
+            <span
+              className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold"
+              style={{ backgroundColor: "color-mix(in srgb, var(--lp-accent) 14%, transparent)", color: "var(--lp-accent-text)" }}
+            >
               쿠팡 파트너스
             </span>
             <p className="mt-1.5 text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "title") || t.product}</p>
