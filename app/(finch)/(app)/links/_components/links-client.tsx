@@ -99,6 +99,7 @@ import {
   applyTemplate,
   createLinkPage,
   createLinkSubpage,
+  revertLinkDraft,
   createLinkPageWithStart,
   deleteBlock,
   deleteLinkPage,
@@ -302,6 +303,14 @@ export function LinksClient({
   /* 멀티·서브 페이지(0060) — 만들기 모달 */
   const [newPageOpen, setNewPageOpen] = useState(false);
   const [newSubOpen, setNewSubOpen] = useState(false);
+  /* "저장(라이브 반영)하지 않으면 남지 않는다"(2026-08-24 사장님 지시) —
+     발행본과 다른 초안이 있는 채로 나가면 모달로 한 번 묻고, 그래도 나가면 초안을 버린다. */
+  const [exitTo, setExitTo] = useState<{ kind: "route"; href: string } | { kind: "page"; id: string } | null>(null);
+  const [revertOpen, setRevertOpen] = useState(false);
+  /* 발행본과 다른 초안이 서버에 있는가 = "지금 나가면 잃을 것이 있는가".
+     발행한 적 있으면 dirty 그대로, 없으면 **블록이 있을 때만** — 안 그러면 빈 페이지에서도
+     dirty(=!publishedAt) 가 참이라 되돌릴 것도 없는데 경고가 계속 뜬다. */
+  const publishDirty = page ? (page.publishedAt ? page.dirty : blocks.length > 0) : false;
   /* 서브 페이지의 **표준 공유 주소**(/p/{부모}/{sub}) — 상단 바·링크 열기·마케팅 탭·QR 이
      전부 같은 주소를 말해야 한다. 흩어 계산하면 탭마다 다른 주소가 보인다(소넷 확정). */
   const shareUrl = (() => {
@@ -430,6 +439,45 @@ export function LinksClient({
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [anyDirty]);
+  /* 초안 폐기 모델(2026-08-24) ①: 창 닫기·새로고침·외부 이동은 브라우저 확인창 → 실제로 나가면
+     pagehide 비콘이 서버 초안을 버린다(서버 액션은 unload 중 못 부른다). 데모는 제외. */
+  useEffect(() => {
+    if (!publishDirty || isDemo || !page) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    const onHide = (e: PageTransitionEvent) => {
+      /* persisted = 페이지가 뒤로가기 캐시로 들어간 것 — 사용자가 돌아올 수 있으므로 버리지 않는다.
+         (모바일 브라우저가 탭 전환에도 이 경로를 쓴다. 남겨두는 쪽이 안전한 실패다) */
+      if (e.persisted) return;
+      navigator.sendBeacon("/links/discard", new Blob([JSON.stringify({ pageId: page.id })], { type: "application/json" }));
+    };
+    window.addEventListener("beforeunload", warn);
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      window.removeEventListener("pagehide", onHide);
+    };
+  }, [publishDirty, isDemo, page]);
+  /* ②: 앱 안 이동(사이드바 등) — 앵커 클릭을 캡처 단계에서 가로채 모달로 묻는다.
+     /links 안 이동(탭·설정)은 나가기가 아니다. 새 창·수정키 클릭은 그대로 둔다. */
+  const exitDirty = publishDirty || anyDirty;
+  useEffect(() => {
+    if (!exitDirty || isDemo) return;
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as HTMLElement | null)?.closest?.("a[href]");
+      if (!a) return;
+      if (a.getAttribute("target") === "_blank") return;
+      const href = a.getAttribute("href") ?? "";
+      if (!href.startsWith("/") || href.startsWith("//") || href.startsWith("/links")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setExitTo({ kind: "route", href });
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, [exitDirty, isDemo]);
   function patchCustom(patch: Partial<LinkThemeCustom>) {
     setCustomForm((f) => {
       const next: Record<string, unknown> = { ...f, ...patch };
@@ -879,8 +927,12 @@ export function LinksClient({
         multiReady={multiReady}
         onSwitchPage={(id) => {
           if (id === page.id) return;
-          /* 라우터 이동은 beforeunload 를 안 태운다 — 같은 관문을 여기서 직접 지킨다 */
-          if (anyDirty && !window.confirm("저장하지 않은 편집이 있어요. 페이지를 이동할까요?")) return;
+          /* 미저장 초안이 있으면 나가기 모달로 — 다른 페이지로 가는 것도 이 페이지를 떠나는 것이다 */
+          if (!isDemo && exitDirty) {
+            setExitTo({ kind: "page", id });
+            return;
+          }
+          if (isDemo && anyDirty && !window.confirm("저장하지 않은 편집이 있어요. 페이지를 이동할까요?")) return;
           startTransition(() => router.push(`/links?page=${id}`));
         }}
         onNewPage={() => setNewPageOpen(true)}
@@ -895,6 +947,7 @@ export function LinksClient({
         }}
         /* 발행은 초안을 스냅샷으로 복사할 뿐 — 초안 조작의 실행취소는 그대로 유효하다 */
         onPublish={() => run(() => publishLinkPage(page.id))}
+        onRevert={publishDirty ? () => setRevertOpen(true) : undefined}
         hasFeed={blocks.some((b) => b.active && b.type === "social_feed")}
         history={tab === "page" ? historyButtons : null}
       />
@@ -1016,6 +1069,69 @@ export function LinksClient({
         </ModalShell>
       ) : null}
 
+      {exitTo ? (
+        <ExitDraftModal
+          busy={busy}
+          neverPublished={!page.publishedAt}
+          onStay={() => setExitTo(null)}
+          onPublishAndGo={() =>
+            run(
+              () => publishLinkPage(page.id),
+              () => {
+                const t = exitTo;
+                setExitTo(null);
+                if (t) startTransition(() => router.push(t.kind === "page" ? `/links?page=${t.id}` : t.href));
+              },
+            )
+          }
+          onDiscardAndGo={() =>
+            run(
+              () => revertLinkDraft(page.id),
+              () => {
+                const t = exitTo;
+                setExitTo(null);
+                if (t) startTransition(() => router.push(t.kind === "page" ? `/links?page=${t.id}` : t.href));
+              },
+            )
+          }
+        />
+      ) : null}
+      {revertOpen ? (
+        <ModalShell label="편집 되돌리기" title="편집 되돌리기" onClose={() => setRevertOpen(false)} busy={busy} size="sm">
+          <div className="space-y-3">
+            <p className="text-[14px] leading-[1.7] text-fg-sub">
+              {page.publishedAt
+                ? "마지막 「라이브 반영」 상태로 되돌려요. 그 뒤에 편집한 내용은 사라져요."
+                : "아직 발행한 적이 없어서 블록이 모두 삭제돼요. 프로필(이름·사진)은 유지돼요."}
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setRevertOpen(false)} disabled={busy}>
+                취소
+              </Button>
+              <Button
+                size="sm"
+                disabled={busy}
+                onClick={() =>
+                  run(
+                    () => revertLinkDraft(page.id),
+                    () => {
+                      setRevertOpen(false);
+                      /* 서버 상태가 통째로 바뀌었다 — 실행취소 스택·열린 편집기는 전부 무효 */
+                      setUndoStack([]);
+                      setRedoStack([]);
+                      setEditingId(null);
+                      setNotice(page.publishedAt ? "마지막 발행본으로 되돌렸어요." : "초안을 비웠어요.");
+                      startTransition(() => router.refresh());
+                    },
+                  )
+                }
+              >
+                {busy ? "되돌리는 중…" : "되돌리기"}
+              </Button>
+            </div>
+          </div>
+        </ModalShell>
+      ) : null}
       {newPageOpen ? (
         <NewPageModal
           busy={busy}
@@ -1557,6 +1673,7 @@ function TopBar({
   onTab,
   onOpenSettings,
   onPublish,
+  onRevert,
   hasFeed = false,
   history,
 }: {
@@ -1575,6 +1692,8 @@ function TopBar({
   onTab: (t: Tab) => void;
   onOpenSettings: () => void;
   onPublish: () => void;
+  /** 미발행 편집이 있을 때만 온다 — 초안을 마지막 발행본으로 되돌리는 모달을 연다 */
+  onRevert?: () => void;
   /** 켜진 「최근 게시물」 블록이 있는가 — 있으면 초안이 깨끗해도 발행(피드 새로고침)을 막지 않는다 */
   hasFeed?: boolean;
   /** 2행 왼쪽 — 실행취소/다시실행(페이지 탭에서만) */
@@ -1658,6 +1777,12 @@ function TopBar({
       {/* 2행 — 이력(↩↪) 왼쪽, 공개·발행 상태·라이브 반영 오른쪽 */}
       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2 border-t border-line px-3 py-1.5">
         {history}
+        {onRevert ? (
+          <Button variant="ghost" size="sm" onClick={onRevert} disabled={busy}>
+            <Undo2 className="size-3.5" aria-hidden />
+            편집 되돌리기
+          </Button>
+        ) : null}
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <span
             className={cn(
@@ -2360,6 +2485,43 @@ function PageSwitcher({
         </>
       ) : null}
     </div>
+  );
+}
+
+/** 나가기 확인(2026-08-24) — 저장(라이브 반영) 없이 나가면 초안이 삭제된다는 걸 한 번 더 말한다 */
+function ExitDraftModal({
+  busy,
+  neverPublished,
+  onStay,
+  onPublishAndGo,
+  onDiscardAndGo,
+}: {
+  busy: boolean;
+  neverPublished: boolean;
+  onStay: () => void;
+  onPublishAndGo: () => void;
+  onDiscardAndGo: () => void;
+}) {
+  return (
+    <ModalShell label="저장하지 않고 나가기" title="저장하지 않고 나가시겠어요?" onClose={onStay} busy={busy} size="sm">
+      <div className="space-y-3">
+        <p className="text-[14px] leading-[1.7] text-fg-sub">
+          지금 편집은 아직 <strong className="font-semibold text-fg">저장(라이브 반영)</strong>되지 않았어요. 그냥 나가면 편집한 내용이
+          삭제되고 {neverPublished ? "빈 페이지로 돌아가요." : "마지막 발행본으로 돌아가요."}
+        </p>
+        <div className="flex flex-col gap-2">
+          <Button size="sm" disabled={busy} onClick={onPublishAndGo}>
+            {busy ? "처리 중…" : "라이브 반영하고 나가기"}
+          </Button>
+          <Button variant="secondary" size="sm" disabled={busy} onClick={onDiscardAndGo}>
+            삭제하고 나가기
+          </Button>
+          <Button variant="ghost" size="sm" disabled={busy} onClick={onStay}>
+            계속 편집
+          </Button>
+        </div>
+      </div>
+    </ModalShell>
   );
 }
 

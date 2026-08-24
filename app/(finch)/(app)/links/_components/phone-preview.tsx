@@ -246,15 +246,20 @@ export function PhonePreview({
     ) : null;
 
   return (
-    <div className={cn("mx-auto", frame === "device" ? "w-full max-w-[420px]" : "w-full max-w-[410px]")}>
-      {/* 폰 프레임 — device 는 칸 폭을 채우는 폰 모양(최대 420px), 높이는 폰 비율을 따르되 뷰포트에 맞춰 잘리고 안에서 스크롤 */}
+    <div
+      className={cn(
+        "mx-auto",
+        /* 폭이 세로 예산을 따라 줄어든다 — aspect + max-h 조합은 max-h 가 걸리는 순간
+           비율이 깨져 뭉툭한 폰이 됐다(2026-08-24 사장님 "핸드폰 화면이 좀 이상해").
+           375/812 ≈ 0.4618. 11.5rem = 상단바·제목줄·패딩 예산 */
+        frame === "device" ? "w-full max-w-[min(420px,calc((100dvh-11.5rem)*0.4618))]" : "w-full max-w-[410px]",
+      )}
+    >
+      {/* 폰 프레임 — 항상 진짜 폰 비율(375:812). 넘치는 내용은 안에서 스크롤 */}
       <div
         className={cn(
           "overflow-hidden rounded-[32px] border-[6px] border-fg/15 bg-plate shadow-pop",
-          /* 폭은 칸을 채우고(최대 420px), 높이는 폰 비율(375:812)을 상한으로 뷰포트 예산(max-h)이 먼저 걸린다 — "미리보기를 더 키워 달라"(2026-08-23).
-             11.5rem = 상단바 56 + sticky 오프셋 16 + 카드 패딩·테두리 26 + 제목줄 28 + 캡션 1~2줄 + 간격 ≈ 168px 에 여유.
-             짧은 화면에선 max-h 가 먼저 걸려 프레임이 잘리는 대신 안에서 스크롤한다 */
-          frame === "device" && "flex aspect-[375/812] max-h-[calc(100dvh-11.5rem)] w-full flex-col",
+          frame === "device" && "flex aspect-[375/812] w-full flex-col",
         )}
       >
         <div

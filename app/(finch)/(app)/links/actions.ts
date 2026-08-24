@@ -1703,6 +1703,89 @@ export async function applyTemplate(key: string, pageId?: string): Promise<Resul
   return { ok: true };
 }
 
+/**
+ * 초안을 마지막 발행본으로 되돌린다(발행한 적 없으면 블록만 비운다 — 프로필은 유지).
+ * 2026-08-24 사장님 지시: "저장(라이브 반영)하지 않으면 남지 않는다" — 편집 되돌리기 버튼과
+ * 나가기 폐기(모달·pagehide 비콘)가 전부 이 함수를 탄다.
+ * 순서는 applyTemplate 과 같다: **넣고 나서 지운다**(중간 실패에도 유실 없음).
+ * 복원 후 published_snapshot 을 같은 값으로 다시 써서 발행 스탬프를 맞춘다 — 안 하면
+ * updated_at 만 앞서서 방금 되돌린 페이지가 곧바로 「초안 수정됨」으로 읽힌다.
+ */
+export async function revertLinkDraft(pageId?: string): Promise<Result> {
+  if (isDemoMode()) return DEMO;
+  const user = await getAuthUser();
+  if (!user) return AUTH;
+  const page = await myPage(pageId);
+  if (!page) return { ok: false, error: "프로필 링크가 없어요." };
+
+  const supabase = await createClient();
+  const { data: row, error: readErr } = await supabase
+    .from("link_pages")
+    .select("published_snapshot")
+    .eq("id", page.id)
+    .maybeSingle();
+  if (readErr || !row) return { ok: false, error: "되돌리지 못했어요." };
+  const snap = (row.published_snapshot ?? null) as Record<string, unknown> | null;
+
+  const { data: oldRows, error: listErr } = await supabase.from("link_blocks").select("id").eq("page_id", page.id);
+  if (listErr) return { ok: false, error: "되돌리지 못했어요." };
+  const oldIds = ((oldRows ?? []) as Array<{ id: string }>).map((r) => r.id);
+
+  const snapBlocks = snap && Array.isArray((snap as { blocks?: unknown }).blocks)
+    ? ((snap as { blocks: Array<{ type?: unknown; data?: unknown }> }).blocks)
+    : [];
+  let insertedIds: string[] = [];
+  if (snapBlocks.length) {
+    const rows = snapBlocks
+      .filter((b) => typeof b?.type === "string")
+      .map((b, i) => ({ page_id: page.id, type: b.type as string, data: (b.data ?? {}) as Record<string, unknown>, sort_order: i }));
+    const { data: inserted, error } = await supabase.from("link_blocks").insert(rows).select("id");
+    if (error) {
+      console.error("[links] 되돌리기(블록 복원) 실패:", error.message);
+      return { ok: false, error: "되돌리지 못했어요. 잠시 후 다시 시도해 주세요." };
+    }
+    insertedIds = ((inserted ?? []) as Array<{ id: string }>).map((r) => r.id);
+  }
+
+  if (oldIds.length) {
+    const { error: delErr } = await supabase.from("link_blocks").delete().in("id", oldIds);
+    if (delErr) {
+      /* 옛 블록 삭제 실패 — 복원본이 중복으로 남지 않게 방금 넣은 쪽을 걷어낸다 */
+      console.error("[links] 되돌리기(옛 블록 삭제) 실패 — 복원 블록 되돌림:", delErr.message);
+      if (insertedIds.length) await supabase.from("link_blocks").delete().in("id", insertedIds);
+      return { ok: false, error: "되돌리지 못했어요. 잠시 후 다시 시도해 주세요." };
+    }
+  }
+
+  if (snap) {
+    const sv = (k: string): string | null => (typeof snap[k] === "string" ? (snap[k] as string) : null);
+    const { error: profErr } = await supabase
+      .from("link_pages")
+      .update({
+        title: sv("title") ?? "",
+        bio: sv("bio") ?? "",
+        layout: sv("layout") ?? "list",
+        theme: sv("theme") ?? DEFAULT_THEME_KEY,
+        align: sv("align") ?? "center",
+        avatar_path: sv("avatarPath"),
+        cover_path: sv("coverPath"),
+        sns_links: Array.isArray(snap.snsLinks) ? snap.snsLinks : [],
+        sns_placement: sv("snsPlacement") ?? "profile",
+        title_size: sv("titleSize") ?? "md",
+        theme_custom: snap.themeCustom && typeof snap.themeCustom === "object" ? snap.themeCustom : null,
+      })
+      .eq("id", page.id);
+    if (profErr) console.error("[links] 되돌리기(프로필 복원) 실패:", profErr.message);
+    /* 발행 스탬프 정렬 — 같은 스냅샷을 다시 쓰면 트리거(0049)가 published_at 을 지금으로 맞춘다 */
+    const { error: stampErr } = await supabase.from("link_pages").update({ published_snapshot: snap }).eq("id", page.id);
+    if (stampErr) console.error("[links] 되돌리기(스탬프 정렬) 실패:", stampErr.message);
+  }
+
+  revalidatePath("/links");
+  revalidatePath(`/p/${page.slug}`);
+  return { ok: true };
+}
+
 /* ══════════════════════════════════════════════════════════════════
    라이브 반영 — 초안을 공개 스냅샷으로 굽는다
    ══════════════════════════════════════════════════════════════════ */
