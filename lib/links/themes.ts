@@ -591,6 +591,11 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
     "--lp-radius-btn": radius === "full" ? "999px" : radius === "sm" ? "8px" : radius === "lg" ? "20px" : "14px",
     "--lp-radius": radius === "full" ? "16px" : radius === "sm" ? "8px" : radius === "lg" ? "18px" : "14px",
     "--lp-shadow": shadowVal,
+    /* 오류색 — 테마와 무관하게 고정한다(스크림과 같은 성격). 방문자 폼의 실패 안내는
+       어떤 테마에서도 "빨강"으로 읽혀야 하고, 강조색이 빨강인 테마와도 구분돼야 한다.
+       어두운 지면에서는 잉크를 밝게 올린다. 컴포넌트에 hex 를 쓰지 않기 위한 토큰이다. */
+    "--lp-danger": "#E5484D",
+    "--lp-danger-ink": darkGround ? "#FFC9CB" : "#B42318",
   };
 }
 

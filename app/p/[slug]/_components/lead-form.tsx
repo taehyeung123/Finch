@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Check } from "lucide-react";
 import { submitLead } from "../actions";
 import type { LpText } from "@/lib/links/i18n";
 
@@ -53,6 +54,12 @@ export function LeadForm({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (busy) return;
+    /* 데모는 **버튼을 죽이지 않는다** — 회색 비활성 버튼이 샘플 페이지를 고장난 화면으로 보이게 했다.
+       방명록과 같은 규칙으로 눌렀을 때 안내한다(2026-08-24 비평) */
+    if (isDemo) {
+      setError(t.demo);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -71,7 +78,15 @@ export function LeadForm({
 
   if (done) {
     return (
-      <div className={`${box} px-4 py-5 text-center`}>
+      /* 성공 상태에 아이콘도 live region 도 없었다 — 스크린리더는 아무 일도 안 일어난 것으로 읽었다 */
+      <div role="status" aria-live="polite" className={`${box} px-4 py-6 text-center`}>
+        <span
+          className="mx-auto mb-2 flex size-11 items-center justify-center rounded-full"
+          style={{ backgroundColor: "color-mix(in srgb, var(--lp-accent) 14%, transparent)", color: "var(--lp-accent-text)" }}
+          aria-hidden
+        >
+          <Check className="size-5" />
+        </span>
         <p className="text-[15px] font-semibold">
           {kind === "subscribe" ? t.doneSubscribe : t.doneContact}
         </p>
@@ -81,14 +96,18 @@ export function LeadForm({
   }
 
   return (
-    <form onSubmit={submit} className={`${box} space-y-2.5 p-4`}>
-      <p className="text-[15px] font-semibold">
-        {s("title") || (kind === "subscribe" ? t.titleSubscribe : t.titleContact)}
-      </p>
-      {s("description") ? (
-        <p className="text-[14px] leading-[1.6] text-[var(--lp-muted)]">{s("description")}</p>
-      ) : null}
+    /* 균일 간격 하나로 쌓여 제목·필드·버튼의 위계가 없던 것 → 제목 묶음 / 필드 묶음 / 제출을 나눈다(2026-08-24 비평) */
+    <form onSubmit={submit} className={`${box} space-y-4 p-4`}>
+      <div className="space-y-1">
+        <p className="text-[15px] font-semibold">
+          {s("title") || (kind === "subscribe" ? t.titleSubscribe : t.titleContact)}
+        </p>
+        {s("description") ? (
+          <p className="text-[14px] leading-[1.6] text-[var(--lp-muted)]">{s("description")}</p>
+        ) : null}
+      </div>
 
+      <div className="space-y-2">
       {fields.map((f) =>
         f === "message" ? (
           <textarea
@@ -99,7 +118,8 @@ export function LeadForm({
             aria-label={FIELD_LABEL[f]}
             rows={3}
             maxLength={2000}
-            className="w-full rounded-[calc(var(--lp-radius)/1.6)] border border-[var(--lp-border)] bg-[var(--lp-bg)] px-3 py-2 text-[15px] text-[var(--lp-fg)] outline-none focus:border-[var(--lp-accent)]"
+            /* 포커스 표시가 테두리 색 하나뿐이라 어느 칸인지 안 보였다 → 링을 함께(2026-08-24 비평) */
+            className="w-full rounded-[calc(var(--lp-radius)/1.6)] border border-[var(--lp-border)] bg-[var(--lp-bg)] px-3 py-2 text-[15px] text-[var(--lp-fg)] outline-none placeholder:text-[var(--lp-muted)] focus:border-[var(--lp-accent)] focus:ring-2 focus:ring-[var(--lp-accent)]/25"
           />
         ) : (
           <input
@@ -112,26 +132,36 @@ export function LeadForm({
             /* 구독은 이메일 하나뿐 — 빈 제출은 브라우저의 현지어 안내로 먼저 막는다(감사 C8) */
             required={kind === "subscribe" || (fields.length === 1 && f !== "name")}
             maxLength={160}
-            className="h-11 w-full rounded-[calc(var(--lp-radius)/1.6)] border border-[var(--lp-border)] bg-[var(--lp-bg)] px-3 text-[15px] text-[var(--lp-fg)] outline-none focus:border-[var(--lp-accent)]"
+            className="h-12 w-full rounded-[calc(var(--lp-radius)/1.6)] border border-[var(--lp-border)] bg-[var(--lp-bg)] px-3 text-[15px] text-[var(--lp-fg)] outline-none placeholder:text-[var(--lp-muted)] focus:border-[var(--lp-accent)] focus:ring-2 focus:ring-[var(--lp-accent)]/25"
           />
         ),
       )}
 
+      </div>
+
       {error ? (
-        <p role="alert" className="text-[13px] text-[var(--lp-fg)]">
+        /* 본문과 똑같이 생겨서 실패한 줄 몰랐다 → 붉은 띠로(2026-08-24 비평) */
+        <p
+          role="alert"
+          className="rounded-[calc(var(--lp-radius)/1.6)] px-3 py-2 text-[14px] font-medium"
+          style={{ backgroundColor: "color-mix(in srgb, var(--lp-danger) 12%, transparent)", color: "var(--lp-danger-ink)" }}
+        >
           {error}
         </p>
       ) : null}
 
       {isDemo ? (
-        <p className="text-[13px] leading-[1.6] text-[var(--lp-muted)]">
+        <p
+          className="rounded-[calc(var(--lp-radius)/1.6)] px-3 py-2 text-[13px] leading-[1.6]"
+          style={{ backgroundColor: "color-mix(in srgb, var(--lp-accent) 10%, transparent)", color: "var(--lp-accent-text)" }}
+        >
           {t.demo}
         </p>
       ) : null}
 
       <button
         type="submit"
-        disabled={busy || isDemo}
+        disabled={busy}
         /* 제출이 페이지에서 가장 작은 버튼이었다 — 본문 링크 버튼과 같은 56px 로(2026-08-24 비평) */
         className="lp-btn min-h-[56px] w-full rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-5 text-[15px] font-semibold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)] disabled:opacity-50"
       >
