@@ -443,10 +443,16 @@ export function LinksClient({
      pagehide 비콘이 서버 초안을 버린다(서버 액션은 unload 중 못 부른다). 데모는 제외. */
   useEffect(() => {
     if (!publishDirty || isDemo || !page) return;
+    /* ⚠️ 자동 폐기는 **되돌아갈 발행본이 있을 때만** 한다. 한 번도 발행하지 않은 페이지의
+       "초안"은 그 사람이 만든 전부라, 탭을 닫았다고 조용히 지우면 되살릴 길이 없다
+       (2026-08-24: 블록 0 인 계정을 보고 재검토). 그 경우엔 브라우저 확인창만 띄우고,
+       비우기는 사용자가 직접 「편집 되돌리기」를 눌렀을 때만 한다. */
+    const canAutoDiscard = !!page.publishedAt;
     const warn = (e: BeforeUnloadEvent) => {
       e.preventDefault();
     };
     const onHide = (e: PageTransitionEvent) => {
+      if (!canAutoDiscard) return;
       /* persisted = 페이지가 뒤로가기 캐시로 들어간 것 — 사용자가 돌아올 수 있으므로 버리지 않는다.
          (모바일 브라우저가 탭 전환에도 이 경로를 쓴다. 남겨두는 쪽이 안전한 실패다) */
       if (e.persisted) return;
@@ -739,6 +745,34 @@ export function LinksClient({
 
 
   /* 캔버스·블록 목록이 **같은 핸들러**를 쓴다 — 두 화면이 같은 일을 다르게 하면 안 된다 */
+  /* 블록 추가 한 곳 — 카탈로그 모달·빈 캔버스 빠른 추가·목록 빈 상태가 같은 경로를 쓴다
+     (실행취소 기록·토스트가 세 곳에서 갈라지면 반드시 한쪽이 빠진다) */
+  const addBlockOfType = (t: BlockType) =>
+    run(
+      () => addBlock(t, page!.id),
+      (res) => {
+        setNotice("블록을 추가했어요. 캔버스의 블록을 누르면 바로 고칠 수 있어요.");
+        if (res.id) {
+          const payload = {
+            type: t,
+            data: defaultBlockData(t),
+            sortOrder: (blocks[blocks.length - 1]?.sortOrder ?? -1) + 1,
+            active: true,
+          };
+          const addedId = res.id;
+          record({
+            label: `${BLOCK_CATALOG.find((c) => c.type === t)?.label ?? t} 추가`,
+            undo: () => deleteBlock(resolveId(addedId)),
+            redo: async () => {
+              const r = await restoreBlock(payload, page!.id);
+              if (r.ok && r.id) idAlias.current.set(resolveId(addedId), r.id);
+              return r;
+            },
+          });
+        }
+      },
+    );
+
   const canvasEdit: CanvasEdit = {
     onEdit: openEditor,
     /* 온오프는 낙관 즉시 반영 — 스위치가 서버 왕복을 기다리면 고장처럼 보인다 */
@@ -834,6 +868,7 @@ export function LinksClient({
       );
     },
     onAdd: () => openDrawer("add", true),
+    onQuickAdd: (t) => addBlockOfType(t),
     onOpenProfile: () => openDrawer("profile", true),
     onProfileCommit: (patch) => {
       /* 인라인 편집은 **그 필드만** 확정한다. 서버에는 「마지막 서버
@@ -1019,32 +1054,7 @@ export function LinksClient({
           ) : null}
               <AddPanel
                 busy={busy}
-                onAdd={(t) =>
-                  run(
-                    () => addBlock(t, page.id),
-                    (res) => {
-                      setNotice("블록을 추가했어요. 캔버스의 블록을 누르면 바로 고칠 수 있어요.");
-                      if (res.id) {
-                        const payload = {
-                          type: t,
-                          data: defaultBlockData(t),
-                          sortOrder: (blocks[blocks.length - 1]?.sortOrder ?? -1) + 1,
-                          active: true,
-                        };
-                        const addedId = res.id;
-                        record({
-                          label: `${BLOCK_CATALOG.find((c) => c.type === t)?.label ?? t} 추가`,
-                          undo: () => deleteBlock(resolveId(addedId)),
-                          redo: async () => {
-                            const r = await restoreBlock(payload, page.id);
-                            if (r.ok && r.id) idAlias.current.set(resolveId(addedId), r.id);
-                            return r;
-                          },
-                        });
-                      }
-                    },
-                  )
-                }
+                onAdd={(t) => addBlockOfType(t)}
                 /* 드로어의 템플릿도 같은 try-on 경로 — 드로어를 닫아 우측 미리보기까지 보이게 */
                 onApplyTemplate={(k) => {
                   const t = LINK_TEMPLATES.find((x) => x.key === k);
@@ -1084,6 +1094,11 @@ export function LinksClient({
               },
             )
           }
+          onLeaveKeeping={() => {
+            const t = exitTo;
+            setExitTo(null);
+            if (t) startTransition(() => router.push(t.kind === "page" ? `/links?page=${t.id}` : t.href));
+          }}
           onDiscardAndGo={() =>
             run(
               () => revertLinkDraft(page.id),
@@ -1329,6 +1344,8 @@ export function LinksClient({
               <Card>
                 <CardBody className="space-y-4">
               <BlockListPanel
+                onQuickAdd={addBlockOfType}
+                onOpenTemplates={() => setTplOpen(true)}
                 blocks={draftBlocksView}
                 editingId={editingId}
                 busy={busy}
@@ -1865,6 +1882,14 @@ const BLOCK_TINT: Record<BlockType, string> = {
   guestbook: "bg-tint-blue text-tint-blue-ink",
 };
 
+/* 빈 목록에서 먼저 권하는 블록 — 캔버스 빈 화면(QUICK_ADD)과 같은 조합 */
+const EMPTY_QUICK: Array<{ type: BlockType; label: string }> = [
+  { type: "link", label: "링크 버튼" },
+  { type: "image_card", label: "이미지 카드" },
+  { type: "contact", label: "문의받기" },
+  { type: "social_feed", label: "최근 게시물" },
+];
+
 /* 블록 아이콘 — 캔버스 자리표시자(phone-preview)와 공유(2026-08-24) */
 
 function BlockListPanel({
@@ -1872,6 +1897,8 @@ function BlockListPanel({
   editingId,
   busy,
   profileOpen,
+  onQuickAdd,
+  onOpenTemplates,
   onToggleProfile,
   profile,
   editor,
@@ -1890,6 +1917,10 @@ function BlockListPanel({
   editingId: string | null;
   busy: boolean;
   profileOpen: boolean;
+  /** 빈 목록의 빠른 추가 — 카탈로그를 안 열고 바로 만든다 */
+  onQuickAdd?: (type: BlockType) => void;
+  /** 템플릿 스트립 펼치기 */
+  onOpenTemplates?: () => void;
   onToggleProfile: () => void;
   profile: React.ReactNode;
   editor: React.ReactNode;
@@ -1963,6 +1994,47 @@ function BlockListPanel({
         </button>
         {profileOpen ? <div className="anim-swap border-t border-line px-3 py-3">{profile}</div> : null}
       </div>
+
+      {blocks.length === 0 ? (
+        /* 빈 페이지(2026-08-24) — 목록이 프로필 한 줄만 있고 아래가 통째로 비어
+           "고장난 화면"으로 읽혔다. 무엇을 할 수 있는지 보여준다 */
+        <div className="rounded-card border border-dashed border-line bg-body px-4 py-5 text-center">
+          <p className="text-[15px] font-semibold text-fg">아직 블록이 없어요</p>
+          <p className="mt-1 text-[14px] leading-[1.6] text-fg-sub">
+            블록을 얹으면 오른쪽 화면이 바로 채워져요. 아래에서 하나 골라 시작하세요.
+          </p>
+          <div className="mt-3.5 flex flex-wrap justify-center gap-2">
+            {EMPTY_QUICK.map((q) => {
+              const Icon = BLOCK_ICON[q.type];
+              return (
+                <button
+                  key={q.type}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => (onQuickAdd ? onQuickAdd(q.type) : onAdd())}
+                  className={cn(
+                    "trans-state flex items-center gap-1.5 rounded-chip border border-line px-3 py-1.5 text-[14px] font-medium text-fg hover:border-primary disabled:opacity-50",
+                    BLOCK_TINT[q.type] ?? "bg-body",
+                  )}
+                >
+                  <Icon className="size-3.5" aria-hidden />
+                  {q.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[13px]">
+            <button type="button" onClick={onAdd} disabled={busy} className="font-semibold text-primary hover:underline disabled:opacity-50">
+              블록 전체 보기
+            </button>
+            {onOpenTemplates ? (
+              <button type="button" onClick={onOpenTemplates} className="text-fg-sub hover:text-fg hover:underline">
+                템플릿으로 한 번에 시작
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {blocks.map((b, i) => {
         const Icon = BLOCK_ICON[b.type] ?? Link2;
@@ -2495,27 +2567,48 @@ function ExitDraftModal({
   onStay,
   onPublishAndGo,
   onDiscardAndGo,
+  onLeaveKeeping,
 }: {
   busy: boolean;
   neverPublished: boolean;
   onStay: () => void;
   onPublishAndGo: () => void;
   onDiscardAndGo: () => void;
+  /** 미발행 페이지 — 아무것도 지우지 않고 그냥 이동 */
+  onLeaveKeeping: () => void;
 }) {
   return (
     <ModalShell label="저장하지 않고 나가기" title="저장하지 않고 나가시겠어요?" onClose={onStay} busy={busy} size="sm">
       <div className="space-y-3">
         <p className="text-[14px] leading-[1.7] text-fg-sub">
-          지금 편집은 아직 <strong className="font-semibold text-fg">저장(라이브 반영)</strong>되지 않았어요. 그냥 나가면 편집한 내용이
-          삭제되고 {neverPublished ? "빈 페이지로 돌아가요." : "마지막 발행본으로 돌아가요."}
+          {neverPublished ? (
+            <>
+              지금 편집은 아직 <strong className="font-semibold text-fg">저장(라이브 반영)</strong>되지 않아서, 방문자에게는 이 페이지가 보이지 않아요.
+              편집 내용은 그대로 두고 나가요 — 지우려면 「편집 되돌리기」를 쓰세요.
+            </>
+          ) : (
+            <>
+              지금 편집은 아직 <strong className="font-semibold text-fg">저장(라이브 반영)</strong>되지 않았어요. 그냥 나가면 편집한 내용이
+              삭제되고 마지막 발행본으로 돌아가요.
+            </>
+          )}
         </p>
         <div className="flex flex-col gap-2">
           <Button size="sm" disabled={busy} onClick={onPublishAndGo}>
             {busy ? "처리 중…" : "라이브 반영하고 나가기"}
           </Button>
-          <Button variant="secondary" size="sm" disabled={busy} onClick={onDiscardAndGo}>
-            삭제하고 나가기
-          </Button>
+          {/* 발행 이력이 없으면 "삭제"는 페이지 전체를 비우는 것이다 — 나가기 동선에서 빼고,
+              정말 비우려면 「편집 되돌리기」로 명시적으로 하게 한다(2026-08-24) */}
+          {neverPublished ? null : (
+            <Button variant="secondary" size="sm" disabled={busy} onClick={onDiscardAndGo}>
+              삭제하고 나가기
+            </Button>
+          )}
+          {neverPublished ? (
+            <Button variant="secondary" size="sm" disabled={busy} onClick={onLeaveKeeping}>
+              그냥 나가기 (편집 유지)
+            </Button>
+          ) : null}
           <Button variant="ghost" size="sm" disabled={busy} onClick={onStay}>
             계속 편집
           </Button>

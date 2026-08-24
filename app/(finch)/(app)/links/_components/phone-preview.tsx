@@ -96,6 +96,8 @@ export type CanvasEdit = {
   onReorder: (id: string, beforeId: string | null, label: string) => void;
   onDelete: (id: string, label: string) => void;
   onAdd: () => void;
+  /** 빈 캔버스의 빠른 추가 — 카탈로그를 안 열고 그 타입을 바로 만든다 */
+  onQuickAdd?: (type: BlockType) => void;
   /** 아바타·커버 클릭 — 사진·레이아웃은 폼이 필요해서 드로어를 연다 */
   onOpenProfile: () => void;
   /** 이름·소개 인라인 편집 확정 — 그 자리에서 저장까지 간다 */
@@ -410,7 +412,36 @@ export function PhonePreview({
           {/* 블록 — snsPlacement=links 면 SNS 줄이 블록 목록 맨 위로 온다 */}
           <div className="mt-6 space-y-2.5">
             {page.snsPlacement === "links" ? snsChips : null}
-            {visible.length === 0 && !editable ? (
+            {visible.length === 0 && editable && edit ? (
+              /* 빈 페이지 첫 화면(2026-08-24) — 리틀리는 빈 자리에 "블록이 생성될 위치입니다"
+                 점선 카드를 깔아 화면이 비어 보이지 않게 한다. 우리는 한 발 더 나가서
+                 **누르면 그 블록이 바로 생기는** 카드로 만든다. */
+              <div className="space-y-2.5">
+                {QUICK_ADD.map((q) => {
+                  const Icon = BLOCK_ICON[q.type];
+                  return (
+                    <button
+                      key={q.type}
+                      type="button"
+                      onClick={() => (edit.onQuickAdd ? edit.onQuickAdd(q.type) : edit.onAdd())}
+                      className="trans-state flex min-h-[56px] w-full items-center gap-3 rounded-[var(--lp-radius)] border border-dashed border-[var(--lp-muted)]/40 bg-[var(--lp-card)] px-3.5 py-3 text-left hover:border-[var(--lp-accent)]"
+                    >
+                      <span
+                        className="flex size-9 shrink-0 items-center justify-center rounded-[calc(var(--lp-radius)/1.4)] text-[var(--lp-accent-text)]"
+                        style={{ backgroundColor: "color-mix(in srgb, var(--lp-accent) 13%, transparent)" }}
+                        aria-hidden
+                      >
+                        <Icon className="size-4" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-[13px] font-semibold text-[var(--lp-fg)]">{q.label}</span>
+                        <span className="mt-0.5 block text-[11px] text-[var(--lp-muted)]">{q.hint}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : visible.length === 0 && !editable ? (
               <p className="text-center text-[13px] text-[var(--lp-muted)]">
                 {mode === "live" ? "라이브에 보이는 블록이 없어요." : "블록을 추가하면 여기에 보여요."}
               </p>
@@ -649,6 +680,13 @@ export function PhonePreview({
 }
 
 /** 이 상태로는 발행돼도 공개 페이지에 안 나온다는 표시 */
+/* 빈 페이지에 먼저 권하는 세 가지 — 링크팜 첫 화면이 실제로 이 조합이다(링크·사진·문의) */
+const QUICK_ADD: Array<{ type: BlockType; label: string; hint: string }> = [
+  { type: "link", label: "링크 버튼", hint: "인스타·유튜브·스토어 어디로든" },
+  { type: "image_card", label: "이미지 카드", hint: "사진 + 제목 + 버튼" },
+  { type: "contact", label: "문의받기", hint: "이름·연락처를 받아요" },
+];
+
 /* 빈 블록의 초대 문구(타입별) — hiddenReason 의 "…해서 공개되지 않아요"를
    "…하면 보여요"로 뒤집은 것. 자리표시자는 경고가 아니라 다음 할 일을 말해야 한다 */
 const GHOST_HINT: Partial<Record<string, string>> = {

@@ -1795,7 +1795,14 @@ export async function revertLinkDraft(pageId?: string): Promise<Result> {
         theme_custom: snap.themeCustom && typeof snap.themeCustom === "object" ? snap.themeCustom : null,
       })
       .eq("id", page.id);
-    if (profErr) console.error("[links] 되돌리기(프로필 복원) 실패:", profErr.message);
+    /* ⚠️ 프로필 복원이 실패하면 **스탬프를 찍지 않고 멈춘다.** 스탬프만 찍히면
+       updated_at == published_at 이라 화면이 「최신」으로 읽히는데 프로필은 되돌려지지
+       않은 옛 값이다 — 그 상태로 나중에 발행하면 옛 프로필이 라이브에 굳는다(소넷 확정 HIGH).
+       블록은 이미 되돌아갔고 이 함수는 다시 불러도 같은 결과다(멱등) — 사용자에게 알리고 끝낸다. */
+    if (profErr) {
+      console.error("[links] 되돌리기(프로필 복원) 실패:", profErr.message);
+      return { ok: false, error: "되돌리지 못했어요. 잠시 후 다시 시도해 주세요." };
+    }
 
     /* 발행 스탬프 정렬 — 0049 트리거는 published_snapshot 이 **달라졌을 때만** published_at 을
        찍는다. 읽은 값을 그대로 다시 쓰면 jsonb 가 동일해 스탬프가 안 찍히고, 그 사이
@@ -1803,7 +1810,12 @@ export async function revertLinkDraft(pageId?: string): Promise<Result> {
        되돌린 시각을 스냅샷에 남겨 실제로 다른 값을 쓴다 — 공개 렌더러는 모르는 키를 무시한다. */
     const stamped = { ...snap, revertedAt: new Date().toISOString() };
     const { error: stampErr } = await supabase.from("link_pages").update({ published_snapshot: stamped }).eq("id", page.id);
-    if (stampErr) console.error("[links] 되돌리기(스탬프 정렬) 실패:", stampErr.message);
+    if (stampErr) {
+      /* 되돌리기 자체는 끝났다 — 상태 표시만 「초안 수정됨」으로 남는다. 조용히 넘기지 않고 말한다 */
+      console.error("[links] 되돌리기(스탬프 정렬) 실패:", stampErr.message);
+      revalidatePath("/links");
+      return { ok: false, error: "되돌렸지만 발행 상태 표시를 갱신하지 못했어요. 새로고침해 주세요." };
+    }
   }
 
   revalidatePath("/links");
