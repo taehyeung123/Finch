@@ -85,8 +85,10 @@ export async function loadPublicPage(slug: string, opts: { withOwner?: boolean }
     if (opts.withOwner) {
       const me = await getAuthUser();
       if (me) {
-        const { data: mine } = await supabase.from("link_pages").select("id").eq("user_id", me.id).maybeSingle();
-        isOwner = !!mine && mine.id === row.id;
+        /* 멀티 페이지(0060): user_id 만으로 maybeSingle 하면 두 장부터 터져 주인이 방문자가 된다(감사4 조사 #11).
+           "이 행이 내 것인가"를 행 단위로 물어본다 */
+        const { data: mine } = await supabase.from("link_pages").select("id").eq("user_id", me.id).eq("id", row.id).maybeSingle();
+        isOwner = !!mine;
       }
     }
     return {
@@ -132,4 +134,26 @@ export async function loadPublicPage(slug: string, opts: { withOwner?: boolean }
     locked: !unlocked,
     isOwner: false,
   };
+}
+
+/**
+ * 서브 페이지 주소 해석(0060) — /p/{부모slug}/{sub_slug} → 자식의 전역 slug.
+ * 자식도 전역 slug 를 갖고 모든 방문자 배관(잠금·/go·집계)이 그 슬러그로 돈다.
+ * RLS 그대로: 발행된 행만 익명에게 보이고, 주인은 자기 비공개 행도 본다(미리보기).
+ * 0060 전(컬럼 없음)·데모 모드는 null — 호출측이 404 로 보낸다.
+ */
+export async function resolveSubSlug(parentSlug: string, sub: string): Promise<string | null> {
+  if (isDemoMode() || !isSupabaseConfigured()) return null;
+  if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(sub)) return null;
+  const supabase = await createClient();
+  const { data: parent, error: pErr } = await supabase.from("link_pages").select("id").eq("slug", parentSlug).maybeSingle();
+  if (pErr || !parent) return null;
+  const { data: child, error: cErr } = await supabase
+    .from("link_pages")
+    .select("slug")
+    .eq("parent_id", parent.id)
+    .eq("sub_slug", sub)
+    .maybeSingle();
+  if (cErr || !child) return null;
+  return (child.slug as string) ?? null;
 }

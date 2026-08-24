@@ -87,24 +87,46 @@ async function releaseSlug(slug: string, pageId: string | null, userId: string):
   if (error) console.error("[links] 옛 주소 기록 실패:", error.message);
 }
 
-/** 내 페이지 id·slug — 거의 모든 액션이 먼저 필요로 한다 */
-async function myPage(): Promise<{ id: string; slug: string } | null> {
+/** 내 페이지 id·slug — 거의 모든 액션이 먼저 필요로 한다.
+    pageId 를 받으면 **그 페이지**(소유 확인 포함), 없으면 첫 페이지(0060 전 단일 페이지와 동일).
+    maybeSingle 은 두 장부터 터지므로 목록에서 첫 장을 집는다(멀티, 2026-08-24). */
+async function myPage(pageId?: string | null): Promise<{ id: string; slug: string } | null> {
   const user = await getAuthUser();
   if (!user) return null;
   const supabase = await createClient();
+  if (pageId) {
+    const { data } = await supabase
+      .from("link_pages")
+      .select("id, slug")
+      .eq("id", pageId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    return (data as { id: string; slug: string } | null) ?? null;
+  }
   const { data } = await supabase
     .from("link_pages")
     .select("id, slug")
     .eq("user_id", user.id)
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
   return (data as { id: string; slug: string } | null) ?? null;
+}
+
+/** 페이지 상한(0060 트리거)·서브 구조 위반을 사용자 문구로 — DB 가 최종 관문이고 여기선 통역만 */
+function pageInsertError(error: { code?: string; message: string }): string | null {
+  if (error.code === "23514" && /페이지는 최대|서브 페이지|부모 페이지|쓸 수 없는 서브/.test(error.message)) {
+    const m = /[가-힣0-9 %.,'"()a-zA-Z]+/.exec(error.message);
+    return m ? m[0].trim() : "페이지 상한에 걸렸어요.";
+  }
+  return null;
 }
 
 /* ══════════════════════════════════════════════════════════════════
    페이지
    ══════════════════════════════════════════════════════════════════ */
 
-export async function createLinkPage(slug: string, title: string): Promise<Result> {
+export async function createLinkPage(slug: string, title: string): Promise<Result & { id?: string }> {
   if (isDemoMode()) return DEMO;
   const user = await getAuthUser();
   if (!user) return AUTH;
@@ -127,8 +149,9 @@ export async function createLinkPage(slug: string, title: string): Promise<Resul
     if (error.code === "23505") {
       return {
         ok: false,
+        /* user_id unique 는 0060 에서 사라진다 — 그 전 배포에서 두 번째 페이지를 만들면 여기로 온다 */
         error: error.message.includes("user_id")
-          ? "이미 프로필 링크가 있어요. 새로고침해 주세요."
+          ? "페이지 추가는 서버 업데이트(0060) 적용 후 쓸 수 있어요. 이미 페이지가 있다면 새로고침해 주세요."
           : "이미 사용 중인 주소예요. 다른 주소를 입력해 주세요.",
       };
     }
@@ -136,6 +159,9 @@ export async function createLinkPage(slug: string, title: string): Promise<Resul
     if (error.code === "23514" && /다른 사람이 쓰던/.test(error.message)) {
       return { ok: false, error: "최근까지 다른 사람이 쓰던 주소예요. 다른 주소를 입력해 주세요." };
     }
+    /* 0060 상한 트리거(무료1·유료3) — DB 문구를 그대로 통역한다 */
+    const capMsg = pageInsertError(error);
+    if (capMsg) return { ok: false, error: capMsg };
     console.error("[links] 페이지 생성 실패:", error.message);
     return { ok: false, error: "만들지 못했어요. 잠시 후 다시 시도해 주세요." };
   }
@@ -150,7 +176,7 @@ export async function createLinkPage(slug: string, title: string): Promise<Resul
     });
   }
   revalidatePath("/links");
-  return { ok: true };
+  return { ok: true, id: created?.id };
 }
 
 /**
@@ -222,7 +248,7 @@ export async function createLinkPageWithStart(input: {
     }
     if (error.code === "23505") {
       if (error.message.includes("user_id")) {
-        return { ok: false, error: "이미 프로필 링크가 있어요. 새로고침해 주세요." };
+        return { ok: false, error: "페이지 추가는 서버 업데이트(0060) 적용 후 쓸 수 있어요. 이미 페이지가 있다면 새로고침해 주세요." };
       }
       continue; // slug 충돌 — 새 주소로 재시도
     }
@@ -247,6 +273,65 @@ export async function createLinkPageWithStart(input: {
   return { ok: true };
 }
 
+/** 서브 페이지 주소 세그먼트 — 0060 check(link_pages_sub_shape)와 같은 규칙 + 라우트 예약어 */
+const SUB_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+const SUB_RESERVED = new Set(["go", "vcard", "dwell", "s", "p", "api"]);
+
+/**
+ * 서브 페이지 만들기(0060) — 부모 주소 아래 /p/{부모}/{sub} 로 열린다.
+ * 전역 slug 도 자동 발급한다: 방문자 경로(/go·/vcard·잠금·집계)가 전부 슬러그 기반이라
+ * 서브도 그 배관을 그대로 쓴다. 페이지 수 상한(무료1·유료3)은 DB 트리거가 최종 관문.
+ */
+export async function createLinkSubpage(parentId: string, subSlug: string, title: string): Promise<Result & { id?: string }> {
+  if (isDemoMode()) return DEMO;
+  const user = await getAuthUser();
+  if (!user) return AUTH;
+
+  const seg = subSlug.trim().toLowerCase();
+  if (!SUB_SLUG_RE.test(seg)) return { ok: false, error: "서브 주소는 영문 소문자·숫자·하이픈 1~40자예요." };
+  if (SUB_RESERVED.has(seg)) return { ok: false, error: "쓸 수 없는 서브 주소예요. 다른 이름을 골라 주세요." };
+
+  const parent = await myPage(parentId);
+  if (!parent) return { ok: false, error: "부모 페이지를 찾을 수 없어요." };
+
+  const supabase = await createClient();
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data: created, error } = await supabase
+      .from("link_pages")
+      .insert({
+        user_id: user.id,
+        slug: randomSlug(),
+        title: sliceChars(title.trim(), 40) || seg,
+        theme: DEFAULT_THEME_KEY,
+        parent_id: parentId,
+        sub_slug: seg,
+      })
+      .select("id")
+      .maybeSingle();
+    if (!error) {
+      if (created?.id) {
+        await supabase.from("link_blocks").insert({ page_id: created.id, type: "link", data: defaultBlockData("link"), sort_order: 0 });
+      }
+      revalidatePath("/links");
+      revalidatePath(`/p/${parent.slug}/${seg}`);
+      return { ok: true, id: created?.id };
+    }
+    if (error.code === "23505") {
+      /* 부모+세그먼트 중복 vs 전역 slug 충돌을 갈라 말한다 — 후자는 재시도 */
+      if (/parent_sub|sub_slug/i.test(error.message)) return { ok: false, error: "이미 있는 서브 주소예요. 다른 이름을 골라 주세요." };
+      continue;
+    }
+    if (error.code === "42703" || /parent_id|sub_slug/i.test(error.message)) {
+      return { ok: false, error: "서브 페이지는 서버 업데이트(0060) 적용 후 쓸 수 있어요." };
+    }
+    const capMsg = pageInsertError(error);
+    if (capMsg) return { ok: false, error: capMsg };
+    console.error("[links] 서브 페이지 생성 실패:", error.message);
+    return { ok: false, error: "만들지 못했어요. 잠시 후 다시 시도해 주세요." };
+  }
+  return { ok: false, error: "만들지 못했어요. 잠시 후 다시 시도해 주세요." };
+}
+
 export async function updateLinkProfile(input: {
   slug: string;
   title: string;
@@ -260,7 +345,7 @@ export async function updateLinkProfile(input: {
   titleSize: string;
   seoTitle: string;
   seoDesc: string;
-}): Promise<Result> {
+}, pageId?: string): Promise<Result> {
   if (isDemoMode()) return DEMO;
   const user = await getAuthUser();
   if (!user) return AUTH;
@@ -288,8 +373,9 @@ export async function updateLinkProfile(input: {
   }
 
   const supabase = await createClient();
-  const { data: before } = await supabase.from("link_pages").select("id, slug").eq("user_id", user.id).maybeSingle();
-  if (before?.slug !== clean && (await slugHeldByOther(clean, user.id))) {
+  const before = await myPage(pageId);
+  if (!before) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
+  if (before.slug !== clean && (await slugHeldByOther(clean, user.id))) {
     return { ok: false, error: "최근까지 다른 사람이 쓰던 주소예요. 다른 주소를 입력해 주세요." };
   }
 
@@ -310,7 +396,7 @@ export async function updateLinkProfile(input: {
   const { error } = await supabase
     .from("link_pages")
     .update({ ...base, sns_placement: placement, title_size: titleSize })
-    .eq("user_id", user.id);
+    .eq("id", before.id);
   if (error) {
     if (error.code === "23505") return { ok: false, error: "이미 사용 중인 주소예요." };
     if (error.code === "23514" && /다른 사람이 쓰던/.test(error.message)) {
@@ -323,9 +409,9 @@ export async function updateLinkProfile(input: {
   revalidatePath("/links");
   revalidatePath(`/p/${clean}`);
   /* 주소를 바꾸면 **옛 경로도** 무효화한다 — 안 하면 옛 주소가 캐시된 채로 계속 열린다 */
-  if (before?.slug && before.slug !== clean) {
+  if (before.slug && before.slug !== clean) {
     revalidatePath(`/p/${before.slug}`);
-    await releaseSlug(before.slug, (before.id as string) ?? null, user.id);
+    await releaseSlug(before.slug, before.id, user.id);
   }
   return { ok: true };
 }
@@ -335,13 +421,15 @@ export async function updateLinkProfile(input: {
  * 관문은 sanitizeThemeCustom 하나: hex·허용 열거값·http(s) 이미지만 남는다.
  * 빈 오버라이드는 null 로 저장(= 프리셋 그대로).
  */
-export async function updateLinkThemeCustom(input: unknown): Promise<Result> {
+export async function updateLinkThemeCustom(input: unknown, pageId?: string): Promise<Result> {
   if (isDemoMode()) return DEMO;
   const user = await getAuthUser();
   if (!user) return AUTH;
   const custom = sanitizeThemeCustom(input);
+  const page = await myPage(pageId);
+  if (!page) return { ok: false, error: "프로필 링크가 없어요." };
   const supabase = await createClient();
-  const { error } = await supabase.from("link_pages").update({ theme_custom: custom }).eq("user_id", user.id);
+  const { error } = await supabase.from("link_pages").update({ theme_custom: custom }).eq("id", page.id);
   if (error) {
     if (error.code === "42703" || (/theme_custom/i.test(error.message) && /column|schema/i.test(error.message))) {
       return { ok: false, error: "직접 꾸미기는 서버 업데이트(0056) 적용 후 저장할 수 있어요." };
@@ -368,13 +456,21 @@ function isSettingsColumnError(error: { code?: string; message: string }): boole
  * settings 부분 갱신 — **원자적**(0059 RPC: jsonb ||). 읽고-합치고-쓰기는 잠금 문구 저장과 비밀번호 걸기가 겹칠 때
  * locked 를 되돌릴 수 있다(소넷 점검). RPC 가 없으면(0059 미적용) 읽고-합치고-쓰기로 폴백한다.
  */
-async function patchSettings(userId: string, patch: Record<string, unknown>): Promise<{ error: { code?: string; message: string } | null }> {
+async function patchSettings(pageId: string, patch: Record<string, unknown>): Promise<{ error: { code?: string; message: string } | null }> {
   const supabase = await createClient();
-  const rpc = await supabase.rpc("link_pages_patch_settings", { p_patch: patch });
+  /* 0060 시그니처(페이지 단위) → 0059 시그니처(user_id 판 — 그땐 페이지가 한 장이라 같은 행) → RMW 폴백 */
+  const rpc = await supabase.rpc("link_pages_patch_settings", { p_page: pageId, p_patch: patch });
   if (!rpc.error) return { error: null };
-  const missingFn = rpc.error.code === "42883" || rpc.error.code === "PGRST202" || /link_pages_patch_settings/i.test(rpc.error.message);
-  if (!missingFn) return { error: rpc.error };
-  const { data: row, error: readErr } = await supabase.from("link_pages").select("id, settings").eq("user_id", userId).maybeSingle();
+  let missingFn = rpc.error.code === "42883" || rpc.error.code === "PGRST202" || /link_pages_patch_settings/i.test(rpc.error.message);
+  if (missingFn) {
+    const legacy = await supabase.rpc("link_pages_patch_settings", { p_patch: patch });
+    if (!legacy.error) return { error: null };
+    missingFn = legacy.error.code === "42883" || legacy.error.code === "PGRST202" || /link_pages_patch_settings/i.test(legacy.error.message);
+    if (!missingFn) return { error: legacy.error };
+  } else {
+    return { error: rpc.error };
+  }
+  const { data: row, error: readErr } = await supabase.from("link_pages").select("id, settings").eq("id", pageId).maybeSingle();
   if (readErr) return { error: readErr };
   if (!row) return { error: { message: "no page" } };
   const cur = (row.settings && typeof row.settings === "object" ? row.settings : {}) as Record<string, unknown>;
@@ -389,6 +485,7 @@ async function patchSettings(userId: string, patch: Record<string, unknown>): Pr
  */
 export async function updateLinkSettings(
   patch: Partial<Pick<LinkPageSettings, "lang" | "target" | "robots" | "ogTitle" | "ogImage" | "favicon" | "lockMessage" | "ga4" | "metaPixel" | "tiktokPixel" | "utm">>,
+  pageId?: string,
 ): Promise<Result> {
   if (isDemoMode()) return DEMO;
   const user = await getAuthUser();
@@ -438,9 +535,9 @@ export async function updateLinkSettings(
   }
   if (Object.keys(next).length === 0) return { ok: true };
 
-  const page = await myPage();
+  const page = await myPage(pageId);
   if (!page) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
-  const { error } = await patchSettings(user.id, next);
+  const { error } = await patchSettings(page.id, next);
   if (error) {
     if (isSettingsColumnError(error)) return { ok: false, error: SETTINGS_MIGRATION_MSG };
     console.error("[links] 페이지 설정 저장 실패:", error.message);
@@ -454,19 +551,18 @@ export async function updateLinkSettings(
  * 비밀번호 걸기/풀기 — 해시는 link_page_secrets(주인만 읽음), jsonb 엔 locked 만.
  * null 이면 해제. 바꾸면 해시가 달라져 방문자들의 「열림」 쿠키가 전부 무효가 된다.
  */
-export async function setLinkPassword(password: string | null): Promise<Result> {
+export async function setLinkPassword(password: string | null, pageId?: string): Promise<Result> {
   if (isDemoMode()) return DEMO;
   const user = await getAuthUser();
   if (!user) return AUTH;
   const supabase = await createClient();
-  const { data: row, error: readErr } = await supabase.from("link_pages").select("id").eq("user_id", user.id).maybeSingle();
-  if (readErr) return { ok: false, error: "저장하지 못했어요." };
+  const row = await myPage(pageId);
   if (!row) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
 
   if (password === null) {
     const { error: delErr } = await supabase.from("link_page_secrets").delete().eq("page_id", row.id);
     if (delErr && !/link_page_secrets/i.test(delErr.message)) return { ok: false, error: "해제하지 못했어요." };
-    const { error } = await patchSettings(user.id, { locked: false });
+    const { error } = await patchSettings(row.id, { locked: false });
     if (error) return { ok: false, error: "해제하지 못했어요." };
     revalidatePath("/links");
     return { ok: true };
@@ -483,7 +579,7 @@ export async function setLinkPassword(password: string | null): Promise<Result> 
     console.error("[links] 비밀번호 저장 실패:", upErr.message);
     return { ok: false, error: "저장하지 못했어요." };
   }
-  const { error } = await patchSettings(user.id, { locked: true });
+  const { error } = await patchSettings(row.id, { locked: true });
   if (error) return { ok: false, error: isSettingsColumnError(error) ? SETTINGS_MIGRATION_MSG : "저장하지 못했어요." };
   revalidatePath("/links");
   return { ok: true };
@@ -493,9 +589,9 @@ export async function setLinkPassword(password: string | null): Promise<Result> 
  * 받은 내용 전체 — CSV 내려받기용(감사 C13: 화면은 최근 50건인데 CSV 가 "전체"라고 했다).
  * RLS 가 내 페이지 것만 내준다. PostgREST 기본 상한(1000행)을 넘을 수 있어 1000씩 잇는다(최대 20쪽).
  */
-export async function exportLeads(): Promise<{ ok: boolean; error?: string; rows?: Array<{ kind: string; name: string; email: string; phone: string; message: string; createdAt: string }> }> {
+export async function exportLeads(pageId?: string): Promise<{ ok: boolean; error?: string; rows?: Array<{ kind: string; name: string; email: string; phone: string; message: string; createdAt: string }> }> {
   if (isDemoMode()) return { ok: false, error: "데모 모드에서는 내려받을 수 없어요." };
-  const page = await myPage();
+  const page = await myPage(pageId);
   if (!page) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
   const supabase = await createClient();
   const rows: Array<{ kind: string; name: string; email: string; phone: string; message: string; createdAt: string }> = [];
@@ -515,7 +611,7 @@ export async function exportLeads(): Promise<{ ok: boolean; error?: string; rows
   return { ok: true, rows };
 }
 
-export async function updateLinkTheme(theme: string): Promise<Result> {
+export async function updateLinkTheme(theme: string, pageId?: string): Promise<Result> {
   if (isDemoMode()) return DEMO;
   const user = await getAuthUser();
   if (!user) return AUTH;
@@ -523,8 +619,10 @@ export async function updateLinkTheme(theme: string): Promise<Result> {
      상태가 된다 — 여기서 막고 알린다. */
   if (themeByKey(theme).key !== theme) return { ok: false, error: "지원하지 않는 테마예요." };
 
+  const page = await myPage(pageId);
+  if (!page) return { ok: false, error: "프로필 링크가 없어요." };
   const supabase = await createClient();
-  const { error } = await supabase.from("link_pages").update({ theme }).eq("user_id", user.id);
+  const { error } = await supabase.from("link_pages").update({ theme }).eq("id", page.id);
   if (error) {
     console.error("[links] 테마 저장 실패:", error.message);
     return { ok: false, error: "저장하지 못했어요." };
@@ -533,11 +631,13 @@ export async function updateLinkTheme(theme: string): Promise<Result> {
   return { ok: true };
 }
 
-export async function setLinkPublished(published: boolean): Promise<Result> {
+export async function setLinkPublished(published: boolean, pageId?: string): Promise<Result> {
   if (isDemoMode()) return DEMO;
   const user = await getAuthUser();
   if (!user) return AUTH;
 
+  const target = await myPage(pageId);
+  if (!target) return { ok: false, error: "프로필 링크가 없어요." };
   const supabase = await createClient();
 
   /* ⚠️ **먼저 확인하고 나서 바꾼다.** 앞서는 UPDATE 를 하고 나서 스냅샷 없음을
@@ -547,7 +647,7 @@ export async function setLinkPublished(published: boolean): Promise<Result> {
     const { data: cur } = await supabase
       .from("link_pages")
       .select("published_snapshot")
-      .eq("user_id", user.id)
+      .eq("id", target.id)
       .maybeSingle();
     if (!cur?.published_snapshot) {
       return { ok: false, error: "먼저 「라이브 반영」을 눌러 지금 편집본을 발행해 주세요." };
@@ -557,7 +657,7 @@ export async function setLinkPublished(published: boolean): Promise<Result> {
   const { data, error } = await supabase
     .from("link_pages")
     .update({ published })
-    .eq("user_id", user.id)
+    .eq("id", target.id)
     .select("slug")
     .maybeSingle();
   if (error) {
@@ -569,14 +669,20 @@ export async function setLinkPublished(published: boolean): Promise<Result> {
   return { ok: true };
 }
 
-export async function deleteLinkPage(): Promise<Result> {
+export async function deleteLinkPage(pageId?: string): Promise<Result> {
   if (isDemoMode()) return DEMO;
   const user = await getAuthUser();
   if (!user) return AUTH;
 
   const supabase = await createClient();
-  const { data: page } = await supabase.from("link_pages").select("id, slug").eq("user_id", user.id).maybeSingle();
-  const { error } = await supabase.from("link_pages").delete().eq("user_id", user.id);
+  /* ⚠️ 반드시 **그 페이지만** 지운다 — user_id 로 지우면 멀티 페이지에서 전부 날아간다(감사4 조사).
+     서브 페이지는 FK cascade 로 함께 지워지므로, 그 주소들도 삭제 전에 무덤에 넣는다. */
+  const page = await myPage(pageId);
+  if (!page) return { ok: false, error: "프로필 링크가 없어요." };
+  let subSlugs: string[] = [];
+  const subRes = await supabase.from("link_pages").select("slug").eq("parent_id", page.id);
+  if (!subRes.error) subSlugs = ((subRes.data ?? []) as Array<{ slug: string }>).map((r) => r.slug);
+  const { error } = await supabase.from("link_pages").delete().eq("id", page.id);
   if (error) {
     console.error("[links] 페이지 삭제 실패:", error.message);
     return { ok: false, error: "삭제하지 못했어요." };
@@ -589,6 +695,7 @@ export async function deleteLinkPage(): Promise<Result> {
        삭제 때는 열어두면 방어에 큰 구멍이 남는다.
        page_id 는 곧 사라지므로(cascade) 소유권 근거는 owner_id 다(0050). */
     await releaseSlug(page.slug as string, null, user.id);
+    for (const sub of subSlugs) await releaseSlug(sub, null, user.id);
   }
   return { ok: true };
 }
@@ -642,7 +749,7 @@ export async function uploadLinkImage(dataUrl: string): Promise<{ ok: boolean; u
 }
 
 /** 프로필 사진·커버 저장 — 업로드 결과 URL 을 페이지에 붙인다 */
-export async function updateLinkImages(patch: { avatarPath?: string | null; coverPath?: string | null }): Promise<Result> {
+export async function updateLinkImages(patch: { avatarPath?: string | null; coverPath?: string | null }, pageId?: string): Promise<Result> {
   if (isDemoMode()) return DEMO;
   const user = await getAuthUser();
   if (!user) return AUTH;
@@ -670,8 +777,10 @@ export async function updateLinkImages(patch: { avatarPath?: string | null; cove
   }
   if (Object.keys(fields).length === 0) return { ok: true };
 
+  const page = await myPage(pageId);
+  if (!page) return { ok: false, error: "프로필 링크가 없어요." };
   const supabase = await createClient();
-  const { error } = await supabase.from("link_pages").update(fields).eq("user_id", user.id);
+  const { error } = await supabase.from("link_pages").update(fields).eq("id", page.id);
   if (error) {
     console.error("[links] 이미지 저장 실패:", error.message);
     return { ok: false, error: "저장하지 못했어요." };
@@ -814,9 +923,9 @@ export async function deleteGuestbook(id: number): Promise<Result> {
 /** 0057(리틀리 흡수 4단계)에서 추가된 타입 — check 위반 시 어느 마이그레이션인지 안내 */
 const STAGE4_TYPES = new Set<BlockType>(["gallery", "music", "vcard", "search", "file", "guestbook"]);
 
-export async function addBlock(type: BlockType): Promise<Result & { id?: string }> {
+export async function addBlock(type: BlockType, pageId?: string): Promise<Result & { id?: string }> {
   if (isDemoMode()) return DEMO;
-  const page = await myPage();
+  const page = await myPage(pageId);
   if (!page) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
 
   const supabase = await createClient();
@@ -1136,9 +1245,10 @@ export async function importFromInpock(
  */
 export async function addBlocksBulk(
   items: Array<{ label: string; url: string }>,
+  pageId?: string,
 ): Promise<Result & { added?: number }> {
   if (isDemoMode()) return DEMO;
-  const page = await myPage();
+  const page = await myPage(pageId);
   if (!page) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
   if (items.length === 0) return { ok: false, error: "추가할 링크가 없어요." };
 
@@ -1256,9 +1366,9 @@ export async function deleteBlock(id: string): Promise<Result> {
  * 강조(하단 고정 CTA) — 페이지당 **하나**. 켜면 다른 블록의 강조를 지운다.
  * 읽고-바꾸고-쓰기(서버 값 기준) — 클라이언트 draft 와 섞이지 않게 data 의 그 키만 만진다.
  */
-export async function setBlockEmphasized(id: string, on: boolean): Promise<Result> {
+export async function setBlockEmphasized(id: string, on: boolean, pageId?: string): Promise<Result> {
   if (isDemoMode()) return DEMO;
-  const page = await myPage();
+  const page = await myPage(pageId);
   if (!page) return { ok: false, error: "프로필 링크가 없어요." };
   const supabase = await createClient();
   const { data: rows, error: readErr } = await supabase.from("link_blocks").select("id, type, data").eq("page_id", page.id);
@@ -1328,9 +1438,9 @@ export async function setBlockSchedule(id: string, openAt: string | null, closeA
 }
 
 /** 블록 복사 — 바로 아래에 같은 내용으로. 강조·예약은 복사하지 않는다(강조는 하나뿐, 예약은 의도가 다를 수 있다) */
-export async function duplicateBlock(id: string): Promise<Result & { id?: string }> {
+export async function duplicateBlock(id: string, pageId?: string): Promise<Result & { id?: string }> {
   if (isDemoMode()) return DEMO;
-  const page = await myPage();
+  const page = await myPage(pageId);
   if (!page) return { ok: false, error: "프로필 링크가 없어요." };
   const supabase = await createClient();
   const { data: rows, error: readErr } = await supabase
@@ -1389,9 +1499,9 @@ export async function restoreBlock(input: {
   data: Record<string, unknown>;
   sortOrder: number;
   active: boolean;
-}): Promise<Result & { id?: string }> {
+}, pageId?: string): Promise<Result & { id?: string }> {
   if (isDemoMode()) return DEMO;
-  const page = await myPage();
+  const page = await myPage(pageId);
   if (!page) return { ok: false, error: "프로필 링크가 없어요." };
 
   /* 클라이언트가 들고 있던 값이지만 원래 서버에서 나간 값이다 — 그래도 관문은
@@ -1438,9 +1548,9 @@ export async function restoreBlock(input: {
  * 모든 조회가 (sort_order, created_at) 복합 정렬이라 순서는 항상 정의되고
  * 같은 드래그를 다시 하면 복구된다.
  */
-export async function reorderBlock(id: string, beforeId: string | null): Promise<Result> {
+export async function reorderBlock(id: string, beforeId: string | null, pageId?: string): Promise<Result> {
   if (isDemoMode()) return DEMO;
-  const page = await myPage();
+  const page = await myPage(pageId);
   if (!page) return { ok: false, error: "프로필 링크가 없어요." };
 
   const supabase = await createClient();
@@ -1485,9 +1595,9 @@ export async function reorderBlock(id: string, beforeId: string | null): Promise
   return { ok: true };
 }
 
-export async function moveBlock(id: string, dir: "up" | "down"): Promise<Result> {
+export async function moveBlock(id: string, dir: "up" | "down", pageId?: string): Promise<Result> {
   if (isDemoMode()) return DEMO;
-  const page = await myPage();
+  const page = await myPage(pageId);
   if (!page) return { ok: false, error: "프로필 링크가 없어요." };
 
   const supabase = await createClient();
@@ -1533,9 +1643,9 @@ export async function moveBlock(id: string, dir: "up" | "down"): Promise<Result>
  * 발행본(published_snapshot)은 건드리지 않는다 — 적용해 보고 마음에 안 들면
  * 라이브 반영을 안 하면 그만이다. 그게 draft/publish 분리의 값어치다.
  */
-export async function applyTemplate(key: string): Promise<Result> {
+export async function applyTemplate(key: string, pageId?: string): Promise<Result> {
   if (isDemoMode()) return DEMO;
-  const page = await myPage();
+  const page = await myPage(pageId);
   if (!page) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
 
   const tpl = LINK_TEMPLATES.find((t) => t.key === key);
@@ -1597,18 +1707,20 @@ export async function applyTemplate(key: string): Promise<Result> {
    라이브 반영 — 초안을 공개 스냅샷으로 굽는다
    ══════════════════════════════════════════════════════════════════ */
 
-export async function publishLinkPage(): Promise<Result> {
+export async function publishLinkPage(pageId?: string): Promise<Result> {
   if (isDemoMode()) return DEMO;
   const user = await getAuthUser();
   if (!user) return AUTH;
 
+  const target = await myPage(pageId);
+  if (!target) return { ok: false, error: "프로필 링크가 없어요." };
   const supabase = await createClient();
   const PUB_COLS =
     "id, slug, title, bio, layout, theme, align, avatar_path, cover_path, sns_links, sns_placement, title_size, seo_title, seo_desc";
   /* theme_custom(0056) 계단식 — 미적용 DB 면 컬럼 없이(스냅샷엔 null 로 굳는다) */
-  let pageRes = await supabase.from("link_pages").select(`${PUB_COLS}, theme_custom`).eq("user_id", user.id).maybeSingle();
+  let pageRes = await supabase.from("link_pages").select(`${PUB_COLS}, theme_custom`).eq("id", target.id).maybeSingle();
   if (pageRes.error && /theme_custom/i.test(pageRes.error.message)) {
-    pageRes = await supabase.from("link_pages").select(PUB_COLS).eq("user_id", user.id).maybeSingle();
+    pageRes = await supabase.from("link_pages").select(PUB_COLS).eq("id", target.id).maybeSingle();
   }
   const page = pageRes.data as (Record<string, unknown> & { id: string }) | null;
   if (!page) return { ok: false, error: "프로필 링크가 없어요." };
@@ -1694,7 +1806,7 @@ export async function publishLinkPage(): Promise<Result> {
   const { error } = await supabase
     .from("link_pages")
     .update({ published_snapshot: snapshot })
-    .eq("user_id", user.id);
+    .eq("id", target.id);
   if (error) {
     console.error("[links] 라이브 반영 실패:", error.message);
     return { ok: false, error: "반영하지 못했어요." };

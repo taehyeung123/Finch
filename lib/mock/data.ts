@@ -1085,6 +1085,11 @@ export const autoDmSummary: AutoDmSummary = {
 
    저장은 서버 액션이 막는다(actions.ts 의 DEMO 가드) — 여기서는 읽기만 시켜준다. */
 export const linkWorkspace: LinkWorkspace = {
+  pages: [
+    { id: "demo-link-page", slug: "finch-demo", title: "핀치 데모", published: true, parentId: null, subSlug: null },
+  ],
+  pageLimit: { used: 1, max: 3 },
+  multiReady: true,
   page: {
     id: "demo-link-page",
     slug: "finch-demo",

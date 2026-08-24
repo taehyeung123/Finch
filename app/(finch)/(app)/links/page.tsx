@@ -48,7 +48,7 @@ const EMPTY_STATS: LinkStats = {
   dwell: { avgMs: 0, n: 0 },
 };
 
-const EMPTY: Loaded = { page: null, blocks: [], snapshot: null, stats: EMPTY_STATS, leads: [] };
+const EMPTY: Loaded = { page: null, pages: [], pageLimit: { used: 0, max: 1 }, multiReady: false, blocks: [], snapshot: null, stats: EMPTY_STATS, leads: [] };
 
 /** link_page_stats 가 돌려주는 원형 */
 interface RawStats {
@@ -67,7 +67,7 @@ interface RawStats {
   dwell?: { avg_ms: number; n: number };
 }
 
-async function load(days: number): Promise<Loaded> {
+async function load(days: number, wantPageId?: string): Promise<Loaded> {
   /* 데모 모드는 **샘플 페이지**를 보여준다. 앞서는 빈 값을 돌려줘 생성 폼만 나왔고,
      주소·제목을 다 채워 누른 뒤에야 "데모 모드에서는 저장할 수 없어요"가 떴다 —
      항상 실패하는 폼 하나가 이 화면의 전부였다. 저장은 서버 액션이 막는다. */
@@ -82,15 +82,52 @@ async function load(days: number): Promise<Loaded> {
   if (!user) return { ...EMPTY, stats: { ...EMPTY_STATS, days } };
 
   const supabase = await createClient();
+
+  /* 페이지 목록(멀티, 0060) — parent_id/sub_slug 는 미적용 DB 에 없다 → 계단식으로 없이 읽는다 */
+  let multiReady = true;
+  let listRes = await supabase
+    .from("link_pages")
+    .select("id, slug, title, published, parent_id, sub_slug")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: true });
+  if (listRes.error && /parent_id|sub_slug/i.test(listRes.error.message)) {
+    multiReady = false;
+    listRes = (await supabase
+      .from("link_pages")
+      .select("id, slug, title, published")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: true })) as unknown as typeof listRes;
+  }
+  if (listRes.error) {
+    console.error("[links] link_pages 목록 조회 실패:", listRes.error.message);
+    return { ...EMPTY, loadFailed: true, stats: { ...EMPTY_STATS, days, failed: true } };
+  }
+  const pageRows = (listRes.data ?? []) as Array<Record<string, unknown> & { id: string; slug: string }>;
+  const pages = pageRows.map((r) => ({
+    id: r.id,
+    slug: r.slug,
+    title: (r.title as string) ?? "",
+    published: r.published === true,
+    parentId: (r.parent_id as string | null) ?? null,
+    subSlug: (r.sub_slug as string | null) ?? null,
+  }));
+  /* 상한 표시용 — 최종 관문은 DB 트리거(0060). 무료 1·유료 3 */
+  const { data: prof } = await supabase.from("users_profile").select("plan").eq("id", user.id).maybeSingle();
+  const pageLimit = { used: pages.length, max: (prof?.plan ?? "free") === "free" ? 1 : 3 };
+
+  /* 활성 페이지 — ?page= 가 내 것이면 그 장, 아니면 첫 메인 장 */
+  const active = (wantPageId && pages.find((p) => p.id === wantPageId)) || pages.find((p) => !p.parentId) || pages[0] || null;
+  if (!active) return { ...EMPTY, pages, pageLimit, multiReady, stats: { ...EMPTY_STATS, days } };
+
   const PAGE_COLS =
     "id, slug, title, bio, published, layout, theme, align, avatar_path, cover_path, sns_links, sns_placement, title_size, seo_title, seo_desc, published_at, published_snapshot, updated_at";
   /* settings(0058)·theme_custom(0056) 계단식 — 미적용 DB 면 그 컬럼 없이 다시 읽는다(0052 관례) */
-  let pageRes = await supabase.from("link_pages").select(`${PAGE_COLS}, theme_custom, settings`).eq("user_id", user.id).maybeSingle();
+  let pageRes = await supabase.from("link_pages").select(`${PAGE_COLS}, theme_custom, settings`).eq("id", active.id).maybeSingle();
   if (pageRes.error && /settings/i.test(pageRes.error.message)) {
-    pageRes = await supabase.from("link_pages").select(`${PAGE_COLS}, theme_custom`).eq("user_id", user.id).maybeSingle();
+    pageRes = await supabase.from("link_pages").select(`${PAGE_COLS}, theme_custom`).eq("id", active.id).maybeSingle();
   }
   if (pageRes.error && /theme_custom/i.test(pageRes.error.message)) {
-    pageRes = await supabase.from("link_pages").select(PAGE_COLS).eq("user_id", user.id).maybeSingle();
+    pageRes = await supabase.from("link_pages").select(PAGE_COLS).eq("id", active.id).maybeSingle();
   }
   /* 조회 오류 ≠ 페이지 없음. 오류를 "없음"으로 흘리면 생성 폼 → 23505 → 새로고침 → 생성 폼 루프(감사 #10) */
   if (pageRes.error) {
@@ -274,6 +311,9 @@ async function load(days: number): Promise<Loaded> {
     : null;
 
   return {
+    pages,
+    pageLimit,
+    multiReady,
     page: {
       id: page.id as string,
       slug: page.slug as string,
@@ -306,12 +346,13 @@ async function load(days: number): Promise<Loaded> {
   };
 }
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ days?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<{ days?: string; page?: string }> }) {
   const sp = await searchParams;
   const asked = Number(sp.days);
   const days = (STATS_RANGES as readonly number[]).includes(asked) ? asked : DEFAULT_DAYS;
 
-  const { page, blocks, snapshot, stats, leads, leadCounts, leadsFailed, guestbook, loadFailed } = await load(days);
+  const wantPage = typeof sp.page === "string" ? sp.page : undefined;
+  const { page, pages, pageLimit, multiReady, blocks, snapshot, stats, leads, leadCounts, leadsFailed, guestbook, loadFailed } = await load(days, wantPage);
 
   /* 복사 버튼이 주는 주소는 **지금 접속한 도메인** 기준이어야 한다.
      프로덕션 도메인을 하드코딩하면 로컬·프리뷰에서 복사한 주소가 안 열린다. */
@@ -324,7 +365,13 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
       {/* 페이지 제목·설명 없음 — 편집기가 화면 전체의 주인공이다(2026-08-20 무대화).
           문서 제목은 metadata 가, 위치는 사이드바 활성 항목이 말해 준다. */}
       <LinksClient
+        /* 페이지를 갈아타면 **통째로 다시 마운트** — 실행취소 스택·설정 저장 체인이
+           페이지 단위 상태라, 남긴 채 갈아타면 다른 페이지에 되돌리기가 꽂힌다(감사4 조사 #10) */
+        key={page?.id ?? "none"}
         page={page}
+        pages={pages}
+        pageLimit={pageLimit}
+        multiReady={multiReady}
         blocks={blocks}
         snapshot={snapshot}
         stats={stats}

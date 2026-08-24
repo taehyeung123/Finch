@@ -119,11 +119,14 @@ export async function deleteAccount(formData: FormData): Promise<void> {
   /* 주소 무덤 기록 — auth.users 삭제가 link_pages 를 cascade 로 지우면서 slug 가 즉시 풀린다(감사3 C3).
      0050 의 owner_id on delete set null 이 탈퇴 뒤에도 90일 보류를 유지하도록 설계됐지만 행이 먼저 있어야 한다. 실패해도 탈퇴는 진행. */
   try {
-    const { data: lp } = await admin.from("link_pages").select("slug").eq("user_id", user.id).maybeSingle();
-    if (lp?.slug) {
+    /* 멀티 페이지(0060) — 한 장만 묻으면 나머지 주소가 즉시 풀린다. 전부 묻는다(감사4 조사 #12) */
+    const { data: lps } = await admin.from("link_pages").select("slug").eq("user_id", user.id);
+    const slugs = ((lps ?? []) as Array<{ slug: string }>).map((r) => r.slug).filter(Boolean);
+    if (slugs.length) {
+      const now = new Date().toISOString();
       const { error: holdErr } = await admin
         .from("link_slug_history")
-        .upsert({ slug: lp.slug, page_id: null, owner_id: user.id, released_at: new Date().toISOString() }, { onConflict: "slug" });
+        .upsert(slugs.map((slug) => ({ slug, page_id: null, owner_id: user.id, released_at: now })), { onConflict: "slug" });
       if (holdErr) console.error("[settings] 탈퇴 시 옛 주소 기록 실패:", holdErr.message);
     }
   } catch (e) {

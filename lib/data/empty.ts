@@ -132,6 +132,9 @@ export const autoDmSummary: AutoDmSummary = {
 /** 실제 모드에서는 /links 가 DB(link_pages)를 직접 읽는다 — 샘플이 끼면 안 된다 */
 export const linkWorkspace: LinkWorkspace = {
   page: null,
+  pages: [],
+  pageLimit: { used: 0, max: 1 },
+  multiReady: false,
   blocks: [],
   snapshot: null,
   stats: { days: 30, failed: false, views: 0, uniques: 0, clicks: 0, ctr: 0, returning: 0, daily: [], blocks: [], regions: [], sources: [], devices: [], referrers: [], dwell: { avgMs: 0, n: 0 } },

@@ -98,6 +98,7 @@ import {
   addBlocksBulk,
   applyTemplate,
   createLinkPage,
+  createLinkSubpage,
   createLinkPageWithStart,
   deleteBlock,
   deleteLinkPage,
@@ -122,7 +123,7 @@ import {
   exportLeads,
 } from "../actions";
 import { LINK_LANGS, LINK_TARGETS, type LinkPageSettings } from "@/lib/links/settings";
-import type { LinkGuestbookEntry, LinkLead, LinkPageView, LinkSnapshotView, LinkStats } from "@/lib/links/types";
+import type { LinkGuestbookEntry, LinkLead, LinkPageSummary, LinkPageView, LinkSnapshotView, LinkStats } from "@/lib/links/types";
 import { BlockEditor, EDITOR_TITLE_ID } from "./block-editor";
 import { ImageField } from "./image-field";
 import { ImportLinks, ImportLinksBody } from "./import-links";
@@ -269,8 +270,15 @@ export function LinksClient({
   guestbook = [],
   isDemo,
   loadFailed = false,
+  pages = [],
+  pageLimit = { used: 0, max: 1 },
+  multiReady = false,
 }: {
   page: LinkPageView | null;
+  /** 내 페이지 전부(멀티·서브, 0060) — 전환 드롭다운용 */
+  pages?: LinkPageSummary[];
+  pageLimit?: { used: number; max: number };
+  multiReady?: boolean;
   blocks: LinkBlock[];
   snapshot: LinkSnapshotView | null;
   origin: string;
@@ -291,6 +299,9 @@ export function LinksClient({
   const [drawer, setDrawer] = useState<Drawer | null>(null);
   const [tab, setTab] = useState<Tab>("page");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /* 멀티·서브 페이지(0060) — 만들기 모달 */
+  const [newPageOpen, setNewPageOpen] = useState(false);
+  const [newSubOpen, setNewSubOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   /* 토스트는 4초 뒤 내려간다 — 같은 문구가 연달아 오면 타이머만 다시 돈다 */
@@ -699,7 +710,7 @@ export function LinksClient({
        「옮겼어요」가 읽히면 안 된다(목록을 눈으로 못 보는 사용자에게는 확정이다) */
     onMove: (id, dir, label) =>
       run(
-        chained(() => moveBlock(id, dir)),
+        chained(() => moveBlock(id, dir, page.id)),
         () => {
           setNotice(`${label} 블록을 ${dir === "up" ? "위로" : "아래로"} 옮겼어요.`);
           /* 한계(소넷 확정 3, 수용): 역연산은 "그때의 이웃"이 아니라 실행
@@ -709,8 +720,8 @@ export function LinksClient({
           record({
             label: `${label} 이동`,
             /* 실행 시점에 id 를 푼다 — 삭제→복원 뒤 옛 id 로 부르면 이 엔트리가 영원히 실패해 이력이 막힌다(감사 C7) */
-            undo: chained(() => moveBlock(resolveId(id), dir === "up" ? "down" : "up")),
-            redo: chained(() => moveBlock(resolveId(id), dir)),
+            undo: chained(() => moveBlock(resolveId(id), dir === "up" ? "down" : "up", page.id)),
+            redo: chained(() => moveBlock(resolveId(id), dir, page.id)),
           });
         },
       ),
@@ -724,7 +735,7 @@ export function LinksClient({
       if (beforeId === dragId || beforeId === origBefore) return;
       fire(
         () => applyBlockPatch({ kind: "order", id: dragId, beforeId }),
-        chained(() => reorderBlock(dragId, beforeId)),
+        chained(() => reorderBlock(dragId, beforeId, page.id)),
         undefined,
         () =>
           /* 한계(이동 undo 와 같은 수용, 소넷 확정 4): undo 좌표(origBefore)는
@@ -733,8 +744,8 @@ export function LinksClient({
              스택에 남는다 — 데이터는 안 다치고, 다른 조작이 이력을 밀어낸다. */
           record({
             label: `${label} 이동`,
-            undo: chained(() => reorderBlock(resolveId(dragId), origBefore === null ? null : resolveId(origBefore))),
-            redo: chained(() => reorderBlock(resolveId(dragId), beforeId === null ? null : resolveId(beforeId))),
+            undo: chained(() => reorderBlock(resolveId(dragId), origBefore === null ? null : resolveId(origBefore), page.id)),
+            redo: chained(() => reorderBlock(resolveId(dragId), beforeId === null ? null : resolveId(beforeId), page.id)),
           }),
       );
     },
@@ -754,7 +765,7 @@ export function LinksClient({
             record({
               label: `${label} 삭제`,
               undo: async () => {
-                const r = await restoreBlock(payload);
+                const r = await restoreBlock(payload, page.id);
                 /* 옛 id → 새 id 별칭 — 이 블록을 가리키던 모든 엔트리가 새 행을 따라간다 */
                 if (r.ok && r.id) idAlias.current.set(resolveId(id), r.id);
                 return r;
@@ -780,7 +791,7 @@ export function LinksClient({
       setProfileForm((f) => ({ ...f, ...patch }));
       fire(
         () => {},
-        () => updateLinkProfile({ ...profileFormFrom(page), ...patch }),
+        () => updateLinkProfile({ ...profileFormFrom(page), ...patch }, page.id),
         () => setProfileForm((f) => ({ ...f, ...before })),
       );
     },
@@ -854,6 +865,17 @@ export function LinksClient({
       {/* 상단 바 — 탭 5개 · 주소 도구 · ⚙ 페이지 설정 · 공개 · 라이브 반영 */}
       <TopBar
         page={page}
+        pages={pages}
+        pageLimit={pageLimit}
+        multiReady={multiReady}
+        onSwitchPage={(id) => {
+          if (id === page.id) return;
+          /* 라우터 이동은 beforeunload 를 안 태운다 — 같은 관문을 여기서 직접 지킨다 */
+          if (anyDirty && !window.confirm("저장하지 않은 편집이 있어요. 페이지를 이동할까요?")) return;
+          startTransition(() => router.push(`/links?page=${id}`));
+        }}
+        onNewPage={() => setNewPageOpen(true)}
+        onNewSubpage={() => setNewSubOpen(true)}
         origin={origin}
         busy={busy}
         tab={tab}
@@ -863,7 +885,7 @@ export function LinksClient({
           setSettingsOpen(true);
         }}
         /* 발행은 초안을 스냅샷으로 복사할 뿐 — 초안 조작의 실행취소는 그대로 유효하다 */
-        onPublish={() => run(() => publishLinkPage())}
+        onPublish={() => run(() => publishLinkPage(page.id))}
         hasFeed={blocks.some((b) => b.active && b.type === "social_feed")}
         history={tab === "page" ? historyButtons : null}
       />
@@ -905,7 +927,7 @@ export function LinksClient({
           onApply={() => {
             const t = tplPreview;
             run(
-              () => applyTemplate(t.key),
+              () => applyTemplate(t.key, page.id),
               () => {
                 clearHistory();
                 setTplPreview(null);
@@ -937,7 +959,7 @@ export function LinksClient({
                 busy={busy}
                 onAdd={(t) =>
                   run(
-                    () => addBlock(t),
+                    () => addBlock(t, page.id),
                     (res) => {
                       setNotice("블록을 추가했어요. 캔버스의 블록을 누르면 바로 고칠 수 있어요.");
                       if (res.id) {
@@ -952,7 +974,7 @@ export function LinksClient({
                           label: `${BLOCK_CATALOG.find((c) => c.type === t)?.label ?? t} 추가`,
                           undo: () => deleteBlock(resolveId(addedId)),
                           redo: async () => {
-                            const r = await restoreBlock(payload);
+                            const r = await restoreBlock(payload, page.id);
                             if (r.ok && r.id) idAlias.current.set(resolveId(addedId), r.id);
                             return r;
                           },
@@ -971,7 +993,7 @@ export function LinksClient({
                 }}
                 onImport={(items, clear) =>
                   run(
-                    () => addBlocksBulk(items),
+                    () => addBlocksBulk(items, page.id),
                     () => {
                       /* 성공했을 때만 표를 비운다 — 실패하면 고른 목록·고친 이름이
                          남아 있어야 한다(붙여넣기 원문은 textarea 에 없어서 여기서
@@ -985,6 +1007,48 @@ export function LinksClient({
         </ModalShell>
       ) : null}
 
+      {newPageOpen ? (
+        <NewPageModal
+          busy={busy}
+          onClose={() => setNewPageOpen(false)}
+          onSubmit={(slugv, titlev) =>
+            run(
+              () =>
+                createLinkPage(slugv, titlev).then((r) => {
+                  if (r.ok) {
+                    setNewPageOpen(false);
+                    startTransition(() => router.push(r.id ? `/links?page=${r.id}` : "/links"));
+                  }
+                  return r;
+                }),
+              () => setNotice("페이지를 만들었어요."),
+            )
+          }
+        />
+      ) : null}
+      {newSubOpen ? (
+        <NewSubpageModal
+          busy={busy}
+          /* 서브에서 열면 그 부모 아래로 — 서브의 서브는 없다(0060 트리거와 같은 규칙) */
+          parentTitle={(pages.find((x) => x.id === (pages.find((x2) => x2.id === page.id)?.parentId ?? page.id))?.title || page.title) ?? ""}
+          onClose={() => setNewSubOpen(false)}
+          onSubmit={(seg, titlev) => {
+            const me = pages.find((x) => x.id === page.id);
+            const parentId = me?.parentId ?? page.id;
+            return run(
+              () =>
+                createLinkSubpage(parentId, seg, titlev).then((r) => {
+                  if (r.ok) {
+                    setNewSubOpen(false);
+                    startTransition(() => router.push(r.id ? `/links?page=${r.id}` : "/links"));
+                  }
+                  return r;
+                }),
+              () => setNotice("서브 페이지를 만들었어요."),
+            );
+          }}
+        />
+      ) : null}
       {settingsOpen ? (
         <ModalShell
           label="페이지 설정"
@@ -1011,7 +1075,7 @@ export function LinksClient({
                   fire(
                     () => {},
                     () => {
-                      const p = settingsChain.current.then(() => updateLinkSettings(patch));
+                      const p = settingsChain.current.then(() => updateLinkSettings(patch, page.id));
                       settingsChain.current = p.then(
                         () => {},
                         () => {},
@@ -1026,7 +1090,7 @@ export function LinksClient({
                   run(
                     /* 잠금 문구 blur 저장(체인)과 같은 줄에 세운다 — 서버도 원자 패치지만 순서까지 지킨다 */
                     () => {
-                      const p = settingsChain.current.then(() => setLinkPassword(pw));
+                      const p = settingsChain.current.then(() => setLinkPassword(pw, page.id));
                       settingsChain.current = p.then(
                         () => {},
                         () => {},
@@ -1039,10 +1103,10 @@ export function LinksClient({
                     },
                   )
                 }
-                onPublishToggle={(v) => run(() => setLinkPublished(v))}
+                onPublishToggle={(v) => run(() => setLinkPublished(v, page.id))}
                 onDelete={() =>
                   run(
-                    () => deleteLinkPage(),
+                    () => deleteLinkPage(page.id),
                     /* 페이지가 사라지면 역연산 대상도 없다 — 같은 컴포넌트 인스턴스가
                        살아남아 새 페이지에 옛 블록을 꽂는 사고를 막는다 */
                     () => clearHistory(),
@@ -1165,9 +1229,9 @@ export function LinksClient({
                           setError(bad.url.trim() ? "SNS 주소가 올바르지 않아요 — http(s) 주소, 이메일, 전화번호만 넣을 수 있어요." : "비어 있는 SNS 줄은 지워 주세요.");
                           return;
                         }
-                        run(() => updateLinkProfile(profileForm));
+                        run(() => updateLinkProfile(profileForm, page.id));
                       }}
-                      onImages={(v) => run(() => updateLinkImages(v))}
+                      onImages={(v) => run(() => updateLinkImages(v, page.id))}
                     />
                   ) : null
                 }
@@ -1219,7 +1283,7 @@ export function LinksClient({
                   /* 켜면 다른 블록의 강조가 풀린다 — 되돌리기는 "그 전에 강조였던 블록"을 복원한다 */
                   const prevEmph = liveBlocks.find((b) => b.data.emphasized === true && b.id !== id)?.id ?? null;
                   run(
-                    () => setBlockEmphasized(id, on),
+                    () => setBlockEmphasized(id, on, page.id),
                     () => {
                       setNotice(on ? "이 블록을 강조했어요 — 페이지 아래에 고정 버튼으로 떠요." : "강조를 풀었어요.");
                       record({
@@ -1227,10 +1291,10 @@ export function LinksClient({
                         undo: () =>
                           on
                             ? prevEmph
-                              ? setBlockEmphasized(resolveId(prevEmph), true)
-                              : setBlockEmphasized(resolveId(id), false)
-                            : setBlockEmphasized(resolveId(id), true),
-                        redo: () => setBlockEmphasized(resolveId(id), on),
+                              ? setBlockEmphasized(resolveId(prevEmph), true, page.id)
+                              : setBlockEmphasized(resolveId(id), false, page.id)
+                            : setBlockEmphasized(resolveId(id), true, page.id),
+                        redo: () => setBlockEmphasized(resolveId(id), on, page.id),
                       });
                     },
                   );
@@ -1242,7 +1306,7 @@ export function LinksClient({
                 onDuplicate={(id, label) =>
                   run(
                     /* 정렬 번호를 다시 쓰는 조작 — 드래그(fire)와 겹치지 않게 같은 체인을 탄다(감사 L5) */
-                    chained(() => duplicateBlock(id)),
+                    chained(() => duplicateBlock(id, page.id)),
                     (res) => {
                       setNotice(`「${label}」 블록을 복사했어요 — 바로 아래에 들어갔어요.`);
                       if (res.id) {
@@ -1251,7 +1315,7 @@ export function LinksClient({
                           label: `${label} 복사`,
                           undo: () => deleteBlock(resolveId(newId)),
                           redo: async () => {
-                            const r = await duplicateBlock(resolveId(id));
+                            const r = await duplicateBlock(resolveId(id), page.id);
                             if (r.ok && r.id) idAlias.current.set(resolveId(newId), r.id);
                             return r;
                           },
@@ -1290,7 +1354,7 @@ export function LinksClient({
                     setError("로고 이미지 주소는 http(s)로 시작해야 하고 공백·따옴표·괄호·역슬래시가 없어야 해요.");
                     return;
                   }
-                  run(() => updateLinkThemeCustom(customForm));
+                  run(() => updateLinkThemeCustom(customForm, page.id));
                 }}
                 current={liveTheme}
                 /* 누르는 즉시 칠한다 — 로딩·비활성 없음. 실패하면 트랜지션 종료와 함께
@@ -1299,11 +1363,11 @@ export function LinksClient({
                   const prev = liveTheme;
                   fire(
                     () => pickThemeOptimistic(k),
-                    () => updateLinkTheme(k),
+                    () => updateLinkTheme(k, page.id),
                     undefined,
                     () => {
                       if (prev !== k) {
-                        record({ label: "테마 변경", undo: () => updateLinkTheme(prev), redo: () => updateLinkTheme(k) });
+                        record({ label: "테마 변경", undo: () => updateLinkTheme(prev, page.id), redo: () => updateLinkTheme(k, page.id) });
                       }
                     },
                   );
@@ -1343,7 +1407,7 @@ export function LinksClient({
                 }}
                 onExportLeads={() =>
                   run(
-                    () => exportLeads(),
+                    () => exportLeads(page.id),
                     (res) => {
                       const rows = res.rows ?? [];
                       downloadCsv("핀치-프로필링크-받은내용.csv", [
@@ -1370,7 +1434,7 @@ export function LinksClient({
                     fire(
                       () => {},
                       () => {
-                        const p = settingsChain.current.then(() => updateLinkSettings(patch));
+                        const p = settingsChain.current.then(() => updateLinkSettings(patch, page.id));
                         settingsChain.current = p.then(
                           () => {},
                           () => {},
@@ -1470,6 +1534,12 @@ export function LinksClient({
 
 function TopBar({
   page,
+  pages = [],
+  pageLimit = { used: 0, max: 1 },
+  multiReady = false,
+  onSwitchPage,
+  onNewPage,
+  onNewSubpage,
   origin,
   busy,
   tab,
@@ -1480,6 +1550,12 @@ function TopBar({
   history,
 }: {
   page: LinkPageView;
+  pages?: LinkPageSummary[];
+  pageLimit?: { used: number; max: number };
+  multiReady?: boolean;
+  onSwitchPage?: (id: string) => void;
+  onNewPage?: () => void;
+  onNewSubpage?: () => void;
   origin: string;
   busy: boolean;
   tab: Tab;
@@ -1493,7 +1569,10 @@ function TopBar({
 }) {
   const [copied, setCopied] = useState(false);
   const [qr, setQr] = useState(false);
-  const url = publicLinkUrl(page.slug, origin);
+  /* 서브 페이지의 표준 주소는 부모 아래(/p/{부모}/{sub}) — 전역 slug 주소도 열리지만 보여주는 건 이것 */
+  const me = pages.find((p) => p.id === page.id);
+  const parentSlug = me?.parentId ? pages.find((p) => p.id === me.parentId)?.slug : null;
+  const url = parentSlug && me?.subSlug ? `${origin}/p/${parentSlug}/${me.subSlug}` : publicLinkUrl(page.slug, origin);
 
   async function copy() {
     try {
@@ -1533,6 +1612,18 @@ function TopBar({
           })}
         </nav>
 
+        {pages.length > 0 && onSwitchPage ? (
+          <PageSwitcher
+            pages={pages}
+            pageLimit={pageLimit}
+            multiReady={multiReady}
+            activeId={page.id}
+            busy={busy}
+            onSwitch={onSwitchPage}
+            onNewPage={onNewPage}
+            onNewSubpage={onNewSubpage}
+          />
+        ) : null}
         <code className="min-w-0 flex-1 truncate px-1 text-[12px] text-fg-sub">{url}</code>
 
         <Button variant="secondary" size="sm" onClick={copy}>
@@ -2146,6 +2237,185 @@ function TemplateModal({
 /* QR 코드 — 링크팜 라이브 미리보기 옆 QR 카피(2026-08-20 대조). 명함·매장·
    오프라인 유입의 표준 통로다. qrcode 는 모달을 열 때만 동적 로드해서
    편집기 본 번들에 끼우지 않는다. */
+/*
+  페이지 전환 드롭다운(멀티·서브, 0060) — 리틀리 「＋페이지 추가」 문법.
+  메인 페이지 아래 서브가 들여쓰여 나오고, 바닥에 추가 버튼 + 사용량(n/max).
+  상한·구조의 최종 관문은 DB 트리거 — 여기 disabled 는 안내일 뿐이다.
+*/
+function PageSwitcher({
+  pages,
+  pageLimit,
+  multiReady,
+  activeId,
+  busy,
+  onSwitch,
+  onNewPage,
+  onNewSubpage,
+}: {
+  pages: LinkPageSummary[];
+  pageLimit: { used: number; max: number };
+  multiReady: boolean;
+  activeId: string;
+  busy: boolean;
+  onSwitch: (id: string) => void;
+  onNewPage?: () => void;
+  onNewSubpage?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const me = pages.find((p) => p.id === activeId) ?? null;
+  const mains = pages.filter((p) => !p.parentId);
+  const full = pageLimit.used >= pageLimit.max;
+  const row = (p: LinkPageSummary, isSub: boolean) => (
+    <button
+      key={p.id}
+      type="button"
+      role="menuitem"
+      onClick={() => {
+        setOpen(false);
+        if (p.id !== activeId) onSwitch(p.id);
+      }}
+      className={cn(
+        "trans-state flex w-full items-center gap-2 rounded-[10px] px-2.5 py-2 text-left text-[14px] hover:bg-tint-hover",
+        isSub && "pl-7",
+        p.id === activeId ? "font-semibold text-fg" : "text-fg-sub",
+      )}
+    >
+      <span className="min-w-0 flex-1 truncate">{p.title || p.slug}</span>
+      <span className="tnum shrink-0 text-[11px] text-fg-faint">{isSub ? `/${p.subSlug}` : `/${p.slug}`}</span>
+      {p.id === activeId ? <Check className="size-3.5 shrink-0 text-primary" aria-hidden /> : null}
+    </button>
+  );
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="페이지 전환"
+        disabled={busy}
+        onClick={() => setOpen((v) => !v)}
+        className="trans-state flex max-w-[11rem] items-center gap-1.5 rounded-card border border-line bg-body px-2.5 py-1.5 text-[14px] font-semibold text-fg hover:bg-tint-hover disabled:opacity-50"
+      >
+        <span className="truncate">{me?.title || me?.slug || "페이지"}</span>
+        <ChevronDown className={cn("trans-state size-3.5 shrink-0 text-fg-faint", open && "rotate-180")} aria-hidden />
+      </button>
+      {open ? (
+        <>
+          {/* 바깥 클릭 닫기 — 스크림은 투명(메뉴일 뿐 모달이 아니다) */}
+          <button type="button" aria-label="페이지 메뉴 닫기" className="fixed inset-0 z-40 cursor-default" onClick={() => setOpen(false)} />
+          <div role="menu" aria-label="내 페이지" className="absolute left-0 top-full z-50 mt-1 w-72 rounded-card border border-line bg-overlay p-1.5 shadow-pop">
+            {mains.map((m) => (
+              <div key={m.id}>
+                {row(m, false)}
+                {pages.filter((p) => p.parentId === m.id).map((sb) => row(sb, true))}
+              </div>
+            ))}
+            <div className="mt-1 space-y-0.5 border-t border-line pt-1.5">
+              <button
+                type="button"
+                role="menuitem"
+                disabled={full || !multiReady}
+                onClick={() => {
+                  setOpen(false);
+                  onNewPage?.();
+                }}
+                className="trans-state flex w-full items-center gap-2 rounded-[10px] px-2.5 py-2 text-left text-[14px] font-medium text-fg hover:bg-tint-hover disabled:opacity-40"
+              >
+                <Plus className="size-3.5" aria-hidden />
+                새 페이지
+                <span className="tnum ml-auto text-[11px] text-fg-faint">
+                  {pageLimit.used}/{pageLimit.max}
+                </span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={full || !multiReady}
+                onClick={() => {
+                  setOpen(false);
+                  onNewSubpage?.();
+                }}
+                className="trans-state flex w-full items-center gap-2 rounded-[10px] px-2.5 py-2 text-left text-[14px] font-medium text-fg hover:bg-tint-hover disabled:opacity-40"
+              >
+                <Plus className="size-3.5" aria-hidden />
+                서브 페이지
+              </button>
+              {!multiReady ? (
+                <p className="px-2.5 pb-1 text-[11px] leading-[1.5] text-fg-faint">페이지 추가는 서버 업데이트(0060) 적용 후 쓸 수 있어요.</p>
+              ) : full ? (
+                <p className="px-2.5 pb-1 text-[11px] leading-[1.5] text-fg-faint">페이지 상한에 닿았어요 — 플랜을 올리면 {pageLimit.max === 1 ? "3개" : "더"}까지 늘어나요.</p>
+              ) : null}
+            </div>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/** 새 페이지 만들기 — 주소·제목. 검증은 서버(validateSlug·상한 트리거)가 최종 */
+function NewPageModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (slug: string, title: string) => void }) {
+  const [slugv, setSlugv] = useState("");
+  const [titlev, setTitlev] = useState("");
+  return (
+    <ModalShell label="새 페이지" title="새 페이지" onClose={onClose} busy={busy} size="sm">
+      <div className="space-y-3">
+        <div>
+          <label className="text-[14px] font-medium text-fg" htmlFor="np-title">제목</label>
+          <input id="np-title" value={titlev} onChange={(e) => setTitlev(e.target.value)} maxLength={40} placeholder="예: 이벤트 페이지"
+            className="mt-1.5 h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none" />
+        </div>
+        <div>
+          <label className="text-[14px] font-medium text-fg" htmlFor="np-slug">주소</label>
+          <div className="mt-1.5 flex items-center gap-1">
+            <span className="text-[13px] text-fg-faint">/p/</span>
+            <input id="np-slug" value={slugv} onChange={(e) => setSlugv(e.target.value.toLowerCase())} maxLength={30} placeholder="my-event"
+              className="h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none" />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={busy}>취소</Button>
+          <Button size="sm" disabled={busy || !slugv.trim() || !titlev.trim()} onClick={() => onSubmit(slugv.trim(), titlev.trim())}>
+            {busy ? "만드는 중…" : "만들기"}
+          </Button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+/** 서브 페이지 만들기 — 부모 주소 아래 세그먼트. /p/{부모}/{세그먼트} 로 열린다 */
+function NewSubpageModal({ busy, parentTitle, onClose, onSubmit }: { busy: boolean; parentTitle: string; onClose: () => void; onSubmit: (seg: string, title: string) => void }) {
+  const [seg, setSeg] = useState("");
+  const [titlev, setTitlev] = useState("");
+  return (
+    <ModalShell label="서브 페이지" title="서브 페이지" onClose={onClose} busy={busy} size="sm">
+      <div className="space-y-3">
+        <p className="text-[14px] text-fg-sub">
+          <strong className="font-semibold text-fg">{parentTitle}</strong> 아래에 만들어요. 방문자는 부모 주소 뒤에 붙는 짧은 주소로 열어요.
+        </p>
+        <div>
+          <label className="text-[14px] font-medium text-fg" htmlFor="ns-title">제목</label>
+          <input id="ns-title" value={titlev} onChange={(e) => setTitlev(e.target.value)} maxLength={40} placeholder="예: 메뉴판"
+            className="mt-1.5 h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none" />
+        </div>
+        <div>
+          <label className="text-[14px] font-medium text-fg" htmlFor="ns-seg">서브 주소</label>
+          <input id="ns-seg" value={seg} onChange={(e) => setSeg(e.target.value.toLowerCase())} maxLength={40} placeholder="menu"
+            className="mt-1.5 h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none" />
+          <p className="mt-1 text-[12px] text-fg-sub">영문 소문자·숫자·하이픈 1~40자</p>
+        </div>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={busy}>취소</Button>
+          <Button size="sm" disabled={busy || !seg.trim() || !titlev.trim()} onClick={() => onSubmit(seg.trim(), titlev.trim())}>
+            {busy ? "만드는 중…" : "만들기"}
+          </Button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
 function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);

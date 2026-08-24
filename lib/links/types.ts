@@ -112,9 +112,27 @@ export interface LinkGuestbookEntry {
   createdAt: string;
 }
 
+/** 페이지 목록 한 줄(멀티·서브, 0060) — 전환 드롭다운이 쓴다 */
+export interface LinkPageSummary {
+  id: string;
+  slug: string;
+  title: string;
+  published: boolean;
+  /** 서브 페이지면 부모 id */
+  parentId: string | null;
+  /** 서브 페이지의 부모 안 주소 세그먼트 */
+  subSlug: string | null;
+}
+
 /** /links 화면 한 벌 — 실제 모드는 DB 에서, 데모 모드는 샘플에서 온다 */
 export interface LinkWorkspace {
   page: LinkPageView | null;
+  /** 내 페이지 전부(메인+서브, 만든 순). 0060 전에는 최대 1개 */
+  pages: LinkPageSummary[];
+  /** 페이지 수 상한 — 무료 1·유료 3(0060 트리거와 같은 숫자). 표시용, 최종 관문은 DB */
+  pageLimit: { used: number; max: number };
+  /** 0060(멀티 페이지) 적용 여부 — false 면 추가 버튼 대신 안내 */
+  multiReady: boolean;
   blocks: LinkBlock[];
   /** 마지막 발행본. null 이면 한 번도 발행 안 함 */
   snapshot: LinkSnapshotView | null;
