@@ -245,14 +245,15 @@ export function PhonePreview({
     ) : null;
 
   return (
-    <div className={cn("mx-auto", frame === "device" ? "w-[375px] max-w-full" : "w-full max-w-[410px]")}>
-      {/* 폰 프레임 — device 는 프레임(테두리 6px 포함) 자체가 375×812 */}
+    <div className={cn("mx-auto", frame === "device" ? "w-full max-w-[420px]" : "w-full max-w-[410px]")}>
+      {/* 폰 프레임 — device 는 칸 폭을 채우는 폰 모양(최대 420px), 높이는 폰 비율을 따르되 뷰포트에 맞춰 잘리고 안에서 스크롤 */}
       <div
         className={cn(
           "overflow-hidden rounded-[32px] border-[6px] border-fg/15 bg-plate shadow-pop",
-          /* 14rem = 상단바 56 + sticky 오프셋 16 + 카드 패딩·테두리 34 + 제목줄 32 + 캡션 2줄 38
-             + 간격 24 ≈ 200px 에 여유 24px — 짧은 화면에서 프레임 아래가 잘리지 않는다 */
-          frame === "device" && "flex h-[812px] max-h-[calc(100dvh-14rem)] flex-col",
+          /* 폭은 칸을 채우고(최대 420px), 높이는 폰 비율(375:812)을 상한으로 뷰포트 예산(max-h)이 먼저 걸린다 — "미리보기를 더 키워 달라"(2026-08-23).
+             11.5rem = 상단바 56 + sticky 오프셋 16 + 카드 패딩·테두리 26 + 제목줄 28 + 캡션 1~2줄 + 간격 ≈ 168px 에 여유.
+             짧은 화면에선 max-h 가 먼저 걸려 프레임이 잘리는 대신 안에서 스크롤한다 */
+          frame === "device" && "flex aspect-[375/812] max-h-[calc(100dvh-11.5rem)] w-full flex-col",
         )}
       >
         <div

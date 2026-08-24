@@ -1062,7 +1062,8 @@ export function LinksClient({
       {/* ── 배치: 좌(탭 콘텐츠) · 우(라이브 미리보기 폰 — 페이지 탭에선 눌러서 바로 편집).
             폰은 **하나**다. 전엔 편집 폰 + 미리보기 폰 둘이었는데 같은 것을 두 번 보여 화면만 복잡했다(2026-08-23 재편).
             xl 미만은 한 칸으로 쌓이고, 칸은 minmax(0,1fr) 로 못 박는다. ── */}
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,1fr)_26rem] xl:items-start">
+      {/* 미리보기 칸은 xl 28rem·2xl 32rem — "미리보기를 더 키워 달라"(2026-08-23). 폰 프레임이 칸 폭을 따라온다 */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,1fr)_28rem] xl:items-start 2xl:grid-cols-[minmax(0,1fr)_32rem]">
         <div className="min-w-0 space-y-4">
           {tab === "page" ? (
             <>
@@ -1378,7 +1379,8 @@ export function LinksClient({
 
         {/* 라이브 미리보기 — 항상 오른쪽. 페이지 탭에선 **편집 캔버스**(누르면 목록의 그 행이 펼쳐진다), 다른 탭에선 읽기 전용 */}
         <Card className="xl:sticky xl:top-[4.5rem]">
-          <CardBody className="space-y-3">
+          {/* 폰에게 자리를 최대한 — CardBody(p-4) 대신 p-3. cn 은 tailwind-merge 가 아니라 className 으로 p-4 를 못 이긴다(소넷) */}
+          <div className="space-y-2 p-3">
             <div className="flex items-center justify-between">
               <h3 className="flex items-center gap-1.5 text-[15px] font-bold">
                 <Smartphone className="size-4 text-fg-sub" aria-hidden />
@@ -1422,7 +1424,7 @@ export function LinksClient({
                 frame="device"
               />
             )}
-          </CardBody>
+          </div>
         </Card>
       </div>
 
