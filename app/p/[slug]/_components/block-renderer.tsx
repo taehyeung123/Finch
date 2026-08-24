@@ -288,7 +288,7 @@ export function BlockRenderer({
           {...ext}
           style={textStyle}
           className={[
-            "lp-btn flex min-h-[52px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] px-5 py-3 text-center text-[15px] font-semibold transition-opacity hover:opacity-85",
+            "lp-btn flex min-h-[56px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] px-5 py-3 text-center text-[15px] font-semibold transition-[opacity,box-shadow] hover:opacity-90",
             hasExtras ? "flex-col gap-0.5" : "",
             primary
               ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]"
@@ -313,7 +313,7 @@ export function BlockRenderer({
 
     /* ── 레이아웃 ──────────────────────────────────────────── */
     case "heading":
-      return <h2 className="pt-2 text-[17px] font-bold text-[var(--lp-fg)]">{s(d, "text")}</h2>;
+      return <h2 className="pt-3 text-[16px] font-bold tracking-[-0.01em] text-[var(--lp-fg)]">{s(d, "text")}</h2>;
 
     case "text":
       return (

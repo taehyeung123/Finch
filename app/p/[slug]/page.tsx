@@ -178,7 +178,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
     return null;
   })();
   const align = snap.align === "left" ? "text-left items-start" : snap.align === "right" ? "text-right items-end" : "text-center items-center";
-  const titlePx = snap.titleSize === "sm" ? "text-[20px]" : snap.titleSize === "lg" ? "text-[30px]" : "text-[24px]";
+  const titlePx = snap.titleSize === "sm" ? "text-[21px]" : snap.titleSize === "lg" ? "text-[32px]" : "text-[26px]";
   /* SNS 줄은 **여기서 한 번 더 거른다** — 스냅샷은 본인 행 직접 PATCH 로 아무 값이나 들어올 수
      있고, 그대로 <a href> 로 찍으면 javascript: 저장형 XSS 가 된다(감사 #5). themeCustom 과 같은 원칙. */
   const snsLinks = sanitizeSnsLinks((snap as { snsLinks?: unknown }).snsLinks);
@@ -195,10 +195,11 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
             key={i}
             href={s.url}
             {...ext}
-            className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-3.5 py-2 text-[13px] font-medium"
+            aria-label={SNS_LABEL.get(s.kind) ?? s.kind}
+            title={SNS_LABEL.get(s.kind) ?? s.kind}
+            className="flex size-11 items-center justify-center rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] shadow-[var(--lp-shadow)] transition-opacity hover:opacity-80"
           >
-            <SnsIcon kind={s.kind} className="size-3.5 shrink-0" />
-            {SNS_LABEL.get(s.kind) ?? s.kind}
+            <SnsIcon kind={s.kind} className="size-[18px] shrink-0" />
           </a>
         ))}
       </nav>
@@ -324,13 +325,13 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
               <img
                 src={snap.avatarPath}
                 alt=""
-                className="mb-3 size-20 rounded-full border-2 border-[var(--lp-card)] object-cover shadow-[var(--lp-shadow)]"
+                className="mb-3.5 size-[88px] rounded-full object-cover shadow-[var(--lp-shadow)] ring-4 ring-[var(--lp-card)]"
               />
             ) : (
               /* 사진이 없으면 이니셜 원. 아무것도 안 그리면 브랜드 페이지 머리가 통째로
                  비어 허전하다 — 편집 미리보기도 같은 것을 그린다(두 화면이 어긋나면 안 된다). */
               <span
-                className="mb-3 flex size-20 items-center justify-center rounded-full border-2 border-[var(--lp-card)] bg-[var(--lp-card)] text-[24px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)]"
+                className="mb-3.5 flex size-[88px] items-center justify-center rounded-full bg-[var(--lp-card)] text-[30px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] ring-4 ring-[var(--lp-card)]"
                 aria-hidden
               >
                 {initialOf(snap.title || slug)}
@@ -341,7 +342,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
               테마색 상속을 이겨 다크 프리셋에서 제목이 배경색과 같아졌다(감사 #6). */}
           <h1 className={`${titlePx} font-bold leading-[1.3] tracking-normal text-[var(--lp-fg)]`}>{snap.title || slug}</h1>
           {snap.bio ? (
-            <p className="mt-2 whitespace-pre-wrap text-[15px] leading-[1.6] text-[var(--lp-muted)]">{snap.bio}</p>
+            <p className="mt-2 max-w-[42ch] whitespace-pre-wrap text-[15px] leading-[1.7] text-[var(--lp-muted)]">{snap.bio}</p>
           ) : null}
 
           {snap.snsPlacement !== "links" ? snsNav : null}
@@ -355,7 +356,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
             ⚠️ hiddenReason 으로 **렌더 목록 자체를 거르지는 않는다.** 이 함수와 렌더러가
             1:1 이 아니라(social_feed 등), 판정이 갈리는 순간 "문구 누락"이
             "정상 블록이 통째로 사라짐"으로 악화된다. 여기서는 문구만 결정한다. */}
-        <div className={`mt-8 space-y-3 ${split ? "lg:col-start-2 lg:row-span-3 lg:mt-0" : ""}`}>
+        <div className={`mt-7 space-y-3.5 ${split ? "lg:col-start-2 lg:row-span-3 lg:mt-0" : ""}`}>
           {snap.snsPlacement === "links" ? snsNav : null}
           {visibleBlocks.every(
             (b) =>

@@ -193,18 +193,18 @@ export function PhonePreview({
     return null;
   })();
   /* 공개 페이지의 20/24/30px 를 380px 프레임 비율로 줄인 값 */
-  const titlePx = page.titleSize === "sm" ? "text-[16px]" : page.titleSize === "lg" ? "text-[24px]" : "text-[19px]";
+  const titlePx = page.titleSize === "sm" ? "text-[17px]" : page.titleSize === "lg" ? "text-[26px]" : "text-[21px]";
   const snsChips =
     page.snsLinks.length > 0 ? (
       <div className={cn("flex flex-wrap gap-1.5", page.snsPlacement === "links" ? "mb-2.5 justify-center" : "mt-2.5")}>
         {page.snsLinks.map((x, i) => (
           <span
             key={i}
-            className="inline-flex items-center gap-1 rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-2.5 py-1 text-[11px] font-medium"
+            title={SNS_LABEL.get(x.kind) ?? x.kind}
+            className="flex size-9 items-center justify-center rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] shadow-[var(--lp-shadow)]"
           >
-            {/* 공개 페이지와 같은 아이콘+한글 라벨 — 미리보기와 실제가 어긋나면 안 된다 */}
-            <SnsIcon kind={x.kind} className="size-3 shrink-0" />
-            {SNS_LABEL.get(x.kind) ?? x.kind}
+            {/* 공개 페이지와 같은 아이콘 원형 — 미리보기와 실제가 어긋나면 안 된다 */}
+            <SnsIcon kind={x.kind} className="size-4 shrink-0" />
           </span>
         ))}
       </div>
@@ -230,13 +230,13 @@ export function PhonePreview({
         <img
           src={page.avatarPath}
           alt=""
-          className="mb-2.5 size-16 rounded-full border-2 border-[var(--lp-card)] object-cover shadow-[var(--lp-shadow)]"
+          className="mb-3 size-[72px] rounded-full object-cover shadow-[var(--lp-shadow)] ring-4 ring-[var(--lp-card)]"
         />
       ) : (
         /* 사진이 없으면 이니셜 원 — 공개 페이지와 **같은 변수**로 그린다. 프리셋 원본(theme.card)을
            쓰면 직접 꾸미기 색이 여기만 빠져 발행본과 머리 색이 달라진다(감사 #25). */
         <span
-          className="mb-2.5 flex size-16 items-center justify-center rounded-full border-2 border-[var(--lp-card)] bg-[var(--lp-card)] text-[20px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)]"
+          className="mb-3 flex size-[72px] items-center justify-center rounded-full bg-[var(--lp-card)] text-[24px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] ring-4 ring-[var(--lp-card)]"
           aria-hidden
         >
           {initialOf(page.title || page.slug)}
@@ -714,7 +714,7 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
         <div
           style={textStyle}
           className={[
-            "lp-btn flex min-h-[44px] items-center justify-center gap-1.5 rounded-[var(--lp-radius-btn)] px-4 py-2.5 text-center text-[13px] font-semibold",
+            "lp-btn flex min-h-[48px] items-center justify-center gap-1.5 rounded-[var(--lp-radius-btn)] px-4 py-2.5 text-center text-[13px] font-semibold",
             hasExtras ? "flex-col gap-0.5" : "",
             emphasis === "primary"
               ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]"

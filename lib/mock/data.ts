@@ -1112,7 +1112,8 @@ export const linkWorkspace: LinkWorkspace = {
   blocks: [
     { id: "demo-b1", type: "notice", sortOrder: 0, active: true, data: { text: "이번 주 공구 진행 중이에요!", tone: "primary" } },
     { id: "demo-b2", type: "link", sortOrder: 1, active: true, data: { label: "공구 바로가기", url: "https://example.com/order", emoji: "🛒", emphasis: "primary" } },
-    { id: "demo-b3", type: "image_card", sortOrder: 2, active: true, data: { title: "베스트 상품", subtitle: "재구매율 1위", price: "29,000원", ctaLabel: "구매하기", url: "https://example.com/best" } },
+    { id: "demo-b3", type: "image_card", sortOrder: 2, active: true, data: { title: "베스트 상품", subtitle: "재구매율 1위", price: "29,000원", ctaLabel: "구매하기", url: "https://example.com/best", imagePath: "https://picsum.photos/id/1080/900/600" } },
+    { id: "demo-b11", type: "gallery", sortOrder: 2.5, active: true, data: { layout: "grid", aspect: "square", items: [{ imagePath: "https://picsum.photos/id/312/600/600" }, { imagePath: "https://picsum.photos/id/292/600/600" }, { imagePath: "https://picsum.photos/id/365/600/600" }] } },
     { id: "demo-b4", type: "heading", sortOrder: 3, active: true, data: { text: "채널" } },
     { id: "demo-b5", type: "grid", sortOrder: 4, active: true, data: { columns: 2, items: [{ title: "인스타그램", url: "https://instagram.com/finch" }, { title: "유튜브", url: "https://youtube.com/@finch" }] } },
     { id: "demo-b6", type: "contact", sortOrder: 5, active: true, data: { title: "협업 문의", description: "브랜드 협업은 여기로 남겨주세요.", fields: ["name", "email", "message"] } },
@@ -1146,7 +1147,8 @@ export const linkWorkspace: LinkWorkspace = {
     blocks: [
       { id: "demo-b1", type: "notice", data: { text: "이번 주 공구 진행 중이에요!", tone: "primary" } },
       { id: "demo-b2", type: "link", data: { label: "공구 바로가기", url: "https://example.com/order", emoji: "🛒", emphasis: "primary" } },
-      { id: "demo-b3", type: "image_card", data: { title: "베스트 상품", subtitle: "재구매율 1위", price: "29,000원", ctaLabel: "구매하기", url: "https://example.com/best" } },
+      { id: "demo-b3", type: "image_card", data: { title: "베스트 상품", subtitle: "재구매율 1위", price: "29,000원", ctaLabel: "구매하기", url: "https://example.com/best", imagePath: "https://picsum.photos/id/1080/900/600" } },
+      { id: "demo-b11", type: "gallery", data: { layout: "grid", aspect: "square", items: [{ imagePath: "https://picsum.photos/id/312/600/600" }, { imagePath: "https://picsum.photos/id/292/600/600" }, { imagePath: "https://picsum.photos/id/365/600/600" }] } },
       { id: "demo-b4", type: "heading", data: { text: "채널" } },
       { id: "demo-b5", type: "grid", data: { columns: 2, items: [{ title: "인스타그램", url: "https://instagram.com/finch" }, { title: "유튜브", url: "https://youtube.com/@finch" }] } },
       { id: "demo-b6", type: "contact", data: { title: "협업 문의", description: "브랜드 협업은 여기로 남겨주세요.", fields: ["name", "email", "message"] } },

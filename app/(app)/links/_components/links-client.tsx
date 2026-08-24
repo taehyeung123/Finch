@@ -21,6 +21,9 @@ import {
   Heart,
   Heading,
   Inbox,
+  MousePointerClick,
+  Percent,
+  RotateCcw,
   Lock,
   Image as ImageIcon,
   LayoutGrid,
@@ -1602,6 +1605,33 @@ function TopBar({
    캔버스와 같은 핸들러(canvasEdit)를 쓴다 — 두 화면이 같은 일을 다르게 하지 않는다.
    ══════════════════════════════════════════════════════════════════ */
 
+/* 블록 종류별 색 — 리틀리처럼 목록·카탈로그가 알록달록하게 읽힌다. 값은 globals.css 의 tint 토큰 */
+const BLOCK_TINT: Record<BlockType, string> = {
+  link: "bg-tint-coral text-tint-coral-ink",
+  heading: "bg-tint-slate text-tint-slate-ink",
+  text: "bg-tint-slate text-tint-slate-ink",
+  divider: "bg-tint-slate text-tint-slate-ink",
+  spacer: "bg-tint-slate text-tint-slate-ink",
+  image: "bg-tint-purple text-tint-purple-ink",
+  image_card: "bg-tint-green text-tint-green-ink",
+  video: "bg-tint-purple text-tint-purple-ink",
+  card_row: "bg-tint-coral text-tint-coral-ink",
+  grid: "bg-tint-coral text-tint-coral-ink",
+  notice: "bg-tint-amber text-tint-amber-ink",
+  social_feed: "bg-tint-pink text-tint-pink-ink",
+  contact: "bg-tint-blue text-tint-blue-ink",
+  subscribe: "bg-tint-blue text-tint-blue-ink",
+  map: "bg-tint-teal text-tint-teal-ink",
+  coupang: "bg-tint-green text-tint-green-ink",
+  donation: "bg-tint-pink text-tint-pink-ink",
+  gallery: "bg-tint-purple text-tint-purple-ink",
+  music: "bg-tint-pink text-tint-pink-ink",
+  vcard: "bg-tint-blue text-tint-blue-ink",
+  search: "bg-tint-teal text-tint-teal-ink",
+  file: "bg-tint-teal text-tint-teal-ink",
+  guestbook: "bg-tint-blue text-tint-blue-ink",
+};
+
 const BLOCK_ICON: Record<BlockType, React.ComponentType<{ className?: string }>> = {
   link: Link2,
   heading: Heading,
@@ -1784,7 +1814,7 @@ function BlockListPanel({
                 aria-expanded={expanded}
                 className="flex min-w-0 flex-1 items-center gap-2 rounded-card px-1 py-1 text-left hover:bg-tint-hover"
               >
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-card bg-plate text-fg-sub" aria-hidden>
+                <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-card", BLOCK_TINT[b.type] ?? "bg-plate text-fg-sub")} aria-hidden>
                   <Icon className="size-4" />
                 </span>
                 <span className="min-w-0">
@@ -2263,19 +2293,27 @@ function AddPanel({
       {groups.map(([group, list]) => (
         <div key={group}>
           <p className="text-[12px] font-semibold text-fg-sub">{group}</p>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            {list.map((c) => (
-              <button
-                key={c.type}
-                type="button"
-                disabled={busy}
-                onClick={() => onAdd(c.type)}
-                className="trans-state rounded-card border border-line px-3 py-2.5 text-left hover:border-primary hover:bg-tint-hover disabled:opacity-50"
-              >
-                <span className="block text-[14px] font-semibold">{c.label}</span>
-                <span className="mt-0.5 block text-[12px] leading-snug text-fg-sub">{c.hint}</span>
-              </button>
-            ))}
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {list.map((c) => {
+              const CatIcon = BLOCK_ICON[c.type];
+              return (
+                <button
+                  key={c.type}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onAdd(c.type)}
+                  className="trans-state flex items-start gap-2.5 rounded-card border border-line px-3 py-2.5 text-left hover:border-primary hover:bg-tint-hover disabled:opacity-50"
+                >
+                  <span className={cn("mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-card", BLOCK_TINT[c.type] ?? "bg-plate text-fg-sub")} aria-hidden>
+                    <CatIcon className="size-4" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[14px] font-semibold">{c.label}</span>
+                    <span className="mt-0.5 block text-[12px] leading-snug text-fg-sub">{c.hint}</span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       ))}
@@ -2941,7 +2979,20 @@ function ThemePanel({
    ══════════════════════════════════════════════════════════════════ */
 
 /** 비율 막대 목록 — 유입·기기·지역 공통(분석 탭) */
-function BarList({ title, rows, empty, hint }: { title: string; rows: Array<{ label: string; value: number }>; empty: string; hint?: string }) {
+function BarList({
+  title,
+  rows,
+  empty,
+  hint,
+  color = "bg-primary",
+}: {
+  title: string;
+  rows: Array<{ label: string; value: number }>;
+  empty: string;
+  hint?: string;
+  /** 막대 색 — 섹션마다 다른 색(알록달록) */
+  color?: string;
+}) {
   const n = (v: number) => v.toLocaleString("ko-KR");
     const total = rows.reduce((a, r) => a + r.value, 0);
     return (
@@ -2960,7 +3011,7 @@ function BarList({ title, rows, empty, hint }: { title: string; rows: Array<{ la
                   </span>
                 </div>
                 <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-plate" aria-hidden>
-                  <span className="block h-full rounded-full bg-primary" style={{ width: `${total > 0 ? Math.round((r.value / total) * 100) : 0}%` }} />
+                  <span className={cn("block h-full rounded-full", color)} style={{ width: `${total > 0 ? Math.round((r.value / total) * 100) : 0}%` }} />
                 </span>
               </li>
             ))}
@@ -3010,7 +3061,7 @@ function StatsPanel({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-[17px] font-semibold">분석</h3>
-          <p className="mt-0.5 text-[14px] text-fg-sub">누가 얼마나 와서 무엇을 눌렀는지. 기간은 한국 시간 자정 기준이에요.</p>
+          <p className="mt-0.5 text-[14px] text-fg-sub">설정 없이 자동으로 집계돼요. 누가 얼마나 와서 무엇을 눌렀는지 — 기간은 한국 시간 자정 기준.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex flex-wrap gap-1" role="group" aria-label="조회 기간">
@@ -3072,20 +3123,23 @@ function StatsPanel({
         </p>
       ) : null}
 
-      {/* 요약 6칸 */}
+      {/* 요약 6칸 — 색 아이콘(리틀리처럼 항목이 색으로 구분돼 읽힌다) */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         {[
-          { label: "페이지뷰", value: n(stats.views) },
-          { label: "방문자", value: n(stats.uniques) },
-          { label: "클릭", value: n(stats.clicks) },
+          { label: "페이지뷰", value: n(stats.views), icon: Eye, tint: "bg-tint-blue text-tint-blue-ink" },
+          { label: "방문자", value: n(stats.uniques), icon: User, tint: "bg-tint-green text-tint-green-ink" },
+          { label: "클릭", value: n(stats.clicks), icon: MousePointerClick, tint: "bg-tint-coral text-tint-coral-ink" },
           /* 「클릭률」이 아니라 「조회당 클릭」 — 같은 사람이 30분 안에 다시 오면 조회는 1로 묶지만 클릭은 전부 센다. 100% 를 넘을 수 있다 */
-          { label: "조회당 클릭", value: ratio(stats.ctr, stats.views) },
-          { label: "재방문율", value: ratio(stats.returning, stats.uniques) },
-          { label: "평균 체류", value: stats.dwell.n > 0 ? dwellLabel(stats.dwell.avgMs) : "—" },
+          { label: "조회당 클릭", value: ratio(stats.ctr, stats.views), icon: Percent, tint: "bg-tint-purple text-tint-purple-ink" },
+          { label: "재방문율", value: ratio(stats.returning, stats.uniques), icon: RotateCcw, tint: "bg-tint-amber text-tint-amber-ink" },
+          { label: "평균 체류", value: stats.dwell.n > 0 ? dwellLabel(stats.dwell.avgMs) : "—", icon: Clock, tint: "bg-tint-teal text-tint-teal-ink" },
         ].map((c) => (
           <div key={c.label} className="rounded-card border border-line bg-body px-3 py-3">
+            <span className={cn("mb-2 flex size-7 items-center justify-center rounded-card", c.tint)} aria-hidden>
+              <c.icon className="size-4" />
+            </span>
             <p className="text-[12px] text-fg-sub">{c.label}</p>
-            <p className="tnum mt-1 text-[20px] font-bold leading-none">{c.value}</p>
+            <p className="tnum mt-0.5 text-[20px] font-bold leading-none">{c.value}</p>
           </div>
         ))}
       </div>
@@ -3192,22 +3246,26 @@ function StatsPanel({
       {/* 유입 4칸 */}
       <div className="grid gap-4 sm:grid-cols-2">
         <BarList
+          color="bg-tint-coral-ink"
           title="유입 채널"
           rows={stats.sources.map((x) => ({ label: (x.src && SRC_LABEL.get(x.src)) ?? "직접·기타", value: x.views }))}
           empty="마케팅 탭의 「플랫폼별 링크」로 복사한 주소로 들어온 방문이 여기 잡혀요."
         />
         <BarList
+          color="bg-tint-blue-ink"
           title="유입 경로"
           rows={stats.referrers.map((x) => ({ label: x.host ?? "직접 입력·앱 내부", value: x.views }))}
           empty="아직 유입 경로 정보가 없어요."
           hint="브라우저가 알려준 이전 페이지(호스트만). 인스타·카톡 앱 안에서 온 방문은 대개 「직접 입력·앱 내부」예요."
         />
         <BarList
+          color="bg-tint-purple-ink"
           title="기기"
           rows={stats.devices.map((x) => ({ label: DEVICE_LABEL.get(x.device ?? "") ?? "알 수 없음", value: x.views }))}
           empty="아직 기기 정보가 없어요."
         />
         <BarList
+          color="bg-tint-teal-ink"
           title="지역"
           rows={stats.regions.map((r) => ({ label: [r.region, r.country].filter(Boolean).join(", "), value: r.views }))}
           empty="아직 지역 정보가 없어요."
@@ -3362,13 +3420,16 @@ function ManagePanel({
       {/* 건수 요약 — 리틀리 관리 탭 상단 카드 */}
       <div className="grid grid-cols-3 gap-2">
         {[
-          { label: "문의", value: counts.contact },
-          { label: "구독", value: counts.subscribe },
-          { label: "방명록", value: counts.guestbook, sub: counts.unreplied ? `답글 없음 ${counts.unreplied}` : undefined },
+          { label: "문의", value: counts.contact, icon: MessageSquare, tint: "bg-tint-blue text-tint-blue-ink" },
+          { label: "구독", value: counts.subscribe, icon: Mail, tint: "bg-tint-green text-tint-green-ink" },
+          { label: "방명록", value: counts.guestbook, icon: BookOpen, tint: "bg-tint-pink text-tint-pink-ink", sub: counts.unreplied ? `답글 없음 ${counts.unreplied}` : undefined },
         ].map((c) => (
           <div key={c.label} className="rounded-card border border-line bg-body px-3 py-2.5">
+            <span className={cn("mb-1.5 flex size-7 items-center justify-center rounded-card", c.tint)} aria-hidden>
+              <c.icon className="size-4" />
+            </span>
             <p className="text-[12px] text-fg-sub">{c.label}</p>
-            <p className="tnum mt-1 text-[20px] font-bold leading-none">{c.value.toLocaleString("ko-KR")}</p>
+            <p className="tnum mt-0.5 text-[20px] font-bold leading-none">{c.value.toLocaleString("ko-KR")}</p>
             {c.sub ? <p className="mt-1 text-[11px] text-primary-ink">{c.sub}</p> : null}
           </div>
         ))}
@@ -3811,20 +3872,12 @@ function MarketingPanel({
         <p className="mt-0.5 text-[14px] text-fg-sub">어디서 왔는지 재고, 광고 계정에 방문자를 쌓고, 오프라인에도 퍼뜨려요.</p>
       </div>
 
-      <PlatformLinks slug={page.slug} origin={origin} />
+      {/* 방문·클릭 집계는 핀치가 자동으로 한다 — "GA 를 넣어야 분석이 되나"로 읽히면 안 된다(2026-08-23 지적) */}
+      <p className="rounded-card bg-tint-green px-3.5 py-2.5 text-[14px] text-tint-green-ink">
+        방문·클릭·기기·유입 분석은 <strong className="font-semibold">핀치가 자동으로 집계해요</strong> — 아무 설정 없이 「분석」 탭에서 바로 보세요.
+      </p>
 
-      <section className="space-y-3 border-t border-line pt-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h4 className="text-[15px] font-semibold">마케팅 연결</h4>
-            <p className="mt-0.5 text-[14px] text-fg-sub">ID 를 넣으면 공개 페이지에 추적 코드가 실려요. 비우면 아무것도 실리지 않고, 내 미리보기엔 싣지 않아요.</p>
-          </div>
-          <span className={cn("rounded-chip px-2.5 py-1 text-[12px] font-semibold", connected.length ? "bg-positive-weak text-positive-strong" : "bg-plate text-fg-sub")}>
-            {connected.length ? `연결됨 · ${connected.join(" · ")}` : "연결 안 됨"}
-          </span>
-        </div>
-        <PageSettingsForm page={page} busy={busy} onSettings={onSettings} onPassword={() => {}} section="marketing" />
-      </section>
+      <PlatformLinks slug={page.slug} origin={origin} />
 
       <section className="space-y-3 border-t border-line pt-5">
         <h4 className="text-[15px] font-semibold">퍼뜨리기</h4>
@@ -3854,6 +3907,22 @@ function MarketingPanel({
         <p className="text-[14px] text-fg-sub">인스타 프로필·유튜브 설명란엔 위의 플랫폼별 주소를, 명함·매장엔 QR 을 쓰세요.</p>
         {qr ? <QrModal url={url} onClose={() => setQr(false)} /> : null}
       </section>
+
+      {/* 고급 — 내 광고 계정 연결. 접어 둔다: 필수처럼 보이면 "왜 수동이냐"가 된다 */}
+      <details className="rounded-card border border-line" open={connected.length > 0}>
+        <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 px-4 py-3">
+          <span>
+            <span className="text-[15px] font-semibold">내 광고 계정에도 쌓기 (선택)</span>
+            <span className="mt-0.5 block text-[12px] text-fg-sub">GA4·Meta 픽셀·TikTok 픽셀 ID 를 넣으면 방문자가 내 광고 계정 모수로도 쌓여요 — 리타게팅 광고용. 핀치 분석과는 무관해요.</span>
+          </span>
+          <span className={cn("shrink-0 rounded-chip px-2.5 py-1 text-[12px] font-semibold", connected.length ? "bg-positive-weak text-positive-strong" : "bg-plate text-fg-sub")}>
+            {connected.length ? `연결됨 · ${connected.join(" · ")}` : "연결 안 함"}
+          </span>
+        </summary>
+        <div className="border-t border-line px-4 py-3">
+          <PageSettingsForm page={page} busy={busy} onSettings={onSettings} onPassword={() => {}} section="marketing" />
+        </div>
+      </details>
     </>
   );
 }
