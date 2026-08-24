@@ -2659,13 +2659,16 @@ function ShareBox({ url, busy, title, hint, children }: { url: string; busy: boo
   const btn =
     "trans-state flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-card border border-line px-2 text-[13px] font-medium text-fg hover:border-primary hover:text-primary disabled:opacity-50";
 
-  async function copy() {
+  /** 성공 여부를 돌려준다 — 공유 폴백이 실패한 복사에도 「복사됨」을 띄우던 것(소넷 확정) */
+  async function copy(): Promise<boolean> {
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
+      return true;
     } catch {
       /* 권한 거부·비보안 컨텍스트 — 주소가 화면에 보이니 손으로 복사하면 된다 */
+      return false;
     }
   }
 
@@ -2679,7 +2682,7 @@ function ShareBox({ url, busy, title, hint, children }: { url: string; busy: boo
         return;
       }
     }
-    await copy();
+    if (!(await copy())) return;
     setShared(true);
     window.setTimeout(() => setShared(false), 1600);
   }

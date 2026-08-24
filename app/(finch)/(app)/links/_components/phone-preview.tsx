@@ -278,9 +278,15 @@ export function PhonePreview({
         ) : null}
       <div
         className={cn(
-          "overflow-hidden rounded-[32px] border-[6px] border-fg/15 bg-plate shadow-pop",
-          frame === "device" &&
-            "phone-frame flex aspect-[375/812] w-full flex-col rounded-[42px] border-[9px] border-fg/12 group-hover/phone:border-primary/45 group-hover/phone:phone-frame-lit",
+          /* ⚠️ 베젤 색을 두 번 쓰지 않는다 — Tailwind v4 는 같은 계열의 투명도 유틸을
+             오름차순으로 방출해서(/12 → /15) 뒤에 오는 /15 가 조건과 무관하게 이긴다.
+             기기 모드의 border-fg/12 는 절대 적용되지 않던 죽은 코드였다(소넷 확정). */
+          "overflow-hidden rounded-[32px] border-[6px] border-fg/15 shadow-pop",
+          /* 기기는 지면 위에 **떠 있는 카드**다 → bg-body(흰 판). bg-plate 는 지면과 같은 색이라
+             카드 밖에서 쓰면 조용히 사라진다(CLAUDE.md 면 역할 규칙, 소넷 확정) */
+          frame === "device"
+            ? "phone-frame flex aspect-[375/812] w-full flex-col rounded-[42px] border-[9px] bg-body group-hover/phone:border-primary/45 group-hover/phone:phone-frame-lit"
+            : "bg-plate",
         )}
       >
         <div
