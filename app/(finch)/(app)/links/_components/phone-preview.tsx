@@ -857,7 +857,7 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
       );
     }
     case "heading":
-      return <p className="pt-1 text-[15px] font-bold">{s(d, "text")}</p>;
+      return <p className="pt-4 pb-0.5 text-[15px] font-bold tracking-[-0.02em]">{s(d, "text")}</p>;
     case "text":
       return (
         <p
@@ -935,7 +935,7 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
                   <span className="block aspect-[4/3] w-full bg-[var(--lp-border)]" aria-hidden />
                 ) : null}
                 <span className="block px-2.5 py-2">
-                  <span className="block truncate text-[13px] font-semibold">{s(it, "title")}</span>
+                  <span className="line-clamp-2 text-[13px] font-semibold">{s(it, "title")}</span>
                   {s(it, "subtitle") ? <span className="block truncate text-[11px] text-[var(--lp-muted)]">{s(it, "subtitle")}</span> : null}
                   <PPrice d={it} />
                 </span>
@@ -951,7 +951,7 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
             <img src={s(it, "imagePath")} alt="" className="size-10 shrink-0 rounded-[calc(var(--lp-radius)/1.6)] object-cover" />
           ) : null}
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[13px] font-semibold">{s(it, "title")}</span>
+            <span className="line-clamp-2 text-[13px] font-semibold">{s(it, "title")}</span>
             {s(it, "subtitle") ? <span className="block truncate text-[12px] text-[var(--lp-muted)]">{s(it, "subtitle")}</span> : null}
             <PPrice d={it} />
           </span>
@@ -975,8 +975,9 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
             // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
             <img src={s(it, "imagePath")} alt="" className="aspect-square w-full object-cover" />
           ) : null}
-          <span className="block px-2 py-1.5 text-center text-[12px] font-medium">
-            {s(it, "title")}
+          {/* 공개와 같은 이유로 블록 — flex 자식이면 line-clamp 가 죽는다 */}
+          <span className="block px-2.5 py-2 text-center text-[12px] font-medium">
+            <span className="line-clamp-2">{s(it, "title")}</span>
             <PPrice d={it} />
           </span>
         </div>
@@ -994,8 +995,11 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
       return (
         <div
           className={[
-            "rounded-[var(--lp-radius)] px-3 py-2.5 text-[12px] leading-[1.6]",
-            s(d, "tone") === "primary" ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]" : card,
+            "rounded-[var(--lp-radius)] px-3 py-2.5 text-[12px] leading-[1.6] shadow-[var(--lp-shadow)]",
+            /* 공개 렌더러와 같은 신호 — 일반 카드와 구분되게 왼쪽에 강조색 띠(2026-08-24) */
+            s(d, "tone") === "primary"
+              ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]"
+              : `${card} border-l-[3px] border-l-[var(--lp-accent)]`,
           ].join(" ")}
         >
           {s(d, "text")}
@@ -1064,7 +1068,8 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
             <img src={s(d, "imagePath")} alt="" className="aspect-[16/9] w-full object-cover" />
           ) : null}
           <div className="px-3 py-2.5">
-            <span className="inline-block rounded-full bg-[var(--lp-accent)] px-2 py-0.5 text-[10px] font-bold text-[var(--lp-on-accent)]">
+            {/* 공개 렌더러와 같은 중립 칩 — 강조색이 배지·CTA 두 번 터지지 않게(2026-08-24) */}
+            <span className="inline-block rounded-full border border-[var(--lp-border)] px-2 py-0.5 text-[10px] font-bold text-[var(--lp-fg)]">
               쿠팡 파트너스
             </span>
             <p className="mt-1 text-[13px] font-semibold">{s(d, "title") || "상품 이름"}</p>

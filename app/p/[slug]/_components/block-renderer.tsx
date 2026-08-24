@@ -502,7 +502,8 @@ export function BlockRenderer({
           ) : null}
           <span className="min-w-0 flex-1">
             {/* 390px 에서 한글 15자를 넘기면 잘렸다 — 두 줄까지 보여준다(그리드 셀은 원래 안 자른다) */}
-            <span className="line-clamp-2 block text-[15px] font-semibold text-[var(--lp-fg)]">{s(it, "title")}</span>
+            {/* block 을 함께 걸면 display 가 겹쳐 클램프가 죽는다(둘 다 display 를 정한다, 소넷 확정) */}
+            <span className="line-clamp-2 text-[15px] font-semibold text-[var(--lp-fg)]">{s(it, "title")}</span>
             {s(it, "subtitle") ? <span className="mt-0.5 block truncate text-[14px] text-[var(--lp-muted)]">{s(it, "subtitle")}</span> : null}
             <Price d={it} size="sm" />
           </span>
@@ -525,7 +526,9 @@ export function BlockRenderer({
           {/* 사진 없는 셀은 라벨만이라 40px 이었다 — 그때만 터치 최소치(44px)를 바닥으로 준다.
               사진 있는 셀까지 밀면 짧은 제목 아래 빈 칸이 생겨 격자 리듬이 헐거워진다(소넷 확정) */}
           <span
-            className={`flex flex-col items-center justify-center px-3 py-2.5 text-center text-[14px] font-medium text-[var(--lp-fg)] ${s(it, "imagePath") ? "" : "min-h-11"}`}
+            /* ⚠️ flex/grid 컨테이너로 만들면 자식의 display 가 블록화돼 line-clamp 가 죽는다(소넷 확정) —
+               캡션은 **평범한 블록**으로 두고 높이만 바닥을 준다 */
+            className={`block px-3 py-2.5 text-center text-[14px] font-medium text-[var(--lp-fg)] ${s(it, "imagePath") ? "" : "min-h-11"}`}
           >
             {/* 3열에서 제목이 2~3줄로 흘러 격자 밑변이 들쭉날쭉했다 — 두 줄까지만 */}
             <span className="line-clamp-2">{s(it, "title")}</span>
@@ -606,11 +609,10 @@ export function BlockRenderer({
             <img src={s(d, "imagePath")} alt={s(d, "title")} className="aspect-[16/9] w-full object-cover" />
           ) : null}
           <div className="px-4 py-3">
-            {/* 배지와 CTA 가 둘 다 강조색이면 24px 안에서 시선이 두 번 터진다 — 배지는 틴트로 낮춘다(2026-08-24 비평) */}
-            <span
-              className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold"
-              style={{ backgroundColor: "color-mix(in srgb, var(--lp-accent) 14%, transparent)", color: "var(--lp-accent-text)" }}
-            >
+            {/* 배지와 CTA 가 둘 다 강조색이면 24px 안에서 시선이 두 번 터진다 → 배지에서 강조색을 뺀다.
+                강조색 틴트도 시도했지만 스카이·블러시·오로라에서 11px 글자가 4.5:1 미달이었다(소넷 확정) —
+                카드 위 본문색(fg)은 카드 가드가 4.5:1 을 보장한다. */}
+            <span className="inline-block rounded-full border border-[var(--lp-border)] px-2.5 py-0.5 text-[11px] font-bold text-[var(--lp-fg)]">
               쿠팡 파트너스
             </span>
             <p className="mt-1.5 text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "title") || t.product}</p>
