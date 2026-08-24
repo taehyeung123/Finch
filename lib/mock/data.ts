@@ -1094,7 +1094,7 @@ export const linkWorkspace: LinkWorkspace = {
     layout: "profile",
     theme: "basic",
     align: "center",
-    avatarPath: null,
+    avatarPath: "https://picsum.photos/id/64/300/300",
     coverPath: null,
     snsLinks: [
       { kind: "instagram", url: "https://instagram.com/finch" },
@@ -1136,7 +1136,7 @@ export const linkWorkspace: LinkWorkspace = {
     layout: "profile",
     theme: "basic",
     align: "center",
-    avatarPath: null,
+    avatarPath: "https://picsum.photos/id/64/300/300",
     coverPath: null,
     snsLinks: [
       { kind: "instagram", url: "https://instagram.com/finch" },
