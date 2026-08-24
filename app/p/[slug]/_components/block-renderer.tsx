@@ -4,7 +4,7 @@ import { COUPANG_DISCLOSURE, musicEmbed } from "@/lib/links/blocks";
 import { Collapsible } from "./collapsible";
 import { GuestbookForm } from "./guestbook-form";
 import { SearchBlock } from "./search-block";
-import { Download, UserPlus } from "lucide-react";
+import { MapPin, ExternalLink, Download, UserPlus } from "lucide-react";
 import { lpText, lpN, type LpText } from "@/lib/links/i18n";
 
 /** 방명록 글(공개분) — 페이지가 읽어서 렌더러에 넘긴다 */
@@ -82,7 +82,8 @@ function Price({ d, size = "md", inherit = false, align = "start" }: { d: Record
   const orig = s(d, "originalPrice");
   return (
     /* 정렬은 Tags 와 같은 규칙 — 가운데 정렬 카드에서 가격만 왼쪽에 붙던 것(2026-08-24 비평) */
-    <span className={`tnum mt-1 flex items-baseline gap-1.5 ${align === "center" ? "justify-center" : ""} ${size === "sm" ? "text-[13px]" : "text-[15px]"}`}>
+    /* 목록·셀 14px / 카드 본문 17px — 부제(14px)보다 작아지지 않는다(2026-08-24 비평) */
+    <span className={`tnum mt-1 flex items-baseline gap-1.5 ${align === "center" ? "justify-center" : ""} ${size === "sm" ? "text-[14px]" : "text-[17px]"}`}>
       <span className={`font-bold ${inherit ? "" : "text-[var(--lp-fg)]"}`}>{price}</span>
       {orig ? <span className={`text-[12px] line-through ${inherit ? "opacity-70" : "text-[var(--lp-muted)]"}`}>{orig}</span> : null}
     </span>
@@ -154,7 +155,7 @@ export function BlockRenderer({
       if (!em) return null;
       return (
         <div className={`${cardCls} overflow-hidden`}>
-          {s(d, "title") ? <p className="px-3 pt-2.5 text-[14px] font-semibold text-[var(--lp-fg)]">{s(d, "title")}</p> : null}
+          {s(d, "title") ? <p className="px-4 pb-2 pt-3 text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "title")}</p> : null}
           <iframe
             src={em.src}
             title={s(d, "title") || t.music}
@@ -198,8 +199,10 @@ export function BlockRenderer({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "title") || s(d, "fileName") || t.file}</span>
-            <span className="block truncate text-[13px] text-[var(--lp-muted)]">
-              {[s(d, "description"), s(d, "fileName"), sizeLabel].filter(Boolean).join(" · ")}
+            {/* 용량은 truncate 에 가장 먼저 잘렸다 — 따로 떼어 항상 보이게, 숫자는 tnum(2026-08-24 비평) */}
+            <span className="flex items-baseline gap-1.5 text-[13px] text-[var(--lp-muted)]">
+              <span className="min-w-0 flex-1 truncate">{[s(d, "description"), s(d, "fileName")].filter(Boolean).join(" · ")}</span>
+              {sizeLabel ? <span className="tnum shrink-0">{sizeLabel}</span> : null}
             </span>
           </span>
         </a>
@@ -339,8 +342,9 @@ export function BlockRenderer({
 
     case "text":
       return (
+        /* 사용자가 쓴 본문이다 — 보조 문구 색(muted)으로 두면 자기 글이 각주처럼 읽힌다(2026-08-24 비평) */
         <p
-          className="whitespace-pre-wrap text-[15px] leading-[1.7] text-[var(--lp-muted)]"
+          className="whitespace-pre-wrap text-[15px] leading-[1.7] text-[var(--lp-fg)]"
           style={{ textAlign: s(d, "align") === "center" ? "center" : "left" }}
         >
           {s(d, "text")}
@@ -657,8 +661,21 @@ export function BlockRenderer({
           {...ext}
           className={`lp-btn ${cardCls} block min-h-[56px] px-4 py-3.5`}
         >
-          <p className="text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "label") || t.map}</p>
-          <p className="mt-1 text-[14px] text-[var(--lp-muted)]">{address}</p>
+          {/* 아이콘·외부 표시가 없어 눌러서 지도가 열린다는 걸 알 수 없었다(2026-08-24 비평) */}
+          <span className="flex items-center gap-2.5">
+            <span
+              className="flex size-9 shrink-0 items-center justify-center rounded-[calc(var(--lp-radius)/1.6)]"
+              style={{ backgroundColor: "color-mix(in srgb, var(--lp-accent) 13%, transparent)", color: "var(--lp-accent-text)" }}
+              aria-hidden
+            >
+              <MapPin className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "label") || t.map}</span>
+              <span className="mt-0.5 block truncate text-[14px] text-[var(--lp-muted)]">{address}</span>
+            </span>
+            <ExternalLink className="size-3.5 shrink-0 text-[var(--lp-muted)]" aria-hidden />
+          </span>
         </a>
       );
     }

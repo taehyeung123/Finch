@@ -292,7 +292,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
       >
         {/* 상단 메뉴 줄 — 스크롤해도 붙어 있는 제목 + 공유/구독(리틀리 「상단 메뉴」). 없으면 버튼은 모서리에 떠 있는다 */}
         {topbar ? (
-          <div className={`sticky top-0 z-20 -mx-5 mb-5 flex items-center gap-3 border-b border-[var(--lp-border)] px-5 py-2.5 backdrop-blur ${split ? "lg:col-span-2 lg:-mx-8 lg:px-8" : ""}`} style={{ backgroundColor: "color-mix(in srgb, var(--lp-bg) 88%, transparent)" }}>
+          <div className={`sticky top-0 z-20 -mx-5 mb-5 flex min-h-[52px] items-center gap-3 border-b border-[var(--lp-border)] px-5 py-2.5 backdrop-blur ${split ? "lg:col-span-2 lg:-mx-8 lg:px-8" : ""}`} style={{ backgroundColor: "color-mix(in srgb, var(--lp-bg) 88%, transparent)" }}>
             {snap.avatarPath ? (
               // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
               <img src={snap.avatarPath} alt="" className="size-7 rounded-full object-cover" />
