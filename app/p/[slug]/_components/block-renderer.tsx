@@ -342,11 +342,17 @@ export function BlockRenderer({
       const src = s(d, "imagePath");
       if (!src) return null;
       const url = s(d, "url");
+      /* 업로드 때 잰 치수로 로드 전 자리를 잡는다(CLS). 서버 액션을 직접 불러 이상한 값을
+         넣어도 화면이 깨지지 않게 비율 0.1~10 밖은 무시한다 */
+      const iw = n(d, "imgW", 0);
+      const ih = n(d, "imgH", 0);
+      const ratio = iw > 0 && ih > 0 && iw / ih >= 0.1 && iw / ih <= 10 ? `${iw} / ${ih}` : undefined;
       const img = (
         // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL. 방문자 페이지라 최적화 프록시를 안 태운다
         <img
           src={src}
           alt={s(d, "alt")}
+          style={ratio ? { aspectRatio: ratio } : undefined}
           className="w-full rounded-[var(--lp-radius)] border border-[var(--lp-border)] object-cover"
           loading="lazy"
         />

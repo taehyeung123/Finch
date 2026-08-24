@@ -65,6 +65,20 @@ export function BlockEditor({
 }) {
   const d = value;
   const set = (k: string, v: unknown) => onChange((cur) => ({ ...cur, [k]: v }));
+  /* 이미지 교체는 치수(imgW/imgH)를 함께 갱신한다 — 공개 페이지가 로드 전 자리를 확보(CLS).
+     업로드가 아닌 경로(주소 붙여넣기·지우기)는 dims 가 없으므로 이전 치수를 지운다 */
+  const setImage = (url: string, dims?: { w: number; h: number }) =>
+    onChange((cur) => {
+      const next: Record<string, unknown> = { ...cur, imagePath: url };
+      if (url && dims) {
+        next.imgW = dims.w;
+        next.imgH = dims.h;
+      } else {
+        delete next.imgW;
+        delete next.imgH;
+      }
+      return next;
+    });
   const str = (k: string) => (typeof d[k] === "string" ? (d[k] as string) : "");
   const num = (k: string, fb: number) => (typeof d[k] === "number" ? (d[k] as number) : fb);
   const items = Array.isArray(d.items) ? (d.items as Record<string, unknown>[]) : [];
@@ -525,7 +539,7 @@ export function BlockEditor({
 
       {/* ── 이미지·이미지 카드 ── */}
       {block.type === "image" || block.type === "image_card" ? (
-        <ImageField label="이미지" value={str("imagePath")} onChange={(v) => set("imagePath", v)} />
+        <ImageField label="이미지" value={str("imagePath")} onChange={setImage} />
       ) : null}
 
       {/* 대체 텍스트 — 공개 렌더러가 alt 로 내보낸다(block-renderer.tsx). 입력칸이 없어서

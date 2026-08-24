@@ -758,10 +758,16 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
     case "image":
       /* edit 전용 도달 — 이미지가 없으면 초대 문구. 사유 캡션과 달리 "하면 된다"로 말한다 */
       if (!s(d, "imagePath")) return <Ghost reason="이미지를 올리면 여기 보여요" />;
-      return (
-        // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
-        <img src={s(d, "imagePath")} alt="" className="w-full rounded-[var(--lp-radius)] object-cover" />
-      );
+      {
+        /* 공개 렌더러와 같은 규칙 — 업로드 때 잰 치수로 로드 전 자리를 잡는다(CLS) */
+        const iw = n(d, "imgW", 0);
+        const ih = n(d, "imgH", 0);
+        const ratio = iw > 0 && ih > 0 && iw / ih >= 0.1 && iw / ih <= 10 ? `${iw} / ${ih}` : undefined;
+        return (
+          // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
+          <img src={s(d, "imagePath")} alt="" style={ratio ? { aspectRatio: ratio } : undefined} className="w-full rounded-[var(--lp-radius)] object-cover" />
+        );
+      }
     case "image_card":
       return (
         <div className={`${card} overflow-hidden`}>

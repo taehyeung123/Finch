@@ -33,7 +33,8 @@ export function ImageField({
   cropAspect,
 }: {
   value: string;
-  onChange: (url: string) => void;
+  /** dims 는 업로드 경로에서만 온다 — 주소 붙여넣기·지우기는 undefined (부모가 이전 치수를 지운다) */
+  onChange: (url: string, dims?: { w: number; h: number }) => void;
   label: string;
   hint?: string;
   /** 미리보기 비율 — 프로필은 정사각, 커버는 3:1 */
@@ -60,12 +61,12 @@ export function ImageField({
     if (t !== value) onChange(t);
   }
 
-  async function upload(dataUrl: string) {
+  async function upload(dataUrl: string, dims?: { w: number; h: number }) {
     setBusy(true);
     try {
       const res = await uploadLinkImage(dataUrl);
       if (!res.ok || !res.url) setError(res.error ?? "업로드하지 못했어요.");
-      else onChange(res.url);
+      else onChange(res.url, dims);
     } catch {
       setError("업로드하지 못했어요.");
     } finally {
@@ -93,27 +94,29 @@ export function ImageField({
       img.onerror = () => setError("이미지를 읽지 못했어요.");
       img.onload = () => {
         /* 긴 변 1600px 로 줄인다 — 4000px 원본이 480px 폰 화면에 그대로 내려가던 것(감사3 C6). 알파 보존을 위해 원래 형식 유지 */
-        const shrink = (): string => {
+        const shrink = (): { url: string; w: number; h: number } => {
           const longest = Math.max(img.naturalWidth, img.naturalHeight);
-          if (longest <= CROP_MAX_W) return dataUrl;
+          if (longest <= CROP_MAX_W) return { url: dataUrl, w: img.naturalWidth, h: img.naturalHeight };
           const k = CROP_MAX_W / longest;
           const canvas = document.createElement("canvas");
           canvas.width = Math.max(1, Math.round(img.naturalWidth * k));
           canvas.height = Math.max(1, Math.round(img.naturalHeight * k));
           const ctx = canvas.getContext("2d");
-          if (!ctx) return dataUrl;
+          if (!ctx) return { url: dataUrl, w: img.naturalWidth, h: img.naturalHeight };
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
           const mime = /^data:(image\/(?:png|webp))/.exec(dataUrl)?.[1] ?? "image/jpeg";
-          return canvas.toDataURL(mime, 0.85);
+          return { url: canvas.toDataURL(mime, 0.85), w: canvas.width, h: canvas.height };
         };
         if (!cropAspect) {
-          void upload(shrink());
+          const sh = shrink();
+          void upload(sh.url, { w: sh.w, h: sh.h });
           return;
         }
         const ratio = img.naturalWidth / img.naturalHeight;
         /* 이미 맞는 비율(±2%)이면 조정 단계 없이 바로 — 괜히 한 단계 늘리지 않는다 */
         if (Math.abs(ratio - cropAspect) / cropAspect < 0.02) {
-          void upload(shrink());
+          const sh = shrink();
+          void upload(sh.url, { w: sh.w, h: sh.h });
           return;
         }
         setOffset(50);
@@ -150,7 +153,7 @@ export function ImageField({
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, x, y, cropW, cropH, 0, 0, canvas.width, canvas.height);
       setPending(null);
-      void upload(canvas.toDataURL("image/jpeg", 0.85));
+      void upload(canvas.toDataURL("image/jpeg", 0.85), { w: canvas.width, h: canvas.height });
     };
     img.src = dataUrl;
   }

@@ -122,6 +122,10 @@ export interface ImageBlockData {
   alt?: string;
   /** 이미지 자체가 링크가 될 수 있다 */
   url?: string;
+  /** 원본 픽셀 치수 — 공개 페이지가 로드 전 자리를 확보하는 데 쓴다(CLS).
+      업로드 경로에서만 채워진다(주소 붙여넣기는 미기록 → 렌더러가 그냥 자연 흐름) */
+  imgW?: number;
+  imgH?: number;
 }
 
 /**
