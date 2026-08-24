@@ -199,7 +199,15 @@ export function PhonePreview({
   const titlePx = page.titleSize === "sm" ? "text-[17px]" : page.titleSize === "lg" ? "text-[26px]" : "text-[21px]";
   const snsChips =
     page.snsLinks.length > 0 ? (
-      <div className={cn("flex flex-wrap gap-1.5", page.snsPlacement === "links" ? "mb-2.5 justify-center" : "mt-2.5")}>
+      /* 공개 페이지와 같은 규칙 — 줄바꿈된 둘째 줄 정렬·소개와의 간격(소넷 확정: 미리보기만 옛 모양이었다) */
+      <div
+        className={cn(
+          "flex flex-wrap gap-1.5",
+          page.snsPlacement === "links"
+            ? "mb-2.5 justify-center"
+            : cn("mt-3.5", page.align === "left" ? "justify-start" : page.align === "right" ? "justify-end" : "justify-center"),
+        )}
+      >
         {page.snsLinks.map((x, i) => (
           <span
             key={i}

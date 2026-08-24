@@ -169,9 +169,10 @@ export function BlockRenderer({
         >
           <UserPlus className="size-4" aria-hidden />
           {s(d, "label") || t.vcard}
-          {/* 이름은 버튼 글자색을 **상속**한다 — muted 로 두면 「강조색 전체 적용」 테마에서
-              강조색 위 회색이 되어 안 읽힌다(2026-08-24 비평) */}
-          <span className="text-[12px] font-normal opacity-75">· {s(d, "name")}</span>
+          {/* 이름은 버튼 글자색을 **그대로** 상속한다 — muted 는 「강조색 전체 적용」에서 안 읽혔고,
+              불투명도(75%)로 위계를 주면 프리셋 19종 중 12종이 4.5:1 미달이었다(소넷 확정).
+              위계는 크기·굵기로만: 15px semibold vs 12px normal. */}
+          <span className="text-[12px] font-normal">· {s(d, "name")}</span>
         </a>
       );
     }
@@ -505,8 +506,11 @@ export function BlockRenderer({
             // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
             <img src={s(it, "imagePath")} alt="" className="aspect-square w-full object-cover" loading="lazy" />
           ) : null}
-          {/* 사진 없는 셀은 라벨만이라 40px 이었다 — 터치 최소치(44px)를 바닥으로 준다(2026-08-24 비평) */}
-          <span className="flex min-h-11 flex-col items-center justify-center px-2.5 py-2 text-center text-[14px] font-medium text-[var(--lp-fg)]">
+          {/* 사진 없는 셀은 라벨만이라 40px 이었다 — 그때만 터치 최소치(44px)를 바닥으로 준다.
+              사진 있는 셀까지 밀면 짧은 제목 아래 빈 칸이 생겨 격자 리듬이 헐거워진다(소넷 확정) */}
+          <span
+            className={`flex flex-col items-center justify-center px-2.5 py-2 text-center text-[14px] font-medium text-[var(--lp-fg)] ${s(it, "imagePath") ? "" : "min-h-11"}`}
+          >
             {s(it, "title")}
             <Price d={it} size="sm" align="center" />
           </span>

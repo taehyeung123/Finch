@@ -181,6 +181,9 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
     return null;
   })();
   const align = snap.align === "left" ? "text-left items-start" : snap.align === "right" ? "text-right items-end" : "text-center items-center";
+  /* SNS 줄이 줄바꿈될 때 둘째 줄의 정렬 — **페이지 정렬을 따른다**. 강제로 가운데를 주면
+     왼쪽 정렬 페이지에서 둘째 줄만 안쪽으로 들어가 제목·소개와 어긋난다(소넷 확정) */
+  const justify = snap.align === "left" ? "justify-start" : snap.align === "right" ? "justify-end" : "justify-center";
   const titlePx = snap.titleSize === "sm" ? "text-[21px]" : snap.titleSize === "lg" ? "text-[32px]" : "text-[26px]";
   /* SNS 줄은 **여기서 한 번 더 거른다** — 스냅샷은 본인 행 직접 PATCH 로 아무 값이나 들어올 수
      있고, 그대로 <a href> 로 찍으면 javascript: 저장형 XSS 가 된다(감사 #5). themeCustom 과 같은 원칙. */
@@ -190,9 +193,10 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
       <nav
         aria-label="SNS"
         className={
-          /* 정렬은 두 자리 모두 가운데로 — 프로필 아래에 둘 때 줄바꿈되면 둘째 줄만 왼쪽으로 붙었다.
+          /* 줄바꿈된 둘째 줄이 첫 줄과 같은 축에 서게 한다(전에는 항상 왼쪽으로 붙었다).
+             블록 위(links)에 둘 때는 페이지 폭 전체를 쓰므로 가운데, 프로필 아래에서는 페이지 정렬을 따른다.
              소개와의 간격은 한 단 키운다(아바타-이름과 같은 3.5 면 위계가 안 생긴다). 2026-08-24 비평 */
-          snap.snsPlacement === "links" ? "mb-4 flex flex-wrap justify-center gap-2" : "mt-5 flex flex-wrap justify-center gap-2"
+          snap.snsPlacement === "links" ? "mb-4 flex flex-wrap justify-center gap-2" : `mt-5 flex flex-wrap gap-2 ${justify}`
         }
       >
         {snsLinks.map((s, i) => (
