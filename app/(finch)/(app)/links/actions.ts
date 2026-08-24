@@ -388,7 +388,7 @@ async function patchSettings(userId: string, patch: Record<string, unknown>): Pr
  * 편집기는 "저장됐는데 안 바뀜"보다 "왜 안 되는지"를 알아야 한다.
  */
 export async function updateLinkSettings(
-  patch: Partial<Pick<LinkPageSettings, "lang" | "target" | "robots" | "ogTitle" | "ogImage" | "favicon" | "lockMessage" | "ga4" | "metaPixel" | "tiktokPixel">>,
+  patch: Partial<Pick<LinkPageSettings, "lang" | "target" | "robots" | "ogTitle" | "ogImage" | "favicon" | "lockMessage" | "ga4" | "metaPixel" | "tiktokPixel" | "utm">>,
 ): Promise<Result> {
   if (isDemoMode()) return DEMO;
   const user = await getAuthUser();
@@ -406,6 +406,10 @@ export async function updateLinkSettings(
   if (patch.robots !== undefined) {
     if (patch.robots !== "index" && patch.robots !== "noindex") return { ok: false, error: "검색 노출 값이 올바르지 않아요." };
     next.robots = patch.robots;
+  }
+  if (patch.utm !== undefined) {
+    if (typeof patch.utm !== "boolean") return { ok: false, error: "UTM 설정 값이 올바르지 않아요." };
+    next.utm = patch.utm;
   }
   if (patch.ogTitle !== undefined) next.ogTitle = sliceChars(String(patch.ogTitle).trim(), 80);
   if (patch.lockMessage !== undefined) next.lockMessage = sliceChars(String(patch.lockMessage).trim(), 200);

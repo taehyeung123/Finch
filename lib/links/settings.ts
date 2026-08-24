@@ -39,6 +39,9 @@ export interface LinkPageSettings {
   ga4: string;
   metaPixel: string;
   tiktokPixel: string;
+  /** 클릭 목적지에 UTM 자동 부착(리틀리 카피) — utm_source=finch 등 3개.
+      목적지에 이미 utm_* 이 있으면 의도된 캠페인 태깅이므로 건드리지 않는다(/go 라우트) */
+  utm: boolean;
   /** 비밀번호가 걸려 있는가(settings.locked). 해시는 link_page_secrets 에 */
   hasPassword: boolean;
 }
@@ -54,6 +57,7 @@ export const DEFAULT_LINK_SETTINGS: LinkPageSettings = {
   ga4: "",
   metaPixel: "",
   tiktokPixel: "",
+  utm: false,
   hasPassword: false,
 };
 
@@ -94,6 +98,7 @@ export function sanitizeLinkSettings(raw: unknown): LinkPageSettings {
     ga4: TRACKER_FORMATS.ga4.test(str("ga4", 20).toUpperCase()) ? str("ga4", 20).toUpperCase() : "",
     metaPixel: TRACKER_FORMATS.metaPixel.test(str("metaPixel", 24)) ? str("metaPixel", 24) : "",
     tiktokPixel: TRACKER_FORMATS.tiktokPixel.test(str("tiktokPixel", 40).toUpperCase()) ? str("tiktokPixel", 40).toUpperCase() : "",
+    utm: r.utm === true,
     hasPassword: r.locked === true,
   };
 }

@@ -25,6 +25,22 @@ import { linkWorkspace } from "@/lib/data";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/** UTM 자동 부착(설정 켠 페이지만) — 주인이 자기 쇼핑몰·블로그 애널리틱스에서
+    "프로필 링크발"을 구분하게 한다. 목적지에 이미 utm_* 이 있으면 의도된 캠페인
+    태깅이므로 그대로 둔다. URL 파싱이 실패할 일은 없지만(위에서 검증) 방어적으로 원본 반환 */
+function withUtm(dest: string, slug: string): string {
+  try {
+    const u = new URL(dest);
+    for (const k of u.searchParams.keys()) if (k.toLowerCase().startsWith("utm_")) return dest;
+    u.searchParams.set("utm_source", "finch");
+    u.searchParams.set("utm_medium", "profile_link");
+    u.searchParams.set("utm_campaign", slug);
+    return u.toString();
+  } catch {
+    return dest;
+  }
+}
+
 interface SnapBlock {
   id: string;
   type: string;
@@ -190,5 +206,5 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
     }
   }
 
-  return NextResponse.redirect(dest, { status: 302 });
+  return NextResponse.redirect(page.settings.utm ? withUtm(dest, slug) : dest, { status: 302 });
 }

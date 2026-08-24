@@ -3891,6 +3891,14 @@ function MarketingPanel({
 }) {
   const [qr, setQr] = useState(false);
   const [copied, setCopied] = useState(false);
+  /* 설정 저장은 서버 왕복 후 revalidate 로 돌아온다 — 스위치가 그동안 옛 값으로 튀지 않게
+     로컬로 들고, 서버 값이 바뀌면 따라간다(ImageField draft 와 같은 재동기화 패턴) */
+  const [utmOn, setUtmOn] = useState(page.settings.utm);
+  const [prevUtm, setPrevUtm] = useState(page.settings.utm);
+  if (page.settings.utm !== prevUtm) {
+    setPrevUtm(page.settings.utm);
+    setUtmOn(page.settings.utm);
+  }
   const url = publicLinkUrl(page.slug, origin);
   const connected = [page.settings.ga4 && "GA4", page.settings.metaPixel && "Meta 픽셀", page.settings.tiktokPixel && "TikTok 픽셀"].filter(Boolean) as string[];
   /* React 의 <details open> 은 리렌더마다 prop 값으로 되돌린다 — 토스트 하나에 접히지 않게 상태로 든다 */
@@ -3908,6 +3916,17 @@ function MarketingPanel({
       </p>
 
       <PlatformLinks slug={page.slug} origin={origin} />
+
+      <section className="space-y-2 border-t border-line pt-5">
+        <h4 className="text-[15px] font-semibold">클릭에 UTM 자동 붙이기</h4>
+        <label className="flex items-start gap-2.5">
+          <Switch checked={utmOn} onChange={(v) => { setUtmOn(v); onSettings({ utm: v }); }} label="UTM 자동 부착" disabled={busy} />
+          <span className="text-[14px] leading-[1.6] text-fg-sub">
+            켜면 방문자가 누른 링크 목적지에 <code className="rounded bg-plate px-1 text-[12px]">utm_source=finch</code> 등이 붙어,
+            내 쇼핑몰·블로그의 애널리틱스에서 프로필 링크 유입을 구분할 수 있어요. 이미 UTM 이 있는 주소는 건드리지 않아요.
+          </span>
+        </label>
+      </section>
 
       <section className="space-y-3 border-t border-line pt-5">
         <h4 className="text-[15px] font-semibold">퍼뜨리기</h4>

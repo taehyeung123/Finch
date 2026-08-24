@@ -1107,7 +1107,7 @@ export const linkWorkspace: LinkWorkspace = {
     themeCustom: null,
     publishedAt: "2026-08-18T21:00:00+09:00",
     dirty: false,
-    settings: { lang: "ko", target: "blank", robots: "index", ogTitle: "", ogImage: "", favicon: "🐦", lockMessage: "", ga4: "", metaPixel: "", tiktokPixel: "", hasPassword: false },
+    settings: { lang: "ko", target: "blank", robots: "index", ogTitle: "", ogImage: "", favicon: "🐦", lockMessage: "", ga4: "", metaPixel: "", tiktokPixel: "", utm: false, hasPassword: false },
   },
   blocks: [
     { id: "demo-b1", type: "notice", sortOrder: 0, active: true, data: { text: "이번 주 공구 진행 중이에요!", tone: "primary" } },
