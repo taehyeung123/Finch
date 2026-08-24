@@ -244,7 +244,9 @@ export function ImageField({
           disabled={busy}
           aria-label={`${label} 올리기`}
           /* busy 중엔 로더가 내용이라 흐리게 하지 않는다 */
-          className={`trans-state mt-1.5 flex flex-col items-center justify-center gap-1.5 border border-dashed border-line bg-plate text-fg-sub hover:border-primary hover:text-fg ${boxCls} ${maxW ? "" : "w-full"}`}
+          /* w-full 은 항상 둔다 — 빼면 button 이 내용 폭(fit-content)으로 쪼그라들어
+             사진이 있을 때(152px)와 없을 때 칸 크기가 달라진다. 상한은 max-w 가 잡는다 */
+          className={`trans-state mt-1.5 flex w-full flex-col items-center justify-center gap-1.5 border border-dashed border-line bg-plate text-fg-sub hover:border-primary hover:text-fg ${boxCls}`}
         >
           {busy ? (
             /* 올리는 동안은 핀치 로더 — "로딩 중이면 로딩 화면" (2026-08-22 지시) */
@@ -253,7 +255,8 @@ export function ImageField({
             <>
               <ImagePlus className="size-5" aria-hidden />
               <span className="text-[14px] font-medium">이미지 올리기</span>
-              <span className="text-[11px]">PNG·JPG·WEBP · 2MB 이하</span>
+              {/* 작은 원형 칸(프로필 사진)에서는 형식 문구가 원 밖으로 넘친다 — 아래 hint 가 대신 말한다 */}
+              {maxW ? null : <span className="text-[11px]">PNG·JPG·WEBP · 2MB 이하</span>}
             </>
           )}
         </button>
