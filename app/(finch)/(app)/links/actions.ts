@@ -629,6 +629,8 @@ export async function uploadLinkImage(dataUrl: string): Promise<{ ok: boolean; u
   });
   if (error) {
     console.error("[links] 이미지 업로드 실패:", error.message);
+    if (/bucket not found|row-level security/i.test(error.message))
+      return { ok: false, error: "이미지 올리기는 서버 업데이트(0048) 적용 후 쓸 수 있어요." };
     return { ok: false, error: "업로드하지 못했어요. 잠시 후 다시 시도해 주세요." };
   }
   const { data } = supabase.storage.from("link-assets").getPublicUrl(path);
@@ -714,6 +716,9 @@ export async function createLinkFileUpload(
   const { data, error } = await supabase.storage.from("link-assets").createSignedUploadUrl(path);
   if (error || !data) {
     console.error("[links] 파일 업로드 URL 실패:", error?.message);
+    /* 버킷 없음·정책 미적용은 재시도해도 영원히 실패한다 — 다른 액션들의 계단식 안내 관례(감사4) */
+    if (/bucket not found|row-level security/i.test(error?.message ?? ""))
+      return { ok: false, error: "파일 올리기는 서버 업데이트(0048) 적용 후 쓸 수 있어요." };
     return { ok: false, error: "업로드를 준비하지 못했어요. 잠시 후 다시 시도해 주세요." };
   }
   const { data: pub } = supabase.storage.from("link-assets").getPublicUrl(path);
@@ -729,20 +734,27 @@ export async function finalizeLinkFileUpload(path: string): Promise<{ ok: boolea
   const user = await getAuthUser();
   if (!user) return { ok: false, error: "로그인이 필요해요." };
   if (typeof path !== "string" || !path.startsWith(`${user.id}/files/`)) return { ok: false, error: "올바르지 않은 경로예요." };
-  /* service_role 로 확인한다 — RLS 와 무관하게(0059 전에도) 실제 크기·형식을 본다. 경로 접두사가 이미 본인 폴더로 묶는다(감사3 C2) */
+  /* service_role 로 확인한다 — RLS 와 무관하게(0059 전에도) 실제 크기·형식을 본다. 경로 접두사가 이미 본인 폴더로 묶는다(감사3 C2).
+     키가 없는 배포(실모드 + SUPABASE_SERVICE_ROLE_KEY 미설정)면 세션 클라이언트로 폴백한다 —
+     0059 의 "own link assets read" 정책이 본인 폴더 select 를 허용해 같은 검사가 가능하다.
+     이 폴백마저 실패하면 이미 올라간 객체를 지워 고아를 막는다(감사4: 업로드는 성공했는데
+     확인만 매번 실패해 재시도마다 고아가 쌓이던 경로). */
   const admin = createAdminClient();
-  if (!admin) return { ok: false, error: "업로드를 확인하지 못했어요." };
+  const store = admin ?? (await createClient());
   const folder = path.slice(0, path.lastIndexOf("/"));
   const name = path.slice(path.lastIndexOf("/") + 1);
-  const { data: list, error: listErr } = await admin.storage.from("link-assets").list(folder, { search: name, limit: 1 });
+  const { data: list, error: listErr } = await store.storage.from("link-assets").list(folder, { search: name, limit: 1 });
   const obj = (list ?? []).find((o) => o.name === name) as { metadata?: { size?: number; mimetype?: string } } | undefined;
-  if (listErr || !obj) return { ok: false, error: "업로드된 파일을 찾지 못했어요. 다시 시도해 주세요." };
+  if (listErr || !obj) {
+    if (!admin) await store.storage.from("link-assets").remove([path]);
+    return { ok: false, error: "업로드된 파일을 찾지 못했어요. 다시 시도해 주세요." };
+  }
   const size = Number(obj.metadata?.size ?? 0);
   const mime = String(obj.metadata?.mimetype ?? "");
   const ext = name.split(".").pop() ?? "";
   const okMime = Object.hasOwn(FILE_EXT_TYPES, ext) && mime === FILE_EXT_TYPES[ext];
   if (size <= 0 || size > MAX_FILE_BYTES || !okMime) {
-    await admin.storage.from("link-assets").remove([path]);
+    await store.storage.from("link-assets").remove([path]);
     return { ok: false, error: size > MAX_FILE_BYTES ? "파일은 20MB 이하만 올릴 수 있어요." : "허용되지 않는 파일이에요." };
   }
   return { ok: true, size };

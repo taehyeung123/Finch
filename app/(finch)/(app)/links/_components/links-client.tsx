@@ -414,6 +414,18 @@ export function LinksClient({
     setCustomForm(page?.themeCustom ?? {});
   }
   const customDirty = stableJson(customForm) !== customServerKey;
+  /* 미저장 편집이 있으면 창 닫기·새로고침에 브라우저 확인을 띄운다 — 탭 이동 관문(leaveEditor)과
+     같은 결함 클래스가 라우트 경계에 열려 있었다(감사4). 앱 내부 사이드바 이동 인터셉트는
+     전역 내비 구조 변경이 필요해 여기선 브라우저 경계만 지킨다. */
+  const anyDirty = editorDirty || profileDirty || customDirty;
+  useEffect(() => {
+    if (!anyDirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [anyDirty]);
   function patchCustom(patch: Partial<LinkThemeCustom>) {
     setCustomForm((f) => {
       const next: Record<string, unknown> = { ...f, ...patch };
@@ -1288,6 +1300,11 @@ export function LinksClient({
                     setError("배경 이미지 주소는 http(s)로 시작해야 하고 공백·따옴표·괄호·역슬래시가 없어야 해요.");
                     return;
                   }
+                  /* 로고도 같은 관문(IMG_URL)을 탄다 — 검사 없이 보내면 저장 「성공」 후 로고만 말없이 사라진다(감사4) */
+                  if (customForm.logoImage && !clean?.logoImage) {
+                    setError("로고 이미지 주소는 http(s)로 시작해야 하고 공백·따옴표·괄호·역슬래시가 없어야 해요.");
+                    return;
+                  }
                   run(() => updateLinkThemeCustom(customForm));
                 }}
                 current={liveTheme}
@@ -1328,7 +1345,12 @@ export function LinksClient({
                 leadsFailed={leadsFailed}
                 guestbook={guestbook}
                 busy={busy}
-                onGuestbookReply={(id, reply) => run(() => replyGuestbook(id, reply), () => setNotice("답글을 달았어요."))}
+                onGuestbookReply={(id, reply, onDone) =>
+                  run(() => replyGuestbook(id, reply), () => {
+                    onDone();
+                    setNotice("답글을 달았어요.");
+                  })
+                }
                 onGuestbookHide={(id, hidden) => run(() => setGuestbookHidden(id, hidden))}
                 onGuestbookDelete={(id) => {
                   if (!window.confirm("이 방명록 글을 지울까요?")) return;
@@ -2819,7 +2841,7 @@ function ThemePanel({
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="mr-1 text-[12px] text-fg-sub">사진 필터</span>
             {CUSTOM_FILTERS.map((f) => (
-              <button key={f.key} type="button" aria-pressed={(custom.bgFilter ?? "none") === f.key} onClick={() => onCustomChange({ bgFilter: f.key })} className={chip((custom.bgFilter ?? "none") === f.key)}>
+              <button key={f.key} type="button" aria-pressed={(custom.bgFilter ?? "none") === f.key} onClick={() => onCustomChange({ bgFilter: f.key === "none" ? undefined : f.key })} className={chip((custom.bgFilter ?? "none") === f.key)}>
                 {f.label}
               </button>
             ))}
@@ -2846,10 +2868,12 @@ function ThemePanel({
       <DSection title="버튼" hint="링크 버튼의 모양·스타일·그림자·마우스 올렸을 때 움직임.">
         {(
           [
-            ["모서리", CUSTOM_RADIUS, custom.radius ?? preset.radius, (k: string) => onCustomChange({ radius: k as LinkThemeCustom["radius"] })],
-            ["스타일", CUSTOM_BUTTONS, custom.buttonScope === "all" ? "fill" : (custom.button ?? "fill"), (k: string) => onCustomChange({ button: k as LinkThemeCustom["button"] })],
-            ["그림자", CUSTOM_SHADOWS, custom.shadow ?? (preset.shadow ? "soft" : "none"), (k: string) => onCustomChange({ shadow: k as LinkThemeCustom["shadow"] })],
-            ["액션", CUSTOM_EFFECTS, custom.effect ?? "none", (k: string) => onCustomChange({ effect: k as LinkThemeCustom["effect"] })],
+            /* 프리셋 기본값 선택은 undefined 로 — 안 그러면 이미 선택된 칩 재클릭이 보이지 않는
+               영구 오버라이드를 만들어 프리셋을 갈아타도 옛 값이 박제된다(감사4, 88c0454 원칙) */
+            ["모서리", CUSTOM_RADIUS, custom.radius ?? preset.radius, (k: string) => onCustomChange({ radius: (k === preset.radius ? undefined : k) as LinkThemeCustom["radius"] })],
+            ["스타일", CUSTOM_BUTTONS, custom.buttonScope === "all" ? "fill" : (custom.button ?? "fill"), (k: string) => onCustomChange({ button: (k === "fill" ? undefined : k) as LinkThemeCustom["button"] })],
+            ["그림자", CUSTOM_SHADOWS, custom.shadow ?? (preset.shadow ? "soft" : "none"), (k: string) => onCustomChange({ shadow: (k === (preset.shadow ? "soft" : "none") ? undefined : k) as LinkThemeCustom["shadow"] })],
+            ["액션", CUSTOM_EFFECTS, custom.effect ?? "none", (k: string) => onCustomChange({ effect: (k === "none" ? undefined : k) as LinkThemeCustom["effect"] })],
           ] as const
         ).map(([lab, opts, cur, set]) => {
           /* 전체 적용이면 스타일(채움/외곽선/은은)은 의미가 없다 — 비활성 + 이유 */
@@ -2914,7 +2938,8 @@ function ThemePanel({
             공유 버튼
           </label>
           <label className={cn("flex items-center gap-2 text-[14px]", !hasSubscribeBlock && "text-fg-sub")}>
-            <Switch checked={!!custom.subscribe} onChange={(v) => onCustomChange({ subscribe: v ? true : undefined })} label="구독 버튼" disabled={!hasSubscribeBlock} />
+            {/* 블록을 숨긴 뒤에도 켜져 있는 subscribe:true 는 끌 수 있어야 한다 — 켜기만 블록 존재를 요구(감사4) */}
+            <Switch checked={!!custom.subscribe} onChange={(v) => onCustomChange({ subscribe: v ? true : undefined })} label="구독 버튼" disabled={!hasSubscribeBlock && !custom.subscribe} />
             구독 버튼
             {!hasSubscribeBlock ? <span className="text-[12px] text-fg-faint">— 구독신청 블록을 먼저 추가하세요</span> : null}
           </label>
@@ -3393,7 +3418,8 @@ function ManagePanel({
   leadsFailed?: boolean;
   guestbook: LinkGuestbookEntry[];
   busy: boolean;
-  onGuestbookReply: (id: number, reply: string) => void;
+  /** onDone 은 성공했을 때만 불린다 — 실패하면 입력창·초안을 그대로 둔다(감사4: 500자 답글 유실) */
+  onGuestbookReply: (id: number, reply: string, onDone: () => void) => void;
   onGuestbookHide: (id: number, hidden: boolean) => void;
   onGuestbookDelete: (id: number) => void;
   /** CSV — 화면의 50건이 아니라 **전체**를 서버에서 받아 내린다(감사 C13) */
@@ -3558,7 +3584,7 @@ function ManagePanel({
                       aria-label="답글 내용"
                       className="h-9 min-w-0 flex-1 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg focus:border-primary focus:outline-none"
                     />
-                    <Button size="sm" disabled={busy} onClick={() => { onGuestbookReply(g.id, replyDraft); setReplyFor(null); }}>
+                    <Button size="sm" disabled={busy} onClick={() => onGuestbookReply(g.id, replyDraft, () => { setReplyFor(null); setReplyDraft(""); })}>
                       저장
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => setReplyFor(null)}>

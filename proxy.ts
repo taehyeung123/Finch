@@ -49,7 +49,10 @@ export async function proxy(request: NextRequest) {
       sameSite: "lax",
       secure: true,
       maxAge: 60 * 60 * 24 * 180,
-      path: "/",
+      /* 소비처가 전부 /p 아래다(액션·/go·dwell) — path 를 좁혀 앱·마케팅 요청에
+         고정 식별자가 실려 나가지 않게 한다(감사4 최소권한). 기존 path=/ 쿠키는
+         만료까지 그대로 읽힌다(위 존재 검사로 재발급 안 함). */
+      path: "/p",
     });
   }
   applySecurityHeaders(response, publicLink);

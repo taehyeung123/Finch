@@ -40,7 +40,12 @@ export function ModalShell({
     const prev = document.activeElement as HTMLElement | null;
     boxRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !busyRef.current) onCloseRef.current();
+      if (e.key === "Escape" && !busyRef.current) {
+        /* X·스크림 클릭과 달리 Esc 는 blur 없이 언마운트돼 onBlur 커밋(설정 텍스트 등)이
+           증발한다 — 닫기 전에 포커스를 떼어 같은 경로를 태운다(감사4) */
+        (document.activeElement as HTMLElement | null)?.blur?.();
+        onCloseRef.current();
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => {

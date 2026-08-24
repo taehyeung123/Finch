@@ -289,7 +289,7 @@ export function PhonePreview({
                 <img src={page.avatarPath} alt="" className="size-6 rounded-full object-cover" />
               ) : null}
               <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">{page.title || "제목"}</span>
-              {page.themeCustom?.subscribe && blocks.some((b) => b.type === "subscribe") ? (
+              {page.themeCustom?.subscribe && blocks.some((b) => b.active && b.type === "subscribe" && !isScheduledHidden(b.data)) ? (
                 <span className="inline-flex h-7 items-center gap-1 rounded-full bg-[var(--lp-accent)] px-2.5 text-[11px] font-semibold text-[var(--lp-on-accent)]">✉ 구독</span>
               ) : null}
               {page.themeCustom?.share ? (
@@ -308,7 +308,7 @@ export function PhonePreview({
                   <Share2 className="size-3.5" />
                 </span>
               ) : null}
-              {page.themeCustom?.subscribe && blocks.some((b) => b.type === "subscribe") ? (
+              {page.themeCustom?.subscribe && blocks.some((b) => b.active && b.type === "subscribe" && !isScheduledHidden(b.data)) ? (
                 <span aria-hidden className="absolute left-3 top-3 inline-flex h-8 items-center gap-1 rounded-full bg-[var(--lp-accent)] px-3 text-[11px] font-semibold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)]">
                   ✉ 구독
                 </span>

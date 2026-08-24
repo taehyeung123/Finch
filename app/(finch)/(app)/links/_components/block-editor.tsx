@@ -1062,8 +1062,9 @@ export function BlockEditor({
       ) : null}
 
       <div className="flex items-center gap-2 pt-1">
-        <Button size="sm" disabled={busy} onClick={() => onSave(d)}>
-          {busy ? "저장 중…" : "저장"}
+        {/* 무변경 저장은 막는다 — 서버 왕복 + 빈 undo 엔트리 기록 + redo 스택 파기(감사4) */}
+        <Button size="sm" disabled={busy || !dirty} onClick={() => onSave(d)}>
+          {busy ? "저장 중…" : dirty ? "저장" : "저장됨"}
         </Button>
         {/* 「되돌리기」는 **이 폼만** 원래대로 돌린다 — 삭제·순서는 못 되돌린다.
             이름만 보고 undo 로 오해하지 않게 옆에 적어둔다. */}

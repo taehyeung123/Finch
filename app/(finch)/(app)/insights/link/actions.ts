@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
-import { analyzeSample } from "@/lib/mock/data";
+import { analyzeSample } from "@/lib/data";
 import { getInstagramAccessContext } from "@/lib/data/live";
 import { fetchMediaComments, fetchMediaInsights, fetchRecentMedia } from "@/lib/meta/instagram";
 import { createClaudeClient, FAST_MODEL } from "@/lib/ai/claude";

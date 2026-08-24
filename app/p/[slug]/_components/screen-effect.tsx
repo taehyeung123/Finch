@@ -8,7 +8,7 @@ import { useEffect, useRef } from "react";
   · snow / sparkle: 계속(입자 수 적게, 탭이 숨겨지면 멈춤)
   pointer-events:none — 어떤 버튼도 가리지 않는다. prefers-reduced-motion 이면 아무것도 안 그린다.
 */
-export function ScreenEffect({ kind }: { kind: "confetti" | "snow" | "sparkle" }) {
+export function ScreenEffect({ kind, light = false }: { kind: "confetti" | "snow" | "sparkle"; light?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -35,7 +35,8 @@ export function ScreenEffect({ kind }: { kind: "confetti" | "snow" | "sparkle" }
       vx: kind === "confetti" ? rnd(-0.6, 0.6) * dpr : rnd(-0.25, 0.25) * dpr,
       vy: kind === "confetti" ? rnd(2.2, 4.2) * dpr : kind === "snow" ? rnd(0.4, 1.1) * dpr : 0,
       r: (kind === "confetti" ? rnd(3, 6) : kind === "snow" ? rnd(1.5, 3.5) : rnd(1, 2.5)) * dpr,
-      c: kind === "snow" ? "#FFFFFF" : colors[Math.floor(Math.random() * colors.length)],
+      /* 눈은 배경 밝기에 따라 색을 고른다 — 순백 고정이면 밝은 프리셋 15종에서 사실상 투명이었다(감사4) */
+      c: kind === "snow" ? (light ? "#64748B" : "#FFFFFF") : colors[Math.floor(Math.random() * colors.length)],
       a: kind === "sparkle" ? rnd(0, Math.PI * 2) : 1,
       t: rnd(0, 1000),
       rot: rnd(0, Math.PI),
@@ -94,6 +95,6 @@ export function ScreenEffect({ kind }: { kind: "confetti" | "snow" | "sparkle" }
       window.removeEventListener("resize", resize);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [kind]);
+  }, [kind, light]);
   return <canvas ref={ref} aria-hidden className="pointer-events-none fixed inset-0 z-30 h-full w-full" />;
 }

@@ -300,7 +300,8 @@ async function load(days: number): Promise<Loaded> {
     stats,
     leads,
     leadCounts,
-    leadsFailed: !!leadRows.error,
+    /* 목록은 성공했는데 count 만 실패하면 카드가 「전체 0건」이라고 거짓말한다 — 실패 신호에 합산(감사4) */
+    leadsFailed: !!leadRows.error || !!contactCnt.error || !!subscribeCnt.error,
     guestbook,
   };
 }

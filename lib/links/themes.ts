@@ -241,6 +241,11 @@ function luminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+/** 밝은 색인가 — 화면 효과(눈)가 입자색을 고르는 데 쓴다. hex 가 아니면 어두운 쪽으로 취급 */
+export function isLightColor(hex: string): boolean {
+  return HEX.test(hex) && luminance(hex) > 0.5;
+}
+
 /** WCAG 대비 — hex 둘. hex 가 아니면(color-mix 등) 계산 불가 → 0 */
 export function contrastRatio(a: string, b: string): number {
   if (!HEX.test(a) || !HEX.test(b)) return 0;

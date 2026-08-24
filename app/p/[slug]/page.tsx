@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -14,7 +15,7 @@ import { FinchMark } from "@/components/logo";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, publicLinkUrl, sanitizeSnsLinks } from "@/lib/links";
 import { emphasizedCta, hiddenReason, isScheduledHidden, type BlockType } from "@/lib/links/blocks";
-import { DEFAULT_THEME_KEY as DEFAULT_LINK_THEME_KEY, fontStylesheets, sanitizeThemeCustom, themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
+import { isLightColor, DEFAULT_THEME_KEY as DEFAULT_LINK_THEME_KEY, fontStylesheets, sanitizeThemeCustom, themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
 import { ShareButton } from "./_components/share-button";
 import { SubscribeButton } from "./_components/subscribe-button";
 import { ScreenEffect } from "./_components/screen-effect";
@@ -63,7 +64,9 @@ interface Snapshot {
  * /go·/vcard·리드·방명록 제출도 같은 함수를 타므로 잠금 규칙이 한 곳에만 있다.
  * 데모 모드는 샘플 페이지를 공개 주소로도 연다(안 하면 /links 의 「열기」가 404 로 떨어진다).
  */
-async function load(slug: string) {
+/* generateMetadata 와 본문이 각각 부른다 — cache 로 같은 요청 안에서는 1회만 조회(감사4).
+   잠금·로그인 방문 경로는 조회당 admin 쿼리가 여러 번이라 이중 실행 비용이 컸다. */
+const load = cache(async (slug: string) => {
   const p = await loadPublicPage(slug, { withOwner: true });
   if (!p) return null;
   /* published 조건을 코드에 걸지 않는다 — RLS 가 이미 그 일을 한다(0045). 여기서 또 걸면
@@ -74,7 +77,7 @@ async function load(slug: string) {
      잠긴 페이지는 snap 이 null 이어도 잠금 화면을 그려야 하므로 통과시킨다. */
   if (!snap && !p.isOwner && !p.locked) return null;
   return { pageId: p.id, published: p.published, isOwner: p.isOwner, locked: p.locked, settings: p.settings, snap };
-}
+});
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -269,7 +272,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
       {/* 방문 집계 — 렌더를 막지 않게 클라이언트에서 한 번만 쏜다.
           개인 식별 정보는 안 보낸다(서버가 익명 토큰만 쿠키로 관리). */}
       {published ? <ViewBeacon slug={slug} /> : null}
-      {screenFx ? <ScreenEffect kind={screenFx} /> : null}
+      {screenFx ? <ScreenEffect kind={screenFx} light={isLightColor(themeCustom?.bg ?? theme.bg)} /> : null}
       {/* 마케팅 연결(GA4·Meta 픽셀·TikTok 픽셀) — 주인이 ID 를 넣었을 때만, 공개 상태에서만 실린다.
           주인 미리보기(비공개)엔 안 싣는다 — 자기 방문이 광고 계정 통계를 더럽힌다. */}
       {published && !isOwner ? <TrackingScripts settings={settings} /> : null}

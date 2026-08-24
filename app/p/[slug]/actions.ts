@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
 import { unlockCookieName, unlockToken, verifyPagePassword } from "@/lib/links/password";
 import { loadPublicPage } from "./public-page";
+import { isScheduledHidden } from "@/lib/links/blocks";
 import type { LpErrorCode } from "@/lib/links/i18n";
 
 /** 방문자 액션 결과 — error 는 한국어 기본 문구, code 는 페이지 언어로 번역할 키(감사 C8) */
@@ -102,7 +103,9 @@ const VIEW_SRC = new Set(["instagram", "tiktok", "threads", "youtube", "x"]);
 const BOT_UA = /bot|crawl|spider|slurp|facebookexternalhit|kakaotalk-scrap|Slackbot|Twitterbot|Discordbot|LinkedInBot|TelegramBot|Googlebot|bingbot/i;
 
 export async function recordView(slug: string, src?: string, ref?: string): Promise<void> {
-  if (!isSupabaseConfigured()) return;
+  /* 강제 데모 모드(NEXT_PUBLIC_DEMO_MODE=true + 키 존재)에서 mock id 로 실 DB 에
+     uuid 캐스트 오류를 쏘던 유일한 방문자 액션 — 다른 액션들과 같은 가드(감사4) */
+  if (isDemoMode() || !isSupabaseConfigured()) return;
   if (BOT_UA.test((await headers()).get("user-agent") ?? "")) return;
   const pageId = await publicPageId(slug);
   if (!pageId) return;
@@ -347,9 +350,12 @@ export async function submitLead(input: {
   const pageId = pageRow.id;
   const snapBlocks = (pageRow.snapshot as { blocks?: unknown } | null)?.blocks;
   const target = Array.isArray(snapBlocks)
-    ? (snapBlocks as Array<{ id?: unknown; type?: unknown }>).find((b) => b && b.id === input.blockId)
+    ? (snapBlocks as Array<{ id?: unknown; type?: unknown; data?: unknown }>).find((b) => b && b.id === input.blockId)
     : undefined;
-  if (!target || target.type !== input.kind) return fail("invalid", "접수할 수 없는 요청이에요.");
+  /* 예약 숨김(openAt/closeAt)도 /go·/vcard 와 같은 기준으로 라우트에서 판정한다 — 화면에서
+     폼을 숨겨도 blockId 를 본 사람이 액션을 직접 부르면 마감 후에도 접수되던 구멍(감사4). */
+  if (!target || target.type !== input.kind || isScheduledHidden((target.data ?? {}) as Record<string, unknown>))
+    return fail("invalid", "접수할 수 없는 요청이에요.");
 
   const email = (input.email ?? "").trim().slice(0, 160);
   const name = (input.name ?? "").trim().slice(0, 60);
@@ -426,9 +432,11 @@ export async function submitGuestbook(input: { slug: string; blockId: string; na
   const pageId = pageRow.id;
   const snapBlocks = (pageRow.snapshot as { blocks?: unknown } | null)?.blocks;
   const target = Array.isArray(snapBlocks)
-    ? (snapBlocks as Array<{ id?: unknown; type?: unknown }>).find((b) => b && b.id === input.blockId)
+    ? (snapBlocks as Array<{ id?: unknown; type?: unknown; data?: unknown }>).find((b) => b && b.id === input.blockId)
     : undefined;
-  if (!target || target.type !== "guestbook") return fail("invalid", "접수할 수 없는 요청이에요.");
+  /* 리드와 같은 기준 — 예약으로 닫힌 방명록엔 직접 호출로도 못 남긴다(감사4) */
+  if (!target || target.type !== "guestbook" || isScheduledHidden((target.data ?? {}) as Record<string, unknown>))
+    return fail("invalid", "접수할 수 없는 요청이에요.");
 
   const admin = createAdminClient();
   if (!admin) return fail("unavailable", "지금은 남길 수 없어요.");
