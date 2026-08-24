@@ -31,6 +31,8 @@ export function ImageField({
   hint,
   aspect = "aspect-[16/9]",
   cropAspect,
+  maxW,
+  round = false,
 }: {
   value: string;
   /** dims 는 업로드 경로에서만 온다 — 주소 붙여넣기·지우기는 undefined (부모가 이전 치수를 지운다) */
@@ -41,7 +43,14 @@ export function ImageField({
   aspect?: string;
   /** 지정하면 비율이 다른 원본에 위치 조정 단계가 끼어든다 (가로/세로, 예: 1, 3) */
   cropAspect?: number;
+  /** 미리보기 상한 폭 — 정사각(프로필 사진)은 패널 폭을 그대로 먹으면 600px 짜리 거대한
+      네모가 된다(2026-08-24 사장님 지적). 가로로 긴 비율은 기본(칸 폭)이 맞다 */
+  maxW?: string;
+  /** 원형 미리보기 — 실제로 원으로 보이는 자리(프로필 사진)와 모양을 맞춘다 */
+  round?: boolean;
 }) {
+  /* 세 상태(조정 중·값 있음·빈 칸)가 같은 크기·모양이어야 한 자리처럼 읽힌다 */
+  const boxCls = `${maxW ?? ""} ${round ? "rounded-full" : "rounded-card"} ${aspect}`.trim();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -168,7 +177,7 @@ export function ImageField({
 
       {pending ? (
         <div className="mt-1.5 space-y-2">
-          <div className={`relative overflow-hidden rounded-card border border-line bg-plate ${aspect}`}>
+          <div className={`relative overflow-hidden border border-line bg-plate ${boxCls}`}>
             {/* eslint-disable-next-line @next/next/no-img-element -- 업로드 전 로컬 data URL */}
             <img
               src={pending.dataUrl}
@@ -211,14 +220,18 @@ export function ImageField({
         </div>
       ) : value ? (
         <div className="mt-1.5 space-y-2">
-          <div className={`relative overflow-hidden rounded-card border border-line bg-plate ${aspect}`}>
-            {/* eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL·외부 URL 혼용 */}
-            <img src={value} alt="" className="size-full object-cover" />
+          {/* 제거 버튼은 **클리핑 밖**에 둔다 — 원형 미리보기 안에 넣으면 원 모서리에 잘려
+              검은 조각처럼 보인다(2026-08-24). 사각형은 안쪽 여백에 그대로. */}
+          <div className={`relative ${maxW ?? ""}`}>
+            <div className={`relative overflow-hidden border border-line bg-plate ${boxCls}`}>
+              {/* eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL·외부 URL 혼용 */}
+              <img src={value} alt="" className="size-full object-cover" />
+            </div>
             <button
               type="button"
               onClick={() => onChange("")}
               aria-label={`${label} 제거`}
-              className="trans-state absolute right-2 top-2 rounded-card bg-scrim p-1.5 text-on-scrim hover:opacity-80"
+              className={`trans-state absolute rounded-full bg-scrim p-1.5 text-on-scrim shadow-pop hover:opacity-80 ${round ? "-right-1.5 -top-1.5" : "right-2 top-2"}`}
             >
               <X className="size-3.5" />
             </button>
@@ -231,7 +244,7 @@ export function ImageField({
           disabled={busy}
           aria-label={`${label} 올리기`}
           /* busy 중엔 로더가 내용이라 흐리게 하지 않는다 */
-          className={`trans-state mt-1.5 flex w-full flex-col items-center justify-center gap-1.5 rounded-card border border-dashed border-line bg-plate text-fg-sub hover:border-primary hover:text-fg ${aspect}`}
+          className={`trans-state mt-1.5 flex flex-col items-center justify-center gap-1.5 border border-dashed border-line bg-plate text-fg-sub hover:border-primary hover:text-fg ${boxCls} ${maxW ? "" : "w-full"}`}
         >
           {busy ? (
             /* 올리는 동안은 핀치 로더 — "로딩 중이면 로딩 화면" (2026-08-22 지시) */

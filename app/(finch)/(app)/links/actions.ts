@@ -1727,32 +1727,50 @@ export async function revertLinkDraft(pageId?: string): Promise<Result> {
   if (readErr || !row) return { ok: false, error: "되돌리지 못했어요." };
   const snap = (row.published_snapshot ?? null) as Record<string, unknown> | null;
 
-  const { data: oldRows, error: listErr } = await supabase.from("link_blocks").select("id").eq("page_id", page.id);
+  const { data: draftRows, error: listErr } = await supabase
+    .from("link_blocks")
+    .select("id, active")
+    .eq("page_id", page.id);
   if (listErr) return { ok: false, error: "되돌리지 못했어요." };
-  const oldIds = ((oldRows ?? []) as Array<{ id: string }>).map((r) => r.id);
+  const draft = (draftRows ?? []) as Array<{ id: string; active: boolean }>;
 
-  const snapBlocks = snap && Array.isArray((snap as { blocks?: unknown }).blocks)
-    ? ((snap as { blocks: Array<{ type?: unknown; data?: unknown }> }).blocks)
+  const rawSnapBlocks = snap && Array.isArray((snap as { blocks?: unknown }).blocks)
+    ? ((snap as { blocks: unknown[] }).blocks)
     : [];
-  let insertedIds: string[] = [];
+  const snapBlocks = rawSnapBlocks.filter(
+    (b): b is { id: string; type: string; data?: Record<string, unknown> } =>
+      !!b && typeof b === "object" && typeof (b as { id?: unknown }).id === "string" && typeof (b as { type?: unknown }).type === "string",
+  );
+  const snapIds = new Set(snapBlocks.map((b) => b.id));
+
+  /* ① 스냅샷 블록을 **같은 id 로** 되돌린다(upsert) — 지우고 새로 넣으면 id 가 바뀌어
+        그 블록에 쌓인 클릭 집계가 이름 없는 과거 기록으로 끊긴다. 발행 당시 켜져 있었으므로
+        active=true 로 돌린다(발행 뒤에 숨긴 블록도 스냅샷 상태로 복귀). */
   if (snapBlocks.length) {
-    const rows = snapBlocks
-      .filter((b) => typeof b?.type === "string")
-      .map((b, i) => ({ page_id: page.id, type: b.type as string, data: (b.data ?? {}) as Record<string, unknown>, sort_order: i }));
-    const { data: inserted, error } = await supabase.from("link_blocks").insert(rows).select("id");
+    const rows = snapBlocks.map((b, i) => ({
+      id: b.id,
+      page_id: page.id,
+      type: b.type,
+      data: b.data ?? {},
+      sort_order: i,
+      active: true,
+    }));
+    const { error } = await supabase.from("link_blocks").upsert(rows, { onConflict: "id" });
     if (error) {
       console.error("[links] 되돌리기(블록 복원) 실패:", error.message);
       return { ok: false, error: "되돌리지 못했어요. 잠시 후 다시 시도해 주세요." };
     }
-    insertedIds = ((inserted ?? []) as Array<{ id: string }>).map((r) => r.id);
   }
 
-  if (oldIds.length) {
-    const { error: delErr } = await supabase.from("link_blocks").delete().in("id", oldIds);
+  /* ② 스냅샷에 없는 블록 = 발행 뒤에 추가한 것 → 지운다.
+        ⚠️ **숨긴 블록(active=false)은 남긴다.** 발행은 켜진 블록만 담으므로 숨긴 블록은
+        애초에 스냅샷에 없다 — 함께 지우면 몇 달 전에 숨겨둔 블록이 "오늘 편집 취소"에
+        휩쓸려 복구 불가로 사라진다(소넷 확정, 데이터 유실). 공개 페이지엔 영향이 없다. */
+  const toDelete = draft.filter((r) => !snapIds.has(r.id) && r.active).map((r) => r.id);
+  if (toDelete.length) {
+    const { error: delErr } = await supabase.from("link_blocks").delete().in("id", toDelete);
     if (delErr) {
-      /* 옛 블록 삭제 실패 — 복원본이 중복으로 남지 않게 방금 넣은 쪽을 걷어낸다 */
-      console.error("[links] 되돌리기(옛 블록 삭제) 실패 — 복원 블록 되돌림:", delErr.message);
-      if (insertedIds.length) await supabase.from("link_blocks").delete().in("id", insertedIds);
+      console.error("[links] 되돌리기(추가 블록 삭제) 실패:", delErr.message);
       return { ok: false, error: "되돌리지 못했어요. 잠시 후 다시 시도해 주세요." };
     }
   }
@@ -1764,7 +1782,9 @@ export async function revertLinkDraft(pageId?: string): Promise<Result> {
       .update({
         title: sv("title") ?? "",
         bio: sv("bio") ?? "",
-        layout: sv("layout") ?? "list",
+        /* 기본값은 컬럼 기본값·publishLinkPage 폴백과 같은 "profile" 이어야 한다 —
+           "list" 는 페이지 레이아웃 열거값에 아예 없는 값이다(소넷 확정) */
+        layout: sv("layout") ?? "profile",
         theme: sv("theme") ?? DEFAULT_THEME_KEY,
         align: sv("align") ?? "center",
         avatar_path: sv("avatarPath"),
@@ -1776,8 +1796,13 @@ export async function revertLinkDraft(pageId?: string): Promise<Result> {
       })
       .eq("id", page.id);
     if (profErr) console.error("[links] 되돌리기(프로필 복원) 실패:", profErr.message);
-    /* 발행 스탬프 정렬 — 같은 스냅샷을 다시 쓰면 트리거(0049)가 published_at 을 지금으로 맞춘다 */
-    const { error: stampErr } = await supabase.from("link_pages").update({ published_snapshot: snap }).eq("id", page.id);
+
+    /* 발행 스탬프 정렬 — 0049 트리거는 published_snapshot 이 **달라졌을 때만** published_at 을
+       찍는다. 읽은 값을 그대로 다시 쓰면 jsonb 가 동일해 스탬프가 안 찍히고, 그 사이
+       updated_at 만 올라가 되돌린 직후 다시 「초안 수정됨」이 된다(소넷 확정).
+       되돌린 시각을 스냅샷에 남겨 실제로 다른 값을 쓴다 — 공개 렌더러는 모르는 키를 무시한다. */
+    const stamped = { ...snap, revertedAt: new Date().toISOString() };
+    const { error: stampErr } = await supabase.from("link_pages").update({ published_snapshot: stamped }).eq("id", page.id);
     if (stampErr) console.error("[links] 되돌리기(스탬프 정렬) 실패:", stampErr.message);
   }
 

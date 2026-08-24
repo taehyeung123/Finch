@@ -1101,8 +1101,8 @@ export function LinksClient({
           <div className="space-y-3">
             <p className="text-[14px] leading-[1.7] text-fg-sub">
               {page.publishedAt
-                ? "마지막 「라이브 반영」 상태로 되돌려요. 그 뒤에 편집한 내용은 사라져요."
-                : "아직 발행한 적이 없어서 블록이 모두 삭제돼요. 프로필(이름·사진)은 유지돼요."}
+                ? "마지막 「라이브 반영」 상태로 되돌려요. 그 뒤에 편집한 내용은 사라지고, 숨긴 블록은 그대로 남아요."
+                : "아직 발행한 적이 없어서 보이는 블록이 모두 삭제돼요. 숨긴 블록과 프로필(이름·사진)은 남아요."}
             </p>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={() => setRevertOpen(false)} disabled={busy}>
@@ -2850,6 +2850,9 @@ function ProfilePanel({
           onChange={(v) => onImages({ avatarPath: v || null })}
           aspect="aspect-square"
           cropAspect={1}
+          /* 실제로 원으로 보이는 자리 — 칸도 원형·작게(패널 폭을 다 먹으면 거대한 네모가 된다) */
+          maxW="max-w-[152px]"
+          round
           hint="권장 400×400 이상 정사각형 — 다른 비율은 올릴 때 위치를 맞출 수 있어요"
         />
       ) : null}
