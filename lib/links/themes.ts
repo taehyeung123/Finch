@@ -303,12 +303,14 @@ export const LINK_THEMES: LinkTheme[] = [
     key: "basic",
     group: "MINIMAL",
     name: "기본",
-    /* 2026-08-23 손질 — 리틀리 기본 화면 수준으로: 지면을 아주 살짝 회색으로, 모서리 lg */
-    bg: "#F8F8FA",
+    /* 2026-08-23 손질 — 리틀리 기본 화면 수준으로: 지면을 아주 살짝 회색으로, 모서리 lg.
+       2026-08-24: #F8F8FA 는 흰 카드와 1.05:1 이라 버튼이 지면에 녹았다 — 앱 지면(#F3F4F6)과
+       같은 단차로 내린다(리틀리 지면도 #F2F2F2 다). */
+    bg: "#F3F4F6",
     fg: "#16161C",
     muted: "#69707E",
     card: "#FFFFFF",
-    border: "#ECEDF1",
+    border: "#E5E7EB",
     accent: "#16161C",
     onAccent: "#FFFFFF",
     radius: "lg",
@@ -505,7 +507,11 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
   const bg2 = c.bg2 ?? (c.bg ? undefined : t.bg2);
   /* 배경 필터 — 이미지 위에 덮는 반투명 겹. 그라데이션으로 쌓아 같은 변수 하나로 공개·미리보기가 같다.
      블러는 공개 페이지가 별도 레이어에서만 건다(--lp-bg-blur). */
-  const filter = c.bgImage ? (c.bgFilter ?? "none") : "none";
+  /* 배경 사진의 **기본 필터**(2026-08-24 비평) — 없음이 기본이면 사진 위에 글자가 그대로 얹혀
+     어떤 대비 가드도 소용이 없다. 밝은 글자면 어둡게, 어두운 글자면 밝게 한 겹 깔아 준다.
+     사용자가 「없음」을 명시적으로 고르면 그대로 존중한다(c.bgFilter 가 있으면 그 값). */
+  const autoFilter = luminance(HEX.test(fg) ? fg : "#000000") > 0.5 ? "dark" : "light";
+  const filter = c.bgImage ? (c.bgFilter ?? autoFilter) : "none";
   const overlay =
     filter === "light" ? "rgba(255,255,255,.35)" : filter === "dark" ? "rgba(0,0,0,.42)" : filter === "blur" ? "rgba(255,255,255,.22)" : filter === "darkBlur" ? "rgba(0,0,0,.42)" : null;
   /* url("…") 안에 들어간다 — 관문(IMG_URL)이 역슬래시·따옴표를 막지만 직렬화도 따로 안전하게(감사2 C5) */
@@ -516,21 +522,36 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
       : "none";
   const bgBlur = filter === "blur" || filter === "darkBlur" ? "10px" : "0px";
   const font = LINK_FONTS.find((f) => f.key === c.font)?.family ?? "inherit";
+  /* 그림자 — 검정 그림자는 **어두운 지면에서 보이지 않는다**. 「진하게」를 골라도 아무 변화가 없어
+     보였던 이유다(2026-08-24 비평). 어두운 배경이면 같은 자리에 **밝은 테두리 겹**을 쓴다
+     (앱 다크 규칙과 같은 문법: 그림자 대신 밝기·테두리로 깊이). */
+  const darkGround = luminance(HEX.test(bg) ? bg : "#ffffff") < 0.35;
+  const shadowSoft = darkGround
+    ? "0 0 0 1px rgba(255,255,255,.07), 0 8px 20px rgba(0,0,0,.45)"
+    : "0 1px 3px rgba(15,23,42,.08), 0 6px 14px rgba(15,23,42,.04)";
+  const shadowStrong = darkGround
+    ? "0 0 0 1px rgba(255,255,255,.12), 0 14px 34px rgba(0,0,0,.6)"
+    : "0 2px 6px rgba(15,23,42,.12), 0 14px 32px rgba(15,23,42,.12)";
   const shadowVal =
     c.shadow === "none"
       ? "none"
       : c.shadow === "strong"
-        ? "0 2px 6px rgba(15,23,42,.12), 0 14px 32px rgba(15,23,42,.12)"
+        ? shadowStrong
         : c.shadow === "soft"
-          ? "0 1px 3px rgba(15,23,42,.08), 0 6px 14px rgba(15,23,42,.04)"
+          ? shadowSoft
           : t.shadow
-            ? "0 1px 3px rgba(15,23,42,.08), 0 6px 14px rgba(15,23,42,.04)"
+            ? shadowSoft
             : "none";
   /* 버튼 스타일 — 링크 버튼의 "기본" 변형이 따른다(채움/외곽선/은은하게) */
   const btn = c.button ?? "fill";
   /* 전체 적용(리틀리 buttonColorLayout=inverted) — 모든 링크 버튼이 강조색 채움 */
   const all = c.buttonScope === "all";
-  const btnBg = all ? accent : btn === "fill" ? card : btn === "outline" ? "transparent" : `color-mix(in srgb, ${accent} 14%, transparent)`;
+  /* 카드 색 가드(2026-08-24 비평) — 「카드」 색에는 검사가 하나도 없어서 어두운 카드색을 고르면
+     카드 위 글자(fg)가 통째로 안 읽혔다. 글자 대비가 4.5:1 미만이면 프리셋 카드색으로 되돌린다.
+     디자인 탭 문구가 "대비가 낮으면 자동으로 읽히는 쪽으로 바꿔요"라고 약속하고 있다. */
+  const cardReadable = !c.card || contrastRatio(fg, card) >= 4.5;
+  const cardSafe = cardReadable ? card : t.card;
+  const btnBg = all ? accent : btn === "fill" ? cardSafe : btn === "outline" ? "transparent" : `color-mix(in srgb, ${accent} 14%, transparent)`;
   /* 외곽선·은은하게의 글자는 강조색인데, 코랄·피치처럼 밝은 강조색은 배경 위에서 2.3~3.1:1 이다 — 안 읽히면 본문색으로(감사2 U8) */
   const accentReadable = contrastRatio(accent, bg) >= 4.5;
   const accentText = accentReadable ? accent : fg;
@@ -547,7 +568,7 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
     "--lp-cursor": cursorCss(c.cursor),
     "--lp-fg": fg,
     "--lp-muted": muted,
-    "--lp-card": card,
+    "--lp-card": cardSafe,
     "--lp-border": border,
     "--lp-accent": accent,
     /* 배경 위 글자로 쓸 강조색 — 대비 4.5 미만이면 본문색. 외곽선 강조 버튼·태그 칩이 쓴다 */

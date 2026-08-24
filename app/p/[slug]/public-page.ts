@@ -64,6 +64,9 @@ export async function loadPublicPage(slug: string, opts: { withOwner?: boolean }
         snsLinks: p.snsLinks,
         snsPlacement: p.snsPlacement,
         titleSize: p.titleSize,
+        /* 데모 스냅샷이 themeCustom 을 빠뜨려 「직접 꾸미기」가 공개 화면에 하나도 안 나갔다
+           — 편집기 미리보기와 /p 가 서로 다른 그림이 됐다(2026-08-24) */
+        themeCustom: p.themeCustom,
         seoTitle: p.seoTitle || null,
         seoDesc: p.seoDesc || null,
         blocks: linkWorkspace.blocks.filter((b) => b.active).map((b) => ({ id: b.id, type: b.type, data: b.data })),
