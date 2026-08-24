@@ -36,7 +36,7 @@ export const LINK_TEMPLATES: LinkTemplate[] = [
     key: "creator",
     name: "크리에이터",
     hint: "채널 구독 유도 + 최근 게시물",
-    theme: "basic",
+    theme: "aurora",
     emoji: "🎬",
     tint: "#EAF3FF",
     blocks: [
@@ -51,7 +51,7 @@ export const LINK_TEMPLATES: LinkTemplate[] = [
     key: "shop",
     name: "공구·판매",
     hint: "진행 중 공구를 맨 위에",
-    theme: "coral",
+    theme: "cream",
     emoji: "🛒",
     tint: "#FFEFE8",
     blocks: [
@@ -79,7 +79,7 @@ export const LINK_TEMPLATES: LinkTemplate[] = [
     key: "brand",
     name: "브랜드·매장",
     hint: "매장 안내 + 문의받기",
-    theme: "porcelain",
+    theme: "sky",
     emoji: "🏪",
     tint: "#F4EFE7",
     blocks: [

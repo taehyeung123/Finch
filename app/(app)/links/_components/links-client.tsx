@@ -2704,7 +2704,9 @@ function ThemePanel({
       list.push(t);
       m.set(t.group, list);
     }
-    return [...m.entries()];
+    /* 그룹 순서는 명시한다 — Map 삽입 순서에 맡기면 프리셋 하나 끼워 넣을 때 섹션이 통째로 재배열된다(소넷) */
+    const ORDER = ["MINIMAL", "PROFESSIONAL", "VIVID"];
+    return [...m.entries()].sort((a, b) => ORDER.indexOf(a[0]) - ORDER.indexOf(b[0]));
   }, []);
   const preset = themeByKey(current);
   const hasCustom = Object.keys(custom).length > 0;
@@ -3865,6 +3867,8 @@ function MarketingPanel({
   const [copied, setCopied] = useState(false);
   const url = publicLinkUrl(page.slug, origin);
   const connected = [page.settings.ga4 && "GA4", page.settings.metaPixel && "Meta 픽셀", page.settings.tiktokPixel && "TikTok 픽셀"].filter(Boolean) as string[];
+  /* React 의 <details open> 은 리렌더마다 prop 값으로 되돌린다 — 토스트 하나에 접히지 않게 상태로 든다 */
+  const [adOpen, setAdOpen] = useState(() => connected.length > 0);
   return (
     <>
       <div>
@@ -3909,7 +3913,7 @@ function MarketingPanel({
       </section>
 
       {/* 고급 — 내 광고 계정 연결. 접어 둔다: 필수처럼 보이면 "왜 수동이냐"가 된다 */}
-      <details className="rounded-card border border-line" open={connected.length > 0}>
+      <details className="rounded-card border border-line" open={adOpen} onToggle={(e) => setAdOpen(e.currentTarget.open)}>
         <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 px-4 py-3">
           <span>
             <span className="text-[15px] font-semibold">내 광고 계정에도 쌓기 (선택)</span>
