@@ -145,10 +145,21 @@ export async function loadPublicPage(slug: string, opts: { withOwner?: boolean }
 export async function resolveSubSlug(parentSlug: string, sub: string): Promise<string | null> {
   if (isDemoMode() || !isSupabaseConfigured()) return null;
   if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(sub)) return null;
-  const supabase = await createClient();
-  const { data: parent, error: pErr } = await supabase.from("link_pages").select("id").eq("slug", parentSlug).maybeSingle();
+  /* 매핑 해석은 RLS **밖**에서 한다(loadPublicPage 와 같은 2단 원칙, 소넷 확정) —
+     세션 클라이언트만 쓰면 부모가 비공개·잠금일 때 발행된 자식의 표준 주소가 404 가 되고,
+     로그인한 타인은 anon 정책이 안 걸려 항상 404 였다. 여기서 새는 건 slug 문자열뿐이고
+     공개·잠금 판정은 렌더러(loadPublicPage)가 자식 행 기준으로 다시 하므로 내용 노출이 없다.
+     자식의 전역 slug 를 부모로 착각하지 않게 부모는 메인(parent_id null)만 받는다. */
+  const admin = createAdminClient();
+  const client = admin ?? (await createClient());
+  const { data: parent, error: pErr } = await client
+    .from("link_pages")
+    .select("id")
+    .eq("slug", parentSlug)
+    .is("parent_id", null)
+    .maybeSingle();
   if (pErr || !parent) return null;
-  const { data: child, error: cErr } = await supabase
+  const { data: child, error: cErr } = await client
     .from("link_pages")
     .select("slug")
     .eq("parent_id", parent.id)

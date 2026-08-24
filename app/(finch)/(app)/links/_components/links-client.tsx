@@ -302,6 +302,14 @@ export function LinksClient({
   /* 멀티·서브 페이지(0060) — 만들기 모달 */
   const [newPageOpen, setNewPageOpen] = useState(false);
   const [newSubOpen, setNewSubOpen] = useState(false);
+  /* 서브 페이지의 **표준 공유 주소**(/p/{부모}/{sub}) — 상단 바·링크 열기·마케팅 탭·QR 이
+     전부 같은 주소를 말해야 한다. 흩어 계산하면 탭마다 다른 주소가 보인다(소넷 확정). */
+  const shareUrl = (() => {
+    if (!page) return "";
+    const me = pages.find((p) => p.id === page.id);
+    const parentSlug = me?.parentId ? pages.find((p) => p.id === me.parentId)?.slug : null;
+    return parentSlug && me?.subSlug ? `${origin}/p/${parentSlug}/${me.subSlug}` : publicLinkUrl(page.slug, origin);
+  })();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   /* 토스트는 4초 뒤 내려간다 — 같은 문구가 연달아 오면 타이머만 다시 돈다 */
@@ -865,6 +873,7 @@ export function LinksClient({
       {/* 상단 바 — 탭 5개 · 주소 도구 · ⚙ 페이지 설정 · 공개 · 라이브 반영 */}
       <TopBar
         page={page}
+        shareUrl={shareUrl}
         pages={pages}
         pageLimit={pageLimit}
         multiReady={multiReady}
@@ -1428,6 +1437,7 @@ export function LinksClient({
               <CardBody className="space-y-5">
                 <MarketingPanel
                   page={page}
+                  shareUrl={shareUrl}
                   origin={origin}
                   busy={busy}
                   onSettings={(patch) =>
@@ -1460,7 +1470,7 @@ export function LinksClient({
                 <Smartphone className="size-4 text-fg-sub" aria-hidden />
                 {tab === "page" ? "미리보기 · 눌러서 편집" : "라이브 미리보기"}
               </h3>
-              <Button variant="ghost" size="sm" onClick={() => window.open(publicLinkUrl(page.slug, origin), "_blank", "noopener,noreferrer")}>
+              <Button variant="ghost" size="sm" onClick={() => window.open(shareUrl, "_blank", "noopener,noreferrer")}>
                 <ExternalLink className="size-3.5" aria-hidden />
                 링크 열기
               </Button>
@@ -1534,6 +1544,7 @@ export function LinksClient({
 
 function TopBar({
   page,
+  shareUrl,
   pages = [],
   pageLimit = { used: 0, max: 1 },
   multiReady = false,
@@ -1550,6 +1561,8 @@ function TopBar({
   history,
 }: {
   page: LinkPageView;
+  /** 표준 공유 주소 — 서브 페이지는 /p/{부모}/{sub}. 모든 공유 표면이 이 값 하나를 쓴다 */
+  shareUrl?: string;
   pages?: LinkPageSummary[];
   pageLimit?: { used: number; max: number };
   multiReady?: boolean;
@@ -1569,10 +1582,7 @@ function TopBar({
 }) {
   const [copied, setCopied] = useState(false);
   const [qr, setQr] = useState(false);
-  /* 서브 페이지의 표준 주소는 부모 아래(/p/{부모}/{sub}) — 전역 slug 주소도 열리지만 보여주는 건 이것 */
-  const me = pages.find((p) => p.id === page.id);
-  const parentSlug = me?.parentId ? pages.find((p) => p.id === me.parentId)?.slug : null;
-  const url = parentSlug && me?.subSlug ? `${origin}/p/${parentSlug}/${me.subSlug}` : publicLinkUrl(page.slug, origin);
+  const url = shareUrl || publicLinkUrl(page.slug, origin);
 
   async function copy() {
     try {
@@ -3537,11 +3547,11 @@ function StatsPanel({
    설정 패널
    ══════════════════════════════════════════════════════════════════ */
 
-function PlatformLinks({ slug, origin }: { slug: string; origin: string }) {
+function PlatformLinks({ baseUrl }: { baseUrl: string }) {
   const [copied, setCopied] = useState<string | null>(null);
   async function copy(key: string) {
     try {
-      await navigator.clipboard.writeText(`${publicLinkUrl(slug, origin)}?src=${key}`);
+      await navigator.clipboard.writeText(`${baseUrl}?src=${key}`);
       setCopied(key);
       window.setTimeout(() => setCopied(null), 1600);
     } catch {
@@ -4111,18 +4121,21 @@ function PageSettingsForm({
 
 function MarketingPanel({
   page,
+  shareUrl,
   origin,
   busy,
   onSettings,
 }: {
   page: LinkPageView;
+  /** 표준 공유 주소 — 퍼뜨리기·QR·플랫폼별 주소의 밑동 */
+  shareUrl?: string;
   origin: string;
   busy: boolean;
   onSettings: (patch: Partial<LinkPageSettings>) => void;
 }) {
   const [qr, setQr] = useState(false);
   const [copied, setCopied] = useState(false);
-  const url = publicLinkUrl(page.slug, origin);
+  const url = shareUrl || publicLinkUrl(page.slug, origin);
   const connected = [page.settings.ga4 && "GA4", page.settings.metaPixel && "Meta 픽셀", page.settings.tiktokPixel && "TikTok 픽셀"].filter(Boolean) as string[];
   /* React 의 <details open> 은 리렌더마다 prop 값으로 되돌린다 — 토스트 하나에 접히지 않게 상태로 든다 */
   const [adOpen, setAdOpen] = useState(() => connected.length > 0);
@@ -4138,7 +4151,7 @@ function MarketingPanel({
         방문·클릭·기기·유입 분석은 <strong className="font-semibold">핀치가 자동으로 집계해요</strong> — 아무 설정 없이 「분석」 탭에서 바로 보세요.
       </p>
 
-      <PlatformLinks slug={page.slug} origin={origin} />
+      <PlatformLinks baseUrl={url} />
 
       <section className="space-y-2 border-t border-line pt-5">
         <h4 className="text-[15px] font-semibold">클릭에 UTM 자동 붙이기</h4>
