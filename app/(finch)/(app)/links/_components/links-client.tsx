@@ -37,7 +37,6 @@ import {
   Redo2,
   Rocket,
   Settings,
-  Smartphone,
   Sparkles,
   Trash2,
   Undo2,
@@ -953,39 +952,6 @@ export function LinksClient({
         </p>
       ) : null}
 
-      {/* 상단 바 — 탭 5개 · 주소 도구 · ⚙ 페이지 설정 · 공개 · 라이브 반영 */}
-      <TopBar
-        page={page}
-        shareUrl={shareUrl}
-        pages={pages}
-        pageLimit={pageLimit}
-        multiReady={multiReady}
-        onSwitchPage={(id) => {
-          if (id === page.id) return;
-          /* 미저장 초안이 있으면 나가기 모달로 — 다른 페이지로 가는 것도 이 페이지를 떠나는 것이다 */
-          if (!isDemo && exitDirty) {
-            setExitTo({ kind: "page", id });
-            return;
-          }
-          if (isDemo && anyDirty && !window.confirm("저장하지 않은 편집이 있어요. 페이지를 이동할까요?")) return;
-          startTransition(() => router.push(`/links?page=${id}`));
-        }}
-        onNewPage={() => setNewPageOpen(true)}
-        onNewSubpage={() => setNewSubOpen(true)}
-        origin={origin}
-        busy={busy}
-        tab={tab}
-        onTab={switchTab}
-        onOpenSettings={() => {
-          setError(null);
-          setSettingsOpen(true);
-        }}
-        /* 발행은 초안을 스냅샷으로 복사할 뿐 — 초안 조작의 실행취소는 그대로 유효하다 */
-        onPublish={() => run(() => publishLinkPage(page.id))}
-        onRevert={publishDirty ? () => setRevertOpen(true) : undefined}
-        hasFeed={blocks.some((b) => b.active && b.type === "social_feed")}
-        history={tab === "page" ? historyButtons : null}
-      />
 
       {scheduleFor ? (
         <ScheduleModal
@@ -1266,9 +1232,43 @@ export function LinksClient({
       {/* ── 배치: 좌(탭 콘텐츠) · 우(라이브 미리보기 폰 — 페이지 탭에선 눌러서 바로 편집).
             폰은 **하나**다. 전엔 편집 폰 + 미리보기 폰 둘이었는데 같은 것을 두 번 보여 화면만 복잡했다(2026-08-23 재편).
             xl 미만은 한 칸으로 쌓이고, 칸은 minmax(0,1fr) 로 못 박는다. ── */}
-      {/* 미리보기 칸은 xl 28rem·2xl 32rem — "미리보기를 더 키워 달라"(2026-08-23). 폰 프레임이 칸 폭을 따라온다 */}
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,1fr)_28rem] xl:items-start 2xl:grid-cols-[minmax(0,1fr)_32rem]">
+      {/* 2026-08-24 리틀리 배치로 재편: **폰이 왼쪽 첫 칸**(전체 높이·크게), 탭 패널이 오른쪽.
+          모바일(<xl)은 한 칸으로 쌓이는데 DOM 순서는 컨트롤 먼저다 — 폰을 먼저 쌓으면
+          작은 화면에서 편집 도구가 전부 접힌 아래로 밀린다. 데스크톱에서만 order 로 왼쪽으로 옮긴다. */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[23rem_minmax(0,1fr)] xl:items-start 2xl:grid-cols-[26rem_minmax(0,1fr)]">
         <div className="min-w-0 space-y-4">
+          {/* 상단 바 — 리틀리처럼 **오른쪽 칸 안**에 둔다(2026-08-24). 폰 위에 아무것도 없어야
+              폰이 화면 높이를 꽉 쓴다 — 전에는 이 바가 위에 있어 폰 밑이 화면 밖으로 잘렸다. */}
+          <TopBar
+            page={page}
+            pages={pages}
+            pageLimit={pageLimit}
+            multiReady={multiReady}
+            onSwitchPage={(id) => {
+              if (id === page.id) return;
+              /* 미저장 초안이 있으면 나가기 모달로 — 다른 페이지로 가는 것도 이 페이지를 떠나는 것이다 */
+              if (!isDemo && exitDirty) {
+                setExitTo({ kind: "page", id });
+                return;
+              }
+              if (isDemo && anyDirty && !window.confirm("저장하지 않은 편집이 있어요. 페이지를 이동할까요?")) return;
+              startTransition(() => router.push(`/links?page=${id}`));
+            }}
+            onNewPage={() => setNewPageOpen(true)}
+            onNewSubpage={() => setNewSubOpen(true)}
+            busy={busy}
+            tab={tab}
+            onTab={switchTab}
+            onOpenSettings={() => {
+              setError(null);
+              setSettingsOpen(true);
+            }}
+            /* 발행은 초안을 스냅샷으로 복사할 뿐 — 초안 조작의 실행취소는 그대로 유효하다 */
+            onPublish={() => run(() => publishLinkPage(page.id))}
+            onRevert={publishDirty ? () => setRevertOpen(true) : undefined}
+            hasFeed={blocks.some((b) => b.active && b.type === "social_feed")}
+            history={tab === "page" ? historyButtons : null}
+          />
           {tab === "page" ? (
             <>
               {/* 템플릿 적용하기 — 접이식 스트립. 넘치는 쪽은 가장자리 페이드. 첫 칸은 가져오기. */}
@@ -1594,35 +1594,12 @@ export function LinksClient({
           ) : null}
         </div>
 
-        {/* 라이브 미리보기 — 항상 오른쪽. 페이지 탭에선 **편집 캔버스**(누르면 목록의 그 행이 펼쳐진다), 다른 탭에선 읽기 전용 */}
-        <Card className="xl:sticky xl:top-[4.5rem]">
+        {/* 폰 — 리틀리처럼 **왼쪽·전체 높이**. 페이지 탭에선 편집 캔버스(누르면 목록의 그 행이 펼쳐진다),
+            다른 탭에선 읽기 전용. 폰 **위**에는 아무것도 두지 않는다(제목줄을 없앤 만큼 폰이 커진다) —
+            주소·복사·QR 과 상태 문구는 리틀리와 같이 폰 **아래**. */}
+        <Card className="xl:sticky xl:top-[4.5rem] xl:order-first">
           {/* 폰에게 자리를 최대한 — CardBody(p-4) 대신 p-3. cn 은 tailwind-merge 가 아니라 className 으로 p-4 를 못 이긴다(소넷) */}
           <div className="space-y-2 p-3">
-            <div className="flex items-center justify-between">
-              <h3 className="flex items-center gap-1.5 text-[15px] font-bold">
-                <Smartphone className="size-4 text-fg-sub" aria-hidden />
-                {tab === "page" ? "미리보기 · 눌러서 편집" : "라이브 미리보기"}
-              </h3>
-              <Button variant="ghost" size="sm" onClick={() => window.open(shareUrl, "_blank", "noopener,noreferrer")}>
-                <ExternalLink className="size-3.5" aria-hidden />
-                링크 열기
-              </Button>
-            </div>
-            {/* published(공개 스위치)를 먼저 본다 — 발행만 하고 공개를 안 켠 상태에서
-                "공개 주소와 같은 모습" 이라고 말하면 방문자는 404 인데 소유자는 모른다(감사 #4) */}
-                <p className="text-[12px] text-fg-sub">
-                  {profileDirty || customDirty || editorDirty
-                    ? "저장하지 않은 편집이 보여요 — 저장한 뒤 「라이브 반영」을 누르면 공개 주소에 반영돼요."
-                    : !page.published
-                    ? page.publishedAt
-                      ? "비공개예요 — 설정에서 「공개」를 켜야 방문자가 볼 수 있어요."
-                      : "지금 모습이에요 — 「라이브 반영」 후 설정에서 「공개」를 켜면 주소가 살아나요."
-                    : page.publishedAt
-                      ? page.dirty
-                        ? "지금 모습이에요 — 「라이브 반영」을 누르면 공개 주소에 반영돼요."
-                        : "공개 주소와 같은 모습이에요."
-                      : "지금 모습이에요 — 「라이브 반영」을 누르면 공개 주소가 살아나요."}
-                </p>
             {tab === "page" ? (
               <PhonePreview
                 page={draftPageView}
@@ -1641,6 +1618,25 @@ export function LinksClient({
                 frame="device"
               />
             )}
+
+            {/* 주소줄 — 리틀리는 폰 바로 아래에 주소 + 도구를 둔다. 칸이 좁아 아이콘 전용 */}
+            <ShareRow url={shareUrl} busy={busy} />
+
+            {/* published(공개 스위치)를 먼저 본다 — 발행만 하고 공개를 안 켠 상태에서
+                "공개 주소와 같은 모습" 이라고 말하면 방문자는 404 인데 소유자는 모른다(감사 #4) */}
+            <p className="text-center text-[12px] leading-[1.6] text-fg-sub">
+              {profileDirty || customDirty || editorDirty
+                ? "저장하지 않은 편집이 보여요 — 저장한 뒤 「라이브 반영」을 누르면 공개 주소에 반영돼요."
+                : !page.published
+                  ? page.publishedAt
+                    ? "비공개예요 — 설정에서 「공개」를 켜야 방문자가 볼 수 있어요."
+                    : "지금 모습이에요 — 「라이브 반영」 후 설정에서 「공개」를 켜면 주소가 살아나요."
+                  : page.publishedAt
+                    ? page.dirty
+                      ? "지금 모습이에요 — 「라이브 반영」을 누르면 공개 주소에 반영돼요."
+                      : "공개 주소와 같은 모습이에요."
+                    : "지금 모습이에요 — 「라이브 반영」을 누르면 공개 주소가 살아나요."}
+            </p>
           </div>
         </Card>
       </div>
@@ -1677,14 +1673,12 @@ export function LinksClient({
 
 function TopBar({
   page,
-  shareUrl,
   pages = [],
   pageLimit = { used: 0, max: 1 },
   multiReady = false,
   onSwitchPage,
   onNewPage,
   onNewSubpage,
-  origin,
   busy,
   tab,
   onTab,
@@ -1695,15 +1689,12 @@ function TopBar({
   history,
 }: {
   page: LinkPageView;
-  /** 표준 공유 주소 — 서브 페이지는 /p/{부모}/{sub}. 모든 공유 표면이 이 값 하나를 쓴다 */
-  shareUrl?: string;
   pages?: LinkPageSummary[];
   pageLimit?: { used: number; max: number };
   multiReady?: boolean;
   onSwitchPage?: (id: string) => void;
   onNewPage?: () => void;
   onNewSubpage?: () => void;
-  origin: string;
   busy: boolean;
   tab: Tab;
   onTab: (t: Tab) => void;
@@ -1716,20 +1707,6 @@ function TopBar({
   /** 2행 왼쪽 — 실행취소/다시실행(페이지 탭에서만) */
   history?: React.ReactNode;
 }) {
-  const [copied, setCopied] = useState(false);
-  const [qr, setQr] = useState(false);
-  const url = shareUrl || publicLinkUrl(page.slug, origin);
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
-    } catch {
-      /* 권한 거부·비보안 컨텍스트 — 주소가 화면에 보이니 손으로 복사하면 된다 */
-    }
-  }
-
   const publishable = page.dirty || !page.publishedAt || hasFeed;
 
   return (
@@ -1770,21 +1747,8 @@ function TopBar({
             onNewSubpage={onNewSubpage}
           />
         ) : null}
-        <code className="min-w-0 flex-1 truncate px-1 text-[12px] text-fg-sub">{url}</code>
-
-        <Button variant="secondary" size="sm" onClick={copy}>
-          {copied ? <Check className="size-3.5" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
-          {copied ? "복사됨" : "복사"}
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => window.open(url, "_blank", "noopener,noreferrer")}>
-          <ExternalLink className="size-3.5" aria-hidden />
-          열기
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => setQr(true)}>
-          <QrCode className="size-3.5" aria-hidden />
-          QR
-        </Button>
-        {qr ? <QrModal url={url} onClose={() => setQr(false)} /> : null}
+        {/* 주소·복사·열기·QR 은 폰 아래(ShareRow)로 옮겼다 — 리틀리 배치(2026-08-24) */}
+        <span className="flex-1" />
         <Button variant="ghost" size="sm" onClick={onOpenSettings} aria-haspopup="dialog" disabled={busy}>
           <Settings className="size-3.5" aria-hidden />
           페이지 설정
@@ -2678,6 +2642,43 @@ function NewSubpageModal({ busy, parentTitle, onClose, onSubmit }: { busy: boole
         </div>
       </div>
     </ModalShell>
+  );
+}
+
+/* 폰 아래 주소줄(리틀리 배치, 2026-08-24) — 주소 + 복사·열기·QR. 칸이 좁아 아이콘 전용 */
+function ShareRow({ url, busy }: { url: string; busy: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const [qr, setQr] = useState(false);
+  const icon = "trans-state flex size-8 shrink-0 items-center justify-center rounded-card border border-line text-fg-sub hover:border-primary hover:text-fg disabled:opacity-50";
+  return (
+    <div className="flex items-center gap-1.5">
+      <code className="min-w-0 flex-1 truncate rounded-card border border-line bg-plate px-2.5 py-1.5 text-[12px] text-fg-sub">{url}</code>
+      <button
+        type="button"
+        aria-label="주소 복사"
+        title="주소 복사"
+        disabled={busy}
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(url);
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1600);
+          } catch {
+            /* 권한 거부·비보안 컨텍스트 — 주소가 화면에 보이니 손으로 복사하면 된다 */
+          }
+        }}
+        className={icon}
+      >
+        {copied ? <Check className="size-3.5 text-positive-strong" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
+      </button>
+      <button type="button" aria-label="링크 열기" title="링크 열기" onClick={() => window.open(url, "_blank", "noopener,noreferrer")} className={icon}>
+        <ExternalLink className="size-3.5" aria-hidden />
+      </button>
+      <button type="button" aria-label="QR 코드" title="QR 코드" onClick={() => setQr(true)} className={icon}>
+        <QrCode className="size-3.5" aria-hidden />
+      </button>
+      {qr ? <QrModal url={url} onClose={() => setQr(false)} /> : null}
+    </div>
   );
 }
 
