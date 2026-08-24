@@ -132,8 +132,9 @@ B단계(판매·예약·멤버십·광고·스토어 동기화)는 PG·정산·�
   서버 액션 본문(base64)은 Vercel 함수 상한 4.5MB 에 걸린다. 버킷 `file_size_limit`/`allowed_mime_types` 가 1차 방어(0059 ⑦).
 - 0059 설계: 비밀번호 시도는 `link_unlock_attempts`(service_role 전용, 페이지 천장 30/10분 + 방문자 8/10분), 풀린 주소 보류는
   트리거(`trg_link_pages_slug_hold`), 공개 읽기 정책은 **anon 전용** — 로그인한 방문자는 `loadPublicPage` 가 service_role 로 공개 컬럼만 읽는다.
-- 감사 3라운드에서 남긴 것(보조, 구조 변경 필요): `<html lang>` 이 /p/* 에서도 ko 고정(route group 으로 공개 페이지 전용 루트 레이아웃 필요),
-  루트 `GoogleAnalytics`(NEXT_PUBLIC_GA_ID 설정 시) 가 /p/* 에도 실려 주인 픽셀과 dataLayer 를 공유(현재 미설정이라 잠복), 이미지 블록 width/height 미기록(CLS).
+- ~~감사 3라운드에서 남긴 것~~ → **2026-08-24 루트 레이아웃 분리로 해소**: 앱·마케팅은 `app/(finch)/layout.tsx`, 방문자 페이지는 `app/p/layout.tsx`
+  (GA 태그·finch-theme 다크 스크립트 없음, 문서 언어는 page.tsx 의 `<main lang>`). 전역 404 는 `(finch)/[...notfound]` 캐치올,
+  /p 전용 404 는 `app/p/not-found.tsx`(핀치 대시보드 링크 없는 담백한 화면). 남은 것: 이미지 블록 width/height 미기록(CLS).
 - 0059 는 프로덕션에 **트랜잭션 드라이런(begin…rollback) 통과** — 구문·의존성 검증 완료, 적용만 남음.
 - 안 한 것(리틀리 대비): 커스텀 도메인, 멀티/서브 페이지, 국가 지도, 엑셀(xlsx — CSV 로 대체), 수익화(판매·후원 정산), UTM 자동 부착·메타태그.
 

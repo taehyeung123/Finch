@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import { pretendard } from "@/lib/fonts";
-import "./globals.css";
+import "../globals.css";
 
 export const metadata: Metadata = {
   // 도메인 확정: finch.ai.kr (2026-07 — finch.kr은 타사 소유라 사용 불가)

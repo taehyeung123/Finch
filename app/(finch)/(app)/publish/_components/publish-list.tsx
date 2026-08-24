@@ -18,7 +18,7 @@ import {
   shiftMonth,
 } from "@/lib/calendar";
 import { SnsIcon } from "@/components/sns-brand-icons";
-import { cancelScheduledPost } from "@/app/(app)/studio/actions";
+import { cancelScheduledPost } from "@/app/(finch)/(app)/studio/actions";
 import { deleteDraft, scheduleDraft } from "../actions";
 import { PostComposer, type ComposerChannel } from "./post-composer";
 
