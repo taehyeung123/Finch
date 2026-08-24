@@ -56,7 +56,8 @@ export function GuestbookForm({ slug, blockId, placeholder, isDemo, t, errors }:
       <button
         type="submit"
         disabled={pending}
-        className="flex min-h-[44px] w-full items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] text-[14px] font-semibold text-[var(--lp-on-accent)] transition-opacity hover:opacity-85 disabled:opacity-60"
+        /* 문의 폼 제출과 같은 높이·같은 위계로(2026-08-24 비평 — 폼마다 제출 크기가 달랐다) */
+        className="lp-btn flex min-h-[56px] w-full items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] text-[15px] font-semibold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)] disabled:opacity-60"
       >
         {pending ? t.sending : t.send}
       </button>

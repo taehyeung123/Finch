@@ -13,7 +13,7 @@ export function SubscribeButton({ label, inline = false }: { label: string; inli
         el.scrollIntoView({ behavior: "smooth", block: "center" });
         window.setTimeout(() => el.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true }), 450);
       }}
-      className={`${inline ? "relative" : "absolute left-5 top-4 z-20"} inline-flex h-9 items-center gap-1.5 rounded-full bg-[var(--lp-accent)] px-3.5 text-[14px] font-semibold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)] transition-opacity hover:opacity-85`}
+      className={`${inline ? "relative" : "absolute left-5 top-4 z-20"} lp-btn inline-flex h-11 items-center gap-1.5 rounded-full bg-[var(--lp-accent)] px-4 text-[14px] font-semibold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)]`}
     >
       <Mail className="size-3.5" aria-hidden />
       {label}

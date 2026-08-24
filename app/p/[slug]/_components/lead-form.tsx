@@ -132,7 +132,8 @@ export function LeadForm({
       <button
         type="submit"
         disabled={busy || isDemo}
-        className="min-h-11 w-full rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-5 text-[15px] font-semibold text-[var(--lp-on-accent)] transition-opacity hover:opacity-85 disabled:opacity-50"
+        /* 제출이 페이지에서 가장 작은 버튼이었다 — 본문 링크 버튼과 같은 56px 로(2026-08-24 비평) */
+        className="lp-btn min-h-[56px] w-full rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-5 text-[15px] font-semibold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)] disabled:opacity-50"
       >
         {busy ? t.sending : s("buttonLabel") || (kind === "subscribe" ? t.subscribe : t.send)}
       </button>

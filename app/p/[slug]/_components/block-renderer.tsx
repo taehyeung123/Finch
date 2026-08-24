@@ -69,12 +69,13 @@ function Tags({ d, align = "center", inherit = false }: { d: Record<string, unkn
 }
 
 /** 판매가·정가 — 표시용 문자열 그대로. 정가는 취소선 */
-function Price({ d, size = "md", inherit = false }: { d: Record<string, unknown>; size?: "sm" | "md"; inherit?: boolean }) {
+function Price({ d, size = "md", inherit = false, align = "start" }: { d: Record<string, unknown>; size?: "sm" | "md"; inherit?: boolean; align?: "center" | "start" }) {
   const price = s(d, "price");
   if (!price) return null;
   const orig = s(d, "originalPrice");
   return (
-    <span className={`tnum mt-1 flex items-baseline gap-1.5 ${size === "sm" ? "text-[13px]" : "text-[15px]"}`}>
+    /* 정렬은 Tags 와 같은 규칙 — 가운데 정렬 카드에서 가격만 왼쪽에 붙던 것(2026-08-24 비평) */
+    <span className={`tnum mt-1 flex items-baseline gap-1.5 ${align === "center" ? "justify-center" : ""} ${size === "sm" ? "text-[13px]" : "text-[15px]"}`}>
       <span className={`font-bold ${inherit ? "" : "text-[var(--lp-fg)]"}`}>{price}</span>
       {orig ? <span className={`text-[12px] line-through ${inherit ? "opacity-70" : "text-[var(--lp-muted)]"}`}>{orig}</span> : null}
     </span>
@@ -164,11 +165,13 @@ export function BlockRenderer({
       return (
         <a
           href={`/p/${slug}/vcard/${block.id}`}
-          className="lp-btn flex min-h-[52px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] border border-[var(--lp-btn-border)] bg-[var(--lp-btn-bg)] px-5 py-3 text-[15px] font-semibold text-[var(--lp-btn-fg)] shadow-[var(--lp-shadow)] transition-opacity hover:opacity-85"
+          className="lp-btn flex min-h-[56px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] border border-[var(--lp-btn-border)] bg-[var(--lp-btn-bg)] px-5 py-3 text-[15px] font-semibold text-[var(--lp-btn-fg)] shadow-[var(--lp-shadow)]"
         >
           <UserPlus className="size-4" aria-hidden />
           {s(d, "label") || t.vcard}
-          <span className="text-[12px] font-normal text-[var(--lp-muted)]">· {s(d, "name")}</span>
+          {/* 이름은 버튼 글자색을 **상속**한다 — muted 로 두면 「강조색 전체 적용」 테마에서
+              강조색 위 회색이 되어 안 읽힌다(2026-08-24 비평) */}
+          <span className="text-[12px] font-normal opacity-75">· {s(d, "name")}</span>
         </a>
       );
     }
@@ -181,7 +184,7 @@ export function BlockRenderer({
       const size = n(d, "fileSize", 0);
       const sizeLabel = size > 0 ? (size >= 1024 * 1024 ? `${(size / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(size / 1024))}KB`) : "";
       return (
-        <a href={goHref(slug, block.id)} {...ext} className={`lp-btn ${cardCls} flex items-center gap-3 p-3 transition-opacity hover:opacity-90`}>
+        <a href={goHref(slug, block.id)} {...ext} className={`lp-btn ${cardCls} flex items-center gap-3 p-3`}>
           <span className="flex size-11 shrink-0 items-center justify-center rounded-[calc(var(--lp-radius)/1.6)] bg-[var(--lp-accent)] text-[var(--lp-on-accent)]" aria-hidden>
             <Download className="size-5" />
           </span>
@@ -259,7 +262,7 @@ export function BlockRenderer({
           <a
             href={goHref(slug, block.id)}
             {...ext}
-            className={`lp-btn ${cardCls} overflow-hidden transition-opacity hover:opacity-90 ${big ? "" : "flex items-center gap-3 p-3"}`}
+            className={`lp-btn ${cardCls} overflow-hidden ${big ? "" : "flex items-center gap-3 p-3"}`}
           >
             {thumb ? (
               // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
@@ -275,7 +278,7 @@ export function BlockRenderer({
                 {emoji ? <span aria-hidden>{emoji} </span> : null}
                 {label}
               </span>
-              <Price d={d} size={big ? "md" : "sm"} />
+              <Price d={d} size={big ? "md" : "sm"} align={big ? "center" : "start"} />
               <Tags d={d} align={big ? "center" : "start"} />
             </span>
           </a>
@@ -288,10 +291,13 @@ export function BlockRenderer({
           {...ext}
           style={textStyle}
           className={[
-            "lp-btn flex min-h-[56px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] px-5 py-3 text-center text-[15px] font-semibold transition-[opacity,box-shadow] hover:opacity-90",
-            hasExtras ? "flex-col gap-0.5" : "",
+            "lp-btn flex min-h-[56px] w-full items-center justify-center rounded-[var(--lp-radius-btn)] px-5 py-3 text-center text-[15px] font-semibold",
+            /* gap 은 **하나만** 건다 — gap-2 와 gap-0.5 를 겹쳐 쓰면 어느 쪽이 이길지가
+               Tailwind 방출 순서에 달린다(2026-08-24 비평) */
+            hasExtras ? "flex-col gap-0.5" : "gap-2",
             primary
-              ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]"
+              /* 강조 버튼에만 그림자가 없어 일반 버튼보다 낮게 깔렸다(위계 역전, 2026-08-24 비평) */
+              ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)]"
               : outline
                 ? "border-2 border-[var(--lp-accent)] bg-transparent text-[var(--lp-accent-text)]"
                 : "border border-[var(--lp-btn-border)] bg-[var(--lp-btn-bg)] text-[var(--lp-btn-fg)] shadow-[var(--lp-shadow)]",
@@ -392,7 +398,7 @@ export function BlockRenderer({
             {/* 카드 전체가 이미 링크다 — 버튼은 <span> 이어야 한다(<a> 중첩은 무효 HTML).
                 url 이 없으면 누를 수 없으므로 버튼도 안 그린다. */}
             {cta && url ? (
-              <span className="mt-3 flex min-h-[40px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-4 text-[14px] font-semibold text-[var(--lp-on-accent)]">
+              <span className="lp-btn mt-3 flex min-h-[48px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-4 text-[15px] font-semibold text-[var(--lp-on-accent)]">
                 {cta}
               </span>
             ) : null}
@@ -400,7 +406,8 @@ export function BlockRenderer({
         </div>
       );
       return url ? (
-        <a href={goHref(slug, block.id)} {...ext} aria-label={s(d, "title") || s(d, "subtitle") || s(d, "ctaLabel") ? undefined : t.imageLink} className="block">
+        /* 카드 전체가 링크다 — lp-btn 을 붙여 다른 누를 수 있는 면과 같은 호버·눌림을 준다(2026-08-24 비평) */
+        <a href={goHref(slug, block.id)} {...ext} aria-label={s(d, "title") || s(d, "subtitle") || s(d, "ctaLabel") ? undefined : t.imageLink} className="lp-btn block">
           {inner}
         </a>
       ) : (
@@ -419,7 +426,7 @@ export function BlockRenderer({
           <a
             href={goHref(slug, block.id)}
             {...ext}
-            className={`${cardCls} flex min-h-[52px] items-center justify-center px-5 py-3 text-[15px] font-semibold text-[var(--lp-fg)]`}
+            className={`lp-btn ${cardCls} flex min-h-[56px] items-center justify-center px-5 py-3 text-[15px] font-semibold text-[var(--lp-fg)]`}
           >
             ▶ {s(d, "title") || t.video}
           </a>
@@ -498,9 +505,10 @@ export function BlockRenderer({
             // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
             <img src={s(it, "imagePath")} alt="" className="aspect-square w-full object-cover" loading="lazy" />
           ) : null}
-          <span className="block px-2.5 py-2 text-center text-[14px] font-medium text-[var(--lp-fg)]">
+          {/* 사진 없는 셀은 라벨만이라 40px 이었다 — 터치 최소치(44px)를 바닥으로 준다(2026-08-24 비평) */}
+          <span className="flex min-h-11 flex-col items-center justify-center px-2.5 py-2 text-center text-[14px] font-medium text-[var(--lp-fg)]">
             {s(it, "title")}
-            <Price d={it} size="sm" />
+            <Price d={it} size="sm" align="center" />
           </span>
         </a>
       ));
@@ -584,7 +592,7 @@ export function BlockRenderer({
             <a
               href={goHref(slug, block.id)}
               {...ext}
-              className="mt-2.5 flex min-h-[44px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-4 text-[14px] font-semibold text-[var(--lp-on-accent)] transition-opacity hover:opacity-85"
+              className="lp-btn mt-2.5 flex min-h-[48px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-4 text-[15px] font-semibold text-[var(--lp-on-accent)]"
             >
               {t.coupangView}
             </a>
@@ -602,7 +610,7 @@ export function BlockRenderer({
           <a
             href={goHref(slug, block.id)}
             {...ext}
-            className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-5 py-3 text-center text-[15px] font-semibold text-[var(--lp-on-accent)] transition-opacity hover:opacity-85"
+            className="lp-btn flex min-h-[56px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-5 py-3 text-center text-[15px] font-semibold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)]"
           >
             {s(d, "emoji") ? <span aria-hidden>{s(d, "emoji")}</span> : null}
             {s(d, "label") || t.donate}
@@ -619,7 +627,7 @@ export function BlockRenderer({
         <a
           href={`https://map.kakao.com/link/search/${encodeURIComponent(address)}`}
           {...ext}
-          className={`${cardCls} block px-4 py-3.5`}
+          className={`lp-btn ${cardCls} block min-h-[56px] px-4 py-3.5`}
         >
           <p className="text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "label") || t.map}</p>
           <p className="mt-1 text-[14px] text-[var(--lp-muted)]">{address}</p>

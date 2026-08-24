@@ -200,7 +200,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
             {...ext}
             aria-label={SNS_LABEL.get(s.kind) ?? s.kind}
             title={SNS_LABEL.get(s.kind) ?? s.kind}
-            className="flex size-11 items-center justify-center rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] shadow-[var(--lp-shadow)] transition-opacity hover:opacity-80"
+            className="lp-btn flex size-11 items-center justify-center rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] shadow-[var(--lp-shadow)]"
           >
             <SnsIcon kind={s.kind} className="size-[18px] shrink-0" />
           </a>
@@ -390,7 +390,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
           <Link
             href="/?utm_source=profile_link&utm_medium=badge"
             target="_blank"
-            className="inline-flex items-center gap-2 rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-4 py-2 text-[13px] font-semibold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] transition-opacity hover:opacity-80"
+            className="lp-btn inline-flex min-h-[44px] items-center gap-2 rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-4 py-2 text-[13px] font-semibold text-[var(--lp-muted)] shadow-[var(--lp-shadow)]"
           >
             <FinchMark className="size-4 text-primary" />
             {t.badge}
@@ -406,7 +406,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
             <a
               href={`/p/${slug}/go/${emphasized.block.id}`}
               {...ext}
-              className="lp-btn pointer-events-auto inline-flex min-h-[48px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-6 text-[15px] font-bold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)]"
+              className="lp-btn pointer-events-auto inline-flex min-h-[56px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-6 text-[15px] font-bold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)]"
             >
               {emphasized.cta.label}
             </a>

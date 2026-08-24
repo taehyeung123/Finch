@@ -1050,7 +1050,25 @@ body {
    .lp-block        : 블록 래퍼. data-lp-anim 이 스크롤 진입 애니를 고른다(scroll-driven,
                       미지원 브라우저는 그냥 보인다).
 ─────────────────────────────────────────────────────────────── */
-.lp-btn { position: relative; }
+/* 누를 수 있는 면의 **공통 상태**(2026-08-24 비평) — 전에는 블록마다 hover:opacity-80/85/90 이
+   제각각이었고 카드 3종(가로 카드·그리드·이미지 카드)은 아무 반응이 없었으며, 눌림 반응은
+   「버튼 액션」을 켠 사람만 봤다. 이제 .lp-btn 하나가 세 상태를 다 정한다.
+   transform 은 --lp-fx 효과와 충돌하지 않게 **효과가 없을 때만** 쓴다. */
+.lp-btn {
+  position: relative;
+  transition:
+    opacity var(--dur-2) var(--ease-arrive),
+    filter var(--dur-2) var(--ease-arrive),
+    box-shadow var(--dur-2) var(--ease-arrive);
+}
+.lp-btn:hover { opacity: 0.92; }
+/* 눌림 — 색이 아니라 밝기로. 어떤 테마(밝은 카드·어두운 강조색)에서도 같은 신호가 된다 */
+.lp-btn:active { filter: brightness(0.96); }
+:root:not([data-lp-fx]) .lp-btn:active,
+[data-lp-fx="none"] .lp-btn:active { transform: scale(0.985); }
+@media (prefers-reduced-motion: reduce) {
+  .lp-btn:active { transform: none; }
+}
 [data-lp-fx] .lp-btn { transition: transform var(--dur-2) var(--ease-arrive), opacity var(--dur-2) var(--ease-arrive); }
 /* 원 채움 — 가운데서 원이 번진다 */
 [data-lp-fx="circle"] .lp-btn { overflow: hidden; isolation: isolate; }

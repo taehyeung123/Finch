@@ -34,7 +34,7 @@ export function Collapsible({
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="mt-2 flex min-h-[40px] w-full items-center justify-center rounded-[var(--lp-radius-btn)] border border-[var(--lp-border)] bg-[var(--lp-card)] text-[13px] font-semibold text-[var(--lp-muted)] transition-opacity hover:opacity-80"
+          className="lp-btn mt-2 flex min-h-[44px] w-full items-center justify-center rounded-[var(--lp-radius-btn)] border border-[var(--lp-border)] bg-[var(--lp-card)] text-[14px] font-semibold text-[var(--lp-muted)]"
         >
           {open ? lessLabel : moreLabel.replace("{n}", String(items.length - initial))}
         </button>
