@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Pencil, Plus, Share2, Trash2 } from "lucide-react";
+import { MapPin, ExternalLink, ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Pencil, Plus, Share2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { FinchMark } from "@/components/logo";
 import { SnsIcon } from "@/components/sns-brand-icons";
@@ -73,12 +73,20 @@ function PTags({ d, align = "center", inherit = false }: { d: Record<string, unk
     </span>
   );
 }
-function PPrice({ d }: { d: Record<string, unknown> }) {
+/** 공개 Price(목록·셀 14 / 카드 본문 17)를 프레임 비율로 줄인 값 — 12 / 15 */
+/** 파일 용량 표시 — 공개 렌더러와 같은 규칙(1MB 이상은 MB, 아니면 KB) */
+function previewFileSize(d: Record<string, unknown>): string {
+  const size = typeof d.fileSize === "number" ? d.fileSize : 0;
+  if (size <= 0) return "";
+  return size >= 1024 * 1024 ? `${(size / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(size / 1024))}KB`;
+}
+
+function PPrice({ d, size = "sm" }: { d: Record<string, unknown>; size?: "sm" | "md" }) {
   const price = s(d, "price");
   if (!price) return null;
   const orig = s(d, "originalPrice");
   return (
-    <span className="tnum mt-0.5 flex items-baseline gap-1 text-[12px]">
+    <span className={`tnum mt-0.5 flex items-baseline gap-1 ${size === "sm" ? "text-[12px]" : "text-[15px]"}`}>
       <span className="font-bold">{price}</span>
       {orig ? <span className="text-[10px] opacity-70 line-through">{orig}</span> : null}
     </span>
@@ -823,7 +831,7 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
                 {s(d, "emoji") ? <span aria-hidden>{s(d, "emoji")} </span> : null}
                 {s(d, "label") || "링크"}
               </span>
-              <PPrice d={d} />
+              <PPrice d={d} size={big ? "md" : "sm"} />
               <PTags d={d} align={big ? "center" : "start"} />
             </span>
           </div>
@@ -861,7 +869,8 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
     case "text":
       return (
         <p
-          className="whitespace-pre-wrap text-[13px] leading-[1.7] text-[var(--lp-muted)]"
+          /* 사용자가 쓴 본문 — 공개 페이지와 같이 본문색(muted 면 각주처럼 읽힌다) */
+          className="whitespace-pre-wrap text-[13px] leading-[1.7] text-[var(--lp-fg)]"
           style={{ textAlign: s(d, "align") === "center" ? "center" : "left" }}
         >
           {s(d, "text")}
@@ -976,7 +985,8 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
             <img src={s(it, "imagePath")} alt="" className="aspect-square w-full object-cover" />
           ) : null}
           {/* 공개와 같은 이유로 블록 — flex 자식이면 line-clamp 가 죽는다 */}
-          <span className="block px-2.5 py-2 text-center text-[12px] font-medium">
+          {/* 사진 없는 셀은 라벨만이라 낮아진다 — 공개와 같은 바닥(비율 축소값) */}
+          <span className={`block px-2.5 py-2 text-center text-[12px] font-medium ${s(it, "imagePath") ? "" : "min-h-9"}`}>
             <span className="line-clamp-2">{s(it, "title")}</span>
             <PPrice d={it} />
           </span>
@@ -1094,9 +1104,20 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
       );
     case "map":
       return (
-        <div className={`${card} px-3 py-2.5`}>
-          <p className="text-[13px] font-semibold">{s(d, "label") || "찾아오시는 길"}</p>
-          <p className="mt-0.5 text-[12px] text-[var(--lp-muted)]">{s(d, "address")}</p>
+        /* 공개 렌더러와 같은 모양 — 아이콘 칩 + 외부 링크 표시(눌러서 지도가 열린다는 신호) */
+        <div className={`${card} flex items-center gap-2.5 px-3 py-2.5`}>
+          <span
+            className="flex size-8 shrink-0 items-center justify-center rounded-[calc(var(--lp-radius)/1.6)]"
+            style={{ backgroundColor: "color-mix(in srgb, var(--lp-accent) 13%, transparent)", color: "var(--lp-accent-text)" }}
+            aria-hidden
+          >
+            <MapPin className="size-3.5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-semibold">{s(d, "label") || "찾아오시는 길"}</span>
+            <span className="mt-0.5 block truncate text-[12px] text-[var(--lp-muted)]">{s(d, "address")}</span>
+          </span>
+          <ExternalLink className="size-3 shrink-0 text-[var(--lp-muted)]" aria-hidden />
         </div>
       );
 
@@ -1161,7 +1182,11 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13px] font-semibold">{s(d, "title") || s(d, "fileName") || "파일"}</span>
-            <span className="block truncate text-[11px] text-[var(--lp-muted)]">{[s(d, "description"), s(d, "fileName")].filter(Boolean).join(" · ")}</span>
+            {/* 용량은 잘리지 않게 따로(공개와 같은 규칙) */}
+            <span className="flex items-baseline gap-1 text-[11px] text-[var(--lp-muted)]">
+              <span className="min-w-0 flex-1 truncate">{[s(d, "description"), s(d, "fileName")].filter(Boolean).join(" · ")}</span>
+              {previewFileSize(d) ? <span className="tnum shrink-0">{previewFileSize(d)}</span> : null}
+            </span>
           </span>
         </div>
       );

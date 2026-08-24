@@ -50,7 +50,7 @@ function goHref(slug: string, blockId: string, idx?: number): string {
   같은 성격의 카드가 서로 다른 밀도로 나왔다. 세 가지만 쓴다.
    · 카드 안쪽 여백: 사진이 꽉 찬 카드는 px-4 py-3.5, 손바닥만 한 셀은 px-3 py-2.5
    · 사진 격자 간격: gap-2(8px) 하나 — 갤러리·그리드·최근 게시물이 같은 밀도
-   · 가격: 카드 본문 17px / 목록·셀 13px (부제 14px 보다 작아지지 않는다)
+   · 가격: 카드 본문 17px / 목록·셀 14px (부제 14px 보다 작아지지 않는다)
 */
 const cardCls =
   "block rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-card)] shadow-[var(--lp-shadow)]";
