@@ -163,17 +163,19 @@ export const LINK_FONTS: ReadonlyArray<{ key: string; label: string; family: str
   { key: "cute-font", label: "귀여운 글꼴", family: '"Cute Font", cursive', pkg: "cute-font", bold: false },
   { key: "nanum-brush", label: "나눔손글씨 붓", family: '"Nanum Brush Script", cursive', pkg: "nanum-brush-script", bold: false },
   { key: "nanum-coding", label: "나눔고딕코딩", family: '"Nanum Gothic Coding", monospace', pkg: "nanum-gothic-coding", bold: true },
-  { key: "inter", label: "Inter", family: '"Inter", sans-serif', pkg: "inter", bold: true },
-  { key: "montserrat", label: "Montserrat", family: '"Montserrat", sans-serif', pkg: "montserrat", bold: true },
-  { key: "poppins", label: "Poppins", family: '"Poppins", sans-serif', pkg: "poppins", bold: true },
-  { key: "raleway", label: "Raleway", family: '"Raleway", sans-serif', pkg: "raleway", bold: true },
-  { key: "space-grotesk", label: "Space Grotesk", family: '"Space Grotesk", sans-serif', pkg: "space-grotesk", bold: true },
-  { key: "playfair", label: "Playfair Display", family: '"Playfair Display", serif', pkg: "playfair-display", bold: true },
-  { key: "lora", label: "Lora", family: '"Lora", serif', pkg: "lora", bold: true },
-  { key: "dm-serif", label: "DM Serif Display", family: '"DM Serif Display", serif', pkg: "dm-serif-display", bold: false },
-  { key: "bebas", label: "Bebas Neue", family: '"Bebas Neue", sans-serif', pkg: "bebas-neue", bold: false },
-  { key: "pacifico", label: "Pacifico", family: '"Pacifico", cursive', pkg: "pacifico", bold: false },
-  { key: "caveat", label: "Caveat", family: '"Caveat", cursive', pkg: "caveat", bold: true },
+  /* 라틴 전용 글꼴 — 한글 글리프가 없어 generic 으로 떨어지면 굴림·Comic Sans 급이 된다.
+     한글은 앱 기본 글꼴(Pretendard)로 받아 라틴만 그 글꼴을 쓴다(2026-08-24 비평). */
+  { key: "inter", label: "Inter", family: '"Inter", "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "inter", bold: true },
+  { key: "montserrat", label: "Montserrat", family: '"Montserrat", "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "montserrat", bold: true },
+  { key: "poppins", label: "Poppins", family: '"Poppins", "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "poppins", bold: true },
+  { key: "raleway", label: "Raleway", family: '"Raleway", "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "raleway", bold: true },
+  { key: "space-grotesk", label: "Space Grotesk", family: '"Space Grotesk", "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "space-grotesk", bold: true },
+  { key: "playfair", label: "Playfair Display", family: '"Playfair Display", "Noto Serif KR", "Apple Myungjo", serif', pkg: "playfair-display", bold: true },
+  { key: "lora", label: "Lora", family: '"Lora", "Noto Serif KR", "Apple Myungjo", serif', pkg: "lora", bold: true },
+  { key: "dm-serif", label: "DM Serif Display", family: '"DM Serif Display", "Noto Serif KR", "Apple Myungjo", serif', pkg: "dm-serif-display", bold: false },
+  { key: "bebas", label: "Bebas Neue", family: '"Bebas Neue", "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "bebas-neue", bold: false },
+  { key: "pacifico", label: "Pacifico", family: '"Pacifico", "Nanum Pen Script", "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", cursive', pkg: "pacifico", bold: false },
+  { key: "caveat", label: "Caveat", family: '"Caveat", "Nanum Pen Script", "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", cursive', pkg: "caveat", bold: true },
 ];
 
 /** 글꼴 스타일시트 주소 — 공개 페이지·편집 미리보기가 <link rel="stylesheet"> 로 싣는다 */
@@ -525,20 +527,23 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
   /* 그림자 — 검정 그림자는 **어두운 지면에서 보이지 않는다**. 「진하게」를 골라도 아무 변화가 없어
      보였던 이유다(2026-08-24 비평). 어두운 배경이면 같은 자리에 **밝은 테두리 겹**을 쓴다
      (앱 다크 규칙과 같은 문법: 그림자 대신 밝기·테두리로 깊이). */
-  /* 사진 배경이면 밑색(bg)이 아니라 **덮은 겹**이 실제 지면 밝기다 — 밝은 밑색 + 어두운 사진에서
-     검은 그림자를 그대로 쓰면 또 안 보인다(소넷 확정). 필터가 정해지면 그 값을 따른다. */
-  const darkGround =
-    filter === "dark" || filter === "darkBlur"
-      ? true
-      : filter === "light" || filter === "blur"
-        ? false
-        : luminance(HEX.test(bg) ? bg : "#ffffff") < 0.35;
-  const shadowSoft = darkGround
-    ? "0 0 0 1px rgba(255,255,255,.07), 0 8px 20px rgba(0,0,0,.45)"
-    : "0 1px 3px rgba(15,23,42,.08), 0 6px 14px rgba(15,23,42,.04)";
-  const shadowStrong = darkGround
-    ? "0 0 0 1px rgba(255,255,255,.12), 0 14px 34px rgba(0,0,0,.6)"
-    : "0 2px 6px rgba(15,23,42,.12), 0 14px 32px rgba(15,23,42,.12)";
+  /* 지면 밝기 — **밑색만** 본다. 사진 배경은 서버에서 밝기를 알 수 없으므로 아래에서 따로 다룬다.
+     ⚠️ 필터로 판정하려던 시도는 틀렸다: 「밝게」(흰 35%) 겹은 새까만 사진을 밝게 만들지 못해
+     밝은 지면이라 단정하면 그림자가 또 사라진다(소넷 확정). */
+  const darkGround = luminance(HEX.test(bg) ? bg : "#ffffff") < 0.35;
+  /* 사진 배경이면 지면 밝기를 알 수 없다 — 밝은 겹·어두운 겹을 **함께** 써서 어느 쪽에서도 보이게 한다
+     (흰 헤어라인은 어두운 사진 위에서, 검은 그림자는 밝은 사진 위에서 각각 살아난다). */
+  const photoGround = !!c.bgImage;
+  const shadowSoft = photoGround
+    ? "0 0 0 1px rgba(255,255,255,.10), 0 1px 3px rgba(15,23,42,.10), 0 10px 24px rgba(15,23,42,.18)"
+    : darkGround
+      ? "0 0 0 1px rgba(255,255,255,.07), 0 8px 20px rgba(0,0,0,.45)"
+      : "0 1px 3px rgba(15,23,42,.08), 0 6px 14px rgba(15,23,42,.04)";
+  const shadowStrong = photoGround
+    ? "0 0 0 1px rgba(255,255,255,.14), 0 2px 6px rgba(15,23,42,.14), 0 16px 36px rgba(15,23,42,.28)"
+    : darkGround
+      ? "0 0 0 1px rgba(255,255,255,.12), 0 14px 34px rgba(0,0,0,.6)"
+      : "0 2px 6px rgba(15,23,42,.12), 0 14px 32px rgba(15,23,42,.12)";
   const shadowVal =
     c.shadow === "none"
       ? "none"
@@ -558,6 +563,9 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
      디자인 탭 문구가 "대비가 낮으면 자동으로 읽히는 쪽으로 바꿔요"라고 약속하고 있다. */
   const cardReadable = !c.card || contrastRatio(fg, card) >= 4.5;
   const cardSafe = cardReadable ? card : t.card;
+  /* 카드 밝기는 지면과 **다른 축**이다 — 카드 위에 얹는 잉크(오류색 등)는 이쪽을 따른다.
+     반드시 **가드를 통과한** cardSafe 를 본다(되돌려진 색이 실제로 칠해지는 색이다). */
+  const darkCard = luminance(HEX.test(cardSafe) ? cardSafe : "#ffffff") < 0.35;
   const btnBg = all ? accent : btn === "fill" ? cardSafe : btn === "outline" ? "transparent" : `color-mix(in srgb, ${accent} 14%, transparent)`;
   /* 외곽선·은은하게의 글자는 강조색인데, 코랄·피치처럼 밝은 강조색은 배경 위에서 2.3~3.1:1 이다 — 안 읽히면 본문색으로(감사2 U8) */
   const accentReadable = contrastRatio(accent, bg) >= 4.5;
@@ -595,7 +603,9 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
        어떤 테마에서도 "빨강"으로 읽혀야 하고, 강조색이 빨강인 테마와도 구분돼야 한다.
        어두운 지면에서는 잉크를 밝게 올린다. 컴포넌트에 hex 를 쓰지 않기 위한 토큰이다. */
     "--lp-danger": "#E5484D",
-    "--lp-danger-ink": darkGround ? "#FFC9CB" : "#B42318",
+    /* 잉크는 **카드** 위에 얹힌다 — 지면(darkGround)으로 고르면 어두운 사진 + 흰 카드에서
+       분홍 글자가 흰 띠 위에 놓여 1.2:1 이 된다(소넷 확정) */
+    "--lp-danger-ink": darkCard ? "#FFC9CB" : "#B42318",
   };
 }
 

@@ -418,7 +418,9 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
             흐름의 **맨 마지막**에 두고 sticky bottom — 스크롤 중엔 화면 아래에 붙고, 끝까지 내리면 제자리로
             내려와 배지를 덮지 않는다(소넷 지적). */}
         {emphasized ? (
-          <div className={`pointer-events-none sticky bottom-4 z-10 mt-4 flex justify-center ${split ? "lg:col-start-2" : ""}`}>
+          /* mt-auto — 콘텐츠가 화면보다 짧으면 sticky 는 "붙을 자리"가 없어 본문 바로 아래(화면 중간)에
+             박제된다. 남는 공간을 흡수해 화면 아래로 내려 보낸다(main 은 min-h-[100dvh] flex-col). 2026-08-24 비평 */
+          <div className={`pointer-events-none sticky bottom-4 z-10 mt-auto pt-4 flex justify-center ${split ? "lg:col-start-2" : ""}`}>
             <a
               href={`/p/${slug}/go/${emphasized.block.id}`}
               {...ext}

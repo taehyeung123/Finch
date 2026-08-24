@@ -208,8 +208,14 @@ export function BlockRenderer({
             <GuestbookForm slug={slug} blockId={block.id} placeholder={s(d, "placeholder") || t.guestbook.placeholder} isDemo={isDemo} t={t.guestbook} errors={t.errors} />
           </div>
           {entries.length ? (
-            <ul className="mt-4 space-y-3 border-t border-[var(--lp-border)] pt-3">
-              {entries.map((g) => (
+            /* 글이 20개면 그 아래 블록이 통째로 묻힌다 — 3개만 펼쳐 두고 나머지는 「더 보기」로(2026-08-24 비평).
+               Collapsible 은 다른 목록 블록과 같은 컴포넌트라 동작·문구가 한 곳이다. */
+            <Collapsible
+              moreLabel={t.more}
+              lessLabel={t.less}
+              initial={3}
+              className="mt-4 space-y-3 border-t border-[var(--lp-border)] pt-3"
+              items={entries.map((g) => (
                 <li key={g.id}>
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-[14px] font-semibold text-[var(--lp-fg)]">{g.name}</span>
@@ -223,7 +229,7 @@ export function BlockRenderer({
                   ) : null}
                 </li>
               ))}
-            </ul>
+            />
           ) : (
             <p className="mt-3 text-center text-[13px] text-[var(--lp-muted)]">{t.guestbook.empty}</p>
           )}
