@@ -211,6 +211,7 @@ export function BlockRenderer({
             /* 글이 20개면 그 아래 블록이 통째로 묻힌다 — 3개만 펼쳐 두고 나머지는 「더 보기」로(2026-08-24 비평).
                Collapsible 은 다른 목록 블록과 같은 컴포넌트라 동작·문구가 한 곳이다. */
             <Collapsible
+              as="ul"
               moreLabel={t.more}
               lessLabel={t.less}
               initial={3}

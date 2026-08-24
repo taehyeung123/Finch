@@ -164,18 +164,21 @@ export const LINK_FONTS: ReadonlyArray<{ key: string; label: string; family: str
   { key: "nanum-brush", label: "나눔손글씨 붓", family: '"Nanum Brush Script", cursive', pkg: "nanum-brush-script", bold: false },
   { key: "nanum-coding", label: "나눔고딕코딩", family: '"Nanum Gothic Coding", monospace', pkg: "nanum-gothic-coding", bold: true },
   /* 라틴 전용 글꼴 — 한글 글리프가 없어 generic 으로 떨어지면 굴림·Comic Sans 급이 된다.
-     한글은 앱 기본 글꼴(Pretendard)로 받아 라틴만 그 글꼴을 쓴다(2026-08-24 비평). */
-  { key: "inter", label: "Inter", family: '"Inter", "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "inter", bold: true },
-  { key: "montserrat", label: "Montserrat", family: '"Montserrat", "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "montserrat", bold: true },
-  { key: "poppins", label: "Poppins", family: '"Poppins", "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "poppins", bold: true },
-  { key: "raleway", label: "Raleway", family: '"Raleway", "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "raleway", bold: true },
-  { key: "space-grotesk", label: "Space Grotesk", family: '"Space Grotesk", "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "space-grotesk", bold: true },
-  { key: "playfair", label: "Playfair Display", family: '"Playfair Display", "Noto Serif KR", "Apple Myungjo", serif', pkg: "playfair-display", bold: true },
-  { key: "lora", label: "Lora", family: '"Lora", "Noto Serif KR", "Apple Myungjo", serif', pkg: "lora", bold: true },
-  { key: "dm-serif", label: "DM Serif Display", family: '"DM Serif Display", "Noto Serif KR", "Apple Myungjo", serif', pkg: "dm-serif-display", bold: false },
-  { key: "bebas", label: "Bebas Neue", family: '"Bebas Neue", "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "bebas-neue", bold: false },
-  { key: "pacifico", label: "Pacifico", family: '"Pacifico", "Nanum Pen Script", "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", cursive', pkg: "pacifico", bold: false },
-  { key: "caveat", label: "Caveat", family: '"Caveat", "Nanum Pen Script", "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", cursive', pkg: "caveat", bold: true },
+     한글은 앱 기본 글꼴(Pretendard)로 받아 라틴만 그 글꼴을 쓴다(2026-08-24 비평).
+     ⚠️ **var(--font-pretendard) 를 넣는다** — next/font 는 해시된 패밀리 이름을 만들어서
+     리터럴 "Pretendard Variable" 은 실제 로드된 글꼴과 매칭되지 않는다(globals.css --font-sans 와 같은 관례, 소넷 확정).
+     명조 계열은 Noto Serif KR·애플명조를 먼저 보고, 없으면 Pretendard 로 떨어진다(굴림보다 낫다). */
+  { key: "inter", label: "Inter", family: '"Inter", var(--font-pretendard), "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "inter", bold: true },
+  { key: "montserrat", label: "Montserrat", family: '"Montserrat", var(--font-pretendard), "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "montserrat", bold: true },
+  { key: "poppins", label: "Poppins", family: '"Poppins", var(--font-pretendard), "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "poppins", bold: true },
+  { key: "raleway", label: "Raleway", family: '"Raleway", var(--font-pretendard), "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "raleway", bold: true },
+  { key: "space-grotesk", label: "Space Grotesk", family: '"Space Grotesk", var(--font-pretendard), "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "space-grotesk", bold: true },
+  { key: "playfair", label: "Playfair Display", family: '"Playfair Display", "Noto Serif KR", "Apple Myungjo", var(--font-pretendard), serif', pkg: "playfair-display", bold: true },
+  { key: "lora", label: "Lora", family: '"Lora", "Noto Serif KR", "Apple Myungjo", var(--font-pretendard), serif', pkg: "lora", bold: true },
+  { key: "dm-serif", label: "DM Serif Display", family: '"DM Serif Display", "Noto Serif KR", "Apple Myungjo", var(--font-pretendard), serif', pkg: "dm-serif-display", bold: false },
+  { key: "bebas", label: "Bebas Neue", family: '"Bebas Neue", var(--font-pretendard), "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "bebas-neue", bold: false },
+  { key: "pacifico", label: "Pacifico", family: '"Pacifico", "Nanum Pen Script", var(--font-pretendard), "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", cursive', pkg: "pacifico", bold: false },
+  { key: "caveat", label: "Caveat", family: '"Caveat", "Nanum Pen Script", var(--font-pretendard), "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", cursive', pkg: "caveat", bold: true },
 ];
 
 /** 글꼴 스타일시트 주소 — 공개 페이지·편집 미리보기가 <link rel="stylesheet"> 로 싣는다 */

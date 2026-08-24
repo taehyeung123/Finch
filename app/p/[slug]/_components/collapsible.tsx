@@ -11,6 +11,7 @@ export function Collapsible({
   items,
   initial,
   className,
+  as: As = "div",
   moreLabel = "더보기 ({n}개)",
   lessLabel = "접기",
 }: {
@@ -19,6 +20,8 @@ export function Collapsible({
   initial: number;
   /** 항목 컨테이너 클래스(grid·space-y 등) */
   className?: string;
+  /** 항목 컨테이너 태그 — <li> 를 담을 때는 "ul" 을 줘야 한다(그렇지 않으면 불릿이 뜨고 목록 의미가 깨진다) */
+  as?: "div" | "ul";
   /** 페이지 언어(0058) — {n} 이 남은 개수로 치환된다. 편집 미리보기는 기본값(한국어) */
   moreLabel?: string;
   lessLabel?: string;
@@ -28,7 +31,7 @@ export function Collapsible({
   const shown = folds && !open ? items.slice(0, initial) : items;
   return (
     <div>
-      <div className={className}>{shown}</div>
+      <As className={className}>{shown}</As>
       {folds ? (
         <button
           type="button"

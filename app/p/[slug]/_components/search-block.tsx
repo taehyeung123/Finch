@@ -67,7 +67,8 @@ export function SearchBlock({
             onClick={() => setQ("")}
             aria-label={t.clear}
             title={t.clear}
-            className="trans-state -mr-1 flex size-8 shrink-0 items-center justify-center rounded-full text-[var(--lp-muted)] hover:text-[var(--lp-fg)]"
+            /* 44px — 이 페이지의 다른 조작면과 같은 최소 크기(보이는 건 아이콘, 나머지는 손가락 몫) */
+            className="trans-state -mr-2 flex size-11 shrink-0 items-center justify-center rounded-full text-[var(--lp-muted)] hover:text-[var(--lp-fg)]"
           >
             <X className="size-4" aria-hidden />
           </button>

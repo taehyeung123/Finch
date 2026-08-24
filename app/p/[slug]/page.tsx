@@ -419,7 +419,10 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
             내려와 배지를 덮지 않는다(소넷 지적). */}
         {emphasized ? (
           /* mt-auto — 콘텐츠가 화면보다 짧으면 sticky 는 "붙을 자리"가 없어 본문 바로 아래(화면 중간)에
-             박제된다. 남는 공간을 흡수해 화면 아래로 내려 보낸다(main 은 min-h-[100dvh] flex-col). 2026-08-24 비평 */
+             박제된다. 남는 공간을 흡수해 화면 아래로 내려 보낸다(main 은 min-h-[100dvh] flex-col). 2026-08-24 비평.
+             ⚠️ 분리 배치(lg:grid)에서는 그리드 트랙이 내용 높이로 잡혀 mt-auto 가 무효다(소넷 확정).
+             데스크톱 넓은 화면 + 아주 짧은 페이지에서만 CTA 가 본문 바로 아래에 온다 — 폰(문제의 화면)은 해결됐다.
+             그리드 행을 재단하려면 배치 전체를 건드려야 해서 여기서는 한계를 명시만 한다. */
           <div className={`pointer-events-none sticky bottom-4 z-10 mt-auto pt-4 flex justify-center ${split ? "lg:col-start-2" : ""}`}>
             <a
               href={`/p/${slug}/go/${emphasized.block.id}`}
