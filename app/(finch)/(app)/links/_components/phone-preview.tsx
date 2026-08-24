@@ -666,9 +666,12 @@ function GhostCard({ type, data }: { type: BlockType; data: Record<string, unkno
   const Icon = BLOCK_ICON[type] ?? BLOCK_ICON.link;
   const cat = BLOCK_CATALOG.find((c) => c.type === type)?.label ?? type;
   /* 사용자가 붙인 이름이 최우선 — 요약이 주소·개수 같은 파생값인 타입(지도 등)도
-     이름을 쓰면 "매장 위치"처럼 본인 말로 읽힌다 */
+     이름을 쓰면 "매장 위치"처럼 본인 말로 읽힌다.
+     이름 필드가 아예 없는 타입(가로 카드·그리드·갤러리·최근 게시물)은 요약이
+     "항목 1개" 같은 개수 문자열이라 제목감이 아니다 — 카탈로그 이름으로(소넷 확정) */
   const own = typeof data.label === "string" && data.label.trim() ? data.label : typeof data.title === "string" && data.title.trim() ? data.title : "";
-  const raw = own || blockSummary(type, data);
+  const DERIVED_SUMMARY = type === "card_row" || type === "grid" || type === "gallery" || type === "social_feed";
+  const raw = own || (DERIVED_SUMMARY ? "" : blockSummary(type, data));
   const label = raw && !raw.startsWith("(") ? raw : cat;
   const hint = GHOST_HINT[type] ?? hiddenReason(type, data) ?? "내용을 채우면 공개돼요";
   return (
@@ -684,14 +687,6 @@ function GhostCard({ type, data }: { type: BlockType; data: Record<string, unkno
         <span className="block truncate text-[13px] font-semibold text-[var(--lp-fg)]">{label}</span>
         <span className="mt-0.5 block text-[11px] text-[var(--lp-muted)]">{hint}</span>
       </span>
-    </div>
-  );
-}
-
-function Ghost({ reason }: { reason: string }) {
-  return (
-    <div className="flex min-h-[44px] items-center justify-center rounded-[var(--lp-radius)] border border-dashed border-[var(--lp-border)] px-3 py-2.5 text-center text-[12px] text-[var(--lp-muted)]">
-      {reason}
     </div>
   );
 }
@@ -804,7 +799,6 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
       return <div style={{ height: n(d, "size", 24) }} />;
     case "image":
       /* edit 전용 도달 — 이미지가 없으면 초대 문구. 사유 캡션과 달리 "하면 된다"로 말한다 */
-      if (!s(d, "imagePath")) return <Ghost reason="이미지를 올리면 여기 보여요" />;
       {
         /* 공개 렌더러와 같은 규칙 — 업로드 때 잰 치수로 로드 전 자리를 잡는다(CLS) */
         const iw = n(d, "imgW", 0);
@@ -851,7 +845,6 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
     }
     case "card_row": {
       const items = arr(d, "items").filter((it) => lenient || s(it, "url"));
-      if (lenient && items.length === 0) return <Ghost reason="항목을 추가해 주세요" />;
       if (s(d, "layout") === "carousel") {
         return (
           <div className="-mx-5 flex snap-x gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -898,7 +891,6 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
     }
     case "grid": {
       const items = arr(d, "items").filter((it) => lenient || s(it, "url"));
-      if (lenient && items.length === 0) return <Ghost reason="항목을 추가해 주세요" />;
       const nodes = items.map((it, i) => (
         <div key={i} className={`${card} overflow-hidden`}>
           {s(it, "imagePath") ? (
@@ -1028,7 +1020,6 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
     /* ── 리틀리 흡수 4단계 블록 — 공개 렌더러(block-renderer.tsx)와 같은 모양(프레임 비율) ── */
     case "gallery": {
       const items = arr(d, "items").filter((it) => s(it, "imagePath"));
-      if (items.length === 0) return <Ghost reason="사진을 올리면 여기 보여요" />;
       const layout = s(d, "layout") || "grid";
       const square = (s(d, "aspect") || "square") === "square";
       const img = (it: Record<string, unknown>, i: number) => (
@@ -1080,7 +1071,6 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
         </div>
       );
     case "file":
-      if (!s(d, "url")) return <Ghost reason="파일을 올리면 여기 보여요" />;
       return (
         <div className={`${card} flex items-center gap-2.5 p-2.5`}>
           <span className="flex size-9 shrink-0 items-center justify-center rounded-[calc(var(--lp-radius)/1.6)] bg-[var(--lp-accent)] text-[var(--lp-on-accent)]" aria-hidden>
