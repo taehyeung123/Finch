@@ -48,3 +48,6 @@ BUSINESS_PLAN.md
 
 # Playwright MCP 브라우저 검증 산출물
 .playwright-mcp/
+
+# 로컬 프로덕션 서버 로그(포트별)
+.next-*.log
