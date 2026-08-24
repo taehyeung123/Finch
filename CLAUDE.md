@@ -11,6 +11,10 @@
 - 프레임워크: Next.js 16 (App Router, Turbopack). **`middleware.ts`가 아니라 `proxy.ts`를 사용한다.**
 - 스타일: Tailwind CSS v4 — 토큰은 `app/globals.css`의 `@theme`에 정의. **코드에 hex 하드코딩 금지, 항상 토큰 사용.**
 - 아이콘: lucide-react. 차트는 `components/ui/charts.tsx`의 경량 SVG 컴포넌트 사용(외부 차트 라이브러리 금지).
+- **프로필 링크 화면은 두 벌이다 — 한쪽만 고치지 말 것.** 공개 페이지 `app/p/[slug]/_components/block-renderer.tsx`(+`page.tsx`)와
+  편집 미리보기 `app/(finch)/(app)/links/_components/phone-preview.tsx`는 **같은 모습을 각자 그린다**(미리보기는 폰 프레임 비율로 축소한 값).
+  블록·헤더의 모양을 바꾸면 **반드시 두 파일을 함께** 고친다 — 한쪽만 고치면 "편집기에서 본 것과 발행본이 다르다"가 되고,
+  이 저장소가 가장 자주 겪은 회귀다(2026-08-24 기준 소넷 점검에서 4회 적발).
 
 ## 디자인 규칙 (PRD PART 7)
 
