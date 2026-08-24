@@ -1062,12 +1062,11 @@ body {
     box-shadow var(--dur-2) var(--ease-arrive);
 }
 .lp-btn:hover { opacity: 0.92; }
-/* 눌림 — 색이 아니라 밝기로. 어떤 테마(밝은 카드·어두운 강조색)에서도 같은 신호가 된다 */
-.lp-btn:active { filter: brightness(0.96); }
-/* ⚠️ :root 로 쓰면 안 된다 — data-lp-fx 는 <main> 에 붙어서 :root 에는 절대 없고,
-   그 결과 이 규칙이 항상 참이 되어 [data-lp-fx="flip"] 의 눌림(3D 기울임)을 특이도로 눌러
-   버렸다(소넷 확정). 효과가 **없는** 페이지에서만 눌림 축소를 준다. */
-main:not([data-lp-fx]) .lp-btn:active { transform: scale(0.985); }
+/* 눌림 — 색이 아니라 밝기로. 어떤 테마(밝은 카드·어두운 강조색)에서도 같은 신호가 된다.
+   축소는 **기본 규칙**에 둔다(특이도 0-2-0) — 효과가 켜지면 [data-lp-fx=…](0-3-0)이
+   자연스럽게 이긴다. 조상 선택자로 조건을 걸면(:root/main) 편집기 미리보기처럼
+   속성이 다른 자리에 붙는 화면에서 그 조건이 항상 참이 되어 효과를 눌러 버린다(소넷 확정 2회). */
+.lp-btn:active { filter: brightness(0.96); transform: scale(0.985); }
 @media (prefers-reduced-motion: reduce) {
   .lp-btn:active { transform: none; }
 }

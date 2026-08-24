@@ -3373,13 +3373,24 @@ function ThemePanel({
           ) : null}
         </div>
         <div id="ds-bgimage">
-          <ImageField label="배경 사진 (선택)" value={custom.bgImage ?? ""} onChange={(v) => onCustomChange({ bgImage: v || undefined })} hint="넣으면 배경색·그라데이션보다 앞에 깔려요 — 글자가 읽히는지 미리보기로 확인하세요" aspect="aspect-[3/1]" />
+          {/* 사진을 지우면 필터도 함께 지운다 — 안 그러면 사진 없는 페이지에 bgFilter 만 남아
+              "직접 꾸민 것"으로 잡힌다(감사4). 사진이 있을 때만 필터가 의미를 갖는다 */}
+          <ImageField
+            label="배경 사진 (선택)"
+            value={custom.bgImage ?? ""}
+            onChange={(v) => onCustomChange(v ? { bgImage: v } : { bgImage: undefined, bgFilter: undefined })}
+            hint="넣으면 배경색·그라데이션보다 앞에 깔려요 — 글자가 읽히는지 미리보기로 확인하세요"
+            aspect="aspect-[3/1]"
+          />
         </div>
         {custom.bgImage ? (
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="mr-1 text-[12px] text-fg-sub">사진 필터</span>
             {CUSTOM_FILTERS.map((f) => (
-              <button key={f.key} type="button" aria-pressed={(custom.bgFilter ?? "none") === f.key} onClick={() => onCustomChange({ bgFilter: f.key === "none" ? undefined : f.key })} className={chip((custom.bgFilter ?? "none") === f.key)}>
+              <button key={f.key} type="button" aria-pressed={(custom.bgFilter ?? "none") === f.key} /* 「없음」도 **값으로 저장한다** — undefined 로 두면 "손댄 적 없음"과 같아져
+                   자동 필터(themeVars)를 끌 방법이 사라진다(소넷 확정). 사진을 지울 때 같이 지운다. */
+                onClick={() => onCustomChange({ bgFilter: f.key })}
+                className={chip((custom.bgFilter ?? "none") === f.key)}>
                 {f.label}
               </button>
             ))}

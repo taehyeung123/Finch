@@ -525,7 +525,14 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
   /* 그림자 — 검정 그림자는 **어두운 지면에서 보이지 않는다**. 「진하게」를 골라도 아무 변화가 없어
      보였던 이유다(2026-08-24 비평). 어두운 배경이면 같은 자리에 **밝은 테두리 겹**을 쓴다
      (앱 다크 규칙과 같은 문법: 그림자 대신 밝기·테두리로 깊이). */
-  const darkGround = luminance(HEX.test(bg) ? bg : "#ffffff") < 0.35;
+  /* 사진 배경이면 밑색(bg)이 아니라 **덮은 겹**이 실제 지면 밝기다 — 밝은 밑색 + 어두운 사진에서
+     검은 그림자를 그대로 쓰면 또 안 보인다(소넷 확정). 필터가 정해지면 그 값을 따른다. */
+  const darkGround =
+    filter === "dark" || filter === "darkBlur"
+      ? true
+      : filter === "light" || filter === "blur"
+        ? false
+        : luminance(HEX.test(bg) ? bg : "#ffffff") < 0.35;
   const shadowSoft = darkGround
     ? "0 0 0 1px rgba(255,255,255,.07), 0 8px 20px rgba(0,0,0,.45)"
     : "0 1px 3px rgba(15,23,42,.08), 0 6px 14px rgba(15,23,42,.04)";
