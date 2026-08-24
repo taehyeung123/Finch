@@ -27,7 +27,8 @@ export interface LpText {
     title: string; placeholder: string; name: string; body: string;
     send: string; sending: string; thanks: string; demo: string; fail: string; empty: string;
   };
-  search: { placeholder: string; empty: string; aria: string };
+  /* count 는 {n} 을 결과 수로 바꿔 쓴다(lpN). clear 는 지우기 버튼의 보조기기 이름 */
+  search: { placeholder: string; empty: string; aria: string; count: string; clear: string };
   vcard: string;
   file: string;
   music: string;
@@ -84,7 +85,7 @@ const ko: LpText = {
     send: "남기기", sending: "남기는 중…", thanks: "남겨 주셔서 고마워요!", demo: "예시 페이지에서는 남길 수 없어요.",
     fail: "보내지 못했어요.", empty: "아직 남겨진 글이 없어요. 첫 글을 남겨 보세요.",
   },
-  search: { placeholder: "무엇을 찾으세요?", empty: "찾는 내용이 없어요.", aria: "페이지 안 검색" },
+  search: { placeholder: "무엇을 찾으세요?", empty: "찾는 내용이 없어요.", aria: "페이지 안 검색", count: "{n}개 찾았어요", clear: "검색어 지우기" },
   vcard: "연락처 저장",
   file: "파일",
   music: "음악",
@@ -134,7 +135,7 @@ const en: LpText = {
     send: "Post", sending: "Posting…", thanks: "Thanks for your note!", demo: "Notes can't be posted on the sample page.",
     fail: "Couldn't post.", empty: "No notes yet. Be the first!",
   },
-  search: { placeholder: "Search this page", empty: "Nothing found.", aria: "Search within page" },
+  search: { placeholder: "Search this page", empty: "Nothing found.", aria: "Search within page", count: "{n} found", clear: "Clear search" },
   vcard: "Save contact",
   file: "File",
   music: "Music",
@@ -184,7 +185,7 @@ const ja: LpText = {
     send: "投稿", sending: "投稿中…", thanks: "メッセージをありがとうございます！", demo: "サンプルページでは投稿できません。",
     fail: "投稿できませんでした。", empty: "まだ投稿がありません。最初のひとことをどうぞ。",
   },
-  search: { placeholder: "ページ内を検索", empty: "見つかりませんでした。", aria: "ページ内検索" },
+  search: { placeholder: "ページ内を検索", empty: "見つかりませんでした。", aria: "ページ内検索", count: "{n}件見つかりました", clear: "検索をクリア" },
   vcard: "連絡先を保存",
   file: "ファイル",
   music: "音楽",
