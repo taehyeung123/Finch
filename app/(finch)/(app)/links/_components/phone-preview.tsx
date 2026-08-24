@@ -263,11 +263,24 @@ export function PhonePreview({
           : "w-full max-w-[410px]",
       )}
     >
-      {/* 폰 프레임 — 항상 진짜 폰 비율(375:812). 넘치는 내용은 안에서 스크롤 */}
+      {/* 폰 프레임 — 항상 진짜 폰 비율(375:812). 넘치는 내용은 안에서 스크롤.
+          2026-08-24 지시로 기기 느낌을 올렸다: 두꺼운 베젤·측면 버튼·호버 글로우.
+          측면 버튼은 프레임 **밖**에 두므로 relative 래퍼가 필요하다(프레임은 overflow-hidden). */}
+      <div className={cn("group/phone relative", frame !== "device" && "contents")}>
+        {frame === "device" ? (
+          <>
+            {/* 측면 버튼 — 기기처럼 보이게 하는 최소 장치. 장식이라 스크린리더에서 감춘다 */}
+            <span aria-hidden className="absolute -left-[3px] top-[16%] h-8 w-[3px] rounded-l-full bg-fg/20" />
+            <span aria-hidden className="absolute -left-[3px] top-[24%] h-12 w-[3px] rounded-l-full bg-fg/20" />
+            <span aria-hidden className="absolute -left-[3px] top-[33%] h-12 w-[3px] rounded-l-full bg-fg/20" />
+            <span aria-hidden className="absolute -right-[3px] top-[26%] h-16 w-[3px] rounded-r-full bg-fg/20" />
+          </>
+        ) : null}
       <div
         className={cn(
           "overflow-hidden rounded-[32px] border-[6px] border-fg/15 bg-plate shadow-pop",
-          frame === "device" && "flex aspect-[375/812] w-full flex-col",
+          frame === "device" &&
+            "phone-frame flex aspect-[375/812] w-full flex-col rounded-[42px] border-[9px] border-fg/12 group-hover/phone:border-primary/45 group-hover/phone:phone-frame-lit",
         )}
       >
         <div
@@ -675,6 +688,7 @@ export function PhonePreview({
           ) : null}
         </div>
         </div>
+      </div>
       </div>
     </div>
   );

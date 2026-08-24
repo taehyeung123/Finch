@@ -27,13 +27,13 @@ import {
   ChevronDown,
   Copy,
   Download,
-  ExternalLink,
   Eye,
   EyeOff,
   Link2,
   Palette,
   Plus,
   QrCode,
+  Share2,
   Redo2,
   Rocket,
   Settings,
@@ -1595,50 +1595,49 @@ export function LinksClient({
         </div>
 
         {/* 폰 — 리틀리처럼 **왼쪽·전체 높이**. 페이지 탭에선 편집 캔버스(누르면 목록의 그 행이 펼쳐진다),
-            다른 탭에선 읽기 전용. 폰 **위**에는 아무것도 두지 않는다(제목줄을 없앤 만큼 폰이 커진다) —
-            주소·복사·QR 과 상태 문구는 리틀리와 같이 폰 **아래**. */}
-        <Card className="xl:sticky xl:top-[4.5rem] xl:order-first">
-          {/* 폰에게 자리를 최대한 — CardBody(p-4) 대신 p-3. cn 은 tailwind-merge 가 아니라 className 으로 p-4 를 못 이긴다(소넷) */}
-          <div className="space-y-2 p-3">
-            {tab === "page" ? (
-              <PhonePreview
-                page={draftPageView}
-                /* active 필터를 걸지 않는다 — 꺼진 블록도 캔버스에 남아야 다시 켤 수 있다 */
-                blocks={draftBlocksView}
-                selectedId={editingId}
-                edit={canvasEdit}
-                frame="device"
-              />
-            ) : (
-              /* 읽기 전용 draft — 캔버스와 같은 값·같은 관대한 규칙(도구만 없음). 꺼진 블록만 뺀다 */
-              <PhonePreview
-                page={draftPageView}
-                blocks={draftBlocksView.filter((b) => b.active && !isScheduledHidden(b.data))}
-                selectedId={null}
-                frame="device"
-              />
-            )}
+            다른 탭에선 읽기 전용.
+            ⚠️ 폰을 **카드로 감싸지 않는다**(2026-08-24 지시 "핸드폰 근처 흰색 배경 전부 없애고 딱 핸드폰만").
+            기기가 회색 지면 위에 그대로 떠 있고, 주소·도구는 그 아래 **따로 흰 박스**다. */}
+        <div className="space-y-3 xl:sticky xl:top-[4.5rem] xl:order-first">
+          {/* 폰 위에 제목줄을 두지 않는 대신(지시) 보조기기용 제목은 남긴다 — 이 영역을
+              찾아갈 이름이 아예 없어지면 스크린리더 사용자가 미리보기를 지나친다(소넷 확정) */}
+          <h3 className="sr-only">{tab === "page" ? "미리보기 — 블록을 눌러 편집" : "라이브 미리보기"}</h3>
+          {tab === "page" ? (
+            <PhonePreview
+              page={draftPageView}
+              /* active 필터를 걸지 않는다 — 꺼진 블록도 캔버스에 남아야 다시 켤 수 있다 */
+              blocks={draftBlocksView}
+              selectedId={editingId}
+              edit={canvasEdit}
+              frame="device"
+            />
+          ) : (
+            /* 읽기 전용 draft — 캔버스와 같은 값·같은 관대한 규칙(도구만 없음). 꺼진 블록만 뺀다 */
+            <PhonePreview
+              page={draftPageView}
+              blocks={draftBlocksView.filter((b) => b.active && !isScheduledHidden(b.data))}
+              selectedId={null}
+              frame="device"
+            />
+          )}
 
-            {/* 주소줄 — 리틀리는 폰 바로 아래에 주소 + 도구를 둔다. 칸이 좁아 아이콘 전용 */}
-            <ShareRow url={shareUrl} busy={busy} />
-
+          {/* 주소·도구 — 폰 아래 별도 흰 박스(지시). 문구 있는 버튼: 복사하기·공유하기·QR 코드 */}
+          <ShareBox url={shareUrl} busy={busy} title={page.title || page.slug} hint={tab === "page" ? "폰 화면의 블록을 누르면 바로 편집할 수 있어요." : undefined}>
             {/* published(공개 스위치)를 먼저 본다 — 발행만 하고 공개를 안 켠 상태에서
                 "공개 주소와 같은 모습" 이라고 말하면 방문자는 404 인데 소유자는 모른다(감사 #4) */}
-            <p className="text-center text-[12px] leading-[1.6] text-fg-sub">
-              {profileDirty || customDirty || editorDirty
-                ? "저장하지 않은 편집이 보여요 — 저장한 뒤 「라이브 반영」을 누르면 공개 주소에 반영돼요."
-                : !page.published
-                  ? page.publishedAt
-                    ? "비공개예요 — 설정에서 「공개」를 켜야 방문자가 볼 수 있어요."
-                    : "지금 모습이에요 — 「라이브 반영」 후 설정에서 「공개」를 켜면 주소가 살아나요."
-                  : page.publishedAt
-                    ? page.dirty
-                      ? "지금 모습이에요 — 「라이브 반영」을 누르면 공개 주소에 반영돼요."
-                      : "공개 주소와 같은 모습이에요."
-                    : "지금 모습이에요 — 「라이브 반영」을 누르면 공개 주소가 살아나요."}
-            </p>
-          </div>
-        </Card>
+            {profileDirty || customDirty || editorDirty
+              ? "저장하지 않은 편집이 보여요 — 저장한 뒤 「라이브 반영」을 누르면 공개 주소에 반영돼요."
+              : !page.published
+                ? page.publishedAt
+                  ? "비공개예요 — 설정에서 「공개」를 켜야 방문자가 볼 수 있어요."
+                  : "지금 모습이에요 — 「라이브 반영」 후 설정에서 「공개」를 켜면 주소가 살아나요."
+                : page.publishedAt
+                  ? page.dirty
+                    ? "지금 모습이에요 — 「라이브 반영」을 누르면 공개 주소에 반영돼요."
+                    : "공개 주소와 같은 모습이에요."
+                  : "지금 모습이에요 — 「라이브 반영」을 누르면 공개 주소가 살아나요."}
+          </ShareBox>
+        </div>
       </div>
 
       {/* 작업 중 베일 — 서버 왕복(run)이 도는 동안 핀치 로더. 200ms 안에 끝나면 보이지 않는다.
@@ -1729,12 +1728,15 @@ function TopBar({
                 )}
               >
                 <t.icon className="size-4" aria-hidden />
-                <span className="hidden md:inline">{t.label}</span>
+                {/* xl(1280~) 은 폰 칸 23rem 과 한 줄을 나눠 써서 글자까지 넣으면 ⚙ 가 다음 줄로 밀린다.
+                    md~lg(한 칸)와 2xl 이상에선 글자를 보여준다(소넷 확정 회귀) */}
+                <span className="hidden md:inline xl:hidden 2xl:inline">{t.label}</span>
               </button>
             );
           })}
         </nav>
 
+        {/* 페이지 전환은 좁은 폭에서 먼저 줄어든다 — 이름이 길어도 한 줄을 깨지 않게 */}
         {pages.length > 0 && onSwitchPage ? (
           <PageSwitcher
             pages={pages}
@@ -1747,9 +1749,9 @@ function TopBar({
             onNewSubpage={onNewSubpage}
           />
         ) : null}
-        {/* 주소·복사·열기·QR 은 폰 아래(ShareRow)로 옮겼다 — 리틀리 배치(2026-08-24) */}
-        <span className="flex-1" />
-        <Button variant="ghost" size="sm" onClick={onOpenSettings} aria-haspopup="dialog" disabled={busy}>
+        {/* 주소·복사·공유·QR 은 폰 아래 박스로 옮겼다 — 리틀리 배치(2026-08-24) */}
+        <span className="ml-auto" />
+        <Button variant="ghost" size="sm" onClick={onOpenSettings} aria-haspopup="dialog" disabled={busy} className="shrink-0">
           <Settings className="size-3.5" aria-hidden />
           페이지 설정
         </Button>
@@ -2645,38 +2647,71 @@ function NewSubpageModal({ busy, parentTitle, onClose, onSubmit }: { busy: boole
   );
 }
 
-/* 폰 아래 주소줄(리틀리 배치, 2026-08-24) — 주소 + 복사·열기·QR. 칸이 좁아 아이콘 전용 */
-function ShareRow({ url, busy }: { url: string; busy: boolean }) {
+/*
+  폰 아래 주소 박스(2026-08-24 지시) — 폰은 지면 위에 그냥 떠 있고, 주소·도구만 흰 박스에 담는다.
+  버튼은 아이콘만 두지 않고 **문구를 함께** 둔다("복사하기·공유하기·QR 코드").
+  공유하기는 기기 공유 시트(navigator.share)를 쓰고, 없으면 주소 복사로 떨어진다.
+*/
+function ShareBox({ url, busy, title, hint, children }: { url: string; busy: boolean; title: string; hint?: string; children?: React.ReactNode }) {
   const [copied, setCopied] = useState(false);
+  const [shared, setShared] = useState(false);
   const [qr, setQr] = useState(false);
-  const icon = "trans-state flex size-8 shrink-0 items-center justify-center rounded-card border border-line text-fg-sub hover:border-primary hover:text-fg disabled:opacity-50";
+  const btn =
+    "trans-state flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-card border border-line px-2 text-[13px] font-medium text-fg hover:border-primary hover:text-primary disabled:opacity-50";
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      /* 권한 거부·비보안 컨텍스트 — 주소가 화면에 보이니 손으로 복사하면 된다 */
+    }
+  }
+
+  async function share() {
+    /* 모바일·크롬 기기 공유 시트. 취소는 예외로 오므로 조용히 넘긴다 */
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({ title, url });
+        return;
+      } catch {
+        return;
+      }
+    }
+    await copy();
+    setShared(true);
+    window.setTimeout(() => setShared(false), 1600);
+  }
+
   return (
-    <div className="flex items-center gap-1.5">
-      <code className="min-w-0 flex-1 truncate rounded-card border border-line bg-plate px-2.5 py-1.5 text-[12px] text-fg-sub">{url}</code>
-      <button
-        type="button"
-        aria-label="주소 복사"
-        title="주소 복사"
-        disabled={busy}
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(url);
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1600);
-          } catch {
-            /* 권한 거부·비보안 컨텍스트 — 주소가 화면에 보이니 손으로 복사하면 된다 */
-          }
-        }}
-        className={icon}
+    <div className="card-face space-y-2 p-3">
+      {/* 주소 자체가 링크 — 눌러서 공개 페이지를 새 창으로 연다(전에 있던 「열기」 버튼을 흡수) */}
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="새 창에서 열기"
+        className="trans-state block truncate rounded-card border border-line bg-plate px-2.5 py-1.5 text-[12px] text-fg-sub hover:border-primary hover:text-fg"
       >
-        {copied ? <Check className="size-3.5 text-positive-strong" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
-      </button>
-      <button type="button" aria-label="링크 열기" title="링크 열기" onClick={() => window.open(url, "_blank", "noopener,noreferrer")} className={icon}>
-        <ExternalLink className="size-3.5" aria-hidden />
-      </button>
-      <button type="button" aria-label="QR 코드" title="QR 코드" onClick={() => setQr(true)} className={icon}>
-        <QrCode className="size-3.5" aria-hidden />
-      </button>
+        {url}
+      </a>
+      <div className="flex items-center gap-1.5">
+        <button type="button" onClick={copy} disabled={busy} className={btn}>
+          {copied ? <Check className="size-3.5 text-positive-strong" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
+          {copied ? "복사됨" : "복사하기"}
+        </button>
+        <button type="button" onClick={share} disabled={busy} className={btn}>
+          <Share2 className="size-3.5" aria-hidden />
+          {shared ? "복사됨" : "공유하기"}
+        </button>
+        <button type="button" onClick={() => setQr(true)} disabled={busy} className={btn}>
+          <QrCode className="size-3.5" aria-hidden />
+          QR 코드
+        </button>
+      </div>
+      {hint ? <p className="text-center text-[12px] font-medium text-fg">{hint}</p> : null}
+      {children ? <p className="text-center text-[12px] leading-[1.6] text-fg-sub">{children}</p> : null}
       {qr ? <QrModal url={url} onClose={() => setQr(false)} /> : null}
     </div>
   );
