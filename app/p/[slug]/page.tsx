@@ -190,7 +190,9 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
       <nav
         aria-label="SNS"
         className={
-          snap.snsPlacement === "links" ? "mb-4 flex flex-wrap justify-center gap-2" : "mt-3.5 flex flex-wrap gap-2"
+          /* 정렬은 두 자리 모두 가운데로 — 프로필 아래에 둘 때 줄바꿈되면 둘째 줄만 왼쪽으로 붙었다.
+             소개와의 간격은 한 단 키운다(아바타-이름과 같은 3.5 면 위계가 안 생긴다). 2026-08-24 비평 */
+          snap.snsPlacement === "links" ? "mb-4 flex flex-wrap justify-center gap-2" : "mt-5 flex flex-wrap justify-center gap-2"
         }
       >
         {snsLinks.map((s, i) => (
@@ -316,25 +318,32 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
           <img
             src={snap.coverPath}
             alt=""
-            className={`mb-4 aspect-[3/1] w-full rounded-[var(--lp-radius)] object-cover ${split ? "lg:col-start-1" : ""}`}
+            /* cover_profile 은 아래 여백을 없애고 header 가 음수 마진으로 올라와 겹친다(2026-08-24 비평) */
+            className={`${snap.layout === "cover_profile" ? "" : "mb-4"} aspect-[3/1] w-full rounded-[var(--lp-radius)] object-cover ${split ? "lg:col-start-1" : ""}`}
           />
         ) : null}
 
         {/* 프로필 — 분리 배치에선 왼쪽 칸 고정(명시하지 않으면 앞 항목에 밀려 오른쪽 칸으로 튄다, 소넷 확정) */}
-        <header className={`flex flex-col ${align} ${split ? "lg:col-start-1 lg:sticky lg:top-16 lg:self-start" : ""}`}>
+        {/* 아바타 반지름(88/2=44px)만큼 끌어올려 커버 하단선을 반쯤 문다 — 레이아웃 선택 썸네일과
+            LAYOUTS 힌트("배너 위에 프로필 사진")가 약속한 모양이 화면에 없었다(2026-08-24 비평) */}
+        <header
+          className={`relative flex flex-col ${align} ${snap.layout === "cover_profile" && snap.coverPath ? "-mt-11" : ""} ${split ? "lg:col-start-1 lg:sticky lg:top-16 lg:self-start" : ""}`}
+        >
           {snap.layout !== "cover" ? (
             snap.avatarPath ? (
               // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
               <img
                 src={snap.avatarPath}
                 alt=""
-                className="mb-3.5 size-[88px] rounded-full object-cover shadow-[var(--lp-shadow)] ring-4 ring-[var(--lp-card)]"
+                /* outline 헤어라인 — --lp-shadow 가 none 인 프리셋 8종에서는 box-shadow 선언이
+                   통째로 무효라 ring 까지 죽는다. 바깥선 하나로 19종 전부에서 원이 보인다(2026-08-24 비평) */
+                className="mb-3.5 size-[88px] rounded-full object-cover shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
               />
             ) : (
               /* 사진이 없으면 이니셜 원. 아무것도 안 그리면 브랜드 페이지 머리가 통째로
                  비어 허전하다 — 편집 미리보기도 같은 것을 그린다(두 화면이 어긋나면 안 된다). */
               <span
-                className="mb-3.5 flex size-[88px] items-center justify-center rounded-full bg-[var(--lp-card)] text-[30px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] ring-4 ring-[var(--lp-card)]"
+                className="mb-3.5 flex size-[88px] items-center justify-center rounded-full bg-[var(--lp-card)] text-[32px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
                 aria-hidden
               >
                 {initialOf(snap.title || slug)}
@@ -343,9 +352,12 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
           ) : null}
           {/* 글자색·자간을 명시한다 — globals.css @layer base 의 h1 규칙(--fg-strong, 자간)이
               테마색 상속을 이겨 다크 프리셋에서 제목이 배경색과 같아졌다(감사 #6). */}
-          <h1 className={`${titlePx} font-bold leading-[1.3] tracking-normal text-[var(--lp-fg)]`}>{snap.title || slug}</h1>
+          {/* break-words — 띄어쓰기 없는 긴 이름(URL·해시태그)이 폭을 뚫고 페이지에 가로 스크롤을 만들었다.
+              자간은 -0.01em: tracking-normal 은 base 레이어를 끄려던 것인데 26px 볼드 제목의 자간까지
+              통째로 0 으로 풀어 버렸다(2026-08-24 비평) */}
+          <h1 className={`${titlePx} w-full break-words font-bold leading-[1.3] tracking-[-0.01em] text-[var(--lp-fg)]`}>{snap.title || slug}</h1>
           {snap.bio ? (
-            <p className="mt-2 max-w-[42ch] whitespace-pre-wrap text-[15px] leading-[1.7] text-[var(--lp-muted)]">{snap.bio}</p>
+            <p className="mt-2 w-full max-w-[42ch] whitespace-pre-wrap break-words text-[15px] leading-[1.7] text-[var(--lp-muted)]">{snap.bio}</p>
           ) : null}
 
           {snap.snsPlacement !== "links" ? snsNav : null}

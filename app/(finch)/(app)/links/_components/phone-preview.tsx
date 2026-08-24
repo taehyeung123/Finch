@@ -233,13 +233,13 @@ export function PhonePreview({
         <img
           src={page.avatarPath}
           alt=""
-          className="mb-3 size-[72px] rounded-full object-cover shadow-[var(--lp-shadow)] ring-4 ring-[var(--lp-card)]"
+          className="mb-3 size-[72px] rounded-full object-cover shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
         />
       ) : (
         /* 사진이 없으면 이니셜 원 — 공개 페이지와 **같은 변수**로 그린다. 프리셋 원본(theme.card)을
            쓰면 직접 꾸미기 색이 여기만 빠져 발행본과 머리 색이 달라진다(감사 #25). */
         <span
-          className="mb-3 flex size-[72px] items-center justify-center rounded-full bg-[var(--lp-card)] text-[24px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] ring-4 ring-[var(--lp-card)]"
+          className="mb-3 flex size-[72px] items-center justify-center rounded-full bg-[var(--lp-card)] text-[26px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
           aria-hidden
         >
           {initialOf(page.title || page.slug)}
@@ -355,18 +355,18 @@ export function PhonePreview({
           {/* 커버 — 캔버스 편집에선 눌러서 프로필 설정(사진 교체)으로 */}
           {(page.layout === "cover" || page.layout === "cover_profile") && page.coverPath ? (
             editable ? (
-              <button type="button" onClick={edit?.onOpenProfile} aria-label="커버 이미지 바꾸기" className="mb-3 block w-full">
+              <button type="button" onClick={edit?.onOpenProfile} aria-label="커버 이미지 바꾸기" className={`${page.layout === "cover_profile" ? "" : "mb-3"} block w-full`}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL */}
                 <img src={page.coverPath} alt="" className="aspect-[3/1] w-full rounded-[var(--lp-radius)] object-cover" />
               </button>
             ) : (
               // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
-              <img src={page.coverPath} alt="" className="mb-3 aspect-[3/1] w-full rounded-[var(--lp-radius)] object-cover" />
+              <img src={page.coverPath} alt="" className={`${page.layout === "cover_profile" ? "" : "mb-3"} aspect-[3/1] w-full rounded-[var(--lp-radius)] object-cover`} />
             )
           ) : null}
 
-          {/* 프로필 */}
-          <div className={`flex flex-col ${align}`}>
+          {/* 프로필 — cover_profile 은 아바타 반지름(72/2=36px)만큼 올라가 커버를 문다(공개 페이지와 같은 규칙) */}
+          <div className={`relative flex flex-col ${align} ${page.layout === "cover_profile" && page.coverPath ? "-mt-9" : ""}`}>
             {editable && page.layout !== "cover" ? (
               <button type="button" onClick={edit?.onOpenProfile} aria-label="프로필 사진·레이아웃 설정">
                 {avatar}
@@ -391,7 +391,8 @@ export function PhonePreview({
                 )}
               />
             ) : (
-              <p className={cn("font-bold leading-[1.3]", titlePx)}>
+              /* w-full + break-words — 띄어쓰기 없는 긴 이름이 폰 폭을 뚫던 것(공개 페이지와 같은 처리) */
+              <p className={cn("w-full break-words font-bold leading-[1.3]", titlePx)}>
                 {page.title || page.slug}
                 {pencilBtn("title", "이름 바로 고치기")}
               </p>
