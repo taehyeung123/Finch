@@ -42,7 +42,9 @@ export const DEFAULT_STATE: NotificationSettingsState = {
 
 export function NotificationSettingsClient({ initial }: { initial: NotificationSettingsState }) {
   const [settings, setSettings] = useState(initial);
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  /* demo 는 «실패»와 다르다 — 고장이 아니라 예시 화면이라 안 담기는 것이다.
+     빨간 「저장 실패」와 「다시 시도」를 띄우면 몇 번이고 다시 누르게 된다. */
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error" | "demo">("idle");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** 서버가 확인한 마지막 값 — 저장 실패 시 여기로 롤백한다 */
   const lastSavedRef = useRef(initial);
@@ -60,6 +62,9 @@ export function NotificationSettingsClient({ initial }: { initial: NotificationS
     if (res.ok) {
       lastSavedRef.current = attempted;
       setSaveState("saved");
+    } else if (res.demo) {
+      setSettings(lastSavedRef.current);
+      setSaveState("demo");
     } else {
       // 롤백 — 화면이 서버에 없는 값을 계속 보여주지 않도록 마지막 저장값으로 되돌린다
       setSettings(lastSavedRef.current);
@@ -110,6 +115,7 @@ export function NotificationSettingsClient({ initial }: { initial: NotificationS
                   saveState === "saving" && "text-fg-sub",
                   saveState === "saved" && "text-positive",
                   saveState === "error" && "text-negative",
+                  saveState === "demo" && "text-warning",
                 )}
               >
                 {saveState === "saving"
@@ -118,7 +124,9 @@ export function NotificationSettingsClient({ initial }: { initial: NotificationS
                     ? "저장됨"
                     : saveState === "error"
                       ? "저장 실패 — 변경이 저장 전 상태로 되돌아갔어요"
-                      : null}
+                      : saveState === "demo"
+                        ? "예시 화면이라 설정은 저장되지 않아요"
+                        : null}
               </span>
               {saveState === "error" ? (
                 <button

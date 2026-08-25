@@ -323,6 +323,10 @@ export type LearnResult =
 
 /** 브랜드 톤 학습 — 예시 캡션/설명에서 톤 프로필을 추출해 저장한다(Claude 1회 호출). */
 export async function learnBrandProfile(input: string): Promise<LearnResult> {
+  /* 데모 확인이 **맨 앞**이다 — 없으면 ANTHROPIC_API_KEY 가 있는 데모 환경에서 Supabase 조회까지
+     들어가 「로그인이 필요합니다」가 떴다. 바로 옆 「저장하고 적용」은 같은 상황에서
+     「데모 모드에서는 사용할 수 없어요」라고 정확히 말한다 — 같은 원인에 두 설명이 나란히 붙어 있었다. */
+  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 사용할 수 없어요." };
   const text = input.trim();
   if (text.length < 20) return { ok: false, error: "브랜드 톤을 파악할 수 있게 예시 캡션이나 설명을 조금 더 입력해 주세요." };
   if (text.length > 4000) return { ok: false, error: "입력이 너무 길어요. 4000자 이내로 줄여 주세요." };
@@ -408,6 +412,8 @@ export async function learnBrandProfile(input: string): Promise<LearnResult> {
 
 /** 저장된 브랜드 톤 프로필 삭제 (초기화) */
 export async function clearBrandProfile(): Promise<void> {
+  /* learnBrandProfile 과 같은 이유로 데모를 먼저 막는다 — 데모에서 지울 수 있는 것이 없다 */
+  if (isDemoMode()) return;
   const supabase = await createClient();
   const {
     data: { user },

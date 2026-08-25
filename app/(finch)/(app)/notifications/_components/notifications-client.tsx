@@ -84,8 +84,10 @@ export function NotificationsClient({ initial }: { initial: AppNotification[] })
     void markNotificationRead(id);
   }
 
+  /* 폭 제한은 **카드**에 건다(아래 Card). ul 에 걸면 카드 오른쪽 159px 이 빈 흰 띠로 남아,
+     미읽음 행의 코랄 틴트와 구분선이 카드 한가운데서 끊겼다(실측 1440px). */
   return (
-    <div className="space-y-6 [&_ul]:max-w-[64rem]">
+    <div className="space-y-6">
       <PageHeader
         title="알림"
         description={
@@ -110,7 +112,7 @@ export function NotificationsClient({ initial }: { initial: AppNotification[] })
 
       {/* 알림 목록 (PART 4.12) — 읽지 않은 항목은 코랄 점 + 배경 틴트 */}
       {visible.length > 0 ? (
-        <Card className="overflow-hidden">
+        <Card className="max-w-[64rem] overflow-hidden">
           <ul className="divide-y divide-line">
             {visible.map((n) => {
               const Icon = TYPE_ICON[n.type];

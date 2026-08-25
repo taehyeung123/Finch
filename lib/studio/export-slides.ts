@@ -15,6 +15,7 @@
  */
 
 import { type CardTemplate, DEFAULT_TEMPLATE, withAlpha } from "./templates";
+import { COVER_FOOT_LH, COVER_FOOT_SIZE, COVER_TOP, coverLayout } from "./cover-layout";
 
 export type SlideRole = "cover" | "content" | "closing";
 
@@ -109,30 +110,34 @@ function drawCover(ctx: CanvasRenderingContext2D, s: ExportSlide, tpl: CardTempl
   ctx.fillStyle = tpl.accent;
   ctx.fillRect(PAD, 452, 96, 9);
 
-  ctx.font = `800 98px ${FONT}`;
-  const lines = wrapText(ctx, s.headline, CW).slice(0, 4);
-  const lh = 116;
-  let y = 560;
+  /* 배치 계산은 편집기와 **같은 함수**가 한다(lib/studio/cover-layout.ts) — 좌표가 두 벌이면
+     한쪽만 고쳐서 또 어긋난다. 여기서는 실제 글꼴로 잰 폭을 넘겨준다. */
+  const L = coverLayout(s.headline, s.footnote, CW, (text, size, maxW) => {
+    ctx.font = `800 ${size}px ${FONT}`;
+    return wrapText(ctx, text, maxW);
+  });
+
+  ctx.font = `800 ${L.headFontSize}px ${FONT}`;
+  let y = COVER_TOP;
   ctx.fillStyle = tpl.paper;
-  for (const l of lines) {
+  for (const l of L.headLines) {
     ctx.fillText(l, PAD, y);
-    y += lh;
+    y += L.headLineHeight;
   }
 
-  if (s.footnote) {
-    ctx.font = `500 38px ${FONT}`;
+  if (L.footTop !== null) {
+    ctx.font = `500 ${COVER_FOOT_SIZE}px ${FONT}`;
     ctx.fillStyle = withAlpha(tpl.paper, 0.72);
-    const fl = wrapText(ctx, s.footnote, CW).slice(0, 2);
-    let fy = y + 26;
-    for (const l of fl) {
+    let fy = L.footTop;
+    for (const l of L.footLines) {
       ctx.fillText(l, PAD, fy);
-      fy += 52;
+      fy += COVER_FOOT_LH;
     }
   }
 
   ctx.font = `600 28px ${FONT}`;
   ctx.fillStyle = withAlpha(tpl.paper, 0.55);
-  ctx.fillText("밀어서 보기 →", PAD, 980);
+  ctx.fillText("밀어서 보기 →", PAD, L.hintY);
 }
 
 function drawContent(ctx: CanvasRenderingContext2D, s: ExportSlide, total: number, tpl: CardTemplate) {

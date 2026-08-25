@@ -55,7 +55,9 @@ export default function CompetitorsPage() {
     <div className="space-y-6">
       <PageHeader
         title="경쟁사 비교"
-        description="경쟁 계정의 성장 흐름과 콘텐츠 성과를 내 계정과 나란히 확인하세요."
+        /* 「내 계정과 나란히」라고 적혀 있었지만 비교 칩에도 표 열에도 내 계정이 없고 넣을 조작도 없다.
+           없는 기능을 설명이 약속하면 사용자는 그걸 찾아 헤맨다. */
+        description="경쟁 계정의 성장 흐름과 콘텐츠 성과를 나란히 비교하세요."
         /* 헤더의 "계정 등록" 버튼을 걷었다 — disabled 입력창에 포커스를 주려 했는데
            disabled 요소는 포커스를 못 받아 아무 반응도 없는 죽은 버튼이었다.
            등록 경로가 아직 없다는 건 아래 폼의 안내가 이미 설명한다. */
@@ -83,7 +85,10 @@ export default function CompetitorsPage() {
               disabled
               placeholder="정확한 사용자명(@handle)을 입력하세요"
               aria-label="경쟁사 계정 사용자명"
-              className="h-10 w-full rounded-card border border-line bg-body pl-9 pr-3 text-[15px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary"
+              /* 비활성인데 살아 있는 입력창과 배경·테두리·글자색·불투명도가 전부 같았다 — 차이는 커서 하나뿐.
+                 클릭해도 타이핑해도 아무 일이 없으니 «고장»으로 읽힌다. 아래 안내문은 이미 aria-describedby 로
+                 걸려 있으므로 **보이는 쪽**을 맞춘다(등록 버튼과 같은 수준으로). */
+              className="h-10 w-full rounded-card border border-line bg-body pl-9 pr-3 text-[15px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:border-dashed disabled:bg-plate disabled:text-fg-faint disabled:placeholder:text-fg-faint"
             />
           </div>
           <Button type="submit" disabled>
@@ -169,20 +174,33 @@ export default function CompetitorsPage() {
       <Card>
         <CardHeader
           title="계정 비교"
-          description="비교할 계정을 2~3개 선택하세요. 지표별 최고값을 초록색으로 표시합니다."
+          description="비교할 계정을 2~3개 선택하세요(최소 2개). 지표별 최고값을 초록색으로 표시합니다."
         />
         <CardBody className="space-y-4">
           <div className="flex flex-wrap gap-1.5">
             {competitors.map((c) => {
               const active = selected.includes(c.id);
+              /* 최소 2개 규칙에 걸린 칩 — 예전엔 눌러도 **아무 일도 안 일어났고**, 눌리는 칩과
+                 disabled·커서·title 이 전부 같아서 화면이 굳은 것처럼 보였다. 왜 안 되는지 말해 준다.
+                 (최대 3개 규칙도 같다 — 3개를 고른 뒤 네 번째 칩이 조용히 무시됐다.) */
+              const locked = active ? selected.length <= 2 : selected.length >= 3;
               return (
                 <button
                   key={c.id}
                   type="button"
                   aria-pressed={active}
+                  aria-disabled={locked || undefined}
+                  title={
+                    locked
+                      ? active
+                        ? "비교하려면 최소 2개는 남겨야 해요"
+                        : "한 번에 3개까지 비교할 수 있어요"
+                      : undefined
+                  }
                   onClick={() => toggleCompare(c.id)}
                   className={cn(
                     "rounded-chip px-3.5 py-1.5 text-[14px] font-semibold trans-state",
+                    locked && "cursor-not-allowed opacity-60",
                     active
                       ? "bg-primary text-on-primary"
                       : "border border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg",

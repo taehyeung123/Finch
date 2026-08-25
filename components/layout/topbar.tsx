@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell, LogOut, Search, Settings } from "lucide-react";
-import { notifications } from "@/lib/data";
 import { Badge } from "@/components/ui/badge";
 import { isDemoMode } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/client";
@@ -16,11 +15,16 @@ const menuItem =
   "flex w-full items-center gap-2 rounded-card px-2.5 py-2 text-left text-[15px] text-fg-sub trans-state hover:bg-tint-hover hover:text-fg";
 
 /** 상단바 — 채널 스위처 / 전역 검색 / 알림 벨 / 계정 드롭다운 (PART 6.2) */
-export function Topbar() {
+export function Topbar({ unread = 0 }: { unread?: number }) {
   const { channel, setChannel } = useChannel();
   const pathname = usePathname();
   const scope = getChannelScope(pathname);
-  const unread = notifications.filter((n) => !n.read).length;
+  /*
+    ⚠️ 미읽음 수는 **서버가 센 값을 받는다.** 예전엔 여기서 정적 모듈 상수(@/lib/data 의 notifications)를
+    세고 있었는데, /notifications 화면은 DB 를 실조회한다(lib/data/internal.ts) — 두 화면이 **다른 소스**를
+    봤다. 그래서 실제 모드에서는 알림이 아무리 쌓여도 벨이 영원히 0 이었고, 데모에서는 「모두 읽음」을
+    눌러 목록이 다 회색이 된 뒤에도 벨이 «2» 를 달고 있었다(실측). 레이아웃이 같은 조회로 세어 내려준다.
+  */
 
   const [email, setEmail] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);

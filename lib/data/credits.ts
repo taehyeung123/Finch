@@ -136,7 +136,21 @@ export async function getCreditSummary(): Promise<CreditSummary> {
   /* 같은 화면의 getCurrentPlan/getSubscription/getPaymentOrders 와 같은 기준을 쓴다.
      isSupabaseConfigured 만 보면 NEXT_PUBLIC_DEMO_MODE=true(프로젝트가 죽었을 때의
      탈출구)에서 이 패널만 죽은 DB 에 접속을 시도해 탈출구를 무력화한다. */
-  if (isDemoMode()) return EMPTY;
+  /* 데모는 **같은 화면의 플랜과 앞뒤가 맞아야 한다.** getCurrentPlan 이 데모에서 "creator" 를
+     돌려주는데 여기서 EMPTY(allowance: null)를 주는 바람에, 결제 화면이 「현재 플랜 Creator」와
+     「무료 플랜은 크레딧 대신 기능별 월 횟수로 제공됩니다 / 남은 크레딧 0」을 나란히 띄웠다(실측).
+     한 화면 안에서 두 문장이 서로를 반박하면 어느 쪽도 못 믿는다. */
+  if (isDemoMode()) {
+    const allowance = PLAN_CREDIT_ALLOWANCE.creator;
+    return {
+      balance: 312,
+      allowance,
+      spentThisMonth: allowance - 312,
+      entries: [],
+      balanceFailed: false,
+      entriesFailed: false,
+    };
+  }
 
   const supabase = await createClient();
   const {

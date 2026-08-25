@@ -9,6 +9,7 @@
 
 import type { ExportSlide, LogoPlacement } from "./export-slides";
 import { type CardTemplate, DEFAULT_TEMPLATE } from "./templates";
+import { COVER_FOOT_SIZE, COVER_TOP, coverLayout, estimateWrap } from "./cover-layout";
 
 export const CARD_SIZE = 1080;
 export const CARD_PAD = 96;
@@ -219,11 +220,18 @@ function coverScene(s: ExportSlide, tpl: CardTemplate): EditorScene {
     els.push(text({ text: s.kicker, x: CARD_PAD + 24, y: 148, width: CW, fontSize: 28, fill: tpl.accent }));
   }
   els.push(rect({ x: CARD_PAD, y: 452, width: 96, height: 9, fill: tpl.accent }));
-  els.push(text({ text: s.headline, x: CARD_PAD, y: 470, width: CW, fontSize: 98, fill: tpl.paper, lineHeight: 1.18, fontStyle: "900" }));
-  if (s.footnote) {
-    els.push(text({ text: s.footnote, x: CARD_PAD, y: 800, width: CW, fontSize: 38, fill: tpl.paper, fontStyle: "400", opacity: 0.72 }));
+  /* 부연 y 가 **800 에 고정**돼 있었다. 헤드라인이 몇 줄이 되든 그대로라, 제목이 조금만 길어지면
+     두 글자 덩어리가 통째로 포개졌다(실측 17~133px 겹침 — 데스크톱·모바일 동일).
+     게다가 내보내기는 다른 규칙으로 흘려보내고 있어서 «편집 화면과 발행물이 다른» 상태였다.
+     이제 두 벌이 같은 함수를 쓴다. 캔버스가 없으므로 줄 수는 근사로 센다(겹침만 막으면 된다). */
+  const L = coverLayout(s.headline, s.footnote, CW, estimateWrap);
+  /* Konva Text 는 baseline 이 아니라 상자 top 기준이다 — 캔버스 baseline 에서 한 줄 위로 올린다 */
+  const headTop = COVER_TOP - L.headFontSize;
+  els.push(text({ text: s.headline, x: CARD_PAD, y: headTop, width: CW, fontSize: L.headFontSize, fill: tpl.paper, lineHeight: 1.18, fontStyle: "900" }));
+  if (s.footnote && L.footTop !== null) {
+    els.push(text({ text: s.footnote, x: CARD_PAD, y: L.footTop - COVER_FOOT_SIZE, width: CW, fontSize: COVER_FOOT_SIZE, fill: tpl.paper, fontStyle: "400", opacity: 0.72 }));
   }
-  els.push(text({ text: "밀어서 보기 →", x: CARD_PAD, y: 952, width: CW, fontSize: 28, fill: tpl.paper, fontStyle: "400", opacity: 0.55 }));
+  els.push(text({ text: "밀어서 보기 →", x: CARD_PAD, y: L.hintY - 28, width: CW, fontSize: 28, fill: tpl.paper, fontStyle: "400", opacity: 0.55 }));
   return { background: tpl.ink, elements: els };
 }
 

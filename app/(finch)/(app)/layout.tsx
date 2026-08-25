@@ -9,6 +9,7 @@ import { OpeningNotice } from "@/components/layout/opening-notice";
 import { isDemoMode } from "@/lib/supabase/config";
 import { getAuthUser } from "@/lib/supabase/server";
 import { IS_SAMPLE_DATA } from "@/lib/data";
+import { getNotifications } from "@/lib/data/internal";
 
 /* 로그인 후 영역 전체 — 검색 노출 금지 (PART 13.1) */
 export const metadata: Metadata = {
@@ -42,12 +43,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     }
   }
 
+  /* 상단바 벨의 미읽음 수 — /notifications 화면과 **같은 조회**를 쓴다.
+     예전엔 상단바가 정적 목데이터를 세고 있어서 실제 모드에서는 영원히 0 이었고,
+     데모에서는 다 읽은 뒤에도 숫자가 그대로였다. null 은 조회 실패라 배지를 띄우지 않는다
+     (없는 것과 모르는 것을 구분한다 — lib/data/internal.ts 규칙). */
+  const notis = await getNotifications();
+  const unread = notis ? notis.filter((n) => !n.read).length : 0;
+
   return (
     <ChannelProvider>
       <div className="flex min-h-screen w-full">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar />
+          <Topbar unread={unread} />
           {IS_SAMPLE_DATA ? (
             /* 좌측 정렬 — text-center 라 1632px 띠 한가운데 한 줄이 떠 있었고,
                그게 모든 페이지 최상단에서 매번 반복됐다. */
@@ -56,7 +64,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               채널 연동이 완료되면 실제 데이터로 교체됩니다
             </p>
           ) : null}
-          <main className="flex-1 px-4 py-5 pb-24 md:px-6 md:pb-10">{children}</main>
+          {/* 우하단 AI 에이전트 FAB(52px, z-40)이 페이지 마지막 줄 위에 겹쳐, 1440×950 에서
+              /settings 의 「문의하기」 링크가 통째로 가려졌다 — 눌렀더니 에이전트 패널이 열렸다(실측).
+              데스크톱에서도 FAB 높이만큼 바닥을 비운다(모바일 pb-24 는 하단 탭바 몫이라 그대로). */}
+          <main className="flex-1 px-4 py-5 pb-24 md:px-6 md:pb-24">{children}</main>
         </div>
       </div>
       <AgentPanel />

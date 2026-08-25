@@ -837,9 +837,14 @@ export default function StudioPage() {
                   {videoSupported ? " · ‘영상으로 저장’은 카드가 넘어가는 릴스형 영상(webm)으로 내려받아요." : ""}
                 </p>
 
+                {/* 각인은 AI 결과일 때만 붙는다(export-slides.ts: 템플릿 폴백에는 표기 안 함) —
+                    그런데 이 안내는 조건 없이 떠서, 「템플릿 (연동 전)」 배지를 단 결과에도
+                    「AI 생성 표시가 자동으로 부착됩니다」라고 말했다. 결과 헤더와 같은 조건으로 가른다. */}
                 <p className="flex items-center gap-1.5 rounded-card border border-line bg-body px-3 py-2.5 text-[14px] text-fg-sub">
                   <Sparkles className="size-4 shrink-0 text-primary" aria-hidden />
-                  AI 생성 표시가 자동으로 부착됩니다 (플랫폼 정책 준수)
+                  {slidesFromAi
+                    ? "AI 생성 표시가 자동으로 부착됩니다 (플랫폼 정책 준수)"
+                    : "이 결과는 템플릿 생성이라 AI 생성 표시가 붙지 않아요"}
                 </p>
 
                 <div className="flex flex-wrap items-center gap-2">

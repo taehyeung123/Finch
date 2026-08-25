@@ -132,7 +132,8 @@ export function RegionPicker({
                           <MapPin className="size-3.5 text-fg-faint" aria-hidden />
                           {formatRegionPick(s)}
                         </span>
-                        {selected ? <span className="text-xs text-primary">선택됨</span> : null}
+                        {/* text-primary 는 흰 지면 2.82:1 — 12px 글자에는 못 쓴다(primary-ink 로) */}
+                        {selected ? <span className="text-xs font-semibold text-primary-ink">선택됨</span> : null}
                       </button>
                     </li>
                   );

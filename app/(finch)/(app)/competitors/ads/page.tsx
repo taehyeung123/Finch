@@ -54,7 +54,9 @@ export default function CompetitorAdsPage() {
             Meta는 2023년 DSA 이후 상업(비정치) 광고를 EU·영국 노출 광고에 한해서만 API로 제공합니다. 한국을 포함한
             그 외 지역은 정치·사회 이슈 광고만 조회할 수 있어, 한국 브랜드의 광고는 자동 수집 대상이 아닙니다. 아래 피드는
             기능 예시이며, 한국 경쟁사는{" "}
-            <Link href="/competitors" className="font-semibold text-primary underline underline-offset-2">
+            {/* text-primary 는 흰 지면에서 2.82:1 — 본문 링크에 못 쓴다. 같은 성격의 링크가
+                  /competitors 에서 쓰는 primary-ink 로 맞춘다. */}
+              <Link href="/competitors" className="font-semibold text-primary-ink underline underline-offset-2">
               경쟁사 비교
             </Link>{" "}
             탭의 공개 프로필·게시물 지표로 분석하는 것을 권장합니다.
