@@ -340,6 +340,19 @@ export interface PlanFeature {
   enterprise: string;
 }
 
+/**
+ * 예약 발행 샘플 한 줄 — DB 의 scheduled_posts 행과 같은 모양(snake_case)으로 둔다.
+ * 화면(publish-list.tsx)이 그 모양을 그대로 받으므로, 데모와 실제가 같은 길로 들어간다.
+ */
+export interface ScheduledPostSample {
+  id: string;
+  caption: string;
+  image_urls: string[];
+  scheduled_at: string;
+  status: "draft" | "scheduled" | "publishing" | "published" | "failed" | "canceled";
+  error: string | null;
+}
+
 export interface UsageStat {
   label: string;
   used: number;

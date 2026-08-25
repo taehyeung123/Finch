@@ -225,7 +225,9 @@ export function PostComposer({
           {/* 채널 — 연결된 채널만 활성. 실제 발행 API 는 인스타그램뿐이다 */}
           <div>
             <p className="text-[12px] font-medium text-fg-sub">채널</p>
-            <div className="mt-1.5 flex gap-2" role="radiogroup" aria-label="발행 채널">
+            {/* flex-wrap 없이 칩 3개를 한 줄에 눌러 담아서, 390px 에서 라벨이 «인스타그/램» 처럼
+                단어 중간에 끊겼다(실측: 칩 높이 60.8px·2줄). 위 채널 스트립은 이미 wrap 이다 — 규칙을 맞춘다. */}
+            <div className="mt-1.5 flex flex-wrap gap-2" role="radiogroup" aria-label="발행 채널">
               {(["instagram", "tiktok", "threads"] as const).map((ch) => {
                 const meta = channels.find((c) => c.channel === ch);
                 const publishable = ch === "instagram"; // 발행 함수가 인스타그램뿐
@@ -239,7 +241,7 @@ export function PostComposer({
                     disabled={!usable}
                     onClick={() => setChannel(ch)}
                     className={cn(
-                      "trans-state inline-flex items-center gap-1.5 rounded-chip border px-3 py-1.5 text-[14px] font-medium disabled:cursor-not-allowed disabled:opacity-45",
+                      "trans-state inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-chip border px-3 py-1.5 text-[14px] font-medium disabled:cursor-not-allowed disabled:opacity-45",
                       channel === ch ? "border-2 border-primary" : "border-line hover:bg-tint-hover",
                     )}
                   >

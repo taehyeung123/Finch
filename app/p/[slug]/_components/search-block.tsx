@@ -59,7 +59,9 @@ export function SearchBlock({
           onChange={(e) => setQ(e.target.value)}
           placeholder={placeholder}
           aria-label={t.aria}
-          className="min-w-0 flex-1 bg-transparent text-[15px] text-[var(--lp-fg)] placeholder:text-[var(--lp-muted)] focus:outline-none"
+          /* 크롬은 type=search 에 자기 취소 버튼을 붙인다 — 테마를 안 따르는 파란 ✕ 가
+             우리 ✕ 바로 옆에 뜨고, 같은 일을 하는 버튼이 둘이 된다(실측). 끈다. */
+          className="min-w-0 flex-1 bg-transparent text-[15px] text-[var(--lp-fg)] placeholder:text-[var(--lp-muted)] focus:outline-none [&::-webkit-search-cancel-button]:appearance-none"
         />
         {q ? (
           <button

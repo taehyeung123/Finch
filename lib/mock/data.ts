@@ -26,6 +26,7 @@ import type {
   ReferenceItem,
   ReferenceSource,
   ReportItem,
+  ScheduledPostSample,
   TopEngager,
   UsageStat,
 } from "../types";
@@ -878,6 +879,73 @@ export const analyzeHistory = [
   { id: "h3", url: "threads.net/@finch.official/post/456", channel: "threads" as const, analyzedAt: "2026-07-08T10:05:00+09:00", views: 21000 },
 ];
 
+/*
+  데모 통계의 «오늘» — KST 자정 기준. 화면이 "한국 시간 자정 기준"이라고 말하므로 UTC 로 자르면
+  하루가 어긋난다. 모듈 로드 시각 한 번만 계산한다(렌더마다 시계를 새로 보면 같은 화면 안에서
+  날짜가 갈라진다 — 이 저장소가 한 번 겪은 문제다).
+*/
+const KST = 9 * 60 * 60 * 1000;
+const DEMO_TODAY_MS = (() => {
+  const k = new Date(Date.now() + KST);
+  return Date.UTC(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate());
+})();
+
+
+/*
+  예약 발행 샘플 — 데모 모드의 /publish 는 이게 없어서 **네 탭이 전부 빈칸**이었다.
+  같은 서버의 다른 화면(자동 DM·홈·프로필 링크)은 샘플이 가득한데 발행만 빈 화면이라
+  «고장 났다»로 읽혔고, 유일하게 살아 있던 「예약하기」는 다 입력한 뒤에야 거절했다.
+
+  날짜는 DEMO_TODAY_MS 기준 상대값이다 — 고정 날짜를 박으면 시간이 갈수록 캘린더가
+  과거로 밀려 또 빈 달이 된다(같은 파일 daily 주석 참조).
+  상태는 사장님이 실제로 마주칠 네 가지를 한 번씩 보여준다: 예약·발행 완료·발행 실패·초안.
+*/
+const demoAt = (dayOffset: number, hh: number, mm = 0) =>
+  new Date(DEMO_TODAY_MS + dayOffset * 86_400_000 + (hh - 9) * 3_600_000 + mm * 60_000).toISOString();
+
+export const scheduledPosts: ScheduledPostSample[] = [
+  {
+    id: "demo-sp-1",
+    caption: "가을 신상 공구 오픈 🍂 링크는 프로필에 있어요! #공구 #가을신상",
+    image_urls: ["/samples/ad-serum.svg"],
+    scheduled_at: demoAt(1, 10, 0),
+    status: "scheduled",
+    error: null,
+  },
+  {
+    id: "demo-sp-2",
+    caption: "이번 주 베스트 3 모아봤어요 — 재구매율 1위는 마지막에!",
+    image_urls: ["/samples/ad-moodlight.svg", "/samples/ad-snack.svg"],
+    scheduled_at: demoAt(3, 19, 30),
+    status: "scheduled",
+    error: null,
+  },
+  {
+    id: "demo-sp-3",
+    caption: "리뷰 이벤트 당첨자 발표 🎉 DM 확인해 주세요",
+    image_urls: ["/samples/ad-snack.svg"],
+    scheduled_at: demoAt(-2, 12, 0),
+    status: "published",
+    error: null,
+  },
+  {
+    id: "demo-sp-4",
+    caption: "주말 한정 무료배송 안내",
+    image_urls: ["/samples/ad-moodlight.svg"],
+    scheduled_at: demoAt(-1, 9, 0),
+    status: "failed",
+    error: "인스타그램 토큰이 만료됐어요. 설정에서 다시 연동해 주세요.",
+  },
+  {
+    id: "demo-sp-5",
+    caption: "(작성 중) 신제품 언박싱 영상 캡션…",
+    image_urls: [],
+    scheduled_at: demoAt(5, 18, 0),
+    status: "draft",
+    error: null,
+  },
+];
+
 export const usageStats: UsageStat[] = [
   { label: "콘텐츠 분석", used: 34, limit: 100, unit: "회" },
   { label: "AI 카드뉴스 생성", used: 12, limit: 30, unit: "회" },
@@ -1173,9 +1241,12 @@ export const linkWorkspace: LinkWorkspace = {
     clicks: 1268,
     ctr: 26.3,
     returning: 31.5,
-    /* 실제 날짜로 — 7/32 같은 없는 날이 CSV 에 찍혔다(감사 L15). 기간 토글은 page.tsx 가 days 만큼 자른다 */
+    /* 실제 날짜로 — 7/32 같은 없는 날이 CSV 에 찍혔다(감사 L15). 기간 토글은 page.tsx 가 days 만큼 자른다.
+       ⚠️ 기준일을 상수로 박지 않는다. 2026-05-22 로 고정돼 있어서 시간이 갈수록 어긋났고,
+       실측일(2026-08-25)에는 「오늘」을 눌러도 6일 전 한 점만 나왔다 — 화면은 "한국 시간 자정 기준"
+       이라고 못 박는데 데이터는 지난주였다. 마지막 원소가 **항상 오늘(KST)** 이 되게 역산한다. */
     daily: Array.from({ length: 90 }, (_, i) => ({
-      date: new Date(Date.UTC(2026, 4, 22) + i * 86_400_000).toISOString().slice(0, 10),
+      date: new Date(DEMO_TODAY_MS - (89 - i) * 86_400_000).toISOString().slice(0, 10),
       views: 120 + Math.round(Math.sin(i / 3) * 45) + i * 2,
       clicks: 32 + Math.round(Math.cos(i / 4) * 12) + i,
     })),

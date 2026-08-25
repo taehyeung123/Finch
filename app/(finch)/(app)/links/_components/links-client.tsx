@@ -453,6 +453,10 @@ export function LinksClient({
     setCustomForm(page?.themeCustom ?? {});
   }
   const customDirty = stableJson(customForm) !== customServerKey;
+  /* 마지막 「꾸미기 저장」이 실패했는가 — customDirty 만 보면 실패해서 되돌아온 상태를
+     «저장됨 / 모두 저장됐어요» 라고 말한다. 실제로 빨간 배너와 「저장됨」 칩이 한 화면에
+     같이 떠 있었다(실측). 성공하면 dirty 가 풀리므로 이 값은 다음 저장에서 덮인다. */
+  const [customSaveFailed, setCustomSaveFailed] = useState(false);
   /* 미저장 편집이 있으면 창 닫기·새로고침에 브라우저 확인을 띄운다 — 탭 이동 관문(leaveEditor)과
      같은 결함 클래스가 라우트 경계에 열려 있었다(감사4). 앱 내부 사이드바 이동 인터셉트는
      전역 내비 구조 변경이 필요해 여기선 브라우저 경계만 지킨다. */
@@ -1539,6 +1543,7 @@ export function LinksClient({
                 hasSubscribeBlock={blocks.some((b) => b.active && b.type === "subscribe")}
                 custom={customForm}
                 customDirty={customDirty}
+                customSaveFailed={customSaveFailed}
                 busy={busy}
                 onCustomChange={patchCustom}
                 onCustomReset={() => setCustomForm({})}
@@ -1549,14 +1554,20 @@ export function LinksClient({
                   const clean = sanitizeThemeCustom(customForm);
                   if (customForm.bgImage && !clean?.bgImage) {
                     setError("배경 이미지 주소는 http(s)로 시작해야 하고 공백·따옴표·괄호·역슬래시가 없어야 해요.");
+                    setCustomSaveFailed(true);
                     return;
                   }
                   /* 로고도 같은 관문(IMG_URL)을 탄다 — 검사 없이 보내면 저장 「성공」 후 로고만 말없이 사라진다(감사4) */
                   if (customForm.logoImage && !clean?.logoImage) {
                     setError("로고 이미지 주소는 http(s)로 시작해야 하고 공백·따옴표·괄호·역슬래시가 없어야 해요.");
+                    setCustomSaveFailed(true);
                     return;
                   }
-                  run(() => updateLinkThemeCustom(customForm, page.id));
+                  run(
+                    () => updateLinkThemeCustom(customForm, page.id),
+                    () => setCustomSaveFailed(false),
+                    () => setCustomSaveFailed(true),
+                  );
                 }}
                 current={liveTheme}
                 /* 누르는 즉시 칠한다 — 로딩·비활성 없음. 실패하면 트랜지션 종료와 함께
@@ -1811,8 +1822,12 @@ function TopBar({
   return (
     /* 폰 칸과 **같은 선**(4.5rem)에 고정한다 — 목록을 내리면 탭·발행 버튼이 사라져
        왼쪽엔 폰이 붙어 있는데 오른쪽 기둥만 없어졌다.
-       ⚠️ z-30 위로 올리지 말 것: sticky 가 쌓임 맥락을 만들어, 더 올리면 모달 스크림 뒤에서 이 바가 튀어나온다 */
-    <div className="card-face xl:sticky xl:top-[4.5rem] xl:z-30">
+       ⚠️ z-30 위로 올리지 말 것: sticky 가 쌓임 맥락을 만들어, 더 올리면 모달 스크림 뒤에서 이 바가 튀어나온다.
+
+       ⚠️ 앱 헤더(h-14 = 56px)와 이 바(72px) 사이 **16px 띠**로 블록 목록이 잘린 채 흘러가는 게 보였다(실측).
+       오프셋 4.5rem 은 폰 칸과 맞춘 값이라 못 옮긴다 — 그래서 그 틈만 지면색으로 덮는다.
+       before 는 바 위쪽으로 16px 뻗어 헤더 밑단까지 닿고, 지면색이라 배경과 구분되지 않는다. */
+    <div className="card-face relative xl:sticky xl:top-[4.5rem] xl:z-30 xl:before:absolute xl:before:inset-x-0 xl:before:bottom-full xl:before:h-4 xl:before:bg-surface xl:before:content-['']">
       {/* 1행 — 탭 · 주소 · 열람 도구(복사/열기/QR) · ⚙ · 공개 · 라이브 반영 */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-3 py-2">
         <nav aria-label="편집 영역" className="flex items-center gap-0.5 rounded-card bg-plate p-0.5">
@@ -2560,6 +2575,20 @@ function PageSwitcher({
   onNewSubpage?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  /* Esc 로 닫는다 — 예전엔 keydown 처리가 없어서, Esc 를 눌러도 화면 전체를 덮는 투명 오버레이가
+     그대로 남았다(실측: 오버레이 1개 → Esc → 여전히 1개). 같은 화면의 블록 ⋯ 메뉴는 되는데
+     이것만 안 돼서 «화면이 굳었다»로 읽힌다. 닫을 때 포커스는 트리거로 돌려준다. */
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      trigger.current?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
   const me = pages.find((p) => p.id === activeId) ?? null;
   const mains = pages.filter((p) => !p.parentId);
   const full = pageLimit.used >= pageLimit.max;
@@ -2586,6 +2615,7 @@ function PageSwitcher({
   return (
     <div className="relative">
       <button
+        ref={trigger}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -3397,6 +3427,7 @@ function ThemePanel({
   current,
   custom,
   customDirty,
+  customSaveFailed = false,
   busy,
   hasSubscribeBlock,
   onPick,
@@ -3407,6 +3438,8 @@ function ThemePanel({
   current: string;
   custom: LinkThemeCustom;
   customDirty: boolean;
+  /** 마지막 저장이 실패했는가 — «저장됨»이라고 말하지 않기 위해 필요하다 */
+  customSaveFailed?: boolean;
   busy: boolean;
   /** 구독신청 블록이 켜져 있는가 — 상단 구독 버튼은 그 블록으로 스크롤한다 */
   hasSubscribeBlock: boolean;
@@ -3482,7 +3515,7 @@ function ThemePanel({
             </Button>
           ) : null}
           <Button size="sm" disabled={busy || !customDirty} onClick={onCustomSave}>
-            {customDirty ? "꾸미기 저장" : "저장됨"}
+            {customSaveFailed ? "다시 저장" : customDirty ? "꾸미기 저장" : "저장됨"}
           </Button>
         </div>
       </div>
@@ -3877,9 +3910,15 @@ function ThemePanel({
       </DSection>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
-        <p className="text-[14px] text-fg-sub">{customDirty ? "저장 안 한 변경이 있어요 — 미리보기엔 보이지만 「저장」해야 실제로 반영돼요." : "모두 저장됐어요."}</p>
+        <p className={`text-[14px] ${customSaveFailed ? "text-negative" : "text-fg-sub"}`}>
+          {customSaveFailed
+            ? "저장하지 못했어요 — 위 안내를 확인하고 다시 눌러 주세요."
+            : customDirty
+              ? "저장 안 한 변경이 있어요 — 미리보기엔 보이지만 「저장」해야 실제로 반영돼요."
+              : "모두 저장됐어요."}
+        </p>
         <Button disabled={busy || !customDirty} onClick={onCustomSave}>
-          꾸미기 저장
+          {customSaveFailed ? "다시 저장" : "꾸미기 저장"}
         </Button>
       </div>
     </div>

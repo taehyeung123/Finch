@@ -25,6 +25,7 @@ import type {
   ReferenceItem,
   ReferenceSource,
   ReportItem,
+  ScheduledPostSample,
   TopEngager,
   UsageStat,
 } from "../types";
@@ -71,6 +72,8 @@ export const dashboardSummaries: Record<ChannelFilter, DashboardSummary> = {
 };
 
 export const recentPosts: Post[] = [];
+/* 예약 발행 — 실제 모드는 화면이 DB 를 직접 읽는다(publish/page.tsx). 여기 빈 배열은 타입 짝을 맞추기 위한 것 */
+export const scheduledPosts: ScheduledPostSample[] = [];
 
 export const contentMix: Record<ChannelFilter, ContentMix[]> = {
   all: [],

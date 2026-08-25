@@ -74,8 +74,42 @@ async function load(days: number, wantPageId?: string): Promise<Loaded> {
   /* days 를 그대로 되비춘다 — 샘플 수치는 그대로여도 기간 토글이 눌린 상태는 맞아야
      한다. 안 그러면 7일을 눌렀는데 30일이 선택된 채로 남아 고장난 것처럼 보인다. */
   if (isDemoMode()) {
-    /* 샘플 일별 추이는 90일을 깔아 두고 기간만큼 자른다 — 30개뿐이면 90일 토글이 아무것도 안 바꾼다(감사3) */
-    return { ...linkWorkspace, stats: { ...linkWorkspace.stats, days, daily: linkWorkspace.stats.daily.slice(-days) } };
+    /* 샘플 일별 추이는 90일을 깔아 두고 기간만큼 자른다 — 30개뿐이면 90일 토글이 아무것도 안 바꾼다(감사3).
+       ⚠️ 예전엔 **daily 만** 잘랐다. 그래서 「오늘」을 눌러도 KPI 는 90일치 그대로였고,
+       같은 카드 안에서 「조회수 4,820」과 「오늘 페이지뷰 254」가 나란히 떴다(실측). 내려받은 CSV 도
+       머리는 «기간: 오늘» 인데 몸통은 4,820 이었다. 숫자가 서로를 반박하면 화면 전체를 못 믿는다.
+
+       그래서 자른 구간에서 **다시 계산한다**: 합계(views·clicks)는 잘린 daily 를 실제로 더하고,
+       비율로만 의미가 있는 값들(uniques·returning·블록·지역·유입·기기·체류)은 같은 축소비로 줄인다.
+       실제 모드가 기간 필터로 하는 일과 같은 모양이다 — 데모라고 다른 규칙을 보여 주지 않는다. */
+    const base = linkWorkspace.stats;
+    const daily = base.daily.slice(-days);
+    const views = daily.reduce((n, d) => n + d.views, 0);
+    const clicks = daily.reduce((n, d) => n + d.clicks, 0);
+    /* 0 나눗셈 가드 — 90일 합이 0 이면 축소비를 1 로 두고 그대로 통과시킨다 */
+    const totalViews = base.daily.reduce((n, d) => n + d.views, 0);
+    const ratio = totalViews > 0 ? views / totalViews : 1;
+    const cut = (n: number) => Math.max(n > 0 ? 1 : 0, Math.round(n * ratio));
+    return {
+      ...linkWorkspace,
+      stats: {
+        ...base,
+        days,
+        daily,
+        views,
+        clicks,
+        uniques: cut(base.uniques),
+        ctr: views > 0 ? clicks / views : 0,
+        returning: base.returning,
+        blocks: base.blocks.map((b) => ({ ...b, clicks: cut(b.clicks) })),
+        regions: base.regions.map((r) => ({ ...r, views: cut(r.views) })),
+        sources: base.sources.map((r) => ({ ...r, views: cut(r.views) })),
+        devices: base.devices.map((r) => ({ ...r, views: cut(r.views) })),
+        referrers: base.referrers.map((r) => ({ ...r, views: cut(r.views) })),
+        /* 평균 체류는 «평균»이라 줄이지 않는다 — 표본 수(n)만 기간에 맞춘다 */
+        dwell: { ...base.dwell, n: cut(base.dwell.n) },
+      },
+    };
   }
 
   const user = await getAuthUser();

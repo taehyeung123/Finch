@@ -24,6 +24,8 @@ export const DATA_SYNCED_AT = src.MOCK_SYNCED_AT;
 export const accounts = src.accounts;
 export const dashboardSummaries = src.dashboardSummaries;
 export const recentPosts = src.recentPosts;
+/** 예약 발행 샘플 — 데모에서만 쓰인다(실제 모드는 publish/page.tsx 가 DB 를 읽는다) */
+export const scheduledPosts = src.scheduledPosts;
 export const contentMix = src.contentMix;
 export const analyzeSample = src.analyzeSample;
 export const analyzeHistory = src.analyzeHistory;

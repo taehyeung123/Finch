@@ -59,21 +59,25 @@ export async function scheduleDraft(id: string, date: string): Promise<{ ok: boo
      집히려면 scheduled_at 이 그 시각 이전이어야 하므로 KST 자정(=UTC 15:00 전날)으로 둔다. */
   const scheduledAt = new Date(`${date}T00:00:00+09:00`).toISOString();
 
+  /* draft 뿐 아니라 **failed 도 받는다.** 발행에 실패한 글은 재시도도 삭제도 안 돼서
+     목록에 영구히 박제됐다(크론도 status="scheduled" 만 집는다). 실패 알림은
+     "스튜디오에서 다시 예약해 주세요"라고 안내했지만, 발행 컴포저로 만든 글은 스튜디오에 없다. */
   const { data, error } = await supabase
     .from("scheduled_posts")
     .update({ status: "scheduled", scheduled_at: scheduledAt, error: null })
     .eq("id", id)
-    .eq("status", "draft")
+    .in("status", ["draft", "failed"])
     .select("id");
   if (error) {
-    console.error("[publish] 초안 예약 전환 실패:", error.message);
+    console.error("[publish] 예약 전환 실패:", error.message);
     return { ok: false, error: "예약으로 바꾸지 못했어요." };
   }
-  if (!data || data.length === 0) return { ok: false, error: "이미 처리된 초안이에요." };
+  if (!data || data.length === 0) return { ok: false, error: "이미 처리된 글이에요." };
   return { ok: true };
 }
 
-/** 초안 삭제. 발행된 글은 지울 수 없다 — 이력이다. */
+/** 초안·발행 실패 글 삭제. 발행**된** 글은 지울 수 없다 — 이력이다.
+    실패한 글은 이력이 아니라 «못 나간 글»이므로 지울 수 있어야 한다(안 그러면 목록에 영구히 남는다). */
 export async function deleteDraft(id: string): Promise<{ ok: boolean; error?: string }> {
   if (isDemoMode()) return { ok: false, error: "데모 모드에서는 저장할 수 없어요." };
   const user = await getAuthUser();
@@ -84,13 +88,13 @@ export async function deleteDraft(id: string): Promise<{ ok: boolean; error?: st
     .from("scheduled_posts")
     .delete()
     .eq("id", id)
-    .eq("status", "draft")
+    .in("status", ["draft", "failed"])
     .select("id");
   if (error) {
-    console.error("[publish] 초안 삭제 실패:", error.message);
+    console.error("[publish] 삭제 실패:", error.message);
     return { ok: false, error: "삭제하지 못했어요." };
   }
-  if (!data || data.length === 0) return { ok: false, error: "이미 처리된 초안이에요." };
+  if (!data || data.length === 0) return { ok: false, error: "이미 처리된 글이에요." };
   /* Storage 의 이미지는 남는다 — cardnews 버킷은 본인 폴더 RLS 라 새는 건 아니지만
      고아 객체가 된다. 버킷 정리는 별도 배치로 다룬다(여기서 지우면 삭제 실패 시
      DB 는 지워졌는데 이미지만 남거나 그 반대가 되는 부분 실패가 생긴다). */

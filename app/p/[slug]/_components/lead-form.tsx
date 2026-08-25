@@ -50,6 +50,8 @@ export function LeadForm({
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* 데모에서 「보내기」를 누른 표시 — 붉은 오류 대신 상시 칩을 잠깐 도드라지게 한다 */
+  const [demoPing, setDemoPing] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -57,7 +59,11 @@ export function LeadForm({
     /* 데모는 **버튼을 죽이지 않는다** — 회색 비활성 버튼이 샘플 페이지를 고장난 화면으로 보이게 했다.
        방명록과 같은 규칙으로 눌렀을 때 안내한다(2026-08-24 비평) */
     if (isDemo) {
-      setError(t.demo);
+      /* 예전엔 여기서 setError(t.demo) 를 했다 — 폼 아래 상시 칩이 이미 **같은 문장**을 들고 있어서
+         누르면 같은 말이 두 번, 그중 하나는 붉은 «오류» 띠로 떴다(실측). 예시라서 안 보내지는 것은
+         고장이 아니므로 붉은 띠로 말하지 않는다. 칩을 잠깐 도드라지게 해 눌린 것만 알린다. */
+      setDemoPing(true);
+      window.setTimeout(() => setDemoPing(false), 1200);
       return;
     }
     setBusy(true);
@@ -152,8 +158,11 @@ export function LeadForm({
 
       {isDemo ? (
         <p
-          className="rounded-[calc(var(--lp-radius)/1.6)] px-3 py-2 text-[13px] leading-[1.6]"
+          className={`trans-state rounded-[calc(var(--lp-radius)/1.6)] px-3 py-2 text-[13px] leading-[1.6] ${
+            demoPing ? "ring-2 ring-[var(--lp-accent)]" : ""
+          }`}
           style={{ backgroundColor: "var(--lp-chip-bg)", color: "var(--lp-chip-ink)" }}
+          aria-live="polite"
         >
           {t.demo}
         </p>

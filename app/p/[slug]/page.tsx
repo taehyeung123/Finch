@@ -272,7 +272,9 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
   return (
     <main
       lang={settings.lang}
-      style={{ ...themeVars(theme, themeCustom), fontFamily: "var(--lp-font)", cursor: "var(--lp-cursor)" } as React.CSSProperties}
+      /* 커서는 themeVars 가 결정해 넣는다 — 여기서 var(--lp-cursor) 를 쓰면 기본 커서 페이지에서도
+         style 문자열에 토큰 이름이 남아 링크의 손가락 커서가 죽는다(themes.ts 주석) */
+      style={{ ...themeVars(theme, themeCustom), fontFamily: "var(--lp-font)" } as React.CSSProperties}
       className="relative isolate min-h-[100dvh] bg-[var(--lp-bg)] text-[var(--lp-fg)]"
       data-lp-fx={fx}
       data-lp-anim={anim}

@@ -635,7 +635,16 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
     "--lp-btn-bg": btnBg,
     "--lp-btn-fg": btnFg,
     "--lp-btn-border": btnBorder,
-    "--lp-cursor": cursorCss(c.cursor),
+    /* ⚠️ 기본(default)일 때는 --lp-cursor 도 cursor 도 **넣지 않는다.**
+       값이 "auto" 라도 넣으면 globals.css 의 `[style*="--lp-cursor"] a { cursor: inherit }`
+       가 모든 공개 페이지에 걸려, 링크·버튼이 UA 의 pointer 대신 지면의 auto 를 물려받는다 —
+       커서를 안 고른 페이지 **전부**에서 손가락이 사라졌다(2026-08-25 실측, 검증 2회).
+       그 규칙은 커스텀 커서에만 필요하므로 그때만 낸다. cursor 선언을 여기서 같이 내는 이유는,
+       호출부에 `cursor: "var(--lp-cursor)"` 라는 **글자만 남아도** style 속성에 "--lp-cursor" 가
+       들어가 같은 선택자가 걸리기 때문이다(공개·미리보기 두 벌 모두 여기만 보게 한다). */
+    ...(cursorCss(c.cursor) === "auto"
+      ? {}
+      : { "--lp-cursor": cursorCss(c.cursor), cursor: cursorCss(c.cursor) }),
     "--lp-fg": fg,
     "--lp-muted": muted,
     "--lp-card": cardSafe,

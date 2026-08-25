@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/ui/section-header";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
-import { accounts as sampleAccounts } from "@/lib/data";
+import { accounts as sampleAccounts, scheduledPosts as demoScheduledPosts } from "@/lib/data";
 import type { ComposerChannel } from "./_components/post-composer";
 import { PublishList, type ScheduledPost } from "./_components/publish-list";
 
@@ -35,15 +35,15 @@ export const metadata: Metadata = {
 /** 최신순 절삭 한도 — 넘치면 화면이 조용히 거짓말하지 않도록 truncated 로 알린다 */
 const PAGE_LIMIT = 200;
 
-async function loadScheduled(): Promise<{ items: ScheduledPost[]; truncated: boolean }> {
+async function loadScheduled(): Promise<{ items: ScheduledPost[]; truncated: boolean; failed: boolean }> {
   /* isDemoMode + getAuthUser — 이 배치의 다른 화면들과 같은 조합이다.
      · isSupabaseConfigured 만 보면 NEXT_PUBLIC_DEMO_MODE(프로젝트가 죽었을 때의
        탈출구)를 못 잡아, 죽은 DB 에 쿼리를 던지고 렌더가 통째로 깨진다.
      · createClient().auth.getUser() 를 직접 부르면 레이아웃 가드와 합쳐 Auth 서버를
        요청당 2회 왕복한다(lib/supabase/server.ts 가 측정해서 고친 패턴). */
-  if (isDemoMode()) return { items: [], truncated: false };
+  if (isDemoMode()) return { items: demoScheduledPosts as ScheduledPost[], truncated: false, failed: false };
   const user = await getAuthUser();
-  if (!user) return { items: [], truncated: false };
+  if (!user) return { items: [], truncated: false, failed: false };
   const supabase = await createClient();
 
   /* 캘린더가 생기면서 조회 범위를 넓혔다. 20건 오름차순이면 **과거만 20건** 나와서
@@ -65,12 +65,18 @@ async function loadScheduled(): Promise<{ items: ScheduledPost[]; truncated: boo
       .limit(50),
   ]);
 
-  if (sched.error || drafts.error) {
-    console.error("[publish] 예약 목록 조회 실패:", sched.error?.message ?? drafts.error?.message);
-    return { items: [], truncated: false };
-  }
+  /* 예전엔 둘 중 하나만 실패해도 **둘 다 버리고** 빈 배열을 돌려줬다. 그러면 화면은
+     「아직 예약이 없어요」라고 단정한다 — 예약해 둔 사람이 그걸 보면 다시 예약하거나,
+     발행이 통째로 날아간 줄 안다. 실패는 «없음»이 아니다(lib/data/internal.ts 규칙).
+     또 한쪽만 죽었을 때 살아 있는 쪽까지 버릴 이유도 없다 — 따로 판단한다. */
+  if (sched.error) console.error("[publish] 예약 조회 실패:", sched.error.message);
+  if (drafts.error) console.error("[publish] 초안 조회 실패:", drafts.error.message);
   const items = [...((sched.data ?? []) as ScheduledPost[]), ...((drafts.data ?? []) as ScheduledPost[])];
-  return { items, truncated: (sched.data ?? []).length >= PAGE_LIMIT };
+  return {
+    items,
+    truncated: (sched.data ?? []).length >= PAGE_LIMIT,
+    failed: !!sched.error || !!drafts.error,
+  };
 }
 
 /** 채널 연결 스트립 데이터 — 데모: 샘플 계정, 실제: connected_accounts */
@@ -93,7 +99,7 @@ async function loadChannels(): Promise<ComposerChannel[]> {
 }
 
 export default async function PublishPage() {
-  const [{ items, truncated }, channels] = await Promise.all([loadScheduled(), loadChannels()]);
+  const [{ items, truncated, failed }, channels] = await Promise.all([loadScheduled(), loadChannels()]);
 
   return (
     <div className="space-y-5">
@@ -101,7 +107,7 @@ export default async function PublishPage() {
         title="발행"
         description="인스타그램 예약 발행을 확인하고 관리합니다. 예약일 아침 배치에서 자동으로 발행됩니다."
       />
-      <PublishList initialItems={items} channels={channels} isDemo={isDemoMode()} truncated={truncated} />
+      <PublishList initialItems={items} channels={channels} isDemo={isDemoMode()} truncated={truncated} loadFailed={failed} />
     </div>
   );
 }

@@ -320,7 +320,6 @@ export function PhonePreview({
             {
               ...themeVars(theme, page.themeCustom),
               fontFamily: "var(--lp-font)",
-              cursor: "var(--lp-cursor)",
             } as React.CSSProperties
           }
           className={cn(

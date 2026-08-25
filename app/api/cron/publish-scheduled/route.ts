@@ -52,7 +52,9 @@ export async function GET(request: Request) {
         userId: post.user_id,
         type: "studio",
         title: "예약 발행에 실패했어요",
-        body: `예약한 카드뉴스 발행이 실패했어요 (${reason}). 스튜디오에서 다시 예약해 주세요.`,
+        /* 「스튜디오에서」라고 안내했었다 — 발행 컴포저로 만든 글은 스튜디오에 존재하지 않아서
+           그 안내를 따라가면 아무것도 못 찾는다. 실패한 글은 /publish 목록에 남는다. */
+        body: `예약한 게시물 발행이 실패했어요 (${reason}). 「발행」 화면에서 다시 예약하거나 지울 수 있어요.`,
       });
       failed++;
     };
@@ -70,12 +72,22 @@ export async function GET(request: Request) {
       continue;
     }
 
-    const result = await publishCardNews({
-      igUserId: account.platform_user_id,
-      accessToken: token,
-      caption: post.caption,
-      imageUrls: post.image_urls,
-    });
+    /* publishCardNews 가 **예외를 던지면** 위에서 박아 둔 status="publishing" 이 그대로 남는다.
+       그 행은 크론이 다시 안 집고(scheduled 만 집는다) 화면에서도 손댈 수 없어, 「발행 중」인 채로
+       영원히 굳는다. 예외도 실패로 내려 앉힌다 — 실패는 사용자가 다시 예약할 수 있다. */
+    let result: Awaited<ReturnType<typeof publishCardNews>>;
+    try {
+      result = await publishCardNews({
+        igUserId: account.platform_user_id,
+        accessToken: token,
+        caption: post.caption,
+        imageUrls: post.image_urls,
+      });
+    } catch (e) {
+      console.error("[cron:publish] 발행 중 예외:", post.id, e);
+      await fail("발행 중 오류가 발생했어요");
+      continue;
+    }
 
     if (!result.ok) {
       console.error("[cron:publish] 발행 실패:", post.id, result.error);

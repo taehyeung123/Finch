@@ -64,6 +64,19 @@ export async function proxy(request: NextRequest) {
     return moved;
   }
 
+  /* 대문자가 섞인 주소는 소문자 정본으로 보낸다 — slug 는 소문자로만 만들어지므로
+     `/Finch-Demo` 는 지금까지 그냥 404 였다(실측). 명함·인쇄물에 문장부호 감각으로 대문자를
+     섞어 적는 일이 흔하고, 받아 적는 사람도 그렇게 친다. 예약어 판정은 이미 소문자로 비교하니
+     여기서 주소만 맞춰 주면 된다. GET 만 옮긴다 — 옛 /p/ 처리와 같은 이유(POST 본문 보존). */
+  if (userPage && first !== first.toLowerCase() && request.method === "GET") {
+    const to = request.nextUrl.clone();
+    to.pathname = `/${first.toLowerCase()}${path.slice(1 + first.length)}`;
+    const moved = NextResponse.redirect(to, 301);
+    response.cookies.getAll().forEach((c) => moved.cookies.set(c));
+    applySecurityHeaders(moved, true);
+    return moved;
+  }
+
   if (userPage) {
     const to = request.nextUrl.clone();
     to.pathname = `/p${path}`;
