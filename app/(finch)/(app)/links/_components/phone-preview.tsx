@@ -751,7 +751,7 @@ const GHOST_HINT: Partial<Record<string, string>> = {
    빈 블록을 실제 모습 흉내 + 경고 캡션으로 그리면 새 계정 첫 화면이 공사장이 된다.
    점선 카드 + 강조색 아이콘 칩 + 사용자가 쓴 이름 + 초대 한 줄이면, 연달아 있어도
    "채워 넣을 페이지 개요"로 읽힌다(리틀리 「블록이 생성될 위치입니다」 문법). */
-function GhostCard({ type, data }: { type: BlockType; data: Record<string, unknown> }) {
+function GhostCard({ type, data, now }: { type: BlockType; data: Record<string, unknown>; now?: number }) {
   const Icon = BLOCK_ICON[type] ?? BLOCK_ICON.link;
   const cat = BLOCK_CATALOG.find((c) => c.type === type)?.label ?? type;
   /* 사용자가 붙인 이름이 최우선 — 요약이 주소·개수 같은 파생값인 타입(지도 등)도
@@ -762,7 +762,7 @@ function GhostCard({ type, data }: { type: BlockType; data: Record<string, unkno
   const DERIVED_SUMMARY = type === "card_row" || type === "grid" || type === "gallery" || type === "social_feed";
   const raw = own || (DERIVED_SUMMARY ? "" : blockSummary(type, data));
   const label = raw && !raw.startsWith("(") ? raw : cat;
-  const hint = GHOST_HINT[type] ?? hiddenReason(type, data) ?? "내용을 채우면 공개돼요";
+  const hint = GHOST_HINT[type] ?? hiddenReason(type, data, now ?? nowMs()) ?? "내용을 채우면 공개돼요";
   return (
     <div className="flex min-h-[56px] items-center gap-3 rounded-[var(--lp-radius)] border border-dashed border-[var(--lp-muted)]/40 bg-[var(--lp-card)] px-3.5 py-3">
       <span
@@ -787,17 +787,20 @@ function GhostCard({ type, data }: { type: BlockType; data: Record<string, unkno
 function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "draft" | "live" | "edit" | "preview" }) {
   const d = block.data ?? {};
   const lenient = mode === "edit" || mode === "preview";
+  /* 이 블록을 그리는 동안 시계는 **하나**다 — 숨김 판정과 아래 목록 계산이 서로 다른 시각을 보면
+     막 끝난 일정에서 「유령 카드」와 「목록」이 갈린다(감사 종합 지적) */
+  const now = nowMs();
 
   /* 공개 렌더러가 숨기는 조건과 **같은 함수**를 쓴다. live 는 부모가 이미 걸렀지만
      혹시 새 숨김 조건이 부모 필터를 놓쳐도 유령칸이 라이브에 새지 않게 한 번 더 막는다. */
-  const hidden = hiddenReason(block.type, d);
+  const hidden = hiddenReason(block.type, d, now);
   if (hidden) {
     if (mode === "live") return null;
     /* 빈 블록은 어느 모드에서든 자리표시자 카드로(2026-08-24, 리틀리 문법).
        "실제 모습 + 경고 캡션"(2026-08-20 방식)은 새 계정 첫 화면 — 템플릿 골격만
        깔린 상태 — 을 경고 더미로 만들었다. 카드가 이름을 크게 들고 있어
        연달아 있어도 개요로 읽힌다. 사유 캡션은 래퍼에서 함께 뗐다. */
-    return <GhostCard type={block.type} data={d} />;
+    return <GhostCard type={block.type} data={d} now={now} />;
   }
 
   switch (block.type) {
@@ -1108,7 +1111,6 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
     case "events": {
       /* 공개 렌더러(block-renderer.tsx case "events")와 같은 모양 — 15/14/17 을 프레임 비율로 13/12/15.
          ⚠️ 두 벌이다. 한쪽만 고치면 편집기와 발행본이 달라진다(CLAUDE.md). */
-      const now = nowMs();
       const parsed = arr(d, "items")
         .map((it) => ({ it, start: parseEventAt(it.startAt), end: parseEventAt(it.endAt) }))
         .filter((x): x is { it: Record<string, unknown>; start: EventPart; end: EventPart | null } => !!x.start && !!s(x.it, "title").trim())
@@ -1122,7 +1124,7 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
          hiddenReason 이 알고 있고 위쪽 가드가 GhostCard 로 빠뜨린다 — 도달하면 같은 카드로 통일한다.
          (예전엔 여기서 「제목과 날짜를 넣으면 여기에 보여요」라고 제 문구를 그려, 다 채워 넣고
           일정만 지난 사람에게 거짓말이 됐다 — 감사 확정) */
-      if (rows.length === 0) return <GhostCard type={block.type} data={d} />;
+      if (rows.length === 0) return <GhostCard type={block.type} data={d} now={now} />;
       return (
         <div className={`${card} px-3 py-2.5`}>
           {s(d, "label") ? <p className="mb-1 text-[13px] font-semibold">{s(d, "label")}</p> : null}

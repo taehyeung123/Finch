@@ -452,7 +452,7 @@ export function defaultBlockData(type: BlockType): Record<string, unknown> {
  * 약속을 어긴다 — 편집기에는 멀쩡히 보이는데 발행하면 사라지는 블록이 생긴다.
  * 그래서 렌더러가 아니라 여기에 둔다. 목록 뱃지·미리보기 유령칸이 같은 함수를 쓴다.
  */
-export function hiddenReason(type: BlockType, data: Record<string, unknown>): string | null {
+export function hiddenReason(type: BlockType, data: Record<string, unknown>, now: number = nowMs()): string | null {
   const s = (k: string) => (typeof data[k] === "string" ? (data[k] as string) : "");
   const items = Array.isArray(data.items) ? (data.items as Record<string, unknown>[]) : [];
   const withUrl = items.filter((it) => typeof it.url === "string" && it.url.trim()).length;
@@ -485,7 +485,6 @@ export function hiddenReason(type: BlockType, data: Record<string, unknown>): st
       /* 다 채워 넣었는데도 **전부 지나** 공개에서 빠지는 경우 — 예전엔 아무 말이 없어서
          "왜 발행본에 안 보이지"가 됐다(감사 확정). 「흐리게 남기기」면 지난 것도 남으므로 해당 없음 */
       if (data.past !== "dim") {
-        const now = nowMs();
         const anyUpcoming = valid.some((x) => eventEndEpoch(x.start!, parseEventAt(x.it.endAt)) >= now);
         if (!anyUpcoming) return "일정이 모두 지나 공개되지 않아요 — 「지난 일정: 흐리게 남기기」로 두거나 새 일정을 넣어 주세요";
       }

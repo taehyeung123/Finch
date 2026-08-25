@@ -169,6 +169,8 @@ async function load(days: number, wantPageId?: string): Promise<Loaded> {
     supabase.from("link_guestbook").select("id", { count: "exact", head: true }).eq("page_id", page.id),
   ]);
   if (leadRows.error) console.error("[links] 받은 내용 조회 실패:", leadRows.error.message);
+  if (guestRes.error) console.error("[links] 방명록 조회 실패:", guestRes.error.message);
+  if (guestCnt.error) console.error("[links] 방명록 건수 조회 실패:", guestCnt.error.message);
   const leadCounts = {
     contact: contactCnt.error ? 0 : (contactCnt.count ?? 0),
     subscribe: subscribeCnt.error ? 0 : (subscribeCnt.count ?? 0),
