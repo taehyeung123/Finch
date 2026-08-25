@@ -799,7 +799,8 @@ export default function StudioPage() {
                           <img
                             src={img}
                             alt={`슬라이드 ${s.no} — ${s.headline}`}
-                            className="w-full rounded-card border border-line transition-shadow duration-200 group-hover:border-primary/40 group-hover:shadow-lg"
+                            /* shadow-lg 같은 임의 유틸 금지 — 다크에서 그림자 토큰이 none 이라 라이트에만 층이 생긴다(CLAUDE.md) */
+                            className="trans-state w-full rounded-card border border-line group-hover:border-primary/40 group-hover:shadow-pop"
                           />
                         ) : (
                           <div className="flex aspect-square flex-col justify-between rounded-card border border-line bg-body p-3">

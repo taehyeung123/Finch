@@ -487,7 +487,7 @@ export default function CardEditor({
               </button>
             </div>
           </div>
-          <div style={{ width: display, height: display }} className="shrink-0 rounded-card shadow-lg">
+          <div style={{ width: display, height: display }} className="shadow-pop shrink-0 rounded-card">
             <Stage
               ref={stageRef}
               width={display}
