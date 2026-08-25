@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Bookmark } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { EmptyState } from "@/components/ui/empty-state";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { togglePoolSave } from "@/app/(finch)/(app)/library/pool-actions";
 import { ReferenceCard, AdCard } from "@/app/(finch)/(app)/library/_components/reference-card";
@@ -38,10 +39,13 @@ export function ScrapClient({
   initialEntries,
   initialHasMore,
   isDemo,
+  loadFailed = false,
 }: {
   initialEntries: ScrapEntry[];
   initialHasMore: boolean;
   isDemo: boolean;
+  /** 조회 자체가 실패했다 — «0건»과 다른 화면을 그린다(lib/data/internal.ts 규칙) */
+  loadFailed?: boolean;
 }) {
   const router = useRouter();
   const [entries, setEntries] = useState(initialEntries);
@@ -117,7 +121,10 @@ export function ScrapClient({
           setError(result.error ?? "스크랩 해제에 실패했어요.");
           return;
         }
-        router.refresh();
+        /* 성공 경로에서 router.refresh() 를 부르지 않는다 — 서버는 언제나 **첫 60건**만 내려주고,
+           위 동기화 블록이 그걸 보고 목록을 첫 장으로 되감는다. 즉 「더 보기」로 쌓아 둔 뒷장이
+           해제 한 번에 통째로 날아갔다(실측). 화면은 이미 낙관적으로 그 카드를 지웠고 그게 서버 상태와
+           같으므로, 다시 읽을 이유가 없다. */
       } catch {
         setEntries(snapshot);
         setError("스크랩 해제에 실패했어요. 잠시 후 다시 시도해 주세요.");
@@ -141,6 +148,17 @@ export function ScrapClient({
     } finally {
       setLoadingMore(false);
     }
+  }
+
+  /* 실패 분기가 빈 상태보다 **앞**이다 — 순서가 바뀌면 조회 실패가 「아직 없어요」로 나가고,
+     담아 둔 사람은 저장이 날아간 줄 안다. */
+  if (loadFailed) {
+    return (
+      <LoadFailed
+        title="스크랩을 불러오지 못했어요"
+        description="저장한 게 없는 게 아니라 목록을 못 읽은 것이에요. 잠시 후 다시 시도해 주세요."
+      />
+    );
   }
 
   if (entries.length === 0) {
@@ -176,9 +194,9 @@ export function ScrapClient({
               {t.label}
               {/* 총계가 아니라 "지금 불러온 수"다. hasMore 면 + 를 붙여 총계로 오독되지 않게 —
                   200건 저장한 사람에게 "전체 40"이라고 말하면 저장이 사라진 것처럼 보인다. */}
+              {/* 0 인데 뒷장이 남았으면 «0+» 라는 이상한 글자가 됐다 — 그때는 세지 못한 것이므로 «—» 다 */}
               <span className="tnum ml-1.5 opacity-70">
-                {counts[t.key]}
-                {hasMore ? "+" : ""}
+                {counts[t.key] === 0 && hasMore ? "—" : `${counts[t.key]}${hasMore ? "+" : ""}`}
               </span>
             </button>
           );
@@ -192,9 +210,18 @@ export function ScrapClient({
       ) : null}
 
       {shown.length === 0 ? (
+        /* 필터는 **이미 받아온 60건**에만 걸린다(서버 필터가 아니다). 뒷장이 남아 있는데
+           「없어요」라고 단정하면, 실제로는 61번째부터 잔뜩 있는 사람에게 거짓말이 된다. */
         <EmptyState
           icon={Bookmark}
-          title={tab === "ad" ? "스크랩한 광고가 없어요" : "스크랩한 게시물이 없어요"}
+          title={
+            hasMore
+              ? "지금까지 불러온 것 중에는 없어요"
+              : tab === "ad"
+                ? "스크랩한 광고가 없어요"
+                : "스크랩한 게시물이 없어요"
+          }
+          description={hasMore ? "아래 「더 보기」로 이어서 확인해 주세요." : undefined}
         />
       ) : (
         <div className="grid-refs mt-4">

@@ -24,7 +24,7 @@ export const metadata: Metadata = {
   보드(폴더)·메모는 표는 있지만 화면을 더 쪼갤 만큼 저장 건수가 쌓이기 전이라 뒤로 미룬다.
 */
 export default async function Page() {
-  const { entries, hasMore } = await loadScrapPage(0);
+  const { entries, hasMore, failed } = await loadScrapPage(0);
 
   return (
     <div className="space-y-5">
@@ -32,7 +32,7 @@ export default async function Page() {
         title="스크랩"
         description="탐색에서 저장한 레퍼런스를 모아 봅니다. 저장한 순서대로 쌓입니다."
       />
-      <ScrapClient initialEntries={entries} initialHasMore={hasMore} isDemo={isDemoMode()} />
+      <ScrapClient initialEntries={entries} initialHasMore={hasMore} isDemo={isDemoMode()} loadFailed={!!failed} />
     </div>
   );
 }

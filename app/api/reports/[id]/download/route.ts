@@ -50,10 +50,21 @@ export async function GET(
 
   const s = dashboard.summaries.instagram;
 
+  /*
+    ⚠️ **파일 내용은 아직 사용자가 고른 기간·채널을 따르지 않는다.**
+    getLiveDashboard()/getLiveAudience() 는 인자를 안 받고 안에서 7일·14일 창을 못 박고 있으며(live.ts),
+    요약도 summaries.instagram 하나만 본다. 그런데 파일 표지에는 report.period 가 그대로 찍혀서,
+    「2026.06.01 ~ 2026.06.30」이라고 적힌 파일 안에 최근 7·14일 숫자가 들어가 있었다 —
+    광고주에게 그대로 나가는 문서라 가장 나쁜 종류의 거짓말이다.
+    기간 인자를 뚫는 것이 제대로 된 수리이고(그때 이 주석과 아래 라벨을 함께 지운다),
+    그 전까지는 **파일이 자기 범위를 정직하게 말하게** 한다.
+  */
+  const coverageNote = "최근 7일(요약) · 최근 14일(일별) · Instagram";
+
   if (report.format === "pdf") {
     const pdfBytes = await renderReportPdf({
       title: report.title,
-      period: report.period,
+      period: `${report.period} (수록: ${coverageNote})`,
       generatedAt: new Date().toLocaleString("ko-KR"),
       summaryRows: [
         ["팔로워", s.followers.toLocaleString("ko-KR")],
@@ -91,7 +102,8 @@ export async function GET(
     rows(
       ["핀치 성과 리포트"],
       ["제목", report.title],
-      ["기간", report.period],
+      ["요청한 기간", report.period],
+      ["실제 수록 범위", coverageNote],
       ["생성 시각", new Date().toISOString()],
       ["데이터 기준", "Instagram 공식 API · 일별 지표는 최근 14일 제공 범위"],
     ),

@@ -68,8 +68,18 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
       start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       end = new Date(now.getFullYear(), now.getMonth(), 0);
     } else {
-      start = customStart ? new Date(customStart) : now;
-      end = customEnd ? new Date(customEnd) : now;
+      /* 예전엔 빈 값을 조용히 now 로 메워 «2026.08.25 ~ 2026.08.25» 라는 0일짜리 리포트를 만들고,
+         시작>종료도 그대로 저장했다(둘 다 실측). 채널 0개는 이미 막고 있는데 날짜만 무방비였다. */
+      if (!customStart || !customEnd) {
+        setError("시작일과 종료일을 모두 골라 주세요.");
+        return;
+      }
+      start = new Date(customStart);
+      end = new Date(customEnd);
+      if (start.getTime() > end.getTime()) {
+        setError("종료일이 시작일보다 빠를 수 없어요.");
+        return;
+      }
     }
     const label =
       period === "custom" ? "맞춤 기간" : PERIOD_OPTIONS.find((o) => o.value === period)?.label ?? "";
@@ -101,7 +111,9 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
     <div className="space-y-6">
       <PageHeader
         title="리포트"
-        description="광고주 보고용 리포트를 자동 생성하고 정기 발송합니다."
+        /* 「정기 발송」은 생성 폼에도 배치(cron)에도 없다 — actions.ts 가 scheduled:false 를 박아 넣는다.
+           없는 기능을 있는 것처럼 말하면 「어디서 켜지?」를 찾다가 시간을 버린다. */
+        description="광고주 보고용 리포트를 만들고 내려받을 수 있어요."
         action={
           /* 버튼 라벨을 상태에 맞춘다 — 폼이 기본으로 열려 있는데 라벨이 항상
              "새 리포트 만들기"라, 누르면 여는 게 아니라 닫혔다. */
@@ -185,6 +197,12 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
                     </label>
                   ))}
                 </div>
+                {/* 지금 파일에 실제로 담기는 건 인스타그램 지표뿐이다(다운로드 라우트가
+                    summaries.instagram 하나만 본다). 고를 수는 있게 두되 사실은 적어 둔다 —
+                    다른 채널을 골라 놓고 파일을 열었을 때 없는 이유를 알 수 있어야 한다. */}
+                <p className="mt-2 text-[12px] text-fg-sub">
+                  지금은 인스타그램 지표만 파일에 담겨요. 다른 채널은 연동 후 순차로 열립니다.
+                </p>
               </fieldset>
 
               <fieldset>
@@ -234,7 +252,13 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
           {items.length > 0 ? (
             <div className="divide-y divide-line">
               {items.map((r) => (
-                <div key={r.id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 py-4 first:pt-0 last:pb-0">
+                /* 390px 에서 트레일링(형식 뱃지+다운로드)이 147~161px 로 카드 폭의 절반을 먹어
+                   제목이 「6월 월간 성과 리포 / 트」로 꺾이고 기간이 3~4줄로 흩어졌다(실측).
+                   좁은 화면에서는 트레일링을 **아래 줄**로 내린다. */
+                <div
+                  key={r.id}
+                  className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 py-4 first:pt-0 last:pb-0 sm:grid-cols-[auto_minmax(0,1fr)_auto]"
+                >
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-card border border-line bg-plate text-fg-sub">
                     {r.format === "pdf" ? (
                       <FileText className="size-4" aria-hidden />
@@ -245,16 +269,18 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-[15px] font-semibold">{r.title}</p>
-                      {r.scheduled ? <Badge tone="primary">정기 발송</Badge> : null}
+                      {r.scheduled ? <Badge tone="neutral">정기 발송 준비 중</Badge> : null}
                     </div>
                     <p className="tnum mt-0.5 text-[14px] text-fg-sub">
-                      {r.period} <span className="text-fg-faint">· 생성일 {formatDate(r.createdAt)}</span>
+                      {/* 날짜는 부모의 text-fg-sub(5.0:1)를 상속한다 — fg-faint 는 4.0:1 라 본문 금지 토큰이다.
+                          구분자만 흐리게 둔다. */}
+                      {r.period} <span className="text-fg-faint">·</span> 생성일 {formatDate(r.createdAt)}
                     </p>
                   </div>
                   {/* 트레일링을 한 묶음으로 — 채널·형식·다운로드가 행마다 같은 x 에
                       정렬돼 세로로 스캔된다(앞서는 flex-wrap 이라 열이 안 맞았다). */}
-                  <div className="flex items-center gap-2">
-                    <div className="hidden items-center gap-1.5 sm:flex">
+                  <div className="col-span-2 flex items-center justify-end gap-2 sm:col-span-1">
+                    <div className="flex items-center gap-1.5">
                       {r.channels.map((ch) => (
                         <ChannelBadge key={ch} channel={ch} />
                       ))}

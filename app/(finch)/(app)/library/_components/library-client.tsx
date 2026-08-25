@@ -476,6 +476,11 @@ export function LibraryClient({
     const tokens = poolReady ? [] : query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const maxHours = WITHIN_HOURS[filters.within];
     return ads.filter((ad) => {
+      /* 「영상 대본」 검색에서는 광고를 제외한다 — 광고에는 transcript 필드가 아예 없는데
+         아래 haystack 이 body·문구를 훑어서, «대본 안에서 찾는다»고 안내해 놓고 광고 문구가
+         걸려 나왔다(실측: 「여름」 → 대본 없는 메타광고 1건). filteredItems 는 scope 를 보는데
+         여기만 안 보고 있었다. */
+      if (filters.scope === "transcript") return false;
       if (filters.target === "tiktok" || filters.target === "threads") return false;
       if (filters.target === "instagram" && !ad.platforms.includes("INSTAGRAM")) return false;
       if (filters.favOnly && !adFavoriteIds.has(ad.id)) return false;
@@ -880,7 +885,10 @@ export function LibraryClient({
           40px 밀어냈다. 이 화면에서 실측된 유일한 레이아웃 시프트였다. */}
       <div
         aria-live={toast?.tone === "error" ? "assertive" : "polite"}
-        className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center px-4"
+        /* 모바일에서는 하단 탭바(fixed bottom-0, z-40, 높이 61px) 위로 올린다 —
+           같은 z 에 DOM 이 뒤라 탭바가 토스트를 덮어, 두 줄짜리 안내의 아랫줄이 안 읽혔다(실측 390px).
+           safe-area 를 더해 홈 인디케이터가 있는 기기에서도 가려지지 않게 한다. */
+        className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-40 flex justify-center px-4 md:bottom-6"
       >
         <p
           data-open={toast ? "true" : "false"}

@@ -196,12 +196,16 @@ function industryLabelById(id: string): string {
  * 라벨은 사람이 읽는 말, q 는 실제로 풀에 잘 걸리는 짧은 토큰이다 —
  * "8월 여름세일"을 통째로 검색하면 0건이지만 "세일"은 광고 문구 어디에나 있다.
  */
+/* ⚠️ 칩은 **눌렀을 때 결과가 나와야 한다.** 예전 다섯 개 중 넷(세일·신제품·특가·이벤트)이
+   목 데이터 어디에도 없어서 「지금 조건에 맞는 레퍼런스가 없어요」로 떨어졌다(실측).
+   처음 들어온 사람이 가장 먼저 누르는 자리에서 네 번 연속 빈 화면을 보면 «자료가 없는 서비스»가 된다.
+   지금 토큰은 데모 목 데이터에 실제로 걸리는 것들이고, 실제 풀에서도 흔한 말이다. */
 const SUGGESTED_QUERIES: { label: string; q: string; icon: "sun" | "sparkles" | "tag" | "compare" }[] = [
-  { label: "8월 여름세일", q: "세일", icon: "sun" },
-  { label: "신제품 런칭", q: "신제품", icon: "sparkles" },
-  { label: "오늘의 특가", q: "특가", icon: "tag" },
+  { label: "여름 시즌", q: "여름", icon: "sun" },
   { label: "제품 비교", q: "비교", icon: "compare" },
-  { label: "이벤트·경품", q: "이벤트", icon: "tag" },
+  { label: "리뷰 콘텐츠", q: "리뷰", icon: "sparkles" },
+  { label: "할인·프로모션", q: "할인", icon: "tag" },
+  { label: "수분·보습", q: "수분", icon: "tag" },
 ];
 
 function SuggestIcon({ kind }: { kind: string }) {
@@ -1510,7 +1514,16 @@ export function SearchConsole({
         </div>
       </div>
 
-      {/* lg 미만 필터 시트 — 같은 본문을 재사용 */}
+    </header>
+
+      {/* lg 미만 필터 시트 — 같은 본문을 재사용.
+
+          ⚠️ **헤더 밖에 있어야 한다.** 바로 위 데스크톱 스크림 주석이 적어 둔 것과 같은 사고를
+          이 시트가 그대로 다시 겪었다: 헤더의 backdrop-blur 가 fixed 자손의 기준을 뷰포트에서
+          헤더 자신으로 바꾸는 바람에, 390px 에서 시트가 top:-394 로 **화면 위쪽 밖**에 붙었다.
+          내부 스크롤은 이미 맨 위(scrollTop 0)라 위쪽 절반은 영영 도달 불가였고, 스크림도
+          inset:0 이 «헤더 영역»이 되어 화면 대부분이 안 어두워져 뒤 카드가 그대로 눌렸다
+          (elementFromPoint 로 확인). 768px 태블릿도 같았다. 헤더의 형제로 빼면 기준이 뷰포트로 돌아온다. */}
       {sheetOpen ? (
         <div className="lg:hidden">
           <div className="fixed inset-0 z-50 bg-black/40" onClick={() => setSheetOpen(false)} aria-hidden />
@@ -1529,7 +1542,6 @@ export function SearchConsole({
           </div>
         </div>
       ) : null}
-    </header>
     </>
   );
 }

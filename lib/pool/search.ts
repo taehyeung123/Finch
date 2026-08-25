@@ -339,7 +339,11 @@ export async function searchPool(query: PoolQuery): Promise<PoolResult> {
 export async function listSavedPool(
   page = 0,
   pageSize = DEFAULT_PAGE_SIZE,
-): Promise<{ items: PoolItem[]; total: number; hasMore: boolean }> {
+): Promise<{ items: PoolItem[]; total: number; hasMore: boolean; failed?: boolean }> {
+  /* ⚠️ 실패·미인증·미설정이 전부 «빈 배열»로 합쳐져 나가고 있었다. 그러면 스크랩 화면은
+     「아직 스크랩한 레퍼런스가 없어요」를 그린다 — 담아 둔 사람이 그걸 보면 저장이 날아간 줄 안다.
+     (app)/layout.tsx 가 Supabase 예외에 fail-open 이라, 백엔드가 죽어도 로그인 화면이 아니라
+     이 «0건» 화면이 그대로 보인다. 실패는 «없음»이 아니다(lib/data/internal.ts 규칙). */
   const supabase = await createClient();
   if (!supabase) return { items: [], total: 0, hasMore: false };
 
@@ -362,7 +366,7 @@ export async function listSavedPool(
 
   if (error) {
     console.error("[pool] 저장 목록 조회 실패", error.message);
-    return { items: [], total: 0, hasMore: false };
+    return { items: [], total: 0, hasMore: false, failed: true };
   }
 
   /* PostgREST 는 to-one 조인도 배열로 줄 때가 있다 — one() 으로 평탄화한다.

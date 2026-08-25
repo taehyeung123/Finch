@@ -59,7 +59,13 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
 
   const reach = sum(days, "reach");
   const prevReach = sum(prevDays, "reach");
-  const reachDelta = prevReach > 0 ? ((reach - prevReach) / prevReach) * 100 : 0;
+  /* 비교 구간 표본이 **없으면** 증감을 계산하지 않는다(undefined).
+     daily 가 14일치뿐이라 period=14 면 prevDays 가 늘 빈 배열이고, 예전엔 그걸 0 으로 눌러
+     「0% 지난주 대비」= «변화 없음» 이라고 단정했다. 비교할 게 없는 것과 변화가 없는 것은 다르다.
+     실제 모드도 같다 — live.ts 가 14일 창만 조회하므로 연동 계정에서도 14일 탭은 늘 0% 였다.
+     StatCard 는 delta 가 undefined 면 증감 줄 자체를 그리지 않는다. */
+  const reachDelta =
+    prevDays.length > 0 && prevReach > 0 ? ((reach - prevReach) / prevReach) * 100 : undefined;
   const followerNet = sum(days, "followerNet");
   const totals = period === 7 ? view.totals7 : view.totals14;
 
@@ -95,7 +101,8 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
         <StatCard
           label="도달"
           value={formatCompact(reach)}
-          delta={Number(reachDelta.toFixed(1))}
+          delta={reachDelta === undefined ? undefined : Number(reachDelta.toFixed(1))}
+          deltaLabel={`지난 ${period}일 대비`}
           trend={days.map((d) => d.reach)}
         />
         <StatCard
