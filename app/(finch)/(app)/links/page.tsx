@@ -99,7 +99,9 @@ async function load(days: number, wantPageId?: string): Promise<Loaded> {
         views,
         clicks,
         uniques: cut(base.uniques),
-        ctr: views > 0 ? clicks / views : 0,
+        /* ctr 은 **백분율 소수 첫째자리**다(원본 26.3 = 26.3%). 실제 모드의 pct() 와 같은 규칙을
+           써야 데모와 실제가 같은 화면을 만든다 — 비율로 넘기면 화면이 「0.4%」를 찍는다 */
+        ctr: views > 0 ? Math.round((clicks / views) * 1000) / 10 : 0,
         returning: base.returning,
         blocks: base.blocks.map((b) => ({ ...b, clicks: cut(b.clicks) })),
         regions: base.regions.map((r) => ({ ...r, views: cut(r.views) })),
