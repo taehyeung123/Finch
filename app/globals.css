@@ -77,7 +77,7 @@
   /* 타이포그래피 (PART 7.6) — next/font/local이 주입하는 --font-pretendard 우선, 폴백 체인 유지 */
   /* 맨몸 `Pretendard` 는 뺐다 — next/font 통짜를 없앤 뒤로는 선언되지 않는 이름이고,
      남겨 두면 예전 캐시가 있는 브라우저에서만 2MB 를 다시 끌어온다(2026-08-24) */
-  --font-sans: var(--font-pretendard), "Pretendard Variable",
+  --font-sans: var(--font-pretendard), "Pretendard Variable", "Pretendard Fallback",
     -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Segoe UI",
     "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
 
@@ -120,7 +120,24 @@
   --color-plan-ent-edge: var(--plan-ent-edge);
 }
 
+/*
+  Pretendard 예비 글꼴 — 웹폰트가 도착하기 전 **글자 크기가 튀지 않게** 지표를 맞춘 Arial.
+  next/font 를 걷어내면서 함께 사라진 것이라 직접 재서 넣는다(2026-08-24 실측):
+  Pretendard 라틴 평균폭 0.4428em vs Arial 0.4413em → size-adjust 100.34%,
+  ascent/descent 는 typo 지표(1950/-494, upm 2048)를 그 비율로 환산.
+  한글은 Arial 에 글리프가 없어 이 면을 건너뛰므로 영향이 없다 — 흔들리던 건 숫자·영문이었다.
+*/
+@font-face {
+  font-family: "Pretendard Fallback";
+  src: local("Arial");
+  size-adjust: 100.34%;
+  ascent-override: 94.90%;
+  descent-override: 24.04%;
+  line-gap-override: 0%;
+}
+
 /* ── 라이트 팔레트 (기본) ─────────────────────────────── */
+
 :root {
   color-scheme: light;
 
