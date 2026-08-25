@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MapPin, ExternalLink, ArrowDown, ArrowUp, CalendarPlus, Eye, EyeOff, GripVertical, Pencil, Plus, Share2, Trash2 } from "lucide-react";
+import { MapPin, ExternalLink, ArrowDown, ArrowUp, CalendarPlus, Download, Eye, EyeOff, GripVertical, Pencil, Plus, Search, Share2, Trash2, UserPlus } from "lucide-react";
 import { eventChip, eventEndEpoch, eventEpoch, formatEventDate, formatEventTime, isMultiDay, nowMs, parseEventAt, type EventPart } from "@/lib/links/events";
 import { cn } from "@/lib/cn";
 import { FinchMark } from "@/components/logo";
@@ -23,7 +23,7 @@ import { type BlockType,
   scheduleCaption,
   type LinkBlock,
 } from "@/lib/links/blocks";
-import type { LinkPageView } from "@/lib/links/types";
+import type { LinkGuestbookEntry, LinkPageView } from "@/lib/links/types";
 
 /*
   라이브 미리보기 — 링크팜의 우측 폰 프레임에 해당.
@@ -120,6 +120,7 @@ export function PhonePreview({
   mode = "draft",
   frame = "fluid",
   edit,
+  guestbook = [],
 }: {
   page: LinkPageView;
   blocks: LinkBlock[];
@@ -139,6 +140,12 @@ export function PhonePreview({
   frame?: "fluid" | "device";
   /** 있으면 캔버스 직접 편집 — 블록 툴바·이름/소개 인라인 편집·블록 추가가 켜진다 */
   edit?: CanvasEdit;
+  /*
+    방명록 블록이 그릴 글 — 숙긴 것까지 넣어도 된다(공개와 같은 규칙으로 여기서 걸러낸다).
+    안 넘기면 폼만 보이는데, 공개 페이지는 글을 3개까지 펼쳐 둔다 —
+    글이 쌓인 페이지일수록 미리보기와 발행본의 높이가 벌어졌다.
+  */
+  guestbook?: LinkGuestbookEntry[];
 }) {
   const theme = themeByKey(page.theme);
   useFontStylesheets(fontStylesheets(page.themeCustom?.font));
@@ -488,7 +495,7 @@ export function PhonePreview({
             ) : mode === "live" ? (
               visible.map((b) => (
                 <div key={b.id} className="lp-block">
-                  <PreviewBlock block={b} mode="live" />
+                  <PreviewBlock block={b} mode="live" guestbook={guestbook} />
                 </div>
               ))
             ) : editable && edit ? (
@@ -631,7 +638,7 @@ export function PhonePreview({
                         !b.active && selectedId !== b.id && "outline-dashed outline-1 outline-[var(--lp-muted)]",
                       )}
                     >
-                      <PreviewBlock block={b} mode="edit" />
+                      <PreviewBlock block={b} mode="edit" guestbook={guestbook} />
                     </button>
                     {/* 상태 캡션 — 공개 안 되는 사유(주소 없음 등) 또는 숨김을 블록 아래
                         10px 한 줄로. 유령칸 문장 상자 도배(2026-08-20 실계정 지적)의
@@ -658,7 +665,7 @@ export function PhonePreview({
                  나온다"로 보인다(2026-08-20 지적). 공개 여부는 캔버스 캡션·최신 칩이 말한다. */
               visible.map((b) => (
                 <div key={b.id} className="lp-block">
-                  <PreviewBlock block={b} mode="preview" />
+                  <PreviewBlock block={b} mode="preview" guestbook={guestbook} />
                 </div>
               ))
             )}
@@ -784,7 +791,7 @@ function GhostCard({ type, data, now }: { type: BlockType; data: Record<string, 
   mode — live: 공개 규칙(숨김은 아예 안 그림) · draft: 유령칸 · edit: 캔버스(관대, 회색 자리표시·사유 캡션)
        · preview: 우측 읽기 전용 미리보기 — edit 처럼 관대하게 실제 모습을 그리되 회색 자리표시(업로드 초대)는 없다(감사2 C1).
 */
-function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "draft" | "live" | "edit" | "preview" }) {
+function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBlock; mode?: "draft" | "live" | "edit" | "preview"; guestbook?: LinkGuestbookEntry[] }) {
   const d = block.data ?? {};
   const lenient = mode === "edit" || mode === "preview";
   /* 이 블록을 그리는 동안 시계는 **하나**다 — 숨김 판정과 아래 목록 계산이 서로 다른 시각을 보면
@@ -1227,38 +1234,45 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
     }
     case "music": {
       const em = musicEmbed(s(d, "url"));
+      /* 주소가 없거나 모르는 곳이면 위쪽 hiddenReason 가드가 GhostCard 로 뻐다 — 여긴 유효한 임베드만 온다.
+         공개는 「제목 줄 + height 만큼의 임베드」다. 예전엔 44px 한 줄로 그려서 352px 앨범을 넣으면
+         발행 뒤 높이가 열 배로 뛰었다 — 아래 블록 배치를 미리 가다듬을 수 없었다.
+         배율 0.85 는 글자(15→13px)·아이콘 원(11→9)과 같은 미리보기 축소율이다. */
+      const provider = em ? (em.provider === "spotify" ? "스포티파이" : em.provider === "soundcloud" ? "사운드클라우드" : "유튜브 뮤직") : "";
       return (
-        <div className={`${card} flex items-center gap-2.5 px-3 py-2.5`}>
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--lp-accent)] text-[var(--lp-on-accent)]" aria-hidden>
-            ♪
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate text-[13px] font-semibold">{s(d, "title") || "음악"}</span>
-            <span className="block text-[11px] text-[var(--lp-muted)]">
-              {em ? `${em.provider === "spotify" ? "스포티파이" : em.provider === "soundcloud" ? "사운드클라우드" : "유튜브 뮤직"} 플레이어가 여기 들어가요` : "지원하는 주소를 넣으면 플레이어가 보여요"}
-            </span>
-          </span>
+        <div className={`${card} overflow-hidden`}>
+          {s(d, "title") ? <p className="px-3 pb-1.5 pt-2.5 text-[13px] font-semibold">{s(d, "title")}</p> : null}
+          <div
+            className="flex items-center justify-center bg-[var(--lp-bg)] text-[11px] text-[var(--lp-muted)]"
+            style={{ height: em ? Math.round(em.height * 0.85) : 130 }}
+          >
+            {provider} 플레이어가 여기 들어가요
+          </div>
         </div>
       );
     }
     case "vcard":
       return (
         <div className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-[var(--lp-radius-btn)] border border-[var(--lp-btn-border)] bg-[var(--lp-btn-bg)] px-4 py-2.5 text-[13px] font-semibold text-[var(--lp-btn-fg)] shadow-[var(--lp-shadow)]">
-          👤 {s(d, "label") || "연락처 저장"}
-          {s(d, "name") ? <span className="text-[11px] font-normal text-[var(--lp-muted)]">· {s(d, "name")}</span> : null}
+          <UserPlus className="size-3.5" aria-hidden />
+          {s(d, "label") || "연락처 저장"}
+          {/* 이름은 버튼 글자색을 **그대로** 상속한다 — muted 는 버튼 면 위에서 12/19 프리셋이 4.5:1 미달이라
+              공개 렌더러가 이미 걸러냈다(block-renderer.tsx vcard). 두 벌을 같이 맞춘다. */}
+          {s(d, "name") ? <span className="text-[11px] font-normal">· {s(d, "name")}</span> : null}
         </div>
       );
     case "search":
       return (
         <div className={`${card} flex min-h-[40px] items-center gap-2 px-3 text-[12px] text-[var(--lp-muted)]`}>
-          🔍 {s(d, "placeholder") || "무엇을 찾으세요?"}
+          <Search className="size-3.5 shrink-0" aria-hidden />
+          {s(d, "placeholder") || "무엇을 찾으세요?"}
         </div>
       );
     case "file":
       return (
         <div className={`${card} flex items-center gap-2.5 p-2.5`}>
           <span className="flex size-9 shrink-0 items-center justify-center rounded-[calc(var(--lp-radius)/1.6)] bg-[var(--lp-accent)] text-[var(--lp-on-accent)]" aria-hidden>
-            ⤓
+            <Download className="size-4" />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13px] font-semibold">{s(d, "title") || s(d, "fileName") || "파일"}</span>
@@ -1270,16 +1284,46 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
           </span>
         </div>
       );
-    case "guestbook":
+    case "guestbook": {
+      /* 공개 페이지와 **같은 규칙**: 숙긴 글은 빼고, 3개만 펼쳐 두고 나머지는 「더 보기」.
+         예전엔 글을 아예 안 그려서, 글이 쌓인 페이지일수록 아래 블록 위치가 발행 뒤에 밀렸다. */
+      const shownGb = guestbook.filter((g) => !g.hidden);
+      const headGb = shownGb.slice(0, 3);
       return (
         <div className={`${card} p-3`}>
           <p className="text-[13px] font-semibold">{s(d, "title") || "방명록"}</p>
           <div className="mt-2 flex h-8 items-center rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-bg)] px-2 text-[11px] text-[var(--lp-muted)]" aria-hidden>이름</div>
           <div className="mt-1.5 h-14 rounded-[var(--lp-radius)] border border-[var(--lp-border)] px-2 py-1.5 text-[11px] text-[var(--lp-muted)]">{s(d, "placeholder") || "한마디 남겨 주세요"}</div>
           <div className="mt-1.5 flex h-8 items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] text-[12px] font-semibold text-[var(--lp-on-accent)]">남기기</div>
-          <p className="mt-2 text-center text-[10px] text-[var(--lp-muted)]">방문자 글과 내 답글이 아래에 쌓여요</p>
+          {headGb.length ? (
+            <ul className="mt-3 space-y-2.5 border-t border-[var(--lp-border)] pt-2.5">
+              {headGb.map((g) => (
+                <li key={g.id}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate text-[12px] font-semibold">{g.name}</span>
+                    <span className="tnum shrink-0 text-[10px] text-[var(--lp-muted)]">{g.createdAt.slice(0, 10)}</span>
+                  </div>
+                  <p className="mt-0.5 line-clamp-3 whitespace-pre-wrap text-[12px]">{g.message}</p>
+                  {g.reply ? (
+                    <p
+                      className="mt-1 line-clamp-2 rounded-[calc(var(--lp-radius)/1.6)] px-2 py-1 text-[11px] text-[var(--lp-muted)]"
+                      style={{ backgroundColor: "color-mix(in srgb, var(--lp-accent) 10%, transparent)" }}
+                    >
+                      ↳ {g.reply}
+                    </p>
+                  ) : null}
+                </li>
+              ))}
+              {shownGb.length > headGb.length ? (
+                <li className="text-center text-[11px] text-[var(--lp-muted)]">더 보기 ({shownGb.length - headGb.length})</li>
+              ) : null}
+            </ul>
+          ) : (
+            <p className="mt-2 text-center text-[10px] text-[var(--lp-muted)]">방문자 글과 내 답글이 아래에 쌓여요</p>
+          )}
         </div>
       );
+    }
     default:
       return null;
   }

@@ -1389,7 +1389,7 @@ export function LinksClient({
                     <span className="tnum absolute right-2 top-2 rounded-chip bg-scrim px-1.5 py-0.5 text-[11px] font-semibold text-on-scrim">
                       {t.blocks.length}블록
                     </span>
-                    <span className="flex size-8 items-center justify-center rounded-card bg-body text-[18px]" aria-hidden>
+                    <span className="flex size-8 items-center justify-center rounded-card bg-body text-[17px]" aria-hidden>
                       {t.emoji}
                     </span>
                     <span className="mt-2 block text-[14px] font-semibold">{t.name}</span>
@@ -1694,6 +1694,7 @@ export function LinksClient({
               selectedId={editingId}
               edit={canvasEdit}
               frame="device"
+              guestbook={guestbook}
             />
           ) : (
             /* 읽기 전용 draft — 캔버스와 같은 값·같은 관대한 규칙(도구만 없음). 꺼진 블록만 뺀다 */
@@ -1702,6 +1703,7 @@ export function LinksClient({
               blocks={draftBlocksView.filter((b) => b.active && !isScheduledHidden(b.data))}
               selectedId={null}
               frame="device"
+              guestbook={guestbook}
             />
           )}
 
@@ -2113,7 +2115,7 @@ function BlockListPanel({
               );
             })}
           </div>
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[13px]">
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[14px]">
             <button type="button" onClick={onAdd} disabled={busy} className="font-semibold text-primary hover:underline disabled:opacity-50">
               블록 전체 보기
             </button>
@@ -2724,7 +2726,7 @@ function NewPageModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () 
         <div>
           <label className="text-[14px] font-medium text-fg" htmlFor="np-slug">주소</label>
           <div className="mt-1.5 flex items-center gap-1">
-            <span className="shrink-0 text-[13px] text-fg-sub">finch.ai.kr/</span>
+            <span className="shrink-0 text-[12px] text-fg-sub">finch.ai.kr/</span>
             <input id="np-slug" value={slugv} onChange={(e) => setSlugv(e.target.value.toLowerCase())} maxLength={30} placeholder="my-event"
               className="h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none" />
           </div>
@@ -2782,7 +2784,7 @@ function ShareBox({ url, busy, title, children }: { url: string; busy: boolean; 
   const [shared, setShared] = useState(false);
   const [qr, setQr] = useState(false);
   const btn =
-    "trans-state flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-card border border-line px-2 text-[13px] font-medium text-fg hover:border-primary hover:text-primary disabled:opacity-50";
+    "trans-state flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-card border border-line px-2 text-[14px] font-medium text-fg hover:border-primary hover:text-primary disabled:opacity-50";
 
   /** 성공 여부를 돌려준다 — 공유 폴백이 실패한 복사에도 「복사됨」을 띄우던 것(소넷 확정) */
   async function copy(): Promise<boolean> {

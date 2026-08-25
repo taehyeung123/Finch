@@ -257,7 +257,7 @@ export function BlockEditor({
                   onBlur={() => addTag(tagDraft)}
                   placeholder="입력 후 Enter"
                   maxLength={16}
-                  className="h-8 min-w-[120px] flex-1 rounded-card border border-line bg-body px-2.5 text-[13px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
+                  className="h-8 min-w-[120px] flex-1 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
                 />
               ) : null}
             </div>
