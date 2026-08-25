@@ -1094,38 +1094,52 @@ export function BlockEditor({
                     maxLength={60}
                     className={input}
                   />
-                  <div className="grid grid-cols-[1fr_7rem] gap-1.5">
-                    <input
-                      type="date"
-                      value={date}
-                      onChange={(e) => setAt(e.target.value, time)}
-                      aria-label={`일정 ${i + 1} 날짜`}
-                      className={input}
-                    />
-                    <input
-                      type="time"
-                      value={time}
-                      onChange={(e) => setAt(date, e.target.value)}
-                      aria-label={`일정 ${i + 1} 시각 (비우면 하루 종일)`}
-                      className={input}
-                    />
+                  {/* 날짜 칸에는 **눈에 보이는 라벨**이 필요하다 — 빈 date 인풋 둘은 둘 다 「yyyy-mm-dd」라
+                      어느 쪽이 종료일인지 알 수 없다. 시각 칸은 8.5rem: 한국어 «오후 08:00» 이 7rem 에서 잘린다 */}
+                  <div className="grid grid-cols-[1fr_8.5rem] gap-1.5">
+                    <label className="block text-[11px] font-medium text-fg-sub">
+                      시작 날짜
+                      <input
+                        type="date"
+                        value={date}
+                        onChange={(e) => setAt(e.target.value, time)}
+                        aria-label={`일정 ${i + 1} 시작 날짜`}
+                        className={`mt-1 ${input}`}
+                      />
+                    </label>
+                    <label className="block text-[11px] font-medium text-fg-sub">
+                      시각 (선택)
+                      <input
+                        type="time"
+                        value={time}
+                        onChange={(e) => setAt(date, e.target.value)}
+                        aria-label={`일정 ${i + 1} 시각 (비우면 하루 종일)`}
+                        className={`mt-1 ${input}`}
+                      />
+                    </label>
                   </div>
-                  <div className="grid grid-cols-[1fr_1fr] gap-1.5">
-                    <input
-                      type="date"
-                      value={typeof it.endAt === "string" ? it.endAt.split("T")[0] : ""}
-                      onChange={(e) => setItem(i, "endAt", e.target.value)}
-                      aria-label={`일정 ${i + 1} 종료 날짜 (선택)`}
-                      className={input}
-                    />
-                    <input
-                      value={typeof it.place === "string" ? it.place : ""}
-                      onChange={(e) => setItem(i, "place", e.target.value)}
-                      placeholder="장소 (선택)"
-                      aria-label={`일정 ${i + 1} 장소`}
-                      maxLength={40}
-                      className={input}
-                    />
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <label className="block text-[11px] font-medium text-fg-sub">
+                      종료 날짜 (여러 날일 때)
+                      <input
+                        type="date"
+                        value={typeof it.endAt === "string" ? it.endAt.split("T")[0] : ""}
+                        onChange={(e) => setItem(i, "endAt", e.target.value)}
+                        aria-label={`일정 ${i + 1} 종료 날짜 (선택)`}
+                        className={`mt-1 ${input}`}
+                      />
+                    </label>
+                    <label className="block text-[11px] font-medium text-fg-sub">
+                      장소 (선택)
+                      <input
+                        value={typeof it.place === "string" ? it.place : ""}
+                        onChange={(e) => setItem(i, "place", e.target.value)}
+                        placeholder="예: 인스타 라이브"
+                        aria-label={`일정 ${i + 1} 장소`}
+                        maxLength={40}
+                        className={`mt-1 ${input}`}
+                      />
+                    </label>
                   </div>
                   <input
                     value={typeof it.url === "string" ? it.url : ""}
@@ -1134,10 +1148,10 @@ export function BlockEditor({
                     aria-label={`일정 ${i + 1} 주소`}
                     className={input}
                   />
-                  <p className="text-[12px] text-fg-sub">시각을 비우면 「하루 종일」로 보여요. 종료 날짜는 여러 날 이어지는 일정에만 넣으세요.</p>
                 </div>
               );
             })}
+            <p className="text-[12px] text-fg-sub">시각을 비우면 「하루 종일」로 보여요. 지난 일정은 아래 설정대로 숨기거나 흐리게 남겨요.</p>
             {items.length < 12 ? (
               <Button variant="secondary" size="sm" onClick={() => set("items", [...items, { title: "", startAt: "" }])}>
                 <Plus className="size-3.5" aria-hidden />
