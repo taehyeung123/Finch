@@ -42,7 +42,9 @@ export function InfoTip({ children, className }: { children: React.ReactNode; cl
         aria-expanded={open}
         aria-controls={id}
         aria-label="지표 설명 보기"
-        className="text-fg-faint hover:text-fg-sub trans-state"
+        /* 보이는 크기는 14px 그대로 두고 **클릭 판정만** 넓힌다 — 14×14 는 WCAG 2.2 최소(24×24) 미달이라
+           모바일에서 조준 자체가 어려웠다(실측). 저장소의 버튼이 쓰는 after 확장과 같은 수법이다. */
+        className="trans-state relative text-fg-faint after:absolute after:-inset-[5px] after:content-[''] hover:text-fg-sub"
         onClick={() => setOpen((v) => !v)}
         onBlur={() => setOpen(false)}
       >

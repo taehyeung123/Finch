@@ -4,7 +4,7 @@ import { COUPANG_DISCLOSURE, musicEmbed } from "@/lib/links/blocks";
 import { Collapsible } from "./collapsible";
 import { GuestbookForm } from "./guestbook-form";
 import { SearchBlock } from "./search-block";
-import { MapPin, ExternalLink, Download, UserPlus, CalendarPlus } from "lucide-react";
+import { MapPin, ExternalLink, Download, Info, UserPlus, CalendarPlus } from "lucide-react";
 import { buildIcs, eventChip, eventEndEpoch, eventEpoch, formatEventDate, formatEventTime, icsHref, isMultiDay, nowMs, parseEventAt, type EventPart } from "@/lib/links/events";
 import { lpText, lpN, type LpText } from "@/lib/links/i18n";
 
@@ -555,17 +555,28 @@ export function BlockRenderer({
 
     case "notice": {
       const tone = s(d, "tone") || "info";
+      /*
+        ⚠️ **누르는 것과 실루엣이 겹치면 안 된다.** primary 톤이 강조색 통짜 채움이라, 바로 아래
+        강조 링크 버튼과 채움색·글자색이 같고 반지름 2px·높이 6px 차이뿐이었다 — 방문자가 눌렀는데
+        아무 일도 안 일어났다(실측: 공지 클릭 → URL 그대로, 새 탭 0개 / 바로 아래 링크는 정상 이동).
+        강조는 살리되 **면을 통짜로 칠하지 않는다**: 강조색 틴트 + 왼쪽 굵은 띠로 info 톤과 같은
+        골격을 쓰고, 앞에 안내 아이콘을 세워 버튼 알약과 형태가 갈리게 한다.
+      */
       return (
         <div
           className={[
-            "rounded-[var(--lp-radius)] px-4 py-3.5 text-[14px] leading-[1.6] shadow-[var(--lp-shadow)]",
-            tone === "primary"
-              ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]"
-              /* 일반 카드와 구분이 안 됐다 — 왼쪽에 강조색 띠를 세워 "안내"로 읽히게(2026-08-24 비평) */
-              : "border border-l-[3px] border-[var(--lp-border)] border-l-[var(--lp-accent)] bg-[var(--lp-card)] text-[var(--lp-fg)]",
+            "flex items-start gap-2.5 rounded-[var(--lp-radius)] px-4 py-3.5 text-[14px] leading-[1.6] shadow-[var(--lp-shadow)]",
+            "border border-l-[3px] border-[var(--lp-border)] text-[var(--lp-fg)]",
+            tone === "primary" ? "border-l-[5px] border-l-[var(--lp-accent)]" : "border-l-[var(--lp-accent)] bg-[var(--lp-card)]",
           ].join(" ")}
+          style={
+            tone === "primary"
+              ? { backgroundColor: "color-mix(in srgb, var(--lp-accent) 12%, var(--lp-card))" }
+              : undefined
+          }
         >
-          {s(d, "text")}
+          <Info className="mt-0.5 size-4 shrink-0 text-[var(--lp-accent)]" aria-hidden />
+          <span className="min-w-0">{s(d, "text")}</span>
         </div>
       );
     }

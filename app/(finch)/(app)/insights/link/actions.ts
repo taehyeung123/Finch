@@ -99,7 +99,16 @@ async function classifySentiment(comments: string[]): Promise<AnalyzeResult["sen
 
 export async function analyzeUrl(url: string): Promise<AnalyzeActionResult> {
   if (isDemoMode()) {
-    return { ok: true, result: { ...analyzeSample, url } };
+    /* 데모라고 **아무 주소나 받지 않는다.** 예전엔 https://example.com/not-a-post 를 넣어도
+       오류 없이 「내 계정 게시물」 배지와 인스타 샘플(조회수 18.2만·해시태그·감성)을 그대로 띄우고,
+       그 아래 URL 만 example.com 으로 찍었다(실측) — 실제 모드는 같은 입력을 정확히 거절하는데
+       데모만 거짓 결과를 만들어 냈다. 같은 관문을 태워 같은 안내를 돌려준다. */
+    if (!extractShortcode(url.trim())) {
+      return { ok: false, error: "인스타그램 게시물 URL을 입력해 주세요. (틱톡·쓰레드 분석은 준비 중입니다)" };
+    }
+    /* 결과의 url 은 **샘플의 permalink 를 그대로 둔다** — 입력값으로 덮어쓰면 방금 넣은 주소의
+       실제 지표인 것처럼 읽힌다. 샘플이라는 사실이 화면에서 안 지워지게 한다. */
+    return { ok: true, result: analyzeSample };
   }
 
   const supabase = await createClient();

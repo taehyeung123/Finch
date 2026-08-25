@@ -53,7 +53,9 @@ export default function AnalyzePage() {
             type="url"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://www.instagram.com/reel/... 또는 TikTok·Threads 게시물 URL"
+            /* 지원 범위를 사실대로 적는다 — 틱톡·스레드는 서버가 거절하고(actions.ts), 타 계정도 아직이다.
+               안내가 받는다고 해 놓고 서버가 막으면 사용자는 자기가 잘못한 줄 안다. */
+            placeholder="https://www.instagram.com/reel/... (연동한 인스타그램 계정의 게시물)"
             aria-label="분석할 게시물 URL"
             className="h-10 flex-1 rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint trans-state hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
           />
@@ -188,7 +190,7 @@ export default function AnalyzePage() {
         <EmptyState
           icon={FileSearch}
           title="URL을 입력해 첫 분석을 시작하세요"
-          description="내 계정 게시물은 물론, 타 계정 게시물도 조회 가능한 범위 안에서 분석할 수 있습니다."
+          description="지금은 연동한 인스타그램 계정의 게시물을 분석할 수 있어요. 틱톡·스레드와 타 계정 분석은 준비 중입니다."
         />
       )}
 
@@ -221,8 +223,11 @@ export default function AnalyzePage() {
                 ))
               ) : (
                 <tr>
+                  {/* 기록 저장이 아직 없다 — analyzeUrl 은 결과만 돌려주고 어디에도 남기지 않는다.
+                      「아직 분석 기록이 없어요 / 첫 게시물을 분석해 보세요」는 분석을 성공해도 그대로라,
+                      해 보라고 시켜 놓고 아무 일도 안 일어나는 막다른 안내가 된다. 사실을 적는다. */}
                   <td colSpan={4} className="py-6 text-center text-[14px] text-fg-sub">
-                    아직 분석 기록이 없어요. 위에서 첫 게시물을 분석해 보세요.
+                    분석 기록 저장은 준비 중이에요 — 지금은 분석할 때마다 위 결과 카드에서 확인해 주세요.
                   </td>
                 </tr>
               )}

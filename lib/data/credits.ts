@@ -169,8 +169,11 @@ export async function getCreditSummary(): Promise<CreditSummary> {
 
   const plan = typeof profile?.plan === "string" ? profile.plan : "free";
   const balance = Number(profile?.credits ?? 0);
-  const allowance = isPaidPlan(plan) ? PLAN_CREDIT_ALLOWANCE[plan] : null;
+  /* 조회가 실패했으면 plan 이 "free" 로 떨어진다 — 그 값으로 allowance 를 정하면 화면 머리글이
+     유료 고객에게 「무료 플랜은 크레딧 대신 횟수로 제공됩니다」라고 말한다(잔액 숫자는 이미
+     «확인 못 함» 인데 설명만 단정하는 앞뒤 안 맞는 화면이 된다). 모를 땐 아무 말도 하지 않는다. */
   const balanceFailed = !!profileErr;
+  const allowance = balanceFailed ? null : isPaidPlan(plan) ? PLAN_CREDIT_ALLOWANCE[plan] : null;
 
   /* 이번 달 기준은 **결제일이 아니라 달력 월**이다. 결제일 기준으로 하려면
      구독 시작일이 필요한데, 관리자 지급·무료 사용자에겐 그 값이 없다.

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -67,21 +68,26 @@ const TYPE_ICON_TONE: Partial<Record<NotificationType, string>> = {
    왼쪽 끝, 시각은 오른쪽 끝으로 갈라져 시선이 매 행 화면을 가로지른다.
    페이지 전체를 묶는 것과는 다르다(그건 좌우 빈 여백을 만든다). */
 export function NotificationsClient({ initial }: { initial: AppNotification[] }) {
+  const router = useRouter();
   const [items, setItems] = useState(initial);
   const [filter, setFilter] = useState<FilterValue>("all");
 
   const unreadCount = items.filter((n) => !n.read).length;
   const visible = filter === "all" ? items : items.filter((n) => TYPE_TO_FILTER[n.type] === filter);
 
-  // 낙관적 로컬 갱신 + 서버 액션으로 영속화 (실패해도 화면은 유지 — 다음 로드에서 서버 상태로 수렴)
+  /* 낙관적 로컬 갱신 + 서버 액션으로 영속화 (실패해도 화면은 유지 — 다음 로드에서 서버 상태로 수렴).
+
+     ⚠️ 끝나면 **router.refresh()** 를 부른다. 상단바 벨의 미읽음 수는 앱 레이아웃(서버 컴포넌트)이
+     세어 내려주는데, 여기서 읽음 처리만 하고 레이아웃을 다시 안 그리면 목록은 다 회색이 됐는데
+     벨만 「2」를 달고 있다 — 클라이언트 내비게이션으로 다른 화면에 가도 그대로다(실측). */
   function markAllRead() {
     setItems((prev) => prev.map((n) => ({ ...n, read: true })));
-    void markAllNotificationsRead();
+    void markAllNotificationsRead().then(() => router.refresh());
   }
 
   function markRead(id: string) {
     setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
-    void markNotificationRead(id);
+    void markNotificationRead(id).then(() => router.refresh());
   }
 
   /* 폭 제한은 **카드**에 건다(아래 Card). ul 에 걸면 카드 오른쪽 159px 이 빈 흰 띠로 남아,

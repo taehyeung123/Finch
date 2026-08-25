@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MapPin, ExternalLink, ArrowDown, ArrowUp, CalendarPlus, Download, Eye, EyeOff, GripVertical, Pencil, Plus, Search, Share2, Trash2, UserPlus } from "lucide-react";
+import { MapPin, ExternalLink, ArrowDown, ArrowUp, CalendarPlus, Download, Eye, EyeOff, GripVertical, Info, Pencil, Plus, Search, Share2, Trash2, UserPlus } from "lucide-react";
 import { eventChip, eventEndEpoch, eventEpoch, formatEventDate, formatEventTime, isMultiDay, nowMs, parseEventAt, type EventPart } from "@/lib/links/events";
 import { cn } from "@/lib/cn";
 import { FinchMark } from "@/components/logo";
@@ -1014,17 +1014,23 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
       );
     }
     case "notice":
+      /* 공개 렌더러와 같은 규칙 — primary 도 통짜 채움을 쓰지 않는다(누르는 것과 실루엣이 겹쳤다).
+         강조색 틴트 + 굵은 왼쪽 띠 + 안내 아이콘(block-renderer.tsx notice 주석 참조). */
       return (
         <div
           className={[
-            "rounded-[var(--lp-radius)] px-3 py-2.5 text-[12px] leading-[1.6] shadow-[var(--lp-shadow)]",
-            /* 공개 렌더러와 같은 신호 — 일반 카드와 구분되게 왼쪽에 강조색 띠(2026-08-24) */
-            s(d, "tone") === "primary"
-              ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]"
-              : `${card} border-l-[3px] border-l-[var(--lp-accent)]`,
+            "flex items-start gap-2 rounded-[var(--lp-radius)] px-3 py-2.5 text-[12px] leading-[1.6] shadow-[var(--lp-shadow)]",
+            card,
+            s(d, "tone") === "primary" ? "border-l-[4px] border-l-[var(--lp-accent)]" : "border-l-[3px] border-l-[var(--lp-accent)]",
           ].join(" ")}
+          style={
+            s(d, "tone") === "primary"
+              ? { backgroundColor: "color-mix(in srgb, var(--lp-accent) 12%, var(--lp-card))" }
+              : undefined
+          }
         >
-          {s(d, "text")}
+          <Info className="mt-0.5 size-3.5 shrink-0 text-[var(--lp-accent)]" aria-hidden />
+          <span className="min-w-0">{s(d, "text")}</span>
         </div>
       );
     case "social_feed":

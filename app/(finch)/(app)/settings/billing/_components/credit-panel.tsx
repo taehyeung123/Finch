@@ -30,9 +30,13 @@ export function CreditPanel({ summary }: { summary: CreditSummary }) {
       <CardHeader
         title="크레딧"
         description={
-          allowance !== null
-            ? "매달 결제일에 플랜 지급량까지 다시 채워집니다. 남은 크레딧은 이월되지 않습니다."
-            : "무료 플랜은 크레딧 대신 기능별 월 횟수로 제공됩니다. 아래 잔액은 지급받은 크레딧입니다."
+          /* 못 읽었으면 어느 쪽도 단정하지 않는다 — allowance 는 조회 실패 때도 null 이라
+             그것만 보면 유료 고객에게 「무료 플랜은…」이라고 말하게 된다 */
+          balanceFailed
+            ? "플랜 정보를 확인하지 못했어요. 새로고침하면 지급량과 잔액이 함께 표시됩니다."
+            : allowance !== null
+              ? "매달 결제일에 플랜 지급량까지 다시 채워집니다. 남은 크레딧은 이월되지 않습니다."
+              : "무료 플랜은 크레딧 대신 기능별 월 횟수로 제공됩니다. 아래 잔액은 지급받은 크레딧입니다."
         }
       />
       <CardBody className="space-y-5">

@@ -16,8 +16,16 @@ export const COVER_TOP = 560;
 export const COVER_HINT_Y = 980;
 export const COVER_FOOT_SIZE = 38;
 export const COVER_FOOT_LH = 52;
-/** 힌트와 부연 사이 여백 */
-const GAP = 24;
+/** 「밀어서 보기 →」의 글자 크기 — 아래 여백 계산이 이 값을 뺀다 */
+const HINT_SIZE = 28;
+/**
+ * 부연 마지막 줄과 힌트 **글자 사이**의 여백.
+ *
+ * ⚠️ 예전엔 이 값을 «baseline ↔ baseline» 간격으로 썼다. 부연이 38px 이라 24px 로는 모자라서,
+ * 부연이 2줄로 감기면 마지막 줄과 힌트가 실제로 겹쳤다(마지막 baseline 956 vs 힌트 baseline 980 —
+ * 감사 후속 실측). 이제 힌트 글자 높이를 먼저 빼고 그 위에 여백을 준다.
+ */
+const GAP = 20;
 /** 큰 것부터 시도하는 헤드라인 크기 — 상한 안에 들어가는 첫 값을 쓴다 */
 const HEAD_SIZES = [98, 92, 86, 80, 74, 68, 62] as const;
 
@@ -42,8 +50,10 @@ export function coverLayout(
   wrap: (text: string, fontSize: number, maxWidth: number) => string[],
 ): CoverLayout {
   const footLines = footnote ? wrap(footnote, COVER_FOOT_SIZE, maxWidth).slice(0, 2) : [];
-  /* 헤드라인이 끝나야 하는 선 — 힌트 위 여백과 부연 블록을 먼저 뗀다 */
-  const headBottomLimit = COVER_HINT_Y - GAP - footLines.length * COVER_FOOT_LH;
+  /* 부연 마지막 줄의 기준선 — 힌트 글자 높이와 여백을 먼저 뗀 자리다 */
+  const footLastBaseline = COVER_HINT_Y - HINT_SIZE - GAP;
+  /* 헤드라인이 끝나야 하는 선 — 부연 블록까지 마저 뗀다 */
+  const headBottomLimit = footLastBaseline - footLines.length * COVER_FOOT_LH;
 
   let headFontSize: number = HEAD_SIZES[HEAD_SIZES.length - 1];
   let headLineHeight = Math.round(headFontSize * 1.18);
@@ -66,7 +76,7 @@ export function coverLayout(
     headLines,
     footLines,
     /* 부연은 헤드라인 바로 아래가 아니라 **힌트 바로 위**에 붙인다 — 읽는 순서가 항상 같다 */
-    footTop: footLines.length ? COVER_HINT_Y - GAP - (footLines.length - 1) * COVER_FOOT_LH : null,
+    footTop: footLines.length ? footLastBaseline - (footLines.length - 1) * COVER_FOOT_LH : null,
     hintY: COVER_HINT_Y,
   };
 }
