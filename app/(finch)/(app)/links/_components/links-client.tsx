@@ -11,9 +11,12 @@ import {
   CalendarClock,
   Clock,
   Copy as CopyIcon,
+  Droplet,
   Ellipsis,
   GripVertical,
+  Image as ImageIcon,
   Inbox,
+  Monitor,
   MousePointerClick,
   Percent,
   RotateCcw,
@@ -31,6 +34,7 @@ import {
   EyeOff,
   Link2,
   Palette,
+  PanelTop,
   Plus,
   QrCode,
   Share2,
@@ -38,11 +42,14 @@ import {
   Rocket,
   Settings,
   Sparkles,
+  Square,
   Trash2,
+  Type,
   Undo2,
   User,
   X,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { trapFocus } from "@/components/ui/trap-focus";
 import { ModalShell } from "@/components/ui/modal-shell";
@@ -86,9 +93,11 @@ import {
   CUSTOM_RADIUS,
   LAYOUTS,
   LINK_THEMES,
+  contrastRatio,
   mixHex,
   sanitizeThemeCustom,
   themeByKey,
+  themeVars,
   type LinkThemeCustom,
 } from "@/lib/links/themes";
 import { LINK_TEMPLATES, type LinkTemplate } from "@/lib/links/templates";
@@ -3247,12 +3256,34 @@ function ProfilePanel({
    테마 패널
    ══════════════════════════════════════════════════════════════════ */
 
-function DSection({ title, hint, children, first = false }: { title: string; hint?: string; children: React.ReactNode; first?: boolean }) {
+/* 디자인 탭 섹션 머리 — 목록·카탈로그처럼 **틴트 아이콘**을 단다.
+   여덟 섹션 제목이 전부 같은 회색 글자라 이 탭에만 색이 하나도 없었다(비평 확정).
+   왼쪽 트랙 11rem → 13rem: 아이콘 28 + 간격 10 을 물려도 글자 폭이 지금과 같게(「상단 메뉴 · 로고」 줄바꿈 방지) */
+function DSection({
+  title,
+  hint,
+  icon: Icon,
+  tint,
+  children,
+  first = false,
+}: {
+  title: string;
+  hint?: string;
+  icon: LucideIcon;
+  tint: string;
+  children: React.ReactNode;
+  first?: boolean;
+}) {
   return (
-    <section className={cn("grid gap-3 md:grid-cols-[11rem_minmax(0,1fr)] md:gap-6", !first && "border-t border-line pt-6")}>
-      <div>
-        <h4 className="text-[15px] font-semibold">{title}</h4>
-        {hint ? <p className="mt-0.5 text-[12px] leading-[1.5] text-fg-sub">{hint}</p> : null}
+    <section className={cn("grid gap-3 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-6", !first && "border-t border-line pt-6")}>
+      <div className="flex items-start gap-2.5">
+        <span className={cn("mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-card", tint)} aria-hidden>
+          <Icon className="size-4" />
+        </span>
+        <div className="min-w-0">
+          <h4 className="text-[15px] font-semibold">{title}</h4>
+          {hint ? <p className="mt-0.5 text-[12px] leading-[1.5] text-fg-sub">{hint}</p> : null}
+        </div>
       </div>
       <div className="min-w-0 space-y-3">{children}</div>
     </section>
@@ -3307,6 +3338,13 @@ function ThemePanel({
       on ? "bg-primary text-on-primary" : "border border-line bg-body text-fg-sub hover:bg-tint-hover hover:text-fg",
     );
   const bgMode: "solid" | "gradient" | "image" = custom.bgImage ? "image" : custom.bg2 || (!custom.bg && preset.bg2) ? "gradient" : "solid";
+  /* 「사진」은 아직 사진이 없어도 눌린 상태여야 한다 — 예전엔 스크롤만 하고 칩이 안 눌려
+     3칸 모드 스위치 중 둘만 진짜였다. 저장된 사진이 있으면 bgMode 가 알아서 image 다 */
+  const [wantsImage, setWantsImage] = useState(false);
+  const bgTab: "solid" | "gradient" | "image" = custom.bgImage || wantsImage ? "image" : bgMode;
+  /* 스와치용 — 지금 설정에 한 값만 바꿔 **실제 발행본과 같은 CSS 변수**를 받아온다.
+     8/14/20px·color-mix 문자열을 패널에 복제하지 않으므로 themeVars 가 단일 출처로 남는다 */
+  const varsFor = (patch: Partial<LinkThemeCustom>) => themeVars(preset, { ...custom, ...patch });
   const colorInput = (key: "bg" | "accent" | "card" | "fg", label: string) => (
     <label key={key} className="flex items-center gap-2 rounded-card border border-line bg-body px-2.5 py-2 text-[14px]">
       <input
@@ -3341,12 +3379,19 @@ function ThemePanel({
         </div>
       </div>
 
-      <DSection first title="테마" hint="출발점. 고른 뒤 아래에서 뭐든 바꿀 수 있어요.">
+      <DSection icon={Palette} tint="bg-tint-purple text-tint-purple-ink" first title="테마" hint="출발점. 고른 뒤 아래에서 뭐든 바꿀 수 있어요.">
         {groups.map(([group, list]) => (
           <div key={group}>
             <p className="text-[11px] font-bold tracking-[0.08em] text-fg-sub">{group}</p>
             <div className="mt-1.5 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
-              {list.map((t) => (
+              {list.map((t) => {
+                /* 썸네일이 배경·강조·카드 세 색만 보여줘서 모서리·글자색·그림자가 다른 테마가
+                   서로 같아 보였다. 값은 새로 적지 않고 themeVars 에서 끌어온다 —
+                   페이지 매핑이 바뀌면 썸네일이 따라온다(표를 두 벌 만들지 않는다) */
+                const tv = themeVars(t);
+                const btnR = tv["--lp-radius-btn"];
+                const r = btnR === "999px" ? "999px" : `${Math.max(2, Math.round(parseInt(btnR, 10) * 0.35))}px`;
+                return (
                 <button
                   key={t.key}
                   type="button"
@@ -3357,48 +3402,70 @@ function ThemePanel({
                     current === t.key ? "border-primary ring-2 ring-primary/30" : "border-line hover:border-line-strong",
                   )}
                 >
-                  <span className="block h-11 p-2" style={{ background: t.bg2 ? `linear-gradient(160deg, ${t.bg}, ${t.bg2})` : t.bg }}>
-                    <span className="block h-3 w-full rounded-full" style={{ background: t.accent }} aria-hidden />
-                    <span className="mt-1 block h-3 w-full rounded-full border" style={{ background: t.card, borderColor: t.border }} aria-hidden />
+                  <span className="block h-14 p-2" style={{ background: t.bg2 ? `linear-gradient(160deg, ${t.bg}, ${t.bg2})` : t.bg }}>
+                    {/* 강조 막대 — 테마를 가르는 가장 센 신호 */}
+                    <span className="block w-full" style={{ height: 18, background: t.accent, borderRadius: r }} aria-hidden />
+                    {/* 카드 막대 위에 글자색을 얹는다 — 실제로도 본문은 카드 위에 놓인다 */}
+                    <span
+                      className="mt-1 flex items-center border px-1.5"
+                      style={{ height: 18, background: t.card, borderColor: t.border, borderRadius: r, boxShadow: t.shadow ? tv["--lp-shadow"] : "none" }}
+                      aria-hidden
+                    >
+                      <span className="text-[11px] font-semibold leading-none" style={{ color: t.fg }}>
+                        Aa
+                      </span>
+                    </span>
                   </span>
                   <span className="block truncate px-2 py-1.5 text-[12px] font-semibold">{t.name}</span>
                 </button>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}
       </DSection>
 
-      <DSection title="배경" hint="단색·그라데이션·사진. 사진엔 필터를 덮어 글자를 살려요.">
+      <DSection icon={ImageIcon} tint="bg-tint-blue text-tint-blue-ink" title="배경" hint="단색·그라데이션·사진. 사진엔 필터를 덮어 글자를 살려요.">
         <div className="flex flex-wrap gap-1.5">
-          <button type="button" className={chip(bgMode === "solid")} aria-pressed={bgMode === "solid"} onClick={() => bgMode !== "solid" && onCustomChange({ bg2: undefined, bgImage: undefined, bg: custom.bg ?? preset.bg })}>
+          <button
+            type="button"
+            className={chip(bgTab === "solid")}
+            aria-pressed={bgTab === "solid"}
+            onClick={() => {
+              setWantsImage(false);
+              if (bgMode !== "solid") onCustomChange({ bg2: undefined, bgImage: undefined, bg: custom.bg ?? preset.bg });
+            }}
+          >
             단색
           </button>
           <button
             type="button"
-            className={chip(bgMode === "gradient")}
-            aria-pressed={bgMode === "gradient"}
+            className={chip(bgTab === "gradient")}
+            aria-pressed={bgTab === "gradient"}
             /* 끝색 기본값은 배경에 강조색을 살짝 섞은 색 — 강조색 그대로면 기본·다크 프리셋에서 글자색과 같아 아래쪽 제목이 사라진다(감사2 U7) */
-            onClick={() => bgMode !== "gradient" && onCustomChange({ bgImage: undefined, bg2: custom.bg2 ?? preset.bg2 ?? mixHex(custom.bg ?? preset.bg, custom.accent ?? preset.accent, 0.22) })}
+            onClick={() => {
+              setWantsImage(false);
+              if (bgMode !== "gradient") onCustomChange({ bgImage: undefined, bg2: custom.bg2 ?? preset.bg2 ?? mixHex(custom.bg ?? preset.bg, custom.accent ?? preset.accent, 0.22) });
+            }}
           >
             그라데이션
           </button>
-          <button type="button" className={chip(bgMode === "image")} aria-pressed={bgMode === "image"} onClick={() => document.getElementById("ds-bgimage")?.scrollIntoView({ block: "nearest" })}>
+          <button type="button" className={chip(bgTab === "image")} aria-pressed={bgTab === "image"} onClick={() => setWantsImage(true)}>
             사진
           </button>
         </div>
         <div className="flex flex-wrap gap-2">
-          {colorInput("bg", bgMode === "gradient" ? "시작색" : "배경색")}
-          {bgMode === "gradient" ? (
+          {colorInput("bg", bgTab === "gradient" ? "시작색" : "배경색")}
+          {bgTab === "gradient" ? (
             <label className="flex items-center gap-2 rounded-card border border-line bg-body px-2.5 py-2 text-[14px]">
               <input type="color" value={custom.bg2 ?? preset.bg2 ?? "#FFFFFF"} onChange={(e) => onCustomChange({ bg2: e.target.value.toUpperCase() })} aria-label="그라데이션 끝색" className="size-7 cursor-pointer rounded-[6px] border-0 bg-transparent p-0" />
               <span className="font-medium">끝색</span>
             </label>
           ) : null}
         </div>
-        <div id="ds-bgimage">
-          {/* 사진을 지우면 필터도 함께 지운다 — 안 그러면 사진 없는 페이지에 bgFilter 만 남아
-              "직접 꾸민 것"으로 잡힌다(감사4). 사진이 있을 때만 필터가 의미를 갖는다 */}
+        {bgTab === "image" ? (
+          /* 사진을 지우면 필터도 함께 지운다 — 안 그러면 사진 없는 페이지에 bgFilter 만 남아
+             "직접 꾸민 것"으로 잡힌다(감사4). 사진이 있을 때만 필터가 의미를 갖는다 */
           <ImageField
             label="배경 사진 (선택)"
             value={custom.bgImage ?? ""}
@@ -3406,7 +3473,7 @@ function ThemePanel({
             hint="넣으면 배경색·그라데이션보다 앞에 깔려요 — 글자가 읽히는지 미리보기로 확인하세요"
             aspect="aspect-[3/1]"
           />
-        </div>
+        ) : null}
         {custom.bgImage ? (
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="mr-1 text-[12px] text-fg-sub">사진 필터</span>
@@ -3422,12 +3489,26 @@ function ThemePanel({
         ) : null}
       </DSection>
 
-      <DSection title="색상" hint="강조색은 주요 버튼·CTA 에, 글자색은 제목·본문에 쓰여요. 대비가 낮으면 자동으로 읽히는 쪽으로 바꿔요.">
+      <DSection icon={Droplet} tint="bg-tint-pink text-tint-pink-ink" title="색상" hint="강조색은 주요 버튼·CTA 에, 글자색은 제목·본문에 쓰여요. 대비가 낮으면 자동으로 읽히는 쪽으로 바꿔요.">
         <div className="flex flex-wrap gap-2">
           {colorInput("accent", "강조")}
           {colorInput("card", "카드")}
           {colorInput("fg", "글자")}
         </div>
+        {/* 테마 엔진이 대비를 지키려고 고른 색을 되돌리는 일이 있다 — 그 사실을 여기서 말해 준다.
+            판정식은 themes.ts 의 themeVars 를 그대로 거울처럼 옮긴 것이다(4.5 기준이 바뀌면 여기도 같이 고친다) */}
+        {custom.card && contrastRatio(custom.fg ?? preset.fg, custom.card) < 4.5 ? (
+          <p className="flex items-start gap-1.5 rounded-card bg-tint-amber px-2.5 py-1.5 text-[12px] text-tint-amber-ink">
+            <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
+            글자색과 대비가 낮아 카드색은 프리셋 값으로 되돌려 칠했어요 — 글자색을 함께 바꿔 보세요.
+          </p>
+        ) : null}
+        {(custom.accent || custom.bg) && contrastRatio(custom.accent ?? preset.accent, custom.bg ?? preset.bg) < 4.5 ? (
+          <p className="flex items-start gap-1.5 rounded-card bg-tint-amber px-2.5 py-1.5 text-[12px] text-tint-amber-ink">
+            <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
+            배경과 대비가 낮아 강조색 글자(외곽선·은은하게 버튼, 태그 칩·아이콘)는 본문색으로 그려요 — 채움 버튼 배경은 그대로예요.
+          </p>
+        ) : null}
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="mr-1 text-[12px] text-fg-sub">강조색 적용</span>
           {CUSTOM_BUTTON_SCOPE.map((f) => (
@@ -3438,7 +3519,7 @@ function ThemePanel({
         </div>
       </DSection>
 
-      <DSection title="버튼" hint="링크 버튼의 모양·스타일·그림자·마우스 올렸을 때 움직임.">
+      <DSection icon={Square} tint="bg-tint-coral text-tint-coral-ink" title="버튼" hint="링크 버튼의 모양·스타일·그림자·마우스 올렸을 때 움직임.">
         {(
           [
             /* 프리셋 기본값 선택은 undefined 로 — 안 그러면 이미 선택된 칩 재클릭이 보이지 않는
@@ -3451,21 +3532,69 @@ function ThemePanel({
         ).map(([lab, opts, cur, set]) => {
           /* 전체 적용이면 스타일(채움/외곽선/은은)은 의미가 없다 — 비활성 + 이유 */
           const off = lab === "스타일" && custom.buttonScope === "all";
+          /* 「액션」은 마우스를 올려야 보이는 움직임이라 정지 그림으로 못 보여준다 — 칩 그대로 */
+          const swatch = lab !== "액션";
           return (
             <div key={lab} className="flex flex-wrap items-center gap-1.5">
               <span className="mr-1 w-10 text-[12px] text-fg-sub">{lab}</span>
-              {opts.map((o) => (
-                <button key={o.key} type="button" disabled={off} aria-pressed={cur === o.key} onClick={() => set(o.key)} className={cn(chip(cur === o.key), off && "opacity-40")}>
-                  {o.label}
-                </button>
-              ))}
+              {opts.map((o) => {
+                if (!swatch) {
+                  return (
+                    <button key={o.key} type="button" disabled={off} aria-pressed={cur === o.key} onClick={() => set(o.key)} className={cn(chip(cur === o.key), off && "opacity-40")}>
+                      {o.label}
+                    </button>
+                  );
+                }
+                /* 값을 손으로 다시 적지 않는다 — themeVars 를 다시 불러 **실제 발행본과 같은 값**으로 그린다.
+                   그래야 카드 대비 가드·어두운 지면 그림자 같은 분기까지 스와치가 저절로 따라온다 */
+                const base = varsFor({});
+                const v = varsFor(
+                  lab === "모서리" ? { radius: o.key as LinkThemeCustom["radius"] } : lab === "스타일" ? { button: o.key as LinkThemeCustom["button"] } : { shadow: o.key as LinkThemeCustom["shadow"] },
+                );
+                return (
+                  <button
+                    key={o.key}
+                    type="button"
+                    disabled={off}
+                    aria-pressed={cur === o.key}
+                    onClick={() => set(o.key)}
+                    className={cn(
+                      "trans-state flex flex-col items-center rounded-card border p-2",
+                      cur === o.key ? "border-primary bg-primary/10" : "border-line bg-body hover:bg-tint-hover",
+                      off && "opacity-40",
+                    )}
+                  >
+                    {lab === "모서리" ? (
+                      <span className="block h-7 w-12" style={{ background: custom.accent ?? preset.accent, borderRadius: v["--lp-radius-btn"] }} aria-hidden />
+                    ) : lab === "스타일" ? (
+                      <span
+                        className="flex h-7 w-12 items-center justify-center text-[12px] font-semibold"
+                        style={{ background: v["--lp-btn-bg"], color: v["--lp-btn-fg"], border: `1.5px solid ${v["--lp-btn-border"]}`, borderRadius: v["--lp-radius-btn"] }}
+                        aria-hidden
+                      >
+                        Aa
+                      </span>
+                    ) : (
+                      /* 그림자는 **지면 위의 카드**로 그린다 — 흰 상자에 얹으면 어두운 테마·사진 배경의 분기를 못 보여준다 */
+                      <span
+                        className="flex h-7 w-12 items-center justify-center"
+                        style={{ background: base["--lp-bg"], backgroundImage: base["--lp-bg-image"], backgroundSize: "cover", borderRadius: v["--lp-radius"] }}
+                        aria-hidden
+                      >
+                        <span className="block h-4 w-8" style={{ background: base["--lp-card"], boxShadow: v["--lp-shadow"], borderRadius: v["--lp-radius"] }} />
+                      </span>
+                    )}
+                    <span className="mt-1 block text-[11px] text-fg-sub">{o.label}</span>
+                  </button>
+                );
+              })}
               {off ? <span className="text-[12px] text-fg-faint">— 「전체 적용」이면 모두 채움</span> : null}
             </div>
           );
         })}
       </DSection>
 
-      <DSection title="글꼴" hint="한글 30종 + 영문 11종. 이름으로 찾아요.">
+      <DSection icon={Type} tint="bg-tint-amber text-tint-amber-ink" title="글꼴" hint="한글 30종 + 영문 11종. 이름으로 찾아요.">
         <input
           value={fontQuery}
           onChange={(e) => setFontQuery(e.target.value)}
@@ -3496,7 +3625,7 @@ function ThemePanel({
         </div>
       </DSection>
 
-      <DSection title="상단 메뉴 · 로고" hint="스크롤해도 붙어 있는 제목 줄, 공유·구독 버튼, 페이지 아래 로고.">
+      <DSection icon={PanelTop} tint="bg-tint-teal text-tint-teal-ink" title="상단 메뉴 · 로고" hint="스크롤해도 붙어 있는 제목 줄, 공유·구독 버튼, 페이지 아래 로고.">
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="mr-1 text-[12px] text-fg-sub">상단 메뉴</span>
           {CUSTOM_TOPBAR.map((f) => (
@@ -3535,7 +3664,7 @@ function ThemePanel({
         </div>
       </DSection>
 
-      <DSection title="효과" hint="스크롤 애니메이션·커서·화면 효과는 공개 페이지에서만 움직여요(미리보기는 모양만).">
+      <DSection icon={Sparkles} tint="bg-tint-green text-tint-green-ink" title="효과" hint="스크롤 애니메이션·커서·화면 효과는 공개 페이지에서만 움직여요(미리보기는 모양만).">
         {(
           [
             ["스크롤", CUSTOM_ANIMS, custom.anim ?? "none", (k: string) => onCustomChange({ anim: k === "none" ? undefined : (k as LinkThemeCustom["anim"]) })],
@@ -3554,7 +3683,7 @@ function ThemePanel({
         ))}
       </DSection>
 
-      <DSection title="PC 레이아웃" hint="넓은 화면에서 프로필을 왼쪽에 떼어 두 칸으로 보여줄 수 있어요.">
+      <DSection icon={Monitor} tint="bg-tint-slate text-tint-slate-ink" title="PC 레이아웃" hint="넓은 화면에서 프로필을 왼쪽에 떼어 두 칸으로 보여줄 수 있어요.">
         <div className="flex flex-wrap gap-1.5">
           {CUSTOM_DESKTOP.map((f) => (
             <button key={f.key} type="button" aria-pressed={(custom.desktop ?? "phone") === f.key} onClick={() => onCustomChange({ desktop: f.key === "phone" ? undefined : f.key })} className={chip((custom.desktop ?? "phone") === f.key)}>
