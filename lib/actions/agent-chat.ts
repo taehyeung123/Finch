@@ -29,6 +29,7 @@ const ROUTES = [
   "/publish",
   "/auto-dm",
   "/links",
+  "/ads",
   "/insights",
   "/insights/posts",
   "/insights/link",

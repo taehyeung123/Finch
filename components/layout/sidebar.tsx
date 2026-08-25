@@ -11,6 +11,7 @@ import {
   FileText,
   LayoutDashboard,
   LineChart,
+  Megaphone,
   Link2,
   MessageCircleQuestion,
   MessageSquareReply,
@@ -52,6 +53,11 @@ export const NAV_GROUPS = [
       { href: "/publish", label: "발행", icon: CalendarClock },
       { href: "/auto-dm", label: "자동 DM", icon: MessageSquareReply },
       { href: "/links", label: "프로필 링크", icon: Link2 },
+      /* 2026-08-25 복귀. b837819(IA 개편)에서 «실계정에선 항상 빈 표»를 이유로 내렸었는데,
+         같은 기준을 다른 미연동 기능(발행·프로필 링크)에는 적용하지 않았다 — 그쪽은 EmptyState 로
+         "연동하면 여기 쌓여요"를 안내하고 메뉴에 그대로 둔다. 무엇보다 제품 이름이
+         「SNS 통합 분석 & **메타광고 관리**」인데 메뉴에 없으면 기능이 없어진 것으로 읽힌다(사장님 지적). */
+      { href: "/ads", label: "광고 관리", icon: Megaphone },
       { href: "/insights", label: "성과 분석", icon: LineChart },
       { href: "/reports", label: "리포트", icon: FileText },
     ],

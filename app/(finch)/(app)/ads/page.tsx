@@ -29,6 +29,11 @@ export default function AdsPage() {
   // 전체 캠페인 누적 기준 — 가중 평균(공통 유틸)으로 계산해 대시보드와 기준을 공유한다
   const totals = aggregateCampaigns(campaigns);
   const organicWeeklyViews = dashboardSummaries.all.weeklyViews;
+  /* 연동 전에는 «0» 이 아니라 «—» 다. 0원·0.0배는 "안 썼다·성과가 없다"는 **사실 주장**이라,
+     아직 광고 계정을 연결하지 않은 사람에게는 거짓이다(2026-08-25 감사에서 통계·리드·방명록에
+     같은 함정을 고쳤다 — 실패·미연동을 «없음»으로 단정하지 않는다). */
+  const linked = campaigns.length > 0;
+  const val = (v: string) => (linked ? v : "—");
 
   return (
     <div className="space-y-6">
@@ -45,8 +50,8 @@ export default function AdsPage() {
 
       {/* 요약 지표 (PART 4.7) — 전체 캠페인 누적, 가중 평균 */}
       <section aria-label="광고 요약 지표" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="누적 집행 금액" value={formatKRW(totals.spend)} />
-        <StatCard label="누적 노출수" value={formatCompact(totals.impressions)} />
+        <StatCard label="누적 집행 금액" value={val(formatKRW(totals.spend))} />
+        <StatCard label="누적 노출수" value={val(formatCompact(totals.impressions))} />
         <StatCard
           label={
             <>
@@ -54,7 +59,7 @@ export default function AdsPage() {
               <InfoTip>총 클릭 ÷ 총 노출의 가중 평균입니다. 규모가 다른 캠페인을 동일하게 취급하는 단순 평균과 달리 계정 실제 성과를 반영해요.</InfoTip>
             </>
           }
-          value={formatPercent(totals.ctr)}
+          value={val(formatPercent(totals.ctr))}
         />
         <StatCard
           label={
@@ -63,7 +68,7 @@ export default function AdsPage() {
               <InfoTip>지출 가중 평균(전환가치 합 ÷ 지출 합)입니다.</InfoTip>
             </>
           }
-          value={`${totals.roas.toFixed(1)}배`}
+          value={val(`${totals.roas.toFixed(1)}배`)}
         />
       </section>
 
@@ -77,8 +82,13 @@ export default function AdsPage() {
           {campaigns.length === 0 ? (
             <EmptyState
               icon={Megaphone}
-              title="연동된 캠페인이 없습니다"
-              description="광고 계정을 연동하면 캠페인 성과가 표시됩니다"
+              title="아직 연결한 광고 계정이 없어요"
+              description="Meta 광고 계정을 연결하면 캠페인별 집행 금액·노출·CTR·ROAS 가 여기에 쌓여요."
+              action={
+                <ButtonLink href="/settings" size="sm" variant="secondary">
+                  광고 계정 연결하기
+                </ButtonLink>
+              }
             />
           ) : (
             <CampaignTable campaigns={campaigns} details={campaignDetails} />
@@ -140,9 +150,9 @@ export default function AdsPage() {
               <div className="p-5">
                 <p className="text-[14px] text-fg-sub">광고 노출수</p>
                 <p className="tnum mt-1.5 text-2xl font-bold leading-none">
-                  {formatCompact(totals.impressions)}
+                  {val(formatCompact(totals.impressions))}
                 </p>
-                <p className="mt-2 text-xs text-fg-faint">캠페인 전체 합산</p>
+                <p className="mt-2 text-xs text-fg-faint">{linked ? "캠페인 전체 합산" : "광고 계정 연결 전"}</p>
               </div>
             </div>
             <p className="mt-3 text-xs text-fg-faint">
