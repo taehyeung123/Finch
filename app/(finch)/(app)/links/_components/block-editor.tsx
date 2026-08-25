@@ -1118,7 +1118,9 @@ export function BlockEditor({
                       />
                     </label>
                   </div>
-                  <div className="grid grid-cols-2 gap-1.5">
+                  {/* date 인풋은 «yyyy-mm-dd» + 달력 아이콘이 들어갈 최소 폭이 필요하다 —
+                      375 에서 2열이면 125px 로 잘린다. 좁으면 한 줄씩 쌓는다 */}
+                  <div className="grid grid-cols-1 gap-1.5 min-[400px]:grid-cols-2">
                     <label className="block text-[11px] font-medium text-fg-sub">
                       종료 날짜 (여러 날일 때)
                       <input

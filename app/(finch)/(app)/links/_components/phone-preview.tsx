@@ -1160,7 +1160,11 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px] font-semibold">{s(x.it, "title")}</span>
-                    <span className="mt-0.5 block truncate text-[12px] text-[var(--lp-muted)]">{meta}</span>
+                    <span className="mt-0.5 block truncate text-[12px] text-[var(--lp-muted)]">
+                      {/* 칩이 aria-hidden 이라 날짜가 접근성 트리에서 통째로 빠졌다 — 공개와 같은 대체 텍스트 */}
+                      <span className="sr-only">{formatEventDate(x.start, "ko")} </span>
+                      {meta}
+                    </span>
                   </span>
                   {x.over ? (
                     <span className="shrink-0 rounded-chip border border-[var(--lp-border)] px-1.5 py-0.5 text-[10px] text-[var(--lp-muted)]">지난 일정</span>

@@ -3672,12 +3672,18 @@ function ThemePanel({
                     aria-pressed={cur === o.key}
                     onClick={() => set(o.key)}
                     className={cn(
-                      "trans-state flex cursor-pointer flex-col items-center rounded-card border p-2",
+                      "trans-state relative flex cursor-pointer flex-col items-center rounded-card border p-2",
                       "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
-                      cur === o.key ? "border-primary bg-primary/10" : "border-line bg-body hover:bg-tint-hover",
+                      cur === o.key ? "border-primary ring-2 ring-primary/30" : "border-line bg-body hover:bg-tint-hover",
                       off && "opacity-40",
                     )}
                   >
+                    {/* 프리셋·글꼴과 같은 선택 문법 — 1px 테두리(2.82:1)만으로는 «지금 것» 이 안 읽힌다 */}
+                    {cur === o.key ? (
+                      <span className="absolute right-1 top-1 z-10 flex size-4 items-center justify-center rounded-chip bg-primary text-on-primary ring-2 ring-body" aria-hidden>
+                        <Check className="size-3" />
+                      </span>
+                    ) : null}
                     {lab === "모서리" ? (
                       <span className="block h-7 w-12" style={{ background: custom.accent ?? preset.accent, borderRadius: v["--lp-radius-btn"] }} aria-hidden />
                     ) : lab === "스타일" ? (
@@ -4070,7 +4076,8 @@ function StatsPanel({
                 onClick={() => onRange(r.days)}
                 aria-pressed={stats.days === r.days}
                 className={cn(
-                  "trans-state rounded-chip px-2.5 py-1 text-[12px] font-semibold disabled:opacity-50",
+                  /* 세그먼티드 트랙 안이라 py 를 키우면 트랙이 커진다 — 히트영역만 넓힌다 */
+                  "trans-state relative rounded-chip px-2.5 py-1 text-[12px] font-semibold before:absolute before:-inset-y-[9px] before:inset-x-0 before:content-[''] disabled:opacity-50",
                   stats.days === r.days ? "bg-primary text-on-primary" : "text-fg-sub hover:text-fg",
                 )}
               >
@@ -4270,7 +4277,8 @@ function StatsPanel({
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline justify-between gap-2">
-                        <span className={cn("min-w-0 truncate text-[14px]", b.removed && "text-fg-faint line-through")}>{b.label}</span>
+                        {/* fg-faint 는 본문 금지(플레이스홀더·아이콘 전용) — 취소선이 이미 「지운 블록」을 말한다 */}
+                        <span className={cn("min-w-0 truncate text-[14px]", b.removed && "text-fg-sub line-through")}>{b.label}</span>
                         <span className="tnum shrink-0 text-[14px] font-semibold">
                           {n(b.clicks)} <span className="font-normal text-fg-sub">{stats.clicks > 0 ? `${Math.round((b.clicks / stats.clicks) * 100)}%` : ""}</span>
                         </span>
@@ -4545,7 +4553,8 @@ function ManagePanel({
                   aria-pressed={kindFilter === k}
                   onClick={() => setKindFilter(k)}
                   className={cn(
-                    "trans-state rounded-chip px-2 py-0.5 text-[11px] font-semibold",
+                    /* 24px 짜리 칩이라 손가락으로 못 누른다 — 보이는 크기는 두고 히트영역만 위아래로 넓힌다(44px) */
+                    "trans-state relative rounded-chip px-2 py-0.5 text-[11px] font-semibold before:absolute before:-inset-y-[10px] before:inset-x-0 before:content-['']",
                     kindFilter === k ? "bg-primary text-on-primary" : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
                   )}
                 >
@@ -4666,7 +4675,7 @@ function ManagePanel({
                   aria-pressed={gbFilter === k}
                   onClick={() => setGbFilter(k)}
                   className={cn(
-                    "trans-state rounded-chip px-2 py-0.5 text-[11px] font-semibold",
+                    "trans-state relative rounded-chip px-2 py-0.5 text-[11px] font-semibold before:absolute before:-inset-y-[10px] before:inset-x-0 before:content-['']",
                     gbFilter === k ? "bg-primary text-on-primary" : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
                   )}
                 >
@@ -5160,7 +5169,9 @@ function MarketingPanel({
       <section className="space-y-3 border-t border-line pt-5">
         <h4 className="text-[15px] font-semibold">퍼뜨리기</h4>
         <div className="flex flex-wrap items-center gap-2">
-          <code className="min-w-0 flex-1 truncate rounded-card border border-line bg-body px-3 py-2 text-[14px] text-fg-sub">{url}</code>
+          {/* min-w-0 이 flex-wrap 을 무력화해 좁은 화면에서 주소만 계속 줄어들었다(375 에서 102px) —
+              좁을 땐 한 줄을 통째로 쓰게 한다 */}
+          <code className="min-w-[14rem] flex-1 basis-full truncate rounded-card border border-line bg-body px-3 py-2 text-[14px] text-fg-sub sm:basis-auto">{url}</code>
           <Button
             variant="secondary"
             size="sm"

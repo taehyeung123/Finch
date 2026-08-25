@@ -196,20 +196,22 @@
   --warning: #b45309;
   --warning-weak: rgba(180, 83, 9, 0.12);
   /* 색 칩(라이트) — 흰 카드 위 옅은 바탕 + AA 잉크 */
+  /* 잉크는 **회색 지면(plate) 위**에서도 4.5:1 을 넘어야 한다 — 틴트 칩은 흰 카드와 회색 판 양쪽에 얹힌다.
+     코랄·초록·앰버·틸이 plate 위에서 3.99~4.43 이었다(실측). 한 칸씩 진하게 내렸다. */
   --tint-coral: rgba(255, 107, 74, 0.13);
-  --tint-coral-ink: #C2410C;
+  --tint-coral-ink: #9A3412;
   --tint-blue: rgba(59, 130, 246, 0.12);
   --tint-blue-ink: #1D4ED8;
   --tint-green: rgba(34, 197, 94, 0.13);
-  --tint-green-ink: #15803D;
+  --tint-green-ink: #166534;
   --tint-purple: rgba(139, 92, 246, 0.13);
   --tint-purple-ink: #6D28D9;
   --tint-amber: rgba(245, 158, 11, 0.16);
-  --tint-amber-ink: #A16207;
+  --tint-amber-ink: #92400E;
   --tint-pink: rgba(236, 72, 153, 0.12);
   --tint-pink-ink: #BE185D;
   --tint-teal: rgba(20, 184, 166, 0.14);
-  --tint-teal-ink: #0F766E;
+  --tint-teal-ink: #115E59;
   --tint-slate: rgba(100, 116, 139, 0.13);
   --tint-slate-ink: #47566B;
 
