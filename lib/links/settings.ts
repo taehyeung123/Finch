@@ -42,6 +42,11 @@ export interface LinkPageSettings {
   /** 클릭 목적지에 UTM 자동 부착(리틀리 카피) — utm_source=finch 등 3개.
       목적지에 이미 utm_* 이 있으면 의도된 캠페인 태깅이므로 건드리지 않는다(/go 라우트) */
   utm: boolean;
+  /* 검색엔진 소유확인 메타태그(리틀리 「메타태그」) — 서치콘솔·네이버 웹마스터가 요구하는 값.
+     주소를 등록하려면 이 태그가 <head> 에 있어야 한다. **임의 태그는 받지 않는다** — 두 열쇠만,
+     그것도 형식이 맞는 값만 넣는다(임의 문자열을 head 에 심게 하면 그건 남의 화면에 태그를 넣는 창구가 된다). */
+  verifyGoogle: string;
+  verifyNaver: string;
   /** 비밀번호가 걸려 있는가(settings.locked). 해시는 link_page_secrets 에 */
   hasPassword: boolean;
 }
@@ -58,6 +63,8 @@ export const DEFAULT_LINK_SETTINGS: LinkPageSettings = {
   metaPixel: "",
   tiktokPixel: "",
   utm: false,
+  verifyGoogle: "",
+  verifyNaver: "",
   hasPassword: false,
 };
 
@@ -69,6 +76,10 @@ export const TRACKER_FORMATS = {
 } as const;
 
 const HTTPS_IMG = /^https:\/\/[^\s"'<>()]+$/;
+
+/* 소유확인 값 — 구글은 43자 안팎의 base64url, 네이버는 40자 안팎의 16진수다.
+   둘 다 영숫자·-·_ 로만 이뤄지므로 한 규칙으로 받는다. 따옴표·꺾쇠는 애초에 들어올 수 없다. */
+export const VERIFY_FORMAT = /^[A-Za-z0-9_-]{16,100}$/;
 
 /** 이모지 한 덩어리(ZWJ·변형 선택자 포함)인가 — 파비콘 텍스트 모드 판정 */
 export function isSingleEmoji(v: string): boolean {
@@ -99,6 +110,8 @@ export function sanitizeLinkSettings(raw: unknown): LinkPageSettings {
     metaPixel: TRACKER_FORMATS.metaPixel.test(str("metaPixel", 24)) ? str("metaPixel", 24) : "",
     tiktokPixel: TRACKER_FORMATS.tiktokPixel.test(str("tiktokPixel", 40).toUpperCase()) ? str("tiktokPixel", 40).toUpperCase() : "",
     utm: r.utm === true,
+    verifyGoogle: VERIFY_FORMAT.test(str("verifyGoogle", 100)) ? str("verifyGoogle", 100) : "",
+    verifyNaver: VERIFY_FORMAT.test(str("verifyNaver", 100)) ? str("verifyNaver", 100) : "",
     hasPassword: r.locked === true,
   };
 }

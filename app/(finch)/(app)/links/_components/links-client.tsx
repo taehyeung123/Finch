@@ -4197,9 +4197,10 @@ function PageSettingsForm({
 }) {
   const st = page.settings;
   /* 텍스트 필드는 초안을 두고 blur/저장에서 확정 — 글자마다 서버 왕복을 돌리지 않는다 */
-  type Staged = Pick<LinkPageSettings, "ogTitle" | "ogImage" | "favicon" | "lockMessage" | "ga4" | "metaPixel" | "tiktokPixel">;
+  type Staged = Pick<LinkPageSettings, "ogTitle" | "ogImage" | "favicon" | "lockMessage" | "ga4" | "metaPixel" | "tiktokPixel" | "verifyGoogle" | "verifyNaver">;
   const stagedOf = (x: LinkPageSettings): Staged => ({
     ogTitle: x.ogTitle, ogImage: x.ogImage, favicon: x.favicon, lockMessage: x.lockMessage, ga4: x.ga4, metaPixel: x.metaPixel, tiktokPixel: x.tiktokPixel,
+    verifyGoogle: x.verifyGoogle, verifyNaver: x.verifyNaver,
   });
   const [form, setForm] = useState<Staged>(() => stagedOf(st));
   const [pw, setPw] = useState("");
@@ -4225,6 +4226,7 @@ function PageSettingsForm({
     });
   }
   const { ogTitle, ogImage, favicon, lockMessage } = form;
+  const setVerify = (k: "verifyGoogle" | "verifyNaver", v: string) => setForm((f) => ({ ...f, [k]: v }));
   const setTracker = (k: "ga4" | "metaPixel" | "tiktokPixel", v: string) => setForm((f) => ({ ...f, [k]: v }));
   const setOgTitle = (v: string) => setForm((f) => ({ ...f, ogTitle: v }));
   const setOgImage = (v: string) => setForm((f) => ({ ...f, ogImage: v }));
@@ -4381,6 +4383,45 @@ function PageSettingsForm({
         </div>
         <Switch checked={st.robots === "index"} onChange={(v) => onSettings({ robots: v ? "index" : "noindex" })} label="검색 노출" disabled={busy} />
       </div>
+
+      {/* 검색엔진 소유확인(리틀리 「메타태그」) — 서치콘솔·네이버 웹마스터에 주소를 등록하려면
+          그쪽이 준 확인 코드가 이 페이지 <head> 에 있어야 한다. **임의 태그는 받지 않는다** —
+          두 열쇠만, 형식이 맞는 값만 넣는다(임의 문자열을 head 에 심게 하면 남의 화면에 태그를 넣는 창구가 된다).
+          평소엔 접어 둔다 — 대부분의 사용자에겐 필요 없는 칸이다. */}
+      <details className="rounded-card border border-line bg-body px-4 py-3">
+        <summary className="cursor-pointer text-[14px] font-semibold">
+          검색엔진 소유확인
+          {st.verifyGoogle || st.verifyNaver ? <span className="ml-2 text-[12px] font-medium text-fg-sub">등록됨</span> : null}
+        </summary>
+        <p className="mt-2 text-[12px] leading-[1.6] text-fg-sub">
+          구글 서치콘솔·네이버 서치어드바이저에 이 주소를 등록할 때 쓰는 확인 코드예요.
+          <code className="mx-1 rounded bg-plate px-1">content=&quot;…&quot;</code> 안의 값만 넣어 주세요 — 태그 전체가 아니라요.
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {(
+            [
+              ["verifyGoogle", "구글 서치콘솔", "abcDEF123_gh-…"],
+              ["verifyNaver", "네이버 서치어드바이저", "1a2b3c4d5e6f…"],
+            ] as Array<["verifyGoogle" | "verifyNaver", string, string]>
+          ).map(([k, name, ph]) => (
+            <div key={k}>
+              <label className={label} htmlFor={`ps-${k}`}>
+                {name}
+              </label>
+              <input
+                id={`ps-${k}`}
+                value={form[k]}
+                onChange={(e) => setVerify(k, e.target.value)}
+                onBlur={() => commit(k, form[k])}
+                placeholder={ph}
+                maxLength={100}
+                spellCheck={false}
+                className={`mt-1.5 ${input}`}
+              />
+            </div>
+          ))}
+        </div>
+      </details>
 
       {/* 공유 카드(OG) */}
       <div className="space-y-2">

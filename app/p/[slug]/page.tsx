@@ -125,6 +125,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     },
     icons: icon ? { icon: [{ url: icon }] } : undefined,
     robots: noindex ? { index: false, follow: false } : undefined,
+    /* 소유확인 메타태그(0058 settings) — 서치콘솔·네이버 웹마스터 등록용.
+       값은 sanitizeLinkSettings 가 형식으로 거른 것만 온다. 잠긴 페이지는 위에서 이미 빠져나갔다. */
+    verification:
+      st.verifyGoogle || st.verifyNaver
+        ? {
+            ...(st.verifyGoogle ? { google: st.verifyGoogle } : {}),
+            ...(st.verifyNaver ? { other: { "naver-site-verification": st.verifyNaver } } : {}),
+          }
+        : undefined,
   };
 }
 

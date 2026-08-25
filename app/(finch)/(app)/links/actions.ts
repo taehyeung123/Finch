@@ -9,7 +9,7 @@ import { SNS_CATALOG, snsHref } from "@/lib/links/sns-catalog";
 import { BLOCK_META_KEYS, BLOCK_TYPES, EMPHASIS_TYPES, defaultBlockData, type BlockType } from "@/lib/links/blocks";
 import { SafeFetchError, fetchPublicHtml } from "@/lib/links/safe-fetch";
 import { DEFAULT_THEME_KEY, sanitizeThemeCustom, themeByKey } from "@/lib/links/themes";
-import { LINK_LANGS, TRACKER_FORMATS, isSingleEmoji, type LinkPageSettings } from "@/lib/links/settings";
+import { LINK_LANGS, TRACKER_FORMATS, VERIFY_FORMAT, isSingleEmoji, type LinkPageSettings } from "@/lib/links/settings";
 import { hashPagePassword, validPagePassword } from "@/lib/links/password";
 import { LINK_TEMPLATES } from "@/lib/links/templates";
 import { parseLittlyHtml } from "@/lib/links/littly";
@@ -484,7 +484,12 @@ async function patchSettings(pageId: string, patch: Record<string, unknown>): Pr
  * 편집기는 "저장됐는데 안 바뀜"보다 "왜 안 되는지"를 알아야 한다.
  */
 export async function updateLinkSettings(
-  patch: Partial<Pick<LinkPageSettings, "lang" | "target" | "robots" | "ogTitle" | "ogImage" | "favicon" | "lockMessage" | "ga4" | "metaPixel" | "tiktokPixel" | "utm">>,
+  patch: Partial<
+    Pick<
+      LinkPageSettings,
+      "lang" | "target" | "robots" | "ogTitle" | "ogImage" | "favicon" | "lockMessage" | "ga4" | "metaPixel" | "tiktokPixel" | "utm" | "verifyGoogle" | "verifyNaver"
+    >
+  >,
   pageId?: string,
 ): Promise<Result> {
   if (isDemoMode()) return DEMO;
@@ -531,6 +536,16 @@ export async function updateLinkSettings(
     const raw = String(patch[k]).trim();
     const v = upper ? raw.toUpperCase() : raw;
     if (v && !TRACKER_FORMATS[k].test(v)) return { ok: false, error: msg };
+    next[k] = v;
+  }
+  /* 검색엔진 소유확인 — 값 자체가 <head> 로 나가므로 형식 밖이면 거절한다.
+     "붙여넣었는데 확인이 안 된다"는 대개 태그 전체(<meta …>)를 통째로 붙인 경우다 — 그걸 그대로 말해 준다. */
+  for (const k of ["verifyGoogle", "verifyNaver"] as const) {
+    if (patch[k] === undefined) continue;
+    const v = String(patch[k]).trim();
+    if (v && !VERIFY_FORMAT.test(v)) {
+      return { ok: false, error: "확인 코드만 넣어 주세요 — <meta …> 태그 전체가 아니라 content=\"…\" 안의 값이에요." };
+    }
     next[k] = v;
   }
   if (Object.keys(next).length === 0) return { ok: true };
