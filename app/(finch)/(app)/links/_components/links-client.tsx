@@ -1234,7 +1234,9 @@ export function LinksClient({
       ) : null}
 
       {/* 모달이 자기 오류를 보여주는 동안은 페이지 배너를 안 띄운다 — 같은 문장이 둘(스크림 뒤 하나) 이 된다(소넷) */}
-      {error && !settingsOpen && drawer !== "add" && !scheduleFor && !tplPreview ? (
+      {/* 자기 오류를 스스로 보여주는 화면(모달 4곳 + 인라인 프로필·블록 편집기)이 떠 있는 동안은
+          페이지 배너를 안 띄운다 — 같은 문장이 둘이 되면 두 번 실패한 것으로 읽힌다 */}
+      {error && !settingsOpen && !drawer && !editing && !scheduleFor && !tplPreview ? (
         <p role="alert" className="rounded-card border border-negative/40 bg-negative-weak p-4 text-[15px] text-negative-strong">
           {error}
         </p>
@@ -1252,6 +1254,7 @@ export function LinksClient({
               폰이 화면 높이를 꽉 쓴다 — 전에는 이 바가 위에 있어 폰 밑이 화면 밖으로 잘렸다. */}
           <TopBar
             page={page}
+            unsaved={anyDirty}
             pages={pages}
             pageLimit={pageLimit}
             multiReady={multiReady}
@@ -1671,7 +1674,10 @@ export function LinksClient({
       {/* 작업 중 베일 — 서버 왕복(run)이 도는 동안 핀치 로더. 200ms 안에 끝나면 보이지 않는다.
           "기능 쓸 때 로딩 중이면 로딩 화면" (2026-08-22 지시). fire() 경로(온오프·테마·드래그)는
           낙관 반영이라 기다릴 것이 없어 베일을 띄우지 않는다. */}
-      {busy ? (
+      {/* 모달이 열려 있으면 전역 베일을 접는다 — z-[60] 이 모달(z-50) 위를 덮어 로더가 둘이 되고,
+          「만드는 중…」·「되돌리는 중…」 같은 모달 안 진행 라벨이 베일 아래로 사라졌다.
+          모달이 열린 동안 시작되는 run() 은 그 모달에서 나온 것뿐이라(스크림이 뒤를 막는다) 진행 표시는 모달이 스스로 낸다 */}
+      {busy && !settingsOpen && !drawer && !scheduleFor && !tplPreview && !newPageOpen && !newSubOpen && !exitTo && !revertOpen ? (
         <div
           className="busy-veil-in fixed inset-0 z-[60] flex items-center justify-center bg-surface/70 backdrop-blur-[2px]"
         >
@@ -1713,6 +1719,7 @@ function TopBar({
   onPublish,
   onRevert,
   hasFeed = false,
+  unsaved = false,
   history,
 }: {
   page: LinkPageView;
@@ -1731,13 +1738,18 @@ function TopBar({
   onRevert?: () => void;
   /** 켜진 「최근 게시물」 블록이 있는가 — 있으면 초안이 깨끗해도 발행(피드 새로고침)을 막지 않는다 */
   hasFeed?: boolean;
+  /** 저장 안 한 로컬 편집(프로필·꾸미기·블록 편집기)이 있는가 — 발행 상태보다 앞선다 */
+  unsaved?: boolean;
   /** 2행 왼쪽 — 실행취소/다시실행(페이지 탭에서만) */
   history?: React.ReactNode;
 }) {
   const publishable = page.dirty || !page.publishedAt || hasFeed;
 
   return (
-    <div className="card-face">
+    /* 폰 칸과 **같은 선**(4.5rem)에 고정한다 — 목록을 내리면 탭·발행 버튼이 사라져
+       왼쪽엔 폰이 붙어 있는데 오른쪽 기둥만 없어졌다.
+       ⚠️ z-30 위로 올리지 말 것: sticky 가 쌓임 맥락을 만들어, 더 올리면 모달 스크림 뒤에서 이 바가 튀어나온다 */
+    <div className="card-face xl:sticky xl:top-[4.5rem] xl:z-30">
       {/* 1행 — 탭 · 주소 · 열람 도구(복사/열기/QR) · ⚙ · 공개 · 라이브 반영 */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-3 py-2">
         <nav aria-label="편집 영역" className="flex items-center gap-0.5 rounded-card bg-plate p-0.5">
@@ -1788,11 +1800,17 @@ function TopBar({
       {/* 2행 — 이력(↩↪) 왼쪽, 공개·발행 상태·라이브 반영 오른쪽 */}
       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2 border-t border-line px-3 py-1.5">
         {history}
+        {/* 「실행취소」(한 단계)와 「편집 되돌리기」(초안 전체 폐기)는 무게가 다르다 —
+            같은 Undo2 아이콘으로 6px 간격에 붙어 있으면 손이 먼저 나간다. 아이콘을 가르고 선으로 끊는다.
+            구분선은 조건 **안**에 둔다: 밖에 두면 초안이 깨끗할 때 선만 남아 뜬다 */}
         {onRevert ? (
-          <Button variant="ghost" size="sm" onClick={onRevert} disabled={busy}>
-            <Undo2 className="size-3.5" aria-hidden />
-            편집 되돌리기
-          </Button>
+          <>
+            <span className="mx-1 h-4 w-px bg-line" aria-hidden />
+            <Button variant="ghost" size="sm" onClick={onRevert} disabled={busy}>
+              <RotateCcw className="size-3.5" aria-hidden />
+              편집 되돌리기
+            </Button>
+          </>
         ) : null}
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <span
@@ -1804,14 +1822,27 @@ function TopBar({
             {page.published ? <Eye className="size-3" aria-hidden /> : <EyeOff className="size-3" aria-hidden />}
             {page.published ? "공개" : "비공개"}
           </span>
-          {/* 발행 상태는 **버튼 라벨이 아니라 칩**으로 — 상태와 액션을 한 몸으로 두면 "지금 라이브가 최신인가"를 역산해야 한다 */}
+          {/* 「라이브까지 남은 일」 칩 — 상태와 액션을 한 몸(버튼 라벨)으로 두면 "지금 라이브가 최신인가"를 역산해야 한다.
+              **저장 → 발행 순서**라 미저장이 초안 상태를 가린다: 예전엔 초록 ✓최신 옆에서
+              "저장하지 않은 편집이 보여요" 라고 말해 두 곳이 서로를 부정했다(비평 확정) */}
           <span
             className={cn(
               "inline-flex shrink-0 items-center gap-1 rounded-chip px-2.5 py-1 text-[12px] font-semibold",
-              !page.publishedAt ? "bg-plate text-fg-sub" : page.dirty ? "bg-warning-weak text-warning-strong" : "bg-positive-weak text-positive-strong",
+              unsaved
+                ? "bg-warning-weak text-warning-strong"
+                : !page.publishedAt
+                  ? "bg-plate text-fg-sub"
+                  : page.dirty
+                    ? "bg-warning-weak text-warning-strong"
+                    : "bg-positive-weak text-positive-strong",
             )}
           >
-            {!page.publishedAt ? (
+            {unsaved ? (
+              <>
+                <AlertTriangle className="size-3" aria-hidden />
+                저장 안 됨
+              </>
+            ) : !page.publishedAt ? (
               "발행 전"
             ) : page.dirty ? (
               "초안 수정됨"
@@ -1830,7 +1861,7 @@ function TopBar({
             title={!page.dirty && !!page.publishedAt && hasFeed ? "최근 게시물을 다시 불러와 반영해요" : undefined}
           >
             <Rocket className="size-3.5" aria-hidden />
-            {busy ? "반영 중…" : !page.dirty && !!page.publishedAt && hasFeed ? "피드 새로고침" : "라이브 반영"}
+            {!page.dirty && !!page.publishedAt && hasFeed ? "피드 새로고침" : "라이브 반영"}
           </Button>
         </div>
       </div>
@@ -2043,9 +2074,11 @@ function BlockListPanel({
         const canEmph = EMPHASIS_TYPES.includes(b.type);
         const sched = blockSchedule(b.data);
         const hasSched = !!(sched.openAt || sched.closeAt);
-        const status = !b.active
-          ? "숨김 — 미리보기·공개에 안 나가요"
-          : (scheduleCaption(b.data) ?? hiddenReason(b.type, b.data) ?? partialReason(b.type, b.data));
+        /* 세 신호를 분리한다 — 예전엔 ?? 사슬이라 예약이 걸리면 「주소가 비어 공개되지 않아요」가
+           통째로 삼켜졌다. 예약(정상 운영)과 고장(공개가 안 됨)은 같은 급이 아니다 */
+        const off = !b.active ? "숨김 — 미리보기·공개에 안 나가요" : null;
+        const problem = b.active ? (hiddenReason(b.type, b.data) ?? partialReason(b.type, b.data)) : null;
+        const schedText = b.active ? scheduleCaption(b.data) : null;
         return (
           <div
             key={b.id}
@@ -2187,7 +2220,31 @@ function BlockListPanel({
                 />
               </button>
             </div>
-            {status ? <p className="px-3 pb-2 text-[11px] text-fg-sub">{status}</p> : null}
+            {off || problem || schedText ? (
+              /* pl-21(84px) = 행의 블록 아이콘 왼쪽 선.
+                 px-2(8) + 핸들 p-1+size-4(24) + gap-1.5(6) + Switch w-9(36) + gap-1.5(6) + 버튼 px-1(4).
+                 ↑ 이 중 하나라도 크기가 바뀌면 여기도 같이 고칠 것 */
+              <div className="flex flex-wrap items-center gap-1.5 pb-2 pl-21 pr-3">
+                {problem ? (
+                  <span className="inline-flex items-center gap-1 rounded-chip bg-warning-weak px-2 py-0.5 text-[11px] font-medium text-warning-strong">
+                    <AlertTriangle className="size-3" aria-hidden />
+                    {problem}
+                  </span>
+                ) : null}
+                {schedText ? (
+                  <span className="inline-flex items-center gap-1 rounded-chip bg-plate px-2 py-0.5 text-[11px] font-medium text-fg-sub">
+                    <Clock className="size-3" aria-hidden />
+                    {schedText}
+                  </span>
+                ) : null}
+                {off ? (
+                  <span className="inline-flex items-center gap-1 rounded-chip bg-plate px-2 py-0.5 text-[11px] font-medium text-fg-sub">
+                    <EyeOff className="size-3" aria-hidden />
+                    {off}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
             {expanded ? <div className="anim-swap border-t border-line px-3 py-3">{editor}</div> : null}
           </div>
         );
@@ -2233,7 +2290,6 @@ function ScheduleModal({
   onClose: () => void;
   onSave: (openAt: string | null, closeAt: string | null) => void;
 }) {
-  const boxRef = useRef<HTMLDivElement>(null);
   const init = block ? blockSchedule(block.data) : { openAt: null, closeAt: null };
   /* datetime-local 은 로컬 시각 "YYYY-MM-DDTHH:mm" 을 쓴다 — ISO(UTC) 와 서로 변환 */
   const toLocal = (iso: string | null) => {
@@ -2244,84 +2300,56 @@ function ScheduleModal({
   };
   const [openAt, setOpenAt] = useState(toLocal(init.openAt));
   const [closeAt, setCloseAt] = useState(toLocal(init.closeAt));
-  const onCloseRef = useRef(onClose);
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  });
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
-    boxRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCloseRef.current();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      prev?.focus?.();
-    };
-  }, []);
   const bad = openAt && closeAt && new Date(openAt).getTime() >= new Date(closeAt).getTime();
   const toIso = (v: string) => (v ? new Date(v).toISOString() : null);
   const field = "mt-1.5 h-10 w-full rounded-card border border-line bg-body px-3 text-[14px] text-fg focus:border-primary focus:outline-none";
 
+  /* 손수 짠 스크림·포커스·Esc 를 걷고 ModalShell 로 — 다크에서 표면색(--body)이 다른 모달과 갈렸고,
+     무엇보다 busy 중에도 Esc·스크림으로 닫혀 저장이 뒤에서 계속 돌 수 있었다 */
   return (
-    <div
-      className="modal-scrim-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label="예약 공개 설정"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={boxRef}
-        tabIndex={-1}
-        onKeyDown={(e) => trapFocus(boxRef.current, e)}
-        className="modal-card-in shadow-pop w-full max-w-sm rounded-card border border-line bg-body p-5 outline-none"
-      >
-        <div className="flex items-center justify-between">
-          <h3 className="flex items-center gap-1.5 text-[15px] font-bold">
-            <CalendarClock className="size-4 text-fg-sub" aria-hidden />
-            예약 공개
-          </h3>
-          <button type="button" aria-label="닫기" onClick={onClose} className="trans-state rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg">
-            <X className="size-4" aria-hidden />
-          </button>
-        </div>
-        <p className="mt-1 text-[12px] text-fg-sub">
-          {block ? `「${blockSummary(block.type, block.data)}」 — ` : ""}
-          정한 날짜에 맞춰 공개 페이지에서 보이거나 숨겨져요. 비워 두면 제한이 없어요.
-        </p>
-        <label className="mt-4 block text-[12px] font-medium text-fg-sub">
-          공개 날짜 (이때부터 보여요)
-          <input type="datetime-local" value={openAt} onChange={(e) => setOpenAt(e.target.value)} className={field} />
-        </label>
-        <label className="mt-3 block text-[12px] font-medium text-fg-sub">
-          숨김 날짜 (이때부터 숨겨요)
-          <input type="datetime-local" value={closeAt} onChange={(e) => setCloseAt(e.target.value)} className={field} />
-        </label>
-        {bad ? <p className="mt-2 text-[12px] text-negative-strong">숨김 날짜는 공개 날짜보다 뒤여야 해요.</p> : null}
-        {error && !bad ? (
-          <p role="alert" className="mt-2 text-[12px] text-negative-strong">
-            {error}
-          </p>
-        ) : null}
-        <div className="mt-4 flex items-center justify-between gap-2">
+    <ModalShell
+      label="예약 공개 설정"
+      title={
+        <span className="flex items-center gap-1.5">
+          <CalendarClock className="size-4 text-fg-sub" aria-hidden />
+          예약 공개
+        </span>
+      }
+      description={`${block ? `「${blockSummary(block.type, block.data)}」 — ` : ""}정한 날짜에 맞춰 공개 페이지에서 보이거나 숨겨져요. 비워 두면 제한이 없어요.`}
+      size="sm"
+      busy={busy}
+      onClose={onClose}
+      footer={
+        <div className="flex items-center justify-between gap-2">
           <Button variant="ghost" size="sm" disabled={busy || (!init.openAt && !init.closeAt)} onClick={() => onSave(null, null)}>
             예약 해제
           </Button>
           <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={onClose}>
+            <Button variant="ghost" size="sm" disabled={busy} onClick={onClose}>
               취소
             </Button>
             <Button size="sm" disabled={busy || !!bad} onClick={() => onSave(toIso(openAt), toIso(closeAt))}>
-              {busy ? "저장 중…" : "저장"}
+              저장
             </Button>
           </div>
         </div>
-      </div>
-    </div>
+      }
+    >
+      <label className="block text-[12px] font-medium text-fg-sub">
+        공개 날짜 (이때부터 보여요)
+        <input type="datetime-local" value={openAt} onChange={(e) => setOpenAt(e.target.value)} className={field} />
+      </label>
+      <label className="mt-3 block text-[12px] font-medium text-fg-sub">
+        숨김 날짜 (이때부터 숨겨요)
+        <input type="datetime-local" value={closeAt} onChange={(e) => setCloseAt(e.target.value)} className={field} />
+      </label>
+      {bad ? <p className="mt-2 text-[12px] text-negative-strong">숨김 날짜는 공개 날짜보다 뒤여야 해요.</p> : null}
+      {error && !bad ? (
+        <p role="alert" className="mt-2 text-[12px] text-negative-strong">
+          {error}
+        </p>
+      ) : null}
+    </ModalShell>
   );
 }
 
@@ -2388,12 +2416,13 @@ function TemplateModal({
       <div
         ref={boxRef}
         tabIndex={-1}
-        className="modal-card-in shadow-pop relative flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-card border border-line bg-body outline-none"
+        className="modal-card-in shadow-pop relative flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-card border border-line bg-overlay outline-none"
         onKeyDown={(e) => trapFocus(boxRef.current, e)}
       >
         {/* 적용 중 — 핀치 로더(로고 주위로 도는 빛)로 덮는다. 모달을 닫지 않는다 */}
+        {/* 베일도 같은 면색으로 — bg-body/75 면 다크에서 카드보다 어두워져 적용 중에 카드가 한 톤 내려앉는다 */}
         {busy ? (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-body/75">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-overlay/75">
             <FinchLoader label="템플릿을 적용하는 중…" />
           </div>
         ) : null}
@@ -2414,7 +2443,8 @@ function TemplateModal({
             <X className="size-4" aria-hidden />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto bg-surface px-5 py-5">
+        {/* 카드 **안**의 중첩 면은 plate 가 역할이다(지면 bg-surface 가 아니라) */}
+        <div className="min-h-0 flex-1 overflow-y-auto bg-plate px-5 py-5">
           <PhonePreview page={{ ...page, theme: template.theme, themeCustom: null }} blocks={blocks} selectedId={null} />
         </div>
         <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-3">
@@ -2755,22 +2785,7 @@ function ShareBox({ url, busy, title, children }: { url: string; busy: boolean; 
 
 function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const boxRef = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
-
-  /* onClose 는 부모 렌더마다 새 함수다 — ref 로 고정해 리스너를 한 번만 건다
-     (rule-wizard·post-composer 와 같은 관례, 소넷 확정) */
-  const onCloseRef = useRef(onClose);
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  });
-
-  /* 열릴 때 모달로 포커스, 닫히면 원래 자리로 — 레포 모달 공통 관례 */
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
-    boxRef.current?.focus();
-    return () => prev?.focus?.();
-  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -2794,14 +2809,6 @@ function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
     };
   }, [url]);
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onCloseRef.current();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, []);
-
   function download() {
     const c = canvasRef.current;
     if (!c) return;
@@ -2817,25 +2824,29 @@ function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
     }, "image/png");
   }
 
+  /* 다른 모달과 같은 껍데기 — 손수 짠 스크림·Esc 를 두면 다크에서 표면색(--body vs --overlay)이 갈린다.
+     text-center 는 카드가 아니라 **본문**에만 건다(카드에 걸면 ModalShell 헤더 제목까지 가운데로 간다) */
   return (
-    <div
-      className="modal-scrim-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label="QR 코드"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <ModalShell
+      label="QR 코드"
+      title="QR 코드"
+      description="명함·매장·포스터 어디든 — 찍으면 내 프로필 링크로 와요."
+      size="sm"
+      onClose={onClose}
+      footer={
+        <div className="flex justify-center gap-2">
+          <Button size="sm" onClick={download} disabled={failed}>
+            PNG 저장
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            닫기
+          </Button>
+        </div>
+      }
     >
-      <div
-        ref={boxRef}
-        tabIndex={-1}
-        onKeyDown={(e) => trapFocus(boxRef.current, e)}
-        className="modal-card-in shadow-pop w-full max-w-xs rounded-card border border-line bg-body p-5 text-center outline-none"
-      >
-        <h3 className="text-[15px] font-bold">QR 코드</h3>
-        <p className="mt-1 text-[12px] text-fg-sub">명함·매장·포스터 어디든 — 찍으면 내 프로필 링크로 와요.</p>
-        <div className="mx-auto mt-3 w-fit rounded-card bg-white p-2.5">
+      <div className="text-center">
+        {/* 카메라가 읽어야 하므로 QR 판은 테마와 무관하게 항상 흰색이다(의도된 예외) */}
+        <div className="mx-auto w-fit rounded-card bg-white p-2.5">
           <canvas ref={canvasRef} aria-label={`${url} QR 코드`} />
         </div>
         {failed ? (
@@ -2844,16 +2855,8 @@ function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
           </p>
         ) : null}
         <p className="mt-2 break-all text-[11px] text-fg-sub">{url}</p>
-        <div className="mt-3 flex justify-center gap-2">
-          <Button size="sm" onClick={download} disabled={failed}>
-            PNG 저장
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            닫기
-          </Button>
-        </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -3374,7 +3377,7 @@ function ThemePanel({
             </Button>
           ) : null}
           <Button size="sm" disabled={busy || !customDirty} onClick={onCustomSave}>
-            {busy ? "저장 중…" : customDirty ? "꾸미기 저장" : "저장됨"}
+            {customDirty ? "꾸미기 저장" : "저장됨"}
           </Button>
         </div>
       </div>
@@ -3696,7 +3699,7 @@ function ThemePanel({
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
         <p className="text-[14px] text-fg-sub">{customDirty ? "저장 안 한 변경이 있어요 — 미리보기엔 보이지만 「저장」해야 실제로 반영돼요." : "모두 저장됐어요."}</p>
         <Button disabled={busy || !customDirty} onClick={onCustomSave}>
-          {busy ? "저장 중…" : "꾸미기 저장"}
+          꾸미기 저장
         </Button>
       </div>
     </div>
