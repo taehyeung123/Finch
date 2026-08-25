@@ -3666,7 +3666,8 @@ function ThemePanel({
                     aria-pressed={cur === o.key}
                     onClick={() => set(o.key)}
                     className={cn(
-                      "trans-state flex flex-col items-center rounded-card border p-2",
+                      "trans-state flex cursor-pointer flex-col items-center rounded-card border p-2",
+                      "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
                       cur === o.key ? "border-primary bg-primary/10" : "border-line bg-body hover:bg-tint-hover",
                       off && "opacity-40",
                     )}
@@ -5163,7 +5164,9 @@ function MarketingPanel({
             {copied ? <Check className="size-3.5" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
             {copied ? "복사됨" : "주소 복사"}
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => setQr(true)}>
+          {/* disabled={busy} — QR 은 컴포넌트 로컬 state 라 최상위 베일 제외 목록이 알 수 없다.
+              busy 중에 열리면 z-[60] 베일이 z-50 모달을 덮어 로더가 둘이 된다(소넷 확정) */}
+          <Button variant="secondary" size="sm" disabled={busy} onClick={() => setQr(true)}>
             <QrCode className="size-3.5" aria-hidden />
             QR 코드
           </Button>
