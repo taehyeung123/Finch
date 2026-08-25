@@ -1598,11 +1598,20 @@ export function LinksClient({
             다른 탭에선 읽기 전용.
             ⚠️ 폰을 **카드로 감싸지 않는다**(2026-08-24 지시 "핸드폰 근처 흰색 배경 전부 없애고 딱 핸드폰만").
             기기가 회색 지면 위에 그대로 떠 있고, 주소·도구는 그 아래 **따로 흰 박스**다. */}
-        <div className="space-y-3 xl:sticky xl:top-[4.5rem] xl:order-first">
+        {/* ⚠️ 높이를 화면에 맞춘다 — 예전엔 폰이 뷰포트보다 길어서 sticky 가 한 번도 붙지 못했다.
+            목록을 내리면 폰이 통째로 화면 밖으로 사라졌고, 주소·복사·공유·QR 박스는 어느 해상도에서도
+            접힌 선 아래였다(1440×900 에서 y=933, 실측). 칸을 화면 높이로 잘라 두면 폰은 늘 붙어 있고,
+            짧은 화면에서만 이 칸 안에서 조금 스크롤된다 — 오른쪽 목록 스크롤과 서로 간섭하지 않는다.
+            px-1 은 프레임 밖으로 나온 측면 버튼(-3px)이 잘리지 않게 두는 여유다.
+            높이 8rem 뺀 값 = 상단 오프셋 72 + main 의 아래 여백(pb-10=40) + 여유 16.
+            아래 여백을 안 빼면 페이지 맨 끝에서 칸이 grid 바닥에 끌려 40px 올라가 폰 윗 베젤이
+            상단바 뒤로 잘린다(실측: 페이지 끝에서 colTop 72→32). */}
+        <div className="space-y-3 xl:sticky xl:top-[4.5rem] xl:order-first xl:flex xl:h-[calc(100dvh-8rem)] xl:flex-col xl:gap-2 xl:space-y-0 xl:overflow-y-auto xl:overflow-x-hidden xl:px-1 xl:[overflow-anchor:none]">
           {/* 폰 위에 제목줄을 두지 않는 대신(지시) 보조기기용 제목은 남긴다 — 이 영역을
               찾아갈 이름이 아예 없어지면 스크린리더 사용자가 미리보기를 지나친다(소넷 확정) */}
           <h3 className="sr-only">{tab === "page" ? "미리보기 — 블록을 눌러 편집" : "라이브 미리보기"}</h3>
           {tab === "page" ? (
+            /* xl:shrink-0 — 세로가 모자라도 프레임을 눌러 찌그러뜨리지 않는다(칸이 스크롤된다) */
             <PhonePreview
               page={draftPageView}
               /* active 필터를 걸지 않는다 — 꺼진 블록도 캔버스에 남아야 다시 켤 수 있다 */
@@ -1622,7 +1631,7 @@ export function LinksClient({
           )}
 
           {/* 주소·도구 — 폰 아래 별도 흰 박스(지시). 문구 있는 버튼: 복사하기·공유하기·QR 코드 */}
-          <ShareBox url={shareUrl} busy={busy} title={page.title || page.slug} hint={tab === "page" ? "폰 화면의 블록을 누르면 바로 편집할 수 있어요." : undefined}>
+          <ShareBox url={shareUrl} busy={busy} title={page.title || page.slug}>
             {/* published(공개 스위치)를 먼저 본다 — 발행만 하고 공개를 안 켠 상태에서
                 "공개 주소와 같은 모습" 이라고 말하면 방문자는 404 인데 소유자는 모른다(감사 #4) */}
             {profileDirty || customDirty || editorDirty
@@ -2652,7 +2661,7 @@ function NewSubpageModal({ busy, parentTitle, onClose, onSubmit }: { busy: boole
   버튼은 아이콘만 두지 않고 **문구를 함께** 둔다("복사하기·공유하기·QR 코드").
   공유하기는 기기 공유 시트(navigator.share)를 쓰고, 없으면 주소 복사로 떨어진다.
 */
-function ShareBox({ url, busy, title, hint, children }: { url: string; busy: boolean; title: string; hint?: string; children?: React.ReactNode }) {
+function ShareBox({ url, busy, title, children }: { url: string; busy: boolean; title: string; children?: React.ReactNode }) {
   const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState(false);
   const [qr, setQr] = useState(false);
@@ -2688,7 +2697,8 @@ function ShareBox({ url, busy, title, hint, children }: { url: string; busy: boo
   }
 
   return (
-    <div className="card-face space-y-2 p-3">
+    /* xl:shrink-0 — 폰이 남긴 자리를 다 쓰되 스스로 눌리지는 않는다 */
+    <div className="card-face space-y-1.5 p-2.5 xl:shrink-0">
       {/* 주소 자체가 링크 — 눌러서 공개 페이지를 새 창으로 연다(전에 있던 「열기」 버튼을 흡수) */}
       <a
         href={url}
@@ -2713,7 +2723,7 @@ function ShareBox({ url, busy, title, hint, children }: { url: string; busy: boo
           QR 코드
         </button>
       </div>
-      {hint ? <p className="text-center text-[12px] font-medium text-fg">{hint}</p> : null}
+      {/* 문구는 한 줄만 — 두 줄이면 박스가 20px 길어지고 그만큼 폰이 짧아진다(왼쪽 칸은 화면 높이에 갇혀 있다) */}
       {children ? <p className="text-center text-[12px] leading-[1.6] text-fg-sub">{children}</p> : null}
       {qr ? <QrModal url={url} onClose={() => setQr(false)} /> : null}
     </div>
