@@ -245,6 +245,22 @@ export function isHex(v: unknown): v is string {
   return typeof v === "string" && HEX.test(v);
 }
 
+/* 8자리 hex(#RRGGBBAA) — 프리셋 「서울의 밤」의 카드색(#18203440)처럼 **반투명 카드**가 있다.
+   6자리만 받는 검사에 넣으면 전부 0/false 로 떨어져 대비 가드가 통째로 무력해진다(실측: 대비 0.00). */
+const HEX8 = /^#[0-9a-fA-F]{8}$/;
+
+/**
+ * 반투명 색을 밑색 위에 **눌러 편다** — 대비·밝기 판정은 눈에 보이는 색으로 해야 한다.
+ * 6자리면 그대로, 8자리면 alpha 로 밑색과 섞는다. 그 밖(color-mix 등)이면 null.
+ */
+export function flattenHex(color: string, under: string): string | null {
+  if (HEX.test(color)) return color;
+  if (!HEX8.test(color) || !HEX.test(under)) return null;
+  const a = parseInt(color.slice(7, 9), 16) / 255;
+  const ch = (i: number) => Math.round(parseInt(under.slice(i, i + 2), 16) * (1 - a) + parseInt(color.slice(i, i + 2), 16) * a);
+  return `#${[1, 3, 5].map((i) => ch(i).toString(16).padStart(2, "0")).join("").toUpperCase()}`;
+}
+
 /** WCAG 상대 휘도 */
 function luminance(hex: string): number {
   const [r, g, b] = [1, 3, 5]
@@ -504,6 +520,25 @@ export function themeByKey(key: string | null | undefined): LinkTheme {
 }
 
 /** 테마 → 인라인 CSS 변수. 공개 페이지 루트에 style 로 주입한다 */
+/**
+ * 틴트 칩(카드 위 «강조색 N%» 배경)에 얹을 잉크.
+ *
+ * --lp-accent-text 는 **지면(bg)** 대비로만 검사한다. 칩 배경은 «카드 + 강조색 13%» 라 다른 면이고,
+ * 실측에서 프리셋 19종 중 8종이 여기서 4.5:1 을 못 넘었다(sky 4.32·blush 4.31·ocean 4.48 …).
+ * 그래서 칩 배경을 실제로 합성해 놓고, 강조색을 지면 반대쪽으로 밀어 4.5:1 을 넘긴다.
+ * 끝내 못 넘기면 본문색으로 떨어뜨린다 — 색 정체성보다 읽히는 것이 먼저다.
+ */
+function chipInkFor(accent: string, chipBg: string, fg: string): string {
+  if (!HEX.test(accent) || !HEX.test(chipBg)) return fg;
+  if (contrastRatio(accent, chipBg) >= 4.5) return accent;
+  const toward = isLightColor(chipBg) ? "#000000" : "#FFFFFF";
+  for (const r of [0.2, 0.35, 0.5, 0.65, 0.8]) {
+    const c = mixHex(accent, toward, r);
+    if (contrastRatio(c, chipBg) >= 4.5) return c;
+  }
+  return contrastRatio(fg, chipBg) >= 4.5 ? fg : toward;
+}
+
 export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record<string, string> {
   const c = custom ?? {};
   const bg = c.bg ?? t.bg;
@@ -571,15 +606,25 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
   /* 카드 색 가드(2026-08-24 비평) — 「카드」 색에는 검사가 하나도 없어서 어두운 카드색을 고르면
      카드 위 글자(fg)가 통째로 안 읽혔다. 글자 대비가 4.5:1 미만이면 프리셋 카드색으로 되돌린다.
      디자인 탭 문구가 "대비가 낮으면 자동으로 읽히는 쪽으로 바꿔요"라고 약속하고 있다. */
-  const cardReadable = !c.card || contrastRatio(fg, card) >= 4.5;
+  /* 카드가 반투명(#RRGGBBAA)일 수 있다 — 지면 위에 눌러 편 색으로 검사해야 «보이는 대로» 판정된다.
+     예전엔 8자리를 6자리 검사에 넣어 대비가 0 으로 떨어졌고, 그 바람에 카드 가드·밝기 판정이
+     「서울의 밤」에서 통째로 헛돌았다(실측). */
+  const cardFlat = flattenHex(card, HEX.test(bg) ? bg : "#FFFFFF") ?? card;
+  const cardReadable = !c.card || contrastRatio(fg, cardFlat) >= 4.5;
   const cardSafe = cardReadable ? card : t.card;
+  /* 가드를 통과한 뒤의 «보이는 카드색» — 아래 밝기·칩 계산이 전부 이걸 본다 */
+  const cardSafeFlat = flattenHex(cardSafe, HEX.test(bg) ? bg : "#FFFFFF") ?? cardSafe;
   /* 카드 밝기는 지면과 **다른 축**이다 — 카드 위에 얹는 잉크(오류색 등)는 이쪽을 따른다.
      반드시 **가드를 통과한** cardSafe 를 본다(되돌려진 색이 실제로 칠해지는 색이다). */
-  const darkCard = luminance(HEX.test(cardSafe) ? cardSafe : "#ffffff") < 0.35;
+  const darkCard = luminance(HEX.test(cardSafeFlat) ? cardSafeFlat : "#ffffff") < 0.35;
   const btnBg = all ? accent : btn === "fill" ? cardSafe : btn === "outline" ? "transparent" : `color-mix(in srgb, ${accent} 14%, transparent)`;
   /* 외곽선·은은하게의 글자는 강조색인데, 코랄·피치처럼 밝은 강조색은 배경 위에서 2.3~3.1:1 이다 — 안 읽히면 본문색으로(감사2 U8) */
   const accentReadable = contrastRatio(accent, bg) >= 4.5;
   const accentText = accentReadable ? accent : fg;
+  /* 틴트 칩 — 배경을 **미리 합성**해 둔다. color-mix 를 화면에서 계산하면 대비를 검사할 수 없다.
+     13% 는 기존 칩들이 쓰던 농도. 사진 배경이어도 칩은 카드 위에 있으므로 카드색을 밑색으로 본다 */
+  const chipBg = HEX.test(cardSafeFlat) && HEX.test(accent) ? mixHex(cardSafeFlat, accent, 0.13) : cardSafeFlat;
+  const chipInk = chipInkFor(accent, chipBg, fg);
   const btnFg = all ? onAccent : btn === "fill" ? fg : accentText;
   const btnBorder = all ? accent : btn === "fill" ? border : btn === "outline" ? accent : "transparent";
   return {
@@ -598,6 +643,9 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
     "--lp-accent": accent,
     /* 배경 위 글자로 쓸 강조색 — 대비 4.5 미만이면 본문색. 외곽선 강조 버튼·태그 칩이 쓴다 */
     "--lp-accent-text": accentText,
+    /* 틴트 칩(카드 위 강조 13%) 전용 — 배경과 잉크가 한 쌍이다. 둘을 따로 쓰면 대비 보장이 깨진다 */
+    "--lp-chip-bg": chipBg,
+    "--lp-chip-ink": chipInk,
     "--lp-on-accent": onAccent,
     /* 모서리는 **두 갈래**다.
        radius 의 이름이 「버튼 모서리」인데(위 인터페이스 주석), 값 하나를 이미지·카드·

@@ -47,10 +47,22 @@ export function eventEpoch(p: EventPart): number {
   return Date.UTC(p.y, p.mo - 1, p.d, (p.h ?? 0) - 9, p.mi);
 }
 
-/** 일정이 끝난 것으로 볼 시각 — 종료가 없으면 시작일의 자정(하루 종일) 또는 시작+2시간 */
+/** 여러 날에 걸치는 일정인가 — **달력 날짜**로 본다.
+    epoch 으로 비교하면 "9/1 20:00 시작 · 9/1 종료"(같은 날)가 서로 달라 «~ 9월 1일» 이라는
+    유령 기간이 붙는다(감사 확정). 같은 날이면 종료일은 표기할 것이 없다. */
+export function isMultiDay(start: EventPart, end: EventPart | null): boolean {
+  if (!end) return false;
+  return end.y !== start.y || end.mo !== start.mo || end.d !== start.d;
+}
+
+/** 일정이 끝난 것으로 볼 시각 — 종료가 없으면 시작일의 자정(하루 종일) 또는 시작+2시간.
+    종료를 시작보다 **앞으로** 적었으면 종료가 없는 것으로 친다 — 그대로 두면
+    .ics 가 DTEND < DTSTART 로 나가 캘린더가 파일을 통째로 거부한다(감사 확정). */
 export function eventEndEpoch(start: EventPart, end: EventPart | null): number {
-  if (end) return eventEpoch(end) + (end.h === null ? 24 * 3600_000 : 0);
-  return start.h === null ? eventEpoch(start) + 24 * 3600_000 : eventEpoch(start) + 2 * 3600_000;
+  const fallback = start.h === null ? eventEpoch(start) + 24 * 3600_000 : eventEpoch(start) + 2 * 3600_000;
+  if (!end) return fallback;
+  const e = eventEpoch(end) + (end.h === null ? 24 * 3600_000 : 0);
+  return e > eventEpoch(start) ? e : fallback;
 }
 
 /** "9월 1일 (화)" · 영어/일본어 페이지는 그 언어 표기 — 시간대는 KST 로 고정해 서버·브라우저가 같은 값을 낸다 */
@@ -123,7 +135,8 @@ export function buildIcs(events: IcsEvent[], now = 0): string {
   for (const ev of events) {
     lines.push("BEGIN:VEVENT", `UID:${ev.uid}`, `DTSTAMP:${utcStamp(now)}`);
     if (ev.start.h === null) {
-      const endPart = ev.end ?? ev.start;
+      /* 뒤집힌 종료일은 없는 것으로 — DTEND < DTSTART 인 파일은 캘린더가 거부한다 */
+      const endPart = ev.end && isMultiDay(ev.start, ev.end) && eventEpoch(ev.end) > eventEpoch(ev.start) ? ev.end : ev.start;
       /* 하루 종일 일정의 DTEND 는 **다음 날**(끝을 배타적으로 읽는다) */
       const endNext = new Date(Date.UTC(endPart.y, endPart.mo - 1, endPart.d + 1));
       lines.push(

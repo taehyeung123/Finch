@@ -342,6 +342,9 @@ async function load(days: number, wantPageId?: string): Promise<Loaded> {
     leadCounts,
     /* 목록은 성공했는데 count 만 실패하면 카드가 「전체 0건」이라고 거짓말한다 — 실패 신호에 합산(감사4) */
     leadsFailed: !!leadRows.error || !!contactCnt.error || !!subscribeCnt.error,
+    /* 방명록은 별도 질의다 — 여기에 안 실으면 조회가 실패해도 화면이 「아직 방명록 글이 없어요」라고
+       **사실로 단정**한다(감사5 확정). 받은 내용 쪽은 이미 같은 함정을 막아 뒀다 */
+    guestbookFailed: !!guestRes.error || !!guestCnt.error,
     guestbook,
   };
 }
@@ -352,7 +355,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
   const days = (STATS_RANGES as readonly number[]).includes(asked) ? asked : DEFAULT_DAYS;
 
   const wantPage = typeof sp.page === "string" ? sp.page : undefined;
-  const { page, pages, pageLimit, multiReady, blocks, snapshot, stats, leads, leadCounts, leadsFailed, guestbook, loadFailed } = await load(days, wantPage);
+  const { page, pages, pageLimit, multiReady, blocks, snapshot, stats, leads, leadCounts, leadsFailed, guestbookFailed, guestbook, loadFailed } = await load(days, wantPage);
 
   /* 복사 버튼이 주는 주소는 **지금 접속한 도메인** 기준이어야 한다.
      프로덕션 도메인을 하드코딩하면 로컬·프리뷰에서 복사한 주소가 안 열린다. */
@@ -378,6 +381,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
         leads={leads}
         leadCounts={leadCounts}
         leadsFailed={leadsFailed}
+        guestbookFailed={guestbookFailed}
         guestbook={guestbook ?? []}
         origin={`${proto}://${host}`}
         isDemo={isDemoMode()}

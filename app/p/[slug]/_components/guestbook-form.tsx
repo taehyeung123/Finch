@@ -24,7 +24,7 @@ export function GuestbookForm({ slug, blockId, placeholder, isDemo, t, errors }:
         role="status"
         aria-live="polite"
         className="rounded-[calc(var(--lp-radius)/1.6)] px-3 py-2.5 text-center text-[14px] font-medium"
-        style={{ backgroundColor: "color-mix(in srgb, var(--lp-accent) 12%, transparent)", color: "var(--lp-accent-text)" }}
+        style={{ backgroundColor: "var(--lp-chip-bg)", color: "var(--lp-chip-ink)" }}
       >
         {t.thanks}
       </p>

@@ -142,6 +142,8 @@ export interface LinkWorkspace {
   leadCounts?: { contact: number; subscribe: number; guestbook: number };
   /** 받은 내용 조회 실패 — 빈 상태("아직 없어요")와 구분한다 */
   leadsFailed?: boolean;
+  /** 방명록 조회·집계 실패 — 같은 이유로 따로 싣는다(별도 질의라 leadsFailed 가 못 덮는다) */
+  guestbookFailed?: boolean;
   /** 방명록 최근 50건(숨김 포함). 0057 미적용이면 빈 배열 */
   guestbook?: LinkGuestbookEntry[];
   /**

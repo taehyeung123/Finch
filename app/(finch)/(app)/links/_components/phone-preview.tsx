@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { MapPin, ExternalLink, ArrowDown, ArrowUp, CalendarPlus, Eye, EyeOff, GripVertical, Pencil, Plus, Share2, Trash2 } from "lucide-react";
-import { eventChip, eventEndEpoch, eventEpoch, formatEventTime, nowMs, parseEventAt, type EventPart } from "@/lib/links/events";
+import { eventChip, eventEndEpoch, eventEpoch, formatEventDate, formatEventTime, isMultiDay, nowMs, parseEventAt, type EventPart } from "@/lib/links/events";
 import { cn } from "@/lib/cn";
 import { FinchMark } from "@/components/logo";
 import { SnsIcon } from "@/components/sns-brand-icons";
@@ -1118,11 +1118,15 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
       const past = dim ? parsed.filter((x) => x.over).sort((a, b) => eventEpoch(b.start) - eventEpoch(a.start)) : [];
       /* 자르기는 정렬 뒤에(공개와 같은 규칙) */
       const rows = [...upcoming, ...past].slice(0, 20);
-      /* 캔버스에서는 빈 블록도 자리를 지킨다 — 편집 중에 사라지면 다시 고를 길이 없다(다른 블록과 같은 관례) */
+      /* 캔버스에서는 빈 블록도 자리를 지킨다 — 편집 중에 사라지면 다시 고를 길이 없다(다른 블록과 같은 관례).
+         ⚠️ 사유를 갈라 말한다: 예전엔 일정이 **전부 지나서** 사라진 경우에도
+         「제목과 날짜를 넣으면 여기에 보여요」라고 해서, 다 채워 넣은 사람에게 거짓말이 됐다(감사 확정) */
       if (rows.length === 0) {
+        const hasItems = parsed.length > 0;
         return (
           <div className={`${card} px-3 py-2.5 text-[12px] text-[var(--lp-muted)]`}>
-            {s(d, "label") || "일정"} — 제목과 날짜를 넣으면 여기에 보여요
+            {s(d, "label") || "일정"} —{" "}
+            {hasItems ? "일정이 모두 지나 공개 페이지에선 빠져요. 「지난 일정: 흐리게 남기기」로 두거나 새 일정을 넣어 주세요" : "제목과 날짜를 넣으면 여기에 보여요"}
           </div>
         );
       }
@@ -1132,36 +1136,45 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
           <div className="divide-y divide-[var(--lp-border)]">
             {rows.map((x, i) => {
               const chip = eventChip(x.start, "ko");
-              const endSame = x.end && eventEpoch(x.end) !== eventEpoch(x.start);
-              /* 공개 렌더러와 같은 규칙 — 여러 날이어도 시각을 버리지 않는다 */
+              /* 공개와 **같은 판정·같은 문구** — 달력 날짜로 보고(같은 날이면 기간이 아니다),
+                 종료일도 요일까지 붙인다. 예전엔 여기만 「~ 9월 7일」이라 발행본과 달랐다(감사 확정) */
+              const endSame = isMultiDay(x.start, x.end) && eventEpoch(x.end!) > eventEpoch(x.start);
               const time = formatEventTime(x.start);
-              const meta = [endSame ? `~ ${x.end!.mo}월 ${x.end!.d}일` : "", time || (endSame ? "" : "하루 종일"), s(x.it, "place")]
+              const meta = [endSame ? `~ ${formatEventDate(x.end!, "ko")}` : "", time || (endSame ? "" : "하루 종일"), s(x.it, "place")]
                 .filter(Boolean)
                 .join(" · ");
+              /* 공개와 같은 규칙 — opacity 로 흐리지 않고 칩을 무채로 돌린다 */
               return (
-                <div key={i} className={`flex items-center gap-2.5 py-2 ${x.over ? "opacity-55" : ""}`}>
+                <div key={i} className="flex items-center gap-2.5 py-2">
                   <span
                     className="tnum flex size-10 shrink-0 flex-col items-center justify-center rounded-[calc(var(--lp-radius)/1.6)] leading-none"
-                    style={{ backgroundColor: "color-mix(in srgb, var(--lp-accent) 13%, transparent)", color: "var(--lp-accent-text)" }}
+                    style={
+                      x.over
+                        ? { border: "1px solid var(--lp-border)", color: "var(--lp-muted)" }
+                        : { backgroundColor: "var(--lp-chip-bg)", color: "var(--lp-chip-ink)" }
+                    }
                     aria-hidden
                   >
-                    <span className="text-[10px] font-medium opacity-80">{chip.top}</span>
+                    <span className="text-[10px] font-medium">{chip.top}</span>
                     <span className="mt-0.5 text-[15px] font-bold">{chip.d}</span>
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px] font-semibold">{s(x.it, "title")}</span>
-                    <span className="mt-0.5 block truncate text-[11px] text-[var(--lp-muted)]">
-                      {meta}
-                    </span>
+                    <span className="mt-0.5 block truncate text-[12px] text-[var(--lp-muted)]">{meta}</span>
                   </span>
+                  {x.over ? (
+                    <span className="shrink-0 rounded-chip border border-[var(--lp-border)] px-1.5 py-0.5 text-[10px] text-[var(--lp-muted)]">지난 일정</span>
+                  ) : null}
                   {s(x.it, "url") ? <ExternalLink className="size-3 shrink-0 text-[var(--lp-muted)]" aria-hidden /> : null}
                 </div>
               );
             })}
           </div>
-          {past.length > 0 ? <p className="mt-1.5 text-center text-[11px] text-[var(--lp-muted)]">지난 일정</p> : null}
           {d.ics !== false && upcoming.length > 0 ? (
-            <span className="mt-2 flex min-h-9 w-full items-center justify-center gap-1.5 rounded-[var(--lp-radius-btn)] border border-[var(--lp-border)] px-3 text-[12px] font-medium">
+            <span
+              style={{ backgroundColor: "var(--lp-chip-bg)", color: "var(--lp-chip-ink)" }}
+              className="mt-2 flex min-h-9 w-full items-center justify-center gap-1.5 rounded-[var(--lp-radius-btn)] px-3 text-[12px] font-semibold"
+            >
               <CalendarPlus className="size-3.5" aria-hidden />
               캘린더에 추가
             </span>
@@ -1176,7 +1189,7 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
         <div className={`${card} flex items-center gap-2.5 px-3 py-2.5`}>
           <span
             className="flex size-8 shrink-0 items-center justify-center rounded-[calc(var(--lp-radius)/1.6)]"
-            style={{ backgroundColor: "color-mix(in srgb, var(--lp-accent) 13%, transparent)", color: "var(--lp-accent-text)" }}
+            style={{ backgroundColor: "var(--lp-chip-bg)", color: "var(--lp-chip-ink)" }}
             aria-hidden
           >
             <MapPin className="size-3.5" />

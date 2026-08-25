@@ -5,7 +5,7 @@ import { Collapsible } from "./collapsible";
 import { GuestbookForm } from "./guestbook-form";
 import { SearchBlock } from "./search-block";
 import { MapPin, ExternalLink, Download, UserPlus, CalendarPlus } from "lucide-react";
-import { buildIcs, eventChip, eventEndEpoch, eventEpoch, formatEventDate, formatEventTime, icsHref, nowMs, parseEventAt, type EventPart } from "@/lib/links/events";
+import { buildIcs, eventChip, eventEndEpoch, eventEpoch, formatEventDate, formatEventTime, icsHref, isMultiDay, nowMs, parseEventAt, type EventPart } from "@/lib/links/events";
 import { lpText, lpN, type LpText } from "@/lib/links/i18n";
 
 /** 방명록 글(공개분) — 페이지가 읽어서 렌더러에 넘긴다 */
@@ -675,7 +675,7 @@ export function BlockRenderer({
       const row = (x: (typeof rows)[number]) => {
         const chip = eventChip(x.start, t.lang);
         const time = formatEventTime(x.start);
-        const endSame = x.end && eventEpoch(x.end) !== eventEpoch(x.start);
+        const endSame = isMultiDay(x.start, x.end) && eventEpoch(x.end!) > eventEpoch(x.start);
         /* 여러 날이면 "~ 끝나는 날" 을 앞에 세우고, 시각이 있으면 **함께** 보여준다.
            끝나는 날이 시각을 밀어내면 "20:00 오픈" 같은 핵심이 사라진다(소넷 확정).
            "하루 종일" 은 시각도 종료일도 없을 때만 — 여러 날 일정에 붙이면 군더더기다 */
@@ -683,23 +683,35 @@ export function BlockRenderer({
           .filter(Boolean)
           .join(" · ");
         const inner = (
-          <span className={`flex items-center gap-3 ${x.over ? "opacity-55" : ""}`}>
+          /* ⚠️ 지난 항목을 opacity 로 흐리지 않는다 — 0.55 면 본문이 2.2:1 까지 떨어져
+             「읽을 수는 있게 남긴다」는 목적 자체가 무너진다(감사 확정).
+             지났다는 신호는 **칩을 무채로 되돌리고** 「지남」 표를 다는 것으로 준다. */
+          <span className="flex items-center gap-3">
             <span
               className="tnum flex size-12 shrink-0 flex-col items-center justify-center rounded-[calc(var(--lp-radius)/1.6)] leading-none"
-              style={{ backgroundColor: "color-mix(in srgb, var(--lp-accent) 13%, transparent)", color: "var(--lp-accent-text)" }}
+              style={
+                x.over
+                  ? { border: "1px solid var(--lp-border)", color: "var(--lp-muted)" }
+                  : { backgroundColor: "var(--lp-chip-bg)", color: "var(--lp-chip-ink)" }
+              }
               aria-hidden
             >
-              <span className="text-[11px] font-medium opacity-80">{chip.top}</span>
+              {/* opacity-80 을 걷었다 — 칩 잉크는 이미 4.5:1 로 맞춰 놓은 값이라 더 흐리면 다시 미달이다 */}
+              <span className="text-[11px] font-medium">{chip.top}</span>
               <span className="mt-0.5 text-[17px] font-bold">{chip.d}</span>
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[15px] font-semibold text-[var(--lp-fg)]">{s(x.it, "title")}</span>
               <span className="mt-0.5 block truncate text-[14px] text-[var(--lp-muted)]">
                 {/* 보조기기에는 "9월 1일 (화)" 를 그대로 읽어 준다 — 칩의 숫자만으로는 무슨 날인지 모른다 */}
-                <span className="sr-only">{formatEventDate(x.start, t.lang)}{endSame ? ` ~ ${formatEventDate(x.end!, t.lang)}` : ""} </span>
+                {/* 종료일은 아래 meta 에 이미 있다 — 여기서 또 읽으면 스크린리더가 같은 날짜를 두 번 말한다 */}
+                <span className="sr-only">{formatEventDate(x.start, t.lang)} </span>
                 {meta}
               </span>
             </span>
+            {x.over ? (
+              <span className="shrink-0 rounded-chip border border-[var(--lp-border)] px-2 py-0.5 text-[12px] text-[var(--lp-muted)]">{t.events.past}</span>
+            ) : null}
             {s(x.it, "url") ? <ExternalLink className="size-3.5 shrink-0 text-[var(--lp-muted)]" aria-hidden /> : null}
           </span>
         );
@@ -737,12 +749,14 @@ export function BlockRenderer({
         <div className={`${cardCls} px-4 py-3.5`}>
           {s(d, "label") ? <p className="mb-1 text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "label")}</p> : null}
           <ul className="divide-y divide-[var(--lp-border)]">{rows.map(row)}</ul>
-          {past.length > 0 ? <p className="mt-2 text-center text-[12px] text-[var(--lp-muted)]">{t.events.past}</p> : null}
           {ics && upcoming.length > 0 ? (
             <a
               href={icsHref(ics)}
               download={`${slug}-schedule.ics`}
-              className="lp-btn mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-[var(--lp-radius-btn)] border border-[var(--lp-border)] px-4 text-[14px] font-medium text-[var(--lp-fg)]"
+              /* 면 없이 헤어라인 하나면 카드 위에서 1.24:1 이라 버튼으로 안 읽힌다(감사 확정) —
+                 대비를 보장해 둔 칩 면을 그대로 깔아 준다 */
+              style={{ backgroundColor: "var(--lp-chip-bg)", color: "var(--lp-chip-ink)" }}
+              className="lp-btn mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-[var(--lp-radius-btn)] px-4 text-[14px] font-semibold"
             >
               <CalendarPlus className="size-4" aria-hidden />
               {t.events.add}
@@ -765,7 +779,7 @@ export function BlockRenderer({
           <span className="flex items-center gap-2.5">
             <span
               className="flex size-9 shrink-0 items-center justify-center rounded-[calc(var(--lp-radius)/1.6)]"
-              style={{ backgroundColor: "color-mix(in srgb, var(--lp-accent) 13%, transparent)", color: "var(--lp-accent-text)" }}
+              style={{ backgroundColor: "var(--lp-chip-bg)", color: "var(--lp-chip-ink)" }}
               aria-hidden
             >
               <MapPin className="size-4" />

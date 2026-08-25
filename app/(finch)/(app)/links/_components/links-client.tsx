@@ -283,6 +283,7 @@ export function LinksClient({
   leads,
   leadCounts,
   leadsFailed = false,
+  guestbookFailed = false,
   guestbook = [],
   isDemo,
   loadFailed = false,
@@ -302,6 +303,7 @@ export function LinksClient({
   leads: LinkLead[];
   leadCounts?: { contact: number; subscribe: number; guestbook: number };
   leadsFailed?: boolean;
+  guestbookFailed?: boolean;
   /** 방명록(0057) — 주인용 목록, 숨김 포함 */
   guestbook?: LinkGuestbookEntry[];
   isDemo: boolean;
@@ -1601,12 +1603,14 @@ export function LinksClient({
                 leads={leads}
                 leadCounts={leadCounts}
                 leadsFailed={leadsFailed}
+                guestbookFailed={guestbookFailed}
                 guestbook={guestbook}
                 busy={busy}
                 onGuestbookReply={(id, reply, onDone) =>
                   run(() => replyGuestbook(id, reply), () => {
                     onDone();
-                    toast("답글을 달았어요.");
+                    /* 빈 값 저장은 **삭제**다(서버가 text || null 로 지운다) — 버튼 이름과 토스트가 같은 말을 해야 한다 */
+                    toast(reply.trim() ? "답글을 달았어요." : "답글을 지웠어요.");
                   })
                 }
                 onGuestbookHide={(id, hidden) => run(() => setGuestbookHidden(id, hidden))}
@@ -2593,8 +2597,10 @@ function PageSwitcher({
       </button>
       {open ? (
         <>
-          {/* 바깥 클릭 닫기 — 스크림은 투명(메뉴일 뿐 모달이 아니다) */}
-          <button type="button" aria-label="페이지 메뉴 닫기" className="fixed inset-0 z-40 cursor-default" onClick={() => setOpen(false)} />
+          {/* 바깥 클릭 닫기 — 스크림은 투명(메뉴일 뿐 모달이 아니다).
+              z-45: 하단 탭바가 z-40 이라 같은 층이면 **탭바가 위로 올라와** 뚫린다(모바일에서 메뉴를 연 채
+              탭을 눌러 다른 화면으로 튕겼다). 메뉴 자체(z-50)보다는 아래여야 항목이 눌린다. */}
+          <button type="button" aria-label="페이지 메뉴 닫기" className="fixed inset-0 z-[45] cursor-default" onClick={() => setOpen(false)} />
           <div role="menu" aria-label="내 페이지" className="absolute left-0 top-full z-50 mt-1 w-72 rounded-card border border-line bg-overlay p-1.5 shadow-pop">
             {mains.map((m) => (
               <div key={m.id}>
@@ -4432,6 +4438,7 @@ function ManagePanel({
   leads,
   leadCounts,
   leadsFailed = false,
+  guestbookFailed = false,
   guestbook,
   busy,
   onGuestbookReply,
@@ -4442,6 +4449,7 @@ function ManagePanel({
   leads: LinkLead[];
   leadCounts?: { contact: number; subscribe: number; guestbook: number };
   leadsFailed?: boolean;
+  guestbookFailed?: boolean;
   guestbook: LinkGuestbookEntry[];
   busy: boolean;
   /** onDone 은 성공했을 때만 불린다 — 실패하면 입력창·초안을 그대로 둔다(감사4: 500자 답글 유실) */
@@ -4494,7 +4502,7 @@ function ManagePanel({
              (분석 탭의 ratio·nv 와 같은 규칙) */
           { label: "문의", value: leadsFailed ? "—" : counts.contact.toLocaleString("ko-KR"), unknown: leadsFailed, icon: MessageSquare, tint: "bg-tint-blue text-tint-blue-ink", sub: undefined as string | undefined },
           { label: "구독", value: leadsFailed ? "—" : counts.subscribe.toLocaleString("ko-KR"), unknown: leadsFailed, icon: Mail, tint: "bg-tint-green text-tint-green-ink", sub: undefined as string | undefined },
-          { label: "방명록", value: leadsFailed ? "—" : counts.guestbook.toLocaleString("ko-KR"), unknown: leadsFailed, icon: BookOpen, tint: "bg-tint-pink text-tint-pink-ink", sub: counts.unreplied ? `답글 없음 ${counts.unreplied}` : undefined },
+          { label: "방명록", value: leadsFailed || guestbookFailed ? "—" : counts.guestbook.toLocaleString("ko-KR"), unknown: leadsFailed || guestbookFailed, icon: BookOpen, tint: "bg-tint-pink text-tint-pink-ink", sub: counts.unreplied ? `답글 없음 ${counts.unreplied}` : undefined },
         ].map((c) => (
           <div key={c.label} className="rounded-card border border-line bg-plate px-3 py-2.5">
             <span className={cn("mb-1.5 flex size-7 items-center justify-center rounded-card", c.tint)} aria-hidden>
@@ -4669,7 +4677,12 @@ function ManagePanel({
           ) : null}
         </div>
         {shownGuest.length === 0 ? (
-          guestbook.length === 0 ? (
+          guestbookFailed ? (
+            /* 조회가 실패한 것을 「글이 없다」고 단정하면 안 된다 — 받은 내용 칸과 같은 규칙(감사5 확정) */
+            <p role="alert" className="mt-2 rounded-card border border-negative/40 bg-negative-weak px-3 py-2 text-[14px] text-negative-strong">
+              방명록을 불러오지 못했어요 — 새로고침해 주세요. (글이 없는 게 아니라 조회가 실패한 거예요.)
+            </p>
+          ) : guestbook.length === 0 ? (
             <div className="mt-3">
               <EmptyState
                 icon={BookOpen}

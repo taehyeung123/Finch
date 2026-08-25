@@ -82,7 +82,7 @@ export function LeadForm({
       <div role="status" aria-live="polite" className={`${box} px-4 py-6 text-center`}>
         <span
           className="mx-auto mb-2 flex size-11 items-center justify-center rounded-full"
-          style={{ backgroundColor: "color-mix(in srgb, var(--lp-accent) 14%, transparent)", color: "var(--lp-accent-text)" }}
+          style={{ backgroundColor: "var(--lp-chip-bg)", color: "var(--lp-chip-ink)" }}
           aria-hidden
         >
           <Check className="size-5" />
@@ -153,7 +153,7 @@ export function LeadForm({
       {isDemo ? (
         <p
           className="rounded-[calc(var(--lp-radius)/1.6)] px-3 py-2 text-[13px] leading-[1.6]"
-          style={{ backgroundColor: "color-mix(in srgb, var(--lp-accent) 10%, transparent)", color: "var(--lp-accent-text)" }}
+          style={{ backgroundColor: "var(--lp-chip-bg)", color: "var(--lp-chip-ink)" }}
         >
           {t.demo}
         </p>

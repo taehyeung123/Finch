@@ -17,7 +17,7 @@
   게시물을 끌어온다(링크팜은 사용자가 URL 을 손으로 넣어야 한다).
 */
 
-import { parseEventAt } from "./events";
+import { eventEndEpoch, nowMs, parseEventAt } from "./events";
 
 export const BLOCK_TYPES = [
   "link",
@@ -476,11 +476,21 @@ export function hiddenReason(type: BlockType, data: Record<string, unknown>): st
       return musicEmbed(s("url")) ? null : "스포티파이·사운드클라우드·유튜브 뮤직 주소가 있어야 공개돼요";
     case "vcard":
       return s("name").trim() ? null : "이름이 비어 공개되지 않아요";
-    case "events":
+    case "events": {
       /* 제목·날짜가 **둘 다** 있는 항목이 하나도 없으면 렌더러가 블록을 통째로 숨긴다 */
-      return items.some((it) => typeof it.title === "string" && it.title.trim() && parseEventAt(it.startAt))
-        ? null
-        : "제목과 날짜가 있는 일정이 없어 공개되지 않아요";
+      const valid = items
+        .map((it) => ({ it, start: parseEventAt(it.startAt) }))
+        .filter((x) => !!x.start && typeof x.it.title === "string" && x.it.title.trim());
+      if (valid.length === 0) return "제목과 날짜가 있는 일정이 없어 공개되지 않아요";
+      /* 다 채워 넣었는데도 **전부 지나** 공개에서 빠지는 경우 — 예전엔 아무 말이 없어서
+         "왜 발행본에 안 보이지"가 됐다(감사 확정). 「흐리게 남기기」면 지난 것도 남으므로 해당 없음 */
+      if (data.past !== "dim") {
+        const now = nowMs();
+        const anyUpcoming = valid.some((x) => eventEndEpoch(x.start!, parseEventAt(x.it.endAt)) >= now);
+        if (!anyUpcoming) return "일정이 모두 지나 공개되지 않아요 — 「지난 일정: 흐리게 남기기」로 두거나 새 일정을 넣어 주세요";
+      }
+      return null;
+    }
     case "file":
       return s("url") ? null : "파일을 올리면 공개돼요";
     case "social_feed":
@@ -499,6 +509,12 @@ export function hiddenReason(type: BlockType, data: Record<string, unknown>): st
  * 보이는데 발행본엔 3칸인 불일치를 아무도 알려주지 않았다(감사 #17).
  */
 export function partialReason(type: BlockType, data: Record<string, unknown>): string | null {
+  if (type === "events") {
+    /* 제목·날짜 중 하나가 빠진 항목은 렌더러가 그 줄만 버린다 — 편집기에 3건이 보이는데 발행본은 2건이 된다 */
+    const its = Array.isArray(data.items) ? (data.items as Record<string, unknown>[]) : [];
+    const bad = its.filter((it) => !(typeof it.title === "string" && it.title.trim() && parseEventAt(it.startAt))).length;
+    return bad > 0 && bad < its.length ? `제목이나 날짜가 빠진 일정 ${bad}건은 공개되지 않아요` : null;
+  }
   if (type !== "card_row" && type !== "grid") return null;
   const items = Array.isArray(data.items) ? (data.items as Record<string, unknown>[]) : [];
   const missing = items.filter((it) => !(typeof it.url === "string" && it.url.trim())).length;
