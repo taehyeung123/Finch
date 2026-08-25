@@ -1118,18 +1118,11 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
       const past = dim ? parsed.filter((x) => x.over).sort((a, b) => eventEpoch(b.start) - eventEpoch(a.start)) : [];
       /* 자르기는 정렬 뒤에(공개와 같은 규칙) */
       const rows = [...upcoming, ...past].slice(0, 20);
-      /* 캔버스에서는 빈 블록도 자리를 지킨다 — 편집 중에 사라지면 다시 고를 길이 없다(다른 블록과 같은 관례).
-         ⚠️ 사유를 갈라 말한다: 예전엔 일정이 **전부 지나서** 사라진 경우에도
-         「제목과 날짜를 넣으면 여기에 보여요」라고 해서, 다 채워 넣은 사람에게 거짓말이 됐다(감사 확정) */
-      if (rows.length === 0) {
-        const hasItems = parsed.length > 0;
-        return (
-          <div className={`${card} px-3 py-2.5 text-[12px] text-[var(--lp-muted)]`}>
-            {s(d, "label") || "일정"} —{" "}
-            {hasItems ? "일정이 모두 지나 공개 페이지에선 빠져요. 「지난 일정: 흐리게 남기기」로 두거나 새 일정을 넣어 주세요" : "제목과 날짜를 넣으면 여기에 보여요"}
-          </div>
-        );
-      }
+      /* 여기까지 오면 그릴 줄이 없다는 뜻인데, 그 사유(제목·날짜 없음 / 전부 지남)는 이미
+         hiddenReason 이 알고 있고 위쪽 가드가 GhostCard 로 빠뜨린다 — 도달하면 같은 카드로 통일한다.
+         (예전엔 여기서 「제목과 날짜를 넣으면 여기에 보여요」라고 제 문구를 그려, 다 채워 넣고
+          일정만 지난 사람에게 거짓말이 됐다 — 감사 확정) */
+      if (rows.length === 0) return <GhostCard type={block.type} data={d} />;
       return (
         <div className={`${card} px-3 py-2.5`}>
           {s(d, "label") ? <p className="mb-1 text-[13px] font-semibold">{s(d, "label")}</p> : null}
