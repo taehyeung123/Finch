@@ -21,5 +21,7 @@ export default async function PublicSubPage({ params }: { params: Promise<{ slug
   const { slug, sub } = await params;
   const child = await resolveSubSlug(slug, sub);
   if (!child) notFound();
-  return PublicLinkPage({ params: Promise.resolve({ slug: child }) });
+  /* 데이터는 자식 slug 로, 주소는 방문자가 들어온 표준 주소로 —
+     링크·비콘·잠금 쿠키가 `/{부모}/{sub}` 아래에 놓여야 방문자 쿠키(path=`/{부모}`)가 실린다 */
+  return PublicLinkPage({ params: Promise.resolve({ slug: child }), urlBase: `${slug}/${sub}` });
 }

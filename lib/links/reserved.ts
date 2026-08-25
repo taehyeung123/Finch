@@ -21,7 +21,15 @@ const APP = [
   "scrap", "settings", "studio", "support",
 ];
 
-/** 라우트 핸들러·시스템 경로 */
+/*
+  라우트 핸들러·시스템 경로.
+
+  ⚠️ 여기엔 **slug 가 될 수 없는 이름도 있다**(`_next`·`_fonts`·점 있는 파일들). 이 목록은 두 가지 일을 한다:
+   ① proxy 의 «리라이트할 경로인가» 판정 — `/_next/data/…` 같은 요청이 사용자 페이지로 새면 안 된다
+   ② validateSlug 의 «이 이름을 잡을 수 있나» 판정
+  ①만 필요한 이름(언더스코어·점)은 형식 규칙(SLUG_RE)이 이미 막으므로 DB 예약어(0066)에는 넣지 않는다 —
+  두 목록이 글자 그대로 같지 않은 것은 **의도된 것**이다(소넷 점검에서 불일치로 보고돼 여기 적어 둔다).
+*/
 const SYSTEM = ["api", "auth", "p", "_next", "_fonts", "onboarding", "robots.txt", "sitemap.xml", "icon.svg", "favicon.ico", "llms.txt"];
 
 /** 사칭 방지 — 라우트는 없지만 공식 페이지처럼 읽히는 이름(구 RESERVED 를 흡수) */

@@ -42,8 +42,8 @@ const arr = (d: Record<string, unknown>, k: string): Record<string, unknown>[] =
   Array.isArray(d[k]) ? (d[k] as Record<string, unknown>[]) : [];
 
 /** 클릭 집계 경로. url 이 없는 블록은 링크로 만들지 않는다 */
-function goHref(slug: string, blockId: string, idx?: number): string {
-  return idx === undefined ? `/${slug}/go/${blockId}` : `/${slug}/go/${blockId}?i=${idx}`;
+function goHref(base: string, blockId: string, idx?: number): string {
+  return idx === undefined ? `/${base}/go/${blockId}` : `/${base}/go/${blockId}?i=${idx}`;
 }
 
 /*
@@ -96,6 +96,7 @@ const EXT_BLANK = { target: "_blank", rel: "noopener noreferrer nofollow" };
 export function BlockRenderer({
   block,
   slug,
+  urlBase,
   guestbook,
   isDemo = false,
   t = lpText("ko"),
@@ -104,7 +105,10 @@ export function BlockRenderer({
   now = nowMs(),
 }: {
   block: SnapshotBlock;
+  /** 데이터 식별 — 방명록 제출처럼 «어느 페이지인가» 를 서버에 말할 때 쓴다 */
   slug: string;
+  /** 방문자가 보고 있는 주소 — /go·/vcard 링크를 이 아래에 놓는다(서브 페이지는 `{부모}/{sub}`) */
+  urlBase?: string;
   /** 방명록 블록일 때 — 공개 글 목록 */
   guestbook?: GuestbookPublicEntry[];
   isDemo?: boolean;
@@ -116,6 +120,8 @@ export function BlockRenderer({
 }) {
   const d = block.data ?? {};
   const type = block.type as BlockType;
+  /* ⚠️ 아래 goHref·vcard 는 **주소**를 만든다 — 데이터 식별용 slug 가 아니라 이걸 쓴다 */
+  const base = urlBase ?? slug;
 
   switch (type) {
     /* ── 리틀리 흡수 4단계 블록 ─────────────────────────────── */
@@ -131,7 +137,7 @@ export function BlockRenderer({
           <img src={s(it, "imagePath")} alt={s(it, "alt")} className={`${imgCls} rounded-[calc(var(--lp-radius)/1.6)]`} loading="lazy" />
         );
         return s(it, "url") ? (
-          <a key={i} href={goHref(slug, block.id, i)} {...ext} className="lp-btn block overflow-hidden rounded-[calc(var(--lp-radius)/1.6)]" aria-label={s(it, "alt") || lpN(t.photoLink, i + 1)}>
+          <a key={i} href={goHref(base, block.id, i)} {...ext} className="lp-btn block overflow-hidden rounded-[calc(var(--lp-radius)/1.6)]" aria-label={s(it, "alt") || lpN(t.photoLink, i + 1)}>
             {img}
           </a>
         ) : (
@@ -176,7 +182,7 @@ export function BlockRenderer({
       if (!s(d, "name").trim()) return null;
       return (
         <a
-          href={`/${slug}/vcard/${block.id}`}
+          href={`/${base}/vcard/${block.id}`}
           className="lp-btn flex min-h-[56px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] border border-[var(--lp-btn-border)] bg-[var(--lp-btn-bg)] px-5 py-3 text-[15px] font-semibold text-[var(--lp-btn-fg)] shadow-[var(--lp-shadow)]"
         >
           <UserPlus className="size-4" aria-hidden />
@@ -197,7 +203,7 @@ export function BlockRenderer({
       const size = n(d, "fileSize", 0);
       const sizeLabel = size > 0 ? (size >= 1024 * 1024 ? `${(size / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(size / 1024))}KB`) : "";
       return (
-        <a href={goHref(slug, block.id)} {...ext} className={`lp-btn ${cardCls} flex items-center gap-3 p-3`}>
+        <a href={goHref(base, block.id)} {...ext} className={`lp-btn ${cardCls} flex items-center gap-3 p-3`}>
           <span className="flex size-11 shrink-0 items-center justify-center rounded-[calc(var(--lp-radius)/1.6)] bg-[var(--lp-accent)] text-[var(--lp-on-accent)]" aria-hidden>
             <Download className="size-5" />
           </span>
@@ -282,7 +288,7 @@ export function BlockRenderer({
         const thumbCls = layout === "small" ? "size-14" : "size-[88px]";
         return (
           <a
-            href={goHref(slug, block.id)}
+            href={goHref(base, block.id)}
             {...ext}
             className={`lp-btn ${cardCls} overflow-hidden ${big ? "" : "flex items-center gap-3 p-3"}`}
           >
@@ -309,7 +315,7 @@ export function BlockRenderer({
       const hasExtras = s(d, "price") || (Array.isArray(d.tags) && (d.tags as unknown[]).length > 0);
       return (
         <a
-          href={goHref(slug, block.id)}
+          href={goHref(base, block.id)}
           {...ext}
           style={textStyle}
           className={[
@@ -390,7 +396,7 @@ export function BlockRenderer({
       return url ? (
         /* 대체 텍스트가 비면 링크 이름이 비어 스크린리더가 경로만 읽는다 — 최소한의 이름을 준다(감사 #21) */
         <a
-          href={goHref(slug, block.id)}
+          href={goHref(base, block.id)}
           {...ext}
           className="block"
           aria-label={s(d, "alt") ? undefined : t.imageLink}
@@ -431,7 +437,7 @@ export function BlockRenderer({
       );
       return url ? (
         /* 카드 전체가 링크다 — lp-btn 을 붙여 다른 누를 수 있는 면과 같은 호버·눌림을 준다(2026-08-24 비평) */
-        <a href={goHref(slug, block.id)} {...ext} aria-label={s(d, "title") || s(d, "subtitle") || s(d, "ctaLabel") ? undefined : t.imageLink} className="lp-btn block">
+        <a href={goHref(base, block.id)} {...ext} aria-label={s(d, "title") || s(d, "subtitle") || s(d, "ctaLabel") ? undefined : t.imageLink} className="lp-btn block">
           {inner}
         </a>
       ) : (
@@ -448,7 +454,7 @@ export function BlockRenderer({
       if (!embed) {
         return (
           <a
-            href={goHref(slug, block.id)}
+            href={goHref(base, block.id)}
             {...ext}
             className={`lp-btn ${cardCls} flex min-h-[56px] items-center justify-center px-5 py-3 text-[15px] font-semibold text-[var(--lp-fg)]`}
           >
@@ -483,7 +489,7 @@ export function BlockRenderer({
             {items.map(({ it, i }) => (
               <a
                 key={i}
-                href={goHref(slug, block.id, i)}
+                href={goHref(base, block.id, i)}
                 {...ext}
                 aria-label={s(it, "title") ? undefined : lpN(t.itemLink, i + 1)}
                 className={`lp-btn ${cardCls} w-[72%] shrink-0 snap-start overflow-hidden`}
@@ -503,7 +509,7 @@ export function BlockRenderer({
         );
       }
       const nodes = items.map(({ it, i }) => (
-        <a key={i} href={goHref(slug, block.id, i)} {...ext} aria-label={s(it, "title") ? undefined : lpN(t.itemLink, i + 1)} className={`lp-btn ${cardCls} flex items-center gap-3 p-3`}>
+        <a key={i} href={goHref(base, block.id, i)} {...ext} aria-label={s(it, "title") ? undefined : lpN(t.itemLink, i + 1)} className={`lp-btn ${cardCls} flex items-center gap-3 p-3`}>
           {s(it, "imagePath") ? (
             // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
             <img src={s(it, "imagePath")} alt="" className="size-14 shrink-0 rounded-[calc(var(--lp-radius)/1.6)] object-cover" loading="lazy" />
@@ -526,7 +532,7 @@ export function BlockRenderer({
       if (items.length === 0) return null;
       const cols = n(d, "columns", 2) === 3 ? "grid-cols-3" : "grid-cols-2";
       const nodes = items.map(({ it, i }) => (
-        <a key={i} href={goHref(slug, block.id, i)} {...ext} aria-label={s(it, "title") ? undefined : lpN(t.itemLink, i + 1)} className={`lp-btn ${cardCls} overflow-hidden`}>
+        <a key={i} href={goHref(base, block.id, i)} {...ext} aria-label={s(it, "title") ? undefined : lpN(t.itemLink, i + 1)} className={`lp-btn ${cardCls} overflow-hidden`}>
           {s(it, "imagePath") ? (
             // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
             <img src={s(it, "imagePath")} alt="" className="aspect-square w-full object-cover" loading="lazy" />
@@ -581,7 +587,7 @@ export function BlockRenderer({
             return s(it, "permalink") ? (
               <a
                 key={i}
-                href={goHref(slug, block.id, i)}
+                href={goHref(base, block.id, i)}
                 {...ext}
                 aria-label={lpN(t.postLink, i + 1)}
                 className="overflow-hidden rounded-[calc(var(--lp-radius)/1.6)]"
@@ -626,7 +632,7 @@ export function BlockRenderer({
             <p className="mt-1.5 text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "title") || t.product}</p>
             {s(d, "price") ? <p className="tnum mt-0.5 text-[17px] font-bold text-[var(--lp-fg)]">{s(d, "price")}</p> : null}
             <a
-              href={goHref(slug, block.id)}
+              href={goHref(base, block.id)}
               {...ext}
               className="lp-btn mt-2.5 flex min-h-[48px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-4 text-[15px] font-semibold text-[var(--lp-on-accent)]"
             >
@@ -644,7 +650,7 @@ export function BlockRenderer({
       return (
         <div>
           <a
-            href={goHref(slug, block.id)}
+            href={goHref(base, block.id)}
             {...ext}
             className="lp-btn flex min-h-[56px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-5 py-3 text-center text-[15px] font-semibold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)]"
           >
@@ -717,7 +723,7 @@ export function BlockRenderer({
         );
         return s(x.it, "url") ? (
           <li key={x.i}>
-            <a href={goHref(slug, block.id, x.i)} {...ext} className="lp-btn -mx-1 block rounded-[calc(var(--lp-radius)/1.6)] px-1 py-2.5">
+            <a href={goHref(base, block.id, x.i)} {...ext} className="lp-btn -mx-1 block rounded-[calc(var(--lp-radius)/1.6)] px-1 py-2.5">
               {inner}
             </a>
           </li>

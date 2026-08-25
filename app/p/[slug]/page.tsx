@@ -137,8 +137,17 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   };
 }
 
-export default async function PublicLinkPage({ params }: { params: Promise<{ slug: string }> }) {
+/*
+  ⚠️ slug 와 urlBase 는 **다른 것**이다.
+   · slug    — 데이터 식별. 서버 액션·집계·스냅샷 조회가 쓰는 그 페이지의 전역 이름.
+   · urlBase — 방문자가 실제로 보고 있는 주소. 서브 페이지는 `{부모}/{sub}` 로 들어오고,
+               그 아래에 링크·비콘·잠금 쿠키가 놓여야 한다(안 그러면 쿠키 path 가 어긋나
+               해제한 페이지가 다시 잠기고, 클릭·체류가 익명으로 쌓인다).
+  기본값은 slug — 최상위 페이지는 둘이 같다.
+*/
+export default async function PublicLinkPage({ params, urlBase }: { params: Promise<{ slug: string }>; urlBase?: string }) {
   const { slug } = await params;
+  const base = urlBase ?? slug;
   const data = await load(slug);
   if (!data) notFound();
 
@@ -157,7 +166,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
         style={themeVars(theme, null) as React.CSSProperties}
         className="relative isolate flex min-h-[100dvh] items-center justify-center bg-[var(--lp-bg)] px-5 text-[var(--lp-fg)]"
       >
-        <LockScreen slug={slug} message={settings.lockMessage} t={t.lock} errors={t.errors} />
+        <LockScreen slug={slug} urlBase={base} message={settings.lockMessage} t={t.lock} errors={t.errors} />
       </main>
     );
   }
@@ -286,7 +295,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
 
       {/* 방문 집계 — 렌더를 막지 않게 클라이언트에서 한 번만 쏜다.
           개인 식별 정보는 안 보낸다(서버가 익명 토큰만 쿠키로 관리). */}
-      {published ? <ViewBeacon slug={slug} /> : null}
+      {published ? <ViewBeacon slug={slug} urlBase={base} /> : null}
       {screenFx ? <ScreenEffect kind={screenFx} light={isLightColor(themeCustom?.bg ?? theme.bg)} /> : null}
       {/* 마케팅 연결(GA4·Meta 픽셀·TikTok 픽셀) — 주인이 ID 를 넣었을 때만, 공개 상태에서만 실린다.
           주인 미리보기(비공개)엔 안 싣는다 — 자기 방문이 광고 계정 통계를 더럽힌다. */}
@@ -399,7 +408,8 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
               {b.type === "contact" || b.type === "subscribe" ? (
                 <LeadForm slug={slug} blockId={b.id} kind={b.type} data={b.data} isDemo={isDemoMode()} t={t.lead} errors={t.errors} />
               ) : (
-                <BlockRenderer block={b} slug={slug} guestbook={b.type === "guestbook" ? guestbook : undefined} isDemo={isDemoMode()} t={t} ext={ext} />
+                /* BlockRenderer 의 slug 는 **주소 조립 전용**이다(goHref·vcard) — 서브 페이지에선 표준 주소를 넘긴다 */
+                <BlockRenderer block={b} slug={slug} urlBase={base} guestbook={b.type === "guestbook" ? guestbook : undefined} isDemo={isDemoMode()} t={t} ext={ext} />
               )}
             </div>
           ))}
@@ -434,7 +444,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
              그리드 행을 재단하려면 배치 전체를 건드려야 해서 여기서는 한계를 명시만 한다. */
           <div className={`pointer-events-none sticky bottom-4 z-10 mt-auto pt-4 flex justify-center ${split ? "lg:col-start-2" : ""}`}>
             <a
-              href={`/${slug}/go/${emphasized.block.id}`}
+              href={`/${base}/go/${emphasized.block.id}`}
               {...ext}
               className="lp-btn pointer-events-auto inline-flex min-h-[56px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-6 text-[15px] font-bold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)]"
             >

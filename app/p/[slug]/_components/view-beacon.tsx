@@ -17,7 +17,11 @@ import { recordView } from "../actions";
   체류시간(0058): **보이는 시간만** 더한다 — 탭을 숨긴 25분을 세면 평균 체류가 거짓이 된다(감사 C12).
   숨기거나 떠날 때(pagehide·visibilitychange) keepalive 로 /dwell 에 보내고, 서버는 최댓값만 남긴다.
 */
-export function ViewBeacon({ slug }: { slug: string }) {
+export function ViewBeacon({ slug, urlBase }: { slug: string; urlBase?: string }) {
+  /* slug=데이터 식별(recordView·recordDwell 이 페이지를 찾는 이름), urlBase=방문자가 보고 있는 주소.
+     서브 페이지는 둘이 다르다 — 비콘을 전역 slug 로 쏘면 방문자 쿠키(path=`/{부모}`)가 안 실려
+     체류가 익명으로 쌓인다(소넷 확정) */
+  const base = urlBase ?? slug;
   const sent = useRef(false);
   useEffect(() => {
     if (sent.current) return;
@@ -39,7 +43,7 @@ export function ViewBeacon({ slug }: { slug: string }) {
       if (ms < 1000 || (lastSent > 0 && ms - lastSent < 5000)) return;
       lastSent = ms;
       try {
-        void fetch(`/${encodeURIComponent(slug)}/dwell`, {
+        void fetch(`/${base.split("/").map(encodeURIComponent).join("/")}/dwell`, {
           method: "POST",
           keepalive: true,
           headers: { "content-type": "application/json" },
@@ -67,6 +71,6 @@ export function ViewBeacon({ slug }: { slug: string }) {
       window.removeEventListener("pagehide", send);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [slug]);
+  }, [base]);
   return null;
 }

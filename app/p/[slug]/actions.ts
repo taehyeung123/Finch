@@ -255,7 +255,12 @@ const UNLOCK_PAGE_MAX = 30;
 const UNLOCK_FALLBACK = new Map<string, { n: number; until: number }>();
 
 /** 비밀번호 대조 → 맞으면 열림 쿠키. 해시는 service_role 로만 읽는다(주인 외 아무도 못 읽는 표) */
-export async function unlockLinkPage(slug: string, password: string): Promise<VisitorResult> {
+/**
+ * 비밀번호 해제.
+ * urlBase — 방문자가 보고 있는 주소(서브 페이지는 `{부모}/{sub}`). 해제 쿠키를 그 아래에 둔다.
+ * 생략하면 slug 와 같다(최상위 페이지).
+ */
+export async function unlockLinkPage(slug: string, password: string, urlBase?: string): Promise<VisitorResult> {
   if (isDemoMode()) return { ok: true };
   if (!isSupabaseConfigured()) return fail("unavailable", "지금은 열 수 없어요.");
   const pw = (password ?? "").trim();
@@ -317,7 +322,9 @@ export async function unlockLinkPage(slug: string, password: string): Promise<Vi
       sameSite: "lax",
       secure: true,
       maxAge: 60 * 60 * 24, // 하루
-      path: `/${slug}`,
+      /* 방문자가 실제로 보고 있는 주소 아래에 둔다 — 서브 페이지는 표준 주소가 `/{부모}/{sub}` 라
+         자식 전역 slug 로 발급하면 재방문 때 쿠키가 안 실려 **해제한 페이지가 다시 잠긴다**(소넷 확정) */
+      path: `/${urlBase ?? slug}`,
     });
   } catch {
     return fail("unavailable", "지금은 열 수 없어요.");
