@@ -135,20 +135,28 @@ export async function analyzeUrl(url: string): Promise<AnalyzeActionResult> {
     };
   }
 
-  // 분석할 대상이 확정된 뒤에 차감 — 플랜별 한도 (free 월 10회)
+  /* 분석할 대상이 확정된 뒤에 차감.
+     ⚠️ 한도는 **DB(free_plan_limits)** 가 갖는다 — 0047 이후 use_quota 는 p_limit 인자를 무시한다.
+     예전엔 여기서 플랜별 한도를 인자로 넘겼는데, 그 값은 버려지고 DB 에는 content_analysis 행이
+     아예 없어서 **모든 플랜에서 언제나 false** 였다(= 기능이 죽어 있었다, 2026-08-25 감사).
+     지금은 무료 플랜만 계량기를 탄다. 유료는 통합 크레딧 모델인데 이 기능 단가가 아직 없어
+     계량하지 않는다 — 단가가 정해지면 chargeGeneration 으로 옮긴다. */
   const { data: profile } = await supabase.from("users_profile").select("plan").eq("id", user.id).maybeSingle();
-  const limit = ANALYSIS_LIMITS[profile?.plan ?? "free"] ?? 10;
-  const { data: allowed, error: quotaErr } = await supabase.rpc("use_quota", {
-    p_metric: "content_analysis",
-    p_limit: limit,
-    p_amount: 1,
-  });
-  if (quotaErr) {
-    console.error("[analyze] 쿼터 확인 실패:", quotaErr.message);
-    return { ok: false, error: "사용량 확인에 실패했습니다. 잠시 후 다시 시도해 주세요." };
-  }
-  if (!allowed) {
-    return { ok: false, error: "이번 달 콘텐츠 분석 한도를 모두 사용했어요. 요금제에서 플랜을 올리면 한도가 늘어납니다." };
+  const plan = profile?.plan ?? "free";
+  if (plan === "free") {
+    const { data: allowed, error: quotaErr } = await supabase.rpc("use_quota", {
+      p_metric: "content_analysis",
+      /* 시그니처 호환용 — DB 가 무시한다(넘겨도 반영되지 않는다) */
+      p_limit: ANALYSIS_LIMITS.free,
+      p_amount: 1,
+    });
+    if (quotaErr) {
+      console.error("[analyze] 쿼터 확인 실패:", quotaErr.message);
+      return { ok: false, error: "사용량 확인에 실패했습니다. 잠시 후 다시 시도해 주세요." };
+    }
+    if (!allowed) {
+      return { ok: false, error: "이번 달 콘텐츠 분석 한도를 모두 사용했어요. 요금제에서 플랜을 올리면 한도가 늘어납니다." };
+    }
   }
 
   const [insights, commentTexts] = await Promise.all([

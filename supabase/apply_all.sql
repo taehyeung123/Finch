@@ -1,5 +1,10 @@
 -- 핀치(Finch) 전체 스키마 통합 적용본 — 0001~0004를 순서대로 이어붙인 파일.
 -- 새 프로젝트에 한 번에 붙여넣고 실행한다. (개별 파일: migrations/ 폴더)
+--
+-- ⚠️ **이 파일은 0001~0004 까지만 담는다.** 최신 스키마는 migrations/ 에 0065 까지 있다.
+--    새 프로젝트라면 이 파일을 먼저 실행한 뒤 **0005 부터 번호 순서대로** 이어서 적용할 것.
+--    이미 돌아가는 프로젝트에 다시 실행하지 말 것 — create or replace 가 뒤 마이그레이션이
+--    고쳐 놓은 함수를 옛 버전으로 되돌린다(2026-08-25 감사에서 use_quota 가 실제로 그랬다).
 
 
 -- ============================================================
@@ -236,6 +241,29 @@ create trigger trg_commenter_consent_updated before update on public.commenter_c
 
 -- use_quota: 이번 달 metric 사용량을 원자적으로 p_amount 만큼 증가시키되, 한도 초과면 증가시키지 않고 false 반환.
 -- 반환값 true = 허용(차감됨), false = 한도 초과(차감 안 됨). 호출측은 false면 기능을 막는다.
+-- 무료 플랜 한도 표 — **한도의 유일한 출처**(0047). use_quota 가 이 표만 본다.
+-- 정책을 만들지 않는다 = service_role 과 SECURITY DEFINER 함수만 읽는다(사용자가 보면 바꿔볼 생각을 한다).
+create table if not exists public.free_plan_limits (
+  metric      text primary key,
+  limit_value int not null check (limit_value >= 0),
+  updated_at  timestamptz not null default now()
+);
+alter table public.free_plan_limits enable row level security;
+
+insert into public.free_plan_limits (metric, limit_value) values
+  ('ai_cardnews', 0),
+  ('growth_diagnosis', 0),
+  ('reference_collect', 1),
+  ('ad_collect', 1),
+  ('reference_transcript', 1),
+  ('ai_ideas', 0),
+  ('ai_brand_tone', 0),
+  ('ai_agent_chat', 3),
+  ('ai_video_analysis', 1),
+  ('board_saves', 20),
+  ('content_analysis', 10)
+on conflict (metric) do update set limit_value = excluded.limit_value, updated_at = now();
+
 create or replace function public.use_quota(p_metric text, p_limit integer, p_amount integer default 1)
 returns boolean
 language plpgsql
@@ -245,15 +273,28 @@ as $$
 declare
   v_month date := date_trunc('month', now())::date;
   v_used  integer;
+  v_limit integer;
 begin
   if auth.uid() is null then
     return false;
   end if;
 
+  -- ① 음수·0 차단(0046 과 같은 부류) — used 를 되돌려 한도를 무한으로 만들 수 있다
+  if p_amount is null or p_amount <= 0 then
+    return false;
+  end if;
+
+  -- ② 한도는 **DB 가 갖는다**(0047). p_limit 인자는 시그니처 호환으로만 남기고 쓰지 않는다 —
+  --    클라이언트가 부를 수 있는 RPC 라 인자를 믿으면 999999 한 번으로 무제한이 된다.
+  select limit_value into v_limit from public.free_plan_limits where metric = p_metric;
+  if v_limit is null then
+    return false;   -- 등록되지 않은 계량기는 막는다
+  end if;
+
   insert into public.usage_counters (user_id, metric, period_month, used, limit_value)
-    values (auth.uid(), p_metric, v_month, 0, p_limit)
+    values (auth.uid(), p_metric, v_month, 0, v_limit)
     on conflict (user_id, metric, period_month)
-      do update set limit_value = excluded.limit_value;  -- 플랜 변경 시 한도 동기화
+      do update set limit_value = v_limit;  -- 한도 변경 시 동기화(클라이언트 값 아님)
 
   update public.usage_counters
     set used = used + p_amount

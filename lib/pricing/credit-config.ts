@@ -63,6 +63,9 @@ export const FREE_MONTHLY_LIMITS: Record<string, number> = {
   // 2026-08-14 사장님 확정: 무료는 새 분석 월 1회 (캐시 히트는 횟수 미차감·무료)
   ai_video_analysis: 1,
   board_saves: 20, // 미사용(연결 안 됨) — 위 설명 참고
+  /* 콘텐츠 분석(내 게시물 1건) — 무료 월 10회. DB free_plan_limits 와 **같이** 움직여야 한다(0047·0065).
+     유료 플랜은 이 계량기를 타지 않는다(단가 미정 — 정해지면 CREDIT_COSTS 로 옮긴다) */
+  content_analysis: 10,
 };
 
 /**
