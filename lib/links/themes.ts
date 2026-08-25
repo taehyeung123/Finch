@@ -168,17 +168,17 @@ export const LINK_FONTS: ReadonlyArray<{ key: string; label: string; family: str
      ⚠️ **var(--font-pretendard) 를 넣는다** — next/font 는 해시된 패밀리 이름을 만들어서
      리터럴 "Pretendard Variable" 은 실제 로드된 글꼴과 매칭되지 않는다(globals.css --font-sans 와 같은 관례, 소넷 확정).
      명조 계열은 Noto Serif KR·애플명조를 먼저 보고, 없으면 Pretendard 로 떨어진다(굴림보다 낫다). */
-  { key: "inter", label: "Inter", family: '"Inter", var(--font-pretendard), "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "inter", bold: true },
-  { key: "montserrat", label: "Montserrat", family: '"Montserrat", var(--font-pretendard), "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "montserrat", bold: true },
-  { key: "poppins", label: "Poppins", family: '"Poppins", var(--font-pretendard), "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "poppins", bold: true },
-  { key: "raleway", label: "Raleway", family: '"Raleway", var(--font-pretendard), "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "raleway", bold: true },
-  { key: "space-grotesk", label: "Space Grotesk", family: '"Space Grotesk", var(--font-pretendard), "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "space-grotesk", bold: true },
+  { key: "inter", label: "Inter", family: '"Inter", var(--font-pretendard), "Pretendard Variable", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "inter", bold: true },
+  { key: "montserrat", label: "Montserrat", family: '"Montserrat", var(--font-pretendard), "Pretendard Variable", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "montserrat", bold: true },
+  { key: "poppins", label: "Poppins", family: '"Poppins", var(--font-pretendard), "Pretendard Variable", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "poppins", bold: true },
+  { key: "raleway", label: "Raleway", family: '"Raleway", var(--font-pretendard), "Pretendard Variable", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "raleway", bold: true },
+  { key: "space-grotesk", label: "Space Grotesk", family: '"Space Grotesk", var(--font-pretendard), "Pretendard Variable", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "space-grotesk", bold: true },
   { key: "playfair", label: "Playfair Display", family: '"Playfair Display", "Noto Serif KR", "Apple Myungjo", var(--font-pretendard), serif', pkg: "playfair-display", bold: true },
   { key: "lora", label: "Lora", family: '"Lora", "Noto Serif KR", "Apple Myungjo", var(--font-pretendard), serif', pkg: "lora", bold: true },
   { key: "dm-serif", label: "DM Serif Display", family: '"DM Serif Display", "Noto Serif KR", "Apple Myungjo", var(--font-pretendard), serif', pkg: "dm-serif-display", bold: false },
-  { key: "bebas", label: "Bebas Neue", family: '"Bebas Neue", var(--font-pretendard), "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "bebas-neue", bold: false },
-  { key: "pacifico", label: "Pacifico", family: '"Pacifico", "Nanum Pen Script", var(--font-pretendard), "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", cursive', pkg: "pacifico", bold: false },
-  { key: "caveat", label: "Caveat", family: '"Caveat", "Nanum Pen Script", var(--font-pretendard), "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", cursive', pkg: "caveat", bold: true },
+  { key: "bebas", label: "Bebas Neue", family: '"Bebas Neue", var(--font-pretendard), "Pretendard Variable", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif', pkg: "bebas-neue", bold: false },
+  { key: "pacifico", label: "Pacifico", family: '"Pacifico", "Nanum Pen Script", var(--font-pretendard), "Pretendard Variable", "Noto Sans KR", "Apple SD Gothic Neo", cursive', pkg: "pacifico", bold: false },
+  { key: "caveat", label: "Caveat", family: '"Caveat", "Nanum Pen Script", var(--font-pretendard), "Pretendard Variable", "Noto Sans KR", "Apple SD Gothic Neo", cursive', pkg: "caveat", bold: true },
 ];
 
 /** 글꼴 스타일시트 주소 — 공개 페이지·편집 미리보기가 <link rel="stylesheet"> 로 싣는다 */

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { GoogleAnalytics } from "@next/third-parties/google";
-import { pretendard } from "@/lib/fonts";
 import "../globals.css";
+import "../_fonts/pretendard/pretendardvariable-dynamic-subset.css";
 
 export const metadata: Metadata = {
   // 도메인 확정: finch.ai.kr (2026-07 — finch.kr은 타사 소유라 사용 불가)
@@ -44,7 +44,15 @@ export default function RootLayout({
 }>) {
   const gaId = process.env.NEXT_PUBLIC_GA_ID;
   return (
-    <html lang="ko" className={`${pretendard.variable} h-full antialiased`}>
+    /* 글꼴은 **유니코드 구간 분할본**을 쓴다(2026-08-24 실측) — 통짜 Pretendard Variable 는 2,009KB 라
+       첫 방문에 그대로 얹혔고, next/font 가 그 파일을 preload 까지 걸어 /p 방문자 페이지에서도 끌려왔다.
+       분할본은 실제로 쓰는 구간만(한글 페이지 기준 100~250KB) 내려받는다. --font-pretendard 를
+       같은 이름으로 정의해 globals.css(--font-sans)와 테마 스택이 그대로 동작한다. */
+    <html
+      lang="ko"
+      className="h-full antialiased"
+      style={{ ["--font-pretendard" as string]: "'Pretendard Variable'" } as React.CSSProperties}
+    >
       <head>
         {/*
           FOUC 방지 — React 렌더 전에 저장된 테마를 즉시 반영한다.

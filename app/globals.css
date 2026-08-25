@@ -75,7 +75,9 @@
   --color-on-kakao: var(--on-kakao);
 
   /* 타이포그래피 (PART 7.6) — next/font/local이 주입하는 --font-pretendard 우선, 폴백 체인 유지 */
-  --font-sans: var(--font-pretendard), "Pretendard Variable", Pretendard,
+  /* 맨몸 `Pretendard` 는 뺐다 — next/font 통짜를 없앤 뒤로는 선언되지 않는 이름이고,
+     남겨 두면 예전 캐시가 있는 브라우저에서만 2MB 를 다시 끌어온다(2026-08-24) */
+  --font-sans: var(--font-pretendard), "Pretendard Variable",
     -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Segoe UI",
     "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
 
