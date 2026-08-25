@@ -4063,39 +4063,59 @@ function ManagePanel({
   const [replyDraft, setReplyDraft] = useState("");
   const [kindFilter, setKindFilter] = useState<"all" | "contact" | "subscribe">("all");
   const [openLead, setOpenLead] = useState<number | null>(null);
+  /* 방명록 본문은 500자까지 들어온다 — 접어 두고 필요할 때만 편다 */
+  const [openGb, setOpenGb] = useState<number | null>(null);
   const shownLeads = kindFilter === "all" ? leads : leads.filter((l) => l.kind === kindFilter);
   /* 카드는 총 건수(서버 count) — 없으면(데모) 목록을 센다 */
+  /* 카드는 총 건수(서버 count). 화면에 들어온 행 수를 **하한**으로 깐다 —
+     count 만 실패해 0 이 오면 "3건이 보이는데 0건"이라고 말하게 된다 */
   const counts = {
-    contact: leadCounts?.contact ?? leads.filter((l) => l.kind === "contact").length,
-    subscribe: leadCounts?.subscribe ?? leads.filter((l) => l.kind === "subscribe").length,
-    guestbook: leadCounts?.guestbook ?? guestbook.length,
+    contact: Math.max(leadCounts?.contact ?? 0, leads.filter((l) => l.kind === "contact").length),
+    subscribe: Math.max(leadCounts?.subscribe ?? 0, leads.filter((l) => l.kind === "subscribe").length),
+    guestbook: Math.max(leadCounts?.guestbook ?? 0, guestbook.length),
     unreplied: guestbook.filter((g) => !g.reply && !g.hidden).length,
   };
+  /* 답글 없는 글만 보기 — 인박스에서 남은 일을 골라내는 유일한 수단 */
+  const [gbFilter, setGbFilter] = useState<"all" | "unreplied">("all");
+  const shownGuest = gbFilter === "all" ? guestbook : guestbook.filter((g) => !g.reply && !g.hidden);
   /* 날짜는 KST 로 — UTC ISO 를 10자 자르면 새벽 0~9시 접수가 전날로 보인다(감사3) */
   const dayOf = (iso: string) => new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso)).replace(/\.\s?/g, "-").replace(/-$/, "");
+  /* 시각도 같은 KST 로 — 접힌 행(dayOf)과 펼친 줄이 다른 날짜를 말하면 안 된다.
+     toLocaleString 은 **보는 사람의 시간대**라 해외 접속 시 하루가 어긋났다 */
+  const timeOf = (iso: string) =>
+    `${dayOf(iso)} ${new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit" }).format(new Date(iso))}`;
 
   return (
     <div className="space-y-4">
-      <h3 className="text-[15px] font-bold">관리</h3>
+      {/* 형제 탭(디자인·분석·마케팅)과 같은 17 semibold — 탭을 오갈 때 같은 자리의 제목이 움직이지 않는다.
+          동시에 안쪽 소제목(14 semibold)보다 커져 위계가 굵기 하나에만 걸리지 않는다 */}
+      <div>
+        <h3 className="text-[17px] font-semibold">관리</h3>
+        <p className="mt-0.5 text-[14px] text-fg-sub">방문자가 남긴 문의·구독 신청·방명록이 여기 모여요.</p>
+      </div>
 
       {/* 건수 요약 — 리틀리 관리 탭 상단 카드 */}
       <div className="grid grid-cols-3 gap-2">
         {[
-          { label: "문의", value: counts.contact, icon: MessageSquare, tint: "bg-tint-blue text-tint-blue-ink" },
-          { label: "구독", value: counts.subscribe, icon: Mail, tint: "bg-tint-green text-tint-green-ink" },
-          { label: "방명록", value: counts.guestbook, icon: BookOpen, tint: "bg-tint-pink text-tint-pink-ink", sub: counts.unreplied ? `답글 없음 ${counts.unreplied}` : undefined },
+          /* 조회 실패면 0 이 아니라 «—» — 0 은 「아무도 안 보냈다」는 사실 주장이라 실패했을 땐 거짓이다
+             (분석 탭의 ratio·nv 와 같은 규칙) */
+          { label: "문의", value: leadsFailed ? "—" : counts.contact.toLocaleString("ko-KR"), unknown: leadsFailed, icon: MessageSquare, tint: "bg-tint-blue text-tint-blue-ink", sub: undefined as string | undefined },
+          { label: "구독", value: leadsFailed ? "—" : counts.subscribe.toLocaleString("ko-KR"), unknown: leadsFailed, icon: Mail, tint: "bg-tint-green text-tint-green-ink", sub: undefined as string | undefined },
+          { label: "방명록", value: leadsFailed ? "—" : counts.guestbook.toLocaleString("ko-KR"), unknown: leadsFailed, icon: BookOpen, tint: "bg-tint-pink text-tint-pink-ink", sub: counts.unreplied ? `답글 없음 ${counts.unreplied}` : undefined },
         ].map((c) => (
           <div key={c.label} className="rounded-card border border-line bg-plate px-3 py-2.5">
             <span className={cn("mb-1.5 flex size-7 items-center justify-center rounded-card", c.tint)} aria-hidden>
               <c.icon className="size-4" />
             </span>
             <p className="text-[12px] text-fg-sub">{c.label}</p>
-            <p className="tnum mt-0.5 text-[20px] font-bold leading-none">{c.value.toLocaleString("ko-KR")}</p>
+            <p className={cn("tnum mt-0.5 text-[20px] font-bold leading-none", c.unknown && "text-fg-faint")}>
+              {c.value}
+              {c.unknown ? <span className="sr-only">불러오지 못함</span> : null}
+            </p>
             {c.sub ? <p className="mt-1 text-[11px] text-primary-ink">{c.sub}</p> : null}
           </div>
         ))}
       </div>
-      <p className="text-[12px] text-fg-sub">목록은 최근 50건만 보여요(숫자는 전체). 받은 내용 전체는 CSV 로 내려받을 수 있어요.</p>
       {leadsFailed ? (
         <p role="alert" className="rounded-card border border-negative/40 bg-negative-weak px-3 py-2 text-[14px] text-negative-strong">
           받은 내용을 불러오지 못했어요 — 새로고침해 주세요. (아무도 안 보낸 게 아니라 조회가 실패한 거예요.)
@@ -4103,8 +4123,10 @@ function ManagePanel({
       ) : null}
 
       {/* 받은 내용 — 문의받기·구독신청 블록이 약속한 자리.
-          이게 없으면 방문자가 남긴 게 어디로 갔는지 알 수 없다(편집기가 여기를 가리킨다). */}
-      <div>
+          이게 없으면 방문자가 남긴 게 어디로 갔는지 알 수 없다(편집기가 여기를 가리킨다).
+          판을 씌운다 — 맨몸으로 두면 분석 탭과 구조가 달라 같은 편집기로 안 읽힌다.
+          카드(bg-body) 안이므로 면은 bg-plate 다(흰 판 위 흰 판 금지) */}
+      <div className="rounded-card border border-line bg-plate p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
             <p className="text-[14px] font-semibold text-fg">받은 내용</p>
@@ -4131,46 +4153,65 @@ function ManagePanel({
               ))}
             </div>
           </div>
-          {leads.length > 0 || leadsFailed || (leadCounts?.contact ?? 0) + (leadCounts?.subscribe ?? 0) > 0 ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={onExportLeads}
-              className="trans-state rounded-chip border border-line px-2.5 py-1 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg disabled:opacity-50"
-            >
-              CSV (전체)
-            </button>
-          ) : null}
+          {/* CSV — 목록 50건이 아니라 **전체**를 서버에서 받아 내린다. 0건이어도 자리를 비우지 않는다:
+              첫 리드가 들어오는 순간 헤더 높이가 뛰는 것도 막는다. 분석 탭 CSV 와 같은 부품 */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onExportLeads}
+            disabled={busy || (counts.contact + counts.subscribe === 0 && !leadsFailed)}
+            title={counts.contact + counts.subscribe === 0 && !leadsFailed ? "아직 받은 내용이 없어요" : undefined}
+          >
+            <Download className="size-3.5" aria-hidden />
+            CSV 전체
+          </Button>
         </div>
         {shownLeads.length === 0 ? (
-          <p className="mt-1.5 text-[14px] text-fg-sub">
-            {leads.length === 0 ? "문의받기·구독신청 블록으로 들어온 내용이 여기에 쌓여요." : "이 종류로 들어온 내용이 아직 없어요."}
-          </p>
+          /* 조회 실패면 빈 상태를 그리지 않는다 — 위 경고가 이미 설명했고,
+             여기서 "아직 없어요"라고 단정하면 실패를 「아무도 안 보냄」으로 뭉갠다 */
+          leadsFailed ? null : (
+            <div className="mt-3">
+              <EmptyState
+                icon={Inbox}
+                title={leads.length === 0 ? "아직 받은 내용이 없어요" : "이 종류로 들어온 내용이 없어요"}
+                description={leads.length === 0 ? "「문의받기」·「구독신청」 블록을 페이지에 두면 방문자가 남긴 내용이 여기에 쌓여요." : undefined}
+              />
+            </div>
+          )
         ) : (
-          <ul className="mt-1.5 max-h-80 divide-y divide-line overflow-y-auto">
+          <>
+          <ul className="mt-2 max-h-96 divide-y divide-line overflow-y-auto">
             {shownLeads.map((l) => {
               const open = openLead === l.id;
               return (
-                <li key={l.id} className="py-2.5">
+                <li key={l.id} className="py-1.5">
                   <button
                     type="button"
                     onClick={() => setOpenLead(open ? null : l.id)}
                     aria-expanded={open}
-                    className="flex w-full flex-wrap items-center gap-2 text-left"
+                    /* 눌리는 줄인데 마우스·키보드에 아무 반응이 없었다 — 틴트와 포커스 링을 준다 */
+                    className="trans-state flex w-full flex-wrap items-center gap-2 rounded-card px-2 py-1 text-left hover:bg-tint-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                   >
-                    <span className="rounded-chip bg-plate px-2 py-0.5 text-[11px] font-semibold text-fg-sub">
+                    {/* 위 카드가 문의=파랑·구독=초록으로 약속했다 — 목록에서 회색으로 뭉개면 그 약속이 깨진다 */}
+                    <span
+                      className={cn(
+                        "rounded-chip px-2 py-0.5 text-[11px] font-semibold",
+                        l.kind === "subscribe" ? "bg-tint-green text-tint-green-ink" : "bg-tint-blue text-tint-blue-ink",
+                      )}
+                    >
                       {l.kind === "subscribe" ? "구독" : "문의"}
                     </span>
                     <span className="text-[14px] font-semibold">{l.name || l.email || l.phone || "(이름 없음)"}</span>
                     <span className="tnum ml-auto text-[12px] text-fg-sub">{dayOf(l.createdAt)}</span>
-                    <ChevronDown className={cn("trans-state size-3.5 text-fg-faint", open && "rotate-180")} aria-hidden />
+                    <ChevronDown className={cn("trans-state size-4 shrink-0 text-fg-sub", open && "rotate-180")} aria-hidden />
                   </button>
                   {l.email || l.phone ? (
-                    <p className="mt-0.5 text-[12px] text-fg-sub">{[l.email, l.phone].filter(Boolean).join(" · ")}</p>
+                    <p className="mt-0.5 px-2 text-[12px] text-fg-sub">{[l.email, l.phone].filter(Boolean).join(" · ")}</p>
                   ) : null}
-                  {l.message ? <p className={cn("mt-1 whitespace-pre-wrap text-[14px]", !open && "line-clamp-2")}>{l.message}</p> : null}
+                  {/* 공백 없는 긴 주문번호·URL 이 가로로 터져 목록에 스크롤바를 만들던 것 */}
+                  {l.message ? <p className={cn("mt-1 whitespace-pre-wrap break-words px-2 text-[14px]", !open && "line-clamp-2")}>{l.message}</p> : null}
                   {open ? (
-                    <div className="mt-1.5 flex flex-wrap gap-1">
+                    <div className="mt-1.5 flex flex-wrap gap-1 px-2">
                       {l.email ? (
                         <a href={`mailto:${l.email}`} className="trans-state rounded-chip border border-line px-2.5 py-1 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg">
                           메일 보내기
@@ -4181,58 +4222,169 @@ function ManagePanel({
                           전화
                         </a>
                       ) : null}
-                      <p className="tnum w-full text-[11px] text-fg-sub">접수 {new Date(l.createdAt).toLocaleString("ko-KR")}</p>
+                      <p className="tnum w-full px-2 text-[11px] text-fg-sub">접수 {timeOf(l.createdAt)}</p>
                     </div>
                   ) : null}
                 </li>
               );
             })}
           </ul>
+          {/* 꼬리말은 스크롤 상자 **밖**에 — 안에 있으면 끝까지 굴려야 보인다.
+              "최근 N건" 은 필터가 걸려 12건만 보일 때도 참인 진술이다 */}
+          {counts.contact + counts.subscribe > leads.length || leads.length >= 50 ? (
+            <p className="mt-2 border-t border-line pt-2 text-[12px] text-fg-sub">
+              최근 <span className="tnum font-semibold text-fg">{leads.length}</span>건까지만 불러와요 — 지금까지 받은{" "}
+              <span className="tnum font-semibold text-fg">{(counts.contact + counts.subscribe).toLocaleString("ko-KR")}</span>건 전체는 위 「CSV 전체」로 받으세요.
+            </p>
+          ) : null}
+          </>
         )}
       </div>
 
       {/* 방명록 — 방문자 글에 답글·숨김·삭제(리틀리 「답글 및 삭제」 카피, 4단계) */}
-      <div>
-        <p className="text-[14px] font-semibold text-fg">방명록 {guestbook.length ? <span className="tnum">{guestbook.length}</span> : null}</p>
-        {guestbook.length === 0 ? (
-          <p className="mt-1.5 text-[14px] text-fg-sub">방명록 블록을 두면 방문자 글이 여기에 쌓여요. 답글을 달면 공개 페이지에 함께 보여요.</p>
+      <div className="rounded-card border border-line bg-plate p-4">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {/* 숫자는 카드와 같은 **전체** 건수 — 목록은 최근 50건이라 둘이 다르면 어느 쪽이 맞는지 알 수 없다 */}
+          <p className="text-[14px] font-semibold text-fg">
+            방명록 {counts.guestbook ? <span className="tnum">{counts.guestbook.toLocaleString("ko-KR")}</span> : null}
+            {guestbook.length < counts.guestbook ? <span className="ml-1 text-[12px] font-normal text-fg-sub">· 최근 {guestbook.length}건 표시</span> : null}
+          </p>
+          {/* 미답변만 보기 — 답글 달 일이 남았는지 목록 어디에도 표시가 없었다.
+              칩은 개수가 아니라 목록 유무로 건다: 마지막 하나에 답글을 달아 0이 돼도 되돌릴 칩이 남아야 한다 */}
+          {guestbook.length > 0 ? (
+            <div className="flex gap-1" role="group" aria-label="답글 상태">
+              {(
+                [
+                  ["all", "전체"],
+                  ["unreplied", counts.unreplied ? `답글 없음 ${counts.unreplied}` : "답글 없음"],
+                ] as const
+              ).map(([k, labelText]) => (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={gbFilter === k}
+                  onClick={() => setGbFilter(k)}
+                  className={cn(
+                    "trans-state rounded-chip px-2 py-0.5 text-[11px] font-semibold",
+                    gbFilter === k ? "bg-primary text-on-primary" : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
+                  )}
+                >
+                  {labelText}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        {shownGuest.length === 0 ? (
+          guestbook.length === 0 ? (
+            <div className="mt-3">
+              <EmptyState
+                icon={BookOpen}
+                title="아직 방명록 글이 없어요"
+                description="「방명록」 블록을 페이지에 두면 방문자 글이 여기에 쌓여요. 답글을 달면 공개 페이지에 함께 보여요."
+              />
+            </div>
+          ) : (
+            /* 필터가 걸려 비었을 뿐이다 — 빈 상태 그림을 띄우면 "글이 하나도 없다"로 읽힌다 */
+            <p className="mt-2 text-[14px] text-fg-sub">답글 없는 글이 없어요 — 다 답했어요.</p>
+          )
         ) : (
-          <ul className="mt-1.5 max-h-72 divide-y divide-line overflow-y-auto">
-            {guestbook.map((g) => (
-              <li key={g.id} className={cn("py-2.5", g.hidden && "opacity-60")}>
+          <ul className="mt-2 max-h-96 divide-y divide-line overflow-y-auto">
+            {/* 숨김을 opacity 로 표현하면 메타 글자가 2.5:1 까지 떨어진다 —
+                왼쪽 레일과 칩으로 말하고 본문 대비는 그대로 둔다(주인은 그 글을 읽고 판단해야 한다) */}
+            {shownGuest.map((g) => (
+              <li key={g.id} className={cn("border-l-2 py-2.5 pl-3", g.hidden ? "border-tint-slate-ink" : "border-transparent")}>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[14px] font-semibold">{g.name}</span>
-                  {g.hidden ? <span className="rounded-chip bg-plate px-2 py-0.5 text-[11px] font-semibold text-fg-sub">숨김</span> : null}
+                  {/* 상태 배지는 무채 — 종류(파랑·초록)와 문법을 가른다. 판이 bg-plate 라 채움 대신 테두리로 */}
+                  {g.hidden ? (
+                    <span className="inline-flex items-center gap-1 rounded-chip bg-tint-slate px-2 py-0.5 text-[11px] font-semibold text-tint-slate-ink">
+                      <EyeOff className="size-3" aria-hidden />
+                      숨김
+                    </span>
+                  ) : null}
+                  {!g.reply && !g.hidden ? (
+                    <span className="rounded-chip bg-tint-coral px-2 py-0.5 text-[11px] font-semibold text-tint-coral-ink">답글 없음</span>
+                  ) : null}
                   <span className="tnum ml-auto text-[12px] text-fg-sub">{dayOf(g.createdAt)}</span>
                 </div>
-                <p className="mt-1 whitespace-pre-wrap text-[14px]">{g.message}</p>
-                {g.reply ? <p className="mt-1 rounded-card bg-plate px-2.5 py-1.5 text-[14px] text-fg-sub">↳ {g.reply}</p> : null}
+                <p className={cn("mt-1 whitespace-pre-wrap break-words text-[14px]", openGb !== g.id && "line-clamp-3")}>{g.message}</p>
+                {/* 길이·줄바꿈 휴리스틱 — 짧은 글에 쓸모없는 「더보기」가 뜨는 건 무해하지만,
+                    줄 많은 글이 토글 없이 잘리면 내용이 통째로 숨는다 */}
+                {g.message.length > 120 || g.message.split("\n").length > 3 ? (
+                  <button
+                    type="button"
+                    onClick={() => setOpenGb(openGb === g.id ? null : g.id)}
+                    aria-expanded={openGb === g.id}
+                    className="trans-state mt-0.5 text-[12px] font-semibold text-fg-sub hover:text-fg"
+                  >
+                    {openGb === g.id ? "접기" : "더보기"}
+                  </button>
+                ) : null}
+                {g.reply ? (
+                  <p className="mt-1 whitespace-pre-wrap break-words rounded-card border border-line bg-body px-2.5 py-1.5 text-[14px] text-fg-sub">↳ {g.reply}</p>
+                ) : null}
                 {replyFor === g.id ? (
-                  <div className="mt-1.5 flex gap-1.5">
-                    <input
+                  /* 500자를 받는 칸이 한 줄 input 이었다 — 세 줄 textarea·글자 수·Esc 로 닫기 */
+                  <div className="mt-2 space-y-1.5">
+                    <textarea
                       value={replyDraft}
                       onChange={(e) => setReplyDraft(e.target.value)}
                       maxLength={500}
+                      rows={3}
                       placeholder="답글"
                       aria-label="답글 내용"
-                      className="h-9 min-w-0 flex-1 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg focus:border-primary focus:outline-none"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") setReplyFor(null);
+                      }}
+                      className="w-full resize-y rounded-card border border-line bg-body px-2.5 py-2 text-[14px] leading-[1.6] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
                     />
-                    <Button size="sm" disabled={busy} onClick={() => onGuestbookReply(g.id, replyDraft, () => { setReplyFor(null); setReplyDraft(""); })}>
-                      저장
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setReplyFor(null)}>
-                      취소
-                    </Button>
+                    <div className="flex items-center gap-1.5">
+                      {/* 기존 답글이 있을 때 빈 값 저장은 «답글 삭제» 다(서버가 text || null 로 지운다) — 이름으로 그렇게 말한다 */}
+                      <Button
+                        size="sm"
+                        disabled={busy || (!g.reply && !replyDraft.trim())}
+                        onClick={() => onGuestbookReply(g.id, replyDraft, () => { setReplyFor(null); setReplyDraft(""); })}
+                      >
+                        {g.reply && !replyDraft.trim() ? "답글 삭제" : "저장"}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setReplyFor(null)}>
+                        취소
+                      </Button>
+                      <span className="tnum ml-auto text-[11px] text-fg-sub">{replyDraft.length}/500</span>
+                    </div>
                   </div>
                 ) : (
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setReplyFor(g.id); setReplyDraft(g.reply ?? ""); }}>
+                  /* 되돌릴 수 없는 「삭제」가 답글·숨기기와 같은 무게였다 — 색과 자리로 갈라 놓는다 */
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <Button
+                      variant={g.reply ? "ghost" : "secondary"}
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => {
+                        setReplyFor(g.id);
+                        setReplyDraft(g.reply ?? "");
+                      }}
+                    >
+                      <MessageSquare className="size-3.5" aria-hidden />
                       {g.reply ? "답글 수정" : "답글"}
                     </Button>
                     <Button variant="ghost" size="sm" disabled={busy} onClick={() => onGuestbookHide(g.id, !g.hidden)}>
-                      {g.hidden ? "다시 보이기" : "숨기기"}
+                      {g.hidden ? (
+                        <>
+                          <Eye className="size-3.5" aria-hidden />
+                          다시 보이기
+                        </>
+                      ) : (
+                        <>
+                          <EyeOff className="size-3.5" aria-hidden />
+                          숨기기
+                        </>
+                      )}
                     </Button>
-                    <Button variant="ghost" size="sm" disabled={busy} onClick={() => onGuestbookDelete(g.id)}>
+                    <Button variant="danger" size="sm" className="ml-auto" disabled={busy} onClick={() => onGuestbookDelete(g.id)}>
+                      <Trash2 className="size-3.5" aria-hidden />
                       삭제
                     </Button>
                   </div>
