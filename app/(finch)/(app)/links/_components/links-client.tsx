@@ -294,6 +294,8 @@ export function LinksClient({
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
+  /* 기간 이동 전용 — 저장(busy)과 신호를 섞지 않는다. 섞으면 발행 중에 분석 숫자가 흐려진다 */
+  const [rangePending, startRangeNav] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [drawer, setDrawer] = useState<Drawer | null>(null);
@@ -1522,7 +1524,15 @@ export function LinksClient({
           {tab === "analytics" ? (
             <Card>
               <CardBody>
-                <StatsPanel stats={stats} blocks={blocks} onRange={(d) => router.push(`/links?days=${d}`, { scroll: false })} busy={busy} />
+                <StatsPanel
+            stats={stats}
+            blocks={blocks}
+            pending={rangePending}
+            /* ?page= 를 떨구면 서브페이지에서 기간을 누를 때 메인 페이지로 튕긴다(리마운트로 탭도 초기화된다) */
+            onRange={(d) => startRangeNav(() => router.push(`/links?days=${d}&page=${page.id}`, { scroll: false }))}
+            onRetry={() => startRangeNav(() => router.refresh())}
+            busy={busy}
+          />
               </CardBody>
             </Card>
           ) : null}
@@ -3575,6 +3585,8 @@ function BarList({
   empty,
   hint,
   color = "bg-primary",
+  denom,
+  restLabel = "나머지",
 }: {
   title: string;
   rows: Array<{ label: string; value: number }>;
@@ -3582,11 +3594,19 @@ function BarList({
   hint?: string;
   /** 막대 색 — 섹션마다 다른 색(알록달록) */
   color?: string;
+  /** 실제 분모 — SQL 이 상위 8개만 주므로 rows 합계는 100% 가 아니다(0058).
+      분모를 rows 합계로 두면 "인스타 54%" 같은 부풀린 비중이 찍힌다 */
+  denom?: number;
+  /** 잘린 꼬리 행 이름 */
+  restLabel?: string;
 }) {
   const n = (v: number) => v.toLocaleString("ko-KR");
-    const total = rows.reduce((a, r) => a + r.value, 0);
+    const shown = rows.reduce((a, r) => a + r.value, 0);
+    const total = denom && denom > shown ? denom : shown;
+    const rest = total - shown;
     return (
-      <div className="rounded-card border border-line bg-body p-4">
+      /* 카드(bg-body) **안**의 중첩 면이라 bg-plate — bg-body 면 흰 판 위 흰 판이라 단차가 0이다 */
+      <div className="rounded-card border border-line bg-plate p-4">
         <p className="text-[14px] font-semibold">{title}</p>
         {rows.length === 0 ? (
           <p className="mt-2 text-[14px] text-fg-sub">{empty}</p>
@@ -3600,11 +3620,21 @@ function BarList({
                     {n(r.value)} <span className="font-normal text-fg-sub">{total > 0 ? `${Math.round((r.value / total) * 100)}%` : ""}</span>
                   </span>
                 </div>
-                <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-plate" aria-hidden>
+                {/* 트랙은 상자(bg-plate)보다 밝게 — 면이 한 단계 내려갔으니 반전한다 */}
+                <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-body" aria-hidden>
                   <span className={cn("block h-full rounded-full", color)} style={{ width: `${total > 0 ? Math.round((r.value / total) * 100) : 0}%` }} />
                 </span>
               </li>
             ))}
+            {/* 잘린 꼬리 — 안 보여주면 상위 8개가 전부인 것처럼 읽힌다 */}
+            {rest > 0 ? (
+              <li className="flex items-baseline justify-between gap-2 border-t border-line pt-2 text-[14px] text-fg-sub">
+                <span className="min-w-0 truncate">{restLabel}</span>
+                <span className="tnum shrink-0">
+                  {n(rest)} {Math.round((rest / total) * 100)}%
+                </span>
+              </li>
+            ) : null}
           </ul>
         )}
         {hint ? <p className="mt-2 text-[11px] text-fg-sub">{hint}</p> : null}
@@ -3625,12 +3655,17 @@ function StatsPanel({
   stats,
   blocks,
   onRange,
+  onRetry,
+  pending,
   busy,
 }: {
   stats: LinkStats;
   /** 초안 블록 순서 — 블록별 클릭을 「페이지 순서」로 정렬할 때 기준 */
   blocks: LinkBlock[];
   onRange: (days: number) => void;
+  onRetry: () => void;
+  /** 기간 왕복 중 — 지금 보이는 숫자는 옛 기간 값이다 */
+  pending: boolean;
   busy: boolean;
 }) {
   /* 분모가 0이면 비율은 "0%"가 아니라 **모름**이다. 0% 로 찍으면 성과가 나쁜 것처럼 읽힌다 */
@@ -3642,9 +3677,14 @@ function StatsPanel({
     blockSort === "clicks"
       ? stats.blocks
       : [...stats.blocks].sort((a, b) => (order.get(a.id) ?? 9999) - (order.get(b.id) ?? 9999));
-  const best = stats.blocks.slice(0, 3);
+  /* 순위는 언제나 클릭 기준 — 「페이지 순서」로 정렬해도 1·2·3위 표식은 따라간다 */
+  const rankById = new Map(stats.blocks.map((b, i) => [b.id, i]));
   const rangeLabel = STAT_RANGES.find((r) => r.days === stats.days)?.label ?? `${stats.days}일`;
   const n = (v: number) => v.toLocaleString("ko-KR");
+  /* 집계 실패는 「모름」이지 「0」이 아니다 — 0 을 찍으면 멀쩡한 페이지를 갈아엎는다 */
+  const nv = (v: number) => (stats.failed ? "—" : n(v));
+  /* 일별 추이 공통 축의 최댓값 — 눈금 라벨과 차트가 같은 값을 봐야 한다 */
+  const dayMax = Math.max(1, ...stats.daily.map((d) => Math.max(d.views, d.clicks)));
 
   return (
     <div className="space-y-6">
@@ -3671,10 +3711,13 @@ function StatsPanel({
               </button>
             ))}
           </div>
-          {/* CSV — 화면이 든 데이터를 그대로 내린다 */}
+          {/* CSV — 화면이 든 데이터를 그대로 내린다. 집계 실패 상태의 0 을 파일로 내보내면
+              화면을 고쳐도 거짓이 파일에 남는다 */}
           <Button
             variant="secondary"
             size="sm"
+            disabled={stats.failed}
+            title={stats.failed ? "통계를 불러오지 못해 내려받을 수 없어요" : undefined}
             onClick={() =>
               downloadCsv(`핀치-프로필링크-분석-${rangeLabel}.csv`, [
                 ["구분", "값"],
@@ -3708,23 +3751,32 @@ function StatsPanel({
 
       {/* 집계 실패를 0 으로 뭉개면 "성과 0" 으로 읽힌다 — 멀쩡한 페이지를 갈아엎게 만든다 */}
       {stats.failed ? (
-        <p role="alert" className="rounded-card border border-negative/40 bg-negative-weak p-3 text-[14px] text-negative-strong">
-          통계를 불러오지 못했어요. 아래 숫자는 실제 성과가 아닙니다 — 잠시 후 다시 열어 주세요.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-negative/40 bg-negative-weak p-3">
+          <span role="alert" className="text-[14px] text-negative-strong">
+            통계를 불러오지 못했어요 — 성과가 0이라는 뜻이 아니에요.
+          </span>
+          <Button variant="secondary" size="sm" onClick={onRetry}>
+            다시 시도
+          </Button>
+        </div>
       ) : null}
+
+      {/* 기간 왕복 중에는 아래 내용이 **옛 기간의 값**이다 — 흐려서 그 사실을 말한다.
+          툴바(기간 칩·CSV)는 선명하게 둔다: 흐린 칩을 다시 누르게 만들면 안 된다 */}
+      <div className={cn("space-y-6", pending && "trans-state opacity-60")} aria-busy={pending}>
 
       {/* 요약 6칸 — 색 아이콘(리틀리처럼 항목이 색으로 구분돼 읽힌다) */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         {[
-          { label: "페이지뷰", value: n(stats.views), icon: Eye, tint: "bg-tint-blue text-tint-blue-ink" },
-          { label: "방문자", value: n(stats.uniques), icon: User, tint: "bg-tint-green text-tint-green-ink" },
-          { label: "클릭", value: n(stats.clicks), icon: MousePointerClick, tint: "bg-tint-coral text-tint-coral-ink" },
+          { label: "페이지뷰", value: nv(stats.views), icon: Eye, tint: "bg-tint-blue text-tint-blue-ink" },
+          { label: "방문자", value: nv(stats.uniques), icon: User, tint: "bg-tint-green text-tint-green-ink" },
+          { label: "클릭", value: nv(stats.clicks), icon: MousePointerClick, tint: "bg-tint-coral text-tint-coral-ink" },
           /* 「클릭률」이 아니라 「조회당 클릭」 — 같은 사람이 30분 안에 다시 오면 조회는 1로 묶지만 클릭은 전부 센다. 100% 를 넘을 수 있다 */
           { label: "조회당 클릭", value: ratio(stats.ctr, stats.views), icon: Percent, tint: "bg-tint-purple text-tint-purple-ink" },
           { label: "재방문율", value: ratio(stats.returning, stats.uniques), icon: RotateCcw, tint: "bg-tint-amber text-tint-amber-ink" },
           { label: "평균 체류", value: stats.dwell.n > 0 ? dwellLabel(stats.dwell.avgMs) : "—", icon: Clock, tint: "bg-tint-teal text-tint-teal-ink" },
         ].map((c) => (
-          <div key={c.label} className="rounded-card border border-line bg-body px-3 py-3">
+          <div key={c.label} className="rounded-card border border-line bg-plate px-3 py-3">
             <span className={cn("mb-2 flex size-7 items-center justify-center rounded-card", c.tint)} aria-hidden>
               <c.icon className="size-4" />
             </span>
@@ -3733,12 +3785,16 @@ function StatsPanel({
           </div>
         ))}
       </div>
+      {/* 실패했으면 여기부터는 그리지 않는다 — "아직 클릭이 없어요"는 모름을 없음이라 말하는 거짓말이다.
+          요약 6칸은 남긴다: 지표 이름과 «—» 가 나란히 있어야 "모른다"가 읽힌다 */}
+      {stats.failed ? null : (
+        <>
       <p className="-mt-3 text-[12px] leading-relaxed text-fg-sub">
         같은 사람이 30분 안에 다시 와도 조회는 1로 세고 클릭은 전부 세요 — 그래서 「조회당 클릭」은 100%를 넘을 수 있어요. 쿠키를 지운 방문은 방문자 집계에서 빠집니다.
       </p>
 
       {/* 추이 */}
-      <div className="rounded-card border border-line bg-body p-4">
+      <div className="rounded-card border border-line bg-plate p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-[14px] font-semibold">일별 추이</p>
           <span className="flex items-center gap-2.5 text-[11px] text-fg-sub">
@@ -3758,45 +3814,36 @@ function StatsPanel({
           </p>
         ) : stats.daily.some((d) => d.views > 0 || d.clicks > 0) ? (
           <>
-            <DualLineChart
-              className="mt-2"
-              height={180}
-              series={[
-                { data: stats.daily.map((d) => d.views), stroke: "var(--color-primary)" },
-                { data: stats.daily.map((d) => d.clicks), stroke: "var(--color-positive)" },
-              ]}
-            />
-            <div className="mt-1 flex justify-between text-[11px] text-fg-sub">
+            {/* 두 선을 **공통 0~최댓값** 축에 올린다 — 각자 정규화하면 클릭 3건이 페이지뷰 300건과
+                같은 높이로 그려져 "클릭이 조회만큼 나온다"로 읽힌다. 눈금은 HTML 로 얹는다:
+                차트가 preserveAspectRatio="none" 이라 SVG 안 글자는 가로로 늘어난다 */}
+            <div className="relative mt-2 pl-9">
+              {/* 14px = charts.tsx 의 padY. translate 로 라벨 중심을 선에 맞춘다 */}
+              <span className="tnum absolute left-0 top-[14px] -translate-y-1/2 text-[11px] leading-none text-fg-sub">{n(dayMax)}</span>
+              <span className="tnum absolute bottom-[14px] left-0 translate-y-1/2 text-[11px] leading-none text-fg-sub">0</span>
+              <DualLineChart
+                height={180}
+                scale="shared0"
+                series={[
+                  { data: stats.daily.map((d) => d.views), stroke: "var(--color-primary)" },
+                  { data: stats.daily.map((d) => d.clicks), stroke: "var(--color-positive)" },
+                ]}
+              />
+            </div>
+            <div className="mt-1 flex justify-between pl-9 text-[11px] text-fg-sub">
               <span className="tnum">{stats.daily[0]?.date ?? ""}</span>
               <span className="tnum">{stats.daily[stats.daily.length - 1]?.date ?? ""}</span>
             </div>
-            {/* 두 계열을 각자 min/max 로 정규화해 그린다 — 높이를 서로 비교하면 안 된다 */}
-            <p className="mt-1 text-[12px] text-fg-sub">두 선은 각자의 범위로 그려요. 모양(추세)을 보세요.</p>
           </>
         ) : (
           <p className="mt-2 text-[14px] text-fg-sub">아직 데이터가 없어요.</p>
         )}
       </div>
 
-      {/* BEST 클릭 + 블록별 클릭 */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-        <div className="rounded-card border border-line bg-body p-4">
-          <p className="text-[14px] font-semibold">BEST 클릭</p>
-          {best.length === 0 ? (
-            <p className="mt-2 text-[14px] text-fg-sub">아직 클릭이 없어요.</p>
-          ) : (
-            <ol className="mt-2 space-y-2">
-              {best.map((b, i) => (
-                <li key={b.id} className="flex items-center gap-3">
-                  <span className={cn("tnum flex size-7 shrink-0 items-center justify-center rounded-full text-[12px] font-bold", i === 0 ? "bg-primary text-on-primary" : "bg-plate text-fg-sub")}>{i + 1}</span>
-                  <span className={cn("min-w-0 flex-1 truncate text-[14px]", b.removed && "text-fg-faint line-through")}>{b.label}</span>
-                  <span className="tnum shrink-0 text-[14px] font-semibold">{n(b.clicks)}</span>
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-        <div className="rounded-card border border-line bg-body p-4">
+      {/* 블록별 클릭 — 예전엔 옆에 「BEST 클릭」 카드가 따로 있었는데 같은 목록의 앞 3줄이었다.
+          순위 표식을 이 목록이 직접 달아 카드 하나를 없앴다 */}
+      <div>
+        <div className="rounded-card border border-line bg-plate p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[14px] font-semibold">블록별 클릭</p>
             <div className="flex gap-1" role="group" aria-label="정렬">
@@ -3815,19 +3862,33 @@ function StatsPanel({
           {sortedBlocks.length === 0 ? (
             <p className="mt-2 text-[14px] text-fg-sub">아직 클릭이 없어요.</p>
           ) : (
-            <ul className="mt-2 space-y-1.5">
-              {sortedBlocks.slice(0, 20).map((b) => (
-                <li key={b.id}>
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className={cn("min-w-0 truncate text-[14px]", b.removed && "text-fg-faint line-through")}>{b.label}</span>
-                    <span className="tnum shrink-0 text-[14px] font-semibold">{n(b.clicks)}</span>
-                  </div>
-                  <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-plate" aria-hidden>
-                    <span className="block h-full rounded-full bg-primary" style={{ width: `${Math.round((b.clicks / maxBlock) * 100)}%` }} />
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <ol className="mt-2 space-y-1.5">
+              {sortedBlocks.slice(0, 20).map((b, i) => {
+                /* ?? 0 이면 스냅샷에 없는 id 가 금메달이 된다 */
+                const r = rankById.get(b.id) ?? i;
+                return (
+                  <li key={b.id} className="flex items-center gap-2.5">
+                    <span
+                      className={cn(
+                        "tnum flex size-6 shrink-0 items-center justify-center rounded-chip text-[11px] font-bold",
+                        r === 0 ? "bg-primary text-on-primary" : r < 3 ? "bg-tint-coral text-tint-coral-ink" : "text-fg-sub",
+                      )}
+                    >
+                      {r + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className={cn("min-w-0 truncate text-[14px]", b.removed && "text-fg-faint line-through")}>{b.label}</span>
+                        <span className="tnum shrink-0 text-[14px] font-semibold">{n(b.clicks)}</span>
+                      </div>
+                      <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-body" aria-hidden>
+                        <span className="block h-full rounded-full bg-primary" style={{ width: `${Math.round((b.clicks / maxBlock) * 100)}%` }} />
+                      </span>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
           )}
           <p className="mt-2 text-[11px] text-fg-sub">취소선은 초안에서 지웠지만 라이브에서 눌린 블록이에요.</p>
         </div>
@@ -3838,12 +3899,14 @@ function StatsPanel({
         <BarList
           color="bg-tint-coral-ink"
           title="유입 채널"
+          denom={stats.views}
           rows={stats.sources.map((x) => ({ label: (x.src && SRC_LABEL.get(x.src)) ?? "직접·기타", value: x.views }))}
           empty="마케팅 탭의 「플랫폼별 링크」로 복사한 주소로 들어온 방문이 여기 잡혀요."
         />
         <BarList
           color="bg-tint-blue-ink"
           title="유입 경로"
+          denom={stats.views}
           rows={stats.referrers.map((x) => ({ label: x.host ?? "직접 입력·앱 내부", value: x.views }))}
           empty="아직 유입 경로 정보가 없어요."
           hint="브라우저가 알려준 이전 페이지(호스트만). 인스타·카톡 앱 안에서 온 방문은 대개 「직접 입력·앱 내부」예요."
@@ -3851,15 +3914,22 @@ function StatsPanel({
         <BarList
           color="bg-tint-purple-ink"
           title="기기"
+          denom={stats.views}
           rows={stats.devices.map((x) => ({ label: DEVICE_LABEL.get(x.device ?? "") ?? "알 수 없음", value: x.views }))}
           empty="아직 기기 정보가 없어요."
         />
         <BarList
           color="bg-tint-teal-ink"
           title="지역"
+          denom={stats.views}
+          /* regions 만 country is not null 조건이 있어 잔여에 국가 미상 방문이 섞인다 — 이름으로 그 사실을 드러낸다 */
+          restLabel="나머지·지역 미확인"
           rows={stats.regions.map((r) => ({ label: [r.region, r.country].filter(Boolean).join(", "), value: r.views }))}
           empty="아직 지역 정보가 없어요."
         />
+      </div>
+        </>
+      )}
       </div>
     </div>
   );
@@ -4015,7 +4085,7 @@ function ManagePanel({
           { label: "구독", value: counts.subscribe, icon: Mail, tint: "bg-tint-green text-tint-green-ink" },
           { label: "방명록", value: counts.guestbook, icon: BookOpen, tint: "bg-tint-pink text-tint-pink-ink", sub: counts.unreplied ? `답글 없음 ${counts.unreplied}` : undefined },
         ].map((c) => (
-          <div key={c.label} className="rounded-card border border-line bg-body px-3 py-2.5">
+          <div key={c.label} className="rounded-card border border-line bg-plate px-3 py-2.5">
             <span className={cn("mb-1.5 flex size-7 items-center justify-center rounded-card", c.tint)} aria-hidden>
               <c.icon className="size-4" />
             </span>

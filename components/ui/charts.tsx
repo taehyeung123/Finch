@@ -109,21 +109,27 @@ export function LineChart({
 }
 
 /*
-  2계열 라인 차트 — 단위가 다른 두 지표(ROAS·CPA 등)를 겹쳐 본다.
-  각 계열을 자체 min/max로 정규화해 그리므로 "추세 비교"용이다 — 절대값 비교용 아님
-  (호출부에서 이 점을 캡션으로 고지할 것).
+  2계열 라인 차트.
+  scale="each"(기본) — 계열마다 자체 min~max 정규화. 단위가 다른 두 지표(ROAS·CPA 등)의
+  "추세 비교"용이라 절대값 비교는 못 한다. 이 경우에만 호출부가 캡션으로 고지한다.
+  scale="shared0" — 같은 단위 두 계열을 **공통 0~최댓값** 축에 올린다. 높이를 그대로 비교해도 된다.
+  세로 여백은 위아래 padY(14px) — 호출부가 눈금 라벨을 얹을 때 이 값에 맞춘다.
 */
 export function DualLineChart({
   series,
   className,
   height = 180,
+  scale = "each",
 }: {
   series: { data: number[]; stroke: string }[];
   className?: string;
   height?: number;
+  scale?: "each" | "shared0";
 }) {
   const drawable = series.filter((s) => s.data.length >= 2);
   if (drawable.length === 0) return null;
+  /* 공통 축 — 계열을 통틀어 최댓값. 1 하한은 전부 0일 때의 0 나눗셈 가드 */
+  const gMax = scale === "shared0" ? Math.max(1, ...drawable.flatMap((s) => s.data)) : 0;
   const W = 600;
   const H = height;
   const padX = 6;
@@ -144,8 +150,8 @@ export function DualLineChart({
         />
       ))}
       {drawable.map((s, si) => {
-        const max = Math.max(...s.data);
-        const min = Math.min(...s.data);
+        const max = scale === "shared0" ? gMax : Math.max(...s.data);
+        const min = scale === "shared0" ? 0 : Math.min(...s.data);
         /* 값이 전부 같으면(신규 페이지의 0 행렬 등) range 가 0 이다. 1 로 대체하면
            (v-min)/1 = 0 이라 선이 **맨 위**에 붙어 "최고치가 계속 유지 중"처럼 보인다.
            변화가 없다는 뜻이므로 세로 가운데에 그린다. */

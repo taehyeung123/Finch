@@ -135,7 +135,9 @@ export function buildIcs(events: IcsEvent[], now = 0): string {
     }
     lines.push(fold(`SUMMARY:${esc(ev.title)}`));
     if (ev.place) lines.push(fold(`LOCATION:${esc(ev.place)}`));
-    if (ev.url) lines.push(fold(`URL:${esc(ev.url)}`));
+    /* URL 은 URI 값 타입이라 TEXT 이스케이프 대상이 아니다 — `?a=1;b=2` 같은 주소에
+       백슬래시가 박혀 캘린더가 엉뚱한 곳으로 연다. 개행만 막는다(헤더 주입 방지) */
+    if (ev.url) lines.push(fold(`URL:${ev.url.replace(/[\r\n]/g, "")}`));
     lines.push("END:VEVENT");
   }
   lines.push("END:VCALENDAR");

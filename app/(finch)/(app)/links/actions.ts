@@ -937,6 +937,9 @@ export async function deleteGuestbook(id: number): Promise<Result> {
 
 /** 0057(리틀리 흡수 4단계)에서 추가된 타입 — check 위반 시 어느 마이그레이션인지 안내 */
 const STAGE4_TYPES = new Set<BlockType>(["gallery", "music", "vcard", "search", "file", "guestbook"]);
+/** 타입을 더할 때마다 여기 한 줄이 같이 는다 — 안 늘리면 "0054 적용하세요" 같은 엉뚱한 안내가 나간다(소넷 확정) */
+const TYPE_MIGRATION = new Map<BlockType, string>([["events", "0063"]]);
+const migrationFor = (type: BlockType) => TYPE_MIGRATION.get(type) ?? (STAGE4_TYPES.has(type) ? "0057" : "0054");
 
 export async function addBlock(type: BlockType, pageId?: string): Promise<Result & { id?: string }> {
   if (isDemoMode()) return DEMO;
@@ -978,7 +981,7 @@ export async function addBlock(type: BlockType, pageId?: string): Promise<Result
     /* 0054(수익화 블록 타입) 미적용 DB — check 위반을 사용자 언어로.
        조용히 "추가하지 못했어요"만 내면 코드 버그처럼 읽힌다(계단식 폴백 관례). */
     if (error.code === "23514" || /link_blocks_type_check/.test(error.message)) {
-      const mig = STAGE4_TYPES.has(type) ? "0057" : "0054";
+      const mig = migrationFor(type);
       return { ok: false, error: `이 블록은 서버 업데이트(${mig}) 적용 후 쓸 수 있어요.` };
     }
     console.error("[links] 블록 추가 실패:", error.message);

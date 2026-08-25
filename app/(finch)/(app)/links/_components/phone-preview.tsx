@@ -1112,12 +1112,12 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
       const parsed = arr(d, "items")
         .map((it) => ({ it, start: parseEventAt(it.startAt), end: parseEventAt(it.endAt) }))
         .filter((x): x is { it: Record<string, unknown>; start: EventPart; end: EventPart | null } => !!x.start && !!s(x.it, "title").trim())
-        .map((x) => ({ ...x, over: eventEndEpoch(x.start, x.end) < now }))
-        .slice(0, 20);
+        .map((x) => ({ ...x, over: eventEndEpoch(x.start, x.end) < now }));
       const dim = s(d, "past") === "dim";
       const upcoming = parsed.filter((x) => !x.over).sort((a, b) => eventEpoch(a.start) - eventEpoch(b.start));
       const past = dim ? parsed.filter((x) => x.over).sort((a, b) => eventEpoch(b.start) - eventEpoch(a.start)) : [];
-      const rows = [...upcoming, ...past];
+      /* 자르기는 정렬 뒤에(공개와 같은 규칙) */
+      const rows = [...upcoming, ...past].slice(0, 20);
       /* 캔버스에서는 빈 블록도 자리를 지킨다 — 편집 중에 사라지면 다시 고를 길이 없다(다른 블록과 같은 관례) */
       if (rows.length === 0) {
         return (
@@ -1133,7 +1133,9 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
             {rows.map((x, i) => {
               const chip = eventChip(x.start, "ko");
               const endSame = x.end && eventEpoch(x.end) !== eventEpoch(x.start);
-              const meta = [endSame ? `~ ${x.end!.mo}월 ${x.end!.d}일` : formatEventTime(x.start) || "하루 종일", s(x.it, "place")]
+              /* 공개 렌더러와 같은 규칙 — 여러 날이어도 시각을 버리지 않는다 */
+              const time = formatEventTime(x.start);
+              const meta = [endSame ? `~ ${x.end!.mo}월 ${x.end!.d}일` : "", time || (endSame ? "" : "하루 종일"), s(x.it, "place")]
                 .filter(Boolean)
                 .join(" · ");
               return (

@@ -662,23 +662,24 @@ export function BlockRenderer({
       const parsed = arr(d, "items")
         .map((it, i) => ({ it, i, start: parseEventAt(it.startAt), end: parseEventAt(it.endAt) }))
         .filter((x): x is { it: Record<string, unknown>; i: number; start: EventPart; end: EventPart | null } => !!x.start && !!s(x.it, "title").trim())
-        .map((x) => ({ ...x, over: eventEndEpoch(x.start, x.end) < now }))
-        .slice(0, 20);
+        .map((x) => ({ ...x, over: eventEndEpoch(x.start, x.end) < now }));
       if (parsed.length === 0) return null;
       const dim = s(d, "past") === "dim";
       /* 다가올 일정은 가까운 순, 지난 일정은 최근 순으로 아래에 — 방문자가 위만 봐도 되게 */
+      /* 자르기는 **정렬 뒤**에 — 앞서 자르면 21번째로 적어 넣은 가장 가까운 일정이 통째로 사라진다 */
       const upcoming = parsed.filter((x) => !x.over).sort((a, b) => eventEpoch(a.start) - eventEpoch(b.start));
       const past = dim ? parsed.filter((x) => x.over).sort((a, b) => eventEpoch(b.start) - eventEpoch(a.start)) : [];
-      const rows = [...upcoming, ...past];
+      const rows = [...upcoming, ...past].slice(0, 20);
       if (rows.length === 0) return null;
 
       const row = (x: (typeof rows)[number]) => {
         const chip = eventChip(x.start, t.lang);
         const time = formatEventTime(x.start);
         const endSame = x.end && eventEpoch(x.end) !== eventEpoch(x.start);
-        /* 여러 날 이어지는 일정은 "~ 9월 7일 (월)" 이 시각 자리를 대신한다 —
-           끝나는 날과 "하루 종일" 을 나란히 두면 어느 쪽이 이 줄의 날짜인지 헷갈린다 */
-        const meta = [endSame ? `~ ${formatEventDate(x.end!, t.lang)}` : time || t.events.allday, s(x.it, "place")]
+        /* 여러 날이면 "~ 끝나는 날" 을 앞에 세우고, 시각이 있으면 **함께** 보여준다.
+           끝나는 날이 시각을 밀어내면 "20:00 오픈" 같은 핵심이 사라진다(소넷 확정).
+           "하루 종일" 은 시각도 종료일도 없을 때만 — 여러 날 일정에 붙이면 군더더기다 */
+        const meta = [endSame ? `~ ${formatEventDate(x.end!, t.lang)}` : "", time || (endSame ? "" : t.events.allday), s(x.it, "place")]
           .filter(Boolean)
           .join(" · ");
         const inner = (
