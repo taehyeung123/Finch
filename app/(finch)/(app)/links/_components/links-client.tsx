@@ -36,6 +36,7 @@ import {
   Link2,
   Palette,
   PanelTop,
+  PartyPopper,
   Plus,
   QrCode,
   Share2,
@@ -43,6 +44,7 @@ import {
   Redo2,
   Rocket,
   Settings,
+  Snowflake,
   Sparkles,
   Square,
   Trash2,
@@ -97,6 +99,8 @@ import {
   LAYOUTS,
   LINK_THEMES,
   contrastRatio,
+  cursorCss,
+  cursorImage,
   mixHex,
   sanitizeThemeCustom,
   themeByKey,
@@ -336,11 +340,15 @@ export function LinksClient({
     return parentSlug && me?.subSlug ? `${origin}/p/${parentSlug}/${me.subSlug}` : publicLinkUrl(page.slug, origin);
   })();
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [notice, setNotice] = useState("");
+  /* 토스트 — 「블록을 추가했어요」와 「클릭이 삼켜졌어요」가 같은 회색이면 성공과 거절이 구분되지 않는다.
+     배경은 두 갈래 모두 불투명 bg-overlay 를 유지하고(반투명이면 베일이 비쳐 읽기가 무너진다)
+     테두리·아이콘으로 톤을 가른다 */
+  const [notice, setNotice] = useState<{ text: string; tone: "ok" | "warn" } | null>(null);
+  const toast = (text: string, tone: "ok" | "warn" = "ok") => setNotice({ text, tone });
   /* 토스트는 4초 뒤 내려간다 — 같은 문구가 연달아 오면 타이머만 다시 돈다 */
   useEffect(() => {
     if (!notice) return;
-    const t = window.setTimeout(() => setNotice(""), 4000);
+    const t = window.setTimeout(() => setNotice(null), 4000);
     return () => window.clearTimeout(t);
   }, [notice]);
   /* 템플릿 스트립 접기 — 링크팜의 「템플릿 적용하기 ^」 상시 스트립 카피 */
@@ -573,7 +581,7 @@ export function LinksClient({
       /* 앞선 작업이 끝날 때까지 조용히 삼킨다. **삼켰다는 사실은 알려야 한다** —
          ↑↓ 는 포커스가 튀지 않게 일부러 비활성화하지 않으므로, 눌렀는데 아무 일도
          안 일어나는 게 화면상 구분되지 않는다. */
-      setNotice("앞선 작업을 처리하는 중이에요. 잠시 후 다시 눌러 주세요.");
+      toast("앞선 작업을 처리하는 중이에요. 잠시 후 다시 눌러 주세요.", "warn");
       return;
     }
     setBusy(true);
@@ -647,7 +655,7 @@ export function LinksClient({
     run(entry.undo, () => {
       setUndoStack((s) => s.filter((e) => e !== entry));
       setRedoStack((s) => [...s, entry]);
-      setNotice(`되돌렸어요: ${entry.label}`);
+      toast(`되돌렸어요: ${entry.label}`);
     });
   }
 
@@ -657,7 +665,7 @@ export function LinksClient({
     run(entry.redo, () => {
       setRedoStack((s) => s.filter((e) => e !== entry));
       setUndoStack((s) => [...s, entry]);
-      setNotice(`다시 실행했어요: ${entry.label}`);
+      toast(`다시 실행했어요: ${entry.label}`);
     });
   }
 
@@ -746,7 +754,7 @@ export function LinksClient({
         onStart={(input) =>
           run(
             () => createLinkPageWithStart(input),
-            () => setNotice("페이지를 만들었어요. 주소는 「프로필」 탭에서 바꿀 수 있어요."),
+            () => toast("페이지를 만들었어요. 주소는 「프로필」 탭에서 바꿀 수 있어요."),
           )
         }
         error={error}
@@ -767,7 +775,7 @@ export function LinksClient({
     run(
       () => addBlock(t, page!.id),
       (res) => {
-        setNotice("블록을 추가했어요. 캔버스의 블록을 누르면 바로 고칠 수 있어요.");
+        toast("블록을 추가했어요. 캔버스의 블록을 누르면 바로 고칠 수 있어요.");
         if (res.id) {
           const payload = {
             type: t,
@@ -800,7 +808,7 @@ export function LinksClient({
         () => {
           /* 무슨 일이 났는지 바로 말한다 — 눈 아이콘을 편집 버튼으로 알고 누른 뒤
              "미리보기에 왜 안 나오냐"가 됐다(2026-08-22 실계정). 되돌리는 길도 같이. */
-          setNotice(
+          toast(
             active
               ? "블록을 다시 켰어요 — 미리보기·공개에 나가요."
               : "블록을 숨겼어요 — 미리보기·공개 페이지에서 빠져요. 눈 아이콘이나 ↩ 실행취소로 되돌릴 수 있어요.",
@@ -818,7 +826,7 @@ export function LinksClient({
       run(
         chained(() => moveBlock(id, dir, page.id)),
         () => {
-          setNotice(`${label} 블록을 ${dir === "up" ? "위로" : "아래로"} 옮겼어요.`);
+          toast(`${label} 블록을 ${dir === "up" ? "위로" : "아래로"} 옮겼어요.`);
           /* 한계(소넷 확정 3, 수용): 역연산은 "그때의 이웃"이 아니라 실행
              시점의 이웃과 스왑한다(moveBlock 이 현재 목록을 다시 읽는다).
              사이에 다른 이동이 끼면 원래 배치 복원이 아니라 한 칸 이동을
@@ -894,7 +902,7 @@ export function LinksClient({
               redo: () => deleteBlock(resolveId(id)),
             });
           }
-          setNotice("블록을 삭제했어요. 상단 ↩ 실행취소로 복원할 수 있어요.");
+          toast("블록을 삭제했어요. 상단 ↩ 실행취소로 복원할 수 있어요.");
         },
       );
   }
@@ -1001,7 +1009,7 @@ export function LinksClient({
               () => setBlockSchedule(id, openAt, closeAt),
               () => {
                 setScheduleFor(null);
-                setNotice(openAt || closeAt ? "예약을 저장했어요 — 공개 페이지가 날짜에 맞춰 보이거나 숨겨요." : "예약을 해제했어요.");
+                toast(openAt || closeAt ? "예약을 저장했어요 — 공개 페이지가 날짜에 맞춰 보이거나 숨겨요." : "예약을 해제했어요.");
                 record({
                   label: "예약 공개 변경",
                   undo: () => setBlockSchedule(resolveId(id), prev.openAt, prev.closeAt),
@@ -1027,7 +1035,7 @@ export function LinksClient({
               () => {
                 clearHistory();
                 setTplPreview(null);
-                setNotice(`「${t.name}」 템플릿을 적용했어요.`);
+                toast(`「${t.name}」 템플릿을 적용했어요.`);
               },
             );
           }}
@@ -1070,7 +1078,7 @@ export function LinksClient({
                          남아 있어야 한다(붙여넣기 원문은 textarea 에 없어서 여기서
                          날리면 원래 서비스로 돌아가 다시 복사해 와야 한다). */
                       clear();
-                      setNotice(`링크 ${items.length}개를 추가했어요.`);
+                      toast(`링크 ${items.length}개를 추가했어요.`);
                     },
                   )
                 }
@@ -1148,7 +1156,7 @@ export function LinksClient({
                       setUndoStack([]);
                       setRedoStack([]);
                       setEditingId(null);
-                      setNotice(page.publishedAt ? "마지막 발행본으로 되돌렸어요." : "초안을 비웠어요.");
+                      toast(page.publishedAt ? "마지막 발행본으로 되돌렸어요." : "초안을 비웠어요.");
                       startTransition(() => router.refresh());
                     },
                   )
@@ -1174,7 +1182,7 @@ export function LinksClient({
                   }
                   return r;
                 }),
-              () => setNotice("페이지를 만들었어요."),
+              () => toast("페이지를 만들었어요."),
             )
           }
         />
@@ -1197,7 +1205,7 @@ export function LinksClient({
                   }
                   return r;
                 }),
-              () => setNotice("서브 페이지를 만들었어요."),
+              () => toast("서브 페이지를 만들었어요."),
             );
           }}
         />
@@ -1236,7 +1244,7 @@ export function LinksClient({
                       return p;
                     },
                     undefined,
-                    () => setNotice("페이지 설정을 저장했어요. 바로 적용돼요."),
+                    () => toast("페이지 설정을 저장했어요. 바로 적용돼요."),
                   )
                 }
                 onPassword={(pw, onDone) =>
@@ -1251,7 +1259,7 @@ export function LinksClient({
                       return p;
                     },
                     () => {
-                      setNotice(pw === null ? "비밀번호를 풀었어요. 누구나 볼 수 있어요." : "비밀번호를 걸었어요. 방문자는 비밀번호를 넣어야 볼 수 있어요.");
+                      toast(pw === null ? "비밀번호를 풀었어요. 누구나 볼 수 있어요." : "비밀번호를 걸었어요. 방문자는 비밀번호를 넣어야 볼 수 있어요.");
                       onDone?.();
                     },
                   )
@@ -1477,7 +1485,7 @@ export function LinksClient({
                   run(
                     () => setBlockEmphasized(id, on, page.id),
                     () => {
-                      setNotice(on ? "이 블록을 강조했어요 — 페이지 아래에 고정 버튼으로 떠요." : "강조를 풀었어요.");
+                      toast(on ? "이 블록을 강조했어요 — 페이지 아래에 고정 버튼으로 떠요." : "강조를 풀었어요.");
                       record({
                         label: on ? "강조 켜기" : "강조 끄기",
                         undo: () =>
@@ -1500,7 +1508,7 @@ export function LinksClient({
                     /* 정렬 번호를 다시 쓰는 조작 — 드래그(fire)와 겹치지 않게 같은 체인을 탄다(감사 L5) */
                     chained(() => duplicateBlock(id, page.id)),
                     (res) => {
-                      setNotice(`「${label}」 블록을 복사했어요 — 바로 아래에 들어갔어요.`);
+                      toast(`「${label}」 블록을 복사했어요 — 바로 아래에 들어갔어요.`);
                       if (res.id) {
                         const newId = res.id;
                         record({
@@ -1598,7 +1606,7 @@ export function LinksClient({
                 onGuestbookReply={(id, reply, onDone) =>
                   run(() => replyGuestbook(id, reply), () => {
                     onDone();
-                    setNotice("답글을 달았어요.");
+                    toast("답글을 달았어요.");
                   })
                 }
                 onGuestbookHide={(id, hidden) => run(() => setGuestbookHidden(id, hidden))}
@@ -1607,7 +1615,7 @@ export function LinksClient({
                     title: "방명록 글을 지울까요?",
                     description: "공개 페이지에서도 함께 사라져요. 이건 되돌릴 수 없어요 — 잠시 감추려면 「숨기기」를 쓰세요.",
                     confirmLabel: "삭제",
-                    onConfirm: () => run(() => deleteGuestbook(id), () => setNotice("방명록 글을 지웠어요.")),
+                    onConfirm: () => run(() => deleteGuestbook(id), () => toast("방명록 글을 지웠어요.")),
                   })
                 }
                 onExportLeads={() =>
@@ -1619,7 +1627,7 @@ export function LinksClient({
                         ["종류", "이름", "이메일", "연락처", "내용", "접수일"],
                         ...rows.map((l) => [l.kind, l.name, l.email, l.phone, l.message, l.createdAt] as Array<string | number>),
                       ]);
-                      setNotice(`받은 내용 ${rows.length}건을 CSV 로 내려받았어요.`);
+                      toast(`받은 내용 ${rows.length}건을 CSV 로 내려받았어요.`);
                     },
                   )
                 }
@@ -1648,7 +1656,7 @@ export function LinksClient({
                         return p;
                       },
                       undefined,
-                      () => setNotice("마케팅 연결을 저장했어요. 공개 페이지에 바로 실려요."),
+                      () => toast("마케팅 연결을 저장했어요. 공개 페이지에 바로 실려요."),
                     )
                   }
                 />
@@ -1732,9 +1740,17 @@ export function LinksClient({
         <p
           data-open={notice ? "true" : "false"}
           role="status"
-          className="toast-pop pointer-events-auto max-w-xl rounded-card border border-line-strong bg-overlay px-4 py-2.5 text-[14px] text-fg-sub shadow-pop"
+          className={cn(
+            "toast-pop pointer-events-auto flex max-w-xl items-start gap-2 rounded-card border bg-overlay px-4 py-2.5 text-[14px] leading-[1.6] text-fg shadow-pop",
+            notice?.tone === "warn" ? "border-warning" : "border-line-strong",
+          )}
         >
-          {notice}
+          {notice?.tone === "warn" ? (
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
+          ) : (
+            <Check className="mt-0.5 size-4 shrink-0 text-positive" aria-hidden />
+          )}
+          <span>{notice?.text}</span>
         </p>
       </div>
     </div>
@@ -3482,10 +3498,17 @@ function ThemePanel({
                   onClick={() => onPick(t.key)}
                   aria-pressed={current === t.key}
                   className={cn(
-                    "trans-state overflow-hidden rounded-card border bg-body text-left disabled:opacity-50",
+                    "trans-state relative overflow-hidden rounded-card border bg-body text-left disabled:opacity-50",
                     current === t.key ? "border-primary ring-2 ring-primary/30" : "border-line hover:border-line-strong",
                   )}
                 >
+                  {/* 선택 배지 — 프리셋·글꼴이 같은 문법을 쓴다(테두리만으로는 어느 쪽이 «지금 것» 인지 흐리다).
+                      ring-body 는 임의 색 스와치 위에서 코랄이 묻히지 않게 하는 halo 다 */}
+                  {current === t.key ? (
+                    <span className="absolute right-1 top-1 z-10 flex size-4 items-center justify-center rounded-chip bg-primary text-on-primary ring-2 ring-body" aria-hidden>
+                      <Check className="size-3" />
+                    </span>
+                  ) : null}
                   <span className="block h-14 p-2" style={{ background: t.bg2 ? `linear-gradient(160deg, ${t.bg}, ${t.bg2})` : t.bg }}>
                     {/* 강조 막대 — 테마를 가르는 가장 센 신호 */}
                     <span className="block w-full" style={{ height: 18, background: t.accent, borderRadius: r }} aria-hidden />
@@ -3713,10 +3736,15 @@ function ThemePanel({
               aria-pressed={(custom.font ?? "sans") === f.key}
               onClick={() => onCustomChange({ font: f.key === "sans" ? undefined : f.key })}
               className={cn(
-                "trans-state flex flex-col items-start rounded-card border px-3 py-2 text-left",
+                "trans-state relative flex flex-col items-start rounded-card border px-3 py-2 text-left",
                 (custom.font ?? "sans") === f.key ? "border-primary bg-primary/10" : "border-line bg-body hover:bg-tint-hover",
               )}
             >
+              {(custom.font ?? "sans") === f.key ? (
+                <span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-chip bg-primary text-on-primary ring-2 ring-body" aria-hidden>
+                  <Check className="size-3" />
+                </span>
+              ) : null}
               {/* 견본만 그 글꼴 — 이름표는 앱 글꼴 그대로 */}
               <span className="text-[17px] leading-tight" style={{ fontFamily: f.family }}>
                 안녕하세요 Aa
@@ -3774,7 +3802,14 @@ function ThemePanel({
         </div>
       </DSection>
 
-      <DSection icon={Sparkles} tint="bg-tint-green text-tint-green-ink" title="효과" hint="스크롤 애니메이션·커서·화면 효과는 공개 페이지에서만 움직여요(미리보기는 모양만).">
+      {/* 예전 hint 는 커서·스크롤까지 "공개 페이지에서만 움직인다"고 했는데 사실이 아니다 —
+          미리보기도 --lp-cursor 와 스크롤 애니를 그대로 돌린다. 진짜로 미리보기에 없는 건 화면 효과뿐이다 */}
+      <DSection
+        icon={Sparkles}
+        tint="bg-tint-green text-tint-green-ink"
+        title="효과"
+        hint="커서는 칩이나 폰 위에 올려 보면 바로 보여요. 스크롤 효과는 폰을 굴려 보세요. 화면 효과만 공개 페이지에서 보입니다."
+      >
         {(
           [
             ["스크롤", CUSTOM_ANIMS, custom.anim ?? "none", (k: string) => onCustomChange({ anim: k === "none" ? undefined : (k as LinkThemeCustom["anim"]) })],
@@ -3784,11 +3819,34 @@ function ThemePanel({
         ).map(([lab, opts, cur, set]) => (
           <div key={lab} className="flex flex-wrap items-center gap-1.5">
             <span className="mr-1 w-10 text-[12px] text-fg-sub">{lab}</span>
-            {opts.map((o) => (
-              <button key={o.key} type="button" aria-pressed={cur === o.key} onClick={() => set(o.key)} className={chip(cur === o.key)}>
-                {o.label}
-              </button>
-            ))}
+            {opts.map((o) => {
+              /* 커서 줄에만 실제 커서·글리프를 건다 — 공용 루프라 lab 으로 갈라야 페이드·줌 칩에 별이 붙지 않는다 */
+              const isCursor = lab === "커서";
+              const isFx = lab === "화면";
+              const FxIcon = o.key === "confetti" ? PartyPopper : o.key === "snow" ? Snowflake : o.key === "sparkle" ? Sparkles : null;
+              const curImg = isCursor ? cursorImage(o.key as LinkThemeCustom["cursor"]) : undefined;
+              return (
+                <button
+                  key={o.key}
+                  type="button"
+                  aria-pressed={cur === o.key}
+                  onClick={() => set(o.key)}
+                  className={chip(cur === o.key)}
+                  /* 「기본」은 cursorCss 가 "auto"(truthy) 라 || 로는 안 걸린다 — 값으로 비교해 pointer 를 준다 */
+                  style={isCursor ? { cursor: curImg ? cursorCss(o.key as LinkThemeCustom["cursor"]) : "pointer" } : undefined}
+                >
+                  {curImg ? (
+                    <span
+                      aria-hidden
+                      className="mr-1 inline-block size-4 bg-center bg-no-repeat align-[-4px]"
+                      style={{ backgroundImage: curImg, backgroundSize: "16px 16px" }}
+                    />
+                  ) : null}
+                  {isFx && FxIcon ? <FxIcon aria-hidden className="mr-1 inline size-3.5 align-[-2px]" /> : null}
+                  {o.label}
+                </button>
+              );
+            })}
           </div>
         ))}
       </DSection>

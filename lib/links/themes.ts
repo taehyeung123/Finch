@@ -128,6 +128,13 @@ export function cursorCss(kind: LinkThemeCustom["cursor"]): string {
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 12 12, auto`;
 }
 
+/** 같은 SVG 를 **그림으로** 쓸 때 — 편집기 칩이 커서 모양을 보여준다.
+    호출부에서 정규식으로 파싱하지 않도록 정의를 이 파일 한 곳에 둔다 */
+export function cursorImage(kind: LinkThemeCustom["cursor"]): string | undefined {
+  const css = cursorCss(kind);
+  return css === "auto" ? undefined : css.replace(/\s+\d+\s+\d+,\s*auto$/, "");
+}
+
 /** 글꼴 목록 — fontsource(jsdelivr) 로 싣는다. CSP 가 이미 cdn.jsdelivr.net 의 style/font 를 허용한다.
     pkg 가 null 이면 시스템 글꼴(추가 로드 없음). bold 는 700.css 가 있는 패키지. */
 export const LINK_FONTS: ReadonlyArray<{ key: string; label: string; family: string; pkg: string | null; bold: boolean }> = [
