@@ -4,7 +4,8 @@ import { COUPANG_DISCLOSURE, musicEmbed } from "@/lib/links/blocks";
 import { Collapsible } from "./collapsible";
 import { GuestbookForm } from "./guestbook-form";
 import { SearchBlock } from "./search-block";
-import { MapPin, ExternalLink, Download, UserPlus } from "lucide-react";
+import { MapPin, ExternalLink, Download, UserPlus, CalendarPlus } from "lucide-react";
+import { buildIcs, eventChip, eventEndEpoch, eventEpoch, formatEventDate, formatEventTime, icsHref, nowMs, parseEventAt, type EventPart } from "@/lib/links/events";
 import { lpText, lpN, type LpText } from "@/lib/links/i18n";
 
 /** 방명록 글(공개분) — 페이지가 읽어서 렌더러에 넘긴다 */
@@ -99,6 +100,8 @@ export function BlockRenderer({
   isDemo = false,
   t = lpText("ko"),
   ext = EXT_BLANK,
+  /* 일정 블록의 "지났는가" 판정 시각 — 페이지가 force-dynamic 이라 요청 시점이 기본값이다 */
+  now = nowMs(),
 }: {
   block: SnapshotBlock;
   slug: string;
@@ -109,6 +112,7 @@ export function BlockRenderer({
   t?: LpText;
   /** 외부 링크 속성 — 새 창/현재 창(0058). SNS 줄·고정 CTA 와 같은 값을 받는다 */
   ext?: { target?: string; rel: string };
+  now?: number;
 }) {
   const d = block.data ?? {};
   const type = block.type as BlockType;
@@ -648,6 +652,101 @@ export function BlockRenderer({
             {s(d, "label") || t.donate}
           </a>
           {s(d, "message") ? <p className="mt-1.5 text-center text-[12px] text-[var(--lp-muted)]">{s(d, "message")}</p> : null}
+        </div>
+      );
+    }
+
+    case "events": {
+      /* 일정 — 리틀리 「일정」 흡수(2026-08-25). 백엔드가 없다: 알리고, 캘린더에 담아 준다.
+         ⚠️ 미리보기(phone-preview)도 **같은 모양**을 따로 그린다 — 한쪽만 고치지 말 것(CLAUDE.md). */
+      const parsed = arr(d, "items")
+        .map((it, i) => ({ it, i, start: parseEventAt(it.startAt), end: parseEventAt(it.endAt) }))
+        .filter((x): x is { it: Record<string, unknown>; i: number; start: EventPart; end: EventPart | null } => !!x.start && !!s(x.it, "title").trim())
+        .map((x) => ({ ...x, over: eventEndEpoch(x.start, x.end) < now }))
+        .slice(0, 20);
+      if (parsed.length === 0) return null;
+      const dim = s(d, "past") === "dim";
+      /* 다가올 일정은 가까운 순, 지난 일정은 최근 순으로 아래에 — 방문자가 위만 봐도 되게 */
+      const upcoming = parsed.filter((x) => !x.over).sort((a, b) => eventEpoch(a.start) - eventEpoch(b.start));
+      const past = dim ? parsed.filter((x) => x.over).sort((a, b) => eventEpoch(b.start) - eventEpoch(a.start)) : [];
+      const rows = [...upcoming, ...past];
+      if (rows.length === 0) return null;
+
+      const row = (x: (typeof rows)[number]) => {
+        const chip = eventChip(x.start, t.lang);
+        const time = formatEventTime(x.start);
+        const endSame = x.end && eventEpoch(x.end) !== eventEpoch(x.start);
+        /* 여러 날 이어지는 일정은 "~ 9월 7일 (월)" 이 시각 자리를 대신한다 —
+           끝나는 날과 "하루 종일" 을 나란히 두면 어느 쪽이 이 줄의 날짜인지 헷갈린다 */
+        const meta = [endSame ? `~ ${formatEventDate(x.end!, t.lang)}` : time || t.events.allday, s(x.it, "place")]
+          .filter(Boolean)
+          .join(" · ");
+        const inner = (
+          <span className={`flex items-center gap-3 ${x.over ? "opacity-55" : ""}`}>
+            <span
+              className="tnum flex size-12 shrink-0 flex-col items-center justify-center rounded-[calc(var(--lp-radius)/1.6)] leading-none"
+              style={{ backgroundColor: "color-mix(in srgb, var(--lp-accent) 13%, transparent)", color: "var(--lp-accent-text)" }}
+              aria-hidden
+            >
+              <span className="text-[11px] font-medium opacity-80">{chip.top}</span>
+              <span className="mt-0.5 text-[17px] font-bold">{chip.d}</span>
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[15px] font-semibold text-[var(--lp-fg)]">{s(x.it, "title")}</span>
+              <span className="mt-0.5 block truncate text-[14px] text-[var(--lp-muted)]">
+                {/* 보조기기에는 "9월 1일 (화)" 를 그대로 읽어 준다 — 칩의 숫자만으로는 무슨 날인지 모른다 */}
+                <span className="sr-only">{formatEventDate(x.start, t.lang)}{endSame ? ` ~ ${formatEventDate(x.end!, t.lang)}` : ""} </span>
+                {meta}
+              </span>
+            </span>
+            {s(x.it, "url") ? <ExternalLink className="size-3.5 shrink-0 text-[var(--lp-muted)]" aria-hidden /> : null}
+          </span>
+        );
+        return s(x.it, "url") ? (
+          <li key={x.i}>
+            <a href={goHref(slug, block.id, x.i)} {...ext} className="lp-btn -mx-1 block rounded-[calc(var(--lp-radius)/1.6)] px-1 py-2.5">
+              {inner}
+            </a>
+          </li>
+        ) : (
+          <li key={x.i} className="py-2.5">
+            {inner}
+          </li>
+        );
+      };
+
+      const ics =
+        d.ics !== false
+          ? buildIcs(
+              rows
+                .filter((x) => !x.over)
+                .map((x) => ({
+                  uid: `${block.id}-${x.i}@finch.ai.kr`,
+                  title: s(x.it, "title"),
+                  start: x.start,
+                  end: x.end,
+                  place: s(x.it, "place") || undefined,
+                  url: s(x.it, "url") || undefined,
+                })),
+              now,
+            )
+          : "";
+
+      return (
+        <div className={`${cardCls} px-4 py-3.5`}>
+          {s(d, "label") ? <p className="mb-1 text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "label")}</p> : null}
+          <ul className="divide-y divide-[var(--lp-border)]">{rows.map(row)}</ul>
+          {past.length > 0 ? <p className="mt-2 text-center text-[12px] text-[var(--lp-muted)]">{t.events.past}</p> : null}
+          {ics && upcoming.length > 0 ? (
+            <a
+              href={icsHref(ics)}
+              download={`${slug}-schedule.ics`}
+              className="lp-btn mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-[var(--lp-radius-btn)] border border-[var(--lp-border)] px-4 text-[14px] font-medium text-[var(--lp-fg)]"
+            >
+              <CalendarPlus className="size-4" aria-hidden />
+              {t.events.add}
+            </a>
+          ) : null}
         </div>
       );
     }

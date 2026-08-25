@@ -1055,6 +1055,122 @@ export function BlockEditor({
         </>
       ) : null}
 
+      {/* ── 일정(리틀리 흡수, 2026-08-25) ── */}
+      {block.type === "events" ? (
+        <>
+          <div>
+            <label className={label} htmlFor="b-elabel">
+              블록 제목
+            </label>
+            <input id="b-elabel" value={str("label")} onChange={(e) => set("label", e.target.value)} placeholder="이번 달 일정" maxLength={40} className={`mt-1.5 ${input}`} />
+          </div>
+
+          <div className="space-y-3">
+            {items.map((it, i) => {
+              /* 저장 형식은 "YYYY-MM-DD" 또는 "YYYY-MM-DDTHH:mm" 한 칸이다.
+                 편집은 날짜·시간 두 칸으로 받는다 — 시간을 비우면 「하루 종일」이 된다. */
+              const at = typeof it.startAt === "string" ? it.startAt : "";
+              const [date, time] = at.includes("T") ? at.split("T") : [at, ""];
+              const setAt = (nextDate: string, nextTime: string) =>
+                setItem(i, "startAt", nextDate ? (nextTime ? `${nextDate}T${nextTime}` : nextDate) : "");
+              return (
+                <div key={i} className="space-y-2 rounded-card border border-line p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[12px] font-semibold text-fg-sub">일정 {i + 1}</span>
+                    <button
+                      type="button"
+                      onClick={() => set("items", items.filter((_, j) => j !== i))}
+                      aria-label={`일정 ${i + 1} 삭제`}
+                      className="trans-state rounded-card p-1 text-fg-faint hover:bg-tint-hover hover:text-negative"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                  <input
+                    value={typeof it.title === "string" ? it.title : ""}
+                    onChange={(e) => setItem(i, "title", e.target.value)}
+                    placeholder="일정 이름 (예: 가을 공구 오픈)"
+                    aria-label={`일정 ${i + 1} 이름`}
+                    maxLength={60}
+                    className={input}
+                  />
+                  <div className="grid grid-cols-[1fr_7rem] gap-1.5">
+                    <input
+                      type="date"
+                      value={date}
+                      onChange={(e) => setAt(e.target.value, time)}
+                      aria-label={`일정 ${i + 1} 날짜`}
+                      className={input}
+                    />
+                    <input
+                      type="time"
+                      value={time}
+                      onChange={(e) => setAt(date, e.target.value)}
+                      aria-label={`일정 ${i + 1} 시각 (비우면 하루 종일)`}
+                      className={input}
+                    />
+                  </div>
+                  <div className="grid grid-cols-[1fr_1fr] gap-1.5">
+                    <input
+                      type="date"
+                      value={typeof it.endAt === "string" ? it.endAt.split("T")[0] : ""}
+                      onChange={(e) => setItem(i, "endAt", e.target.value)}
+                      aria-label={`일정 ${i + 1} 종료 날짜 (선택)`}
+                      className={input}
+                    />
+                    <input
+                      value={typeof it.place === "string" ? it.place : ""}
+                      onChange={(e) => setItem(i, "place", e.target.value)}
+                      placeholder="장소 (선택)"
+                      aria-label={`일정 ${i + 1} 장소`}
+                      maxLength={40}
+                      className={input}
+                    />
+                  </div>
+                  <input
+                    value={typeof it.url === "string" ? it.url : ""}
+                    onChange={(e) => setItem(i, "url", e.target.value)}
+                    placeholder="자세히 볼 주소 (선택)"
+                    aria-label={`일정 ${i + 1} 주소`}
+                    className={input}
+                  />
+                  <p className="text-[12px] text-fg-sub">시각을 비우면 「하루 종일」로 보여요. 종료 날짜는 여러 날 이어지는 일정에만 넣으세요.</p>
+                </div>
+              );
+            })}
+            {items.length < 12 ? (
+              <Button variant="secondary" size="sm" onClick={() => set("items", [...items, { title: "", startAt: "" }])}>
+                <Plus className="size-3.5" aria-hidden />
+                일정 추가
+              </Button>
+            ) : null}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className={label} htmlFor="b-epast">
+                지난 일정
+              </label>
+              <select id="b-epast" value={str("past") || "hide"} onChange={(e) => set("past", e.target.value)} className={`mt-1.5 ${input}`}>
+                <option value="hide">지나면 숨기기</option>
+                <option value="dim">흐리게 남기기</option>
+              </select>
+            </div>
+            <div>
+              <label className={label} htmlFor="b-eics">
+                캘린더 담기 버튼
+              </label>
+              <select id="b-eics" value={d.ics === false ? "off" : "on"} onChange={(e) => set("ics", e.target.value === "on")} className={`mt-1.5 ${input}`}>
+                <option value="on">보이기</option>
+                <option value="off">숨기기</option>
+              </select>
+            </div>
+          </div>
+          {/* 예약받기가 아니라는 걸 분명히 — 기대가 어긋나면 "왜 신청이 안 들어오지"가 된다 */}
+          <p className="text-[12px] text-fg-sub">일정을 알리고 방문자가 자기 캘린더에 담아 가는 블록이에요. 신청·결제를 받지는 않아요.</p>
+        </>
+      ) : null}
+
       {error ? (
         <p role="alert" className="text-[14px] text-negative-strong">
           {error}

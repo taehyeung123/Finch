@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { MapPin, ExternalLink, ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Pencil, Plus, Share2, Trash2 } from "lucide-react";
+import { MapPin, ExternalLink, ArrowDown, ArrowUp, CalendarPlus, Eye, EyeOff, GripVertical, Pencil, Plus, Share2, Trash2 } from "lucide-react";
+import { eventChip, eventEndEpoch, eventEpoch, formatEventTime, nowMs, parseEventAt, type EventPart } from "@/lib/links/events";
 import { cn } from "@/lib/cn";
 import { FinchMark } from "@/components/logo";
 import { SnsIcon } from "@/components/sns-brand-icons";
@@ -1104,6 +1105,69 @@ function PreviewBlock({ block, mode = "draft" }: { block: LinkBlock; mode?: "dra
           {s(d, "message") ? <p className="mt-1.5 text-center text-[11px] text-[var(--lp-muted)]">{s(d, "message")}</p> : null}
         </div>
       );
+    case "events": {
+      /* 공개 렌더러(block-renderer.tsx case "events")와 같은 모양 — 15/14/17 을 프레임 비율로 13/12/15.
+         ⚠️ 두 벌이다. 한쪽만 고치면 편집기와 발행본이 달라진다(CLAUDE.md). */
+      const now = nowMs();
+      const parsed = arr(d, "items")
+        .map((it) => ({ it, start: parseEventAt(it.startAt), end: parseEventAt(it.endAt) }))
+        .filter((x): x is { it: Record<string, unknown>; start: EventPart; end: EventPart | null } => !!x.start && !!s(x.it, "title").trim())
+        .map((x) => ({ ...x, over: eventEndEpoch(x.start, x.end) < now }))
+        .slice(0, 20);
+      const dim = s(d, "past") === "dim";
+      const upcoming = parsed.filter((x) => !x.over).sort((a, b) => eventEpoch(a.start) - eventEpoch(b.start));
+      const past = dim ? parsed.filter((x) => x.over).sort((a, b) => eventEpoch(b.start) - eventEpoch(a.start)) : [];
+      const rows = [...upcoming, ...past];
+      /* 캔버스에서는 빈 블록도 자리를 지킨다 — 편집 중에 사라지면 다시 고를 길이 없다(다른 블록과 같은 관례) */
+      if (rows.length === 0) {
+        return (
+          <div className={`${card} px-3 py-2.5 text-[12px] text-[var(--lp-muted)]`}>
+            {s(d, "label") || "일정"} — 제목과 날짜를 넣으면 여기에 보여요
+          </div>
+        );
+      }
+      return (
+        <div className={`${card} px-3 py-2.5`}>
+          {s(d, "label") ? <p className="mb-1 text-[13px] font-semibold">{s(d, "label")}</p> : null}
+          <div className="divide-y divide-[var(--lp-border)]">
+            {rows.map((x, i) => {
+              const chip = eventChip(x.start, "ko");
+              const endSame = x.end && eventEpoch(x.end) !== eventEpoch(x.start);
+              const meta = [endSame ? `~ ${x.end!.mo}월 ${x.end!.d}일` : formatEventTime(x.start) || "하루 종일", s(x.it, "place")]
+                .filter(Boolean)
+                .join(" · ");
+              return (
+                <div key={i} className={`flex items-center gap-2.5 py-2 ${x.over ? "opacity-55" : ""}`}>
+                  <span
+                    className="tnum flex size-10 shrink-0 flex-col items-center justify-center rounded-[calc(var(--lp-radius)/1.6)] leading-none"
+                    style={{ backgroundColor: "color-mix(in srgb, var(--lp-accent) 13%, transparent)", color: "var(--lp-accent-text)" }}
+                    aria-hidden
+                  >
+                    <span className="text-[10px] font-medium opacity-80">{chip.top}</span>
+                    <span className="mt-0.5 text-[15px] font-bold">{chip.d}</span>
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-semibold">{s(x.it, "title")}</span>
+                    <span className="mt-0.5 block truncate text-[11px] text-[var(--lp-muted)]">
+                      {meta}
+                    </span>
+                  </span>
+                  {s(x.it, "url") ? <ExternalLink className="size-3 shrink-0 text-[var(--lp-muted)]" aria-hidden /> : null}
+                </div>
+              );
+            })}
+          </div>
+          {past.length > 0 ? <p className="mt-1.5 text-center text-[11px] text-[var(--lp-muted)]">지난 일정</p> : null}
+          {d.ics !== false && upcoming.length > 0 ? (
+            <span className="mt-2 flex min-h-9 w-full items-center justify-center gap-1.5 rounded-[var(--lp-radius-btn)] border border-[var(--lp-border)] px-3 text-[12px] font-medium">
+              <CalendarPlus className="size-3.5" aria-hidden />
+              캘린더에 추가
+            </span>
+          ) : null}
+        </div>
+      );
+    }
+
     case "map":
       return (
         /* 공개 렌더러와 같은 모양 — 아이콘 칩 + 외부 링크 표시(눌러서 지도가 열린다는 신호) */

@@ -1,6 +1,7 @@
 import type { BlockType } from "@/lib/links/blocks";
 import {
   BookOpen,
+  CalendarDays,
   Contact,
   FileDown,
   GalleryHorizontal,
@@ -53,4 +54,5 @@ export const BLOCK_ICON: Record<BlockType, React.ComponentType<{ className?: str
   search: Search,
   file: FileDown,
   guestbook: BookOpen,
+  events: CalendarDays,
 };

@@ -9,6 +9,8 @@ import type { LinkLang } from "./settings";
   서버→클라이언트 경계를 못 넘는다. 개수는 {n} 치환으로 푼다.
 */
 export interface LpText {
+  /** 이 문구 묶음의 언어 — 날짜·요일을 Intl 로 찍을 때 쓴다(문구를 비교해 언어를 추측하지 않게) */
+  lang: LinkLang;
   emptyLinks: string;
   /** {n} 치환 */
   more: string;
@@ -37,6 +39,8 @@ export interface LpText {
   coupangView: string;
   donate: string;
   map: string;
+  /** 일정 블록 — 제목·지난 일정 표시·캘린더 담기·하루 종일 */
+  events: { title: string; past: string; add: string; allday: string };
   imageLink: string;
   /** {n} 치환 */
   photoLink: string;
@@ -67,6 +71,7 @@ export type LpErrorCode =
   | "wrongPassword";
 
 const ko: LpText = {
+  lang: "ko",
   emptyLinks: "아직 등록된 링크가 없어요.",
   more: "더보기 ({n}개)",
   less: "접기",
@@ -94,6 +99,7 @@ const ko: LpText = {
   coupangView: "쿠팡에서 보기",
   donate: "후원하기",
   map: "찾아오시는 길",
+  events: { title: "일정", past: "지난 일정", add: "캘린더에 추가", allday: "하루 종일" },
   imageLink: "이미지 링크",
   photoLink: "사진 {n} 링크",
   postLink: "게시물 {n}",
@@ -117,6 +123,7 @@ const ko: LpText = {
 };
 
 const en: LpText = {
+  lang: "en",
   emptyLinks: "No links yet.",
   more: "Show more ({n})",
   less: "Show less",
@@ -144,6 +151,7 @@ const en: LpText = {
   coupangView: "View on Coupang",
   donate: "Support",
   map: "Directions",
+  events: { title: "Schedule", past: "Past", add: "Add to calendar", allday: "All day" },
   imageLink: "Image link",
   photoLink: "Photo {n} link",
   postLink: "Post {n}",
@@ -167,6 +175,7 @@ const en: LpText = {
 };
 
 const ja: LpText = {
+  lang: "ja",
   emptyLinks: "まだリンクがありません。",
   more: "もっと見る ({n})",
   less: "閉じる",
@@ -194,6 +203,7 @@ const ja: LpText = {
   coupangView: "Coupangで見る",
   donate: "応援する",
   map: "アクセス",
+  events: { title: "スケジュール", past: "終了した予定", add: "カレンダーに追加", allday: "終日" },
   imageLink: "画像リンク",
   photoLink: "写真 {n} のリンク",
   postLink: "投稿 {n}",

@@ -1855,6 +1855,7 @@ const BLOCK_TINT: Record<BlockType, string> = {
   search: "bg-tint-teal text-tint-teal-ink",
   file: "bg-tint-teal text-tint-teal-ink",
   guestbook: "bg-tint-blue text-tint-blue-ink",
+  events: "bg-tint-amber text-tint-amber-ink",
 };
 
 /* 빈 목록에서 먼저 권하는 블록 — 캔버스 빈 화면(QUICK_ADD)과 같은 조합 */
@@ -1943,6 +1944,9 @@ function BlockListPanel({
       <div className="flex items-center justify-between">
         <h3 className="text-[15px] font-bold">
           블록 <span className="tnum text-[12px] font-medium text-fg-sub">{blocks.length}</span>
+          {/* 폰이 눌러서 편집되는 캔버스라는 걸 알려주는 유일한 글줄 — 주소 박스에 있던 것을 여기로 옮겼다.
+              (거기 두면 폰 세로 예산을 20px 먹는다. 유령 카드는 **빈 블록**에만 뜨므로 안내가 되지 못한다.) */}
+          {blocks.length > 0 ? <span className="ml-2 hidden text-[12px] font-medium text-fg-sub xl:inline">폰 화면의 블록을 눌러도 편집할 수 있어요</span> : null}
         </h3>
         <Button size="sm" onClick={onAdd} disabled={busy}>
           <Plus className="size-3.5" aria-hidden />

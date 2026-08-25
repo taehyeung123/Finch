@@ -1967,6 +1967,11 @@ const TEXT_CAPS: Record<string, number> = {
   buttonLabel: 20,
   alt: 100,
   address: 200,
+  /* 일정 — 날짜는 "2026-09-01T20:00" 16자면 충분하다. 형식 검증은 렌더러의 parseEventAt 이 한다
+     (여기서 거절하면 저장 도중의 반쯤 친 날짜가 오류로 튄다 — 잘못된 값은 조용히 안 보이는 게 낫다) */
+  startAt: 16,
+  endAt: 16,
+  place: 40,
   emoji: 4,
   price: 40,
   originalPrice: 20,
@@ -1991,6 +1996,8 @@ const ENUMS: Record<string, readonly string[]> = {
   style: ["line", "dot"],
   tone: ["info", "primary", "warning"],
   channel: ["instagram", "tiktok", "threads"],
+  /* 일정 — 지난 일정 처리. 모르는 값이면 키를 빼서 렌더러 기본값(hide)으로 떨어진다 */
+  past: ["hide", "dim"],
 };
 /** 숫자 필드는 화이트리스트다 — spacer.size 는 렌더러가 그 값을 그대로 px 높이로 쓴다 */
 const NUM_ENUMS: Record<string, readonly number[]> = {

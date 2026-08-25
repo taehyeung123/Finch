@@ -17,6 +17,8 @@
   게시물을 끌어온다(링크팜은 사용자가 URL 을 손으로 넣어야 한다).
 */
 
+import { parseEventAt } from "./events";
+
 export const BLOCK_TYPES = [
   "link",
   "heading",
@@ -42,6 +44,8 @@ export const BLOCK_TYPES = [
   "search",
   "file",
   "guestbook",
+  /* 리틀리 흡수(2026-08-25) — 「일정」. 예약받기와 다르다: 백엔드가 없고 알리기만 한다 */
+  "events",
 ] as const;
 
 export type BlockType = (typeof BLOCK_TYPES)[number];
@@ -282,6 +286,28 @@ export interface GuestbookBlockData {
   placeholder?: string;
 }
 
+/*
+  일정 — 공구 오픈·라이브·팝업처럼 "언제"가 핵심인 알림.
+  리틀리의 「일정」에 해당한다. 예약받기(정원·결제)와는 다르다 — 여기엔 받을 것이 없고,
+  방문자가 자기 캘린더에 담아 가는 것으로 끝난다(.ics 다운로드, 서버 왕복 없음).
+  시각은 KST 벽시계 문자열로 저장한다("2026-09-01" 또는 "2026-09-01T20:00") — lib/links/events.ts 참고.
+*/
+export interface EventsBlockData {
+  label?: string;
+  items: Array<{
+    title: string;
+    /** "YYYY-MM-DD" (하루 종일) 또는 "YYYY-MM-DDTHH:mm" */
+    startAt: string;
+    endAt?: string;
+    place?: string;
+    url?: string;
+  }>;
+  /** 지난 일정 — 숨김(기본) / 흐리게 남김 */
+  past?: "hide" | "dim";
+  /** 「캘린더에 추가」 버튼(.ics). 기본 켬 */
+  ics?: boolean;
+}
+
 export interface MapBlockData {
   address: string;
   label?: string;
@@ -310,7 +336,8 @@ export type BlockData =
   | ({ type: "vcard" } & VcardBlockData)
   | ({ type: "search" } & SearchBlockData)
   | ({ type: "file" } & FileBlockData)
-  | ({ type: "guestbook" } & GuestbookBlockData);
+  | ({ type: "guestbook" } & GuestbookBlockData)
+  | ({ type: "events" } & EventsBlockData);
 
 export interface LinkBlock {
   id: string;
@@ -345,6 +372,7 @@ export const BLOCK_CATALOG: Array<{
   { type: "video", label: "동영상", hint: "유튜브는 바로 재생, 나머지는 링크로", group: "콘텐츠" },
   { type: "social_feed", label: "최근 게시물", hint: "연동한 채널의 최신 글을 자동으로", group: "콘텐츠" },
   { type: "notice", label: "공지·배너", hint: "지금 알릴 것을 맨 위에", group: "콘텐츠" },
+  { type: "events", label: "일정", hint: "공구·라이브 날짜를 알리고 캘린더에 담게", group: "콘텐츠" },
 
   { type: "heading", label: "소제목", hint: "링크를 묶어 구분합니다", group: "레이아웃" },
   { type: "text", label: "텍스트", hint: "짧은 설명 문단", group: "레이아웃" },
@@ -392,6 +420,9 @@ export function defaultBlockData(type: BlockType): Record<string, unknown> {
       return { title: "새 소식 받기", description: "", buttonLabel: "구독하기" };
     case "map":
       return { address: "", label: "" };
+    case "events":
+      /* 날짜를 미리 채우지 않는다 — 아무 날짜나 들어가 있으면 "이미 등록된 일정"으로 읽힌다 */
+      return { label: "일정", items: [{ title: "", startAt: "" }], past: "hide", ics: true };
     case "coupang":
       return { url: "", title: "", price: "", imagePath: "" };
     case "donation":
@@ -445,6 +476,11 @@ export function hiddenReason(type: BlockType, data: Record<string, unknown>): st
       return musicEmbed(s("url")) ? null : "스포티파이·사운드클라우드·유튜브 뮤직 주소가 있어야 공개돼요";
     case "vcard":
       return s("name").trim() ? null : "이름이 비어 공개되지 않아요";
+    case "events":
+      /* 제목·날짜가 **둘 다** 있는 항목이 하나도 없으면 렌더러가 블록을 통째로 숨긴다 */
+      return items.some((it) => typeof it.title === "string" && it.title.trim() && parseEventAt(it.startAt))
+        ? null
+        : "제목과 날짜가 있는 일정이 없어 공개되지 않아요";
     case "file":
       return s("url") ? null : "파일을 올리면 공개돼요";
     case "social_feed":
@@ -573,6 +609,8 @@ export function blockSummary(type: BlockType, data: Record<string, unknown>): st
       return s("title") || s("fileName") || "(파일 없음)";
     case "guestbook":
       return s("title") || "방명록";
+    case "events":
+      return n("items") ? `일정 ${n("items")}건` : "(일정 없음)";
     default:
       return "";
   }
