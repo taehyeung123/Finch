@@ -157,6 +157,12 @@ export async function analyzeUrl(url: string): Promise<AnalyzeActionResult> {
     if (!allowed) {
       return { ok: false, error: "이번 달 콘텐츠 분석 한도를 모두 사용했어요. 요금제에서 플랜을 올리면 한도가 늘어납니다." };
     }
+  } else {
+    /* 유료 플랜은 지금 **막지도 세지도 않는다** — 요금제가 정립되기 전이라 단가도 한도도 없다(사장님 확인, 2026-08-25).
+       그렇다고 원가가 눈에 안 보이는 채로 두면 안 된다: docs/COST_STRUCTURE.md 가 「가장 큰 위험 = 무제한 기능의
+       원가 상한 부재」라고 적어 둔 바로 그 자리다. 계량기를 붙일 때까지는 로그로 남겨 실사용량을 센다.
+       ⚠️ 단가·상한이 정해지면 이 else 를 지우고 chargeGeneration(또는 플랜별 계량기)로 옮긴다. */
+    console.info(`[analyze] 유료 플랜 무제한 사용 — plan=${plan} user=${user.id} metric=content_analysis`);
   }
 
   const [insights, commentTexts] = await Promise.all([
