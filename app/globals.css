@@ -804,6 +804,21 @@ body {
 /* 결과 영역이 측정 기준이 된다 */
 .results-area { container-type: inline-size; }
 
+/* 프리셋 그리드 — 링크 편집기의 컨트롤 칸은 폰(23rem)에 눌려 뷰포트보다 항상 훨씬 좁다.
+   vp 1280 = 사이드바 208 + 여백 48 + 폰 368 + gap 20 + 라벨 176 + gap 24 를 빼면 436px 뿐이라
+   lg(1024) 5열이 참인데 카드는 81px 이 된다(1279px 에서는 한 칸으로 쌓여 158px — 화면을 1px 넓히면
+   카드가 반토막 나는 역전이었다). 카드 폭을 120~170px 밴드에 붙잡아 둔다. */
+.ds-area { container-type: inline-size; }
+.grid-presets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@supports not (container-type: inline-size) {
+  @media (min-width: 40rem) { .grid-presets { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (min-width: 64rem) { .grid-presets { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+}
+@container (min-width: 24rem) { .grid-presets { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container (min-width: 32rem) { .grid-presets { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container (min-width: 40rem) { .grid-presets { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@container (min-width: 50rem) { .grid-presets { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+
 @container (min-width: 26rem) { .grid-refs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @container (min-width: 38rem) { .grid-refs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @container (min-width: 50rem) { .grid-refs { grid-template-columns: repeat(5, minmax(0, 1fr)); } }

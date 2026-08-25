@@ -23,6 +23,7 @@ import {
   Lock,
   LayoutGrid,
   Mail,
+  MapPin,
   Megaphone,
   MessageSquare,
   Star,
@@ -38,6 +39,7 @@ import {
   Plus,
   QrCode,
   Share2,
+  Smartphone,
   Redo2,
   Rocket,
   Settings,
@@ -58,6 +60,7 @@ import { Card, CardBody } from "@/components/ui/card";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { DualLineChart } from "@/components/ui/charts";
 import { EmptyState } from "@/components/ui/empty-state";
+import { InfoTip } from "@/components/ui/info-tip";
 import { Switch } from "@/components/ui/switch";
 import { FinchLoader } from "@/components/ui/finch-loader";
 import { normalizeSnsUrl, publicLinkUrl, stableJson } from "@/lib/links";
@@ -317,6 +320,9 @@ export function LinksClient({
      발행본과 다른 초안이 있는 채로 나가면 모달로 한 번 묻고, 그래도 나가면 초안을 버린다. */
   const [exitTo, setExitTo] = useState<{ kind: "route"; href: string } | { kind: "page"; id: string } | null>(null);
   const [revertOpen, setRevertOpen] = useState(false);
+  /* 지우기 확인 — 이 앱의 다른 파괴적 확인은 전부 모달인데 여기 둘만 native confirm 이었다.
+     OS 대화상자는 테마·글꼴·문구 위계가 없고, 모바일에서는 주소창 아래 붙어 어느 화면 것인지도 흐리다 */
+  const [confirming, setConfirming] = useState<{ title: string; description: string; confirmLabel: string; onConfirm: () => void } | null>(null);
   /* 발행본과 다른 초안이 서버에 있는가 = "지금 나가면 잃을 것이 있는가".
      발행한 적 있으면 dirty 그대로, 없으면 **블록이 있을 때만** — 안 그러면 빈 페이지에서도
      dirty(=!publishedAt) 가 참이라 되돌릴 것도 없는데 경고가 계속 뜬다. */
@@ -783,7 +789,7 @@ export function LinksClient({
       },
     );
 
-  const canvasEdit: CanvasEdit = {
+  const canvasEditHead: Omit<CanvasEdit, "onProfileCommit"> = {
     onEdit: openEditor,
     /* 온오프는 낙관 즉시 반영 — 스위치가 서버 왕복을 기다리면 고장처럼 보인다 */
     onToggle: (id, active) =>
@@ -850,10 +856,25 @@ export function LinksClient({
       );
     },
     onDelete: (id, label) => {
-      /* 삭제는 물리 삭제 — 확인 후 지우고, 직전 1건은 되돌리기 바가 복원한다 */
-      if (!window.confirm(`「${label}」 블록을 삭제할까요?`)) return;
-      const b = blocks.find((x) => x.id === id);
-      run(
+      /* 삭제는 물리 삭제 — 확인을 받은 뒤 지우고, 직전 1건은 실행취소가 복원한다 */
+      setConfirming({
+        title: "블록을 삭제할까요?",
+        description: `「${label}」 블록이 지워져요. 직전 1건은 상단 ↩ 실행취소로 되살릴 수 있어요.`,
+        confirmLabel: "삭제",
+        onConfirm: () => deleteBlockNow(id, label),
+      });
+    },
+    onAdd: () => openDrawer("add", true),
+    onQuickAdd: (t) => addBlockOfType(t),
+    onOpenProfile: () => openDrawer("profile", true),
+  };
+
+  /* 확인을 받은 뒤의 실제 삭제 — onDelete 에서 떼어냈다(모달의 확인 버튼이 부른다) */
+  function deleteBlockNow(id: string, label: string) {
+    /* 함수 선언이라 위쪽 `if (!page)` 가드의 좁히기가 여기까진 오지 않는다 */
+    if (!page) return;
+    const b = blocks.find((x) => x.id === id);
+    run(
         () => deleteBlock(id),
         () => {
           if (b) {
@@ -876,10 +897,11 @@ export function LinksClient({
           setNotice("블록을 삭제했어요. 상단 ↩ 실행취소로 복원할 수 있어요.");
         },
       );
-    },
-    onAdd: () => openDrawer("add", true),
-    onQuickAdd: (t) => addBlockOfType(t),
-    onOpenProfile: () => openDrawer("profile", true),
+  }
+
+  /* 삭제 확인 모달이 중간에 끼어 함수 선언(deleteBlockNow)이 필요해 두 조각으로 나뉜다 — 여기서 합친다 */
+  const canvasEdit: CanvasEdit = {
+    ...canvasEditHead,
     onProfileCommit: (patch) => {
       /* 인라인 편집은 **그 필드만** 확정한다. 서버에는 「마지막 서버
          확정값 + 이번 패치」를 보낸다 — profileForm 전체를 보내면
@@ -1086,6 +1108,20 @@ export function LinksClient({
               },
             )
           }
+        />
+      ) : null}
+      {confirming ? (
+        <ConfirmDialog
+          title={confirming.title}
+          description={confirming.description}
+          confirmLabel={confirming.confirmLabel}
+          busy={busy}
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => {
+            const c = confirming;
+            setConfirming(null);
+            c.onConfirm();
+          }}
         />
       ) : null}
       {revertOpen ? (
@@ -1332,22 +1368,22 @@ export function LinksClient({
                       setTplPreview(t);
                     }}
                     aria-pressed={tplPreview?.key === t.key}
-                    /* 틴트 바탕은 템플릿 고유색(콘텐츠 팔레트) — 글자는 테마 무관 항상 어두운
-                       on-primary, 배지는 항상 어두운 scrim: 다크 테마에서도 그대로 읽힌다 */
-                    style={{ background: t.tint }}
+                    /* 바탕은 tint 토큰 쌍(templates.ts) — 반투명이라 다크에서도 카드로 남는다.
+                       배지는 테마 무관 scrim 유지(사진·색 위 어디서나 읽혀야 한다) */
                     className={cn(
                       "trans-state relative w-44 shrink-0 rounded-card border border-line px-3 py-2.5 text-left hover:border-primary disabled:opacity-50",
+                      t.tint,
                       tplPreview?.key === t.key && "border-primary ring-2 ring-primary/40",
                     )}
                   >
                     <span className="tnum absolute right-2 top-2 rounded-chip bg-scrim px-1.5 py-0.5 text-[11px] font-semibold text-on-scrim">
                       {t.blocks.length}블록
                     </span>
-                    <span className="flex size-8 items-center justify-center rounded-card bg-white/80 text-[18px]" aria-hidden>
+                    <span className="flex size-8 items-center justify-center rounded-card bg-body text-[18px]" aria-hidden>
                       {t.emoji}
                     </span>
-                    <span className="mt-2 block text-[14px] font-semibold text-on-primary">{t.name}</span>
-                    <span className="mt-0.5 block truncate text-[12px] text-on-primary/70">{t.hint}</span>
+                    <span className="mt-2 block text-[14px] font-semibold">{t.name}</span>
+                    <span className="mt-0.5 block truncate text-[12px] opacity-75">{t.hint}</span>
                   </button>
                 ))}
             </div>
@@ -1543,6 +1579,7 @@ export function LinksClient({
             /* ?page= 를 떨구면 서브페이지에서 기간을 누를 때 메인 페이지로 튕긴다(리마운트로 탭도 초기화된다) */
             onRange={(d) => startRangeNav(() => router.push(`/links?days=${d}&page=${page.id}`, { scroll: false }))}
             onRetry={() => startRangeNav(() => router.refresh())}
+            onGoMarketing={() => setTab("marketing")}
             busy={busy}
           />
               </CardBody>
@@ -1565,10 +1602,14 @@ export function LinksClient({
                   })
                 }
                 onGuestbookHide={(id, hidden) => run(() => setGuestbookHidden(id, hidden))}
-                onGuestbookDelete={(id) => {
-                  if (!window.confirm("이 방명록 글을 지울까요?")) return;
-                  run(() => deleteGuestbook(id), () => setNotice("방명록 글을 지웠어요."));
-                }}
+                onGuestbookDelete={(id) =>
+                  setConfirming({
+                    title: "방명록 글을 지울까요?",
+                    description: "공개 페이지에서도 함께 사라져요. 이건 되돌릴 수 없어요 — 잠시 감추려면 「숨기기」를 쓰세요.",
+                    confirmLabel: "삭제",
+                    onConfirm: () => run(() => deleteGuestbook(id), () => setNotice("방명록 글을 지웠어요.")),
+                  })
+                }
                 onExportLeads={() =>
                   run(
                     () => exportLeads(page.id),
@@ -1677,7 +1718,7 @@ export function LinksClient({
       {/* 모달이 열려 있으면 전역 베일을 접는다 — z-[60] 이 모달(z-50) 위를 덮어 로더가 둘이 되고,
           「만드는 중…」·「되돌리는 중…」 같은 모달 안 진행 라벨이 베일 아래로 사라졌다.
           모달이 열린 동안 시작되는 run() 은 그 모달에서 나온 것뿐이라(스크림이 뒤를 막는다) 진행 표시는 모달이 스스로 낸다 */}
-      {busy && !settingsOpen && !drawer && !scheduleFor && !tplPreview && !newPageOpen && !newSubOpen && !exitTo && !revertOpen ? (
+      {busy && !settingsOpen && !drawer && !scheduleFor && !tplPreview && !newPageOpen && !newSubOpen && !exitTo && !revertOpen && !confirming ? (
         <div
           className="busy-veil-in fixed inset-0 z-[60] flex items-center justify-center bg-surface/70 backdrop-blur-[2px]"
         >
@@ -2783,6 +2824,40 @@ function ShareBox({ url, busy, title, children }: { url: string; busy: boolean; 
   );
 }
 
+/* 되돌릴 수 없는 조작의 확인 — native window.confirm 을 대체한다.
+   OS 대화상자는 테마·글꼴·문구 위계가 없고, 무엇보다 «무엇이 어떻게 사라지는지» 를 말할 자리가 없다 */
+function ConfirmDialog({
+  title,
+  description,
+  confirmLabel,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <ModalShell label={title} title={title} size="sm" busy={busy} onClose={onCancel}>
+      <div className="space-y-3">
+        <p className="text-[14px] leading-[1.7] text-fg-sub">{description}</p>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
+            취소
+          </Button>
+          <Button variant="danger" size="sm" onClick={onConfirm} disabled={busy}>
+            {confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
 function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [failed, setFailed] = useState(false);
@@ -3288,7 +3363,8 @@ function DSection({
           {hint ? <p className="mt-0.5 text-[12px] leading-[1.5] text-fg-sub">{hint}</p> : null}
         </div>
       </div>
-      <div className="min-w-0 space-y-3">{children}</div>
+      {/* 컨트롤 칸이 측정 기준 — 폰(23rem)에 눌려 뷰포트보다 늘 훨씬 좁다(globals.css .ds-area) */}
+      <div className="ds-area min-w-0 space-y-3">{children}</div>
     </section>
   );
 }
@@ -3335,9 +3411,14 @@ function ThemePanel({
   }, [fontQuery]);
   /* 패널이 열려 있는 동안 전 글꼴을 비차단으로 싣는다 — 목록의 각 줄이 제 글꼴로 보인다 */
   useFontStylesheets(LINK_FONTS.flatMap((f) => fontStylesheets(f.key)));
+  /* 앱 공용 칩(components/ui/chip-filter.tsx)과 같은 계약 —
+     cursor-pointer(v4 preflight 는 button 에 포인터를 안 준다) · 14px · 코랄 포커스 링.
+     히트 영역 오버레이(after:-inset-*)는 넣지 않는다: gap-1.5 라 확장분이 이웃 칩을 덮어
+     가장자리 클릭이 옆 칩을 누른다 */
   const chip = (on: boolean) =>
     cn(
-      "trans-state rounded-chip px-3 py-1.5 text-[12px] font-semibold",
+      "trans-state cursor-pointer rounded-chip px-3.5 py-1.5 text-[14px] font-semibold",
+      "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
       on ? "bg-primary text-on-primary" : "border border-line bg-body text-fg-sub hover:bg-tint-hover hover:text-fg",
     );
   const bgMode: "solid" | "gradient" | "image" = custom.bgImage ? "image" : custom.bg2 || (!custom.bg && preset.bg2) ? "gradient" : "solid";
@@ -3386,7 +3467,7 @@ function ThemePanel({
         {groups.map(([group, list]) => (
           <div key={group}>
             <p className="text-[11px] font-bold tracking-[0.08em] text-fg-sub">{group}</p>
-            <div className="mt-1.5 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+            <div className="grid-presets mt-1.5 grid gap-2">
               {list.map((t) => {
                 /* 썸네일이 배경·강조·카드 세 색만 보여줘서 모서리·글자색·그림자가 다른 테마가
                    서로 같아 보였다. 값은 새로 적지 않고 themeVars 에서 끌어온다 —
@@ -3597,14 +3678,33 @@ function ThemePanel({
         })}
       </DSection>
 
-      <DSection icon={Type} tint="bg-tint-amber text-tint-amber-ink" title="글꼴" hint="한글 30종 + 영문 11종. 이름으로 찾아요.">
-        <input
-          value={fontQuery}
-          onChange={(e) => setFontQuery(e.target.value)}
-          placeholder="글꼴 검색 — 예: 명조, 손글씨, Inter"
-          aria-label="글꼴 검색"
-          className="h-10 w-full rounded-card border border-line bg-body px-3 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
-        />
+      <DSection
+        icon={Type}
+        tint="bg-tint-amber text-tint-amber-ink"
+        title="글꼴"
+        /* 찾은 개수가 곧 목록의 끝 신호다 — 페이드로 흐리면 다 본 뒤에도 마지막 줄이 영구히 흐려진다 */
+        hint={fontQuery.trim() ? `${fonts.length}종 찾았어요.` : "한글 31종 + 영문 11종. 이름으로 찾아요."}
+      >
+        {/* 지우기 — 레퍼런스 검색(search-console)과 같은 관용구 */}
+        <div className="relative flex items-center">
+          <input
+            value={fontQuery}
+            onChange={(e) => setFontQuery(e.target.value)}
+            placeholder="글꼴 검색 — 예: 명조, 손글씨, Inter"
+            aria-label="글꼴 검색"
+            className="h-10 w-full rounded-card border border-line bg-body px-3 pr-10 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
+          />
+          {fontQuery ? (
+            <button
+              type="button"
+              onClick={() => setFontQuery("")}
+              aria-label="검색어 지우기"
+              className="trans-state absolute right-1 flex size-8 cursor-pointer items-center justify-center rounded-card text-fg-faint hover:bg-tint-hover hover:text-fg"
+            >
+              <X className="size-4" aria-hidden />
+            </button>
+          ) : null}
+        </div>
         <div className="grid max-h-72 grid-cols-2 gap-1.5 overflow-y-auto pr-1 md:grid-cols-3">
           {fonts.map((f) => (
             <button
@@ -3618,13 +3718,20 @@ function ThemePanel({
               )}
             >
               {/* 견본만 그 글꼴 — 이름표는 앱 글꼴 그대로 */}
-              <span className="text-[16px] leading-tight" style={{ fontFamily: f.family }}>
+              <span className="text-[17px] leading-tight" style={{ fontFamily: f.family }}>
                 안녕하세요 Aa
               </span>
               <span className="mt-1 text-[11px] text-fg-sub">{f.label}</span>
             </button>
           ))}
-          {fonts.length === 0 ? <p className="col-span-full py-4 text-center text-[14px] text-fg-sub">찾는 글꼴이 없어요.</p> : null}
+          {fonts.length === 0 ? (
+            <div className="col-span-full py-6 text-center">
+              <p className="text-[14px] text-fg-sub">「{fontQuery}」와 맞는 글꼴이 없어요.</p>
+              <Button variant="ghost" size="sm" className="mt-1" onClick={() => setFontQuery("")}>
+                전체 보기
+              </Button>
+            </div>
+          ) : null}
         </div>
       </DSection>
 
@@ -3719,6 +3826,8 @@ function BarList({
   color = "bg-primary",
   denom,
   restLabel = "나머지",
+  icon: Icon,
+  tint,
 }: {
   title: string;
   rows: Array<{ label: string; value: number }>;
@@ -3731,6 +3840,9 @@ function BarList({
   denom?: number;
   /** 잘린 꼬리 행 이름 */
   restLabel?: string;
+  /** 카드 정체 — 넷이 같은 격자에 있어 아이콘이 없으면 제목을 읽어야만 구분된다 */
+  icon: LucideIcon;
+  tint: string;
 }) {
   const n = (v: number) => v.toLocaleString("ko-KR");
     const shown = rows.reduce((a, r) => a + r.value, 0);
@@ -3739,7 +3851,14 @@ function BarList({
     return (
       /* 카드(bg-body) **안**의 중첩 면이라 bg-plate — bg-body 면 흰 판 위 흰 판이라 단차가 0이다 */
       <div className="rounded-card border border-line bg-plate p-4">
-        <p className="text-[14px] font-semibold">{title}</p>
+        {/* h4 여야 한다 — 제목색(fg-strong)·자간을 globals.css 의 @layer base 가 h1~h4 에 일괄로 건다.
+            p 에 크기만 올리면 본문색·기본 자간으로 남아 1px 차이만 생긴다(CLAUDE.md) */}
+        <div className="flex items-center gap-2">
+          <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-card", tint)} aria-hidden>
+            <Icon className="size-4" />
+          </span>
+          <h4 className="text-[15px] font-semibold">{title}</h4>
+        </div>
         {rows.length === 0 ? (
           <p className="mt-2 text-[14px] text-fg-sub">{empty}</p>
         ) : (
@@ -3788,6 +3907,7 @@ function StatsPanel({
   blocks,
   onRange,
   onRetry,
+  onGoMarketing,
   pending,
   busy,
 }: {
@@ -3796,6 +3916,8 @@ function StatsPanel({
   blocks: LinkBlock[];
   onRange: (days: number) => void;
   onRetry: () => void;
+  /** 0건 빈 상태에서 「마케팅 탭 열기」 — 유입 태깅 주소를 복사하러 보낸다 */
+  onGoMarketing: () => void;
   /** 기간 왕복 중 — 지금 보이는 숫자는 옛 기간 값이다 */
   pending: boolean;
   busy: boolean;
@@ -3815,8 +3937,54 @@ function StatsPanel({
   const n = (v: number) => v.toLocaleString("ko-KR");
   /* 집계 실패는 「모름」이지 「0」이 아니다 — 0 을 찍으면 멀쩡한 페이지를 갈아엎는다 */
   const nv = (v: number) => (stats.failed ? "—" : n(v));
+  /* 아직 아무도 안 온 페이지 — 빈 카드 아홉 장 대신 할 일을 한 번만 말한다.
+     failed 는 뺀다: 집계 실패를 «방문 없음» 으로 뭉개면 안 된다 */
+  const blank = !stats.failed && stats.views === 0 && stats.clicks === 0;
   /* 일별 추이 공통 축의 최댓값 — 눈금 라벨과 차트가 같은 값을 봐야 한다 */
   const dayMax = Math.max(1, ...stats.daily.map((d) => Math.max(d.views, d.clicks)));
+
+  type StatCard = { label: string; value: string; icon: LucideIcon; tint: string; unknown?: boolean; tip?: string };
+  /* 원자 지표 — 먼저 얼마나 왔나. 28px 는 sm 부터다(375px·3칸이면 다섯 자리가 카드를 넘는다) */
+  const primaryCards: StatCard[] = [
+    { label: "페이지뷰", value: nv(stats.views), icon: Eye, tint: "bg-tint-blue text-tint-blue-ink", unknown: stats.failed },
+    {
+      label: "방문자",
+      value: nv(stats.uniques),
+      icon: User,
+      tint: "bg-tint-green text-tint-green-ink",
+      unknown: stats.failed,
+      tip: "쿠키로 사람을 구분해요. 쿠키를 지웠거나 막은 방문은 여기서 빠져요.",
+    },
+    { label: "클릭", value: nv(stats.clicks), icon: MousePointerClick, tint: "bg-tint-coral text-tint-coral-ink", unknown: stats.failed },
+  ];
+  /* 파생 비율 — 그중 얼마가 눌렀나. 「클릭률」이 아니라 「조회당 클릭」이라 100% 를 넘을 수 있다 */
+  const derivedCards: StatCard[] = [
+    {
+      label: "조회당 클릭",
+      value: ratio(stats.ctr, stats.views),
+      icon: Percent,
+      tint: "bg-tint-purple text-tint-purple-ink",
+      tip: "클릭 ÷ 페이지뷰. 같은 사람이 30분 안에 다시 와도 조회는 1로 묶지만 클릭은 전부 세기 때문에 100%를 넘을 수 있어요.",
+    },
+    {
+      label: "재방문율",
+      value: ratio(stats.returning, stats.uniques),
+      icon: RotateCcw,
+      tint: "bg-tint-amber text-tint-amber-ink",
+      tip: "2번 이상 온 사람 ÷ 사람 수를 셀 수 있었던 방문자. 쿠키가 없어 사람을 못 가른 방문은 분모에서 빠져요.",
+    },
+    {
+      label: "평균 체류",
+      value: stats.dwell.n > 0 ? dwellLabel(stats.dwell.avgMs) : "—",
+      icon: Clock,
+      tint: "bg-tint-teal text-tint-teal-ink",
+      /* n=0 이면 카드 값이 «—» 다 — 팁이 "표본 0건" 이라고 숫자를 말하면 서로 어긋난다 */
+      tip:
+        stats.dwell.n > 0
+          ? `페이지를 닫을 때 보내는 신호가 닿은 방문만 평균 냈어요(표본 ${stats.dwell.n.toLocaleString("ko-KR")}건).`
+          : "페이지를 닫을 때 보내는 신호가 닿은 방문만 평균 내요. 아직 신호가 닿은 방문이 없어요.",
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -3826,7 +3994,9 @@ function StatsPanel({
           <p className="mt-0.5 text-[14px] text-fg-sub">설정 없이 자동으로 집계돼요. 누가 얼마나 와서 무엇을 눌렀는지 — 기간은 한국 시간 자정 기준.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex flex-wrap gap-1" role="group" aria-label="조회 기간">
+          {/* 탭 내비와 같은 «트랙 안 알약» — 낱개 테두리 버튼 6개는 어느 것이 한 묶음인지 알려주지 않는다.
+              트랙은 rounded-card 다: 좁은 화면에서 줄바꿈돼도 모양이 무너지지 않는다 */}
+          <div className="flex flex-wrap items-center gap-0.5 rounded-card bg-plate p-0.5" role="group" aria-label="조회 기간">
             {STAT_RANGES.map((r) => (
               <button
                 key={r.days}
@@ -3835,8 +4005,8 @@ function StatsPanel({
                 onClick={() => onRange(r.days)}
                 aria-pressed={stats.days === r.days}
                 className={cn(
-                  "trans-state tnum rounded-chip px-2.5 py-1 text-[12px] font-semibold disabled:opacity-50",
-                  stats.days === r.days ? "bg-primary text-on-primary" : "border border-line bg-body text-fg-sub hover:bg-tint-hover hover:text-fg",
+                  "trans-state rounded-chip px-2.5 py-1 text-[12px] font-semibold disabled:opacity-50",
+                  stats.days === r.days ? "bg-primary text-on-primary" : "text-fg-sub hover:text-fg",
                 )}
               >
                 {r.label}
@@ -3897,45 +4067,58 @@ function StatsPanel({
           툴바(기간 칩·CSV)는 선명하게 둔다: 흐린 칩을 다시 누르게 만들면 안 된다 */}
       <div className={cn("space-y-6", pending && "trans-state opacity-60")} aria-busy={pending}>
 
-      {/* 요약 6칸 — 색 아이콘(리틀리처럼 항목이 색으로 구분돼 읽힌다) */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
-        {[
-          { label: "페이지뷰", value: nv(stats.views), icon: Eye, tint: "bg-tint-blue text-tint-blue-ink" },
-          { label: "방문자", value: nv(stats.uniques), icon: User, tint: "bg-tint-green text-tint-green-ink" },
-          { label: "클릭", value: nv(stats.clicks), icon: MousePointerClick, tint: "bg-tint-coral text-tint-coral-ink" },
-          /* 「클릭률」이 아니라 「조회당 클릭」 — 같은 사람이 30분 안에 다시 오면 조회는 1로 묶지만 클릭은 전부 센다. 100% 를 넘을 수 있다 */
-          { label: "조회당 클릭", value: ratio(stats.ctr, stats.views), icon: Percent, tint: "bg-tint-purple text-tint-purple-ink" },
-          { label: "재방문율", value: ratio(stats.returning, stats.uniques), icon: RotateCcw, tint: "bg-tint-amber text-tint-amber-ink" },
-          { label: "평균 체류", value: stats.dwell.n > 0 ? dwellLabel(stats.dwell.avgMs) : "—", icon: Clock, tint: "bg-tint-teal text-tint-teal-ink" },
-        ].map((c) => (
-          <div key={c.label} className="rounded-card border border-line bg-plate px-3 py-3">
-            <span className={cn("mb-2 flex size-7 items-center justify-center rounded-card", c.tint)} aria-hidden>
-              <c.icon className="size-4" />
-            </span>
-            <p className="text-[12px] text-fg-sub">{c.label}</p>
-            <p className="tnum mt-0.5 text-[20px] font-bold leading-none">{c.value}</p>
-          </div>
-        ))}
-      </div>
+      {/* 요약 — **원자 3(얼마나 왔나) / 파생 3(그중 얼마가 눌렀나)** 두 줄로 나눈다.
+          여섯 칸이 같은 크기·같은 굵기면 핵심 지표가 먼저 눈에 오지 않는다.
+          자체 산출 지표에는 InfoTip 으로 계산 근거를 단다(CLAUDE.md — 출처 배지와 달리 이건 유지한다) */}
+      {[
+        { rows: primaryCards, big: true },
+        { rows: derivedCards, big: false },
+      ].map((grp, gi) => (
+        <div key={gi} className={cn("grid grid-cols-3 gap-2", gi === 1 && "-mt-4")}>
+          {grp.rows.map((c) => (
+            <div key={c.label} className="rounded-card border border-line bg-plate px-3 py-3">
+              <span className={cn("mb-2 flex size-7 items-center justify-center rounded-card", c.tint)} aria-hidden>
+                <c.icon className="size-4" />
+              </span>
+              {/* break-keep — 한글은 기본값이 아무 데서나 끊겨 「조회당 클릭」이 "조회당 클/릭" 이 된다 */}
+              <p className="flex items-center gap-1 break-keep text-[12px] text-fg-sub">
+                {c.label}
+                {c.tip ? <InfoTip>{c.tip}</InfoTip> : null}
+              </p>
+              <p className={cn("tnum mt-0.5 text-[20px] font-bold leading-none", grp.big && "sm:text-[28px]", c.unknown && "text-fg-faint")}>
+                {c.value}
+                {c.unknown ? <span className="sr-only">불러오지 못함</span> : null}
+              </p>
+            </div>
+          ))}
+        </div>
+      ))}
       {/* 실패했으면 여기부터는 그리지 않는다 — "아직 클릭이 없어요"는 모름을 없음이라 말하는 거짓말이다.
           요약 6칸은 남긴다: 지표 이름과 «—» 가 나란히 있어야 "모른다"가 읽힌다 */}
-      {stats.failed ? null : (
+      {blank ? (
+        <EmptyState
+          icon={BarChart3}
+          title="아직 방문이 없어요"
+          description="주소를 인스타 프로필·카톡 프로필에 걸어 두면 여기에 조회와 클릭이 쌓여요. 어디서 왔는지까지 나눠 보려면 마케팅 탭의 「플랫폼별 링크」를 복사해 쓰세요."
+          action={
+            <Button size="sm" variant="secondary" onClick={onGoMarketing}>
+              마케팅 탭 열기
+            </Button>
+          }
+        />
+      ) : stats.failed ? null : (
         <>
-      <p className="-mt-3 text-[12px] leading-relaxed text-fg-sub">
-        같은 사람이 30분 안에 다시 와도 조회는 1로 세고 클릭은 전부 세요 — 그래서 「조회당 클릭」은 100%를 넘을 수 있어요. 쿠키를 지운 방문은 방문자 집계에서 빠집니다.
-      </p>
-
       {/* 추이 */}
       <div className="rounded-card border border-line bg-plate p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-[14px] font-semibold">일별 추이</p>
+          <h4 className="text-[15px] font-semibold">일별 추이</h4>
           <span className="flex items-center gap-2.5 text-[11px] text-fg-sub">
             <span className="flex items-center gap-1">
-              <span className="inline-block size-2 rounded-full bg-primary" aria-hidden />
+              <span className="inline-block size-2 rounded-full bg-tint-blue-ink" aria-hidden />
               페이지뷰
             </span>
             <span className="flex items-center gap-1">
-              <span className="inline-block size-2 rounded-full bg-positive" aria-hidden />
+              <span className="inline-block size-2 rounded-full bg-tint-coral-ink" aria-hidden />
               클릭
             </span>
           </span>
@@ -3957,8 +4140,10 @@ function StatsPanel({
                 height={180}
                 scale="shared0"
                 series={[
-                  { data: stats.daily.map((d) => d.views), stroke: "var(--color-primary)" },
-                  { data: stats.daily.map((d) => d.clicks), stroke: "var(--color-positive)" },
+                  /* 요약 카드(페이지뷰=파랑·클릭=코랄)와 같은 토큰 — 한 항목이 카드→범례→선까지 같은 색이다.
+                     positive 는 «상승» 전용 의미색이라 계열색으로 쓰지 않는다 */
+                  { data: stats.daily.map((d) => d.views), stroke: "var(--color-tint-blue-ink)" },
+                  { data: stats.daily.map((d) => d.clicks), stroke: "var(--color-tint-coral-ink)" },
                 ]}
               />
             </div>
@@ -3977,15 +4162,25 @@ function StatsPanel({
       <div>
         <div className="rounded-card border border-line bg-plate p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[14px] font-semibold">블록별 클릭</p>
-            <div className="flex gap-1" role="group" aria-label="정렬">
+            <h4 className="text-[15px] font-semibold">블록별 클릭</h4>
+            {/* 이 카드는 bg-plate 라 트랙은 한 단계 밝은 bg-body 로 반전한다(같은 색이면 트랙이 사라진다) */}
+            <div className="flex flex-wrap items-center gap-0.5 rounded-card bg-body p-0.5" role="group" aria-label="정렬">
               {(
                 [
                   ["clicks", "클릭순"],
                   ["order", "페이지 순서"],
                 ] as const
               ).map(([k, lab]) => (
-                <button key={k} type="button" aria-pressed={blockSort === k} onClick={() => setBlockSort(k)} className={cn("trans-state rounded-chip px-2.5 py-1 text-[12px] font-semibold", blockSort === k ? "bg-primary text-on-primary" : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg")}>
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={blockSort === k}
+                  onClick={() => setBlockSort(k)}
+                  className={cn(
+                    "trans-state rounded-chip px-2.5 py-1 text-[12px] font-semibold",
+                    blockSort === k ? "bg-primary text-on-primary" : "text-fg-sub hover:text-fg",
+                  )}
+                >
                   {lab}
                 </button>
               ))}
@@ -3994,7 +4189,7 @@ function StatsPanel({
           {sortedBlocks.length === 0 ? (
             <p className="mt-2 text-[14px] text-fg-sub">아직 클릭이 없어요.</p>
           ) : (
-            <ol className="mt-2 space-y-1.5">
+            <ol className="mt-2 space-y-2">
               {sortedBlocks.slice(0, 20).map((b, i) => {
                 /* ?? 0 이면 스냅샷에 없는 id 가 금메달이 된다 */
                 const r = rankById.get(b.id) ?? i;
@@ -4011,7 +4206,9 @@ function StatsPanel({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline justify-between gap-2">
                         <span className={cn("min-w-0 truncate text-[14px]", b.removed && "text-fg-faint line-through")}>{b.label}</span>
-                        <span className="tnum shrink-0 text-[14px] font-semibold">{n(b.clicks)}</span>
+                        <span className="tnum shrink-0 text-[14px] font-semibold">
+                          {n(b.clicks)} <span className="font-normal text-fg-sub">{stats.clicks > 0 ? `${Math.round((b.clicks / stats.clicks) * 100)}%` : ""}</span>
+                        </span>
                       </div>
                       <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-body" aria-hidden>
                         <span className="block h-full rounded-full bg-primary" style={{ width: `${Math.round((b.clicks / maxBlock) * 100)}%` }} />
@@ -4022,7 +4219,8 @@ function StatsPanel({
               })}
             </ol>
           )}
-          <p className="mt-2 text-[11px] text-fg-sub">취소선은 초안에서 지웠지만 라이브에서 눌린 블록이에요.</p>
+          {/* 유입 4칸은 막대 길이가 곧 % 인데 여기만 다르다 — 그 차이를 밝혀 둔다 */}
+          <p className="mt-2 text-[11px] text-fg-sub">막대는 1위 대비 길이예요(%는 전체 클릭 중 몫). 취소선은 초안에서 지웠지만 라이브에서 눌린 블록이에요.</p>
         </div>
       </div>
 
@@ -4031,6 +4229,7 @@ function StatsPanel({
         <BarList
           color="bg-tint-coral-ink"
           title="유입 채널"
+          icon={Share2} tint="bg-tint-coral text-tint-coral-ink"
           denom={stats.views}
           rows={stats.sources.map((x) => ({ label: (x.src && SRC_LABEL.get(x.src)) ?? "직접·기타", value: x.views }))}
           empty="마케팅 탭의 「플랫폼별 링크」로 복사한 주소로 들어온 방문이 여기 잡혀요."
@@ -4038,6 +4237,7 @@ function StatsPanel({
         <BarList
           color="bg-tint-blue-ink"
           title="유입 경로"
+          icon={Link2} tint="bg-tint-blue text-tint-blue-ink"
           denom={stats.views}
           rows={stats.referrers.map((x) => ({ label: x.host ?? "직접 입력·앱 내부", value: x.views }))}
           empty="아직 유입 경로 정보가 없어요."
@@ -4046,6 +4246,7 @@ function StatsPanel({
         <BarList
           color="bg-tint-purple-ink"
           title="기기"
+          icon={Smartphone} tint="bg-tint-purple text-tint-purple-ink"
           denom={stats.views}
           rows={stats.devices.map((x) => ({ label: DEVICE_LABEL.get(x.device ?? "") ?? "알 수 없음", value: x.views }))}
           empty="아직 기기 정보가 없어요."
@@ -4053,6 +4254,7 @@ function StatsPanel({
         <BarList
           color="bg-tint-teal-ink"
           title="지역"
+          icon={MapPin} tint="bg-tint-teal text-tint-teal-ink"
           denom={stats.views}
           /* regions 만 country is not null 조건이 있어 잔여에 국가 미상 방문이 섞인다 — 이름으로 그 사실을 드러낸다 */
           restLabel="나머지·지역 미확인"

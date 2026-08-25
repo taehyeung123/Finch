@@ -23,10 +23,11 @@ export interface LinkTemplate {
   hint: string;
   /** 이 템플릿이 어울리는 테마(적용 시 함께 바뀐다) */
   theme: string;
-  /** 스트립 카드 아이콘·바탕 틴트 — 링크팜 템플릿 카드 카피. 틴트는 앱 UI 토큰이
-      아니라 템플릿 고유색(LINK_THEMES 와 같은 콘텐츠 팔레트 예외)이며 카드 안 글자는
-      테마와 무관하게 항상 어두운 on-primary 를 쓴다. */
+  /** 스트립 카드 아이콘·바탕 틴트 — 링크팜 템플릿 카드 카피. 바탕은 앱 UI 틴트 토큰
+      쌍(bg-tint-* / text-tint-*-ink)이다: 반투명이라 라이트·다크 어느 지면 위에서도 같은 구조로 읽힌다.
+      고정 hex 는 다크에서 흰 카드 넉 장으로 박혀 폐기했다(2026-08-25 비평). */
   emoji: string;
+  /** Tailwind 클래스 쌍 — 배경 + 잉크 */
   tint: string;
   blocks: Array<{ type: BlockType; data: Record<string, unknown> }>;
 }
@@ -38,7 +39,7 @@ export const LINK_TEMPLATES: LinkTemplate[] = [
     hint: "채널 구독 유도 + 최근 게시물",
     theme: "aurora",
     emoji: "🎬",
-    tint: "#EAF3FF",
+    tint: "bg-tint-blue text-tint-blue-ink",
     blocks: [
       { type: "link", data: { label: "채널 구독하기", url: "https://www.youtube.com/", emoji: "🔔", emphasis: "primary" } },
       { type: "heading", data: { text: "요즘 올린 것" } },
@@ -53,7 +54,7 @@ export const LINK_TEMPLATES: LinkTemplate[] = [
     hint: "진행 중 공구를 맨 위에",
     theme: "cream",
     emoji: "🛒",
-    tint: "#FFEFE8",
+    tint: "bg-tint-coral text-tint-coral-ink",
     blocks: [
       { type: "notice", data: { text: "이번 주 공구 진행 중! 아래에서 확인하세요", tone: "primary" } },
       {
@@ -81,7 +82,7 @@ export const LINK_TEMPLATES: LinkTemplate[] = [
     hint: "매장 안내 + 문의받기",
     theme: "sky",
     emoji: "🏪",
-    tint: "#F4EFE7",
+    tint: "bg-tint-amber text-tint-amber-ink",
     blocks: [
       { type: "text", data: { text: "찾아주셔서 고맙습니다. 아래에서 원하는 정보를 확인하세요.", align: "center" } },
       { type: "link", data: { label: "온라인 스토어", url: "https://smartstore.naver.com/", emoji: "🛍️", emphasis: "primary" } },
@@ -100,7 +101,7 @@ export const LINK_TEMPLATES: LinkTemplate[] = [
     hint: "링크 몇 개만 깔끔하게",
     theme: "notion",
     emoji: "✨",
-    tint: "#EEF0F3",
+    tint: "bg-tint-slate text-tint-slate-ink",
     blocks: [
       { type: "link", data: { label: "인스타그램", url: "https://www.instagram.com/", emoji: "📷" } },
       { type: "link", data: { label: "유튜브", url: "https://www.youtube.com/", emoji: "▶️" } },
