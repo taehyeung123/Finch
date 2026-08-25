@@ -77,7 +77,7 @@ function destinationOf(block: SnapBlock, idx: number | null): string | null {
 
 export async function GET(request: Request, ctx: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = await ctx.params;
-  const back = () => NextResponse.redirect(new URL(`/p/${slug}`, request.url));
+  const back = () => NextResponse.redirect(new URL(`/${slug}`, request.url));
 
   /* 데모 모드는 샘플 블록에서 목적지를 찾는다 — 안 하면 데모 페이지의 모든 버튼이
      제자리로 되던져져서, 고치고 있는 바로 그 증상("누르면 아무 일도 안 남")이 된다.

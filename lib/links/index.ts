@@ -7,32 +7,22 @@
 */
 
 import { SNS_CATALOG } from "./sns-catalog";
+import { isReservedSlug } from "./reserved";
 
 const SNS_KEY_SET = new Set(SNS_CATALOG.map((s) => s.key));
 
 /** 소문자·숫자·하이픈, 2~30자, 하이픈으로 시작 불가 */
 export const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,29}$/;
 
-/**
- * 못 쓰는 slug.
- *
- * /p/{slug} 라는 별도 프리픽스를 쓰므로 앱 라우트와는 충돌하지 않는다. 그래도
- * 막는 이유는 **사칭**이다: /p/admin, /p/support, /p/login 같은 주소는 핀치가
- * 운영하는 공식 페이지처럼 읽힌다. 누가 먼저 잡느냐의 문제가 되면 안 된다.
- */
-const RESERVED = new Set([
-  "admin", "api", "app", "auth", "login", "logout", "signup", "signin",
-  "settings", "support", "help", "billing", "pricing", "terms", "privacy",
-  "finch", "official", "team", "about", "contact", "root", "system",
-  "static", "assets", "public", "new", "edit", "delete", "null", "undefined",
-]);
+/* 못 쓰는 slug 는 lib/links/reserved.ts 한 곳에서 관리한다 —
+   주소가 루트로 올라오면서 «사칭 방지» 목록이 곧 «라우트 충돌 방지» 목록이 됐다. */
 
 export type SlugError = "format" | "reserved" | null;
 
 export function validateSlug(raw: string): SlugError {
   const slug = raw.trim().toLowerCase();
   if (!SLUG_RE.test(slug)) return "format";
-  if (RESERVED.has(slug)) return "reserved";
+  if (isReservedSlug(slug)) return "reserved";
   return null;
 }
 
@@ -113,7 +103,9 @@ export function sanitizeSnsLinks(input: unknown): Array<{ kind: string; url: str
 /** 공개 주소 — 화면 여러 곳에서 만들어 쓰므로 한 곳에서 조립한다 */
 export function publicLinkUrl(slug: string, origin?: string): string {
   const base = origin ?? "https://finch.ai.kr";
-  return `${base.replace(/\/$/, "")}/p/${slug}`;
+  /* 2026-08-25 — 리틀리처럼 프리픽스 없이 루트로. 파일은 여전히 app/p/[slug] 이고 proxy 가 리라이트한다.
+     옛 /p/{slug} 는 301 로 여기로 온다(이미 뿌려진 링크가 안 깨지게). */
+  return `${base.replace(/\/$/, "")}/${slug}`;
 }
 
 /**

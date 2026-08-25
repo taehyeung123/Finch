@@ -29,7 +29,8 @@ const APP_ROUTES = [
 ];
 
 /* 프로필 링크의 클릭 집계 경로 — 크롤러가 따라가면 클릭이 기록된다. 앱 경로와 의미가 달라 따로 둔다. */
-const TRACKING_ROUTES = ["/p/*/go/"];
+/* 클릭 집계 경로 — 2026-08-25 주소가 루트로 올라오면서 /p 프리픽스가 빠졌다 */
+const TRACKING_ROUTES = ["/*/go/", "/p/*/go/"];
 
 const AI_CRAWLERS = [
   "GPTBot",

@@ -317,7 +317,7 @@ export async function unlockLinkPage(slug: string, password: string): Promise<Vi
       sameSite: "lax",
       secure: true,
       maxAge: 60 * 60 * 24, // 하루
-      path: `/p/${slug}`,
+      path: `/${slug}`,
     });
   } catch {
     return fail("unavailable", "지금은 열 수 없어요.");

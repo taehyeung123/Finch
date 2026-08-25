@@ -39,7 +39,7 @@ export function ViewBeacon({ slug }: { slug: string }) {
       if (ms < 1000 || (lastSent > 0 && ms - lastSent < 5000)) return;
       lastSent = ms;
       try {
-        void fetch(`/p/${encodeURIComponent(slug)}/dwell`, {
+        void fetch(`/${encodeURIComponent(slug)}/dwell`, {
           method: "POST",
           keepalive: true,
           headers: { "content-type": "application/json" },

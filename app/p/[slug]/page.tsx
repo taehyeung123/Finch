@@ -106,7 +106,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
        공유 카드에 우리 이름이 붙으면 그건 우리 홍보지 그 사람의 페이지가 아니다. */
     title: { absolute: title },
     description,
-    alternates: { canonical: `/p/${slug}` },
+    alternates: { canonical: `/${slug}` },
     /* openGraph 를 정의하지 않으면 루트 레이아웃의 핀치 OG 이미지·siteName 을 그대로
        물려받는다. 남의 브랜드 페이지에 우리 로고가 걸리는 게 그 경로였다. */
     openGraph: {
@@ -114,7 +114,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       siteName: s.title || slug,
       title: ogTitle,
       description,
-      url: `/p/${slug}`,
+      url: `/${slug}`,
       images: image ? [image] : [],
     },
     twitter: {
@@ -434,7 +434,7 @@ export default async function PublicLinkPage({ params }: { params: Promise<{ slu
              그리드 행을 재단하려면 배치 전체를 건드려야 해서 여기서는 한계를 명시만 한다. */
           <div className={`pointer-events-none sticky bottom-4 z-10 mt-auto pt-4 flex justify-center ${split ? "lg:col-start-2" : ""}`}>
             <a
-              href={`/p/${slug}/go/${emphasized.block.id}`}
+              href={`/${slug}/go/${emphasized.block.id}`}
               {...ext}
               className="lp-btn pointer-events-auto inline-flex min-h-[56px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-6 text-[15px] font-bold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)]"
             >

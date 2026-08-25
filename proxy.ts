@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { isDemoMode } from "@/lib/supabase/config";
+import { isReservedSlug } from "@/lib/links/reserved";
 
 /**
  * 전 페이지 공통 보안 헤더 (PRD PART 13.4·13.5) + Supabase 세션 리프레시.
@@ -40,7 +41,39 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  const publicLink = request.nextUrl.pathname.startsWith("/p/");
+  /* ── 공개 프로필 링크 주소 (2026-08-25) ────────────────────────────────────
+     리틀리처럼 `finch.ai.kr/{slug}` 로 나간다. 파일은 그대로 app/p/[slug] 아래 두고
+     여기서 **리라이트**만 한다 — 라우트를 옮기면 레이아웃 분리(GA·다크 스크립트 없는 방문자 루트)와
+     /go·/vcard·/dwell 하위 경로까지 전부 따라 옮겨야 한다.
+
+     ⚠️ 이제 사용자 주소와 제품 주소가 같은 이름 공간이다. 첫 조각이 예약어면 제품 페이지,
+     아니면 사용자 페이지다(lib/links/reserved.ts — 새 라우트를 만들면 그 목록에도 넣을 것). */
+  const path = request.nextUrl.pathname;
+  const first = path.split("/")[1] ?? "";
+  /* 점이 든 조각은 파일 요청이다(예: /foo.png) — 매처가 흔한 확장자는 이미 걸러내지만 나머지도 넘기지 않는다 */
+  const userPage = first !== "" && !first.includes(".") && !isReservedSlug(first);
+
+  /* 옛 주소는 새 주소로 영구 이동 — 이미 뿌려진 /p/… 링크가 안 깨지고, 검색엔진도 새 주소를 정본으로 잡는다.
+     GET 만 옮긴다: /dwell 은 keepalive POST 라 리다이렉트가 걸리면 본문이 날아간다. */
+  if (path.startsWith("/p/") && request.method === "GET") {
+    const to = request.nextUrl.clone();
+    to.pathname = path.slice(2);
+    const moved = NextResponse.redirect(to, 301);
+    response.cookies.getAll().forEach((c) => moved.cookies.set(c));
+    applySecurityHeaders(moved, true);
+    return moved;
+  }
+
+  if (userPage) {
+    const to = request.nextUrl.clone();
+    to.pathname = `/p${path}`;
+    const rewritten = NextResponse.rewrite(to, { request });
+    /* 위 세션 리프레시가 심어 둔 쿠키를 새 응답으로 옮긴다 — 안 옮기면 갱신 토큰이 사라진다 */
+    response.cookies.getAll().forEach((c) => rewritten.cookies.set(c));
+    response = rewritten;
+  }
+
+  const publicLink = userPage || path.startsWith("/p/");
   /* 방문자 토큰 쿠키 — 공개 프로필 링크 첫 방문에 여기서 발급한다. 서버 액션(recordView)이 발급하면 Next 가
      액션 응답에 페이지를 통째로 다시 렌더해 첫 방문 비용이 두 배였다(감사3 C4). 값은 임의 토큰이고 DB 엔 해시만 남는다. */
   if (publicLink && !request.cookies.get("finch_lv")) {
@@ -49,10 +82,11 @@ export async function proxy(request: NextRequest) {
       sameSite: "lax",
       secure: true,
       maxAge: 60 * 60 * 24 * 180,
-      /* 소비처가 전부 /p 아래다(액션·/go·dwell) — path 를 좁혀 앱·마케팅 요청에
-         고정 식별자가 실려 나가지 않게 한다(감사4 최소권한). 기존 path=/ 쿠키는
-         만료까지 그대로 읽힌다(위 존재 검사로 재발급 안 함). */
-      path: "/p",
+      /* path 를 **그 페이지 아래로** 좁힌다. 예전엔 /p 하나로 묶였지만 이제 페이지가 루트에 있어
+         path=/ 로 두면 앱·마케팅 요청에까지 고정 식별자가 실려 나간다(감사4 최소권한).
+         페이지마다 토큰이 갈리는 것은 오히려 낫다 — 페이지 사이를 잇는 식별자가 아예 생기지 않고,
+         한 페이지 안의 재방문·체류 판정은 그대로 된다(소비처가 전부 그 페이지 아래다: 액션·/go·/vcard·/dwell). */
+      path: `/${first}`,
     });
   }
   applySecurityHeaders(response, publicLink);

@@ -61,6 +61,10 @@
 - `app/(marketing)`: 랜딩·요금제 — 공개, SEO 대상
 - `app/(auth)`: 로그인·회원가입·온보딩 — Supabase Auth(Google·Kakao). 환경변수 미설정 시 데모 모드 폴백
 - `app/(app)`: 사이드바 레이아웃 전체 — `robots: { index: false }`
+- **공개 프로필 링크는 루트 주소다: `finch.ai.kr/{slug}`** (2026-08-25, 리틀리와 같은 모양).
+  파일은 `app/p/[slug]/` 그대로이고 `proxy.ts` 가 리라이트한다 — 옛 `/p/{slug}` 는 301 로 새 주소로 보낸다.
+  ⚠️ **새 라우트를 만들면 `lib/links/reserved.ts` 와 마이그레이션 0066 의 예약어 목록에 같이 넣는다.**
+  Next.js 는 정적 경로가 동적 경로를 이기므로, 그 이름을 쓰던 사용자 페이지가 **조용히 가려진다.**
 
 ## 인증 규칙 (Supabase Auth)
 

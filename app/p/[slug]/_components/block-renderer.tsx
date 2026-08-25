@@ -43,7 +43,7 @@ const arr = (d: Record<string, unknown>, k: string): Record<string, unknown>[] =
 
 /** 클릭 집계 경로. url 이 없는 블록은 링크로 만들지 않는다 */
 function goHref(slug: string, blockId: string, idx?: number): string {
-  return idx === undefined ? `/p/${slug}/go/${blockId}` : `/p/${slug}/go/${blockId}?i=${idx}`;
+  return idx === undefined ? `/${slug}/go/${blockId}` : `/${slug}/go/${blockId}?i=${idx}`;
 }
 
 /*
@@ -176,7 +176,7 @@ export function BlockRenderer({
       if (!s(d, "name").trim()) return null;
       return (
         <a
-          href={`/p/${slug}/vcard/${block.id}`}
+          href={`/${slug}/vcard/${block.id}`}
           className="lp-btn flex min-h-[56px] w-full items-center justify-center gap-2 rounded-[var(--lp-radius-btn)] border border-[var(--lp-btn-border)] bg-[var(--lp-btn-bg)] px-5 py-3 text-[15px] font-semibold text-[var(--lp-btn-fg)] shadow-[var(--lp-shadow)]"
         >
           <UserPlus className="size-4" aria-hidden />

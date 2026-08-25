@@ -339,7 +339,7 @@ export function LinksClient({
     if (!page) return "";
     const me = pages.find((p) => p.id === page.id);
     const parentSlug = me?.parentId ? pages.find((p) => p.id === me.parentId)?.slug : null;
-    return parentSlug && me?.subSlug ? `${origin}/p/${parentSlug}/${me.subSlug}` : publicLinkUrl(page.slug, origin);
+    return parentSlug && me?.subSlug ? `${origin}/${parentSlug}/${me.subSlug}` : publicLinkUrl(page.slug, origin);
   })();
   const [editingId, setEditingId] = useState<string | null>(null);
   /* 토스트 — 「블록을 추가했어요」와 「클릭이 삼켜졌어요」가 같은 회색이면 성공과 거절이 구분되지 않는다.
@@ -2724,7 +2724,7 @@ function NewPageModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () 
         <div>
           <label className="text-[14px] font-medium text-fg" htmlFor="np-slug">주소</label>
           <div className="mt-1.5 flex items-center gap-1">
-            <span className="text-[13px] text-fg-faint">/p/</span>
+            <span className="shrink-0 text-[13px] text-fg-sub">finch.ai.kr/</span>
             <input id="np-slug" value={slugv} onChange={(e) => setSlugv(e.target.value.toLowerCase())} maxLength={30} placeholder="my-event"
               className="h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none" />
           </div>
@@ -3134,7 +3134,7 @@ function ProfilePanel({
 
       <div>
         <label htmlFor="p-slug" className="block text-[12px] font-medium text-fg-sub">
-          주소 (/p/…)
+          주소 (finch.ai.kr/…)
         </label>
         <input id="p-slug" value={slug} onChange={(e) => onChange({ slug: e.target.value.toLowerCase() })} maxLength={30} className={`mt-1.5 ${input}`} />
       </div>
@@ -5336,7 +5336,7 @@ function CreateForm({
                   주소
                 </label>
                 <div className="mt-1.5 flex items-center gap-1.5">
-                  <span className="shrink-0 text-[14px] text-fg-sub">/p/</span>
+                  <span className="shrink-0 text-[14px] text-fg-sub">finch.ai.kr/</span>
                   <input
                     id="slug"
                     value={slug}
