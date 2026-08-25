@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { InfoTip } from "@/components/ui/info-tip";
 import { EmptyState } from "@/components/ui/empty-state";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { Switch } from "@/components/ui/switch";
 import { RuleWizard, type RuleDraft } from "./rule-wizard";
 import { createRule, deleteRule, toggleRule, updateRule } from "../actions";
@@ -44,6 +45,7 @@ export function AutoDmClient({
   posts,
   contentLimit,
   planFailed = false,
+  rulesFailed = false,
   accountHandle,
   accountAvatar,
   followRequestReady,
@@ -52,6 +54,8 @@ export function AutoDmClient({
   posts: Post[];
   /** 플랜별 자동화 콘텐츠(게시물) 한도 — 2026-08-14 개편: 발송량 대신 콘텐츠 수로 게이팅 */
   contentLimit: number;
+  /** 규칙 조회가 실패했다 — «규칙 0건»과 다른 화면을 그린다 */
+  rulesFailed?: boolean;
   /** 플랜을 못 읽어 한도가 무료 기준으로 잠긴 상태 — 숫자를 사실처럼 말하지 않는다 */
   planFailed?: boolean;
   accountHandle: string | null;
@@ -101,6 +105,9 @@ export function AutoDmClient({
   }
 
   async function removeRule(rule: AutoDmRule) {
+    /* deleteRule 은 하드 삭제다(actions.ts) — 규칙·문구·발송 기록이 함께 사라지고 복구 경로가 없다.
+       그런데 확인창도 되돌리기도 없어서, 휴지통을 한 번 잘못 누르면 그걸로 끝이었다(실측). */
+    if (!window.confirm("이 자동화를 지울까요? 규칙과 문구가 함께 사라지고 되돌릴 수 없어요.")) return;
     setRules((prev) => prev.filter((r) => r.id !== rule.id));
     const res = await deleteRule(rule.id);
     if (!res.ok) {
@@ -138,11 +145,14 @@ export function AutoDmClient({
     setEditing(null);
   }
 
+  /* 조회가 실패했으면 «0» 이 아니라 «—» 다. 0 은 "안 돌고 있다"는 사실 주장이고,
+     실패는 "모른다"이다 — 이 화면에서 그 둘을 같은 숫자로 그리면 자동화가 멈춘 줄 안다. */
+  const nv = (v: string) => (rulesFailed ? "—" : v);
   const stats = [
-    { label: "실행 중 규칙", value: String(derived.active) },
-    { label: "오늘 발송", value: formatCompact(derived.sentToday) },
-    { label: "누적 발송", value: formatCompact(derived.sentTotal) },
-    { label: "발송 성공률", value: `${derived.deliveryRate.toFixed(1)}%` },
+    { label: "실행 중 규칙", value: nv(String(derived.active)) },
+    { label: "오늘 발송", value: nv(formatCompact(derived.sentToday)) },
+    { label: "누적 발송", value: nv(formatCompact(derived.sentTotal)) },
+    { label: "발송 성공률", value: nv(`${derived.deliveryRate.toFixed(1)}%`) },
   ];
 
   return (
@@ -185,6 +195,10 @@ export function AutoDmClient({
           </Card>
         ))}
       </div>
+      {/* 규칙이 하나도 없으면 이 줄을 그리지 않는다 — 지표 카드가 「누적 발송 0」이라고 말하는
+          바로 아래에서 「최근 30일 2,587건 발송」이 떴다(실측). 두 숫자가 서로를 반박하면
+          어느 쪽도 못 믿는다. 캡션은 rules 에서 파생되지 않는 정적 집계라 이렇게 가른다. */}
+      {rules.length > 0 && !rulesFailed ? (
       <p className="-mt-3 flex items-center gap-1.5 text-[12px] text-fg-faint">
         최근 30일 {formatCompact(autoDmSummary.sent30d)}건 발송 · 평균 응답률 {autoDmSummary.replyRate}%
         <InfoTip>
@@ -192,9 +206,16 @@ export function AutoDmClient({
           연동 전에는 예시 데이터로 표시됩니다.
         </InfoTip>
       </p>
+      ) : null}
 
-      {/* 규칙 목록 */}
-      {rules.length === 0 ? (
+      {/* 규칙 목록 — **실패 분기가 빈 상태보다 앞이다.** 순서가 바뀌면 조회 실패가
+          「아직 규칙이 없어요」로 나가고, 사용자는 없는 규칙을 다시 만든다. */}
+      {rulesFailed ? (
+        <LoadFailed
+          title="자동화 규칙을 불러오지 못했어요"
+          description="규칙이 없는 게 아니라 목록을 못 읽은 것이에요. 지금 만들면 겹칠 수 있으니 새로고침 후 확인해 주세요."
+        />
+      ) : rules.length === 0 ? (
         <EmptyState
           icon={MessageSquareReply}
           title="아직 자동 DM 규칙이 없어요"
@@ -316,8 +337,9 @@ export function AutoDmClient({
                       </div>
                     </div>
 
-                    {/* 액션 */}
-                    <div className="flex items-center gap-1.5">
+                    {/* 액션 — 좁은 화면에서는 **아래 줄로 내린다.** 같은 행에 남으면 112px 를 먹어
+                        본문 컬럼이 132px 가 되고, 제목·링크·DM 본문이 한 줄에 한글 6~7자로 잘렸다(실측 390px). */}
+                    <div className="flex w-full items-center justify-end gap-1.5 sm:w-auto sm:justify-start">
                       <Switch
                         checked={rule.status === "active"}
                         onChange={() => toggleStatus(rule)}
@@ -328,7 +350,8 @@ export function AutoDmClient({
                         type="button"
                         aria-label="편집"
                         onClick={() => openEdit(rule)}
-                        className="rounded-card p-2 text-fg-sub hover:bg-overlay hover:text-fg"
+                        /* hover:bg-overlay 는 라이트에서 카드와 같은 흰색이라 반응이 안 보였다 — 호버 틴트 토큰으로 */
+                        className="rounded-card p-2 text-fg-sub hover:bg-tint-hover hover:text-fg"
                       >
                         <Pencil className="size-4" />
                       </button>

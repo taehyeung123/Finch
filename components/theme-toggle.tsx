@@ -15,7 +15,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       aria-label={isDark ? "라이트 모드로 전환" : "다크 모드로 전환"}
       title={isDark ? "라이트 모드로 전환" : "다크 모드로 전환"}
       className={cn(
-        "flex size-9 items-center justify-center rounded-card text-fg-sub trans-state hover:bg-overlay hover:text-fg",
+        "flex size-9 items-center justify-center rounded-card text-fg-sub trans-state hover:bg-tint-hover hover:text-fg",
         className,
       )}
     >

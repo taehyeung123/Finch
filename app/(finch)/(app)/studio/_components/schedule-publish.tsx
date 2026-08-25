@@ -88,7 +88,7 @@ export function SchedulePublish({
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="rounded-card p-1 text-fg-faint hover:bg-body hover:text-fg"
+          className="rounded-card p-1 text-fg-faint hover:bg-tint-hover hover:text-fg"
           aria-label="닫기"
         >
           <X className="size-4" />

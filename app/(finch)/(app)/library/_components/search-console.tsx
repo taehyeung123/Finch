@@ -1459,7 +1459,7 @@ export function SearchConsole({
                   setInput("");
                   onClearAll();
                 }}
-                className="shrink-0 cursor-pointer rounded-card px-2.5 text-[14px] font-semibold text-fg-sub trans-state hover:bg-overlay hover:text-fg"
+                className="shrink-0 cursor-pointer rounded-card px-2.5 text-[14px] font-semibold text-fg-sub trans-state hover:bg-tint-hover hover:text-fg"
               >
                 전체 해제
               </button>
@@ -1481,7 +1481,7 @@ export function SearchConsole({
             <button
               type="button"
               onClick={onOpenSettings}
-              className="inline-flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-card px-2.5 text-[14px] font-medium text-fg-sub trans-state hover:bg-overlay hover:text-fg"
+              className="inline-flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-card px-2.5 text-[14px] font-medium text-fg-sub trans-state hover:bg-tint-hover hover:text-fg"
             >
               <Plus className="size-3" aria-hidden />
               기준 추가

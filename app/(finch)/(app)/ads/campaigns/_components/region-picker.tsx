@@ -126,7 +126,7 @@ export function RegionPicker({
                           setQuery("");
                           searchRef.current?.focus();
                         }}
-                        className="flex w-full items-center justify-between gap-2 px-3.5 py-2.5 text-left text-[15px] text-fg-sub trans-state hover:bg-body hover:text-fg"
+                        className="flex w-full items-center justify-between gap-2 px-3.5 py-2.5 text-left text-[15px] text-fg-sub trans-state hover:bg-tint-hover hover:text-fg"
                       >
                         <span className="inline-flex items-center gap-2">
                           <MapPin className="size-3.5 text-fg-faint" aria-hidden />
@@ -158,7 +158,7 @@ export function RegionPicker({
                 type="button"
                 aria-label={`${formatRegionPick(p)} 삭제`}
                 onClick={() => remove(p)}
-                className="rounded-chip p-0.5 trans-state hover:bg-overlay"
+                className="rounded-chip p-0.5 trans-state hover:bg-tint-hover"
               >
                 <X className="size-3" aria-hidden />
               </button>

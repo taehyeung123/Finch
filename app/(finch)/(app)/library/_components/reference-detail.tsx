@@ -247,7 +247,7 @@ export function ReferenceDetailModal({
             type="button"
             aria-label="닫기"
             onClick={onClose}
-            className="rounded-card p-1.5 text-fg-faint hover:bg-body hover:text-fg"
+            className="rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg"
           >
             <X className="size-5" />
           </button>
@@ -566,7 +566,7 @@ export function ReferenceDetailModal({
                 onClick={onToggleFavorite}
                 className={cn(
                   "rounded-card p-1.5 trans-state",
-                  favorite ? "text-primary" : "text-fg-faint hover:bg-body hover:text-fg-sub",
+                  favorite ? "text-primary" : "text-fg-faint hover:bg-tint-hover hover:text-fg-sub",
                 )}
               >
                 <Bookmark className="size-4" fill={favorite ? "currentColor" : "none"} aria-hidden />

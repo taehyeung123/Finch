@@ -13,7 +13,7 @@ import { useChannel } from "./channel-context";
 import { ChannelIndicator, ChannelSwitcher, getChannelScope } from "./channel-switcher";
 
 const menuItem =
-  "flex w-full items-center gap-2 rounded-card px-2.5 py-2 text-left text-[15px] text-fg-sub trans-state hover:bg-body hover:text-fg";
+  "flex w-full items-center gap-2 rounded-card px-2.5 py-2 text-left text-[15px] text-fg-sub trans-state hover:bg-tint-hover hover:text-fg";
 
 /** 상단바 — 채널 스위처 / 전역 검색 / 알림 벨 / 계정 드롭다운 (PART 6.2) */
 export function Topbar() {
@@ -88,7 +88,7 @@ export function Topbar() {
       <Link
         href="/notifications"
         aria-label={`알림 ${unread}건`}
-        className="relative rounded-card p-2 text-fg-sub hover:bg-overlay hover:text-fg"
+        className="relative rounded-card p-2 text-fg-sub hover:bg-tint-hover hover:text-fg"
       >
         <Bell className="size-[18px]" aria-hidden />
         {/* 알림이 사이드바에서 빠져 이 벨이 유일한 상시 진입점 — 점 대신 미읽음 개수를 노출한다 */}

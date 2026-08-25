@@ -442,7 +442,7 @@ export function RuleWizard({
               type="button"
               aria-label="이전 단계"
               onClick={() => setStepIdx((i) => Math.max(0, i - 1))}
-              className="-ml-1.5 rounded-card p-1.5 text-fg hover:bg-body"
+              className="-ml-1.5 rounded-card p-1.5 text-fg hover:bg-tint-hover"
             >
               <ChevronLeft className="size-5" />
             </button>
@@ -454,7 +454,7 @@ export function RuleWizard({
             type="button"
             aria-label="닫기"
             onClick={requestClose}
-            className="rounded-card p-1.5 text-fg hover:bg-body"
+            className="rounded-card p-1.5 text-fg hover:bg-tint-hover"
           >
             <X className="size-5" />
           </button>
@@ -818,7 +818,7 @@ export function RuleWizard({
                           aria-label={`답글 ${i + 1} 삭제`}
                           onClick={() => setPublicReplies((prev) => prev.filter((_, j) => j !== i))}
                           disabled={publicReplies.length <= 1}
-                          className="rounded-card p-2 text-fg-faint trans-state hover:bg-overlay hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
+                          className="rounded-card p-2 text-fg-faint trans-state hover:bg-tint-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           <X className="size-4" />
                         </button>

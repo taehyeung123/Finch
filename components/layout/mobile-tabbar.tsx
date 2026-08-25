@@ -55,7 +55,7 @@ export function MobileTabbar() {
           onClick={() => setSheetOpen(false)}
           className={cn(
             "flex items-center gap-3 rounded-card px-3 py-2.5 text-[15px] font-medium trans-state",
-            active ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-body hover:text-fg",
+            active ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-tint-hover hover:text-fg",
           )}
         >
           <Icon className="size-[18px] shrink-0" aria-hidden />
@@ -86,7 +86,7 @@ export function MobileTabbar() {
                 type="button"
                 aria-label="닫기"
                 onClick={() => setSheetOpen(false)}
-                className="rounded-card p-1.5 text-fg-sub trans-state hover:bg-body hover:text-fg"
+                className="rounded-card p-1.5 text-fg-sub trans-state hover:bg-tint-hover hover:text-fg"
               >
                 <X className="size-5" aria-hidden />
               </button>

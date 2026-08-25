@@ -31,6 +31,8 @@ export default async function AutoDmPage() {
      비활성화한다. 저장이 조용히 버려지는데 성공으로 보이는 컨트롤은 없느니만 못하다
      (links 0051 때 확정한 규칙 — 같은 패턴, 같은 대책). */
   let followRequestReady = true;
+  /* 조회가 실패했는가 — «규칙 0건»과 구분해서 화면에 나른다 */
+  let rulesFailed = false;
 
   /* 플랜 조회가 실패하면 null 이다 — 한도는 fail-closed 로 free 를 쓰되(dmContentLimitFor),
      화면이 그 한도를 «당신 플랜의 한도»라고 단정하면 안 된다. 유료 고객이 이유도 모른 채
@@ -73,19 +75,25 @@ export default async function AutoDmPage() {
       accountHandle = (accountRes.data?.handle as string | undefined) ?? null;
       accountAvatar = avatarUrl;
       if (error) {
-        console.warn("[auto-dm] 규칙 조회 실패:", error);
+        /* 예전엔 로그만 남기고 rules=[] 로 넘어갔다 — 그러면 화면은 「아직 자동 DM 규칙이 없어요」와
+           「실행 중 규칙 0 · 누적 발송 0 · 성공률 0.0%」를 그린다. 규칙이 돌고 있는 사람이 그 화면을
+           보면 자동화가 통째로 날아간 줄 안다. 실패는 «없음»이 아니다(lib/data/internal.ts 규칙). */
+        console.error("[auto-dm] 규칙 조회 실패:", error);
+        rulesFailed = true;
       } else if (data) {
         rules = (data as AutoDmRuleRow[]).map(ruleFromRow);
       }
     } catch (e) {
       posts = [];
-      console.warn("[auto-dm] 규칙 조회 실패:", e);
+      console.error("[auto-dm] 규칙 조회 실패:", e);
+      rulesFailed = true;
     }
   }
 
   return (
     <AutoDmClient
       initialRules={rules}
+      rulesFailed={rulesFailed}
       posts={posts}
       contentLimit={contentLimit}
       planFailed={plan === null}

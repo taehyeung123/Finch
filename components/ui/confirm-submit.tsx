@@ -90,7 +90,7 @@ export function ConfirmSubmit({
                 type="button"
                 aria-label="닫기"
                 onClick={() => setOpen(false)}
-                className="-mr-1 -mt-1 rounded-card p-1.5 text-fg-sub hover:bg-body hover:text-fg"
+                className="-mr-1 -mt-1 rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg"
               >
                 <X className="size-4" />
               </button>

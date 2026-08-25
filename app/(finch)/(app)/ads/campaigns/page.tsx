@@ -141,7 +141,7 @@ function RadioPill({
 
 /** 미리보기 스켈레톤 바 — 미입력 필드 자리 표시 */
 function SkeletonBar({ className }: { className?: string }) {
-  return <span className={cn("block rounded-chip bg-overlay", className)} aria-hidden />;
+  return <span className={cn("block rounded-chip bg-plate", className)} aria-hidden />;
 }
 
 /** 소재 형식 선택 카드 (단일·슬라이드·컬렉션) */
@@ -741,18 +741,26 @@ export default function CampaignsPage() {
                 {creativeFormat === "single" ? (
                   <>
                     <div>
-                      <div className="flex flex-col items-center justify-center gap-2 rounded-card border border-dashed border-line px-6 py-10 text-center">
+                      {/* ⚠️ 업로드는 아직 배선이 없다(파일 입력도 onDrop 도 없음). 예전엔 그 사실을
+                          화면이 감춰서, 「파일 선택」을 눌러도 **아무 일도 안 일어났다** — 오류도 없고
+                          변화도 없으니 사용자는 자기 브라우저가 고장 난 줄 안다.
+                          같은 화면의 「게재」가 이미 쓰는 방식(Phase 3 예정 뱃지)으로 통일한다.
+                          살아 있는 것처럼 보이는 죽은 컨트롤보다, 아직 없다고 말하는 편이 낫다. */}
+                      <div className="flex flex-col items-center justify-center gap-2 rounded-card border border-dashed border-line bg-plate px-6 py-10 text-center">
                         <Upload className="size-8 text-fg-faint" aria-hidden />
-                        <p className="text-[15px] font-semibold text-fg-sub">이미지 또는 영상을 끌어다 놓으세요</p>
-                        <p className="text-[14px] text-fg-sub">1:1 또는 4:5 비율 · JPG · PNG · MP4 · 최대 30MB</p>
-                        <Button variant="secondary" size="sm" className="mt-2">
+                        <Badge tone="primary">Phase 3 예정</Badge>
+                        <p className="text-[15px] font-semibold text-fg-sub">소재 업로드는 아직 준비 중이에요</p>
+                        <p className="text-[14px] text-fg-sub">
+                          1:1 또는 4:5 비율 · JPG · PNG · MP4 · 최대 30MB 로 열릴 예정이에요. 지금은 문구·타깃만 저장돼요.
+                        </p>
+                        <Button variant="secondary" size="sm" className="mt-2" disabled title="소재 업로드는 아직 준비 중이에요">
                           파일 선택
                         </Button>
                       </div>
-                      <div className="mt-3 flex items-center gap-3 rounded-card border border-dashed border-line px-4 py-3">
+                      <div className="mt-3 flex items-center gap-3 rounded-card border border-dashed border-line px-4 py-3 opacity-60">
                         <ImagePlus className="size-5 shrink-0 text-fg-faint" aria-hidden />
                         <div className="min-w-0">
-                          <p className="text-[14px] font-semibold text-fg-sub">영상 썸네일 업로드</p>
+                          <p className="text-[14px] font-semibold text-fg-sub">영상 썸네일 업로드 (준비 중)</p>
                           <p className="text-xs text-fg-faint">영상 소재는 썸네일을 함께 올려주세요 (JPG · PNG)</p>
                         </div>
                       </div>
@@ -783,7 +791,7 @@ export default function CampaignsPage() {
                     <div className="mt-2 space-y-2">
                       {carouselCards.map((card, i) => (
                         <div key={card.id} className="flex items-center gap-3 rounded-card border border-line p-3">
-                          <span className="tnum flex size-6 shrink-0 items-center justify-center rounded-chip bg-overlay text-xs font-bold text-fg-sub">
+                          <span className="tnum flex size-6 shrink-0 items-center justify-center rounded-chip bg-plate text-xs font-bold text-fg-sub">
                             {i + 1}
                           </span>
                           <span className="flex size-12 shrink-0 items-center justify-center rounded-card border border-dashed border-line text-fg-faint">
@@ -802,7 +810,7 @@ export default function CampaignsPage() {
                               type="button"
                               aria-label={`${i + 1}번째 카드 삭제`}
                               onClick={() => removeCard(card.id)}
-                              className="shrink-0 rounded-card p-1.5 text-fg-faint trans-state hover:bg-overlay hover:text-fg"
+                              className="shrink-0 rounded-card p-1.5 text-fg-faint trans-state hover:bg-tint-hover hover:text-fg"
                             >
                               <X className="size-4" aria-hidden />
                             </button>
@@ -984,7 +992,7 @@ export default function CampaignsPage() {
                 </div>
 
                 {/* 소재 영역 — 캐러셀이면 슬라이드 도트 표시 */}
-                <div className="relative flex aspect-square items-center justify-center bg-overlay">
+                <div className="relative flex aspect-square items-center justify-center bg-plate">
                   <div className="flex flex-col items-center gap-1.5 text-fg-faint">
                     {creativeFormat === "carousel" ? (
                       <>

@@ -701,7 +701,7 @@ export default function CardEditor({
         <div className="flex w-full flex-col gap-4 overflow-y-auto border-t border-line p-4 sm:w-80 sm:border-l sm:border-t-0">
           <div className="flex items-center justify-between">
             <p className="text-[15px] font-bold">편집 도구</p>
-            <button type="button" onClick={onClose} aria-label="닫기" className="rounded-card p-1 text-fg-faint hover:bg-overlay hover:text-fg">
+            <button type="button" onClick={onClose} aria-label="닫기" className="rounded-card p-1 text-fg-faint hover:bg-tint-hover hover:text-fg">
               <X className="size-5" />
             </button>
           </div>

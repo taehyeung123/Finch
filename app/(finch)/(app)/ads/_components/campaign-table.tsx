@@ -26,6 +26,10 @@ export function CampaignTable({
 
   return (
     <>
+      {/* 390px 에서 표 폭 992 vs 화면 356 — 숫자 8열이 전부 화면 밖인데 스크롤바 자리도 없어서
+          «옆으로 밀 수 있다»는 걸 알 길이 없었다(실측: scrollWidth 992 / clientWidth 356).
+          좁은 화면에서만 한 줄로 알린다 — 넓은 화면에는 다 보이므로 군더더기다. */}
+      <p className="mb-2 text-[12px] text-fg-faint sm:hidden">← 옆으로 밀면 예산·노출·CTR·ROAS 를 볼 수 있어요</p>
       <table className="w-full min-w-[960px] text-[15px]">
         <thead>
           <tr className="border-b border-line text-left text-xs text-fg-faint">
@@ -51,7 +55,7 @@ export function CampaignTable({
                 key={c.id}
                 className={
                   clickable
-                    ? "cursor-pointer border-b border-line trans-state last:border-0 hover:bg-body focus-visible:bg-body focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+                    ? "cursor-pointer border-b border-line trans-state last:border-0 hover:bg-tint-hover focus-visible:bg-tint-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
                     : "border-b border-line last:border-0"
                 }
                 tabIndex={clickable ? 0 : undefined}

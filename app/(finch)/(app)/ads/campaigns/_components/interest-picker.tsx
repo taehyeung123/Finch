@@ -85,7 +85,7 @@ export function InterestPicker({
                     role="option"
                     aria-selected={false}
                     onClick={() => add(s.name)}
-                    className="flex w-full items-center justify-between gap-2 px-3.5 py-2.5 text-left text-[15px] text-fg-sub trans-state hover:bg-body hover:text-fg"
+                    className="flex w-full items-center justify-between gap-2 px-3.5 py-2.5 text-left text-[15px] text-fg-sub trans-state hover:bg-tint-hover hover:text-fg"
                   >
                     <span className="inline-flex min-w-0 items-center gap-2">
                       <Tag className="size-3.5 shrink-0 text-fg-faint" aria-hidden />

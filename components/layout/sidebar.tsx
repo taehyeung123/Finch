@@ -190,7 +190,7 @@ export function Sidebar() {
           title={collapsed ? (groupLabel ? `${groupLabel} · ${label}` : label) : undefined}
           className={cn(
             "flex items-center gap-2.5 rounded-card px-2.5 py-2 text-[14px] font-medium trans-state",
-            active ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-overlay hover:text-fg",
+            active ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-tint-hover hover:text-fg",
           )}
         >
           <Icon className="size-4 shrink-0" aria-hidden />

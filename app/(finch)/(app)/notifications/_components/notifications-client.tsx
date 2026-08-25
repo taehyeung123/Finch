@@ -121,7 +121,7 @@ export function NotificationsClient({ initial }: { initial: AppNotification[] })
                     onClick={() => markRead(n.id)}
                     className={cn(
                       "flex w-full items-start gap-3 p-4 text-left trans-state",
-                      n.read ? "hover:bg-overlay" : "bg-primary-weak hover:bg-overlay",
+                      n.read ? "hover:bg-tint-hover" : "bg-primary-weak hover:bg-tint-hover",
                     )}
                     aria-label={n.read ? n.title : `읽지 않음: ${n.title}`}
                   >

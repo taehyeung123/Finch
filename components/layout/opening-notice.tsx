@@ -91,7 +91,7 @@ export function OpeningNotice() {
             type="button"
             aria-label="닫기"
             onClick={() => setClosedThisSession(true)}
-            className="rounded-card p-1.5 text-fg-faint hover:bg-body hover:text-fg"
+            className="rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg"
           >
             <X className="size-4" />
           </button>

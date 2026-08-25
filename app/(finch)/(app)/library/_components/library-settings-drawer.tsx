@@ -255,7 +255,7 @@ export function LibrarySettingsDrawer({
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            className="flex size-9 cursor-pointer items-center justify-center rounded-card text-fg-faint trans-state hover:bg-body hover:text-fg"
+            className="flex size-9 cursor-pointer items-center justify-center rounded-card text-fg-faint trans-state hover:bg-tint-hover hover:text-fg"
           >
             <X className="size-5" aria-hidden />
           </button>
@@ -271,7 +271,7 @@ export function LibrarySettingsDrawer({
               onClick={() => onTabChange(t.key)}
               className={cn(
                 "cursor-pointer rounded-chip px-3 py-1.5 text-[14px] font-semibold trans-state",
-                tab === t.key ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-body hover:text-fg",
+                tab === t.key ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-tint-hover hover:text-fg",
               )}
             >
               {t.label}

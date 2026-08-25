@@ -1086,7 +1086,8 @@ export const autoDmRules: AutoDmRule[] = [
     sentTotal: 1842,
     sentToday: 64,
     failedTotal: 37,
-    lastSentAt: "2026-07-14T10:12:00+09:00",
+    /* 상대 시각 — 고정 날짜를 박으면 데모가 날마다 낡는다(같은 파일 DEMO_TODAY_MS 주석) */
+    lastSentAt: new Date(DEMO_TODAY_MS + 10 * 3_600_000 + 12 * 60_000).toISOString(),
     createdAt: "2026-06-28T14:00:00+09:00",
   },
   {
@@ -1109,7 +1110,7 @@ export const autoDmRules: AutoDmRule[] = [
     sentTotal: 512,
     sentToday: 28,
     failedTotal: 9,
-    lastSentAt: "2026-07-14T09:40:00+09:00",
+    lastSentAt: new Date(DEMO_TODAY_MS - 3 * 3_600_000).toISOString(),
     createdAt: "2026-07-05T11:30:00+09:00",
   },
   {
@@ -1132,7 +1133,8 @@ export const autoDmRules: AutoDmRule[] = [
     sentTotal: 233,
     sentToday: 0,
     failedTotal: 4,
-    lastSentAt: "2026-07-11T18:20:00+09:00",
+    /* 일시중지된 규칙 — 마지막 발송이 며칠 전인 게 자연스럽다 */
+    lastSentAt: new Date(DEMO_TODAY_MS - 4 * 86_400_000).toISOString(),
     createdAt: "2026-07-02T16:10:00+09:00",
   },
 ];

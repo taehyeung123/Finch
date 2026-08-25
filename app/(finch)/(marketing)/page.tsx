@@ -240,7 +240,7 @@ function TrendPanel() {
         {TREND_ROWS.map((row) => (
           <li
             key={row.rank}
-            className="flex items-center gap-3 rounded-card border border-transparent px-3 py-2.5 trans-state hover:border-line hover:bg-overlay"
+            className="flex items-center gap-3 rounded-card border border-transparent px-3 py-2.5 trans-state hover:border-line hover:bg-tint-hover"
           >
             <span className={`tnum w-4 text-center text-[15px] font-bold ${row.rank === 1 ? "text-primary-ink" : "text-fg-sub"}`}>
               {row.rank}

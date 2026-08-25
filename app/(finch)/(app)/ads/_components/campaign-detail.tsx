@@ -159,7 +159,7 @@ export function CampaignDetailModal({
             type="button"
             aria-label="닫기"
             onClick={onClose}
-            className="rounded-card p-1.5 text-fg-faint hover:bg-body hover:text-fg"
+            className="rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg"
           >
             <X className="size-5" />
           </button>
@@ -284,7 +284,7 @@ export function CampaignDetailModal({
                           </span>
                         </span>
                       </div>
-                      <div className="mt-1 h-2.5 w-full overflow-hidden rounded-chip bg-overlay">
+                      <div className="mt-1 h-2.5 w-full overflow-hidden rounded-chip bg-plate">
                         <div
                           className="h-full rounded-chip bg-primary"
                           style={{ width: `${Math.max(pct, 1.5)}%` }}
@@ -382,7 +382,7 @@ export function CampaignDetailModal({
                   return (
                     <div key={b.range} className="flex items-center gap-3">
                       <span className="tnum w-12 shrink-0 text-xs text-fg-sub">{b.range}</span>
-                      <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-chip bg-overlay">
+                      <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-chip bg-plate">
                         <div
                           className="flex h-full overflow-hidden rounded-chip"
                           style={{ width: `${Math.max((total / maxBandTotal) * 100, 2)}%` }}

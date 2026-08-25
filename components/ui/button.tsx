@@ -16,7 +16,9 @@ const base =
 const variants: Record<Variant, string> = {
   primary: "bg-primary text-on-primary hover:bg-primary-hover active:bg-primary-pressed font-semibold",
   secondary: "bg-overlay text-fg border border-line hover:border-line-strong active:bg-body",
-  ghost: "text-fg-sub hover:text-fg hover:bg-overlay",
+  /* 호버 배경은 **틴트 토큰**이다 — bg-overlay 는 라이트에서 카드·사이드바와 같은 흰색이라
+     ghost 버튼의 호버 반응이 통째로 안 보였다(면 역할표: bg-tint-hover 가 호버 틴트다) */
+  ghost: "text-fg-sub hover:text-fg hover:bg-tint-hover",
   danger: "bg-negative-weak text-negative border border-transparent hover:border-negative",
 };
 

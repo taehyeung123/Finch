@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { InfoTip } from "@/components/ui/info-tip";
 import { ButtonLink } from "@/components/ui/button";
 import { formatCompact, formatKRW, formatPercent } from "@/lib/format";
-import { campaignDetails, campaigns, dashboardSummaries, IS_SAMPLE_DATA } from "@/lib/data";
+import { accounts, campaignDetails, campaigns, dashboardSummaries, IS_SAMPLE_DATA } from "@/lib/data";
 import { aggregateCampaigns } from "@/lib/ads/metrics";
 import { CampaignTable } from "./_components/campaign-table";
 
@@ -29,6 +29,9 @@ export default function AdsPage() {
   // 전체 캠페인 누적 기준 — 가중 평균(공통 유틸)으로 계산해 대시보드와 기준을 공유한다
   const totals = aggregateCampaigns(campaigns);
   const organicWeeklyViews = dashboardSummaries.all.weeklyViews;
+  /* 오가닉 칸도 같은 규칙을 탄다 — 바로 옆 광고 칸은 «—» 인데 여기만 «0» 이라고 단정하고 있었다.
+     채널을 아직 연결하지 않은 사람에게 「이번 주 조회수 0」은 사실이 아니라 «모른다»이다. */
+  const channelLinked = accounts.some((a) => a.connected);
   /* 연동 전에는 «0» 이 아니라 «—» 다. 0원·0.0배는 "안 썼다·성과가 없다"는 **사실 주장**이라,
      아직 광고 계정을 연결하지 않은 사람에게는 거짓이다(2026-08-25 감사에서 통계·리드·방명록에
      같은 함정을 고쳤다 — 실패·미연동을 «없음»으로 단정하지 않는다). */
@@ -143,9 +146,9 @@ export default function AdsPage() {
               <div className="p-5">
                 <p className="text-[14px] text-fg-sub">오가닉 조회수</p>
                 <p className="tnum mt-1.5 text-2xl font-bold leading-none">
-                  {formatCompact(organicWeeklyViews)}
+                  {channelLinked ? formatCompact(organicWeeklyViews) : "—"}
                 </p>
-                <p className="mt-2 text-xs text-fg-faint">이번 주 · 연동 채널 합산</p>
+                <p className="mt-2 text-xs text-fg-faint">{channelLinked ? "이번 주 · 연동 채널 합산" : "채널 연결 전"}</p>
               </div>
               <div className="p-5">
                 <p className="text-[14px] text-fg-sub">광고 노출수</p>
