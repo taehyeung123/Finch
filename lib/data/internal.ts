@@ -20,9 +20,22 @@ async function getUser() {
   return { supabase, user };
 }
 
+/*
+  ⚠️ 이 파일의 규칙 — **조회 실패는 «없음»이 아니다.**
+
+  예전엔 조회가 실패하면 console.error 를 찍고 바로 []를 돌려줬다. 그러면 화면은
+  「아직 없어요」를 그린다 — 결제한 고객이 「결제 내역이 없습니다」를 보고, 리포트를
+  만든 사람이 「리포트가 없습니다」를 본다. 서버 로그에만 남고 화면은 거짓말을 한다.
+
+  그래서 목록 조회는 **실패하면 null**, «진짜 비었음»은 [] 로 가른다. 단일 값도 같은
+  규칙을 따른다(각 함수 주석). 타입이 null 을 강제하므로 새 화면이 이 규칙을
+  조용히 빠뜨릴 수 없다.
+*/
+
 /* ── 알림 ─────────────────────────────────────────────────── */
 
-export async function getNotifications(): Promise<AppNotification[]> {
+/** 알림 목록 — **null 이면 조회 실패**(«알림 없음»은 빈 배열) */
+export async function getNotifications(): Promise<AppNotification[] | null> {
   if (isDemoMode()) return mockNotifications;
   const { supabase, user } = await getUser();
   if (!user) return [];
@@ -33,7 +46,7 @@ export async function getNotifications(): Promise<AppNotification[]> {
     .limit(100);
   if (error) {
     console.error("[internal] 알림 조회 실패:", error.message);
-    return [];
+    return null;
   }
   return (data ?? []).map((r) => ({
     id: r.id,
@@ -71,7 +84,8 @@ function currentMonthStart(): string {
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-01`;
 }
 
-export async function getUsageStats(): Promise<UsageStat[]> {
+/** 이번 달 사용량 — **null 이면 조회 실패**. (2026-08-25 현재 호출부 없음) */
+export async function getUsageStats(): Promise<UsageStat[] | null> {
   if (isDemoMode()) return mockUsageStats;
   const { supabase, user } = await getUser();
   if (!user) return [];
@@ -81,7 +95,7 @@ export async function getUsageStats(): Promise<UsageStat[]> {
     .eq("period_month", currentMonthStart());
   if (error) {
     console.error("[internal] 사용량 조회 실패:", error.message);
-    return [];
+    return null;
   }
   return (data ?? []).map((r) => {
     const meta = USAGE_META[r.metric] ?? { label: r.metric, unit: "회" };
@@ -94,7 +108,13 @@ export async function getUsageStats(): Promise<UsageStat[]> {
 export type PlanKey = "free" | "creator" | "pro" | "agency" | "enterprise";
 
 /** 현재 플랜 — users_profile.plan. 데모는 creator, 비로그인/조회실패는 free. */
-export async function getCurrentPlan(): Promise<PlanKey> {
+/**
+ * 현재 플랜 — **null 이면 조회 실패**(«무료»와 다르다).
+ * 예전엔 실패를 "free" 로 폴백해서 유료 고객의 화면이 잠긐 무료로 읽혔다 —
+ * 기능이 잠기고 업그레이드 권유가 뜨는, 가장 민망한 종류의 오동작이다.
+ * 권한 판정은 여전히 fail-closed 로(호출부가 ?? "free"), 표시만 «확인 못 함»으로 가른다.
+ */
+export async function getCurrentPlan(): Promise<PlanKey | null> {
   if (isDemoMode()) return "creator";
   const { supabase, user } = await getUser();
   if (!user) return "free";
@@ -105,7 +125,7 @@ export async function getCurrentPlan(): Promise<PlanKey> {
     .maybeSingle();
   if (error) {
     console.error("[internal] 플랜 조회 실패:", error.message);
-    return "free";
+    return null;
   }
   const plan = data?.plan;
   return plan === "creator" || plan === "pro" || plan === "agency" || plan === "enterprise" ? plan : "free";
@@ -121,11 +141,19 @@ export interface SubscriptionView {
   pendingPlan: string | null;
 }
 
-/** 현재 구독(정기결제) — 만료·초안 제외 최신 1건. 데모/비로그인/없음은 null. */
-export async function getSubscription(): Promise<SubscriptionView | null> {
-  if (isDemoMode()) return null;
+/**
+ * 현재 구독(정기결제) — 만료·초안 제외 최신 1건.
+ *
+ * 반환값이 **두 격**인 이유: 예전엔 «구독 없음»과 «조회 실패»가 둘 다 null 이었다.
+ * 정기결제 중인 고객의 조회가 한 번 실패하면 결제 화면이 「구독 없음」으로 보이고
+ * 해지·재결제 버튼이 통째로 사라졌다.
+ *   바깥 null   = 조회 실패
+ *   { sub: null } = 구독 없음(데모·비로그인 포함)
+ */
+export async function getSubscription(): Promise<{ sub: SubscriptionView | null } | null> {
+  if (isDemoMode()) return { sub: null };
   const { supabase, user } = await getUser();
-  if (!user) return null;
+  if (!user) return { sub: null };
   let { data, error } = await supabase
     .from("subscriptions")
     .select("id, plan, status, next_billing_at, card_summary, pending_plan")
@@ -146,18 +174,20 @@ export async function getSubscription(): Promise<SubscriptionView | null> {
     error = fallback.error;
   }
   if (error) {
-    // 0009 미적용 등 — 구독 없음으로 폴백
+    /* 0009 미적용 등 — «구독 없음»으로 폴백하지 않는다(위 주석) */
     console.warn("[internal] 구독 조회 실패:", error.message);
     return null;
   }
-  if (!data) return null;
+  if (!data) return { sub: null };
   return {
-    id: data.id,
-    plan: data.plan,
-    status: data.status as SubscriptionView["status"],
-    nextBillingAt: data.next_billing_at,
-    cardSummary: data.card_summary,
-    pendingPlan: data.pending_plan ?? null,
+    sub: {
+      id: data.id,
+      plan: data.plan,
+      status: data.status as SubscriptionView["status"],
+      nextBillingAt: data.next_billing_at,
+      cardSummary: data.card_summary,
+      pendingPlan: data.pending_plan ?? null,
+    },
   };
 }
 
@@ -171,8 +201,11 @@ export interface PaymentOrderView {
   createdAt: string;
 }
 
-/** 결제 내역 — ready(결제창만 열고 이탈한 주문)는 제외. 최신순 20건. */
-export async function getPaymentOrders(): Promise<PaymentOrderView[]> {
+/**
+ * 결제 내역 — ready(결제창만 열고 이탈한 주문)는 제외. 최신순 20건.
+ * **null 이면 조회 실패** — 돈이 오간 화면에서 「내역이 없습니다」는 가장 나쁜 거짓말이다.
+ */
+export async function getPaymentOrders(): Promise<PaymentOrderView[] | null> {
   if (isDemoMode()) return [];
   const { supabase, user } = await getUser();
   if (!user) return [];
@@ -184,7 +217,7 @@ export async function getPaymentOrders(): Promise<PaymentOrderView[]> {
     .limit(20);
   if (error) {
     console.error("[internal] 결제 내역 조회 실패:", error.message);
-    return [];
+    return null;
   }
   return (data ?? []).map((r) => ({
     id: r.id,
@@ -199,7 +232,8 @@ export async function getPaymentOrders(): Promise<PaymentOrderView[]> {
 
 /* ── 리포트 ───────────────────────────────────────────────── */
 
-export async function getReports(): Promise<ReportItem[]> {
+/** 리포트 목록 — **null 이면 조회 실패** */
+export async function getReports(): Promise<ReportItem[] | null> {
   if (isDemoMode()) return mockReports;
   const { supabase, user } = await getUser();
   if (!user) return [];
@@ -210,7 +244,7 @@ export async function getReports(): Promise<ReportItem[]> {
     .limit(100);
   if (error) {
     console.error("[internal] 리포트 조회 실패:", error.message);
-    return [];
+    return null;
   }
   return (data ?? []).map((r) => ({
     id: r.id,

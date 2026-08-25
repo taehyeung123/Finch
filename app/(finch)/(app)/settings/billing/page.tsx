@@ -1,4 +1,4 @@
-import { CreditCard, FileClock } from "lucide-react";
+import { AlertTriangle, CreditCard, FileClock } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +6,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { EmptyState } from "@/components/ui/empty-state";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { formatDate, formatKRW } from "@/lib/format";
 import Link from "next/link";
 import { PLAN_CARDS, type PlanCardData } from "@/components/pricing/plan-cards";
@@ -162,12 +163,25 @@ export default async function BillingSettingsPage({
               ? "플랜 변경 예약을 취소했어요."
               : null;
 
-  const [currentPlan, orders, subscription, credits] = await Promise.all([
+  const [planRes, ordersRes, subRes, credits] = await Promise.all([
     getCurrentPlan(),
     getPaymentOrders(),
     getSubscription(),
     getCreditSummary(),
   ]);
+
+  /* ── 조회 실패를 «없음»으로 읽지 않는다 — 돈이 걸린 화면이라 더욱 ──
+     예전엔 세 조회가 실패를 각각 "free"·[]·null 로 폴백해서, 정기결제 중인 고객이
+     「Free · 결제 내역이 없습니다」를 보고 해지 버튼도 못 찾는 화면이 될 수 있었다.
+     권한 계산은 그대로 fail-closed(free)로 두고, **표시**만 «확인 못 함»으로 가른다. */
+  const planFailed = planRes === null;
+  const ordersFailed = ordersRes === null;
+  const subFailed = subRes === null;
+  const anyFailed = planFailed || ordersFailed || subFailed;
+  const currentPlan: PlanKey = planRes ?? "free";
+  const orders = ordersRes ?? [];
+  const subscription = subRes?.sub ?? null;
+
   const currentName = PLAN_DEFS.find((p) => p.key === currentPlan)?.name ?? "Free";
   const lastPaid = orders.find((o) => o.status === "paid");
   const hasActiveSub = subscription != null && subscription.status !== "canceled";
@@ -193,6 +207,20 @@ export default async function BillingSettingsPage({
 
       <BillingBanner error={planError} notice={notice} />
 
+      {/* 아래 숫자를 믿지 말라고 **먼저** 말해 준다. «없음»과 «모름»을 같은 화면으로
+          그리면 고객은 결제가 안 된 줄 알고 다시 결제한다. */}
+      {anyFailed ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-card border border-warning/40 bg-warning-weak px-4 py-3 text-[14px] text-fg">
+          <AlertTriangle className="size-4 shrink-0 text-warning" aria-hidden />
+          <span>
+            {[planFailed ? "플랜" : null, subFailed ? "구독" : null, ordersFailed ? "결제 내역" : null]
+              .filter(Boolean)
+              .join(" · ")}{" "}
+            정보를 불러오지 못했어요 — 표시된 내용이 실제와 다를 수 있으니 잠시 후 새로고침해 주세요.
+          </span>
+        </div>
+      ) : null}
+
       {/* 현재 플랜 — 카드 한 장을 통째로 쓰던 자리를 한 줄 상태 바로 압축했다(2026-08-15).
           "결제 내역이 없습니다" 한 문장을 위해 화면 첫 스크롤을 다 잡아먹고 있었고,
           정작 알아야 할 플랜·다음 결제일·해지 버튼은 아래 플랜 카드에 밀려 있었다. */}
@@ -200,7 +228,7 @@ export default async function BillingSettingsPage({
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-fg-faint">현재 플랜</span>
-            <span className="text-[17px] font-bold leading-none">{currentName}</span>
+            <span className="text-[17px] font-bold leading-none">{planFailed ? "확인 못 함" : currentName}</span>
             {subscription?.status === "active" ? <Badge tone="positive">자동갱신 중</Badge> : null}
             {subscription?.status === "past_due" ? <Badge tone="warning">결제 재시도 중</Badge> : null}
             {subscription?.status === "canceled" ? <Badge tone="neutral">해지 예약됨</Badge> : null}
@@ -233,6 +261,8 @@ export default async function BillingSettingsPage({
               <span className="tnum font-semibold text-fg">{formatDate(lastPaid.approvedAt ?? lastPaid.createdAt)}</span>
               <span className="tnum ml-2 text-fg-sub">{formatKRW(lastPaid.amount)}</span>
             </p>
+          ) : anyFailed ? (
+            <p className="text-[14px] text-fg-sub">현재 상태를 확인하지 못했어요.</p>
           ) : (
             <p className="text-[14px] text-fg-sub">
               {currentPlan === "free" ? "무료 플랜을 이용 중입니다." : "결제 내역이 없습니다."}
@@ -305,10 +335,19 @@ export default async function BillingSettingsPage({
       <Card>
         <CardHeader
           title="결제 내역"
-          description={orders.length > 0 ? `최근 ${orders.length}건` : "결제가 완료되면 여기에 표시됩니다"}
+          description={
+            ordersFailed
+              ? "불러오지 못했어요"
+              : orders.length > 0
+                ? `최근 ${orders.length}건`
+                : "결제가 완료되면 여기에 표시됩니다"
+          }
         />
         <CardBody>
-          {orders.length === 0 ? (
+          {ordersFailed ? (
+            /* 진짜 없는 것과 못 읽은 것을 같은 카드로 그리면 안 된다 — 이 화면은 돈 얘기다 */
+            <LoadFailed title="결제 내역을 불러오지 못했어요" />
+          ) : orders.length === 0 ? (
             <EmptyState
               icon={FileClock}
               title="결제 내역이 없습니다"

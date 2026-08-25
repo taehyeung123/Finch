@@ -43,6 +43,7 @@ export function AutoDmClient({
   initialRules,
   posts,
   contentLimit,
+  planFailed = false,
   accountHandle,
   accountAvatar,
   followRequestReady,
@@ -51,6 +52,8 @@ export function AutoDmClient({
   posts: Post[];
   /** 플랜별 자동화 콘텐츠(게시물) 한도 — 2026-08-14 개편: 발송량 대신 콘텐츠 수로 게이팅 */
   contentLimit: number;
+  /** 플랜을 못 읽어 한도가 무료 기준으로 잠긴 상태 — 숫자를 사실처럼 말하지 않는다 */
+  planFailed?: boolean;
   accountHandle: string | null;
   /** 연동 인스타 프로필 사진 — 위저드 DM 미리보기 아바타 (미연동 시 이니셜 폴백) */
   accountAvatar: string | null;
@@ -165,6 +168,11 @@ export function AutoDmClient({
             자동화를 걸 수 있는 게시물 개수는 플랜에 따라 다릅니다. 발송 건수에는 제한이 없어요. 같은 게시물에 규칙을
             여러 개 만들어도 콘텐츠 1개로 셉니다.
           </InfoTip>
+          {planFailed ? (
+            <span className="ml-2 text-warning">
+              플랜을 확인하지 못해 무료 기준으로 잠시 제한했어요 — 새로고침하면 정상 한도로 돌아옵니다.
+            </span>
+          ) : null}
         </p>
       ) : null}
 

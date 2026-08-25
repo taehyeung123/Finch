@@ -1,4 +1,4 @@
-import { Coins } from "lucide-react";
+import { AlertTriangle, Coins } from "lucide-react";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatDate } from "@/lib/format";
@@ -21,8 +21,9 @@ import type { CreditSummary } from "@/lib/data/credits";
   (관리자 지급·환불) 100%로 잘라 표시한다 — 넘친 만큼은 막대 대신 숫자가 말한다.
 */
 export function CreditPanel({ summary }: { summary: CreditSummary }) {
-  const { balance, allowance, spentThisMonth, entries } = summary;
-  const pct = allowance && allowance > 0 ? Math.min(100, Math.round((balance / allowance) * 100)) : null;
+  const { balance, allowance, spentThisMonth, entries, balanceFailed, entriesFailed } = summary;
+  const pct =
+    !balanceFailed && allowance && allowance > 0 ? Math.min(100, Math.round((balance / allowance) * 100)) : null;
 
   return (
     <Card>
@@ -41,18 +42,28 @@ export function CreditPanel({ summary }: { summary: CreditSummary }) {
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-card bg-plate px-4 py-3">
             <p className="text-[12px] text-fg-sub">남은 크레딧</p>
+            {/* 잔액을 못 읽었을 때 «0» 을 그리면 "다 썼다"로 읽힌다 — 돈에 해당하는 숫자라
+                «모른다»고 말하는 편이 낫다(lib/data/credits.ts 의 balanceFailed). */}
             <p className="tnum mt-1 flex items-baseline gap-1.5 text-[28px] font-bold leading-none">
               <Coins className="size-5 shrink-0 self-center text-primary" strokeWidth={2} aria-hidden />
-              {balance.toLocaleString("ko-KR")}
-              {allowance !== null ? (
-                <span className="tnum text-[15px] font-medium text-fg-sub">/ {allowance.toLocaleString("ko-KR")}</span>
-              ) : null}
+              {balanceFailed ? (
+                <span className="text-[20px] text-fg-sub">확인 못 함</span>
+              ) : (
+                <>
+                  {balance.toLocaleString("ko-KR")}
+                  {allowance !== null ? (
+                    <span className="tnum text-[15px] font-medium text-fg-sub">
+                      / {allowance.toLocaleString("ko-KR")}
+                    </span>
+                  ) : null}
+                </>
+              )}
             </p>
           </div>
           <div className="rounded-card bg-plate px-4 py-3">
             <p className="text-[12px] text-fg-sub">이번 달 사용</p>
             <p className="tnum mt-1 text-[20px] font-bold leading-none">
-              {spentThisMonth.toLocaleString("ko-KR")}
+              {entriesFailed ? <span className="text-fg-sub">확인 못 함</span> : spentThisMonth.toLocaleString("ko-KR")}
             </p>
           </div>
         </div>
@@ -72,7 +83,15 @@ export function CreditPanel({ summary }: { summary: CreditSummary }) {
 
         <div>
           <h4 className="text-[14px] font-semibold">최근 사용 내역</h4>
-          {entries.length === 0 ? (
+          {entriesFailed ? (
+            <div className="mt-3">
+              <EmptyState
+                icon={AlertTriangle}
+                title="사용 내역을 불러오지 못했어요"
+                description="내역이 없는 게 아니라 잠시 못 읽은 것입니다. 새로고침해 주세요."
+              />
+            </div>
+          ) : entries.length === 0 ? (
             <div className="mt-3">
               <EmptyState
                 icon={Coins}

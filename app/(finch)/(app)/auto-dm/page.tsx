@@ -32,6 +32,9 @@ export default async function AutoDmPage() {
      (links 0051 때 확정한 규칙 — 같은 패턴, 같은 대책). */
   let followRequestReady = true;
 
+  /* 플랜 조회가 실패하면 null 이다 — 한도는 fail-closed 로 free 를 쓰되(dmContentLimitFor),
+     화면이 그 한도를 «당신 플랜의 한도»라고 단정하면 안 된다. 유료 고객이 이유도 모른 채
+     "1/1개 사용 중"으로 막히는 화면이 된다(lib/data/internal.ts 규칙). */
   const plan = await getCurrentPlan();
   const contentLimit = dmContentLimitFor(plan);
 
@@ -85,6 +88,7 @@ export default async function AutoDmPage() {
       initialRules={rules}
       posts={posts}
       contentLimit={contentLimit}
+      planFailed={plan === null}
       accountHandle={accountHandle}
       accountAvatar={accountAvatar}
       followRequestReady={followRequestReady}

@@ -53,6 +53,7 @@ export default async function ProfileSettingsPage({
   let email = "";
   let displayName = "";
   let providers: string[] = [];
+  let profileFailed = false;
 
   if (!isDemoMode()) {
     /* getAuthUser 는 요청 단위로 캐시된다 — 레이아웃 가드가 이미 한 번 왕복했다.
@@ -65,11 +66,17 @@ export default async function ProfileSettingsPage({
       /* identities 가 로그인 **방식**의 단일 출처다. app_metadata.provider 는 마지막
          로그인 하나만 담아서, 구글과 카카오를 모두 연결한 사람에게 거짓말을 한다. */
       providers = (user.identities ?? []).map((i) => i.provider).filter(Boolean);
-      const { data: profile } = await supabase
+      /* 이 조회의 error 는 예전에 버려졌다 — 실패하면 이름 칸이 **빈칸**으로 뜨고,
+         사용자가 다른 항목만 바꿔 저장하는 순간 표시 이름이 지워진다(조용한 손실). */
+      const { data: profile, error: profileErr } = await supabase
         .from("users_profile")
         .select("display_name")
         .eq("id", user.id)
         .maybeSingle();
+      if (profileErr) {
+        console.error("[profile] 표시 이름 조회 실패:", profileErr.message);
+        profileFailed = true;
+      }
       displayName = typeof profile?.display_name === "string" ? profile.display_name : "";
     }
   }
@@ -111,10 +118,24 @@ export default async function ProfileSettingsPage({
                 className="mt-1.5 h-10 w-[min(100%,24rem)] rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
               />
             </div>
-            <SubmitButton variant="secondary" pendingLabel="저장 중…" disabled={isDemoMode()}>
+            <SubmitButton
+              variant="secondary"
+              pendingLabel="저장 중…"
+              disabled={isDemoMode() || profileFailed}
+              title={profileFailed ? "이름을 불러오지 못해 저장을 잠시 막았어요" : undefined}
+            >
               저장
             </SubmitButton>
           </form>
+
+          {/* 이름을 못 읽었으면 «빈 이름»으로 저장되는 길을 막는다 — 나머지 설정은 계속 쓸 수 있게
+              카드 전체가 아니라 이 폼만 잠근다. */}
+          {profileFailed ? (
+            <p role="alert" className="-mt-2 text-[14px] text-warning">
+              지금 표시된 이름은 실제 값이 아니에요 — 불러오지 못했습니다. 이대로 저장하면 이름이 지워질 수 있어
+              저장을 잠시 막았어요. 새로고침해 주세요.
+            </p>
+          ) : null}
 
           {/* 이메일·로그인 방식을 나란히. 각각 값이 한 줄뿐인데 전폭을 쓰면
               카드 오른쪽 2/3 가 통째로 빈다. */}

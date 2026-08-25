@@ -121,9 +121,16 @@ export interface CreditSummary {
   /** 이번 달 사용량(양수) */
   spentThisMonth: number;
   entries: CreditEntry[];
+  /**
+   * 잔액·플랜을 못 읽었다 — balance 0 은 **«다 썼다»가 아니라 «모른다»**다.
+   * 예전엔 이 조회의 error 를 아예 보지 않아서, 실패하면 보유 크레딧이 조용히 0으로 그려졌다.
+   */
+  balanceFailed: boolean;
+  /** 내역·이번 달 사용량을 못 읽었다 — 빈 목록과 구분해야 한다 */
+  entriesFailed: boolean;
 }
 
-const EMPTY: CreditSummary = { balance: 0, allowance: null, spentThisMonth: 0, entries: [] };
+const EMPTY: CreditSummary = { balance: 0, allowance: null, spentThisMonth: 0, entries: [], balanceFailed: false, entriesFailed: false };
 
 export async function getCreditSummary(): Promise<CreditSummary> {
   /* 같은 화면의 getCurrentPlan/getSubscription/getPaymentOrders 와 같은 기준을 쓴다.
@@ -137,15 +144,19 @@ export async function getCreditSummary(): Promise<CreditSummary> {
   } = await supabase.auth.getUser();
   if (!user) return EMPTY;
 
-  const { data: profile } = await supabase
+  /* 이 조회의 error 는 예전에 버려졌다 — 실패하면 credits 가 undefined 가 되고
+     화면에는 「보유 0」이 띄었다. 돈에 해당하는 숫자라 «모른다»와 구분한다. */
+  const { data: profile, error: profileErr } = await supabase
     .from("users_profile")
     .select("credits, plan")
     .eq("id", user.id)
     .maybeSingle();
+  if (profileErr) console.error("[credits] 잔액·플랜 조회 실패:", profileErr.message);
 
   const plan = typeof profile?.plan === "string" ? profile.plan : "free";
   const balance = Number(profile?.credits ?? 0);
   const allowance = isPaidPlan(plan) ? PLAN_CREDIT_ALLOWANCE[plan] : null;
+  const balanceFailed = !!profileErr;
 
   /* 이번 달 기준은 **결제일이 아니라 달력 월**이다. 결제일 기준으로 하려면
      구독 시작일이 필요한데, 관리자 지급·무료 사용자에겐 그 값이 없다.
@@ -168,16 +179,17 @@ export async function getCreditSummary(): Promise<CreditSummary> {
     .limit(30);
 
   if (error) {
-    /* 내역을 못 읽어도 잔액은 보여준다 — 잔액이 더 중요한 정보다 */
+    /* 내역을 못 읽어도 잔액은 보여준다 — 잔액이 더 중요한 정보다.
+       단 spentThisMonth: 0 을 «이번 달 0 크레딧 썬»으로 읽히게 두면 안 된다 — 깃발을 달아 보람 */
     console.error("[credits] 내역 조회 실패:", error.message);
-    return { balance, allowance, spentThisMonth: 0, entries: [] };
+    return { balance, allowance, spentThisMonth: 0, entries: [], balanceFailed, entriesFailed: true };
   }
 
   const all = (rows ?? []) as Array<{ id: number; amount: number; reason: string; created_at: string }>;
 
   /* 이번 달 사용량은 목록 30건이 아니라 **전 기간에서 이번 달 조건**으로 따로 센다.
      30건 안에 이번 달이 다 들어온다는 보장이 없다(하루에 30번 쓸 수 있다). */
-  const { data: monthRows } = await supabase
+  const { data: monthRows, error: monthErr } = await supabase
     .from("credit_transactions")
     .select("amount")
     .eq("user_id", user.id)
@@ -189,10 +201,14 @@ export async function getCreditSummary(): Promise<CreditSummary> {
     0,
   );
 
+  if (monthErr) console.error("[credits] 이번 달 사용량 조회 실패:", monthErr.message);
+
   return {
     balance,
     allowance,
     spentThisMonth,
+    balanceFailed,
+    entriesFailed: !!monthErr,
     entries: all.map((r) => ({
       id: Number(r.id),
       amount: Number(r.amount) || 0,

@@ -9,6 +9,7 @@ import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import type { Channel } from "@/lib/types";
 import { accounts as mockAccounts } from "@/lib/data";
 import { isDemoMode } from "@/lib/supabase/config";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { INSTAGRAM_SCOPE_LABELS, isInstagramOAuthConfigured } from "@/lib/meta/instagram-oauth";
 import { THREADS_SCOPE_LABELS, isThreadsOAuthConfigured } from "@/lib/meta/threads-oauth";
@@ -48,7 +49,8 @@ function daysUntil(iso: string | null): number | null {
 }
 
 /** 채널별 연동 카드 데이터 — 실 모드는 DB, 데모는 목데이터 */
-async function loadAccountCards(): Promise<AccountCard[]> {
+/** 채널별 연동 카드 — **null 이면 조회 실패**(«연동 없음»과 다르다) */
+async function loadAccountCards(): Promise<AccountCard[] | null> {
   if (isDemoMode()) {
     return CHANNELS.map((channel) => {
       const m = mockAccounts.find((a) => a.channel === channel);
@@ -75,13 +77,20 @@ async function loadAccountCards(): Promise<AccountCard[]> {
   // select를 RLS로 열어줬다 — 여기(계정 연동/해제 화면)는 팀 대시보드가 아니라 "내 연동"
   // 관리 화면이므로, RLS만 믿지 않고 본인 행으로 명시 제한해 소유자의 연동 카드(재연동·해제
   // 버튼 포함)가 멤버에게 노출되지 않게 한다.
-  const { data: rows } = user
+  /* 이 조회의 error 는 예전에 버려졌다 — 실패하면 연동된 계정이 전부 «미연동»으로 그려진다.
+     그 화면을 본 사람은 연동이 끊긴 줄 알고 다시 연결을 시도하거나, 데이터가 안 들어온다고
+     오해한다. «연동 안 함»과 «확인 못 함»은 다른 사실이다(lib/data/internal.ts 규칙). */
+  const { data: rows, error } = user
     ? await supabase
         .from("connected_accounts")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: true })
-    : { data: [] };
+    : { data: [], error: null };
+  if (error) {
+    console.error("[settings] 연동 계정 조회 실패:", error.message);
+    return null;
+  }
 
   return CHANNELS.map((channel) => {
     const row = (rows ?? []).find((r) => r.channel === channel);
@@ -207,6 +216,11 @@ export default async function SettingsPage({
 
       {/* 채널별 연동 카드 — 세로 1열이라 카드 하나가 배지·핸들 한 줄만 담고 폭 1600px 을
           썼다. 2열로 묶어 넓은 화면에서 4장이 한눈에 들어오게 한다. */}
+      {/* 조회 실패를 «전부 미연동»으로 그리지 않는다 — 연동해 둔 사람이 그 화면을 보면
+          끊긴 줄 알고 다시 연결하거나, 수집이 멈춘 줄로 오해한다. */}
+      {cards === null ? (
+        <LoadFailed title="연동 상태를 불러오지 못했어요" />
+      ) : (
       <section aria-label="계정 연동 상태" className="grid gap-3 lg:grid-cols-2">
         {cards.map((card) => (
           <Card key={card.channel} className="p-5">
@@ -306,6 +320,7 @@ export default async function SettingsPage({
           </div>
         </Card>
       </section>
+      )}
 
       {/* 권한(scope) 투명성 (PART 4.2) */}
       <Card className="p-5">
