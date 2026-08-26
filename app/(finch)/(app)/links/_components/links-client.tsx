@@ -188,7 +188,6 @@ const TABS: Array<{ key: Tab; label: string; icon: typeof User }> = [
 const SNS_GROUPS = [...new Set(SNS_CATALOG.map((c) => c.group))];
 
 
-const LEAVE_WARNING = "저장하지 않은 편집 내용이 사라져요. 그래도 나갈까요?";
 
 /** 실행취소 한 칸 — 성공한 서버 조작의 역연산 쌍 */
 type UndoEntry = {
@@ -331,7 +330,6 @@ export function LinksClient({
   const [newSubOpen, setNewSubOpen] = useState(false);
   /* "저장(라이브 반영)하지 않으면 남지 않는다"(2026-08-24 사장님 지시) —
      발행본과 다른 초안이 있는 채로 나가면 모달로 한 번 묻고, 그래도 나가면 초안을 버린다. */
-  const [exitTo, setExitTo] = useState<{ kind: "route"; href: string } | { kind: "page"; id: string } | null>(null);
   const [revertOpen, setRevertOpen] = useState(false);
   /* 지우기 확인 — 이 앱의 다른 파괴적 확인은 전부 모달인데 여기 둘만 native confirm 이었다.
      OS 대화상자는 테마·글꼴·문구 위계가 없고, 모바일에서는 주소창 아래 붙어 어느 화면 것인지도 흐리다 */
@@ -409,6 +407,44 @@ export function LinksClient({
   /* 페이지 설정 저장 체인 — blur 저장이 연달아 나가도 서버의 읽고-합치고-쓰기가 겹치지 않게 */
   const settingsChain = useRef<Promise<unknown>>(Promise.resolve());
   const editorDirty = editingId !== null && stableJson(draft) !== baseline;
+  /* ── 실시간 저장(2026-08-26 사장님 지시: «당연히 실시간 저장해놔야지») ──
+     입력이 멎으면 0.8초 뒤 조용히 저장한다 — run() 의 전역 busy 를 쓰지 않는 별도 체인이라
+     화면이 저장마다 잠기지 않는다. 블록을 갈아타면(leaveEditor) 기다리지 않고 즉시 저장한다. */
+  const autosaveChain = useRef<Promise<unknown>>(Promise.resolve());
+  const [autoSaving, setAutoSaving] = useState(false);
+  /* 렌더 중 ref 쓰기 금지(react-hooks/refs) — 미러는 effect 에서 */
+  const draftRef = useRef(draft);
+  const editingIdRef = useRef(editingId);
+  const baselineRef = useRef(baseline);
+  useEffect(() => {
+    draftRef.current = draft;
+    editingIdRef.current = editingId;
+    baselineRef.current = baseline;
+    flushDraftRef.current = flushDraft;
+  });
+  /* 마지막으로 저장에 성공한 값 — 다음 자동 저장의 undo 원본(서버 직전 값)이 된다 */
+  const lastSavedRef = useRef<{ id: string; data: Record<string, unknown> } | null>(null);
+  const flushDraftRef = useRef<(id: string, data: Record<string, unknown>) => void>(() => {});
+  /* 언마운트 플러시(쏘넷 점검 high) — 디바운스 0.8초 창 안에서 사이드바로 나가거나 페이지를
+     갈아타면 cleanup 이 타이머만 지우고 입력이 사라진다. 앱 안 이동은 런타임이 살아 있어
+     fire-and-forget 저장이 끝까지 간다. */
+  useEffect(() => {
+    return () => {
+      const id = editingIdRef.current;
+      if (id && !isDemo && stableJson(draftRef.current) !== baselineRef.current) {
+        flushDraftRef.current(id, draftRef.current);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 언마운트 전용, ref 만 읽는다
+  }, []);
+  /* 창 닫기·새로고침 — 저장이 미처 못 나간 순간만 브라우저 기본 경고를 건다(쏘넷 점검 high).
+     실시간 저장이라 평소엔 안 뜬다. */
+  useEffect(() => {
+    if (isDemo || (!editorDirty && !autoSaving)) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [editorDirty, autoSaving, isDemo]);
   /* 편집 중인 블록의 **서버 값**이 바뀌면(↩ 내용 되돌리기·저장 후 서버 정규화) 미저장이 아닐 때만 초안을 다시 심는다 —
      안 그러면 되돌린 뒤에도 편집기·캔버스가 옛 내용을 보여주고 「저장」이 되돌린 값을 다시 쓴다(감사 C4).
      블록이 사라졌으면(삭제·추가 취소·템플릿) 편집 상태를 비운다 — 남겨두면 없는 편집기에 대한 "나갈까요?" 가 뜬다(감사 L8) */
@@ -478,59 +514,9 @@ export function LinksClient({
      같은 결함 클래스가 라우트 경계에 열려 있었다(감사4). 앱 내부 사이드바 이동 인터셉트는
      전역 내비 구조 변경이 필요해 여기선 브라우저 경계만 지킨다. */
   const anyDirty = editorDirty || profileDirty || customDirty;
-  useEffect(() => {
-    if (!anyDirty) return;
-    const warn = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [anyDirty]);
-  /* 초안 폐기 모델(2026-08-24) ①: 창 닫기·새로고침·외부 이동은 브라우저 확인창 → 실제로 나가면
-     pagehide 비콘이 서버 초안을 버린다(서버 액션은 unload 중 못 부른다). 데모는 제외. */
-  useEffect(() => {
-    if (!publishDirty || isDemo || !page) return;
-    /* ⚠️ 자동 폐기는 **되돌아갈 발행본이 있을 때만** 한다. 한 번도 발행하지 않은 페이지의
-       "초안"은 그 사람이 만든 전부라, 탭을 닫았다고 조용히 지우면 되살릴 길이 없다
-       (2026-08-24: 블록 0 인 계정을 보고 재검토). 그 경우엔 브라우저 확인창만 띄우고,
-       비우기는 사용자가 직접 「편집 되돌리기」를 눌렀을 때만 한다. */
-    const canAutoDiscard = !!page.publishedAt;
-    const warn = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-    };
-    const onHide = (e: PageTransitionEvent) => {
-      if (!canAutoDiscard) return;
-      /* persisted = 페이지가 뒤로가기 캐시로 들어간 것 — 사용자가 돌아올 수 있으므로 버리지 않는다.
-         (모바일 브라우저가 탭 전환에도 이 경로를 쓴다. 남겨두는 쪽이 안전한 실패다) */
-      if (e.persisted) return;
-      navigator.sendBeacon("/links/discard", new Blob([JSON.stringify({ pageId: page.id })], { type: "application/json" }));
-    };
-    window.addEventListener("beforeunload", warn);
-    window.addEventListener("pagehide", onHide);
-    return () => {
-      window.removeEventListener("beforeunload", warn);
-      window.removeEventListener("pagehide", onHide);
-    };
-  }, [publishDirty, isDemo, page]);
-  /* ②: 앱 안 이동(사이드바 등) — 앵커 클릭을 캡처 단계에서 가로채 모달로 묻는다.
-     /links 안 이동(탭·설정)은 나가기가 아니다. 새 창·수정키 클릭은 그대로 둔다. */
-  const exitDirty = publishDirty || anyDirty;
-  useEffect(() => {
-    if (!exitDirty || isDemo) return;
-    const onClick = (e: MouseEvent) => {
-      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-      const a = (e.target as HTMLElement | null)?.closest?.("a[href]");
-      if (!a) return;
-      if (a.getAttribute("target") === "_blank") return;
-      const href = a.getAttribute("href") ?? "";
-      if (!href.startsWith("/") || href.startsWith("//") || href.startsWith("/links")) return;
-      e.preventDefault();
-      e.stopPropagation();
-      setExitTo({ kind: "route", href });
-    };
-    document.addEventListener("click", onClick, true);
-    return () => document.removeEventListener("click", onClick, true);
-  }, [exitDirty, isDemo]);
+  /* 나가기 가드·초안 자동 폐기(비콘)·앵커 가로채기는 2026-08-26 실시간 저장 전환으로 제거 —
+     입력은 저절로 저장되고 발행본에는 저절로 반영되므로 «나가면 사라지는 것»이 없다.
+     수동 「편집 되돌리기」(revertLinkDraft)만 남긴다. */
   function patchCustom(patch: Partial<LinkThemeCustom>) {
     setCustomForm((f) => {
       const next: Record<string, unknown> = { ...f, ...patch };
@@ -741,9 +727,96 @@ export function LinksClient({
    * 항목 12개의 제목·주소·업로드까지 끝낸 이미지 경로가 경고 없이 날아갔다.
    */
   function leaveEditor(): boolean {
-    if (!editorDirty) return true;
-    return window.confirm(LEAVE_WARNING);
+    /* 확인창을 띄우지 않는다(2026-08-26) — 고치다 만 값은 그 자리에서 저장하고 나간다.
+       실패해도 초안은 draft 상태로 남고 자동 저장 오류 안내가 뜬다. */
+    if (editorDirty && editingId && !isDemo) flushDraft(editingId, draft);
+    return true;
   }
+
+  /** 초안을 지금 저장한다 — 디바운스 타이머와 갈아타기(leaveEditor)가 같은 길을 쓴다 */
+  function flushDraft(id: string, data: Record<string, unknown>) {
+    const type = blocks.find((b) => b.id === id)?.type ?? "link";
+    const serverData = blocks.find((b) => b.id === id)?.data ?? {};
+    setAutoSaving(true);
+    autosaveChain.current = autosaveChain.current
+      .then(async () => {
+        /* undo 원본은 **실행 직전**에 읽는다(쏘넷 점검) — 앞선 저장이 끝나야 lastSavedRef 가
+           맞다. 같은 값이 이미 저장돼 있으면(디바운스+갈아타기 이중 호출) 통째로 건너뛴다. */
+        const prev = lastSavedRef.current?.id === id ? lastSavedRef.current.data : serverData;
+        if (stableJson(prev) === stableJson(data)) {
+          if (editingIdRef.current === id && stableJson(draftRef.current) === stableJson(data)) {
+            setBaseline(stableJson(data));
+          }
+          return;
+        }
+        const res = await updateBlock(id, { data });
+        if (!res.ok) {
+          setError(res.error ?? "자동 저장하지 못했어요 — 잠시 후 다시 저장돼요.");
+          return;
+        }
+        lastSavedRef.current = { id, data };
+        /* 그 사이 더 입력했으면 기준선을 옮기지 않는다 — 다음 디바운스가 마저 저장한다 */
+        if (editingIdRef.current === id && stableJson(draftRef.current) === stableJson(data)) {
+          setBaseline(stableJson(data));
+        }
+        record({
+          label: `${blockSummary(type, data)} 내용 저장`,
+          undo: () => updateBlock(resolveId(id), { data: prev }),
+          redo: () => updateBlock(resolveId(id), { data }),
+        });
+      })
+      .finally(() => setAutoSaving(false));
+  }
+
+  /* 디바운스 — 입력이 멎고 0.8초. 값이 또 바뀌면 타이머가 새로 선다 */
+  useEffect(() => {
+    if (isDemo || !editingId || !editorDirty) return;
+    const id = editingId;
+    const data = draft;
+    const t = window.setTimeout(() => flushDraft(id, data), 800);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- flushDraft 는 ref·안정 setter 만 쓴다
+  }, [draft, editingId, editorDirty, isDemo]);
+
+  /* ── 자동 라이브 반영(2026-08-26: «라이브 반영은 처음 1회만») ──
+     최초 발행은 사람이 「라이브 시작」으로 하고, 그 뒤부터는 초안이 바뀌면 2초 뒤
+     자동으로 공개 스냅샷에 반영한다 — 링크인바이오 표준(편집 즉시 라이브). */
+  const publishInFlight = useRef(false);
+  const publishFails = useRef(0);
+  const [autoPublishing, setAutoPublishing] = useState(false);
+  useEffect(() => {
+    if (isDemo || !page || !page.publishedAt || !page.dirty || publishInFlight.current) return;
+    /* 연속 실패 5회면 멈춘다 — 구조적 실패에 2초 간격 무한 재시도로 서버를 두드리지 않는다(쏘넷 점검).
+       실패 횟수만큼 간격도 지수로 벌린다. 성공하면 리셋. */
+    if (publishFails.current >= 5) return;
+    const id = page.id;
+    const delay = 2000 * Math.pow(2, Math.min(publishFails.current, 4));
+    const t = window.setTimeout(() => {
+      publishInFlight.current = true;
+      setAutoPublishing(true);
+      void publishLinkPage(id)
+        .then((res) => {
+          if (!res.ok) {
+            publishFails.current += 1;
+            setError(
+              publishFails.current >= 5
+                ? "자동 반영이 계속 실패했어요 — 화면을 새로고침한 뒤 다시 시도해 주세요."
+                : (res.error ?? "자동 반영하지 못했어요 — 잠시 후 다시 시도돼요."),
+            );
+          } else {
+            publishFails.current = 0;
+          }
+        })
+        .finally(() => {
+          publishInFlight.current = false;
+          setAutoPublishing(false);
+          /* page prop 이 새로 와야 dirty 판정이 풀린다 — 남은 변경이 있으면 이 효과가 다시 돈다 */
+          startTransition(() => router.refresh());
+        });
+    }, delay);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- page 객체 identity 가 refresh 마다 갱신돼 재평가된다
+  }, [page, isDemo]);
 
   /** 편집기를 닫고 **원래 눌렀던 목록 행으로 포커스를 되돌린다** */
   function closeEditor(focusBackTo?: string | null) {
@@ -936,13 +1009,24 @@ export function LinksClient({
     /* 함수 선언이라 위쪽 `if (!page)` 가드의 좁히기가 여기까진 오지 않는다 */
     if (!page) return;
     const b = blocks.find((x) => x.id === id);
+    /* 지우려는 블록을 고치던 중이면 보류 중인 자동 저장을 끊는다(쏘넷 점검 high) —
+       편집 상태를 비우면 디바운스 cleanup 이 타이머를 지우고, 언마운트 플러시도 안 돈다.
+       지우는 마당에 마지막 타이핑을 저장할 이유가 없다. */
+    if (editingId === id) {
+      setEditingId(null);
+      setDraft({});
+      setBaseline("");
+    }
+    /* 복원 원본은 **마지막으로 저장에 성공한 값** — 자동 저장이 삭제 직전에 성공했으면
+       클릭 시점의 blocks 클로저(b.data)는 이미 낡았다(쏘넷 점검 high) */
+    const restoreData = lastSavedRef.current?.id === id ? lastSavedRef.current.data : b?.data;
     run(
         () => deleteBlock(id),
         () => {
           if (b) {
             /* 복원 경로는 전역 실행취소 **하나**다 — 인라인 되돌리기 바와
                이중으로 기록하면 같은 블록이 두 번 복원된다(소넷 확정 1). */
-            const payload = { type: b.type, data: b.data, sortOrder: b.sortOrder, active: b.active };
+            const payload = { type: b.type, data: restoreData ?? b.data, sortOrder: b.sortOrder, active: b.active };
             /* 복원은 **새 행**을 만든다 — 다시실행(재삭제)은 그 새 id 를
                지워야 하므로 클로저 변수로 따라간다 */
             record({
@@ -1171,38 +1255,6 @@ export function LinksClient({
         </ModalShell>
       ) : null}
 
-      {exitTo ? (
-        <ExitDraftModal
-          busy={busy}
-          neverPublished={!page.publishedAt}
-          onStay={() => setExitTo(null)}
-          onPublishAndGo={() =>
-            run(
-              () => publishLinkPage(page.id),
-              () => {
-                const t = exitTo;
-                setExitTo(null);
-                if (t) startTransition(() => router.push(t.kind === "page" ? `/links?page=${t.id}` : t.href));
-              },
-            )
-          }
-          onLeaveKeeping={() => {
-            const t = exitTo;
-            setExitTo(null);
-            if (t) startTransition(() => router.push(t.kind === "page" ? `/links?page=${t.id}` : t.href));
-          }}
-          onDiscardAndGo={() =>
-            run(
-              () => revertLinkDraft(page.id),
-              () => {
-                const t = exitTo;
-                setExitTo(null);
-                if (t) startTransition(() => router.push(t.kind === "page" ? `/links?page=${t.id}` : t.href));
-              },
-            )
-          }
-        />
-      ) : null}
       {confirming ? (
         <ConfirmDialog
           title={confirming.title}
@@ -1386,17 +1438,16 @@ export function LinksClient({
           <TopBar
             page={page}
             unsaved={anyDirty}
+            saving={!isDemo && (autoSaving || editorDirty)}
+            autoPublishing={autoPublishing}
             pages={pages}
             pageLimit={pageLimit}
             multiReady={multiReady}
             onSwitchPage={(id) => {
               if (id === page.id) return;
               /* 미저장 초안이 있으면 나가기 모달로 — 다른 페이지로 가는 것도 이 페이지를 떠나는 것이다 */
-              if (!isDemo && exitDirty) {
-                setExitTo({ kind: "page", id });
-                return;
-              }
-              if (isDemo && anyDirty && !window.confirm("저장하지 않은 편집이 있어요. 페이지를 이동할까요?")) return;
+              /* 실시간 저장 전환(2026-08-26) — 갈아타기 전에 고치다 만 블록만 마저 저장한다 */
+              leaveEditor();
               startTransition(() => router.push(`/links?page=${id}`));
             }}
             onNewPage={() => setNewPageOpen(true)}
@@ -1529,7 +1580,6 @@ export function LinksClient({
                 block={editing}
                 value={draft}
                 onChange={setDraft}
-                busy={busy}
                 error={error}
                 dirty={editorDirty}
                 onClose={() => closeEditor(editing.id)}
@@ -1538,24 +1588,6 @@ export function LinksClient({
                   setDraft(data);
                   setBaseline(stableJson(data));
                 }}
-                /* 저장이 성공해야 기준선을 옮긴다 — 실패하면 「저장 안 됨」이 남고
-                   탭을 눌러 나갈 때 확인을 받는다(그게 맞다). */
-                onSave={(data) =>
-                  run(
-                    () => updateBlock(editing.id, { data }),
-                    () => {
-                      setBaseline(stableJson(data));
-                      /* editing.data 는 저장 직전 렌더의 서버 값 — 역연산의 원본이다 */
-                      const prev = editing.data ?? {};
-                      const savedId = editing.id;
-                      record({
-                        label: `${blockSummary(editing.type, data)} 내용 저장`,
-                        undo: () => updateBlock(resolveId(savedId), { data: prev }),
-                        redo: () => updateBlock(resolveId(savedId), { data }),
-                      });
-                    },
-                  )
-                }
               />
                   ) : null
                 }
@@ -1819,7 +1851,7 @@ export function LinksClient({
             {/* published(공개 스위치)를 먼저 본다 — 발행만 하고 공개를 안 켠 상태에서
                 "공개 주소와 같은 모습" 이라고 말하면 방문자는 404 인데 소유자는 모른다(감사 #4) */}
             {profileDirty || customDirty || editorDirty
-              ? "저장하지 않은 편집이 보여요 — 저장한 뒤 「라이브 반영」을 누르면 공개 주소에 반영돼요."
+              ? "지금 고치는 중인 모습이에요 — 블록 편집은 자동 저장되고, 공개 주소에는 잠시 뒤 자동 반영돼요."
               : !page.published
                 ? page.publishedAt
                   ? "비공개예요 — 설정에서 「공개」를 켜야 방문자가 볼 수 있어요."
@@ -1839,7 +1871,7 @@ export function LinksClient({
       {/* 모달이 열려 있으면 전역 베일을 접는다 — z-[60] 이 모달(z-50) 위를 덮어 로더가 둘이 되고,
           「만드는 중…」·「되돌리는 중…」 같은 모달 안 진행 라벨이 베일 아래로 사라졌다.
           모달이 열린 동안 시작되는 run() 은 그 모달에서 나온 것뿐이라(스크림이 뒤를 막는다) 진행 표시는 모달이 스스로 낸다 */}
-      {busy && !settingsOpen && !drawer && !scheduleFor && !tplPreview && !newPageOpen && !newSubOpen && !exitTo && !revertOpen && !confirming && !slugSetup ? (
+      {busy && !settingsOpen && !drawer && !scheduleFor && !tplPreview && !newPageOpen && !newSubOpen && !revertOpen && !confirming && !slugSetup ? (
         <div
           className="busy-veil-in fixed inset-0 z-[60] flex items-center justify-center bg-surface/70 backdrop-blur-[2px]"
         >
@@ -1890,6 +1922,8 @@ function TopBar({
   onRevert,
   hasFeed = false,
   unsaved = false,
+  saving = false,
+  autoPublishing = false,
   history,
 }: {
   page: LinkPageView;
@@ -1910,6 +1944,10 @@ function TopBar({
   hasFeed?: boolean;
   /** 저장 안 한 로컬 편집(프로필·꾸미기·블록 편집기)이 있는가 — 발행 상태보다 앞선다 */
   unsaved?: boolean;
+  /** 블록 자동 저장이 돌고 있다(2026-08-26 실시간 저장) */
+  saving?: boolean;
+  /** 자동 라이브 반영이 돌고 있다 — 수동 발행(피드 새로고침)과 겹치지 않게 잠근다(쏘넷 점검) */
+  autoPublishing?: boolean;
   /** 2행 왼쪽 — 실행취소/다시실행(페이지 탭에서만) */
   history?: React.ReactNode;
 }) {
@@ -2011,7 +2049,9 @@ function TopBar({
                     : "bg-positive-weak text-positive-strong",
             )}
           >
-            {unsaved ? (
+            {saving ? (
+              "저장 중…"
+            ) : unsaved ? (
               <>
                 <AlertTriangle className="size-3" aria-hidden />
                 저장 안 됨
@@ -2019,7 +2059,7 @@ function TopBar({
             ) : !page.publishedAt ? (
               "발행 전"
             ) : page.dirty ? (
-              "초안 수정됨"
+              "반영 중…"
             ) : (
               <>
                 <Check className="size-3" aria-hidden />
@@ -2027,16 +2067,19 @@ function TopBar({
               </>
             )}
           </span>
-          {/* 라이브 반영 — 초안을 공개 스냅샷으로. 「최근 게시물」이 켜져 있으면 늘 누를 수 있다(피드는 발행 시점에 구워진다) */}
-          <Button
-            size="sm"
-            onClick={onPublish}
-            disabled={busy || !publishable}
-            title={!page.dirty && !!page.publishedAt && hasFeed ? "최근 게시물을 다시 불러와 반영해요" : undefined}
-          >
-            <Rocket className="size-3.5" aria-hidden />
-            {!page.dirty && !!page.publishedAt && hasFeed ? "피드 새로고침" : "라이브 반영"}
-          </Button>
+          {/* 라이브는 **처음 한 번만** 사람이 시작한다(2026-08-26) — 그 뒤엔 자동 반영이라
+              버튼이 사라진다. 「최근 게시물」 피드만 수동 새로고침 버튼을 남긴다. */}
+          {!page.publishedAt ? (
+            <Button size="sm" onClick={onPublish} disabled={busy || autoPublishing || !publishable}>
+              <Rocket className="size-3.5" aria-hidden />
+              라이브 시작
+            </Button>
+          ) : hasFeed ? (
+            <Button size="sm" variant="secondary" onClick={onPublish} disabled={busy || autoPublishing || !publishable} title="최근 게시물을 다시 불러와 반영해요">
+              <Rocket className="size-3.5" aria-hidden />
+              피드 새로고침
+            </Button>
+          ) : null}
         </div>
       </div>
     </div>
@@ -3024,64 +3067,6 @@ function SlugSetupModal({
             ) : (
               "이 주소로 정하기"
             )}
-          </Button>
-        </div>
-      </div>
-    </ModalShell>
-  );
-}
-
-/** 나가기 확인(2026-08-24) — 저장(라이브 반영) 없이 나가면 초안이 삭제된다는 걸 한 번 더 말한다 */
-function ExitDraftModal({
-  busy,
-  neverPublished,
-  onStay,
-  onPublishAndGo,
-  onDiscardAndGo,
-  onLeaveKeeping,
-}: {
-  busy: boolean;
-  neverPublished: boolean;
-  onStay: () => void;
-  onPublishAndGo: () => void;
-  onDiscardAndGo: () => void;
-  /** 미발행 페이지 — 아무것도 지우지 않고 그냥 이동 */
-  onLeaveKeeping: () => void;
-}) {
-  return (
-    <ModalShell label="저장하지 않고 나가기" title="저장하지 않고 나가시겠어요?" onClose={onStay} busy={busy} size="sm">
-      <div className="space-y-3">
-        <p className="text-[14px] leading-[1.7] text-fg-sub">
-          {neverPublished ? (
-            <>
-              지금 편집은 아직 <strong className="font-semibold text-fg">저장(라이브 반영)</strong>되지 않아서, 방문자에게는 이 페이지가 보이지 않아요.
-              편집 내용은 그대로 두고 나가요 — 지우려면 「편집 되돌리기」를 쓰세요.
-            </>
-          ) : (
-            <>
-              지금 편집은 아직 <strong className="font-semibold text-fg">저장(라이브 반영)</strong>되지 않았어요. 그냥 나가면 편집한 내용이
-              삭제되고 마지막 발행본으로 돌아가요.
-            </>
-          )}
-        </p>
-        <div className="flex flex-col gap-2">
-          <Button size="sm" disabled={busy} onClick={onPublishAndGo}>
-            {busy ? "처리 중…" : "라이브 반영하고 나가기"}
-          </Button>
-          {/* 발행 이력이 없으면 "삭제"는 페이지 전체를 비우는 것이다 — 나가기 동선에서 빼고,
-              정말 비우려면 「편집 되돌리기」로 명시적으로 하게 한다(2026-08-24) */}
-          {neverPublished ? null : (
-            <Button variant="secondary" size="sm" disabled={busy} onClick={onDiscardAndGo}>
-              삭제하고 나가기
-            </Button>
-          )}
-          {neverPublished ? (
-            <Button variant="secondary" size="sm" disabled={busy} onClick={onLeaveKeeping}>
-              그냥 나가기 (편집 유지)
-            </Button>
-          ) : null}
-          <Button variant="ghost" size="sm" disabled={busy} onClick={onStay}>
-            계속 편집
           </Button>
         </div>
       </div>

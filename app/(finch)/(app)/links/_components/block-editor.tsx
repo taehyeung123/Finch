@@ -41,10 +41,8 @@ export function BlockEditor({
   block,
   value,
   onChange,
-  busy,
   error,
   dirty,
-  onSave,
   onRevert,
   onClose,
   embedded = false,
@@ -55,11 +53,9 @@ export function BlockEditor({
   value: Record<string, unknown>;
   /** 함수형 갱신을 받는다 — 업로드·불러오기처럼 몇 초 뒤에 끝나는 갱신이 그 사이의 입력을 덮지 않게(감사 C6) */
   onChange: (next: Record<string, unknown> | ((cur: Record<string, unknown>) => Record<string, unknown>)) => void;
-  busy: boolean;
   /** 저장 실패 사유 — 화면 맨 위 배너만으로는 여기까지 스크롤한 사용자가 못 본다 */
   error: string | null;
   dirty: boolean;
-  onSave: (data: Record<string, unknown>) => void;
   onRevert: () => void;
   onClose: () => void;
 }) {
@@ -1200,16 +1196,12 @@ export function BlockEditor({
       ) : null}
 
       <div className="flex items-center gap-2 pt-1">
-        {/* 무변경 저장은 막는다 — 서버 왕복 + 빈 undo 엔트리 기록 + redo 스택 파기(감사4) */}
-        <Button size="sm" disabled={busy || !dirty} onClick={() => onSave(d)}>
-          {busy ? "저장 중…" : dirty ? "저장" : "저장됨"}
-        </Button>
-        {/* 「되돌리기」는 **이 폼만** 원래대로 돌린다 — 삭제·순서는 못 되돌린다.
-            이름만 보고 undo 로 오해하지 않게 옆에 적어둔다. */}
+        {/* 저장 버튼 없음(2026-08-26 사장님 지시) — 입력이 멎으면 부모가 알아서 저장한다.
+            「되돌리기」는 **이 폼만** 마지막 저장값으로 돌린다 — 삭제·순서는 못 되돌린다. */}
         <Button size="sm" variant="ghost" onClick={onRevert}>
           입력 되돌리기
         </Button>
-        {dirty ? <span className="text-[12px] text-fg-sub">저장 안 됨</span> : null}
+        <span className="text-[12px] text-fg-sub">{dirty ? "저장 중…" : "자동 저장됨"}</span>
       </div>
     </div>
   );
