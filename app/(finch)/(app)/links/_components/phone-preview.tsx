@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MapPin, ExternalLink, ArrowDown, ArrowUp, CalendarPlus, Download, Eye, EyeOff, GripVertical, Info, Pencil, Plus, Search, Share2, Trash2, UserPlus } from "lucide-react";
 import { eventChip, eventEndEpoch, eventEpoch, formatEventDate, formatEventTime, isMultiDay, nowMs, parseEventAt, type EventPart } from "@/lib/links/events";
 import { cn } from "@/lib/cn";
@@ -197,6 +197,15 @@ export function PhonePreview({
     /* 한글 조합 중 Escape 는 조합 취소다 — 편집 전체를 닫아버리면 안 된다 */
     if (e.key === "Escape" && !e.nativeEvent.isComposing) setInlineField(null);
   };
+
+  /* 선택된 블록을 캔버스 화면 안으로 — 블록을 **추가**하면 편집기가 곧장 열리는데(2026-08-26),
+     새 블록은 목록 맨 아래라 폰 프레임 스크롤 밖에 있다. 어디에 생겼는지 안 보이면
+     «편집기는 열렸는데 무엇을 고치는지 모르는» 화면이 된다. blocks 도 의존성에 둔다 —
+     추가 직후엔 DOM 에 아직 없고, 서버 목록이 실려 온 렌더에서야 요소가 생긴다. */
+  useEffect(() => {
+    if (!selectedId) return;
+    document.getElementById(`blk-${selectedId}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [selectedId, blocks]);
 
   const editable = mode !== "live" && !!edit;
   /* live 는 공개 렌더러가 숨기는 블록을 **여기서도 뺀다**. draft 는 전부 그린다 —

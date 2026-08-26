@@ -16,6 +16,7 @@ import {
   GripVertical,
   Image as ImageIcon,
   Inbox,
+  Loader2,
   Monitor,
   MousePointerClick,
   Percent,
@@ -342,6 +343,10 @@ export function LinksClient({
     return parentSlug && me?.subSlug ? `${origin}/${parentSlug}/${me.subSlug}` : publicLinkUrl(page.slug, origin);
   })();
   const [editingId, setEditingId] = useState<string | null>(null);
+  /* 지금 서버에 추가 중인 블록 타입 — 카탈로그의 눌린 카드가 스피너를 문다.
+     전역 busy 베일은 모달이 열려 있으면 접히므로(아래 베일 조건), 모달 안 진행 표시는
+     이 값이 유일하다(2026-08-26 사장님 지적: 눌러도 로딩이 안 보인다). */
+  const [addingType, setAddingType] = useState<BlockType | null>(null);
   /* 토스트 — 「블록을 추가했어요」와 「클릭이 삼켜졌어요」가 같은 회색이면 성공과 거절이 구분되지 않는다.
      배경은 두 갈래 모두 불투명 bg-overlay 를 유지하고(반투명이면 베일이 비쳐 읽기가 무너진다)
      테두리·아이콘으로 톤을 가른다 */
@@ -777,11 +782,12 @@ export function LinksClient({
   /* 캔버스·블록 목록이 **같은 핸들러**를 쓴다 — 두 화면이 같은 일을 다르게 하면 안 된다 */
   /* 블록 추가 한 곳 — 카탈로그 모달·빈 캔버스 빠른 추가·목록 빈 상태가 같은 경로를 쓴다
      (실행취소 기록·토스트가 세 곳에서 갈라지면 반드시 한쪽이 빠진다) */
-  const addBlockOfType = (t: BlockType) =>
+  const addBlockOfType = (t: BlockType) => {
+    setAddingType(t);
     run(
       () => addBlock(t, page!.id),
       (res) => {
-        toast("블록을 추가했어요. 캔버스의 블록을 누르면 바로 고칠 수 있어요.");
+        setAddingType(null);
         if (res.id) {
           const payload = {
             type: t,
@@ -799,9 +805,39 @@ export function LinksClient({
               return r;
             },
           });
+
+          /* ── 추가 즉시 편집 준비 (2026-08-26 사장님 지적: "적용됐으면 모달 꺼지고
+             그 추가한 블록 수정할 수 있게 바로 딱 준비해줘야지") ──
+             모달을 닫고 새 블록의 편집기를 연다. 예전엔 모달이 열린 채 토스트만 그 뒤에서
+             울렸고, 사용자는 모달을 닫고 캔버스에서 새 블록을 찾아 다시 눌러야 했다.
+
+             단 **다른 블록을 고치다 만 상태(dirty)** 면 그 편집을 버리지 않는다 — 모달만
+             닫고 안내한다(leaveEditor 의 확인창을 여기서 띄우면 추가 완료 순간에 뜬금없는
+             경고가 된다). */
+          setDrawer(null);
+          if (editorDirty) {
+            toast("블록을 추가했어요 — 지금 고치는 블록을 마친 뒤 캔버스에서 눌러 편집할 수 있어요.");
+          } else {
+            const seed = defaultBlockData(t);
+            setDraft(seed);
+            setBaseline(stableJson(seed));
+            /* 서버 목록에 새 블록이 실려 오기 전까지 editingServer 는 없다("__gone__") —
+               위 reconcile 가드가 그걸 «블록이 사라졌다»로 읽고 편집기를 도로 닫는다.
+               기준키를 미리 맞춰 가드를 지나가게 하고, 목록이 도착하면 dirty 가 아닌 한
+               서버값으로 동기화된다(가드의 else-if 분기). */
+            setPrevEditingKey("__gone__");
+            setEditingId(addedId);
+            setError(null);
+            requestAnimationFrame(() => document.getElementById(EDITOR_TITLE_ID)?.focus());
+            toast("블록을 추가했어요 — 바로 고쳐 보세요.");
+          }
+        } else {
+          toast("블록을 추가했어요. 캔버스의 블록을 누르면 바로 고칠 수 있어요.");
         }
       },
+      () => setAddingType(null),
     );
+  };
 
   const canvasEditHead: Omit<CanvasEdit, "onProfileCommit"> = {
     onEdit: openEditor,
@@ -1070,6 +1106,7 @@ export function LinksClient({
           ) : null}
               <AddPanel
                 busy={busy}
+                addingType={addingType}
                 onAdd={(t) => addBlockOfType(t)}
                 /* 드로어의 템플릿도 같은 try-on 경로 — 드로어를 닫아 우측 미리보기까지 보이게 */
                 onApplyTemplate={(k) => {
@@ -1087,7 +1124,9 @@ export function LinksClient({
                          남아 있어야 한다(붙여넣기 원문은 textarea 에 없어서 여기서
                          날리면 원래 서비스로 돌아가 다시 복사해 와야 한다). */
                       clear();
-                      toast(`링크 ${items.length}개를 추가했어요.`);
+                      /* 단일 추가와 같은 규칙 — 일이 끝났으면 모달이 비켜서 결과(캔버스)를 보여준다 */
+                      setDrawer(null);
+                      toast(`링크 ${items.length}개를 추가했어요 — 캔버스의 블록을 눌러 바로 고칠 수 있어요.`);
                     },
                   )
                 }
@@ -2996,11 +3035,14 @@ function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
 
 function AddPanel({
   busy,
+  addingType = null,
   onAdd,
   onApplyTemplate,
   onImport,
 }: {
   busy: boolean;
+  /** 서버에 추가 중인 타입 — 그 카드만 스피너·「추가하는 중…」으로 바뀐다 */
+  addingType?: BlockType | null;
   onAdd: (t: BlockType) => void;
   onApplyTemplate: (key: string) => void;
   onImport: (items: Array<{ label: string; url: string }>, clear: () => void) => void;
@@ -3026,20 +3068,29 @@ function AddPanel({
           <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
             {list.map((c) => {
               const CatIcon = BLOCK_ICON[c.type];
+              /* 눌린 카드는 저 혼자 「추가하는 중…」 — 전역 베일이 모달 앞에서는 접히므로
+                 이게 유일한 진행 표시다. 나머지 카드는 disabled 흐림으로 구분된다. */
+              const pending = addingType === c.type;
               return (
                 <button
                   key={c.type}
                   type="button"
                   disabled={busy}
+                  aria-busy={pending}
                   onClick={() => onAdd(c.type)}
-                  className="trans-state flex items-start gap-2.5 rounded-card border border-line px-3 py-2.5 text-left hover:border-primary hover:bg-tint-hover disabled:opacity-50"
+                  className={cn(
+                    "trans-state flex items-start gap-2.5 rounded-card border px-3 py-2.5 text-left hover:border-primary hover:bg-tint-hover disabled:opacity-50",
+                    pending ? "border-primary disabled:opacity-100" : "border-line",
+                  )}
                 >
                   <span className={cn("mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-card", BLOCK_TINT[c.type] ?? "bg-plate text-fg-sub")} aria-hidden>
-                    <CatIcon className="size-4" />
+                    {pending ? <Loader2 className="size-4 animate-spin" /> : <CatIcon className="size-4" />}
                   </span>
                   <span className="min-w-0">
                     <span className="block text-[14px] font-semibold">{c.label}</span>
-                    <span className="mt-0.5 block text-[12px] leading-snug text-fg-sub">{c.hint}</span>
+                    <span className="mt-0.5 block text-[12px] leading-snug text-fg-sub">
+                      {pending ? "추가하는 중…" : c.hint}
+                    </span>
                   </span>
                 </button>
               );
