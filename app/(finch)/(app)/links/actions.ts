@@ -997,6 +997,53 @@ const TYPE_MIGRATION = new Map<BlockType, string>([["events", "0063"]]);
 const migrationFor = (type: BlockType) => TYPE_MIGRATION.get(type) ?? (STAGE4_TYPES.has(type) ? "0057" : "0054");
 
 /**
+ * 주소를 지금 쓸 수 있는지 — 「주소 정하기」 모달·프로필 탭이 입력 중에 부른다(2026-08-26 사장님 지시:
+ * 중복 확인을 «먼저» 받고 나서 정하기). 형식·예약어·금칙어는 클라이언트가 즉시 거르므로(validateSlug 공유)
+ * 여기 오는 것은 사실상 «중복·최근 사용» 검사다.
+ *
+ * 사용 중 검사는 service role 로 한다(있으면) — RLS 가 남의 비공개 페이지를 가리므로 사용자 세션으로는
+ * «빈 주소»로 잘못 보일 수 있다. 키가 없으면 사용자 세션 best-effort — 어차피 최종 관문(unique·23505)은
+ * 저장 시점에 다시 선다. 검사 실패는 "skip"(모름) — 없는 사실을 «가능»이라고 단정하지 않는다.
+ */
+export async function checkSlugAvailable(
+  raw: string,
+  pageId?: string,
+): Promise<{ ok: true; status: "available" | "taken" | "held" | "invalid" | "mine" | "cooldown" | "skip"; message?: string }> {
+  if (isDemoMode()) return { ok: true, status: "skip" };
+  const user = await getAuthUser();
+  if (!user) return { ok: true, status: "skip" };
+
+  const clean = raw.trim().toLowerCase();
+  const err = validateSlug(clean);
+  if (err) return { ok: true, status: "invalid", message: SLUG_MESSAGES[err] };
+
+  const mine = await myPage(pageId);
+  if (mine && mine.slug === clean) return { ok: true, status: "mine" };
+
+  /* 쿨다운을 **여기서도** 본다(쏘넷 점검 high) — 안 보면 30일 잠금 중인 사용자에게 초록
+     「쓸 수 있는 주소예요!」를 보여주고, 저장 순간 쿨다운 오류로 뒤집힌다. 실시간 안내와
+     실제 저장 관문이 다른 말을 하면 안내 전체를 못 믿게 된다. */
+  if (mine) {
+    const setAt = await readSlugSetAt(await createClient(), mine.id);
+    const blocked = slugCooldownError(setAt);
+    if (blocked) return { ok: true, status: "cooldown", message: blocked };
+  }
+
+  const admin = createAdminClient();
+  const db = admin ?? (await createClient());
+  const { data: taken, error } = await db.from("link_pages").select("id").eq("slug", clean).limit(1).maybeSingle();
+  if (error) {
+    console.error("[links] 주소 사용 여부 조회 실패:", error.message);
+    return { ok: true, status: "skip" };
+  }
+  if (taken && taken.id !== mine?.id) return { ok: true, status: "taken", message: "이미 사용 중인 주소예요." };
+  if (await slugHeldByOther(clean, user.id)) {
+    return { ok: true, status: "held", message: "최근까지 다른 사람이 쓰던 주소예요. 다른 주소를 골라 주세요." };
+  }
+  return { ok: true, status: "available" };
+}
+
+/**
  * 주소만 바꾼다 — 최초 「주소 정하기」 모달(2026-08-26)이 부른다.
  * 프로필 저장과 같은 관문(형식·예약어·무덤·중복·쿨다운)을 태우고 같은 뒷정리를 한다.
  */

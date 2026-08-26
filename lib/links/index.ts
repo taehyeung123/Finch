@@ -8,6 +8,7 @@
 
 import { SNS_CATALOG } from "./sns-catalog";
 import { isReservedSlug } from "./reserved";
+import { bannedWordIn } from "./banned-words";
 
 const SNS_KEY_SET = new Set(SNS_CATALOG.map((s) => s.key));
 
@@ -17,18 +18,21 @@ export const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,29}$/;
 /* 못 쓰는 slug 는 lib/links/reserved.ts 한 곳에서 관리한다 —
    주소가 루트로 올라오면서 «사칭 방지» 목록이 곧 «라우트 충돌 방지» 목록이 됐다. */
 
-export type SlugError = "format" | "reserved" | null;
+export type SlugError = "format" | "reserved" | "banned" | null;
 
 export function validateSlug(raw: string): SlugError {
   const slug = raw.trim().toLowerCase();
   if (!SLUG_RE.test(slug)) return "format";
   if (isReservedSlug(slug)) return "reserved";
+  /* 금칙어는 부분 일치 — 목록·근거는 banned-words.ts (2026-08-26 사장님 지시) */
+  if (bannedWordIn(slug)) return "banned";
   return null;
 }
 
 export const SLUG_MESSAGES: Record<Exclude<SlugError, null>, string> = {
   format: "영문 소문자·숫자·하이픈만 쓸 수 있어요 (2~30자, 하이픈으로 시작 불가).",
   reserved: "이 주소는 쓸 수 없어요. 다른 주소를 입력해 주세요.",
+  banned: "쓸 수 없는 낱말이 들어 있어요. 다른 주소를 골라 주세요.",
 };
 
 /**

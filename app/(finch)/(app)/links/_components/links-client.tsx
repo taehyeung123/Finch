@@ -67,7 +67,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { InfoTip } from "@/components/ui/info-tip";
 import { Switch } from "@/components/ui/switch";
 import { FinchLoader } from "@/components/ui/finch-loader";
-import { displayLinkUrl, normalizeSnsUrl, publicLinkUrl, stableJson } from "@/lib/links";
+import { displayLinkUrl, normalizeSnsUrl, publicLinkUrl, SLUG_MESSAGES, stableJson, validateSlug } from "@/lib/links";
 import { SNS_CATALOG, snsHref } from "@/lib/links/sns-catalog";
 import {
   BLOCK_CATALOG,
@@ -134,6 +134,7 @@ import {
   setBlockSchedule,
   duplicateBlock,
   changeSlug,
+  checkSlugAvailable,
   replyGuestbook,
   setGuestbookHidden,
   deleteGuestbook,
@@ -1096,6 +1097,7 @@ export function LinksClient({
           busy={busy}
           error={error}
           currentSlug={page.slug}
+          pageId={page.id}
           onLater={() => {
             setSlugSetup(false);
             setError(null);
@@ -2766,6 +2768,83 @@ function PageSwitcher({
   );
 }
 
+/* ── 주소 실시간 검사(2026-08-26 사장님 지시: 중복 확인을 «먼저» 받고 정하기) ──
+   형식·예약어·금칙어는 validateSlug(서버와 같은 함수)로 **입력 즉시** 거르고,
+   중복·최근 사용만 서버에 debounce 로 묻는다. 동기 판정은 렌더에서 파생하고 서버 결과만
+   상태로 든다 — effect 본문에서 setState 를 부르면 린트(set-state-in-effect)가 막고,
+   실제로도 캐스케이딩 렌더가 된다. */
+type SlugCheck = { level: "idle" | "checking" | "ok" | "error" | "neutral"; msg?: string };
+
+function useSlugCheck(value: string, pageId: string | undefined, currentSlug: string | undefined): SlugCheck {
+  const v = value.trim().toLowerCase();
+  const [server, setServer] = useState<{ for: string; res: SlugCheck } | null>(null);
+  const seq = useRef(0);
+
+  /* 동기(즉시) 판정 — 서버가 필요 없는 경우를 렌더에서 바로 가른다 */
+  let sync: SlugCheck | null = null;
+  if (!v) sync = { level: "idle" };
+  else {
+    const err = validateSlug(v);
+    if (err) sync = { level: "error", msg: SLUG_MESSAGES[err] };
+    else if (currentSlug && v === currentSlug) sync = { level: "ok", msg: "지금 쓰는 주소예요." };
+  }
+
+  const needServer = sync === null;
+  useEffect(() => {
+    /* 값이 바뀔 때마다 **무조건** 세대를 올린다 — 서버가 필요 없는 값(빈칸·형식 오류)으로
+       벗어났다 돌아와도, 진행 중이던 이전 요청의 낡은 응답이 캐시로 살아남지 못하게(쏘넷 점검).
+       캐시도 세대가 같을 때만 쓴다(아래 렌더 조건) — 같은 글자를 다시 쳐도 새로 확인한다. */
+    const my = ++seq.current;
+    if (!needServer) return;
+    const t = window.setTimeout(async () => {
+      /* 같은 값을 다시 확인하기 시작하면 그 값의 낡은 캐시를 먼저 비운다 — 안 비우면
+         떠났다 돌아온 값이 재확인 없이 예전 「쓸 수 있어요」를 그대로 보여준다(쏘넷 점검).
+         다른 값의 캐시는 렌더 조건(for===v)이 어차피 무시한다. */
+      setServer((cur) => (cur && cur.for === v ? null : cur));
+      try {
+        const r = await checkSlugAvailable(v, pageId);
+        if (seq.current !== my) return; // 그 사이 입력이 바뀜 — 낡은 답 버림
+        const res: SlugCheck =
+          r.status === "available"
+            ? { level: "ok", msg: "쓸 수 있는 주소예요!" }
+            : r.status === "mine"
+              ? { level: "ok", msg: "지금 쓰는 주소예요." }
+              : r.status === "skip"
+                ? { level: "neutral", msg: "저장할 때 최종 확인돼요." }
+                : { level: "error", msg: r.message ?? "쓸 수 없는 주소예요." };
+        setServer({ for: v, res });
+      } catch {
+        if (seq.current === my) setServer({ for: v, res: { level: "neutral", msg: "확인하지 못했어요 — 저장할 때 다시 검사해요." } });
+      }
+    }, 450);
+    return () => window.clearTimeout(t);
+  }, [v, pageId, needServer]);
+
+  if (sync) return sync;
+  /* seq(ref)는 렌더에서 읽지 않는다(react-hooks/refs) — 낡은 캐시는 위 두 장치가 막는다:
+     ① 값이 바뀔 때마다 세대(++seq)가 올라 뒤늦은 응답이 버려지고,
+     ② 같은 값의 재확인이 시작되면 그 캐시를 비운다. */
+  if (server && server.for === v) return server.res;
+  return { level: "checking", msg: "쓸 수 있는 주소인지 확인하는 중…" };
+}
+
+function SlugStatusLine({ check }: { check: SlugCheck }) {
+  if (check.level === "idle" || !check.msg) return null;
+  return (
+    <p
+      role={check.level === "error" ? "alert" : "status"}
+      className={cn(
+        "mt-1.5 text-[12px] leading-relaxed",
+        check.level === "ok" && "text-positive-strong",
+        check.level === "error" && "text-negative-strong",
+        (check.level === "checking" || check.level === "neutral") && "text-fg-sub",
+      )}
+    >
+      {check.msg}
+    </p>
+  );
+}
+
 /**
  * 최초 「주소 정하기」(2026-08-26 사장님 결정) — 무작위 자동 주소를 정식 주소로 바꾸는 1회 관문.
  * 이후에는 30일에 한 번만 바꿀 수 있으므로(actions.ts slugCooldownError) 신중히 정하라고 말해 준다.
@@ -2775,16 +2854,22 @@ function SlugSetupModal({
   busy,
   error,
   currentSlug,
+  pageId,
   onLater,
   onSubmit,
 }: {
   busy: boolean;
   error: string | null;
   currentSlug: string;
+  pageId: string;
   onLater: () => void;
   onSubmit: (slug: string) => void;
 }) {
   const [v, setV] = useState("");
+  /* 중복 확인을 «먼저» — 확인이 안 끝났거나 막힌 주소면 확정 버튼이 잠긴다.
+     neutral(검사 자체가 실패)은 통과시킨다 — 최종 관문은 서버 저장이 다시 선다(fail-open). */
+  const check = useSlugCheck(v, pageId, currentSlug);
+  const passed = check.level === "ok" || check.level === "neutral";
   return (
     <ModalShell label="내 주소 정하기" title="내 주소를 정해 주세요" onClose={onLater} busy={busy} size="sm">
       <div className="space-y-3">
@@ -2801,7 +2886,7 @@ function SlugSetupModal({
               value={v}
               onChange={(e) => setV(e.target.value.toLowerCase())}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.nativeEvent.isComposing && v.trim() && !busy) onSubmit(v.trim());
+                if (e.key === "Enter" && !e.nativeEvent.isComposing && v.trim() && !busy && passed) onSubmit(v.trim());
               }}
               maxLength={30}
               placeholder="my-brand"
@@ -2809,6 +2894,7 @@ function SlugSetupModal({
               className="h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
             />
           </div>
+          <SlugStatusLine check={check} />
         </div>
         {error ? (
           <p role="alert" className="rounded-card border border-negative/40 bg-negative-weak px-3 py-2 text-[14px] text-negative-strong">
@@ -2823,8 +2909,13 @@ function SlugSetupModal({
           <Button variant="ghost" size="sm" onClick={onLater} disabled={busy}>
             나중에 정하기
           </Button>
-          <Button size="sm" disabled={busy || !v.trim()} onClick={() => onSubmit(v.trim())}>
-            {busy ? "정하는 중…" : "이 주소로 정하기"}
+          <Button
+            size="sm"
+            disabled={busy || !v.trim() || !passed}
+            title={!passed && v.trim() ? (check.msg ?? "확인 중이에요") : undefined}
+            onClick={() => onSubmit(v.trim())}
+          >
+            {busy ? "정하는 중…" : check.level === "checking" ? "확인 중…" : "이 주소로 정하기"}
           </Button>
         </div>
       </div>
@@ -3298,6 +3389,8 @@ function ProfilePanel({
   onImages: (v: { avatarPath?: string | null; coverPath?: string | null }) => void;
   onSave: () => void;
 }) {
+  /* 주소 실시간 검사 — 모달과 같은 훅(useSlugCheck 주석) */
+  const profileSlugCheck = useSlugCheck(form.slug, page.id, page.slug);
   const { slug, title, bio, layout, align, snsLinks: sns, snsPlacement, titleSize, seoTitle, seoDesc } = form;
 
   const input =
@@ -3373,6 +3466,8 @@ function ProfilePanel({
           주소 (finch.ai.kr/…)
         </label>
         <input id="p-slug" value={slug} onChange={(e) => onChange({ slug: e.target.value.toLowerCase() })} maxLength={30} className={`mt-1.5 ${input}`} />
+        {/* 모달과 같은 실시간 검사 — 저장 눌러서야 「이미 있어요」를 듣게 하지 않는다 */}
+        <SlugStatusLine check={profileSlugCheck} />
         {/* 주소 변경의 두 가지 질문 — 「얼마나 자주 바꿀 수 있나」 「이미 뿌린 링크는 어떻게 되나」 */}
         <p className="mt-1.5 text-[12px] leading-relaxed text-fg-sub">
           주소는 30일에 한 번 바꿀 수 있어요(정한 직후 10분은 오타 수정 가능). 바꿔도 옛 주소로 온
