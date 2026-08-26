@@ -1163,6 +1163,8 @@ export const linkWorkspace: LinkWorkspace = {
   page: {
     id: "demo-link-page",
     slug: "finch-demo",
+    /* 데모는 주소를 이미 정한 상태 — 최초 「주소 정하기」 모달이 데모 진입마다 뜨면 안 된다 */
+    slugSetAt: "2026-08-01T00:00:00+09:00",
     title: "핀치 데모",
     bio: "예시 프로필 링크예요. 블록을 눌러 편집 화면을 둘러보세요.",
     published: true,

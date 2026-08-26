@@ -157,8 +157,11 @@ async function load(days: number, wantPageId?: string): Promise<Loaded> {
 
   const PAGE_COLS =
     "id, slug, title, bio, published, layout, theme, align, avatar_path, cover_path, sns_links, sns_placement, title_size, seo_title, seo_desc, published_at, published_snapshot, updated_at";
-  /* settings(0058)·theme_custom(0056) 계단식 — 미적용 DB 면 그 컬럼 없이 다시 읽는다(0052 관례) */
-  let pageRes = await supabase.from("link_pages").select(`${PAGE_COLS}, theme_custom, settings`).eq("id", active.id).maybeSingle();
+  /* slug_set_at(0067)·settings(0058)·theme_custom(0056) 계단식 — 미적용 DB 면 그 컬럼 없이 다시 읽는다(0052 관례) */
+  let pageRes = await supabase.from("link_pages").select(`${PAGE_COLS}, theme_custom, settings, slug_set_at`).eq("id", active.id).maybeSingle();
+  if (pageRes.error && /slug_set_at/i.test(pageRes.error.message)) {
+    pageRes = await supabase.from("link_pages").select(`${PAGE_COLS}, theme_custom, settings`).eq("id", active.id).maybeSingle();
+  }
   if (pageRes.error && /settings/i.test(pageRes.error.message)) {
     pageRes = await supabase.from("link_pages").select(`${PAGE_COLS}, theme_custom`).eq("id", active.id).maybeSingle();
   }
@@ -370,6 +373,8 @@ async function load(days: number, wantPageId?: string): Promise<Loaded> {
       snsPlacement: (page.sns_placement as string) ?? "profile",
       titleSize: (page.title_size as string) ?? "md",
       publishedAt,
+      /* undefined = 0067 미적용(모달·쿨다운 꺼짐) · null = 아직 안 정함(모달을 띄운다) */
+      slugSetAt: "slug_set_at" in page ? ((page.slug_set_at as string | null) ?? null) : undefined,
       dirty,
       settings: sanitizeLinkSettings(page.settings),
     },

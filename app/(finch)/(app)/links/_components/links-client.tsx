@@ -133,6 +133,7 @@ import {
   setBlockEmphasized,
   setBlockSchedule,
   duplicateBlock,
+  changeSlug,
   replyGuestbook,
   setGuestbookHidden,
   deleteGuestbook,
@@ -348,6 +349,10 @@ export function LinksClient({
      전역 busy 베일은 모달이 열려 있으면 접히므로(아래 베일 조건), 모달 안 진행 표시는
      이 값이 유일하다(2026-08-26 사장님 지적: 눌러도 로딩이 안 보인다). */
   const [addingType, setAddingType] = useState<BlockType | null>(null);
+  /* 최초 「주소 정하기」(2026-08-26 사장님 결정) — slugSetAt 이 null(무작위 주소 그대로)이면
+     빌더 진입에서 모달을 먼저 띄운다. undefined 는 0067 미적용(기능 꺼짐), 데모는 안 띄운다.
+     「나중에」로 닫으면 이번 방문 동안은 조용하고, 다음 진입에 다시 묻는다 — 권한은 계속 남아 있다. */
+  const [slugSetup, setSlugSetup] = useState<boolean>(() => !isDemo && !!page && page.slugSetAt === null);
   /* 토스트 — 「블록을 추가했어요」와 「클릭이 삼켜졌어요」가 같은 회색이면 성공과 거절이 구분되지 않는다.
      배경은 두 갈래 모두 불투명 bg-overlay 를 유지하고(반투명이면 베일이 비쳐 읽기가 무너진다)
      테두리·아이콘으로 톤을 가른다 */
@@ -1085,6 +1090,28 @@ export function LinksClient({
         />
       ) : null}
 
+      {/* 최초 「주소 정하기」 — 무작위 주소(6kt139hq 류)를 정식 주소로. 30일 쿨다운의 시작점 */}
+      {slugSetup && page ? (
+        <SlugSetupModal
+          busy={busy}
+          error={error}
+          currentSlug={page.slug}
+          onLater={() => {
+            setSlugSetup(false);
+            setError(null);
+          }}
+          onSubmit={(v) =>
+            run(
+              () => changeSlug(v, page.id),
+              () => {
+                setSlugSetup(false);
+                toast(`주소를 정했어요 — finch.ai.kr/${v}`);
+              },
+            )
+          }
+        />
+      ) : null}
+
       {/* 제목이 「블록 추가」뿐이었는데 안에는 템플릿·벌크·이사(가져오기)가 절반이었다 —
           가져오려고 들어온 사람이 «잘못 눌렀나» 하게 된다(2026-08-26 사장님 지적).
           여는 버튼 두 개(우측 패널·폰 캔버스)와 같은 문구를 쓴다. */}
@@ -1799,7 +1826,7 @@ export function LinksClient({
       {/* 모달이 열려 있으면 전역 베일을 접는다 — z-[60] 이 모달(z-50) 위를 덮어 로더가 둘이 되고,
           「만드는 중…」·「되돌리는 중…」 같은 모달 안 진행 라벨이 베일 아래로 사라졌다.
           모달이 열린 동안 시작되는 run() 은 그 모달에서 나온 것뿐이라(스크림이 뒤를 막는다) 진행 표시는 모달이 스스로 낸다 */}
-      {busy && !settingsOpen && !drawer && !scheduleFor && !tplPreview && !newPageOpen && !newSubOpen && !exitTo && !revertOpen && !confirming ? (
+      {busy && !settingsOpen && !drawer && !scheduleFor && !tplPreview && !newPageOpen && !newSubOpen && !exitTo && !revertOpen && !confirming && !slugSetup ? (
         <div
           className="busy-veil-in fixed inset-0 z-[60] flex items-center justify-center bg-surface/70 backdrop-blur-[2px]"
         >
@@ -2739,6 +2766,72 @@ function PageSwitcher({
   );
 }
 
+/**
+ * 최초 「주소 정하기」(2026-08-26 사장님 결정) — 무작위 자동 주소를 정식 주소로 바꾸는 1회 관문.
+ * 이후에는 30일에 한 번만 바꿀 수 있으므로(actions.ts slugCooldownError) 신중히 정하라고 말해 준다.
+ * 「나중에」를 막지 않는다 — 시작을 막는 강제 관문은 무작위 주소를 만든 이유(이탈 방지)와 모순된다.
+ */
+function SlugSetupModal({
+  busy,
+  error,
+  currentSlug,
+  onLater,
+  onSubmit,
+}: {
+  busy: boolean;
+  error: string | null;
+  currentSlug: string;
+  onLater: () => void;
+  onSubmit: (slug: string) => void;
+}) {
+  const [v, setV] = useState("");
+  return (
+    <ModalShell label="내 주소 정하기" title="내 주소를 정해 주세요" onClose={onLater} busy={busy} size="sm">
+      <div className="space-y-3">
+        <p className="text-[14px] leading-[1.7] text-fg-sub">
+          지금 주소는 자동으로 만든 <code className="rounded bg-plate px-1 text-[12px]">{currentSlug}</code> 예요.
+          기억하기 쉬운 주소로 바꿔 보세요 — 명함·프로필에 들어갈 주소예요.
+        </p>
+        <div>
+          <label className="text-[14px] font-medium text-fg" htmlFor="slug-setup">주소</label>
+          <div className="mt-1.5 flex items-center gap-1">
+            <span className="shrink-0 text-[12px] text-fg-sub">finch.ai.kr/</span>
+            <input
+              id="slug-setup"
+              value={v}
+              onChange={(e) => setV(e.target.value.toLowerCase())}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.nativeEvent.isComposing && v.trim() && !busy) onSubmit(v.trim());
+              }}
+              maxLength={30}
+              placeholder="my-brand"
+              autoFocus
+              className="h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
+            />
+          </div>
+        </div>
+        {error ? (
+          <p role="alert" className="rounded-card border border-negative/40 bg-negative-weak px-3 py-2 text-[14px] text-negative-strong">
+            {error}
+          </p>
+        ) : null}
+        <p className="text-[12px] leading-relaxed text-fg-sub">
+          정한 뒤에는 <strong className="font-semibold text-fg">30일에 한 번</strong>만 바꿀 수 있어요(직후 10분은
+          오타 수정 가능). 바꿔도 옛 주소로 온 방문자는 새 주소로 안내돼요.
+        </p>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="ghost" size="sm" onClick={onLater} disabled={busy}>
+            나중에 정하기
+          </Button>
+          <Button size="sm" disabled={busy || !v.trim()} onClick={() => onSubmit(v.trim())}>
+            {busy ? "정하는 중…" : "이 주소로 정하기"}
+          </Button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
 /** 나가기 확인(2026-08-24) — 저장(라이브 반영) 없이 나가면 초안이 삭제된다는 걸 한 번 더 말한다 */
 function ExitDraftModal({
   busy,
@@ -3280,9 +3373,10 @@ function ProfilePanel({
           주소 (finch.ai.kr/…)
         </label>
         <input id="p-slug" value={slug} onChange={(e) => onChange({ slug: e.target.value.toLowerCase() })} maxLength={30} className={`mt-1.5 ${input}`} />
-        {/* 주소 변경의 첫 질문은 「이미 뿌린 링크는 어떻게 되나」다 — 여기서 바로 답한다 */}
+        {/* 주소 변경의 두 가지 질문 — 「얼마나 자주 바꿀 수 있나」 「이미 뿌린 링크는 어떻게 되나」 */}
         <p className="mt-1.5 text-[12px] leading-relaxed text-fg-sub">
-          바꿔도 옛 주소로 온 방문자는 새 주소로 안내돼요. 옛 주소는 90일간 다른 사람이 가져갈 수 없어요.
+          주소는 30일에 한 번 바꿀 수 있어요(정한 직후 10분은 오타 수정 가능). 바꿔도 옛 주소로 온
+          방문자는 새 주소로 안내되고, 옛 주소는 90일간 다른 사람이 가져갈 수 없어요.
         </p>
       </div>
 

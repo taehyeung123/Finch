@@ -32,6 +32,11 @@ export interface LinkPageView {
   titleSize: string;
   /** 마지막 라이브 반영 시각. null 이면 한 번도 발행 안 함 */
   publishedAt: string | null;
+  /**
+   * 주소를 직접 정한 마지막 시각(0067). null = 아직 무작위 주소(최초 「주소 정하기」 모달을
+   * 띄운다) · undefined = 0067 미적용 DB(기능 꺼짐 — 모달도 쿨다운도 없다).
+   */
+  slugSetAt?: string | null;
   /** 초안이 마지막 발행본과 다른가 — "라이브 반영" 버튼의 상태를 정한다 */
   dirty: boolean;
   /** 페이지 설정(0058) — 발행과 무관하게 즉시 적용. 미적용 DB 면 기본값 */

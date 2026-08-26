@@ -87,6 +87,42 @@ async function releaseSlug(slug: string, pageId: string | null, userId: string):
   if (error) console.error("[links] 옛 주소 기록 실패:", error.message);
 }
 
+/* ── 주소 변경 정책(2026-08-26 사장님 결정): 최초 1회는 자유(모달), 이후 30일에 1회 ──
+   기준은 link_pages.slug_set_at(0067) — 사용자가 직접 정한 마지막 시각. null 이면 아직
+   무작위 주소라 자유 변경. 정한 직후 10분은 오타 수정 유예(이때는 시각을 새로 찍지 않는다 —
+   찍으면 9분마다 바꾸며 유예를 무한 연장할 수 있다). */
+const SLUG_COOLDOWN_DAYS = 30;
+const SLUG_GRACE_MS = 10 * 60 * 1000;
+
+/** 지금 바꿀 수 있나 — 막혀 있으면 사용자에게 그대로 보여줄 문장을 돌려준다 */
+function slugCooldownError(slugSetAt: string | null | undefined): string | null {
+  if (!slugSetAt) return null; // 아직 직접 정한 적 없음(또는 0067 미적용) — 자유
+  const age = Date.now() - new Date(slugSetAt).getTime();
+  if (age <= SLUG_GRACE_MS) return null; // 오타 수정 유예
+  const left = SLUG_COOLDOWN_DAYS - Math.floor(age / 86_400_000);
+  if (left <= 0) return null;
+  return `주소는 30일에 한 번 바꿀 수 있어요 — ${left}일 뒤에 바꿀 수 있어요.`;
+}
+
+/** 이번 변경에 기록할 시각 — 유예 안이면 원래 시각 유지(위 주석), 밖이면 지금 */
+function nextSlugStamp(slugSetAt: string | null | undefined): string {
+  if (slugSetAt && Date.now() - new Date(slugSetAt).getTime() <= SLUG_GRACE_MS) return slugSetAt;
+  return new Date().toISOString();
+}
+
+/** slug_set_at 조회 — 0067 미적용 DB 는 undefined(기능 통째로 꺼짐: 쿨다운도 기록도 안 한다) */
+async function readSlugSetAt(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  pageId: string,
+): Promise<string | null | undefined> {
+  const r = await supabase.from("link_pages").select("slug_set_at").eq("id", pageId).maybeSingle();
+  if (r.error) {
+    if (!/slug_set_at/i.test(r.error.message)) console.error("[links] slug_set_at 조회 실패:", r.error.message);
+    return undefined;
+  }
+  return ((r.data as Record<string, unknown> | null)?.slug_set_at as string | null) ?? null;
+}
+
 /** 내 페이지 id·slug — 거의 모든 액션이 먼저 필요로 한다.
     pageId 를 받으면 **그 페이지**(소유 확인 포함), 없으면 첫 페이지(0060 전 단일 페이지와 동일).
     maybeSingle 은 두 장부터 터지므로 목록에서 첫 장을 집는다(멀티, 2026-08-24). */
@@ -139,11 +175,19 @@ export async function createLinkPage(slug: string, title: string): Promise<Resul
   }
 
   const supabase = await createClient();
-  const { data: created, error } = await supabase
+  /* 직접 정한 주소다 — slug_set_at 을 찍는다(0067). 미적용 DB 는 컬럼 없이 재시도(계단식) */
+  let { data: created, error } = await supabase
     .from("link_pages")
-    .insert({ user_id: user.id, slug: clean, title: sliceChars(title.trim(), 40), theme: DEFAULT_THEME_KEY })
+    .insert({ user_id: user.id, slug: clean, title: sliceChars(title.trim(), 40), theme: DEFAULT_THEME_KEY, slug_set_at: new Date().toISOString() })
     .select("id")
     .maybeSingle();
+  if (error && /slug_set_at/i.test(error.message)) {
+    ({ data: created, error } = await supabase
+      .from("link_pages")
+      .insert({ user_id: user.id, slug: clean, title: sliceChars(title.trim(), 40), theme: DEFAULT_THEME_KEY })
+      .select("id")
+      .maybeSingle());
+  }
   if (error) {
     /* unique 위반 두 가지를 갈라서 말한다 — 사용자에게 의미가 완전히 다르다 */
     if (error.code === "23505") {
@@ -376,8 +420,15 @@ export async function updateLinkProfile(input: {
   const supabase = await createClient();
   const before = await myPage(pageId);
   if (!before) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
-  if (before.slug !== clean && (await slugHeldByOther(clean, user.id))) {
-    return { ok: false, error: "최근까지 다른 사람이 쓰던 주소예요. 다른 주소를 입력해 주세요." };
+  /* 주소가 바뀌는 저장이면 정책 관문을 먼저 — 30일 쿨다운(위 slugCooldownError 주석) */
+  let slugSetAt: string | null | undefined;
+  if (before.slug !== clean) {
+    slugSetAt = await readSlugSetAt(supabase, before.id);
+    const blocked = slugCooldownError(slugSetAt);
+    if (blocked) return { ok: false, error: blocked };
+    if (await slugHeldByOther(clean, user.id)) {
+      return { ok: false, error: "최근까지 다른 사람이 쓰던 주소예요. 다른 주소를 입력해 주세요." };
+    }
   }
 
   const base = {
@@ -394,9 +445,12 @@ export async function updateLinkProfile(input: {
   const placement = input.snsPlacement === "links" ? "links" : "profile";
   const titleSize = ["sm", "md", "lg"].includes(input.titleSize) ? input.titleSize : "md";
 
+  /* 주소가 바뀌면 slug_set_at 도 함께 — 0067 미적용(undefined)이면 안 보낸다 */
+  const stamp =
+    before.slug !== clean && slugSetAt !== undefined ? { slug_set_at: nextSlugStamp(slugSetAt) } : {};
   const { error } = await supabase
     .from("link_pages")
-    .update({ ...base, sns_placement: placement, title_size: titleSize })
+    .update({ ...base, sns_placement: placement, title_size: titleSize, ...stamp })
     .eq("id", before.id);
   if (error) {
     if (error.code === "23505") return { ok: false, error: "이미 사용 중인 주소예요." };
@@ -941,6 +995,52 @@ const STAGE4_TYPES = new Set<BlockType>(["gallery", "music", "vcard", "search", 
 /** 타입을 더할 때마다 여기 한 줄이 같이 는다 — 안 늘리면 "0054 적용하세요" 같은 엉뚱한 안내가 나간다(소넷 확정) */
 const TYPE_MIGRATION = new Map<BlockType, string>([["events", "0063"]]);
 const migrationFor = (type: BlockType) => TYPE_MIGRATION.get(type) ?? (STAGE4_TYPES.has(type) ? "0057" : "0054");
+
+/**
+ * 주소만 바꾼다 — 최초 「주소 정하기」 모달(2026-08-26)이 부른다.
+ * 프로필 저장과 같은 관문(형식·예약어·무덤·중복·쿨다운)을 태우고 같은 뒷정리를 한다.
+ */
+export async function changeSlug(raw: string, pageId?: string): Promise<Result> {
+  if (isDemoMode()) return DEMO;
+  const user = await getAuthUser();
+  if (!user) return AUTH;
+
+  const clean = raw.trim().toLowerCase();
+  const err = validateSlug(clean);
+  if (err) return { ok: false, error: SLUG_MESSAGES[err] };
+
+  const supabase = await createClient();
+  const before = await myPage(pageId);
+  if (!before) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
+  if (before.slug === clean) return { ok: true }; // 그대로 확정 — 무작위 주소를 그대로 쓰겠다는 뜻도 존중
+
+  const slugSetAt = await readSlugSetAt(supabase, before.id);
+  const blocked = slugCooldownError(slugSetAt);
+  if (blocked) return { ok: false, error: blocked };
+  if (await slugHeldByOther(clean, user.id)) {
+    return { ok: false, error: "최근까지 다른 사람이 쓰던 주소예요. 다른 주소를 입력해 주세요." };
+  }
+
+  const stamp = slugSetAt !== undefined ? { slug_set_at: nextSlugStamp(slugSetAt) } : {};
+  const { error } = await supabase
+    .from("link_pages")
+    .update({ slug: clean, ...stamp })
+    .eq("id", before.id);
+  if (error) {
+    if (error.code === "23505") return { ok: false, error: "이미 사용 중인 주소예요." };
+    if (error.code === "23514" && /다른 사람이 쓰던/.test(error.message)) {
+      return { ok: false, error: "최근까지 다른 사람이 쓰던 주소예요. 다른 주소를 입력해 주세요." };
+    }
+    console.error("[links] 주소 변경 실패:", error.message);
+    return { ok: false, error: "바꾸지 못했어요. 잠시 후 다시 시도해 주세요." };
+  }
+
+  revalidatePath("/links");
+  revalidatePath(`/p/${clean}`);
+  revalidatePath(`/p/${before.slug}`);
+  await releaseSlug(before.slug, before.id, user.id);
+  return { ok: true };
+}
 
 export async function addBlock(type: BlockType, pageId?: string): Promise<Result & { id?: string }> {
   if (isDemoMode()) return DEMO;
