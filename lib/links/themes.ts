@@ -654,6 +654,11 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
     "--lp-accent-text": accentText,
     /* 틴트 칩(카드 위 강조 13%) 전용 — 배경과 잉크가 한 쌍이다. 둘을 따로 쓰면 대비 보장이 깨진다 */
     "--lp-chip-bg": chipBg,
+    /* 폼 입력칸의 면 — **카드색에서 계산한 불투명 색**이다(2026-08-26 사장님 지적).
+       예전 입력칸은 지면색(--lp-bg)이나 카드색 그대로를 깔아서, 어두운 테마·사진 배경에서
+       칸이 통째로 묻혔다. 입력칸은 자기가 올라앉은 **카드**와 한 단 갈려야 보인다:
+       어두운 카드면 한 톤 밝게, 밝은 카드면 한 톤 어둡게 — 항상 불투명이라 무엇 위에서도 묻히지 않는다. */
+    "--lp-input-bg": darkCard ? mixHex(cardSafeFlat, "#FFFFFF", 0.1) : mixHex(cardSafeFlat, "#000000", 0.05),
     "--lp-chip-ink": chipInk,
     "--lp-on-accent": onAccent,
     /* 모서리는 **두 갈래**다.

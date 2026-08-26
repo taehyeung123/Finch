@@ -1024,21 +1024,20 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
       );
     }
     case "notice":
-      /* 공개 렌더러와 같은 규칙 — primary 도 통짜 채움을 쓰지 않는다(누르는 것과 실루엣이 겹쳤다).
-         강조색 틴트 + 굵은 왼쪽 띠 + 안내 아이콘(block-renderer.tsx notice 주석 참조). */
+      /* 공개 렌더러와 같은 규칙(block-renderer.tsx notice 주석) — primary 는 홍보 배너(칩 면·중앙
+         semibold, 장식 없음), info 는 안내(띠+아이콘). */
+      if (s(d, "tone") === "primary") {
+        return (
+          <div
+            className="rounded-[var(--lp-radius)] px-3 py-2.5 text-center text-[12px] font-semibold leading-[1.6] shadow-[var(--lp-shadow)]"
+            style={{ backgroundColor: "var(--lp-chip-bg)", color: "var(--lp-chip-ink)" }}
+          >
+            {s(d, "text")}
+          </div>
+        );
+      }
       return (
-        <div
-          className={[
-            "flex items-start gap-2 rounded-[var(--lp-radius)] px-3 py-2.5 text-[12px] leading-[1.6] shadow-[var(--lp-shadow)]",
-            card,
-            s(d, "tone") === "primary" ? "border-l-[4px] border-l-[var(--lp-accent)]" : "border-l-[3px] border-l-[var(--lp-accent)]",
-          ].join(" ")}
-          style={
-            s(d, "tone") === "primary"
-              ? { backgroundColor: "color-mix(in srgb, var(--lp-accent) 12%, var(--lp-card))" }
-              : undefined
-          }
-        >
+        <div className={`${card} flex items-start gap-2 border-l-[3px] border-l-[var(--lp-accent)] px-3 py-2.5 text-[12px] leading-[1.6]`}>
           <Info className="mt-0.5 size-3.5 shrink-0 text-[var(--lp-accent)]" aria-hidden />
           <span className="min-w-0">{s(d, "text")}</span>
         </div>
@@ -1084,7 +1083,7 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
             <span
               key={f}
               className={cn(
-                "flex rounded-[calc(var(--lp-radius)/1.6)] border border-[var(--lp-border)] bg-[var(--lp-bg)] px-2.5 text-[12px] text-[var(--lp-muted)]",
+                "flex rounded-[calc(var(--lp-radius)/1.6)] border border-[var(--lp-border)] bg-[var(--lp-input-bg)] px-2.5 text-[12px] text-[var(--lp-muted)]",
                 f === "message" ? "h-14 pt-2" : "h-9 items-center",
               )}
               aria-hidden
@@ -1307,8 +1306,8 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
       return (
         <div className={`${card} p-3`}>
           <p className="text-[13px] font-semibold">{s(d, "title") || "방명록"}</p>
-          <div className="mt-2 flex h-8 items-center rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-bg)] px-2 text-[11px] text-[var(--lp-muted)]" aria-hidden>이름</div>
-          <div className="mt-1.5 h-14 rounded-[var(--lp-radius)] border border-[var(--lp-border)] px-2 py-1.5 text-[11px] text-[var(--lp-muted)]">{s(d, "placeholder") || "한마디 남겨 주세요"}</div>
+          <div className="mt-2 flex h-8 items-center rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-input-bg)] px-2 text-[11px] text-[var(--lp-muted)]" aria-hidden>이름</div>
+          <div className="mt-1.5 h-14 rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-input-bg)] px-2 py-1.5 text-[11px] text-[var(--lp-muted)]">{s(d, "placeholder") || "한마디 남겨 주세요"}</div>
           <div className="mt-1.5 flex h-8 items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] text-[12px] font-semibold text-[var(--lp-on-accent)]">남기기</div>
           {headGb.length ? (
             <ul className="mt-3 space-y-2.5 border-t border-[var(--lp-border)] pt-2.5">

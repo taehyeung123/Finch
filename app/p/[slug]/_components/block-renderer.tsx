@@ -556,25 +556,25 @@ export function BlockRenderer({
     case "notice": {
       const tone = s(d, "tone") || "info";
       /*
-        ⚠️ **누르는 것과 실루엣이 겹치면 안 된다.** primary 톤이 강조색 통짜 채움이라, 바로 아래
-        강조 링크 버튼과 채움색·글자색이 같고 반지름 2px·높이 6px 차이뿐이었다 — 방문자가 눌렀는데
-        아무 일도 안 일어났다(실측: 공지 클릭 → URL 그대로, 새 탭 0개 / 바로 아래 링크는 정상 이동).
-        강조는 살리되 **면을 통짜로 칠하지 않는다**: 강조색 틴트 + 왼쪽 굵은 띠로 info 톤과 같은
-        골격을 쓰고, 앞에 안내 아이콘을 세워 버튼 알약과 형태가 갈리게 한다.
+        두 톤은 성격이 다르다(2026-08-26 사장님 — 아이콘+띠 구조가 "AI 대시보드 경고" 티가 났다):
+        · info    = 안내. 왼쪽 강조 띠 + Info 아이콘 — 시스템 안내답게.
+        · primary = **홍보 배너**. 공구 오픈·이벤트를 외치는 자리다 — 경고 장식(아이콘·띠)을 전부
+          걷고, 칩 면(--lp-chip-bg/-ink: 대비 4.5:1 보장된 강조 틴트) 위 가운데 정렬 semibold 한 줄.
+          통짜 강조색 채움은 안 쓴다 — 강조 링크 버튼과 실루엣이 겹쳐 «눌러도 안 되는 버튼»이
+          됐던 이력(위 커밋 bbe5b40)이 있다. 틴트 면은 버튼(진한 채움)과 명확히 갈린다.
       */
+      if (tone === "primary") {
+        return (
+          <div
+            className="rounded-[var(--lp-radius)] px-4 py-3 text-center text-[14px] font-semibold leading-[1.6] shadow-[var(--lp-shadow)]"
+            style={{ backgroundColor: "var(--lp-chip-bg)", color: "var(--lp-chip-ink)" }}
+          >
+            {s(d, "text")}
+          </div>
+        );
+      }
       return (
-        <div
-          className={[
-            "flex items-start gap-2.5 rounded-[var(--lp-radius)] px-4 py-3.5 text-[14px] leading-[1.6] shadow-[var(--lp-shadow)]",
-            "border border-l-[3px] border-[var(--lp-border)] text-[var(--lp-fg)]",
-            tone === "primary" ? "border-l-[5px] border-l-[var(--lp-accent)]" : "border-l-[var(--lp-accent)] bg-[var(--lp-card)]",
-          ].join(" ")}
-          style={
-            tone === "primary"
-              ? { backgroundColor: "color-mix(in srgb, var(--lp-accent) 12%, var(--lp-card))" }
-              : undefined
-          }
-        >
+        <div className="flex items-start gap-2.5 rounded-[var(--lp-radius)] border border-l-[3px] border-[var(--lp-border)] border-l-[var(--lp-accent)] bg-[var(--lp-card)] px-4 py-3.5 text-[14px] leading-[1.6] text-[var(--lp-fg)] shadow-[var(--lp-shadow)]">
           <Info className="mt-0.5 size-4 shrink-0 text-[var(--lp-accent)]" aria-hidden />
           <span className="min-w-0">{s(d, "text")}</span>
         </div>

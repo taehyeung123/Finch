@@ -125,7 +125,8 @@ export function LeadForm({
             rows={3}
             maxLength={2000}
             /* 포커스 표시가 테두리 색 하나뿐이라 어느 칸인지 안 보였다 → 링을 함께(2026-08-24 비평) */
-            className="w-full rounded-[calc(var(--lp-radius)/1.6)] border border-[var(--lp-border)] bg-[var(--lp-bg)] px-3 py-2 text-[15px] text-[var(--lp-fg)] outline-none placeholder:text-[var(--lp-muted)] focus:border-[var(--lp-accent)] focus:ring-2 focus:ring-[var(--lp-accent)]/25"
+            /* 입력칸 면은 지면색이 아니라 전용 토큰 — 어두운 테마에서 칸이 묻혔다(themes.ts --lp-input-bg) */
+            className="w-full rounded-[calc(var(--lp-radius)/1.6)] border border-[var(--lp-border)] bg-[var(--lp-input-bg)] px-3 py-2 text-[15px] text-[var(--lp-fg)] outline-none placeholder:text-[var(--lp-muted)] focus:border-[var(--lp-accent)] focus:ring-2 focus:ring-[var(--lp-accent)]/25"
           />
         ) : (
           <input
@@ -138,7 +139,7 @@ export function LeadForm({
             /* 구독은 이메일 하나뿐 — 빈 제출은 브라우저의 현지어 안내로 먼저 막는다(감사 C8) */
             required={kind === "subscribe" || (fields.length === 1 && f !== "name")}
             maxLength={160}
-            className="h-12 w-full rounded-[calc(var(--lp-radius)/1.6)] border border-[var(--lp-border)] bg-[var(--lp-bg)] px-3 text-[15px] text-[var(--lp-fg)] outline-none placeholder:text-[var(--lp-muted)] focus:border-[var(--lp-accent)] focus:ring-2 focus:ring-[var(--lp-accent)]/25"
+            className="h-12 w-full rounded-[calc(var(--lp-radius)/1.6)] border border-[var(--lp-border)] bg-[var(--lp-input-bg)] px-3 text-[15px] text-[var(--lp-fg)] outline-none placeholder:text-[var(--lp-muted)] focus:border-[var(--lp-accent)] focus:ring-2 focus:ring-[var(--lp-accent)]/25"
           />
         ),
       )}

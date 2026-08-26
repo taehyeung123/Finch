@@ -1187,7 +1187,7 @@ export const linkWorkspace: LinkWorkspace = {
     settings: { lang: "ko", target: "blank", robots: "index", ogTitle: "", ogImage: "", favicon: "🐦", lockMessage: "", ga4: "", metaPixel: "", tiktokPixel: "", utm: false, verifyGoogle: "", verifyNaver: "", hasPassword: false },
   },
   blocks: [
-    { id: "demo-b1", type: "notice", sortOrder: 0, active: true, data: { text: "이번 주 공구 진행 중이에요!", tone: "primary" } },
+    { id: "demo-b1", type: "notice", sortOrder: 0, active: true, data: { text: "🔥 가을 신상 공구 오픈 — 일요일 밤 마감", tone: "primary" } },
     { id: "demo-b2", type: "link", sortOrder: 1, active: true, data: { label: "공구 바로가기", url: "https://example.com/order", emoji: "🛒", emphasis: "primary" } },
     { id: "demo-b3", type: "image_card", sortOrder: 2, active: true, data: { title: "베스트 상품", subtitle: "재구매율 1위", price: "29,000원", ctaLabel: "구매하기", url: "https://example.com/best", imagePath: "https://picsum.photos/id/1080/900/600" } },
     { id: "demo-b11", type: "gallery", sortOrder: 2.5, active: true, data: { layout: "grid", aspect: "square", items: [{ imagePath: "https://picsum.photos/id/312/600/600" }, { imagePath: "https://picsum.photos/id/292/600/600" }, { imagePath: "https://picsum.photos/id/365/600/600" }] } },
@@ -1223,7 +1223,7 @@ export const linkWorkspace: LinkWorkspace = {
     snsPlacement: "profile",
     titleSize: "md",
     blocks: [
-      { id: "demo-b1", type: "notice", data: { text: "이번 주 공구 진행 중이에요!", tone: "primary" } },
+      { id: "demo-b1", type: "notice", data: { text: "🔥 가을 신상 공구 오픈 — 일요일 밤 마감", tone: "primary" } },
       { id: "demo-b2", type: "link", data: { label: "공구 바로가기", url: "https://example.com/order", emoji: "🛒", emphasis: "primary" } },
       { id: "demo-b3", type: "image_card", data: { title: "베스트 상품", subtitle: "재구매율 1위", price: "29,000원", ctaLabel: "구매하기", url: "https://example.com/best", imagePath: "https://picsum.photos/id/1080/900/600" } },
       { id: "demo-b11", type: "gallery", data: { layout: "grid", aspect: "square", items: [{ imagePath: "https://picsum.photos/id/312/600/600" }, { imagePath: "https://picsum.photos/id/292/600/600" }, { imagePath: "https://picsum.photos/id/365/600/600" }] } },

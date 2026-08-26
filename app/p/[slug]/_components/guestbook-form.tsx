@@ -16,7 +16,8 @@ export function GuestbookForm({ slug, blockId, placeholder, isDemo, t, errors }:
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const field = "w-full rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-card)] px-3 py-2.5 text-[14px] text-[var(--lp-fg)] placeholder:text-[var(--lp-muted)] focus:border-[var(--lp-accent)] focus:outline-none";
+  /* 카드색 그대로면 칸이 카드에 묻힌다 — 입력칸 전용 면(themes.ts --lp-input-bg) */
+  const field = "w-full rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-input-bg)] px-3 py-2.5 text-[14px] text-[var(--lp-fg)] placeholder:text-[var(--lp-muted)] focus:border-[var(--lp-accent)] focus:outline-none";
 
   if (done)
     return (

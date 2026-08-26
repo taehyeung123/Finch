@@ -56,7 +56,8 @@ export const LINK_TEMPLATES: LinkTemplate[] = [
     emoji: "🛒",
     tint: "bg-tint-coral text-tint-coral-ink",
     blocks: [
-      { type: "notice", data: { text: "이번 주 공구 진행 중! 아래에서 확인하세요", tone: "primary" } },
+      /* 배너 문구는 사람이 쓴 것처럼 — 구체적 사실(무엇·언제)이 들어가야 광고 문구가 된다(2026-08-26) */
+      { type: "notice", data: { text: "🔥 가을 신상 공구 오픈 — 일요일 밤 마감", tone: "primary" } },
       {
         type: "image_card",
         data: { title: "진행 중인 공구", subtitle: "마감까지 얼마 안 남았어요", url: "https://smartstore.naver.com/", ctaLabel: "구매하기" },
