@@ -3280,6 +3280,10 @@ function ProfilePanel({
           주소 (finch.ai.kr/…)
         </label>
         <input id="p-slug" value={slug} onChange={(e) => onChange({ slug: e.target.value.toLowerCase() })} maxLength={30} className={`mt-1.5 ${input}`} />
+        {/* 주소 변경의 첫 질문은 「이미 뿌린 링크는 어떻게 되나」다 — 여기서 바로 답한다 */}
+        <p className="mt-1.5 text-[12px] leading-relaxed text-fg-sub">
+          바꿔도 옛 주소로 온 방문자는 새 주소로 안내돼요. 옛 주소는 90일간 다른 사람이 가져갈 수 없어요.
+        </p>
       </div>
 
       <div>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { resolveSubSlug } from "../public-page";
+import { movedTo, resolveSubSlug } from "../public-page";
+import { redirect } from "next/navigation";
 import PublicLinkPage, { generateMetadata as pageMetadata } from "../page";
 
 /*
@@ -20,7 +21,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function PublicSubPage({ params }: { params: Promise<{ slug: string; sub: string }> }) {
   const { slug, sub } = await params;
   const child = await resolveSubSlug(slug, sub);
-  if (!child) notFound();
+  if (!child) {
+    /* 부모 주소가 이사했으면 서브 경로도 따라간다 — 서브 페이지 QR·링크도 인쇄돼 나가 있다.
+       302 인 이유는 [slug]/page.tsx 의 같은 자리 주석 참조. */
+    const moved = await movedTo(slug);
+    if (moved) redirect(`/${moved}/${sub}`);
+    notFound();
+  }
   /* 데이터는 자식 slug 로, 주소는 방문자가 들어온 표준 주소로 —
      링크·비콘·잠금 쿠키가 `/{부모}/{sub}` 아래에 놓여야 방문자 쿠키(path=`/{부모}`)가 실린다 */
   return PublicLinkPage({ params: Promise.resolve({ slug: child }), urlBase: `${slug}/${sub}` });

@@ -183,7 +183,8 @@ export async function createLinkPage(slug: string, title: string): Promise<Resul
  * 무작위 주소 8자 — 링크팜도 이렇게 시작한다(실측: 사장님 계정이 1vq0uqji 였다).
  *
  * 첫 화면에서 "주소를 뭘로 하지"로 멈추는 게 가장 큰 이탈 지점이다. 자동으로 만들어
- * 주고, 바꾸는 건 프로필 탭에서 언제든 된다(옛 주소는 slug 무덤이 지킨다).
+ * 주고, 바꾸는 건 프로필 탭에서 언제든 된다(옛 주소는 무덤이 90일 지키고,
+ * 옛 주소로 온 방문자는 새 주소로 안내된다 — app/p/[slug]/public-page.ts movedTo).
  */
 function randomSlug(): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";

@@ -7,6 +7,36 @@ import { linkWorkspace } from "@/lib/data";
 import { DEFAULT_LINK_SETTINGS, sanitizeLinkSettings, type LinkPageSettings } from "@/lib/links/settings";
 import { unlockCookieName, unlockTokenMatches } from "@/lib/links/password";
 
+/**
+ * 이 주소가 **이사 간** 페이지인가 — 무덤(link_slug_history)에 page_id 가 살아 있으면
+ * 그 페이지의 현재 주소를 돌려준다(방문자를 새 주소로 안내하는 용도, 2026-08-26).
+ *
+ * 무덤은 원래 «남이 90일간 못 가져가게» 만 했다. 그래서 주소를 바꾸면 인스타 소개란·
+ * 인쇄된 QR 로 온 방문자가 전부 404 를 봤다 — 보호는 되는데 안내가 없었다.
+ * 페이지 자체가 삭제된 경우는 page_id 가 null(on delete set null)이라 자연히 안내가 없다 —
+ * 지운 페이지로 데려갈 곳은 없다.
+ */
+export async function movedTo(slug: string): Promise<string | null> {
+  if (isDemoMode()) return null;
+  const admin = createAdminClient();
+  if (!admin) return null; // 키 없는 환경 — 안내는 부가 기능이지 404 의 조건이 아니다
+  const { data: grave } = await admin
+    .from("link_slug_history")
+    .select("page_id")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (!grave?.page_id) return null;
+  const { data: page } = await admin
+    .from("link_pages")
+    .select("slug, published")
+    .eq("id", grave.page_id as string)
+    .maybeSingle();
+  const current = (page?.slug as string | undefined) ?? null;
+  /* 같은 주소로 돌아오는 안내는 루프다 — 이론상 없지만 무덤 기록이 어긋나면 생길 수 있다 */
+  if (!current || current === slug) return null;
+  return current;
+}
+
 /*
   공개 페이지 조회 — **잠금(비밀번호, 0058) 판정을 한 곳에서.**
   page.tsx · /go/[id] · /vcard/[id] · 리드 제출 · 방명록 제출이 전부 이걸 탄다. 잠금을 page.tsx 에서만

@@ -9,12 +9,13 @@ import { DEFAULT_LINK_SETTINGS, faviconHref } from "@/lib/links/settings";
 import { lpText } from "@/lib/links/i18n";
 import { LockScreen } from "./_components/lock-screen";
 import { TrackingScripts } from "./_components/tracking-scripts";
-import { loadPublicPage } from "./public-page";
+import { loadPublicPage, movedTo } from "./public-page";
 import { linkWorkspace } from "@/lib/data";
 import { FinchMark } from "@/components/logo";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, publicLinkUrl, sanitizeSnsLinks } from "@/lib/links";
 import { emphasizedCta, hiddenReason, isScheduledHidden, type BlockType } from "@/lib/links/blocks";
+import { redirect } from "next/navigation";
 import { isLightColor, DEFAULT_THEME_KEY as DEFAULT_LINK_THEME_KEY, fontStylesheets, sanitizeThemeCustom, themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
 import { ShareButton } from "./_components/share-button";
 import { SubscribeButton } from "./_components/subscribe-button";
@@ -149,7 +150,14 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
   const { slug } = await params;
   const base = urlBase ?? slug;
   const data = await load(slug);
-  if (!data) notFound();
+  if (!data) {
+    /* 주소를 바꾼 페이지면 새 주소로 — 302(임시)다. 무덤 보호가 끝나는 90일 뒤 이 주소를
+       다른 사람이 새로 잡을 수 있는데, 301 을 브라우저가 캐시하면 그때 새 주인의 손님을
+       옛 페이지로 보낸다(옛 /p/ → 루트 301 과는 다른 상황 — 그 주소 공간은 영구히 우리 것이다). */
+    const current = await movedTo(slug);
+    if (current) redirect(`/${current}`);
+    notFound();
+  }
 
   const { pageId, published, isOwner, snap, locked, settings } = data;
   const t = lpText(settings.lang);
