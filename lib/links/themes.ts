@@ -686,6 +686,8 @@ export const LAYOUTS = [
   { key: "profile", label: "프로필", hint: "동그란 프로필 사진만" },
   { key: "cover", label: "커버", hint: "가로 배너 한 장" },
   { key: "cover_profile", label: "커버+프로필", hint: "배너 위에 프로필 사진" },
+  /* 프로필 영역 통째 숨김(2026-08-26) — 대표문구·사진 없이 블록만. DB check 는 0069 가 넓힌다 */
+  { key: "hidden", label: "숨김", hint: "프로필 영역 없이 블록만" },
 ] as const;
 
 export type LayoutKey = (typeof LAYOUTS)[number]["key"];

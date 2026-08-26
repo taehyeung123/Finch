@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
+import { LAYOUTS } from "@/lib/links/themes";
 import { SLUG_MESSAGES, normalizeSnsUrl, normalizeUrl, sanitizeSnsLinks, sliceChars, validateSlug } from "@/lib/links";
 import { SNS_CATALOG, snsHref } from "@/lib/links/sns-catalog";
 import { BLOCK_META_KEYS, BLOCK_TYPES, EMPHASIS_TYPES, defaultBlockData, type BlockType } from "@/lib/links/blocks";
@@ -428,11 +429,13 @@ export async function updateLinkProfile(input: {
     }
   }
 
+  /* 레이아웃 열거 검증 — DB check(0048·0069)가 최후 방어지만 여기서 걸러야 이유가 보인다 */
+  const layout = LAYOUTS.some((l) => l.key === input.layout) ? input.layout : "profile";
   const base = {
     slug: clean,
     title: sliceChars(input.title.trim(), 40),
     bio: sliceChars(input.bio.trim(), 160),
-    layout: input.layout,
+    layout,
     align: input.align,
     sns_links: sns,
     seo_title: sliceChars(input.seoTitle.trim(), 60) || null,
@@ -451,6 +454,10 @@ export async function updateLinkProfile(input: {
     .eq("id", before.id);
   if (error) {
     if (error.code === "23505") return { ok: false, error: "이미 사용 중인 주소예요." };
+    if (error.code === "23514" && /link_pages_layout_check/.test(error.message)) {
+      /* 0069 미적용 DB — 「숨김」이 아직 check 에 없다. 이유 없는 「저장하지 못했어요」로 빠지지 않게(쏘넷 점검) */
+      return { ok: false, error: "이 레이아웃은 준비 중이에요 — 잠시 후 다시 시도해 주세요." };
+    }
     if (error.code === "23514" && /다른 사람이 쓰던/.test(error.message)) {
       return { ok: false, error: "최근까지 다른 사람이 쓰던 주소예요. 다른 주소를 입력해 주세요." };
     }

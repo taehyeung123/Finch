@@ -1583,3 +1583,21 @@ input[type="search"]::-webkit-search-cancel-button {
   .drawer-in-right,
   .sheet-in-up { animation: none; }
 }
+
+/* ── 공개 프로필 하단 알약(FinchPill) — 등장 + 은은한 부유(2026-08-26) ── */
+@keyframes lp-pill-enter {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes lp-pill-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+.lp-pill-in {
+  animation:
+    lp-pill-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) both,
+    lp-pill-bob 5s ease-in-out 1.4s infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-pill-in { animation: none; }
+}

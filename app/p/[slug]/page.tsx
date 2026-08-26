@@ -12,6 +12,7 @@ import { TrackingScripts } from "./_components/tracking-scripts";
 import { loadPublicPage, movedTo } from "./public-page";
 import { linkWorkspace } from "@/lib/data";
 import { FinchMark } from "@/components/logo";
+import { FinchPill } from "./_components/finch-pill";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, publicLinkUrl, sanitizeSnsLinks } from "@/lib/links";
 import { emphasizedCta, hiddenReason, isScheduledHidden, type BlockType } from "@/lib/links/blocks";
@@ -96,7 +97,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const description = s.seoDesc || s.bio || undefined;
   /* 공유 카드(OG) — 페이지 설정이 우선(0058). 없으면 커버 → 프로필 사진. 둘 다 없으면 이미지를 **명시적으로 비운다** */
   const ogTitle = st.ogTitle || title;
-  const image = st.ogImage || s.coverPath || s.avatarPath || null;
+  /* 숨김 레이아웃은 화면에서 프로필 사진을 뺀 것 — 공유 카드에만 새어 나가면 안 된다(쏘넷 점검) */
+  const image = st.ogImage || s.coverPath || (s.layout === "hidden" ? null : s.avatarPath) || null;
   const icon = faviconHref(st.favicon);
   /* 비공개·비밀번호·검색 비노출 페이지는 색인되면 안 된다 */
   const noindex = !data.published || data.locked || st.robots === "noindex";
@@ -211,6 +213,8 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
      왼쪽 정렬 페이지에서 둘째 줄만 안쪽으로 들어가 제목·소개와 어긋난다(소넷 확정) */
   const justify = snap.align === "left" ? "justify-start" : snap.align === "right" ? "justify-end" : "justify-center";
   const titlePx = snap.titleSize === "sm" ? "text-[21px]" : snap.titleSize === "lg" ? "text-[32px]" : "text-[26px]";
+  /* 글자 크기는 대표문구·상세문구가 함께 움직인다(2026-08-26 — 제목만 커지면 위계만 벌어진다) */
+  const bioPx = snap.titleSize === "sm" ? "text-[14px]" : snap.titleSize === "lg" ? "text-[17px]" : "text-[15px]";
   /* SNS 줄은 **여기서 한 번 더 거른다** — 스냅샷은 본인 행 직접 PATCH 로 아무 값이나 들어올 수
      있고, 그대로 <a href> 로 찍으면 javascript: 저장형 XSS 가 된다(감사 #5). themeCustom 과 같은 원칙. */
   const snsLinks = sanitizeSnsLinks((snap as { snsLinks?: unknown }).snsLinks);
@@ -243,7 +247,9 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
   /* 3단계 디자인 옵션 — 값이 없으면 전부 예전과 같은 모양 */
   const fx = themeCustom?.effect && themeCustom.effect !== "none" ? themeCustom.effect : undefined;
   const anim = themeCustom?.anim && themeCustom.anim !== "none" ? themeCustom.anim : undefined;
-  const split = themeCustom?.desktop === "split" && snap.layout !== "cover";
+  /* cover 는 배너가 전폭이라, hidden 은 왼쪽 칸(프로필)이 통째로 비어서 분리 배치가 성립 안 한다
+     — 숨김이면 자동으로 한 줄 배치로 떨어진다(쏘넷 점검: 미리보기엔 split 이 없어 안 보이는 회귀) */
+  const split = themeCustom?.desktop === "split" && snap.layout !== "cover" && snap.layout !== "hidden";
   const fonts = fontStylesheets(themeCustom?.font);
   /* 디자인 탭 보완(2026-08-23): 상단 메뉴 줄·구독 버튼·내 로고·커서·화면 효과 */
   const topbar = themeCustom?.topbar === "bar";
@@ -377,6 +383,7 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
         {/* 프로필 — 분리 배치에선 왼쪽 칸 고정(명시하지 않으면 앞 항목에 밀려 오른쪽 칸으로 튄다, 소넷 확정) */}
         {/* 아바타 반지름(88/2=44px)만큼 끌어올려 커버 하단선을 반쯤 문다 — 레이아웃 선택 썸네일과
             LAYOUTS 힌트("배너 위에 프로필 사진")가 약속한 모양이 화면에 없었다(2026-08-24 비평) */}
+        {snap.layout === "hidden" ? null : (
         <header
           className={`relative flex flex-col ${align} ${snap.layout === "cover_profile" && snap.coverPath ? "-mt-11" : ""} ${split ? "lg:col-start-1 lg:sticky lg:top-16 lg:self-start" : ""}`}
         >
@@ -408,11 +415,12 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
               통째로 0 으로 풀어 버렸다(2026-08-24 비평) */}
           <h1 className={`${titlePx} w-full break-words font-bold leading-[1.3] tracking-[-0.01em] text-[var(--lp-fg)]`}>{snap.title || slug}</h1>
           {snap.bio ? (
-            <p className="mt-2 w-full max-w-[42ch] whitespace-pre-wrap break-words text-[15px] leading-[1.7] text-[var(--lp-muted)]">{snap.bio}</p>
+            <p className={`mt-2 w-full max-w-[42ch] whitespace-pre-wrap break-words ${bioPx} leading-[1.7] text-[var(--lp-muted)]`}>{snap.bio}</p>
           ) : null}
 
           {snap.snsPlacement !== "links" ? snsNav : null}
         </header>
+        )}
 
         {/* 블록.
             빈 상태 문구는 **배열 길이가 아니라 그려질 게 있는지**로 정한다.
@@ -448,19 +456,24 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
             방문자가 "나도 하나 만들까"로 넘어오는 통로라 마지막 블록 바로 아래 알약으로
             둔다. 미리보기(phone-preview)도 같은 자리에 같은 모양을 그린다. */}
         {logoPos === "bottom" ? logoEl : null}
-        {/* 핀치 배지 — 내 로고가 있으면 대신 로고, 숨김이면 아무것도 */}
+        {/* 하단 브랜딩(2026-08-26 사장님 지시) — 알약 링크 하나 대신 두 겹:
+            ① 맨 아래 작게 고정되는 「핀치에서 {이름}님과 함께하세요」 문구
+            ② 둥글고 움직이는 플로팅 알약 「나만의 페이지 만들기」 (FinchPill, X 로 닫기)
+            내 로고·배지 숨김이면 둘 다 안 그린다(기존 정책 그대로). 강조 블록 고정 CTA 가
+            있으면 알약은 생략 — 같은 자리라 돈 버는 버튼을 덮으면 안 된다. */}
         {themeCustom?.badge === "hide" || logoImage ? null : (
         <footer className={`mt-10 pb-6 text-center ${split ? "lg:col-start-2" : ""}`}>
           <Link
             href="/?utm_source=profile_link&utm_medium=badge"
             target="_blank"
-            className="lp-btn inline-flex min-h-[44px] items-center gap-2 rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-4 py-2 text-[13px] font-semibold text-[var(--lp-muted)] shadow-[var(--lp-shadow)]"
+            className="lp-btn inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--lp-muted)] opacity-80 hover:opacity-100"
           >
-            <FinchMark className="size-4 text-primary" />
-            {t.badge}
+            <FinchMark className="size-3.5 text-primary" />
+            {t.badgeWith.replace("{name}", snap.title || slug)}
           </Link>
         </footer>
         )}
+        {themeCustom?.badge === "hide" || logoImage || emphasized ? null : <FinchPill label={t.badgeCta} />}
 
         {/* 강조 블록 — 페이지 하단에 **고정 CTA** 로 한 번 더(리틀리 흡수 1단계). 본문 자리에도 그대로 있다.
             흐름의 **맨 마지막**에 두고 sticky bottom — 스크롤 중엔 화면 아래에 붙고, 끝까지 내리면 제자리로

@@ -18,6 +18,10 @@ export interface LpText {
   share: string;
   copied: string;
   badge: string;
+  /** 맨 아래 작게 고정되는 문구 — {name} 자리에 페이지 이름 */
+  badgeWith: string;
+  /** 플로팅 알약 문구 */
+  badgeCta: string;
   lead: {
     name: string; email: string; phone: string; message: string;
     fail: string; failRetry: string;
@@ -78,6 +82,8 @@ const ko: LpText = {
   share: "이 페이지 공유",
   copied: "주소를 복사했어요",
   badge: "핀치에서 내 프로필 꾸미기",
+  badgeWith: "핀치에서 {name}님과 함께하세요",
+  badgeCta: "나만의 페이지 만들기",
   lead: {
     name: "이름", email: "이메일", phone: "연락처", message: "문의 내용",
     fail: "접수하지 못했어요.", failRetry: "접수하지 못했어요. 잠시 후 다시 시도해 주세요.",
@@ -130,6 +136,8 @@ const en: LpText = {
   share: "Share this page",
   copied: "Link copied",
   badge: "Make your own on Finch",
+  badgeWith: "Join {name} on Finch",
+  badgeCta: "Create your own page",
   lead: {
     name: "Name", email: "Email", phone: "Phone", message: "Message",
     fail: "Couldn't send.", failRetry: "Couldn't send. Please try again in a moment.",
@@ -182,6 +190,8 @@ const ja: LpText = {
   share: "このページを共有",
   copied: "リンクをコピーしました",
   badge: "Finchで自分のページを作る",
+  badgeWith: "Finchで{name}さんと一緒に",
+  badgeCta: "自分のページを作る",
   lead: {
     name: "お名前", email: "メール", phone: "電話番号", message: "お問い合わせ内容",
     fail: "送信できませんでした。", failRetry: "送信できませんでした。しばらくしてからもう一度お試しください。",

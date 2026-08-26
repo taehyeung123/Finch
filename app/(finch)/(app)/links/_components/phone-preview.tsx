@@ -222,6 +222,8 @@ export function PhonePreview({
   })();
   /* 공개 페이지의 20/24/30px 를 380px 프레임 비율로 줄인 값 */
   const titlePx = page.titleSize === "sm" ? "text-[17px]" : page.titleSize === "lg" ? "text-[26px]" : "text-[21px]";
+  /* 공개 페이지 bioPx(14/15/17)를 프레임 비율로 줄인 값 — 대표·상세가 함께 움직인다 */
+  const bioPx = page.titleSize === "sm" ? "text-[12px]" : page.titleSize === "lg" ? "text-[14px]" : "text-[13px]";
   const snsChips =
     page.snsLinks.length > 0 ? (
       /* 공개 페이지와 같은 규칙 — 줄바꿈된 둘째 줄 정렬·소개와의 간격(소넷 확정: 미리보기만 옛 모양이었다) */
@@ -387,7 +389,7 @@ export function PhonePreview({
             <img src={page.themeCustom.logoImage} alt="" className="mx-auto mb-4 max-h-10 max-w-[160px] object-contain" />
           ) : null}
           {/* 커버 — 캔버스 편집에선 눌러서 프로필 설정(사진 교체)으로 */}
-          {(page.layout === "cover" || page.layout === "cover_profile") && page.coverPath ? (
+          {page.layout !== "hidden" && (page.layout === "cover" || page.layout === "cover_profile") && page.coverPath ? (
             editable ? (
               <button type="button" onClick={edit?.onOpenProfile} aria-label="커버 이미지 바꾸기" className={`${page.layout === "cover_profile" ? "" : "mb-3"} block w-full`}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL */}
@@ -400,6 +402,7 @@ export function PhonePreview({
           ) : null}
 
           {/* 프로필 — cover_profile 은 아바타 반지름(72/2=36px)만큼 올라가 커버를 문다(공개 페이지와 같은 규칙) */}
+          {page.layout === "hidden" ? null : (
           <div className={`relative flex flex-col ${align} ${page.layout === "cover_profile" && page.coverPath ? "-mt-9" : ""}`}>
             {editable && page.layout !== "cover" ? (
               <button type="button" onClick={edit?.onOpenProfile} aria-label="프로필 사진·레이아웃 설정">
@@ -446,7 +449,7 @@ export function PhonePreview({
                 className="mt-1.5 w-full resize-none rounded-[8px] border border-[var(--lp-accent)] bg-[var(--lp-card)] px-2 py-1 text-[13px] leading-[1.6] outline-none"
               />
             ) : page.bio ? (
-              <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-[1.6] text-[var(--lp-muted)]">
+              <p className={cn("mt-1.5 whitespace-pre-wrap leading-[1.6] text-[var(--lp-muted)]", bioPx)}>
                 {page.bio}
                 {pencilBtn("bio", "소개 바로 고치기")}
               </p>
@@ -463,6 +466,7 @@ export function PhonePreview({
             ) : null}
             {page.snsPlacement !== "links" ? snsChips : null}
           </div>
+          )}
 
           {/* 블록 — snsPlacement=links 면 SNS 줄이 블록 목록 맨 위로 온다 */}
           <div className="mt-6 space-y-2.5">
@@ -713,11 +717,22 @@ export function PhonePreview({
           ) : null}
           {page.themeCustom?.badge === "hide" || page.themeCustom?.logoImage ? null : (
           <div className="mt-8 text-center">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] px-3 py-1.5 text-[11px] font-semibold text-[var(--lp-muted)] shadow-[var(--lp-shadow)]">
+            {/* 공개 페이지의 badgeWith 와 같은 문구·같은 자리(app/p/[slug]/page.tsx 와 짝) */}
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--lp-muted)] opacity-80">
               <FinchMark className="size-3 text-primary" />
-              핀치에서 내 프로필 꾸미기
+              핀치에서 {page.title || page.slug}님과 함께하세요
             </span>
           </div>
+          )}
+          {/* 플로팅 알약 목업 — 공개 페이지 FinchPill 과 같은 모양(강조 CTA 있으면 공개처럼 생략) */}
+          {page.themeCustom?.badge === "hide" || page.themeCustom?.logoImage || emphasized ? null : (
+            <div className="pointer-events-none sticky bottom-3 z-10 mt-4 flex justify-center">
+              <span className="flex items-center gap-1 rounded-full bg-white py-1 pl-3 pr-1.5 text-neutral-900 shadow-[0_10px_24px_-8px_rgba(0,0,0,0.45)]">
+                <FinchMark className="size-3.5 text-primary" aria-hidden />
+                <span className="text-[11px] font-bold">나만의 페이지 만들기</span>
+                <span className="flex size-5 items-center justify-center rounded-full text-[12px] text-neutral-400" aria-hidden>×</span>
+              </span>
+            </div>
           )}
 
           {/* 강조 블록 하단 고정 CTA — 공개 페이지와 같은 모양·같은 자리(흐름 맨 뒤, 프레임 안 sticky) */}

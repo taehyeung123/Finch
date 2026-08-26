@@ -3507,7 +3507,7 @@ function ProfilePanel({
         <p className="text-[14px] font-semibold text-fg">레이아웃</p>
         {/* 글자 대신 **그림**으로 고른다(링크팜 실측 반영) — "커버+프로필"이라는 말보다
             배너 위에 원이 얹힌 그림이 한눈에 들어온다. 그림은 순수 CSS. */}
-        <div className="mt-1.5 grid grid-cols-3 gap-2">
+        <div className="mt-1.5 grid grid-cols-4 gap-2">
           {LAYOUTS.map((l) => (
             <button
               key={l.key}
@@ -3523,11 +3523,13 @@ function ProfilePanel({
                 className="relative flex h-12 flex-col items-center overflow-hidden rounded-[8px] bg-plate pt-1.5"
                 aria-hidden
               >
-                {l.key !== "profile" ? <span className="absolute inset-x-0 top-0 h-4 bg-fg/20" /> : null}
-                {l.key !== "cover" ? (
+                {l.key === "cover" || l.key === "cover_profile" ? <span className="absolute inset-x-0 top-0 h-4 bg-fg/20" /> : null}
+                {l.key === "profile" || l.key === "cover_profile" ? (
                   <span className={cn("relative z-10 size-4 rounded-full bg-fg/40", l.key === "cover_profile" && "mt-1")} />
-                ) : (
+                ) : l.key === "cover" ? (
                   <span className="mt-4 h-1.5 w-8 rounded-full bg-fg/30" />
+                ) : (
+                  <span className="mt-1 h-1.5 w-10 rounded-[3px] bg-fg/25" />
                 )}
                 <span className="mt-1 h-1 w-10 rounded-full bg-fg/20" />
                 <span className="mt-0.5 h-1 w-7 rounded-full bg-fg/15" />
@@ -3540,7 +3542,7 @@ function ProfilePanel({
 
       {/* 이미지는 **고르는 즉시 저장**한다 — 업로드가 이미 서버 왕복이라, 여기서 또
           「저장」을 누르게 하면 올렸는데 반영이 안 되는 것처럼 보인다. */}
-      {layout !== "cover" ? (
+      {layout !== "cover" && layout !== "hidden" ? (
         <ImageField
           label="프로필 사진"
           value={page.avatarPath ?? ""}
@@ -3565,25 +3567,8 @@ function ProfilePanel({
       ) : null}
 
       <div>
-        <label htmlFor="p-slug" className="block text-[12px] font-medium text-fg-sub">
-          주소 (finch.ai.kr/…)
-        </label>
-        <div className="mt-1.5 flex items-center gap-2">
-          <input id="p-slug" value={slug} onChange={(e) => onChange({ slug: e.target.value.toLowerCase() })} maxLength={30} className={input} />
-          <SlugCheckButton busy={busy} state={profileSlug} />
-        </div>
-        {/* 모달과 같은 검사 — 저장 눌러서야 「이미 있어요」를 듣게 하지 않는다 */}
-        <SlugStatusLine check={profileSlug.check} />
-        {/* 주소 변경의 두 가지 질문 — 「얼마나 자주 바꿀 수 있나」 「이미 뿌린 링크는 어떻게 되나」 */}
-        <p className="mt-1.5 text-[12px] leading-relaxed text-fg-sub">
-          주소는 30일에 한 번 바꿀 수 있어요. 바꿔도 옛 주소로 온 방문자는 새 주소로 안내되고,
-          옛 주소는 90일간 다른 사람이 가져갈 수 없어요.
-        </p>
-      </div>
-
-      <div>
         <label htmlFor="p-title" className="block text-[12px] font-medium text-fg-sub">
-          타이틀
+          대표문구
         </label>
         <input
           id="p-title"
@@ -3596,7 +3581,7 @@ function ProfilePanel({
 
       <div>
         <label htmlFor="p-bio" className="block text-[12px] font-medium text-fg-sub">
-          설명
+          상세문구
         </label>
         <textarea
           id="p-bio"
@@ -3609,30 +3594,10 @@ function ProfilePanel({
         />
       </div>
 
-      <div>
-        <p className="text-[14px] font-semibold text-fg">정렬</p>
-        <div className="mt-1.5 grid grid-cols-3 gap-2">
-          {(["left", "center", "right"] as const).map((a) => (
-            <button
-              key={a}
-              type="button"
-              onClick={() => onChange({ align: a })}
-              aria-pressed={align === a}
-              className={cn(
-                "trans-state rounded-card border px-2 py-1.5 text-[12px] font-semibold",
-                align === a ? "border-2 border-primary" : "border border-line hover:bg-tint-hover",
-              )}
-            >
-              {a === "left" ? "왼쪽" : a === "center" ? "가운데" : "오른쪽"}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* 타이틀 크기·SNS 위치 — 링크팜 프로필 설정 실측(2026-08-19)에서 가져온 둘.
           링크팜의 「드래그」 배치는 안 가져온다 — 우리는 드래그 정렬 자체를 뺐다. */}
       <div>
-        <p className="text-[14px] font-semibold text-fg">타이틀 크기</p>
+        <p className="text-[14px] font-semibold text-fg">글자 크기</p>
         <div className="mt-1.5 grid grid-cols-3 gap-2">
           {(
             [
@@ -3653,6 +3618,26 @@ function ProfilePanel({
               )}
             >
               {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className="text-[14px] font-semibold text-fg">정렬</p>
+        <div className="mt-1.5 grid grid-cols-3 gap-2">
+          {(["left", "center", "right"] as const).map((a) => (
+            <button
+              key={a}
+              type="button"
+              onClick={() => onChange({ align: a })}
+              aria-pressed={align === a}
+              className={cn(
+                "trans-state rounded-card border px-2 py-1.5 text-[12px] font-semibold",
+                align === a ? "border-2 border-primary" : "border border-line hover:bg-tint-hover",
+              )}
+            >
+              {a === "left" ? "왼쪽" : a === "center" ? "가운데" : "오른쪽"}
             </button>
           ))}
         </div>
@@ -3681,6 +3666,23 @@ function ProfilePanel({
             </button>
           ))}
         </div>
+      </div>
+
+      <div>
+        <label htmlFor="p-slug" className="block text-[12px] font-medium text-fg-sub">
+          주소 (finch.ai.kr/…)
+        </label>
+        <div className="mt-1.5 flex items-center gap-2">
+          <input id="p-slug" value={slug} onChange={(e) => onChange({ slug: e.target.value.toLowerCase() })} maxLength={30} className={input} />
+          <SlugCheckButton busy={busy} state={profileSlug} />
+        </div>
+        {/* 모달과 같은 검사 — 저장 눌러서야 「이미 있어요」를 듣게 하지 않는다 */}
+        <SlugStatusLine check={profileSlug.check} />
+        {/* 주소 변경의 두 가지 질문 — 「얼마나 자주 바꿀 수 있나」 「이미 뿌린 링크는 어떻게 되나」 */}
+        <p className="mt-1.5 text-[12px] leading-relaxed text-fg-sub">
+          주소는 30일에 한 번 바꿀 수 있어요. 바꿔도 옛 주소로 온 방문자는 새 주소로 안내되고,
+          옛 주소는 90일간 다른 사람이 가져갈 수 없어요.
+        </p>
       </div>
 
       <div>
