@@ -326,7 +326,7 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
           split
             ? "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:grid lg:max-w-[1000px] lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] lg:items-start lg:gap-x-16 lg:px-14 lg:pb-16 lg:pt-16"
             : "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:max-w-[600px] lg:px-10 lg:pb-16"
-        } ${topbar ? "pt-4" : snap.layout === "hero" ? "pt-0" : themeCustom?.share || subscribeOn ? "pt-16" : "pt-12"} lg:isolate lg:my-12 lg:min-h-[calc(100dvh-6rem)] ${topbar ? "" : snap.layout === "hero" ? "lg:pt-0" : "lg:pt-14"}`}
+        } ${topbar ? "pt-4" : snap.layout === "hero" ? "pt-0" : "pt-20"} lg:isolate lg:my-12 lg:min-h-[calc(100dvh-6rem)] ${topbar ? "" : snap.layout === "hero" ? "lg:pt-0" : "lg:pt-16"}`}
       >
         {/* PC 캔버스 — 판(색·그림자·테두리)과 이미지(사용자 블러 옵션)를 **두 겹으로 분리**한다:
             한 겹에 filter 를 걸면 그림자·라운드 테두리까지 같이 번진다. 이미지 겹은 clip-path 로

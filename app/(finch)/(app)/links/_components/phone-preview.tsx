@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MapPin, ExternalLink, ArrowDown, ArrowUp, CalendarPlus, Download, Eye, EyeOff, GripVertical, ImagePlus, Info, Pencil, Plus, Search, Share2, Trash2, UserPlus } from "lucide-react";
 import { eventChip, eventEndEpoch, eventEpoch, formatEventDate, formatEventTime, isMultiDay, nowMs, parseEventAt, type EventPart } from "@/lib/links/events";
 import { cn } from "@/lib/cn";
@@ -204,9 +204,17 @@ export function PhonePreview({
      새 블록은 목록 맨 아래라 폰 프레임 스크롤 밖에 있다. 어디에 생겼는지 안 보이면
      «편집기는 열렸는데 무엇을 고치는지 모르는» 화면이 된다. blocks 도 의존성에 둔다 —
      추가 직후엔 DOM 에 아직 없고, 서버 목록이 실려 온 렌더에서야 요소가 생긴다. */
+  /* 같은 선택에 blocks 참조만 바뀌어도(프로필 타이핑·레이아웃 클릭 등 매 렌더) 다시 스크롤해
+     화면이 저 혼자 움직였다(2026-08-26 사장님 «미리보기가 왜 움직이냐»). 스크롤은 선택이
+     **바뀐 순간** 한 번 — 단, 방금 추가한 블록은 DOM 이 늦게 생기므로 요소를 찾을 때까지만
+     blocks 변화에 재시도한다. */
+  const scrolledFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!selectedId) return;
-    document.getElementById(`blk-${selectedId}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    if (!selectedId || scrolledFor.current === selectedId) return;
+    const el = document.getElementById(`blk-${selectedId}`);
+    if (!el) return; // 아직 안 실렸다 — 다음 blocks 갱신에서 다시
+    el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    scrolledFor.current = selectedId;
   }, [selectedId, blocks]);
 
   const editable = mode !== "live" && !!edit;
@@ -390,17 +398,27 @@ export function PhonePreview({
             // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
             <img src={page.themeCustom.logoImage} alt="" className="mx-auto mb-4 max-h-10 max-w-[160px] object-contain" />
           ) : null}
+          {/* 프로필 위 숨 고르기(리틀리 실측 — 아바타가 천장에 붙지 않는다). 상단 메뉴 바·배경형·숨김은 제외 */}
+          {page.themeCustom?.topbar !== "bar" && page.layout !== "hero" && page.layout !== "hidden" ? <div className="h-6" aria-hidden /> : null}
           {/* 커버 — 캔버스 편집에선 눌러서 프로필 설정(사진 교체)으로 */}
-          {page.layout !== "hidden" && (page.layout === "cover" || page.layout === "cover_profile") && page.coverPath ? (
-            editable ? (
-              <button type="button" onClick={edit?.onOpenProfile} aria-label="커버 이미지 바꾸기" className={`${page.layout === "cover_profile" ? "" : "mb-3"} block w-full`}>
-                {/* eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL */}
-                <img src={page.coverPath} alt="" className="aspect-[3/1] w-full rounded-[var(--lp-radius)] object-cover" />
+          {page.layout !== "hidden" && (page.layout === "cover" || page.layout === "cover_profile") ? (
+            page.coverPath ? (
+              editable ? (
+                <button type="button" onClick={edit?.onOpenProfile} aria-label="커버 이미지 바꾸기" className={`${page.layout === "cover_profile" ? "" : "mb-3"} block w-full`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL */}
+                  <img src={page.coverPath} alt="" className="aspect-[3/1] w-full rounded-[var(--lp-radius)] object-cover" />
+                </button>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
+                <img src={page.coverPath} alt="" className={`${page.layout === "cover_profile" ? "" : "mb-3"} aspect-[3/1] w-full rounded-[var(--lp-radius)] object-cover`} />
+              )
+            ) : editable ? (
+              /* 사진이 없으면 회색 자리 — 리틀리 실측(2026-08-26): 자리가 있어야 카드를 눌렀을 때
+                 레이아웃 차이가 보인다(없으면 «2·3번째가 똑같다»가 된다). 공개 페이지엔 안 나간다. */
+              <button type="button" onClick={edit?.onOpenProfile} aria-label="커버 이미지 넣기" className={`${page.layout === "cover_profile" ? "" : "mb-3"} flex aspect-[3/1] w-full items-center justify-center rounded-[var(--lp-radius)] bg-[var(--lp-border)] text-[var(--lp-muted)]`}>
+                <ImagePlus className="size-6" aria-hidden />
               </button>
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
-              <img src={page.coverPath} alt="" className={`${page.layout === "cover_profile" ? "" : "mb-3"} aspect-[3/1] w-full rounded-[var(--lp-radius)] object-cover`} />
-            )
+            ) : null
           ) : null}
 
           {/* 프로필 — cover_profile 은 아바타 반지름(72/2=36px)만큼 올라가 커버를 문다(공개 페이지와 같은 규칙) */}
