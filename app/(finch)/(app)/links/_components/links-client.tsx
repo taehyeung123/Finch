@@ -3063,7 +3063,9 @@ function AddPanel({
         </div>
       </details>
 
-      {/* 다른 서비스에서 옮겨오기 — 템플릿과 같은 격의 접이식 */}
+      {/* 「링크 여러 개 한 번에」(내 링크 벌크 추가) + 「다른 서비스에서 옮겨오기」(이사) —
+          템플릿과 같은 격의 접이식 두 개. 하나로 합치면 벌크 버튼이 리틀리 입력칸을
+          내밀게 된다(import-links.tsx 상단 주석, 2026-08-26 사장님 지적). */}
       <ImportLinks busy={busy} onImport={onImport} />
     </div>
   );

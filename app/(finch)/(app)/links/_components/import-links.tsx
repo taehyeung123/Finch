@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download } from "lucide-react";
+import { Download, ListPlus } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
 import { parsePastedLinks, type HarvestedLink } from "@/lib/links";
@@ -25,15 +25,23 @@ import { importFromInpock, importFromLittly } from "../actions";
 */
 
 /**
- * 가져오기 본체 — 두 자리에서 쓴다:
- *  · 첫 화면(페이지 없음): 「기존 링크 가져오기」로 펼쳐진 채 — 가져온 링크로 페이지를 만든다
- *  · 빌더 블록 탭: 접이식(ImportLinks)으로 — 기존 페이지에 뒤에 붙인다
- * actionLabel 만 다르고 검증·표·경고는 완전히 같다.
+ * 가져오기 본체 — 두 자리, 두 모드로 쓴다:
+ *  · 첫 화면(페이지 없음): 「기존 링크 가져오기」 = mode "migrate" — 리틀리·인포크 주소
+ *    가져오기와 붙여넣기 이사 안내까지 전부. 가져온 링크로 페이지를 만든다.
+ *  · 빌더 블록 탭 「링크 여러 개 한 번에」 = mode "bulk" — **내 링크를 여러 줄로 붓는 것뿐**이다.
+ *
+ * ⚠️ 모드를 가른 이유(2026-08-26 사장님 지적): 블록 탭의 「링크 여러 개 한 번에」를 눌렀는데
+ * 첫 줄부터 「litt.ly/아이디」 입력칸과 경쟁사 이사 안내가 떴다. 이름은 «여러 개 추가»인데
+ * 내용물이 «리틀리에서 가져오기»면 이름이 거짓말이 되고, 경쟁사 이름이 일상 화면 한가운데에
+ * 박힌다. 이사(migrate)는 이사라고 적힌 자리에만 있어야 한다 — 블록 탭에는
+ * 「다른 서비스에서 옮겨오기」 접이식이 따로 있다(ImportLinks 래퍼).
+ * 검증(parsePastedLinks)·선택 표·추적 주소 경고는 두 모드가 완전히 같다.
  */
 export function ImportLinksBody({
   busy,
   onImport,
   actionLabel = "추가하기",
+  mode = "migrate",
 }: {
   busy: boolean;
   /**
@@ -44,6 +52,8 @@ export function ImportLinksBody({
   onImport: (items: Array<{ label: string; url: string }>, clear: () => void) => void;
   /** 적용 버튼 문구 — "{n}개 " 뒤에 붙는다 */
   actionLabel?: string;
+  /** migrate = 다른 서비스 이사(리틀리·인포크 포함) · bulk = 내 링크 여러 줄 추가(위 주석) */
+  mode?: "migrate" | "bulk";
 }) {
   const [found, setFound] = useState<HarvestedLink[] | null>(null);
   const [picked, setPicked] = useState<Set<number>>(new Set());
@@ -133,7 +143,9 @@ export function ImportLinksBody({
     const links = parsePastedLinks({ text, anchors, sourceHost });
     showLinks(
       links,
-      "링크를 못 찾았어요. 기존 페이지를 열어 전체 선택(Ctrl+A) 후 복사해 붙여넣거나, 한 줄에 하나씩 「이름 | 주소」로 적어 주세요.",
+      mode === "bulk"
+        ? "링크를 못 찾았어요. 한 줄에 하나씩 주소를 적거나 「이름 | 주소」로 적어 주세요."
+        : "링크를 못 찾았어요. 기존 페이지를 열어 전체 선택(Ctrl+A) 후 복사해 붙여넣거나, 한 줄에 하나씩 「이름 | 주소」로 적어 주세요.",
     );
   }
 
@@ -141,38 +153,48 @@ export function ImportLinksBody({
 
   return (
     <div className="space-y-3">
-        <p className="text-[12px] leading-relaxed text-fg-sub">
-          쓰던 링크 페이지를 열어 <strong className="font-semibold text-fg">전체 선택(Ctrl+A) → 복사</strong> 한 뒤
-          아래에 붙여넣으세요. 한 줄에 하나씩 <code className="text-[12px]">이름 | 주소</code> 로 적어도 됩니다.
-        </p>
+        {mode === "migrate" ? (
+          <>
+            <p className="text-[12px] leading-relaxed text-fg-sub">
+              쓰던 링크 페이지를 열어 <strong className="font-semibold text-fg">전체 선택(Ctrl+A) → 복사</strong> 한 뒤
+              아래에 붙여넣으세요. 한 줄에 하나씩 <code className="text-[12px]">이름 | 주소</code> 로 적어도 됩니다.
+            </p>
 
-        {/* 리틀리·인포크는 주소만으로 가져온다 — 서버가 페이지의 data 페이로드를
-            읽는다(actions.ts, 상수 호스트 화이트리스트가 서버 fetch 의 전부). */}
-        <div className="flex items-center gap-1.5">
-          <input
-            value={littly}
-            onChange={(e) => setLittly(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                void pullByAddress();
-              }
-            }}
-            placeholder="litt.ly/아이디 · link.inpock.co.kr/아이디"
-            aria-label="리틀리·인포크 주소"
-            className="h-9 min-w-0 flex-1 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
-          />
-          <Button size="sm" variant="secondary" disabled={fetching || !littly.trim()} onClick={() => void pullByAddress()}>
-            {fetching ? "가져오는 중…" : "주소로 가져오기"}
-          </Button>
-        </div>
+            {/* 리틀리·인포크는 주소만으로 가져온다 — 서버가 페이지의 data 페이로드를
+                읽는다(actions.ts, 상수 호스트 화이트리스트가 서버 fetch 의 전부). */}
+            <div className="flex items-center gap-1.5">
+              <input
+                value={littly}
+                onChange={(e) => setLittly(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void pullByAddress();
+                  }
+                }}
+                placeholder="litt.ly/아이디 · link.inpock.co.kr/아이디"
+                aria-label="리틀리·인포크 주소"
+                className="h-9 min-w-0 flex-1 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
+              />
+              <Button size="sm" variant="secondary" disabled={fetching || !littly.trim()} onClick={() => void pullByAddress()}>
+                {fetching ? "가져오는 중…" : "주소로 가져오기"}
+              </Button>
+            </div>
 
-        <p className="text-[12px] text-fg-sub">다른 서비스는 아래에 붙여넣으세요.</p>
+            <p className="text-[12px] text-fg-sub">다른 서비스는 아래에 붙여넣으세요.</p>
+          </>
+        ) : (
+          /* bulk — 내 링크를 여러 줄로. 이사 안내도 경쟁사 이름도 여기 안 나온다(위 주석) */
+          <p className="text-[12px] leading-relaxed text-fg-sub">
+            한 줄에 주소 하나씩 적거나 붙여넣으세요. <code className="text-[12px]">이름 | 주소</code> 로 적으면
+            버튼 이름까지 함께 들어가요.
+          </p>
+        )}
 
         <textarea
           rows={3}
-          aria-label="붙여넣을 링크"
-          placeholder="여기에 붙여넣기"
+          aria-label={mode === "bulk" ? "추가할 링크 주소" : "붙여넣을 링크"}
+          placeholder={mode === "bulk" ? "https://…\n이름 | https://…" : "여기에 붙여넣기"}
           onPaste={(e) => {
             const text = e.clipboardData.getData("text/plain");
             const html = e.clipboardData.getData("text/html");
@@ -271,7 +293,13 @@ export function ImportLinksBody({
   );
 }
 
-/** 빌더 블록 탭용 접이식 래퍼 */
+/**
+ * 빌더 블록 탭용 접이식 래퍼 — **두 개**다.
+ * 「링크 여러 개 한 번에」는 내 링크를 여러 줄로 붓는 것(bulk)이고,
+ * 「다른 서비스에서 옮겨오기」가 이사(migrate, 리틀리·인포크 포함)다.
+ * 예전엔 접이식 하나에 이사 UI 를 통째로 넣어서, «여러 개 추가»를 눌렀는데
+ * litt.ly 입력칸이 첫 줄에 떴다(2026-08-26 사장님 지적 — 파일 상단 주석).
+ */
 export function ImportLinks({
   busy,
   onImport,
@@ -280,14 +308,26 @@ export function ImportLinks({
   onImport: (items: Array<{ label: string; url: string }>, clear: () => void) => void;
 }) {
   return (
-    <details className="rounded-card border border-line">
-      <summary className="cursor-pointer px-3 py-2 text-[14px] font-semibold">
-        <Download className="mr-1 inline size-3.5" aria-hidden />
-        링크 여러 개 한 번에
-      </summary>
-      <div className="px-3 pb-3">
-        <ImportLinksBody busy={busy} onImport={onImport} />
-      </div>
-    </details>
+    <>
+      <details className="rounded-card border border-line">
+        <summary className="cursor-pointer px-3 py-2 text-[14px] font-semibold">
+          <ListPlus className="mr-1 inline size-3.5" aria-hidden />
+          링크 여러 개 한 번에
+        </summary>
+        <div className="px-3 pb-3">
+          <ImportLinksBody busy={busy} onImport={onImport} mode="bulk" />
+        </div>
+      </details>
+
+      <details className="rounded-card border border-line">
+        <summary className="cursor-pointer px-3 py-2 text-[14px] font-semibold">
+          <Download className="mr-1 inline size-3.5" aria-hidden />
+          다른 서비스에서 옮겨오기
+        </summary>
+        <div className="px-3 pb-3">
+          <ImportLinksBody busy={busy} onImport={onImport} mode="migrate" />
+        </div>
+      </details>
+    </>
   );
 }
