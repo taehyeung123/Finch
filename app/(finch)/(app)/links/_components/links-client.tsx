@@ -733,8 +733,11 @@ export function LinksClient({
     return true;
   }
 
-  /** 초안을 지금 저장한다 — 디바운스 타이머와 갈아타기(leaveEditor)가 같은 길을 쓴다 */
-  function flushDraft(id: string, data: Record<string, unknown>) {
+  /** 초안을 지금 저장한다 — 디바운스 타이머와 갈아타기(leaveEditor)가 같은 길을 쓴다.
+      attempt: 전송 계층 실패(첫 진입 직후엔 사이드바 프리페치 폭주로 Vercel 이 첫 POST 를
+      503 으로 미는 것을 실계정 실측으로 확인, 2026-08-26) 시 1.5·3초 뒤 자동 재시도 — 최대 2회.
+      사용자가 그 사이 더 입력했으면 재시도 대신 디바운스가 최신값을 저장한다. */
+  function flushDraft(id: string, data: Record<string, unknown>, attempt = 0) {
     const type = blocks.find((b) => b.id === id)?.type ?? "link";
     const serverData = blocks.find((b) => b.id === id)?.data ?? {};
     setAutoSaving(true);
@@ -769,6 +772,15 @@ export function LinksClient({
         });
       })
       .catch(() => {
+        if (attempt < 2) {
+          window.setTimeout(() => {
+            /* 그 사이 입력이 갔거나 편집 대상이 바뀌었으면 디바운스/갈아타기 저장이 담당한다 */
+            if (editingIdRef.current === id && stableJson(draftRef.current) === stableJson(data)) {
+              flushDraft(id, data, attempt + 1);
+            }
+          }, 1500 * (attempt + 1));
+          return;
+        }
         setError("자동 저장하지 못했어요 — 네트워크를 확인해 주세요. 잠시 뒤 다시 저장돼요.");
       })
       .finally(() => setAutoSaving(false));
