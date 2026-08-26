@@ -690,7 +690,8 @@ export function PhonePreview({
                 )}
               >
                 <Plus className="size-4" aria-hidden />
-                {draggingId ? "여기 놓으면 맨 뒤로" : "블록 추가"}
+                {/* 여는 모달과 같은 문구 — 「블록 추가」라고만 하면 가져오기가 그 안에 있는 줄 모른다 */}
+                {draggingId ? "여기 놓으면 맨 뒤로" : "블록 추가 · 가져오기"}
               </button>
             ) : null}
           </div>

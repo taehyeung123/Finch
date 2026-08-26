@@ -1048,11 +1048,14 @@ export function LinksClient({
         />
       ) : null}
 
+      {/* 제목이 「블록 추가」뿐이었는데 안에는 템플릿·벌크·이사(가져오기)가 절반이었다 —
+          가져오려고 들어온 사람이 «잘못 눌렀나» 하게 된다(2026-08-26 사장님 지적).
+          여는 버튼 두 개(우측 패널·폰 캔버스)와 같은 문구를 쓴다. */}
       {drawer === "add" ? (
         <ModalShell
-          label="블록 추가"
-          title="블록 추가"
-          description="누르면 맨 아래에 들어가요. 캔버스나 목록에서 바로 고칠 수 있어요."
+          label="블록 추가 · 가져오기"
+          title="블록 추가 · 가져오기"
+          description="블록을 누르면 맨 아래에 들어가요. 쓰던 링크를 한 번에 가져올 수도 있어요."
           size="xl"
           busy={busy}
           onClose={() => {
@@ -2078,7 +2081,7 @@ function BlockListPanel({
         </h3>
         <Button size="sm" onClick={onAdd} disabled={busy}>
           <Plus className="size-3.5" aria-hidden />
-          블록 추가
+          블록 추가 · 가져오기
         </Button>
       </div>
 
@@ -3014,6 +3017,9 @@ function AddPanel({
 
   return (
     <div className="space-y-4">
+      {/* 구역 ① — 블록 하나씩. 카탈로그 그룹 제목 위에 층위 하나를 더 두는 이유:
+          아래 「한 번에 채우기」와 짝이 맞아야 모달 제목(추가 · 가져오기)이 거짓말이 안 된다. */}
+      <h4 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-fg-faint">블록 하나씩</h4>
       {groups.map(([group, list]) => (
         <div key={group}>
           <p className="text-[12px] font-semibold text-fg-sub">{group}</p>
@@ -3041,6 +3047,13 @@ function AddPanel({
           </div>
         </div>
       ))}
+
+      {/* 구역 ② — 한 번에 채우기: 템플릿 · 내 링크 벌크 · 다른 서비스 이사.
+          하나씩 고르는 위쪽과 성격이 달라서 선을 긋고 이름을 준다 — 「기존 링크를 가져오려면
+          어디로 가나」의 답이 이 제목이다. */}
+      <div className="border-t border-line pt-4">
+        <h4 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-fg-faint">한 번에 채우기 · 가져오기</h4>
+      </div>
 
       {/* 템플릿 — 빈 캔버스에서 "뭘 만들지"에 멈추는 지점을 넘긴다.
           적용은 기존 블록을 덮으므로 확인을 받는다. */}
