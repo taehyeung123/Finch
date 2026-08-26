@@ -7,7 +7,7 @@
 */
 
 import { SNS_CATALOG } from "./sns-catalog";
-import { isReservedSlug } from "./reserved";
+import { isBrandImpersonation, isReservedSlug } from "./reserved";
 import { bannedWordIn } from "./banned-words";
 
 const SNS_KEY_SET = new Set(SNS_CATALOG.map((s) => s.key));
@@ -24,6 +24,8 @@ export function validateSlug(raw: string): SlugError {
   const slug = raw.trim().toLowerCase();
   if (!SLUG_RE.test(slug)) return "format";
   if (isReservedSlug(slug)) return "reserved";
+  /* finch-official 류 브랜드 사칭 프리픽스 — 취득만 막는다(근거는 reserved.ts 주석) */
+  if (isBrandImpersonation(slug)) return "reserved";
   /* 금칙어는 부분 일치 — 목록·근거는 banned-words.ts (2026-08-26 사장님 지시) */
   if (bannedWordIn(slug)) return "banned";
   return null;
