@@ -225,9 +225,15 @@ export function BlockEditor({
               ))}
             </div>
           </div>
-          {(str("layout") || "button") !== "button" ? (
-            <ImageField label="썸네일 (선택)" value={str("imagePath")} onChange={(v) => set("imagePath", v)} aspect="aspect-[16/9]" />
-          ) : null}
+          {/* 버튼 레이아웃도 이미지(로고)를 받는다(2026-08-26 지시: «버튼 로고를 왜 못 정하지») —
+              버튼에선 왼쪽 원형 자리라 정사각, 카드에선 넓은 썸네일이라 16:9 로 안내한다 */}
+          <ImageField
+            label={(str("layout") || "button") === "button" ? "버튼 이미지 (선택)" : "썸네일 (선택)"}
+            value={str("imagePath")}
+            onChange={(v) => set("imagePath", v)}
+            aspect={(str("layout") || "button") === "button" ? "aspect-square" : "aspect-[16/9]"}
+            {...((str("layout") || "button") === "button" ? { cropAspect: 1, maxW: "max-w-[120px]" } : {})}
+          />
 
           {/* 강조 태그 — 최대 3개. 버튼 아래 작은 칩 */}
           <div>

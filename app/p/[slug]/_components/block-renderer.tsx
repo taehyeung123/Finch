@@ -319,7 +319,10 @@ export function BlockRenderer({
           {...ext}
           style={textStyle}
           className={[
-            "lp-btn flex min-h-[56px] w-full items-center justify-center rounded-[var(--lp-radius-btn)] px-5 py-3 text-center text-[15px] font-semibold",
+            "lp-btn relative flex min-h-[56px] w-full items-center justify-center rounded-[var(--lp-radius-btn)] py-3 text-center text-[15px] font-semibold",
+            /* 썸네일이 있으면 왼쪽에 고정하고 라벨은 가운데 그대로 — 양쪽 패딩을 똑같이
+               벌려 긴 라벨이 이미지 밑으로 파고들지 않게 한다(2026-08-26 링크 버튼 로고) */
+            thumb ? "px-[60px]" : "px-5",
             /* gap 은 **하나만** 건다 — gap-2 와 gap-0.5 를 겹쳐 쓰면 어느 쪽이 이길지가
                Tailwind 방출 순서에 달린다(2026-08-24 비평) */
             hasExtras ? "flex-col gap-0.5" : "gap-2",
@@ -331,6 +334,10 @@ export function BlockRenderer({
                 : "border border-[var(--lp-btn-border)] bg-[var(--lp-btn-bg)] text-[var(--lp-btn-fg)] shadow-[var(--lp-shadow)]",
           ].join(" ")}
         >
+          {thumb ? (
+            // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
+            <img src={thumb} alt="" className="absolute left-2 top-1/2 size-10 -translate-y-1/2 rounded-[calc(var(--lp-radius-btn)/1.4)] object-cover" />
+          ) : null}
           <span className="flex items-center gap-2">
             {emoji ? <span aria-hidden>{emoji}</span> : null}
             {label}

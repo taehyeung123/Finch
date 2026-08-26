@@ -326,7 +326,7 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
         className={`${
           split
             ? "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:grid lg:max-w-[1000px] lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] lg:items-start lg:gap-x-16 lg:px-14 lg:pb-16 lg:pt-16"
-            : "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:max-w-[640px] lg:px-12 lg:pb-16"
+            : "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:max-w-[600px] lg:px-10 lg:pb-16"
         } ${topbar ? "pt-4" : themeCustom?.share || subscribeOn ? "pt-16" : "pt-12"} lg:isolate lg:my-12 lg:min-h-[calc(100dvh-6rem)] ${topbar ? "" : "lg:pt-14"}`}
       >
         {/* PC 캔버스 — 판(색·그림자·테두리)과 이미지(사용자 블러 옵션)를 **두 겹으로 분리**한다:
@@ -456,23 +456,9 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
             방문자가 "나도 하나 만들까"로 넘어오는 통로라 마지막 블록 바로 아래 알약으로
             둔다. 미리보기(phone-preview)도 같은 자리에 같은 모양을 그린다. */}
         {logoPos === "bottom" ? logoEl : null}
-        {/* 하단 브랜딩(2026-08-26 사장님 지시) — 알약 링크 하나 대신 두 겹:
-            ① 맨 아래 작게 고정되는 「핀치에서 {이름}님과 함께하세요」 문구
-            ② 둥글고 움직이는 플로팅 알약 「나만의 페이지 만들기」 (FinchPill, X 로 닫기)
-            내 로고·배지 숨김이면 둘 다 안 그린다(기존 정책 그대로). 강조 블록 고정 CTA 가
-            있으면 알약은 생략 — 같은 자리라 돈 버는 버튼을 덮으면 안 된다. */}
-        {themeCustom?.badge === "hide" || logoImage ? null : (
-        <footer className={`mt-10 pb-6 text-center ${split ? "lg:col-start-2" : ""}`}>
-          <Link
-            href="/?utm_source=profile_link&utm_medium=badge"
-            target="_blank"
-            className="lp-btn inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--lp-muted)] opacity-80 hover:opacity-100"
-          >
-            <FinchMark className="size-3.5 text-primary" />
-            {t.badgeWith.replace("{name}", snap.title || slug)}
-          </Link>
-        </footer>
-        )}
+        {/* 하단 브랜딩 — 플로팅 알약 **하나만**(2026-08-26 2차: 문구+알약 두 겹은 로고가
+            나란히 두 번 보여 중복이라는 지적). 내 로고·배지 숨김이면 안 그리고, 강조 블록
+            고정 CTA 가 있으면 생략 — 같은 자리라 돈 버는 버튼을 덮으면 안 된다. */}
         {themeCustom?.badge === "hide" || logoImage || emphasized ? null : <FinchPill label={t.badgeCta} />}
 
         {/* 강조 블록 — 페이지 하단에 **고정 CTA** 로 한 번 더(리틀리 흡수 1단계). 본문 자리에도 그대로 있다.

@@ -717,16 +717,8 @@ export function PhonePreview({
             // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
             <img src={page.themeCustom.logoImage} alt="" className="mx-auto mt-8 max-h-10 max-w-[160px] object-contain" />
           ) : null}
-          {page.themeCustom?.badge === "hide" || page.themeCustom?.logoImage ? null : (
-          <div className="mt-8 text-center">
-            {/* 공개 페이지의 badgeWith 와 같은 문구·같은 자리(app/p/[slug]/page.tsx 와 짝) */}
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--lp-muted)] opacity-80">
-              <FinchMark className="size-3 text-primary" />
-              핀치에서 {page.title || page.slug}님과 함께하세요
-            </span>
-          </div>
-          )}
-          {/* 플로팅 알약 목업 — 공개 페이지 FinchPill 과 같은 모양(강조 CTA 있으면 공개처럼 생략) */}
+          {/* 플로팅 알약 목업 — 공개 페이지 FinchPill 과 같은 모양(강조 CTA 있으면 공개처럼 생략).
+              함께하세요 문구는 2026-08-26 2차 지시로 제거 — 알약 하나만. */}
           {page.themeCustom?.badge === "hide" || page.themeCustom?.logoImage || emphasized ? null : (
             <div className="pointer-events-none sticky bottom-3 z-10 mt-4 flex justify-center">
               <span className="flex items-center gap-1 rounded-full bg-white py-1 pl-3 pr-1.5 text-neutral-900 shadow-[0_10px_24px_-8px_rgba(0,0,0,0.45)]">
@@ -887,7 +879,9 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
         <div
           style={textStyle}
           className={[
-            "lp-btn flex min-h-[48px] items-center justify-center gap-1.5 rounded-[var(--lp-radius-btn)] px-4 py-2.5 text-center text-[13px] font-semibold",
+            "lp-btn relative flex min-h-[48px] items-center justify-center gap-1.5 rounded-[var(--lp-radius-btn)] py-2.5 text-center text-[13px] font-semibold",
+            /* 공개 페이지와 같은 규칙(2026-08-26 링크 버튼 로고) — 썸네일 왼쪽 고정, 양쪽 패딩 동일 */
+            thumb ? "px-[52px]" : "px-4",
             hasExtras ? "flex-col gap-0.5" : "",
             emphasis === "primary"
               ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]"
@@ -896,6 +890,10 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
                 : "border border-[var(--lp-btn-border)] bg-[var(--lp-btn-bg)] text-[var(--lp-btn-fg)] shadow-[var(--lp-shadow)]",
           ].join(" ")}
         >
+          {thumb ? (
+            // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
+            <img src={thumb} alt="" className="absolute left-1.5 top-1/2 size-9 -translate-y-1/2 rounded-[calc(var(--lp-radius-btn)/1.4)] object-cover" />
+          ) : null}
           <span className="flex items-center gap-1.5">
             {s(d, "emoji") ? <span aria-hidden>{s(d, "emoji")}</span> : null}
             {s(d, "label") || "링크"}
