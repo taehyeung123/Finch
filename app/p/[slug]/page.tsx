@@ -299,9 +299,14 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
           블러 필터는 레이어를 살짝 키워(-inset) 가장자리 번짐을 숨긴다. */}
       <div
         aria-hidden
-        className="pointer-events-none fixed -inset-4 -z-10 bg-[var(--lp-bg)] bg-cover bg-center"
+        className="pointer-events-none fixed -inset-4 -z-20 bg-[var(--lp-bg)] bg-cover bg-center"
         style={{ backgroundImage: "var(--lp-bg-image)", filter: "blur(var(--lp-bg-blur))" }}
       />
+      {/* PC 무대(2026-08-26 사장님 지시 «PC 레이아웃 전부 조정») — 링크인바이오 표준 문법의 재구현:
+          넓은 화면에서는 테마 배경을 그대로 펼치지 않고, 흐리고 어둡게 눌러 «무대»로 깔고
+          그 위에 또렷한 테마를 품은 캔버스(아래 wrapper)가 뜬다. 테마가 무슨 색이든 무대는
+          자기 색으로 은은하게 물들고, 콘텐츠 캔버스가 주인공이 된다. 모바일은 이 레이어가 없다. */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 hidden bg-black/45 backdrop-blur-3xl lg:block" />
 
       {/* 방문 집계 — 렌더를 막지 않게 클라이언트에서 한 번만 쏜다.
           개인 식별 정보는 안 보낸다(서버가 익명 토큰만 쿠키로 관리). */}
@@ -314,10 +319,24 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
       <div
         className={`${
           split
-            ? "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:grid lg:max-w-[980px] lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:items-start lg:gap-x-14 lg:px-8 lg:pt-16"
-            : "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14"
-        } ${topbar ? "pt-4" : themeCustom?.share || subscribeOn ? "pt-16" : "pt-10"}`}
+            ? "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:grid lg:max-w-[1000px] lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] lg:items-start lg:gap-x-16 lg:px-14 lg:pb-16 lg:pt-16"
+            : "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:max-w-[640px] lg:px-12 lg:pb-16"
+        } ${topbar ? "pt-4" : themeCustom?.share || subscribeOn ? "pt-16" : "pt-10"} lg:isolate lg:my-12 lg:min-h-[calc(100dvh-6rem)] ${topbar ? "" : "lg:pt-14"}`}
       >
+        {/* PC 캔버스 — 판(색·그림자·테두리)과 이미지(사용자 블러 옵션)를 **두 겹으로 분리**한다:
+            한 겹에 filter 를 걸면 그림자·라운드 테두리까지 같이 번진다. 이미지 겹은 clip-path 로
+            라운드에 맞춰 잘라 블러 번짐이 모서리 밖으로 새지 않게 한다. overflow-hidden 을 안
+            쓰는 이유: 분리 배치의 프로필 sticky·하단 고정 CTA 가 뷰포트 기준 sticky 라 잘라내면
+            죽는다. 모바일에는 이 두 겹이 없다(기존 고정 배경 그대로). */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10 hidden rounded-[28px] bg-[var(--lp-bg)] shadow-[0_32px_96px_-24px_rgba(0,0,0,0.55)] ring-1 ring-white/15 lg:block"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10 hidden bg-cover bg-center lg:block"
+          style={{ backgroundImage: "var(--lp-bg-image)", filter: "blur(var(--lp-bg-blur))", clipPath: "inset(0 round 28px)" }}
+        />
         {/* 상단 메뉴 줄 — 스크롤해도 붙어 있는 제목 + 공유/구독(리틀리 「상단 메뉴」). 없으면 버튼은 모서리에 떠 있는다 */}
         {topbar ? (
           <div className={`sticky top-0 z-20 -mx-5 mb-5 flex min-h-[52px] items-center gap-3 border-b border-[var(--lp-border)] px-5 py-2.5 backdrop-blur ${split ? "lg:col-span-2 lg:-mx-8 lg:px-8" : ""}`} style={{ backgroundColor: "color-mix(in srgb, var(--lp-bg) 88%, transparent)" }}>
