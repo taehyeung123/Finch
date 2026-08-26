@@ -327,7 +327,7 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
           split
             ? "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:grid lg:max-w-[1000px] lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] lg:items-start lg:gap-x-16 lg:px-14 lg:pb-16 lg:pt-16"
             : "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:max-w-[640px] lg:px-12 lg:pb-16"
-        } ${topbar ? "pt-4" : themeCustom?.share || subscribeOn ? "pt-16" : "pt-10"} lg:isolate lg:my-12 lg:min-h-[calc(100dvh-6rem)] ${topbar ? "" : "lg:pt-14"}`}
+        } ${topbar ? "pt-4" : themeCustom?.share || subscribeOn ? "pt-16" : "pt-12"} lg:isolate lg:my-12 lg:min-h-[calc(100dvh-6rem)] ${topbar ? "" : "lg:pt-14"}`}
       >
         {/* PC 캔버스 — 판(색·그림자·테두리)과 이미지(사용자 블러 옵션)를 **두 겹으로 분리**한다:
             한 겹에 filter 를 걸면 그림자·라운드 테두리까지 같이 번진다. 이미지 겹은 clip-path 로
@@ -395,13 +395,13 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
                 alt=""
                 /* outline 헤어라인 — --lp-shadow 가 none 인 프리셋 8종에서는 box-shadow 선언이
                    통째로 무효라 ring 까지 죽는다. 바깥선 하나로 19종 전부에서 원이 보인다(2026-08-24 비평) */
-                className="mb-3.5 size-[88px] rounded-full object-cover shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
+                className="mb-3.5 size-[96px] rounded-full object-cover shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
               />
             ) : (
               /* 사진이 없으면 이니셜 원. 아무것도 안 그리면 브랜드 페이지 머리가 통째로
                  비어 허전하다 — 편집 미리보기도 같은 것을 그린다(두 화면이 어긋나면 안 된다). */
               <span
-                className="mb-3.5 flex size-[88px] items-center justify-center rounded-full bg-[var(--lp-card)] text-[32px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
+                className="mb-3.5 flex size-[96px] items-center justify-center rounded-full bg-[var(--lp-card)] text-[32px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
                 aria-hidden
               >
                 {initialOf(snap.title || slug)}
@@ -430,7 +430,7 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
             ⚠️ hiddenReason 으로 **렌더 목록 자체를 거르지는 않는다.** 이 함수와 렌더러가
             1:1 이 아니라(social_feed 등), 판정이 갈리는 순간 "문구 누락"이
             "정상 블록이 통째로 사라짐"으로 악화된다. 여기서는 문구만 결정한다. */}
-        <div className={`mt-7 space-y-3.5 ${split ? "lg:col-start-2 lg:row-span-3 lg:mt-0" : ""}`}>
+        <div className={`mt-8 space-y-4 ${split ? "lg:col-start-2 lg:row-span-3 lg:mt-0" : ""}`}>
           {snap.snsPlacement === "links" ? snsNav : null}
           {visibleBlocks.every(
             (b) =>

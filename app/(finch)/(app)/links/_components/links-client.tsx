@@ -293,12 +293,15 @@ export function LinksClient({
   loadFailed = false,
   pages = [],
   pageLimit = { used: 0, max: 1 },
+  paid = false,
   multiReady = false,
 }: {
   page: LinkPageView | null;
   /** 내 페이지 전부(멀티·서브, 0060) — 전환 드롭다운용 */
   pages?: LinkPageSummary[];
   pageLimit?: { used: number; max: number };
+  /** 유료 플랜 여부 — 배지 숨김·내 로고 게이트(2026-08-26) */
+  paid?: boolean;
   multiReady?: boolean;
   blocks: LinkBlock[];
   snapshot: LinkSnapshotView | null;
@@ -367,6 +370,8 @@ export function LinksClient({
   }, [notice]);
   /* 템플릿 스트립 접기 — 링크팜의 「템플릿 적용하기 ^」 상시 스트립 카피 */
   const [tplOpen, setTplOpen] = useState(true);
+  /* 유료 게이트 모달(2026-08-26) — 배지 숨김·내 로고·미리보기 알약 × 가 연다 */
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   /* 스트립이 잘리는 쪽을 흐린다 — 카드가 뚝 잘려 "끊긴 화면"으로 보이던 것(2026-08-22 지적).
      스크롤 위치·폭이 바뀔 때마다 양끝 페이드를 다시 판정한다. */
   const stripRef = useRef<HTMLDivElement>(null);
@@ -958,6 +963,8 @@ export function LinksClient({
 
   /* 삭제 확인 모달이 중간에 끼어 함수 선언(deleteBlockNow)이 필요해 두 조각으로 나뉜다 — 여기서 합친다 */
   const canvasEdit: CanvasEdit = {
+    /* 미리보기 알약의 × — 지우려면 유료(리틀리와 같은 문법) */
+    onUpgrade: paid ? undefined : () => setUpgradeOpen(true),
     ...canvasEditHead,
     onProfileCommit: (patch) => {
       /* 인라인 편집은 **그 필드만** 확정한다. 서버에는 「마지막 서버
@@ -1246,6 +1253,7 @@ export function LinksClient({
           </div>
         </ModalShell>
       ) : null}
+      {upgradeOpen ? <UpgradeModal onClose={() => setUpgradeOpen(false)} /> : null}
       {newPageOpen ? (
         <NewPageModal
           busy={busy}
@@ -1613,6 +1621,8 @@ export function LinksClient({
             <Card>
               <CardBody className="space-y-4">
               <ThemePanel
+                paid={paid}
+                onUpgrade={() => setUpgradeOpen(true)}
                 hasSubscribeBlock={blocks.some((b) => b.active && b.type === "subscribe")}
                 custom={customForm}
                 customDirty={customDirty}
@@ -2910,6 +2920,29 @@ function SlugStatusLine({ check }: { check: SlugCheck }) {
   );
 }
 
+/** 유료 게이트 모달(2026-08-26 사장님 지시) — 배지 숨김·내 로고·미리보기 알약 × 가 연다 */
+function UpgradeModal({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+  return (
+    <ModalShell label="유료 플랜 안내" title="유료 플랜에서 쓸 수 있어요" onClose={onClose} busy={false} size="sm">
+      <div className="space-y-3">
+        <p className="text-[14px] leading-[1.7] text-fg-sub">
+          핀치 배지를 숨기고 <strong className="font-semibold text-fg">내 로고</strong>를 다는 건 유료 플랜 기능이에요.
+          페이지를 온전히 내 브랜드로만 채울 수 있어요.
+        </p>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            닫기
+          </Button>
+          <Button size="sm" onClick={() => router.push("/pricing")}>
+            요금제 보기
+          </Button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
 /**
  * 최초 「주소 정하기」(2026-08-26 사장님 결정) — 무작위 자동 주소를 정식 주소로 바꾸는 1회 관문.
  * 이후에는 30일에 한 번만 바꿀 수 있으므로(actions.ts slugCooldownError) 신중히 정하라고 말해 준다.
@@ -3857,6 +3890,8 @@ function DSection({
 }
 
 function ThemePanel({
+  paid,
+  onUpgrade,
   current,
   custom,
   customDirty,
@@ -3878,6 +3913,8 @@ function ThemePanel({
   hasSubscribeBlock: boolean;
   onPick: (k: string) => void;
   onCustomChange: (patch: Partial<LinkThemeCustom>) => void;
+  paid: boolean;
+  onUpgrade: () => void;
   onCustomReset: () => void;
   onCustomSave: () => void;
 }) {
@@ -4070,9 +4107,9 @@ function ThemePanel({
         ) : null}
       </DSection>
 
-      <DSection icon={Droplet} tint="bg-tint-pink text-tint-pink-ink" title="색상" hint="강조색은 주요 버튼·CTA 에, 글자색은 제목·본문에 쓰여요. 대비가 낮으면 자동으로 읽히는 쪽으로 바꿔요.">
+      <DSection icon={Droplet} tint="bg-tint-pink text-tint-pink-ink" title="색상" hint="버튼색은 채움 버튼·CTA 에, 카드색은 블록 판에, 글자색은 제목·본문에 쓰여요. 대비가 낮으면 자동으로 읽히는 쪽으로 바꿔요.">
         <div className="flex flex-wrap gap-2">
-          {colorInput("accent", "강조")}
+          {colorInput("accent", "버튼색")}
           {colorInput("card", "카드")}
           {colorInput("fg", "글자")}
         </div>
@@ -4087,11 +4124,11 @@ function ThemePanel({
         {(custom.accent || custom.bg) && contrastRatio(custom.accent ?? preset.accent, custom.bg ?? preset.bg) < 4.5 ? (
           <p className="flex items-start gap-1.5 rounded-card bg-tint-amber px-2.5 py-1.5 text-[12px] text-tint-amber-ink">
             <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
-            배경과 대비가 낮아 강조색 글자(외곽선·은은하게 버튼, 태그 칩·아이콘)는 본문색으로 그려요 — 채움 버튼 배경은 그대로예요.
+            배경과 대비가 낮아 버튼색 글자(외곽선·은은하게 버튼, 태그 칩·아이콘)는 본문색으로 그려요 — 채움 버튼 배경은 그대로예요.
           </p>
         ) : null}
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-[12px] text-fg-sub">강조색 적용</span>
+          <span className="mr-1 text-[12px] text-fg-sub">버튼색 적용</span>
           {CUSTOM_BUTTON_SCOPE.map((f) => (
             <button key={f.key} type="button" title={f.hint} aria-pressed={(custom.buttonScope ?? "partial") === f.key} onClick={() => onCustomChange({ buttonScope: f.key === "partial" ? undefined : f.key })} className={chip((custom.buttonScope ?? "partial") === f.key)}>
               {f.label}
@@ -4265,12 +4302,43 @@ function ThemePanel({
             {!hasSubscribeBlock ? <span className="text-[12px] text-fg-faint">— 구독신청 블록을 먼저 추가하세요</span> : null}
           </label>
           <label className="flex items-center gap-2 text-[14px]">
-            <Switch checked={custom.badge !== "hide"} onChange={(v) => onCustomChange({ badge: v ? undefined : "hide" })} label="핀치 배지" disabled={!!custom.logoImage} />
+            {/* 끄기(숨김)만 유료 관문 — 다시 켜는 건 언제나 무료(리틀리 문법, 2026-08-26 지시) */}
+            <Switch
+              checked={custom.badge !== "hide"}
+              onChange={(v) => {
+                if (!v && !paid) {
+                  onUpgrade();
+                  return;
+                }
+                onCustomChange({ badge: v ? undefined : "hide" });
+              }}
+              label="핀치 배지"
+              disabled={!!custom.logoImage}
+            />
             핀치 배지
+            {!paid ? <span className="rounded-chip bg-tint-amber px-1.5 py-0.5 text-[11px] font-semibold text-tint-amber-ink">유료</span> : null}
           </label>
         </div>
         <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-          <ImageField label="내 로고 (선택)" value={custom.logoImage ?? ""} onChange={(v) => onCustomChange({ logoImage: v || undefined })} hint="넣으면 핀치 배지 대신 로고가 보여요. PNG 투명 배경 권장" aspect="aspect-[4/1]" />
+          {paid || custom.logoImage ? (
+            <ImageField label="내 로고 (선택)" value={custom.logoImage ?? ""} onChange={(v) => onCustomChange({ logoImage: v || undefined })} hint="넣으면 핀치 배지 대신 로고가 보여요. PNG 투명 배경 권장" aspect="aspect-[4/1]" />
+          ) : (
+            /* 무료 — 잠금 카드. 이미 넣어 둔 로고가 있으면 위 분기로 편집을 뺏지 않는다 */
+            <div>
+              <p className="flex items-center gap-1.5 text-[12px] font-medium text-fg-sub">
+                내 로고 (선택)
+                <span className="rounded-chip bg-tint-amber px-1.5 py-0.5 text-[11px] font-semibold text-tint-amber-ink">유료</span>
+              </p>
+              <button
+                type="button"
+                onClick={onUpgrade}
+                className="trans-state mt-1.5 flex w-full items-center justify-center gap-2 rounded-card border border-dashed border-line bg-plate px-3 py-5 text-[14px] font-medium text-fg-sub hover:border-primary hover:text-fg"
+              >
+                <Lock className="size-4" aria-hidden />
+                유료 플랜에서 핀치 배지 대신 내 로고를 올릴 수 있어요
+              </button>
+            </div>
+          )}
           {custom.logoImage ? (
             <div className="flex gap-1.5">
               {CUSTOM_LOGO_POS.map((f) => (

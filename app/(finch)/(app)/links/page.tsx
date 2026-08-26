@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
+import { getCurrentPlan } from "@/lib/data/internal";
 import { linkWorkspace } from "@/lib/data";
 import { sanitizeThemeCustom } from "@/lib/links/themes";
 import { sanitizeLinkSettings } from "@/lib/links/settings";
@@ -399,6 +400,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
 
   const wantPage = typeof sp.page === "string" ? sp.page : undefined;
   const { page, pages, pageLimit, multiReady, blocks, snapshot, stats, leads, leadCounts, leadsFailed, guestbookFailed, guestbook, loadFailed } = await load(days, wantPage);
+  /* 배지 숨김·내 로고는 유료 게이트(2026-08-26 사장님 지시) — 판정은 fail-closed(조회 실패=무료).
+     데모는 getCurrentPlan 관례대로 creator(열림) — 어차피 저장이 막혀 있다. */
+  const paid = ((await getCurrentPlan()) ?? "free") !== "free";
 
   /* 복사 버튼이 주는 주소는 **지금 접속한 도메인** 기준이어야 한다.
      프로덕션 도메인을 하드코딩하면 로컬·프리뷰에서 복사한 주소가 안 열린다. */
@@ -422,6 +426,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
         page={page}
         pages={pages}
         pageLimit={pageLimit}
+        paid={paid}
         multiReady={multiReady}
         blocks={blocks}
         snapshot={snapshot}

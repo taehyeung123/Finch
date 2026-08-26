@@ -98,6 +98,8 @@ const SNS_LABEL = new Map<string, string>(SNS_KINDS.map((k) => [k.key, k.label])
 
 /** 캔버스 직접 편집 콜백 — 넘기면 draft 미리보기가 편집기가 된다(링크팜 캔버스, 2026-08-20) */
 export type CanvasEdit = {
+  /** 알약(핀치 배지) × — 무료 플랜이면 유료 안내를 연다(2026-08-26). 유료면 undefined */
+  onUpgrade?: () => void;
   onEdit: (id: string) => void;
   onToggle: (id: string, active: boolean) => void;
   onMove: (id: string, dir: "up" | "down", label: string) => void;
@@ -268,13 +270,13 @@ export function PhonePreview({
         <img
           src={page.avatarPath}
           alt=""
-          className="mb-3 size-[72px] rounded-full object-cover shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
+          className="mb-3 size-[78px] rounded-full object-cover shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
         />
       ) : (
         /* 사진이 없으면 이니셜 원 — 공개 페이지와 **같은 변수**로 그린다. 프리셋 원본(theme.card)을
            쓰면 직접 꾸미기 색이 여기만 빠져 발행본과 머리 색이 달라진다(감사 #25). */
         <span
-          className="mb-3 flex size-[72px] items-center justify-center rounded-full bg-[var(--lp-card)] text-[26px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
+          className="mb-3 flex size-[78px] items-center justify-center rounded-full bg-[var(--lp-card)] text-[26px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
           aria-hidden
         >
           {initialOf(page.title || page.slug)}
@@ -469,7 +471,7 @@ export function PhonePreview({
           )}
 
           {/* 블록 — snsPlacement=links 면 SNS 줄이 블록 목록 맨 위로 온다 */}
-          <div className="mt-6 space-y-2.5">
+          <div className="mt-7 space-y-3">
             {page.snsPlacement === "links" ? snsChips : null}
             {visible.length === 0 && editable && edit ? (
               /* 빈 페이지 첫 화면(2026-08-24) — 리틀리는 빈 자리에 "블록이 생성될 위치입니다"
@@ -730,7 +732,13 @@ export function PhonePreview({
               <span className="flex items-center gap-1 rounded-full bg-white py-1 pl-3 pr-1.5 text-neutral-900 shadow-[0_10px_24px_-8px_rgba(0,0,0,0.45)]">
                 <FinchMark className="size-3.5 text-primary" aria-hidden />
                 <span className="text-[11px] font-bold">나만의 페이지 만들기</span>
-                <span className="flex size-5 items-center justify-center rounded-full text-[12px] text-neutral-400" aria-hidden>×</span>
+                {edit?.onUpgrade ? (
+                  <button type="button" aria-label="배지 없애기 — 유료 안내" onClick={edit.onUpgrade} className="pointer-events-auto flex size-5 items-center justify-center rounded-full text-[12px] text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700">
+                    ×
+                  </button>
+                ) : (
+                  <span className="flex size-5 items-center justify-center rounded-full text-[12px] text-neutral-400" aria-hidden>×</span>
+                )}
               </span>
             </div>
           )}
