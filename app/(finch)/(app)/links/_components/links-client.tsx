@@ -2983,7 +2983,14 @@ function SlugSetupModal({
             title={!passed && v.trim() ? (check.msg ?? "먼저 중복 확인을 해 주세요") : undefined}
             onClick={() => onSubmit(v.trim())}
           >
-            {busy ? "정하는 중…" : "이 주소로 정하기"}
+            {busy ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+                정하는 중…
+              </span>
+            ) : (
+              "이 주소로 정하기"
+            )}
           </Button>
         </div>
       </div>
@@ -3093,7 +3100,14 @@ function NewPageModal({ busy, error, onClose, onSubmit }: { busy: boolean; error
             title={!slugCheck.passed && slugv.trim() ? (slugCheck.check.msg ?? "먼저 중복 확인을 해 주세요") : undefined}
             onClick={() => onSubmit(slugv.trim(), titlev.trim())}
           >
-            {busy ? "만드는 중…" : "만들기"}
+            {busy ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+                만드는 중…
+              </span>
+            ) : (
+              "만들기"
+            )}
           </Button>
         </div>
       </div>
@@ -3788,7 +3802,14 @@ function ProfilePanel({
         }
         onClick={onSave}
       >
-        {busy ? "저장 중…" : "저장"}
+        {busy ? (
+          <span className="inline-flex items-center gap-1.5">
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+            저장 중…
+          </span>
+        ) : (
+          "저장"
+        )}
       </Button>
     </div>
   );
