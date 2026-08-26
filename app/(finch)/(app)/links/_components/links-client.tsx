@@ -3941,6 +3941,8 @@ function ThemePanel({
   /* 스와치용 — 지금 설정에 한 값만 바꿔 **실제 발행본과 같은 CSS 변수**를 받아온다.
      8/14/20px·color-mix 문자열을 패널에 복제하지 않으므로 themeVars 가 단일 출처로 남는다 */
   const varsFor = (patch: Partial<LinkThemeCustom>) => themeVars(preset, { ...custom, ...patch });
+  /* 「내 로고」 칩을 눌렀지만 아직 이미지를 안 올린 상태 — 업로드 칸을 보여주기 위한 로컬 상태 */
+  const [logoOpen, setLogoOpen] = useState(false);
   const colorInput = (key: "bg" | "accent" | "card" | "fg", label: string) => (
     <label key={key} className="flex items-center gap-2 rounded-card border border-line bg-body px-2.5 py-2 text-[14px]">
       <input
@@ -4275,65 +4277,111 @@ function ThemePanel({
             </button>
           ))}
         </div>
-        <div className="flex flex-wrap gap-x-6 gap-y-2">
-          <label className="flex items-center gap-2 text-[14px]">
-            <Switch checked={!!custom.share} onChange={(v) => onCustomChange({ share: v ? true : undefined })} label="공유 버튼" />
-            공유 버튼
-          </label>
-          <label className={cn("flex items-center gap-2 text-[14px]", !hasSubscribeBlock && "text-fg-sub")}>
-            {/* 블록을 숨긴 뒤에도 켜져 있는 subscribe:true 는 끌 수 있어야 한다 — 켜기만 블록 존재를 요구(감사4) */}
-            <Switch checked={!!custom.subscribe} onChange={(v) => onCustomChange({ subscribe: v ? true : undefined })} label="구독 버튼" disabled={!hasSubscribeBlock && !custom.subscribe} />
-            구독 버튼
-            {!hasSubscribeBlock ? <span className="text-[12px] text-fg-faint">— 구독신청 블록을 먼저 추가하세요</span> : null}
-          </label>
-          <label className="flex items-center gap-2 text-[14px]">
-            {/* 끄기(숨김)만 유료 관문 — 다시 켜는 건 언제나 무료(리틀리 문법, 2026-08-26 지시) */}
-            <Switch
-              checked={custom.badge !== "hide"}
-              onChange={(v) => {
-                if (!v && !paid) {
-                  onUpgrade();
-                  return;
-                }
-                onCustomChange({ badge: v ? undefined : "hide" });
-              }}
-              label="핀치 배지"
-              disabled={!!custom.logoImage}
-            />
-            핀치 배지
-            {!paid ? <span className="rounded-chip bg-tint-amber px-1.5 py-0.5 text-[11px] font-semibold text-tint-amber-ink">유료</span> : null}
-          </label>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-          {paid || custom.logoImage ? (
-            <ImageField label="내 로고 (선택)" value={custom.logoImage ?? ""} onChange={(v) => onCustomChange({ logoImage: v || undefined })} hint="넣으면 핀치 배지 대신 로고가 보여요. PNG 투명 배경 권장" aspect="aspect-[4/1]" />
-          ) : (
-            /* 무료 — 잠금 카드. 이미 넣어 둔 로고가 있으면 위 분기로 편집을 뺏지 않는다 */
-            <div>
-              <p className="flex items-center gap-1.5 text-[12px] font-medium text-fg-sub">
-                내 로고 (선택)
-                <span className="rounded-chip bg-tint-amber px-1.5 py-0.5 text-[11px] font-semibold text-tint-amber-ink">유료</span>
-              </p>
+        {/* 공유·구독 — 리틀리식 선택제 칩(2026-08-26 사장님 스크린샷 스펙): 기본값(비공개)만 무료,
+            바꾸는 건 유료. 자물쇠 칩을 누르면 유료 안내가 뜬다. */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[12px] text-fg-sub">공유·구독 버튼</span>
+          {(
+            [
+              { key: "none", label: "비공개", needsSub: false },
+              { key: "both", label: "노출", needsSub: true },
+              { key: "share", label: "공유", needsSub: false },
+              { key: "sub", label: "구독", needsSub: true },
+            ] as const
+          ).map((o) => {
+            const sel = custom.share && custom.subscribe ? "both" : custom.share ? "share" : custom.subscribe ? "sub" : "none";
+            const locked = !paid && o.key !== "none";
+            const noSub = o.needsSub && !hasSubscribeBlock && sel !== o.key;
+            return (
               <button
+                key={o.key}
                 type="button"
-                onClick={onUpgrade}
-                className="trans-state mt-1.5 flex w-full items-center justify-center gap-2 rounded-card border border-dashed border-line bg-plate px-3 py-5 text-[14px] font-medium text-fg-sub hover:border-primary hover:text-fg"
+                aria-pressed={sel === o.key}
+                disabled={noSub}
+                title={noSub ? "구독신청 블록을 먼저 추가하세요" : locked ? "유료 플랜에서 바꿀 수 있어요" : undefined}
+                onClick={() => {
+                  if (sel === o.key) return;
+                  if (locked) {
+                    onUpgrade();
+                    return;
+                  }
+                  onCustomChange(
+                    o.key === "both"
+                      ? { share: true, subscribe: true }
+                      : o.key === "share"
+                        ? { share: true, subscribe: undefined }
+                        : o.key === "sub"
+                          ? { share: undefined, subscribe: true }
+                          : { share: undefined, subscribe: undefined },
+                  );
+                }}
+                className={cn(chip(sel === o.key), "inline-flex items-center gap-1", noSub && "opacity-50")}
               >
-                <Lock className="size-4" aria-hidden />
-                유료 플랜에서 핀치 배지 대신 내 로고를 올릴 수 있어요
+                {locked ? <Lock className="size-3" aria-hidden /> : null}
+                {o.label}
               </button>
-            </div>
-          )}
-          {custom.logoImage ? (
-            <div className="flex gap-1.5">
-              {CUSTOM_LOGO_POS.map((f) => (
-                <button key={f.key} type="button" aria-pressed={(custom.logoPos ?? "bottom") === f.key} onClick={() => onCustomChange({ logoPos: f.key === "bottom" ? undefined : f.key })} className={chip((custom.logoPos ?? "bottom") === f.key)}>
-                  {f.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
+            );
+          })}
         </div>
+
+        {/* 로고 — [핀치 로고] [내 로고🔒] [로고 삭제🔒] (리틀리와 같은 3칩) */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[12px] text-fg-sub">로고</span>
+          {(
+            [
+              { key: "finch", label: "핀치 로고" },
+              { key: "custom", label: "내 로고" },
+              { key: "none", label: "로고 삭제" },
+            ] as const
+          ).map((o) => {
+            const sel = custom.logoImage || logoOpen ? "custom" : custom.badge === "hide" ? "none" : "finch";
+            const locked = !paid && o.key !== "finch";
+            return (
+              <button
+                key={o.key}
+                type="button"
+                aria-pressed={sel === o.key}
+                title={locked ? "유료 플랜에서 바꿀 수 있어요" : undefined}
+                onClick={() => {
+                  if (o.key === "finch") {
+                    setLogoOpen(false);
+                    onCustomChange({ badge: undefined, logoImage: undefined, logoPos: undefined });
+                    return;
+                  }
+                  if (locked) {
+                    onUpgrade();
+                    return;
+                  }
+                  if (o.key === "custom") {
+                    setLogoOpen(true);
+                    onCustomChange({ badge: undefined });
+                  } else {
+                    setLogoOpen(false);
+                    onCustomChange({ badge: "hide", logoImage: undefined, logoPos: undefined });
+                  }
+                }}
+                className={cn(chip((custom.logoImage || logoOpen ? "custom" : custom.badge === "hide" ? "none" : "finch") === o.key), "inline-flex items-center gap-1")}
+              >
+                {locked ? <Lock className="size-3" aria-hidden /> : null}
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+        {custom.logoImage || logoOpen ? (
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+            <ImageField label="내 로고" value={custom.logoImage ?? ""} onChange={(v) => onCustomChange({ logoImage: v || undefined })} hint="핀치 배지 대신 이 로고가 보여요. PNG 투명 배경 권장" aspect="aspect-[4/1]" />
+            {custom.logoImage ? (
+              <div className="flex gap-1.5">
+                {CUSTOM_LOGO_POS.map((f) => (
+                  <button key={f.key} type="button" aria-pressed={(custom.logoPos ?? "bottom") === f.key} onClick={() => onCustomChange({ logoPos: f.key === "bottom" ? undefined : f.key })} className={chip((custom.logoPos ?? "bottom") === f.key)}>
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </DSection>
 
       {/* 예전 hint 는 커서·스크롤까지 "공개 페이지에서만 움직인다"고 했는데 사실이 아니다 —
