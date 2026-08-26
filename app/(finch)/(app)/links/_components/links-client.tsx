@@ -2783,10 +2783,13 @@ function useSlugCheck(value: string, pageId: string | undefined, currentSlug: st
   /* 동기(즉시) 판정 — 서버가 필요 없는 경우를 렌더에서 바로 가른다 */
   let sync: SlugCheck | null = null;
   if (!v) sync = { level: "idle" };
-  else {
+  else if (currentSlug && v === currentSlug) {
+    /* 지금 주소가 먼저다 — 목록 확장으로 기존 주소가 사후에 걸려도(0068 의 sns 실사례)
+       제 주소에 빨간 오류를 띄우지 않는다. 서버 저장도 같은 원칙(주소 그대로면 검증 생략). */
+    sync = { level: "ok", msg: "지금 쓰는 주소예요." };
+  } else {
     const err = validateSlug(v);
     if (err) sync = { level: "error", msg: SLUG_MESSAGES[err] };
-    else if (currentSlug && v === currentSlug) sync = { level: "ok", msg: "지금 쓰는 주소예요." };
   }
 
   const needServer = sync === null;

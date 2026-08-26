@@ -396,8 +396,16 @@ export async function updateLinkProfile(input: {
   if (!user) return AUTH;
 
   const clean = input.slug.trim().toLowerCase();
-  const err = validateSlug(clean);
-  if (err) return { ok: false, error: SLUG_MESSAGES[err] };
+  const supabase = await createClient();
+  const before = await myPage(pageId);
+  if (!before) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
+  /* 지금 주소 그대로면 검증을 건너뛴다 — 예약어·금칙어 목록이 확장되면 기존 주소가 사후에
+     걸릴 수 있는데(0068 의 sns 실사례), 그때 주소 아닌 다른 필드 저장까지 막으면 안 된다.
+     관문은 «새 주소 취득»에만 선다 — 아래 before.slug !== clean 분기와 같은 원칙. */
+  if (before.slug !== clean) {
+    const err = validateSlug(clean);
+    if (err) return { ok: false, error: SLUG_MESSAGES[err] };
+  }
 
   /* SNS 주소도 http(s) 만 통과시킨다 — 공개 페이지가 그대로 <a href> 로 쓴다.
      틀린 주소는 **조용히 떨구지 않고 거절한다** — 떨구면 ok 인데 저장 결과가 직전과 같아
@@ -417,9 +425,6 @@ export async function updateLinkProfile(input: {
     sns.push({ kind, url: href });
   }
 
-  const supabase = await createClient();
-  const before = await myPage(pageId);
-  if (!before) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
   /* 주소가 바뀌는 저장이면 정책 관문을 먼저 — 30일 쿨다운(위 slugCooldownError 주석) */
   let slugSetAt: string | null | undefined;
   if (before.slug !== clean) {
