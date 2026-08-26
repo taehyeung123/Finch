@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { isDemoMode } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/client";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { cn } from "@/lib/cn";
 import { useChannel } from "./channel-context";
 import { ChannelIndicator, ChannelSwitcher, getChannelScope } from "./channel-switcher";
 
@@ -64,8 +65,14 @@ export function Topbar({ unread = 0 }: { unread?: number }) {
     };
   }, [menuOpen]);
 
+  /* 계정 메뉴가 열려 있는 동안만 z 를 올린다(2026-08-26 사장님 지적 — 링크 편집기의
+     고정 바에 메뉴가 덮여 안 보였다). 상단바는 sticky+z-30 으로 자기 쌓임 맥락을 만들기
+     때문에, 안의 메뉴에 z 를 아무리 줘도 DOM 상 뒤에 오는 같은 층(편집기 바 z-30,
+     탐색 헤더 z-40)이 이긴다 — 맥락 전체를 올리는 것만이 답이다.
+     상시 z-50 으로 두지 않는 이유: 탐색의 필터 스크림(z-30, DOM 나중)이 상단바를 함께
+     가라앉히는 연출이 z-30 전제를 딛고 서 있다(search-console.tsx 주석). */
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-body/90 px-4 backdrop-blur md:px-6">
+    <header className={cn("sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-body/90 px-4 backdrop-blur md:px-6", menuOpen && "z-50")}>
       {/* 페이지 성격별 채널 영역 — 스위처(필터 동작) / 전용 표시 / 숨김 (channel-switcher.tsx) */}
       {scope.mode === "switch" ? (
         <ChannelSwitcher value={channel} onChange={setChannel} />

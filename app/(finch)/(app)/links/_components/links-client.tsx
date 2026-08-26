@@ -19,6 +19,7 @@ import {
   Loader2,
   Monitor,
   MousePointerClick,
+  Pencil,
   Percent,
   RotateCcw,
   Lock,
@@ -1761,7 +1762,20 @@ export function LinksClient({
           )}
 
           {/* 주소·도구 — 폰 아래 별도 흰 박스(지시). 문구 있는 버튼: 복사하기·공유하기·QR 코드 */}
-          <ShareBox url={shareUrl} busy={busy} title={page.title || page.slug}>
+          <ShareBox
+            url={shareUrl}
+            busy={busy}
+            title={page.title || page.slug}
+            onEditSlug={() => {
+              openDrawer("profile", true);
+              /* 드로어가 그려진 다음 프레임에야 입력이 존재한다 */
+              window.setTimeout(() => {
+                const el = document.getElementById("p-slug");
+                el?.focus();
+                el?.scrollIntoView({ block: "center", behavior: "smooth" });
+              }, 80);
+            }}
+          >
             {/* published(공개 스위치)를 먼저 본다 — 발행만 하고 공개를 안 켠 상태에서
                 "공개 주소와 같은 모습" 이라고 말하면 방문자는 404 인데 소유자는 모른다(감사 #4) */}
             {profileDirty || customDirty || editorDirty
@@ -2851,7 +2865,20 @@ function NewSubpageModal({ busy, parentTitle, onClose, onSubmit }: { busy: boole
   버튼은 아이콘만 두지 않고 **문구를 함께** 둔다("복사하기·공유하기·QR 코드").
   공유하기는 기기 공유 시트(navigator.share)를 쓰고, 없으면 주소 복사로 떨어진다.
 */
-function ShareBox({ url, busy, title, children }: { url: string; busy: boolean; title: string; children?: React.ReactNode }) {
+function ShareBox({
+  url,
+  busy,
+  title,
+  onEditSlug,
+  children,
+}: {
+  url: string;
+  busy: boolean;
+  title: string;
+  /** 주소 편집으로 바로 — 자동 생성된 무작위 주소를 여기서 처음 마주치기 때문에(2026-08-26 사장님) */
+  onEditSlug?: () => void;
+  children?: React.ReactNode;
+}) {
   const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState(false);
   const [qr, setQr] = useState(false);
@@ -2889,17 +2916,33 @@ function ShareBox({ url, busy, title, children }: { url: string; busy: boolean; 
   return (
     /* xl:shrink-0 — 폰이 남긴 자리를 다 쓰되 스스로 눌리지는 않는다 */
     <div className="card-face space-y-1.5 p-2.5 xl:shrink-0">
-      {/* 주소 자체가 링크 — 눌러서 공개 페이지를 새 창으로 연다(전에 있던 「열기」 버튼을 흡수) */}
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        title="새 창에서 열기"
-        className="trans-state block truncate rounded-card border border-line bg-plate px-2.5 py-1.5 text-[12px] text-fg-sub hover:border-primary hover:text-fg"
-      >
-        {/* 표시는 스킴 없이 「finch…」부터 — href·복사는 완전한 주소다(lib/links displayLinkUrl 주석) */}
-        {displayLinkUrl(url)}
-      </a>
+      {/* 주소 자체가 링크 — 눌러서 공개 페이지를 새 창으로 연다(전에 있던 「열기」 버튼을 흡수).
+          옆의 연필이 주소 편집으로 간다 — 처음 시작하면 주소가 무작위(6kt139hq 류)인데,
+          바꾸는 길이 「페이지 탭 → 프로필 행」 안에 숨어 있어 못 찾았다(2026-08-26 사장님 지적). */}
+      <div className="flex items-center gap-1.5">
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="새 창에서 열기"
+          className="trans-state block min-w-0 flex-1 truncate rounded-card border border-line bg-plate px-2.5 py-1.5 text-[12px] text-fg-sub hover:border-primary hover:text-fg"
+        >
+          {/* 표시는 스킴 없이 「finch…」부터 — href·복사는 완전한 주소다(lib/links displayLinkUrl 주석) */}
+          {displayLinkUrl(url)}
+        </a>
+        {onEditSlug ? (
+          <button
+            type="button"
+            onClick={onEditSlug}
+            disabled={busy}
+            aria-label="주소 바꾸기"
+            title="주소 바꾸기"
+            className="trans-state shrink-0 rounded-card border border-line p-1.5 text-fg-sub hover:border-primary hover:text-primary disabled:opacity-50"
+          >
+            <Pencil className="size-3.5" aria-hidden />
+          </button>
+        ) : null}
+      </div>
       <div className="flex items-center gap-1.5">
         <button type="button" onClick={copy} disabled={busy} className={btn}>
           {copied ? <Check className="size-3.5 text-positive-strong" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
