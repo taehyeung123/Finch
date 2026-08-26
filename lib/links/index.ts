@@ -109,6 +109,18 @@ export function publicLinkUrl(slug: string, origin?: string): string {
 }
 
 /**
+ * **화면에 보여줄** 주소 — 스킴(https://)을 뗀다.
+ *
+ * 주소를 루트로 올린 결정(위)의 핵심이 「finch 로 시작하는 심플한 주소」인데, 화면 세 곳
+ * (폰 아래 주소 바·QR 캡션·마케팅 퍼뜨리기)이 https:// 째로 보여주고 있었다(2026-08-26 사장님 지적).
+ * 표시만 뗀다 — 복사·공유·QR 인코딩·href 는 완전한 URL 을 유지한다. 스킴 없는 주소를
+ * 클립보드에 넣으면 카톡·인스타 소개란 등에서 링크로 안 걸리는 곳이 있다.
+ */
+export function displayLinkUrl(url: string): string {
+  return url.replace(/^https?:\/\//i, "");
+}
+
+/**
  * 키 순서에 흔들리지 않는 비교용 직렬화.
  *
  * "편집기에 미저장 내용이 있는가"를 판정하는 데 쓴다. JSON.stringify 를 그냥 쓰면

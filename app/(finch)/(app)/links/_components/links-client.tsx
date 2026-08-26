@@ -65,7 +65,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { InfoTip } from "@/components/ui/info-tip";
 import { Switch } from "@/components/ui/switch";
 import { FinchLoader } from "@/components/ui/finch-loader";
-import { normalizeSnsUrl, publicLinkUrl, stableJson } from "@/lib/links";
+import { displayLinkUrl, normalizeSnsUrl, publicLinkUrl, stableJson } from "@/lib/links";
 import { SNS_CATALOG, snsHref } from "@/lib/links/sns-catalog";
 import {
   BLOCK_CATALOG,
@@ -2855,7 +2855,8 @@ function ShareBox({ url, busy, title, children }: { url: string; busy: boolean; 
         title="새 창에서 열기"
         className="trans-state block truncate rounded-card border border-line bg-plate px-2.5 py-1.5 text-[12px] text-fg-sub hover:border-primary hover:text-fg"
       >
-        {url}
+        {/* 표시는 스킴 없이 「finch…」부터 — href·복사는 완전한 주소다(lib/links displayLinkUrl 주석) */}
+        {displayLinkUrl(url)}
       </a>
       <div className="flex items-center gap-1.5">
         <button type="button" onClick={copy} disabled={busy} className={btn}>
@@ -2983,7 +2984,8 @@ function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
             QR 을 만들지 못했어요. 잠시 후 다시 열어 주세요.
           </p>
         ) : null}
-        <p className="mt-2 break-all text-[11px] text-fg-sub">{url}</p>
+        {/* QR 자체는 완전한 URL 로 인코딩한다 — 캡션만 스킴 없이 */}
+        <p className="mt-2 break-all text-[11px] text-fg-sub">{displayLinkUrl(url)}</p>
       </div>
     </ModalShell>
   );
@@ -5214,7 +5216,7 @@ function MarketingPanel({
         <div className="flex flex-wrap items-center gap-2">
           {/* min-w-0 이 flex-wrap 을 무력화해 좁은 화면에서 주소만 계속 줄어들었다(375 에서 102px) —
               좁을 땐 한 줄을 통째로 쓰게 한다 */}
-          <code className="min-w-[14rem] flex-1 basis-full truncate rounded-card border border-line bg-body px-3 py-2 text-[14px] text-fg-sub sm:basis-auto">{url}</code>
+          <code className="min-w-[14rem] flex-1 basis-full truncate rounded-card border border-line bg-body px-3 py-2 text-[14px] text-fg-sub sm:basis-auto">{displayLinkUrl(url)}</code>
           <Button
             variant="secondary"
             size="sm"
