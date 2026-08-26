@@ -1103,42 +1103,46 @@ export async function importFromLittly(
 
   /* "https://litt.ly/abc", "litt.ly/abc", "abc" 를 모두 받는다.
      다른 도메인 주소가 들어오면 **다른 오류**로 갈라 말한다 — "못 찾았어요"로
-     뭉개면 사용자가 리틀리 주소를 계속 다시 붙여넣는다. */
+     뭉개면 사용자가 같은 주소를 계속 다시 붙여넣는다.
+
+     ⚠️ 이 함수가 돌려주는 error 는 이사 UI 의 note 로 **화면에 그대로 렌더된다.**
+     경쟁사 이름(리틀리·인포크 등)을 고객 화면에 내지 않는다(2026-08-26 사장님 지시) —
+     오류 문구는 전부 「그 서비스/그 페이지」로 말한다. 이름은 주석·상수에만 남는다. */
   let input = raw.trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "");
   if (input.includes("/")) {
     const host = input.split("/")[0].toLowerCase();
     if (host !== "litt.ly") {
-      return { ok: false, error: "리틀리(litt.ly) 주소만 가져올 수 있어요. 다른 서비스는 페이지를 복사해 위 칸에 붙여넣어 주세요." };
+      return { ok: false, error: "그 서비스는 주소로 바로 가져오기를 지원하지 않아요. 쓰던 페이지를 복사해 붙여넣기 칸에 넣어 주세요." };
     }
     input = input.slice(host.length + 1);
   }
   const slug = input.split(/[/?#]/)[0];
   /* "litt.ly" 만 넣은 자연스러운 실수 — 404 류 메시지 대신 뭘 빠뜨렸는지 말한다 */
   if (slug.toLowerCase() === "litt.ly") {
-    return { ok: false, error: "아이디까지 넣어 주세요 — litt.ly/아이디 형태예요." };
+    return { ok: false, error: "아이디까지 넣어 주세요 — 쓰던 페이지 주소 끝의 아이디요." };
   }
   if (!LITTLY_SLUG_RE.test(slug)) {
-    return { ok: false, error: "리틀리 주소가 아니에요. litt.ly/아이디 형태로 넣어 주세요." };
+    return { ok: false, error: "가져올 수 있는 페이지 주소가 아니에요. 쓰던 페이지의 전체 주소를 붙여넣어 주세요." };
   }
 
   const fetched = await fetchBoundedHtml(`https://litt.ly/${encodeURIComponent(slug)}`);
   if (fetched.kind !== "ok") {
     /* 없는 슬러그 = 301 홈 리다이렉트(실측) — redirect 가 곧 "못 찾음" 신호다 */
     const msg: Record<Exclude<BoundedHtml["kind"], "ok">, string> = {
-      network: "리틀리에 접속하지 못했어요. 잠시 후 다시 시도해 주세요.",
-      redirect: "그 주소의 리틀리 페이지를 찾지 못했어요. 아이디를 확인해 주세요.",
-      http: "리틀리 페이지를 열지 못했어요. 잠시 후 다시 시도해 주세요.",
-      type: "리틀리 페이지 형식을 읽지 못했어요.",
+      network: "그 서비스에 접속하지 못했어요. 잠시 후 다시 시도해 주세요.",
+      redirect: "그 주소의 페이지를 찾지 못했어요. 아이디를 확인해 주세요.",
+      http: "그 페이지를 열지 못했어요. 잠시 후 다시 시도해 주세요.",
+      type: "그 페이지 형식을 읽지 못했어요.",
       toolarge: "페이지가 너무 커서 가져올 수 없어요.",
-      timeout: "리틀리 응답이 너무 느려요. 잠시 후 다시 시도해 주세요.",
-      read: "리틀리 페이지를 읽지 못했어요.",
+      timeout: "그 서비스 응답이 너무 느려요. 잠시 후 다시 시도해 주세요.",
+      read: "그 페이지를 읽지 못했어요.",
     };
     return { ok: false, error: msg[fetched.kind] };
   }
 
   const parsed = parseLittlyHtml(fetched.html);
   if (!parsed) {
-    return { ok: false, error: "리틀리 페이지 형식이 바뀐 것 같아요. 페이지를 복사해 위 칸에 붙여넣어 주세요." };
+    return { ok: false, error: "그 페이지 형식이 바뀐 것 같아요. 페이지를 복사해 붙여넣기 칸에 넣어 주세요." };
   }
   if (parsed.candidates.length === 0) {
     return { ok: false, error: "그 페이지에서 가져올 링크를 찾지 못했어요." };
@@ -1173,38 +1177,39 @@ export async function importFromInpock(
   if (input.includes("/")) {
     const host = input.split("/")[0].toLowerCase();
     if (host !== "link.inpock.co.kr" && host !== "inpock.co.kr") {
-      return { ok: false, error: "인포크(link.inpock.co.kr) 주소만 가져올 수 있어요." };
+      /* 오류 문구에 서비스 이름을 안 쓴다 — importFromLittly 의 같은 자리 주석 참조 */
+      return { ok: false, error: "그 서비스는 주소로 바로 가져오기를 지원하지 않아요. 쓰던 페이지를 복사해 붙여넣기 칸에 넣어 주세요." };
     }
     input = input.slice(input.indexOf("/") + 1);
   }
   const slug = input.split(/[/?#]/)[0];
   if (!slug || slug.toLowerCase() === "link.inpock.co.kr") {
-    return { ok: false, error: "아이디까지 넣어 주세요 — link.inpock.co.kr/아이디 형태예요." };
+    return { ok: false, error: "아이디까지 넣어 주세요 — 쓰던 페이지 주소 끝의 아이디요." };
   }
   if (!INPOCK_SLUG_RE.test(slug)) {
-    return { ok: false, error: "인포크 주소가 아니에요. link.inpock.co.kr/아이디 형태로 넣어 주세요." };
+    return { ok: false, error: "가져올 수 있는 페이지 주소가 아니에요. 쓰던 페이지의 전체 주소를 붙여넣어 주세요." };
   }
 
   const fetched = await fetchBoundedHtml(`https://link.inpock.co.kr/${encodeURIComponent(slug)}`);
   if (fetched.kind !== "ok") {
     const msg: Record<Exclude<BoundedHtml["kind"], "ok">, string> = {
-      network: "인포크에 접속하지 못했어요. 잠시 후 다시 시도해 주세요.",
-      redirect: "그 주소의 인포크 페이지를 찾지 못했어요. 아이디를 확인해 주세요.",
-      http: "인포크 페이지를 열지 못했어요. 잠시 후 다시 시도해 주세요.",
-      type: "인포크 페이지 형식을 읽지 못했어요.",
+      network: "그 서비스에 접속하지 못했어요. 잠시 후 다시 시도해 주세요.",
+      redirect: "그 주소의 페이지를 찾지 못했어요. 아이디를 확인해 주세요.",
+      http: "그 페이지를 열지 못했어요. 잠시 후 다시 시도해 주세요.",
+      type: "그 페이지 형식을 읽지 못했어요.",
       toolarge: "페이지가 너무 커서 가져올 수 없어요.",
-      timeout: "인포크 응답이 너무 느려요. 잠시 후 다시 시도해 주세요.",
-      read: "인포크 페이지를 읽지 못했어요.",
+      timeout: "그 서비스 응답이 너무 느려요. 잠시 후 다시 시도해 주세요.",
+      read: "그 페이지를 읽지 못했어요.",
     };
     return { ok: false, error: msg[fetched.kind] };
   }
 
   const parsed = parseInpockHtml(fetched.html);
   if (!parsed) {
-    return { ok: false, error: "인포크 페이지 형식이 바뀐 것 같아요. 페이지를 복사해 위 칸에 붙여넣어 주세요." };
+    return { ok: false, error: "그 페이지 형식이 바뀐 것 같아요. 페이지를 복사해 붙여넣기 칸에 넣어 주세요." };
   }
   if (parsed.notFound) {
-    return { ok: false, error: "그 주소의 인포크 페이지를 찾지 못했어요. 아이디를 확인해 주세요." };
+    return { ok: false, error: "그 주소의 페이지를 찾지 못했어요. 아이디를 확인해 주세요." };
   }
 
   /* /api/r/{token} 은 인포크의 클릭 추적 리다이렉트다 — 같은 호스트에 물어

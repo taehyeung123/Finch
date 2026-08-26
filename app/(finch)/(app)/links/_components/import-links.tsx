@@ -161,7 +161,10 @@ export function ImportLinksBody({
             </p>
 
             {/* 리틀리·인포크는 주소만으로 가져온다 — 서버가 페이지의 data 페이로드를
-                읽는다(actions.ts, 상수 호스트 화이트리스트가 서버 fetch 의 전부). */}
+                읽는다(actions.ts, 상수 호스트 화이트리스트가 서버 fetch 의 전부).
+                ⚠️ placeholder·aria-label 에 서비스 **이름을 쓰지 않는다**(2026-08-26 사장님 지시 —
+                경쟁사 이름을 고객 화면에 내지 않는다). 어차피 주소를 붙여넣으면 호스트로 인식하고,
+                지원 밖 서비스는 오류 문구가 붙여넣기 경로로 안내한다. 이름은 주석에만 남는다. */}
             <div className="flex items-center gap-1.5">
               <input
                 value={littly}
@@ -172,8 +175,8 @@ export function ImportLinksBody({
                     void pullByAddress();
                   }
                 }}
-                placeholder="litt.ly/아이디 · link.inpock.co.kr/아이디"
-                aria-label="리틀리·인포크 주소"
+                placeholder="쓰던 페이지 주소 붙여넣기 (https://…)"
+                aria-label="옮겨올 페이지 주소"
                 className="h-9 min-w-0 flex-1 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
               />
               <Button size="sm" variant="secondary" disabled={fetching || !littly.trim()} onClick={() => void pullByAddress()}>
@@ -181,7 +184,7 @@ export function ImportLinksBody({
               </Button>
             </div>
 
-            <p className="text-[12px] text-fg-sub">다른 서비스는 아래에 붙여넣으세요.</p>
+            <p className="text-[12px] text-fg-sub">주소로 안 가져와지면 아래에 붙여넣으세요.</p>
           </>
         ) : (
           /* bulk — 내 링크를 여러 줄로. 이사 안내도 경쟁사 이름도 여기 안 나온다(위 주석) */
