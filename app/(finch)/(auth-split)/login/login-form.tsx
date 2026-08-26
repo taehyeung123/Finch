@@ -83,15 +83,23 @@ function LoginCard() {
         </p>
       ) : null}
 
-      {/* 둘러보기 탈출구는 항상 노출 — 로그인 연동이 죽어 있어도 사이트가 막다른 길이 되지 않도록 */}
-      <div className="my-6 flex items-center gap-3" aria-hidden>
-        <span className="h-px flex-1 bg-line" />
-        <span className="text-xs text-fg-faint">또는</span>
-        <span className="h-px flex-1 bg-line" />
-      </div>
-      <ButtonLink href="/dashboard" variant="secondary" className="w-full">
-        로그인 없이 둘러보기
-      </ButtonLink>
+      {/* 둘러보기 탈출구는 **데모 폴백에서만** 노출한다.
+          "항상 노출 — 막다른 길이 되지 않도록" 이 원래 의도였지만, 실서버(수파베이스 설정됨)에서는
+          /dashboard 가드가 비로그인 사용자를 즉시 /login 으로 되돌려서 **이 링크 자체가 막다른
+          고리**였다 — 프로덕션 첫 화면에서 눌러도 제자리로 돌아오는 버튼(2026-08-26 실서버 실측).
+          실서버의 탈출구는 위 로고(홈으로)가 맡는다. */}
+      {!configured ? (
+        <>
+          <div className="my-6 flex items-center gap-3" aria-hidden>
+            <span className="h-px flex-1 bg-line" />
+            <span className="text-xs text-fg-faint">또는</span>
+            <span className="h-px flex-1 bg-line" />
+          </div>
+          <ButtonLink href="/dashboard" variant="secondary" className="w-full">
+            로그인 없이 둘러보기
+          </ButtonLink>
+        </>
+      ) : null}
 
       <p className="mt-6 text-center text-[14px] text-fg-sub">
         아직 계정이 없나요?{" "}
