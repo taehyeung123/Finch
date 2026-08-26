@@ -2881,7 +2881,14 @@ function SlugCheckButton({ busy, state }: { busy: boolean; state: { check: SlugC
       }
       onClick={state.runCheck}
     >
-      {checking ? "확인 중…" : "중복 확인"}
+      {checking ? (
+        <span className="inline-flex items-center gap-1.5">
+          <Loader2 className="size-4 animate-spin" aria-hidden />
+          확인 중…
+        </span>
+      ) : (
+        "중복 확인"
+      )}
     </Button>
   );
 }
@@ -2963,8 +2970,8 @@ function SlugSetupModal({
           </p>
         ) : null}
         <p className="text-[12px] leading-relaxed text-fg-sub">
-          정한 뒤에는 <strong className="font-semibold text-fg">30일에 한 번</strong>만 바꿀 수 있어요(직후 10분은
-          오타 수정 가능). 바꿔도 옛 주소로 온 방문자는 새 주소로 안내돼요.
+          정한 뒤에는 <strong className="font-semibold text-fg">30일에 한 번</strong>만 바꿀 수 있어요.
+          바꿔도 옛 주소로 온 방문자는 새 주소로 안내돼요.
         </p>
         <div className="flex justify-end gap-2 pt-1">
           <Button variant="ghost" size="sm" onClick={onLater} disabled={busy}>
@@ -3555,8 +3562,8 @@ function ProfilePanel({
         <SlugStatusLine check={profileSlug.check} />
         {/* 주소 변경의 두 가지 질문 — 「얼마나 자주 바꿀 수 있나」 「이미 뿌린 링크는 어떻게 되나」 */}
         <p className="mt-1.5 text-[12px] leading-relaxed text-fg-sub">
-          주소는 30일에 한 번 바꿀 수 있어요(정한 직후 10분은 오타 수정 가능). 바꿔도 옛 주소로 온
-          방문자는 새 주소로 안내되고, 옛 주소는 90일간 다른 사람이 가져갈 수 없어요.
+          주소는 30일에 한 번 바꿀 수 있어요. 바꿔도 옛 주소로 온 방문자는 새 주소로 안내되고,
+          옛 주소는 90일간 다른 사람이 가져갈 수 없어요.
         </p>
       </div>
 

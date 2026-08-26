@@ -89,25 +89,17 @@ async function releaseSlug(slug: string, pageId: string | null, userId: string):
 
 /* ── 주소 변경 정책(2026-08-26 사장님 결정): 최초 1회는 자유(모달), 이후 30일에 1회 ──
    기준은 link_pages.slug_set_at(0067) — 사용자가 직접 정한 마지막 시각. null 이면 아직
-   무작위 주소라 자유 변경. 정한 직후 10분은 오타 수정 유예(이때는 시각을 새로 찍지 않는다 —
-   찍으면 9분마다 바꾸며 유예를 무한 연장할 수 있다). */
+   무작위 주소라 자유 변경. (정한 직후 10분 오타 수정 유예가 있었으나 같은 날 사장님 지시로
+   제거 — 정하기 전에 「중복 확인」 버튼을 거치므로 오타 걱정은 그 단계가 흡수한다.) */
 const SLUG_COOLDOWN_DAYS = 30;
-const SLUG_GRACE_MS = 10 * 60 * 1000;
 
 /** 지금 바꿀 수 있나 — 막혀 있으면 사용자에게 그대로 보여줄 문장을 돌려준다 */
 function slugCooldownError(slugSetAt: string | null | undefined): string | null {
   if (!slugSetAt) return null; // 아직 직접 정한 적 없음(또는 0067 미적용) — 자유
   const age = Date.now() - new Date(slugSetAt).getTime();
-  if (age <= SLUG_GRACE_MS) return null; // 오타 수정 유예
   const left = SLUG_COOLDOWN_DAYS - Math.floor(age / 86_400_000);
   if (left <= 0) return null;
   return `주소는 30일에 한 번 바꿀 수 있어요 — ${left}일 뒤에 바꿀 수 있어요.`;
-}
-
-/** 이번 변경에 기록할 시각 — 유예 안이면 원래 시각 유지(위 주석), 밖이면 지금 */
-function nextSlugStamp(slugSetAt: string | null | undefined): string {
-  if (slugSetAt && Date.now() - new Date(slugSetAt).getTime() <= SLUG_GRACE_MS) return slugSetAt;
-  return new Date().toISOString();
 }
 
 /** slug_set_at 조회 — 0067 미적용 DB 는 undefined(기능 통째로 꺼짐: 쿨다운도 기록도 안 한다) */
@@ -452,7 +444,7 @@ export async function updateLinkProfile(input: {
 
   /* 주소가 바뀌면 slug_set_at 도 함께 — 0067 미적용(undefined)이면 안 보낸다 */
   const stamp =
-    before.slug !== clean && slugSetAt !== undefined ? { slug_set_at: nextSlugStamp(slugSetAt) } : {};
+    before.slug !== clean && slugSetAt !== undefined ? { slug_set_at: new Date().toISOString() } : {};
   const { error } = await supabase
     .from("link_pages")
     .update({ ...base, sns_placement: placement, title_size: titleSize, ...stamp })
@@ -1076,7 +1068,7 @@ export async function changeSlug(raw: string, pageId?: string): Promise<Result> 
     return { ok: false, error: "최근까지 다른 사람이 쓰던 주소예요. 다른 주소를 입력해 주세요." };
   }
 
-  const stamp = slugSetAt !== undefined ? { slug_set_at: nextSlugStamp(slugSetAt) } : {};
+  const stamp = slugSetAt !== undefined ? { slug_set_at: new Date().toISOString() } : {};
   const { error } = await supabase
     .from("link_pages")
     .update({ slug: clean, ...stamp })
