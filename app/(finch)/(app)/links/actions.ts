@@ -1013,6 +1013,9 @@ const migrationFor = (type: BlockType) => TYPE_MIGRATION.get(type) ?? (STAGE4_TY
 export async function checkSlugAvailable(
   raw: string,
   pageId?: string,
+  /* "change" = 기존 페이지의 주소 변경(내 주소·쿨다운 판정 포함) / "create" = 새 페이지 —
+     내 다른 페이지와 같은 주소는 «내 주소»가 아니라 중복이고, 쿨다운도 새 페이지엔 무관하다 */
+  mode: "change" | "create" = "change",
 ): Promise<{ ok: true; status: "available" | "taken" | "held" | "invalid" | "mine" | "cooldown" | "skip"; message?: string }> {
   if (isDemoMode()) return { ok: true, status: "skip" };
   const user = await getAuthUser();
@@ -1022,7 +1025,7 @@ export async function checkSlugAvailable(
   const err = validateSlug(clean);
   if (err) return { ok: true, status: "invalid", message: SLUG_MESSAGES[err] };
 
-  const mine = await myPage(pageId);
+  const mine = mode === "change" ? await myPage(pageId) : null;
   if (mine && mine.slug === clean) return { ok: true, status: "mine" };
 
   /* 쿨다운을 **여기서도** 본다(쏘넷 점검 high) — 안 보면 30일 잠금 중인 사용자에게 초록

@@ -1249,6 +1249,7 @@ export function LinksClient({
       {newPageOpen ? (
         <NewPageModal
           busy={busy}
+          error={error}
           onClose={() => setNewPageOpen(false)}
           onSubmit={(slugv, titlev) =>
             run(
@@ -2768,17 +2769,38 @@ function PageSwitcher({
   );
 }
 
-/* ── 주소 실시간 검사(2026-08-26 사장님 지시: 중복 확인을 «먼저» 받고 정하기) ──
+/* ── 주소 검사(2026-08-26 사장님 지시 2차: 자동 debounce 대신 «중복 확인» 버튼) ──
    형식·예약어·금칙어는 validateSlug(서버와 같은 함수)로 **입력 즉시** 거르고,
-   중복·최근 사용만 서버에 debounce 로 묻는다. 동기 판정은 렌더에서 파생하고 서버 결과만
-   상태로 든다 — effect 본문에서 setState 를 부르면 린트(set-state-in-effect)가 막고,
-   실제로도 캐스케이딩 렌더가 된다. */
-type SlugCheck = { level: "idle" | "checking" | "ok" | "error" | "neutral"; msg?: string };
+   중복·최근 사용·쿨다운은 사용자가 버튼을 눌러 확인한다 — 통과해야만 주소를 정할 수 있다.
+   동기 판정과 «확인 필요» 여부는 렌더에서 파생하고 서버 결과만 상태로 든다(set-state-in-effect
+   회피 — effect 자체가 없어졌다). 응답은 요청 시점 값(for)과 세대(seq)가 지금과 같을 때만
+   쓴다 — 확인 후 글자를 고치면 그 값은 다시 «확인 필요»로 돌아간다. */
+type SlugCheck = { level: "idle" | "checking" | "ok" | "error" | "neutral" | "unchecked"; msg?: string };
 
-function useSlugCheck(value: string, pageId: string | undefined, currentSlug: string | undefined): SlugCheck {
+function useSlugCheck(
+  value: string,
+  pageId: string | undefined,
+  currentSlug: string | undefined,
+  mode: "change" | "create" = "change",
+  /** 부모의 저장/확정 오류 — 새 오류가 오면 «통과» 캐시를 버린다(쏘넷 점검 high):
+      확인은 통과였는데 저장이 거절된 값(막판 선점 등)이 초록인 채 재시도 루프가 되면 안 된다 */
+  errorSignal?: string | null,
+): { check: SlugCheck; passed: boolean; needsCheck: boolean; runCheck: () => void } {
   const v = value.trim().toLowerCase();
   const [server, setServer] = useState<{ for: string; res: SlugCheck } | null>(null);
+  const [pendingFor, setPendingFor] = useState<string | null>(null);
   const seq = useRef(0);
+
+  /* 렌더 중 조정 패턴(props 변화에 state 맞추기 — effect 금지 규칙의 공식 대안).
+     오류가 «새로» 온 순간에만 캐시를 비운다 — 오류가 남아 있는 동안의 재확인 결과는 유지된다. */
+  const [seenError, setSeenError] = useState<string | null | undefined>(errorSignal);
+  if (errorSignal !== seenError) {
+    setSeenError(errorSignal);
+    if (errorSignal) {
+      setServer(null);
+      setPendingFor(null);
+    }
+  }
 
   /* 동기(즉시) 판정 — 서버가 필요 없는 경우를 렌더에서 바로 가른다 */
   let sync: SlugCheck | null = null;
@@ -2792,43 +2814,76 @@ function useSlugCheck(value: string, pageId: string | undefined, currentSlug: st
     if (err) sync = { level: "error", msg: SLUG_MESSAGES[err] };
   }
 
-  const needServer = sync === null;
-  useEffect(() => {
-    /* 값이 바뀔 때마다 **무조건** 세대를 올린다 — 서버가 필요 없는 값(빈칸·형식 오류)으로
-       벗어났다 돌아와도, 진행 중이던 이전 요청의 낡은 응답이 캐시로 살아남지 못하게(쏘넷 점검).
-       캐시도 세대가 같을 때만 쓴다(아래 렌더 조건) — 같은 글자를 다시 쳐도 새로 확인한다. */
+  const runCheck = () => {
+    if (sync) return; // 서버가 필요 없는 값 — 버튼이 어차피 잠겨 있다
+    const val = v;
     const my = ++seq.current;
-    if (!needServer) return;
-    const t = window.setTimeout(async () => {
-      /* 같은 값을 다시 확인하기 시작하면 그 값의 낡은 캐시를 먼저 비운다 — 안 비우면
-         떠났다 돌아온 값이 재확인 없이 예전 「쓸 수 있어요」를 그대로 보여준다(쏘넷 점검).
-         다른 값의 캐시는 렌더 조건(for===v)이 어차피 무시한다. */
-      setServer((cur) => (cur && cur.for === v ? null : cur));
+    setPendingFor(val);
+    /* 같은 값을 다시 확인하면 낡은 캐시부터 비운다 — 버튼을 눌렀으면 정말 다시 확인한다 */
+    setServer((cur) => (cur && cur.for === val ? null : cur));
+    void (async () => {
       try {
-        const r = await checkSlugAvailable(v, pageId);
-        if (seq.current !== my) return; // 그 사이 입력이 바뀜 — 낡은 답 버림
+        const r = await checkSlugAvailable(val, pageId, mode);
+        if (seq.current !== my) return; // 그 사이 새 확인이 시작됨 — 낡은 답 버림
         const res: SlugCheck =
           r.status === "available"
             ? { level: "ok", msg: "쓸 수 있는 주소예요!" }
             : r.status === "mine"
               ? { level: "ok", msg: "지금 쓰는 주소예요." }
               : r.status === "skip"
-                ? { level: "neutral", msg: "저장할 때 최종 확인돼요." }
+                ? { level: "neutral", msg: "지금은 최종 확인을 못 해요 — 저장할 때 다시 검사돼요." }
                 : { level: "error", msg: r.message ?? "쓸 수 없는 주소예요." };
-        setServer({ for: v, res });
+        setServer({ for: val, res });
       } catch {
-        if (seq.current === my) setServer({ for: v, res: { level: "neutral", msg: "확인하지 못했어요 — 저장할 때 다시 검사해요." } });
+        /* 확인 실패는 통과가 아니다(사장님 지시: 통과해야만 설정) — 다시 누르게 한다 */
+        if (seq.current === my) setServer({ for: val, res: { level: "error", msg: "확인하지 못했어요 — 「중복 확인」을 다시 눌러 주세요." } });
+      } finally {
+        if (seq.current === my) setPendingFor(null);
       }
-    }, 450);
-    return () => window.clearTimeout(t);
-  }, [v, pageId, needServer]);
+    })();
+  };
 
-  if (sync) return sync;
-  /* seq(ref)는 렌더에서 읽지 않는다(react-hooks/refs) — 낡은 캐시는 위 두 장치가 막는다:
-     ① 값이 바뀔 때마다 세대(++seq)가 올라 뒤늦은 응답이 버려지고,
-     ② 같은 값의 재확인이 시작되면 그 캐시를 비운다. */
-  if (server && server.for === v) return server.res;
-  return { level: "checking", msg: "쓸 수 있는 주소인지 확인하는 중…" };
+  let check: SlugCheck;
+  if (sync) check = sync;
+  else if (pendingFor === v) check = { level: "checking", msg: "쓸 수 있는 주소인지 확인하는 중…" };
+  else if (server && server.for === v) check = server.res;
+  else check = { level: "unchecked", msg: "「중복 확인」을 눌러 쓸 수 있는 주소인지 확인해 주세요." };
+
+  return {
+    check,
+    /* 통과 = 초록(내 주소 포함) 또는 neutral(서버가 확인 불가 — 최종 관문은 저장이 다시 선다) */
+    passed: check.level === "ok" || check.level === "neutral",
+    /* 서버가 준 오류(중복·확인 실패)도 다시 눌러볼 수 있어야 한다 — 안 그러면 「다시 눌러
+       주세요」라는 문구와 달리 버튼이 영영 잠긴다(쏘넷 점검 high). 동기 오류(형식·금칙어)는
+       sync 가 잡으므로 여기 안 온다 — 그건 눌러 봐야 결과가 같아 잠근 채 둔다. */
+    needsCheck: check.level === "unchecked" || (sync === null && check.level === "error"),
+    runCheck,
+  };
+}
+
+/** 「중복 확인」 — 주소 입력칸 옆에 붙는 버튼. 검사할 게 없으면(즉시 판정으로 끝) 잠긴다 */
+function SlugCheckButton({ busy, state }: { busy: boolean; state: { check: SlugCheck; needsCheck: boolean; runCheck: () => void } }) {
+  const checking = state.check.level === "checking";
+  const disabled = busy || checking || !state.needsCheck;
+  return (
+    <Button
+      type="button"
+      variant="secondary"
+      size="sm"
+      className="h-10 shrink-0"
+      disabled={disabled}
+      title={
+        disabled && !checking && !busy
+          ? state.check.level === "idle"
+            ? "주소를 먼저 입력해 주세요"
+            : (state.check.msg ?? undefined)
+          : undefined
+      }
+      onClick={state.runCheck}
+    >
+      {checking ? "확인 중…" : "중복 확인"}
+    </Button>
+  );
 }
 
 function SlugStatusLine({ check }: { check: SlugCheck }) {
@@ -2840,7 +2895,7 @@ function SlugStatusLine({ check }: { check: SlugCheck }) {
         "mt-1.5 text-[12px] leading-relaxed",
         check.level === "ok" && "text-positive-strong",
         check.level === "error" && "text-negative-strong",
-        (check.level === "checking" || check.level === "neutral") && "text-fg-sub",
+        (check.level === "checking" || check.level === "neutral" || check.level === "unchecked") && "text-fg-sub",
       )}
     >
       {check.msg}
@@ -2869,10 +2924,9 @@ function SlugSetupModal({
   onSubmit: (slug: string) => void;
 }) {
   const [v, setV] = useState("");
-  /* 중복 확인을 «먼저» — 확인이 안 끝났거나 막힌 주소면 확정 버튼이 잠긴다.
-     neutral(검사 자체가 실패)은 통과시킨다 — 최종 관문은 서버 저장이 다시 선다(fail-open). */
-  const check = useSlugCheck(v, pageId, currentSlug);
-  const passed = check.level === "ok" || check.level === "neutral";
+  /* 중복 확인을 «먼저» — 버튼으로 확인하고, 통과해야만 확정 버튼이 열린다(사장님 지시 2차) */
+  const slugCheck = useSlugCheck(v, pageId, currentSlug, "change", error);
+  const { check, passed, needsCheck, runCheck } = slugCheck;
   return (
     <ModalShell label="내 주소 정하기" title="내 주소를 정해 주세요" onClose={onLater} busy={busy} size="sm">
       <div className="space-y-3">
@@ -2889,13 +2943,17 @@ function SlugSetupModal({
               value={v}
               onChange={(e) => setV(e.target.value.toLowerCase())}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.nativeEvent.isComposing && v.trim() && !busy && passed) onSubmit(v.trim());
+                if (e.key !== "Enter" || e.nativeEvent.isComposing || !v.trim() || busy) return;
+                /* Enter 한 키로 자연스럽게: 아직 확인 전이면 확인부터, 통과했으면 확정 */
+                if (needsCheck) runCheck();
+                else if (passed) onSubmit(v.trim());
               }}
               maxLength={30}
               placeholder="my-brand"
               autoFocus
               className="h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
             />
+            <SlugCheckButton busy={busy} state={slugCheck} />
           </div>
           <SlugStatusLine check={check} />
         </div>
@@ -2915,10 +2973,10 @@ function SlugSetupModal({
           <Button
             size="sm"
             disabled={busy || !v.trim() || !passed}
-            title={!passed && v.trim() ? (check.msg ?? "확인 중이에요") : undefined}
+            title={!passed && v.trim() ? (check.msg ?? "먼저 중복 확인을 해 주세요") : undefined}
             onClick={() => onSubmit(v.trim())}
           >
-            {busy ? "정하는 중…" : check.level === "checking" ? "확인 중…" : "이 주소로 정하기"}
+            {busy ? "정하는 중…" : "이 주소로 정하기"}
           </Button>
         </div>
       </div>
@@ -2985,9 +3043,11 @@ function ExitDraftModal({
 }
 
 /** 새 페이지 만들기 — 주소·제목. 검증은 서버(validateSlug·상한 트리거)가 최종 */
-function NewPageModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (slug: string, title: string) => void }) {
+function NewPageModal({ busy, error, onClose, onSubmit }: { busy: boolean; error: string | null; onClose: () => void; onSubmit: (slug: string, title: string) => void }) {
   const [slugv, setSlugv] = useState("");
   const [titlev, setTitlev] = useState("");
+  /* 새 페이지도 같은 규칙 — create 모드는 내 주소·쿨다운 판정을 빼고 중복만 본다(actions 주석) */
+  const slugCheck = useSlugCheck(slugv, undefined, undefined, "create", error);
   return (
     <ModalShell label="새 페이지" title="새 페이지" onClose={onClose} busy={busy} size="sm">
       <div className="space-y-3">
@@ -3001,12 +3061,31 @@ function NewPageModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () 
           <div className="mt-1.5 flex items-center gap-1">
             <span className="shrink-0 text-[12px] text-fg-sub">finch.ai.kr/</span>
             <input id="np-slug" value={slugv} onChange={(e) => setSlugv(e.target.value.toLowerCase())} maxLength={30} placeholder="my-event"
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" || e.nativeEvent.isComposing || !slugv.trim() || busy) return;
+                /* 설정 모달과 같은 Enter 흐름 — 확인 전이면 확인부터, 통과했으면 만들기(쏘넷 점검) */
+                if (slugCheck.needsCheck) slugCheck.runCheck();
+                else if (slugCheck.passed && titlev.trim()) onSubmit(slugv.trim(), titlev.trim());
+              }}
               className="h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none" />
+            <SlugCheckButton busy={busy} state={slugCheck} />
           </div>
+          <SlugStatusLine check={slugCheck.check} />
         </div>
+        {/* 만들기 실패(서버 최종 관문)를 모달 안에서 보여준다 — 전엔 보일 자리가 없었다 */}
+        {error ? (
+          <p role="alert" className="rounded-card border border-negative/40 bg-negative-weak px-3 py-2 text-[14px] text-negative-strong">
+            {error}
+          </p>
+        ) : null}
         <div className="flex justify-end gap-2 pt-1">
           <Button variant="ghost" size="sm" onClick={onClose} disabled={busy}>취소</Button>
-          <Button size="sm" disabled={busy || !slugv.trim() || !titlev.trim()} onClick={() => onSubmit(slugv.trim(), titlev.trim())}>
+          <Button
+            size="sm"
+            disabled={busy || !slugv.trim() || !titlev.trim() || !slugCheck.passed}
+            title={!slugCheck.passed && slugv.trim() ? (slugCheck.check.msg ?? "먼저 중복 확인을 해 주세요") : undefined}
+            onClick={() => onSubmit(slugv.trim(), titlev.trim())}
+          >
             {busy ? "만드는 중…" : "만들기"}
           </Button>
         </div>
@@ -3392,8 +3471,8 @@ function ProfilePanel({
   onImages: (v: { avatarPath?: string | null; coverPath?: string | null }) => void;
   onSave: () => void;
 }) {
-  /* 주소 실시간 검사 — 모달과 같은 훅(useSlugCheck 주석) */
-  const profileSlugCheck = useSlugCheck(form.slug, page.id, page.slug);
+  /* 주소 검사 — 모달과 같은 훅·같은 규칙(버튼으로 확인, 통과해야 저장) */
+  const profileSlug = useSlugCheck(form.slug, page.id, page.slug, "change", error);
   const { slug, title, bio, layout, align, snsLinks: sns, snsPlacement, titleSize, seoTitle, seoDesc } = form;
 
   const input =
@@ -3468,9 +3547,12 @@ function ProfilePanel({
         <label htmlFor="p-slug" className="block text-[12px] font-medium text-fg-sub">
           주소 (finch.ai.kr/…)
         </label>
-        <input id="p-slug" value={slug} onChange={(e) => onChange({ slug: e.target.value.toLowerCase() })} maxLength={30} className={`mt-1.5 ${input}`} />
-        {/* 모달과 같은 실시간 검사 — 저장 눌러서야 「이미 있어요」를 듣게 하지 않는다 */}
-        <SlugStatusLine check={profileSlugCheck} />
+        <div className="mt-1.5 flex items-center gap-2">
+          <input id="p-slug" value={slug} onChange={(e) => onChange({ slug: e.target.value.toLowerCase() })} maxLength={30} className={input} />
+          <SlugCheckButton busy={busy} state={profileSlug} />
+        </div>
+        {/* 모달과 같은 검사 — 저장 눌러서야 「이미 있어요」를 듣게 하지 않는다 */}
+        <SlugStatusLine check={profileSlug.check} />
         {/* 주소 변경의 두 가지 질문 — 「얼마나 자주 바꿀 수 있나」 「이미 뿌린 링크는 어떻게 되나」 */}
         <p className="mt-1.5 text-[12px] leading-relaxed text-fg-sub">
           주소는 30일에 한 번 바꿀 수 있어요(정한 직후 10분은 오타 수정 가능). 바꿔도 옛 주소로 온
@@ -3684,7 +3766,21 @@ function ProfilePanel({
           저장 안 한 변경이 있어요 — 탭을 옮겨도 입력은 남아 있고, 「저장」해야 실제로 반영됩니다.
         </p>
       ) : null}
-      <Button variant="secondary" disabled={busy} onClick={onSave}>
+      {/* 주소를 바꿔 적었으면 중복 확인 통과 전엔 저장이 잠긴다 — 주소 그대로면 동기 판정이
+          즉시 통과라 다른 필드만 고치는 저장은 안 막힌다(서버 관문과 같은 원칙). 잠긴 이유는
+          원인에 맞게 말한다 — 빈 주소인데 「중복 확인을 하라」고 하면 엉뚱하다(쏘넷 점검). */}
+      <Button
+        variant="secondary"
+        disabled={busy || !profileSlug.passed}
+        title={
+          !profileSlug.passed
+            ? profileSlug.check.level === "idle"
+              ? "주소가 비어 있어요 — 주소를 입력하거나 원래 주소로 되돌려 주세요"
+              : (profileSlug.check.msg ?? "먼저 중복 확인을 해 주세요")
+            : undefined
+        }
+        onClick={onSave}
+      >
         {busy ? "저장 중…" : "저장"}
       </Button>
     </div>
