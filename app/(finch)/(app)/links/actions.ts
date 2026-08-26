@@ -430,7 +430,7 @@ export async function updateLinkProfile(input: {
   }
 
   /* 레이아웃 열거 검증 — DB check(0048·0069)가 최후 방어지만 여기서 걸러야 이유가 보인다 */
-  const layout = LAYOUTS.some((l) => l.key === input.layout) ? input.layout : "profile";
+  const layout = LAYOUTS.some((l) => l.key === input.layout) || input.layout === "hidden" ? input.layout : "profile";
   const base = {
     slug: clean,
     title: sliceChars(input.title.trim(), 40),

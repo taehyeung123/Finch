@@ -683,14 +683,15 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
 
 /** 프로필 레이아웃 — 링크팜의 프로필 / 커버 / 커버+프로필 */
 export const LAYOUTS = [
+  /* 배경형 — 프로필 사진이 상단 전체에 깔리고 그라데이션으로 지면에 녹는다(리틀리 1번, 실측 2026-08-26) */
+  { key: "hero", label: "배경", hint: "사진이 상단 전체 배경으로" },
   { key: "profile", label: "프로필", hint: "동그란 프로필 사진만" },
-  { key: "cover", label: "커버", hint: "가로 배너 한 장" },
   { key: "cover_profile", label: "커버+프로필", hint: "배너 위에 프로필 사진" },
-  /* 프로필 영역 통째 숨김(2026-08-26) — 대표문구·사진 없이 블록만. DB check 는 0069 가 넓힌다 */
-  { key: "hidden", label: "숨김", hint: "프로필 영역 없이 블록만" },
+  { key: "cover", label: "커버", hint: "가로 배너 한 장" },
 ] as const;
 
-export type LayoutKey = (typeof LAYOUTS)[number]["key"];
+/* «숨김»은 카드가 아니라 프로필 영역 ON/OFF 토글의 값이다(리틀리 문법) — 저장값으로는 유효 */
+export type LayoutKey = (typeof LAYOUTS)[number]["key"] | "hidden";
 
 /** SNS 아이콘 줄에서 지원하는 채널 */
 /** SNS 채널 — 목록의 단일 출처는 lib/links/sns-catalog.ts(리틀리 흡수 4단계, 90여 채널) */

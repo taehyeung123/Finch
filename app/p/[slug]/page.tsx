@@ -11,7 +11,6 @@ import { LockScreen } from "./_components/lock-screen";
 import { TrackingScripts } from "./_components/tracking-scripts";
 import { loadPublicPage, movedTo } from "./public-page";
 import { linkWorkspace } from "@/lib/data";
-import { FinchMark } from "@/components/logo";
 import { FinchPill } from "./_components/finch-pill";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, publicLinkUrl, sanitizeSnsLinks } from "@/lib/links";
@@ -327,7 +326,7 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
           split
             ? "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:grid lg:max-w-[1000px] lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] lg:items-start lg:gap-x-16 lg:px-14 lg:pb-16 lg:pt-16"
             : "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:max-w-[600px] lg:px-10 lg:pb-16"
-        } ${topbar ? "pt-4" : themeCustom?.share || subscribeOn ? "pt-16" : "pt-12"} lg:isolate lg:my-12 lg:min-h-[calc(100dvh-6rem)] ${topbar ? "" : "lg:pt-14"}`}
+        } ${topbar ? "pt-4" : snap.layout === "hero" ? "pt-0" : themeCustom?.share || subscribeOn ? "pt-16" : "pt-12"} lg:isolate lg:my-12 lg:min-h-[calc(100dvh-6rem)] ${topbar ? "" : snap.layout === "hero" ? "lg:pt-0" : "lg:pt-14"}`}
       >
         {/* PC 캔버스 — 판(색·그림자·테두리)과 이미지(사용자 블러 옵션)를 **두 겹으로 분리**한다:
             한 겹에 filter 를 걸면 그림자·라운드 테두리까지 같이 번진다. 이미지 겹은 clip-path 로
@@ -385,9 +384,19 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
             LAYOUTS 힌트("배너 위에 프로필 사진")가 약속한 모양이 화면에 없었다(2026-08-24 비평) */}
         {snap.layout === "hidden" ? null : (
         <header
-          className={`relative flex flex-col ${align} ${snap.layout === "cover_profile" && snap.coverPath ? "-mt-11" : ""} ${split ? "lg:col-start-1 lg:sticky lg:top-16 lg:self-start" : ""}`}
+          className={`relative flex flex-col ${snap.layout === "hero" ? "items-center text-center" : align} ${snap.layout === "cover_profile" && snap.coverPath ? "-mt-11" : ""} ${split ? "lg:col-start-1 lg:sticky lg:top-16 lg:self-start" : ""}`}
         >
-          {snap.layout !== "cover" ? (
+          {/* 배경형(hero, 리틀리 실측) — 프로필 사진이 상단 전체 배경으로 깔리고
+              아래로 갈수록 지면색에 녹는다. 사진이 없으면 이 층 없이 문구만(방문자에게
+              회색 자리표시자를 보여주지 않는다 — 초대는 편집 미리보기의 몫). */}
+          {snap.layout === "hero" && snap.avatarPath ? (
+            <div className="relative -mx-5 mb-4 self-stretch overflow-hidden lg:-mx-10 lg:rounded-t-[28px]">
+              {/* eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL */}
+              <img src={snap.avatarPath} alt="" className="aspect-[6/5] w-full object-cover" />
+              <div aria-hidden className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-b from-transparent to-[var(--lp-bg)]" />
+            </div>
+          ) : null}
+          {snap.layout !== "cover" && snap.layout !== "hero" ? (
             snap.avatarPath ? (
               // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
               <img

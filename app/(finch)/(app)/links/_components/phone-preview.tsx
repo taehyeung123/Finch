@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapPin, ExternalLink, ArrowDown, ArrowUp, CalendarPlus, Download, Eye, EyeOff, GripVertical, Info, Pencil, Plus, Search, Share2, Trash2, UserPlus } from "lucide-react";
+import { MapPin, ExternalLink, ArrowDown, ArrowUp, CalendarPlus, Download, Eye, EyeOff, GripVertical, ImagePlus, Info, Pencil, Plus, Search, Share2, Trash2, UserPlus } from "lucide-react";
 import { eventChip, eventEndEpoch, eventEpoch, formatEventDate, formatEventTime, isMultiDay, nowMs, parseEventAt, type EventPart } from "@/lib/links/events";
 import { cn } from "@/lib/cn";
 import { FinchMark } from "@/components/logo";
@@ -405,14 +405,37 @@ export function PhonePreview({
 
           {/* 프로필 — cover_profile 은 아바타 반지름(72/2=36px)만큼 올라가 커버를 문다(공개 페이지와 같은 규칙) */}
           {page.layout === "hidden" ? null : (
-          <div className={`relative flex flex-col ${align} ${page.layout === "cover_profile" && page.coverPath ? "-mt-9" : ""}`}>
-            {editable && page.layout !== "cover" ? (
+          <div className={`relative flex flex-col ${page.layout === "hero" ? "items-center text-center" : align} ${page.layout === "cover_profile" && page.coverPath ? "-mt-9" : ""}`}>
+            {/* 배경형(hero) — 공개 페이지와 같은 층. 편집 캔버스에선 눌러서 프로필 설정으로 */}
+            {page.layout === "hero" ? (
+              page.avatarPath ? (
+                editable ? (
+                  <button type="button" onClick={edit?.onOpenProfile} aria-label="배경 사진 바꾸기" className="relative -mx-5 -mt-8 mb-3 block self-stretch overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL */}
+                    <img src={page.avatarPath} alt="" className="aspect-[6/5] w-full object-cover" />
+                    <span aria-hidden className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-b from-transparent to-[var(--lp-bg)]" />
+                  </button>
+                ) : (
+                  <span className="relative -mx-5 -mt-8 mb-3 block self-stretch overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL */}
+                    <img src={page.avatarPath} alt="" className="aspect-[6/5] w-full object-cover" />
+                    <span aria-hidden className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-b from-transparent to-[var(--lp-bg)]" />
+                  </span>
+                )
+              ) : editable ? (
+                /* 사진 초대 — 리틀리처럼 회색 자리(공개 페이지엔 안 나간다) */
+                <button type="button" onClick={edit?.onOpenProfile} aria-label="배경 사진 넣기" className="-mx-5 -mt-8 mb-3 flex aspect-[6/5] items-center justify-center self-stretch bg-[var(--lp-border)] text-[var(--lp-muted)]">
+                  <ImagePlus className="size-8" aria-hidden />
+                </button>
+              ) : null
+            ) : null}
+            {editable && page.layout !== "cover" && page.layout !== "hero" ? (
               <button type="button" onClick={edit?.onOpenProfile} aria-label="프로필 사진·레이아웃 설정">
                 {avatar}
               </button>
-            ) : (
+            ) : page.layout !== "hero" ? (
               avatar
-            )}
+            ) : null}
 
             {editable && inlineField === "title" ? (
               <input

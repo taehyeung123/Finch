@@ -739,6 +739,9 @@ export function LinksClient({
     const serverData = blocks.find((b) => b.id === id)?.data ?? {};
     setAutoSaving(true);
     autosaveChain.current = autosaveChain.current
+      /* 앞선 저장이 던졌어도(네트워크 등) 체인을 살린다 — 여길 안 잡으면 거부된 프라미스에
+         .then 이 계속 붙어 **그 뒤 모든 자동 저장이 조용히 무시**된다(2026-08-26 신고 원인 후보) */
+      .catch(() => {})
       .then(async () => {
         /* undo 원본은 **실행 직전**에 읽는다(쏘넷 점검) — 앞선 저장이 끝나야 lastSavedRef 가
            맞다. 같은 값이 이미 저장돼 있으면(디바운스+갈아타기 이중 호출) 통째로 건너뛴다. */
@@ -764,6 +767,9 @@ export function LinksClient({
           undo: () => updateBlock(resolveId(id), { data: prev }),
           redo: () => updateBlock(resolveId(id), { data }),
         });
+      })
+      .catch(() => {
+        setError("자동 저장하지 못했어요 — 네트워크를 확인해 주세요. 잠시 뒤 다시 저장돼요.");
       })
       .finally(() => setAutoSaving(false));
   }
@@ -3513,14 +3519,40 @@ function ProfilePanel({
   /* 주소 검사 — 모달과 같은 훅·같은 규칙(버튼으로 확인, 통과해야 저장) */
   const profileSlug = useSlugCheck(form.slug, page.id, page.slug, "change", error);
   const { slug, title, bio, layout, align, snsLinks: sns, snsPlacement, titleSize, seoTitle, seoDesc } = form;
+  /* 토글을 다시 켤 때 돌아갈 레이아웃 — 끄기 직전 값(세션 내) */
+  const prevLayoutRef = useRef<string>("profile");
 
   const input =
     "h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none";
 
   return (
     <div className="space-y-4">
-      <h3 className="text-[15px] font-bold">프로필</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-[15px] font-bold">프로필</h3>
+        {/* 프로필 영역 ON/OFF(리틀리 실측 2026-08-26) — 끄면 layout="hidden" 으로 저장되고
+            블록만 남는다. 다시 켜면 끄기 전 레이아웃으로 돌아간다(세션 내). */}
+        <label className="flex items-center gap-2 text-[12px] font-medium text-fg-sub">
+          <Switch
+            checked={layout !== "hidden"}
+            onChange={(v) => {
+              if (v) onChange({ layout: prevLayoutRef.current || "profile" });
+              else {
+                prevLayoutRef.current = layout === "hidden" ? "profile" : layout;
+                onChange({ layout: "hidden" });
+              }
+            }}
+            label="프로필 영역 표시"
+          />
+          표시
+        </label>
+      </div>
 
+      {layout === "hidden" ? (
+        <p className="rounded-card bg-plate px-3 py-2.5 text-[13px] leading-relaxed text-fg-sub">
+          프로필 영역을 껐어요 — 방문자에게 블록만 보여요. 위 「표시」 스위치로 다시 켤 수 있어요.
+        </p>
+      ) : (
+        <>
       <div>
         <p className="text-[14px] font-semibold text-fg">레이아웃</p>
         {/* 글자 대신 **그림**으로 고른다(링크팜 실측 반영) — "커버+프로필"이라는 말보다
@@ -3532,27 +3564,46 @@ function ProfilePanel({
               type="button"
               onClick={() => onChange({ layout: l.key })}
               aria-pressed={layout === l.key}
+              aria-label={l.label}
+              title={`${l.label} — ${l.hint}`}
               className={cn(
-                "trans-state rounded-card border p-2 text-[12px] font-semibold",
+                "trans-state rounded-card border p-1.5",
                 layout === l.key ? "border-2 border-primary" : "border border-line hover:bg-tint-hover",
               )}
             >
-              <span
-                className="relative flex h-12 flex-col items-center overflow-hidden rounded-[8px] bg-plate pt-1.5"
-                aria-hidden
-              >
-                {l.key === "cover" || l.key === "cover_profile" ? <span className="absolute inset-x-0 top-0 h-4 bg-fg/20" /> : null}
-                {l.key === "profile" || l.key === "cover_profile" ? (
-                  <span className={cn("relative z-10 size-4 rounded-full bg-fg/40", l.key === "cover_profile" && "mt-1")} />
-                ) : l.key === "cover" ? (
-                  <span className="mt-4 h-1.5 w-8 rounded-full bg-fg/30" />
+              {/* 리틀리처럼 글자 없이 그림으로만(실측 2026-08-26) — 이름은 title/aria 가 말한다 */}
+              <span className="relative flex h-14 flex-col items-center overflow-hidden rounded-[8px] bg-plate" aria-hidden>
+                {l.key === "hero" ? (
+                  <>
+                    {/* 배경형 — 위쪽이 사진(실루엣+원)이고 아래로 녹는다 */}
+                    <span className="absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-fg/25 to-transparent" />
+                    <span className="relative z-10 mt-2 size-4 rounded-full bg-fg/40" />
+                    <span className="mt-3 h-1 w-10 rounded-full bg-fg/20" />
+                    <span className="mt-0.5 h-1 w-7 rounded-full bg-fg/15" />
+                  </>
+                ) : l.key === "profile" ? (
+                  <>
+                    <span className="mt-2 size-5 rounded-full bg-fg/40" />
+                    <span className="mt-1.5 h-1 w-10 rounded-full bg-fg/20" />
+                    <span className="mt-0.5 h-1 w-7 rounded-full bg-fg/15" />
+                  </>
+                ) : l.key === "cover_profile" ? (
+                  <>
+                    <span className="absolute inset-x-0 top-0 h-5 bg-fg/20" />
+                    <span className="relative z-10 mt-2.5 size-4 rounded-full bg-fg/40 ring-2 ring-body" />
+                    <span className="mt-1.5 h-1 w-10 rounded-full bg-fg/20" />
+                    <span className="mt-0.5 h-1 w-7 rounded-full bg-fg/15" />
+                  </>
                 ) : (
-                  <span className="mt-1 h-1.5 w-10 rounded-[3px] bg-fg/25" />
+                  <>
+                    <span className="absolute inset-x-0 top-0 flex h-6 items-center justify-center bg-fg/20">
+                      <span className="size-2 rounded-full bg-fg/30" />
+                    </span>
+                    <span className="mt-8 h-1 w-10 rounded-full bg-fg/20" />
+                    <span className="mt-0.5 h-1 w-7 rounded-full bg-fg/15" />
+                  </>
                 )}
-                <span className="mt-1 h-1 w-10 rounded-full bg-fg/20" />
-                <span className="mt-0.5 h-1 w-7 rounded-full bg-fg/15" />
               </span>
-              <span className="mt-1 block">{l.label}</span>
             </button>
           ))}
         </div>
@@ -3562,7 +3613,7 @@ function ProfilePanel({
           「저장」을 누르게 하면 올렸는데 반영이 안 되는 것처럼 보인다. */}
       {layout !== "cover" && layout !== "hidden" ? (
         <ImageField
-          label="프로필 사진"
+          label={layout === "hero" ? "배경 사진 (프로필 이미지)" : "프로필 사진"}
           value={page.avatarPath ?? ""}
           onChange={(v) => onImages({ avatarPath: v || null })}
           aspect="aspect-square"
@@ -3685,6 +3736,9 @@ function ProfilePanel({
           ))}
         </div>
       </div>
+
+        </>
+      )}
 
       <div>
         <label htmlFor="p-slug" className="block text-[12px] font-medium text-fg-sub">
