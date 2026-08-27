@@ -541,15 +541,11 @@ export function BlockRenderer({
       const nodes = items.map(({ it, i }) => (
         <a key={i} href={goHref(base, block.id, i)} {...ext} aria-label={s(it, "title") ? undefined : lpN(t.itemLink, i + 1)} className={`lp-btn ${cardCls} overflow-hidden`}>
           {s(it, "imagePath") ? (
-            /* 사진구역 — **같은 사진의 블러 사본**을 뒤에 깔아 빈 부분(투명 PNG·저장된 여백)을
-               사진 자신의 색으로 메운다(2026-08-27 2차: 판에 색을 칠하면 그 색과 사진 사이에
-               띠가 뜬다 — 어떤 판 색도 정답이 아니다). 불투명 사진에선 사본이 완전히 가려진다. */
-            <span className="relative block w-full overflow-hidden border-b border-[var(--lp-border)]">
-              {/* eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL */}
-              <img src={s(it, "imagePath")} alt="" aria-hidden className="absolute inset-0 size-full scale-150 object-cover blur-xl" loading="lazy" />
-              {/* eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL */}
-              <img src={s(it, "imagePath")} alt="" className="relative aspect-square w-full object-cover" loading="lazy" />
-            </span>
+            /* 원본 비율 그대로, 폭만 타일에 맞춘다(2026-08-27 3차 «원본 비율 줄여서 그대로») —
+               정사각 강제 크롭이 옆을 잘라 «찌부» 인상을 만들고, 크롭·판·블러 등 어떤 보정도
+               사진과 다른 무언가를 만들었다. 이미지가 곧 사진구역이다. */
+            // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
+            <img src={s(it, "imagePath")} alt="" className="w-full" loading="lazy" />
           ) : null}
           {/* 사진 없는 셀은 라벨만이라 40px 이었다 — 그때만 터치 최소치(44px)를 바닥으로 준다.
               사진 있는 셀까지 밀면 짧은 제목 아래 빈 칸이 생겨 격자 리듬이 헐거워진다(소넷 확정) */}

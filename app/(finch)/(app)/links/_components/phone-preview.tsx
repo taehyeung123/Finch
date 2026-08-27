@@ -1087,13 +1087,9 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
       const nodes = items.map((it, i) => (
         <div key={i} className={`${card} overflow-hidden`}>
           {s(it, "imagePath") ? (
-            /* 사진구역 — 공개와 동일: 같은 사진의 블러 사본으로 빈 부분을 사진 색으로 메운다 */
-            <span className="relative block w-full overflow-hidden border-b border-[var(--lp-border)]">
-              {/* eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL */}
-              <img src={s(it, "imagePath")} alt="" aria-hidden className="absolute inset-0 size-full scale-150 object-cover blur-xl" />
-              {/* eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL */}
-              <img src={s(it, "imagePath")} alt="" className="relative aspect-square w-full object-cover" />
-            </span>
+            /* 원본 비율 그대로 폭만 맞춘다 — 공개 페이지와 동일(정사각 크롭·보정 전부 제거) */
+            // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
+            <img src={s(it, "imagePath")} alt="" className="w-full" />
           ) : null}
           {/* 공개와 같은 이유로 블록 — flex 자식이면 line-clamp 가 죽는다 */}
           {/* 사진 없는 셀은 라벨만이라 낮아진다 — 공개와 같은 바닥(비율 축소값) */}
