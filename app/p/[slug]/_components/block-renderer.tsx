@@ -541,11 +541,13 @@ export function BlockRenderer({
       const nodes = items.map(({ it, i }) => (
         <a key={i} href={goHref(base, block.id, i)} {...ext} aria-label={s(it, "title") ? undefined : lpN(t.itemLink, i + 1)} className={`lp-btn ${cardCls} overflow-hidden`}>
           {s(it, "imagePath") ? (
-            /* 원본 비율 그대로, 폭만 타일에 맞춘다(2026-08-27 3차 «원본 비율 줄여서 그대로») —
-               정사각 강제 크롭이 옆을 잘라 «찌부» 인상을 만들고, 크롭·판·블러 등 어떤 보정도
-               사진과 다른 무언가를 만들었다. 이미지가 곧 사진구역이다. */
-            // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
-            <img src={s(it, "imagePath")} alt="" className="w-full" loading="lazy" />
+            /* 아이콘 타일(2026-08-27 최종 지시 «사진 크기를 줄이던가») — 사진을 사방 균일한
+               여백의 라운드 정사각 아이콘으로 통일한다. 원본이 무슨 비율·여백이든 이 모양이
+               되므로 «어색한 여백»이 생길 수 없고, 타일 높이도 다시 균일해진다. */
+            <span className="flex w-full items-center justify-center px-2.5 pt-2.5">
+              {/* eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL */}
+              <img src={s(it, "imagePath")} alt="" className="aspect-square w-full rounded-[calc(var(--lp-radius)/1.6)] object-cover" loading="lazy" />
+            </span>
           ) : null}
           {/* 사진 없는 셀은 라벨만이라 40px 이었다 — 그때만 터치 최소치(44px)를 바닥으로 준다.
               사진 있는 셀까지 밀면 짧은 제목 아래 빈 칸이 생겨 격자 리듬이 헐거워진다(소넷 확정) */}
