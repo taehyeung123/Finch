@@ -24,8 +24,14 @@ import { FinchLoader } from "@/components/ui/finch-loader";
 /** 저장본의 최대 긴 변 — 표시 최대폭(PC 캔버스 600px)×레티나 3배보다 넉넉한 상한.
     «고화질을 왜 버리냐»(2026-08-26) 지시로 1600→2000. 이 위는 화질 체감 없이 무게만 는다. */
 const CROP_MAX_W = 2000;
-/** 이 바이트를 넘으면 치수가 작아도 다시 인코딩한다(무거운 PNG 스크린샷 등) */
-const REENCODE_BYTES = 1_500_000;
+/** 조정 화면 비율 선택지 — cropAspect 가 없는 칸에서 사용자가 직접 고른다(2026-08-27 지시) */
+const CROP_RATIOS: { label: string; value: number | null }[] = [
+  { label: "원본", value: null },
+  { label: "1:1", value: 1 },
+  { label: "4:3", value: 4 / 3 },
+  { label: "16:9", value: 16 / 9 },
+  { label: "3:1", value: 3 },
+];
 /** 전송 안전 상한 — Vercel 요청 본문 4.5MB 하드캡을 base64(+33%) 포함해 넘지 않는 선 */
 const WIRE_MAX_BYTES = 3_000_000;
 
@@ -143,15 +149,17 @@ export function ImageField({
      크롭 조정 중에는 280px: 어디를 남길지 고르는 화면이라 조금 더 크게. */
   const cap = maxW ?? "max-w-[200px]";
   const boxCls = `${cap} ${round ? "rounded-full" : "rounded-card"} ${aspect}`.trim();
-  const cropBoxCls = `${maxW ?? "max-w-[280px]"} ${round ? "rounded-full" : "rounded-card"} ${aspect}`.trim();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /** 위치 조정 대기 중인 이미지(4000px 캡 축소본) — cropAspect 와 비율이 다른 이미지만 여기로 온다.
-      원본 그대로면 25MB 를 크롭 내내 물고, 2000px 로 깎으면 크롭 후 해상도가 상한에 못 미친다 */
+  /** 조정 대기 중인 이미지(4000px 캡 축소본) — 원본 그대로면 25MB 를 조정 내내 물고,
+      2000px 로 깎으면 크롭 후 해상도가 상한에 못 미친다 */
   const [pending, setPending] = useState<{ dataUrl: string; w: number; h: number } | null>(null);
-  /** 보일 창의 위치 0~100 — 세로로 긴 원본이면 위아래, 가로로 길면 좌우 */
-  const [offset, setOffset] = useState(50);
+  /** 조정값(2026-08-27 «영역·크기 직접 설정하게 전부») — 확대 1~3배, 위치 0~100(2축),
+      비율(null=원본 비율). cropAspect 가 있는 칸은 그 비율로 고정된다. */
+  const [adj, setAdj] = useState<{ zoom: number; x: number; y: number; ratio: number | null }>({ zoom: 1, x: 50, y: 50, ratio: null });
+  const frameRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ px: number; py: number; x0: number; y0: number; fw: number; fh: number } | null>(null);
   /* 주소 입력의 로컬 초안 — 부모 value 가 바뀌면(업로드·서버 정규화·지우기) 따라간다 */
   const [draft, setDraft] = useState(value);
   const [prevValue, setPrevValue] = useState(value);
@@ -234,40 +242,10 @@ export function ImageField({
             }
           }
         }
-        /* 자동 최적화(2026-08-26 지시 «고화질 수용 + 리스크 없이») — 긴 변 2000px 로 줄이고
-           WebP(알파 보존) 우선으로 다시 인코딩한다. 치수가 작아도 무거우면(스크린샷 PNG 등)
-           재인코딩 — 원본이 이미 작고 가벼울 때만 그대로 보낸다. */
-        const shrink = (): { url: string; w: number; h: number } => {
-          const longest = Math.max(img.naturalWidth, img.naturalHeight);
-          if (longest <= CROP_MAX_W && fileBytes <= REENCODE_BYTES) {
-            return { url: dataUrl, w: img.naturalWidth, h: img.naturalHeight };
-          }
-          const k = Math.min(1, CROP_MAX_W / longest);
-          const canvas = document.createElement("canvas");
-          canvas.width = Math.max(1, Math.round(img.naturalWidth * k));
-          canvas.height = Math.max(1, Math.round(img.naturalHeight * k));
-          const ctx = canvas.getContext("2d");
-          if (!ctx) return { url: dataUrl, w: img.naturalWidth, h: img.naturalHeight };
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          const mime = /^data:(image\/(?:png|webp))/.exec(dataUrl)?.[1] ?? "image/jpeg";
-          return { url: encodeCanvas(canvas, mime), w: canvas.width, h: canvas.height };
-        };
-        if (!cropAspect) {
-          const sh = shrink();
-          void upload(sh.url, { w: sh.w, h: sh.h });
-          return;
-        }
-        const ratio = img.naturalWidth / img.naturalHeight;
-        /* 이미 맞는 비율(±2%)이면 조정 단계 없이 바로 — 괜히 한 단계 늘리지 않는다 */
-        if (Math.abs(ratio - cropAspect) / cropAspect < 0.02) {
-          const sh = shrink();
-          void upload(sh.url, { w: sh.w, h: sh.h });
-          return;
-        }
-        setOffset(50);
-        /* 크롭 대기용 축소본은 저장 상한(2000px)의 2배로만 줄인다 — shrink() 를 그대로 쓰면
-           창을 «자르기 전에» 2000px 로 깎여 세로 원본→4:3 커버가 1500px 로 떨어진다(쏘넷 점검).
-           4000px 이면 어떤 비율로 잘라도 창이 상한을 채우고, 중간 인코딩은 0.92 로 세대 손실을 줄인다. */
+        /* 조정 단계 **필수**(2026-08-27 «사진 영역·크기 직접 설정하게 전부») — 어떤 원본이든
+           올리기 전에 보일 영역·크기를 직접 정한다. 작업본은 저장 상한(2000px)의 2배로만 줄인다:
+           어떤 비율로 잘라도 창이 상한을 채우고, 원본(최대 25MB)을 메모리에 물지 않는다. */
+        setAdj({ zoom: 1, x: 50, y: 50, ratio: cropAspect ?? null });
         const PENDING_MAX = CROP_MAX_W * 2;
         const longest = Math.max(img.naturalWidth, img.naturalHeight);
         if (longest <= PENDING_MAX) {
@@ -292,77 +270,141 @@ export function ImageField({
     r.readAsDataURL(f);
   }
 
-  /** 고른 창만 잘라 JPEG 로 — 저장본 자체가 맞는 비율이 된다 */
-  function applyCrop() {
-    if (!pending || !cropAspect) return;
-    const { dataUrl, w, h } = pending;
-    const wide = w / h > cropAspect;
-    const cropW = wide ? h * cropAspect : w;
-    const cropH = wide ? h : w / cropAspect;
-    const x = wide ? ((w - cropW) * offset) / 100 : 0;
-    const y = wide ? 0 : ((h - cropH) * offset) / 100;
+  /** 보일 창(원본 좌표) — 미리보기와 applyCrop 이 같은 수식을 쓴다: «보이는 대로 잘린다» */
+  function cropWindow(p: { w: number; h: number }, a: { zoom: number; x: number; y: number; ratio: number | null }) {
+    const R = a.ratio ?? p.w / p.h;
+    const base = Math.min(p.w, p.h * R);
+    const winW = base / a.zoom;
+    const winH = winW / R;
+    return { winW, winH, x: (p.w - winW) * (a.x / 100), y: (p.h - winH) * (a.y / 100), R };
+  }
 
+  /** 고른 창만 잘라 저장 — 저장본 = 화면에 보이던 영역 */
+  function applyCrop() {
+    if (!pending) return;
+    const { dataUrl, w, h } = pending;
+    const { winW, winH, x, y } = cropWindow(pending, adj);
+    /* 창=원본 전체(무변경)이고 원본이 이미 작고 가벼우면 재인코딩 없이 그대로 —
+       무손실 PNG·이미 최적화된 JPEG 를 공연히 굽지 않는다(쏘넷 점검: 직행 경로 복원) */
+    if (winW >= w - 0.5 && winH >= h - 0.5 && Math.max(w, h) <= CROP_MAX_W && dataUrlBytes(dataUrl) <= 1_500_000) {
+      setPending(null);
+      void upload(dataUrl, { w, h });
+      return;
+    }
     const img = new Image();
     img.onload = () => {
-      const scale = Math.min(1, CROP_MAX_W / cropW);
+      const scale = Math.min(1, CROP_MAX_W / Math.max(winW, winH));
       const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(cropW * scale));
-      canvas.height = Math.max(1, Math.round(cropH * scale));
+      canvas.width = Math.max(1, Math.round(winW * scale));
+      canvas.height = Math.max(1, Math.round(winH * scale));
       const ctx = canvas.getContext("2d");
       if (!ctx) {
         setError("이미지를 처리하지 못했어요.");
         return;
       }
-      ctx.drawImage(img, x, y, cropW, cropH, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, x, y, winW, winH, 0, 0, canvas.width, canvas.height);
       setPending(null);
-      /* WebP 우선 — 알파가 살아서 흰 바탕 강제(옛 JPEG 고정)의 투명 손실이 없다.
-         WebP 미지원 폴백은 encodeCanvas 가 흰 바탕 JPEG 로 처리한다 */
+      /* WebP 우선 — 알파가 살아서 흰 바탕 강제(옛 JPEG 고정)의 투명 손실이 없다 */
       const srcMime = /^data:(image\/(?:png|webp))/.exec(dataUrl)?.[1] ?? "image/jpeg";
       void upload(encodeCanvas(canvas, srcMime), { w: canvas.width, h: canvas.height });
     };
     img.src = dataUrl;
   }
 
-  /* 조정 미리보기 — object-position 의 % 정렬이 applyCrop 의 창 계산과 같은 수식이라
-     "보이는 대로 잘린다"가 보장된다 */
-  const pendingWide = pending ? pending.w / pending.h > (cropAspect ?? 1) : false;
+  /* 끌어서 위치 조정 — 화면 이동량을 원본 좌표로 환산해 0~100 위치로 되돌린다 */
+  function dragStart(e: React.PointerEvent) {
+    const r = frameRef.current?.getBoundingClientRect();
+    if (!r || !pending) return;
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    dragRef.current = { px: e.clientX, py: e.clientY, x0: adj.x, y0: adj.y, fw: r.width, fh: r.height };
+  }
+  function dragMove(e: React.PointerEvent) {
+    const d = dragRef.current;
+    if (!d || !pending) return;
+    const { winW, winH } = cropWindow(pending, adj);
+    const slackX = pending.w - winW;
+    const slackY = pending.h - winH;
+    const dxSrc = ((e.clientX - d.px) * winW) / d.fw;
+    const dySrc = ((e.clientY - d.py) * winH) / d.fh;
+    setAdj((a) => ({
+      ...a,
+      x: slackX > 0.5 ? Math.min(100, Math.max(0, d.x0 - (dxSrc / slackX) * 100)) : a.x,
+      y: slackY > 0.5 ? Math.min(100, Math.max(0, d.y0 - (dySrc / slackY) * 100)) : a.y,
+    }));
+  }
+  function dragEnd() {
+    dragRef.current = null;
+  }
+  const win = pending ? cropWindow(pending, adj) : null;
 
   return (
     <div>
       <p className="text-[12px] font-medium text-fg-sub">{label}</p>
 
-      {pending ? (
+      {pending && win ? (
         <div className="mt-1.5 space-y-2">
-          <div className={`relative overflow-hidden border border-line bg-plate ${cropBoxCls}`}>
+          {/* 조정 무대 — 프레임이 곧 저장본이다. 끌어서 위치, 슬라이더로 크기 */}
+          <div
+            ref={frameRef}
+            onPointerDown={dragStart}
+            onPointerMove={dragMove}
+            onPointerUp={dragEnd}
+            onPointerCancel={dragEnd}
+            className={`relative w-full max-w-[320px] cursor-move touch-none select-none overflow-hidden border border-line bg-plate ${round ? "rounded-full" : "rounded-card"}`}
+            style={{ aspectRatio: String(win.R) }}
+            role="application"
+            aria-label="사진 위치 조정 — 끌어서 이동"
+          >
             {/* eslint-disable-next-line @next/next/no-img-element -- 업로드 전 로컬 data URL */}
             <img
               src={pending.dataUrl}
               alt=""
-              className="size-full object-cover"
-              style={{ objectPosition: pendingWide ? `${offset}% 50%` : `50% ${offset}%` }}
+              draggable={false}
+              className="pointer-events-none absolute max-w-none"
+              style={{
+                width: `${(pending.w / win.winW) * 100}%`,
+                left: `-${(win.x / win.winW) * 100}%`,
+                top: `-${(win.y / win.winH) * 100}%`,
+              }}
             />
           </div>
-          <label className="block">
-            <span className="text-[12px] text-fg-sub">
-              보일 부분 — {pendingWide ? "좌우로" : "위아래로"} 움직여 맞추세요
-            </span>
+          {!cropAspect ? (
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="저장 비율">
+              {CROP_RATIOS.map((r) => (
+                <button
+                  key={r.label}
+                  type="button"
+                  aria-pressed={adj.ratio === r.value}
+                  onClick={() => setAdj((a) => ({ ...a, ratio: r.value, x: 50, y: 50 }))}
+                  className={`trans-state rounded-chip border px-2.5 py-1 text-[12px] font-medium ${
+                    adj.ratio === r.value ? "border-fg bg-fg text-body" : "border-line bg-body text-fg-sub hover:bg-tint-hover hover:text-fg"
+                  }`}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <label className="block max-w-[320px]">
+            <span className="text-[12px] text-fg-sub">크기(확대) — 사진을 끌어 위치를 맞추세요</span>
             <input
               type="range"
-              min={0}
-              max={100}
-              value={offset}
-              onChange={(e) => setOffset(Number(e.target.value))}
+              min={100}
+              max={300}
+              value={Math.round(adj.zoom * 100)}
+              onChange={(e) => setAdj((a) => ({ ...a, zoom: Number(e.target.value) / 100 }))}
+              aria-label="크기"
               className="mt-1 w-full accent-[var(--color-primary)]"
             />
           </label>
-          <div className="flex gap-2">
+          <div className="flex max-w-[320px] gap-2">
             <button
               type="button"
               onClick={applyCrop}
               disabled={busy}
               className="trans-state flex-1 rounded-card bg-primary px-3 py-2 text-[14px] font-semibold text-on-primary hover:bg-primary-hover disabled:opacity-50"
             >
-              {busy ? "올리는 중…" : "이 위치로 올리기"}
+              {busy ? "올리는 중…" : "이 영역으로 올리기"}
             </button>
             <button
               type="button"
@@ -423,6 +465,9 @@ export function ImageField({
 
       <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" hidden onChange={pick} />
 
+      {/* 조정 중에는 주소 입력을 접는다 — 붙여넣기가 조용히 값이 되고 «올리기»가 덮어쓴다(쏘넷) */}
+      {pending ? null : (
+      <>
       {/* 주소 붙여넣기 — 이미 다른 곳에 올려둔 이미지를 쓰는 경우가 많다.
           ⚠️ 키 입력마다 onChange 를 올리지 않는다. 프로필 패널은 이 값이 서버 액션에 직접 묶여
           있어 'h' 한 글자가 저장되고 나머지는 busy 로 삼켜졌다(감사 #7). 붙여넣기는 즉시,
@@ -444,6 +489,8 @@ export function ImageField({
         aria-label={`${label} 주소`}
         className="mt-2 h-9 w-full rounded-card border border-line bg-body px-2.5 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
       />
+      </>
+      )}
 
       {error ? (
         <p role="alert" className="mt-1 text-[12px] text-negative-strong">

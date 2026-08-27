@@ -41,6 +41,10 @@ export function ModalShell({
     boxRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !busyRef.current) {
+        /* 중첩 모달(예약 공개 안 날짜 픽커 등) — Esc 한 번에 둘 다 닫히면 바깥 모달의
+           입력이 증발한다. DOM 상 마지막 dialog(=맨 위)만 닫는다(2026-08-27). */
+        const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+        if (dialogs.length > 1 && dialogs[dialogs.length - 1] !== boxRef.current?.parentElement) return;
         /* X·스크림 클릭과 달리 Esc 는 blur 없이 언마운트돼 onBlur 커밋(설정 텍스트 등)이
            증발한다 — 닫기 전에 포커스를 떼어 같은 경로를 태운다(감사4) */
         (document.activeElement as HTMLElement | null)?.blur?.();

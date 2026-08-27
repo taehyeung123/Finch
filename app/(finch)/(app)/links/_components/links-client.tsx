@@ -149,6 +149,7 @@ import type { LinkGuestbookEntry, LinkLead, LinkPageSummary, LinkPageView, LinkS
 import { BlockEditor, EDITOR_TITLE_ID } from "./block-editor";
 import { ImageField } from "./image-field";
 import { PickCards, PickChips } from "./option-picker";
+import { DateTimePickerField } from "./date-field";
 import { ImportLinks, ImportLinksBody } from "./import-links";
 import { BLOCK_ICON } from "./block-icons";
 import { PhonePreview, type CanvasEdit } from "./phone-preview";
@@ -2581,7 +2582,6 @@ function ScheduleModal({
   const [closeAt, setCloseAt] = useState(toLocal(init.closeAt));
   const bad = openAt && closeAt && new Date(openAt).getTime() >= new Date(closeAt).getTime();
   const toIso = (v: string) => (v ? new Date(v).toISOString() : null);
-  const field = "mt-1.5 h-10 w-full rounded-card border border-line bg-body px-3 text-[14px] text-fg focus:border-primary focus:outline-none";
 
   /* 손수 짠 스크림·포커스·Esc 를 걷고 ModalShell 로 — 다크에서 표면색(--body)이 다른 모달과 갈렸고,
      무엇보다 busy 중에도 Esc·스크림으로 닫혀 저장이 뒤에서 계속 돌 수 있었다 */
@@ -2614,14 +2614,15 @@ function ScheduleModal({
         </div>
       }
     >
-      <label className="block text-[12px] font-medium text-fg-sub">
+      {/* label 금지 — 모달이 label 자손이면 빈 곳 클릭이 트리거를 재활성해 값이 초기화된다(쏘넷) */}
+      <span className="block text-[12px] font-medium text-fg-sub">
         공개 날짜 (이때부터 보여요)
-        <input type="datetime-local" value={openAt} onChange={(e) => setOpenAt(e.target.value)} className={field} />
-      </label>
-      <label className="mt-3 block text-[12px] font-medium text-fg-sub">
+        <DateTimePickerField mode="datetime" value={openAt} onChange={setOpenAt} ariaLabel="공개 날짜" placeholder="날짜·시각 고르기" />
+      </span>
+      <span className="mt-3 block text-[12px] font-medium text-fg-sub">
         숨김 날짜 (이때부터 숨겨요)
-        <input type="datetime-local" value={closeAt} onChange={(e) => setCloseAt(e.target.value)} className={field} />
-      </label>
+        <DateTimePickerField mode="datetime" value={closeAt} onChange={setCloseAt} ariaLabel="숨김 날짜" placeholder="날짜·시각 고르기" />
+      </span>
       {bad ? <p className="mt-2 text-[12px] text-negative-strong">숨김 날짜는 공개 날짜보다 뒤여야 해요.</p> : null}
       {error && !bad ? (
         <p role="alert" className="mt-2 text-[12px] text-negative-strong">

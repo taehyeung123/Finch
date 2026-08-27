@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AlignCenter, AlignLeft, CalendarOff, CalendarPlus, Columns2, Columns3, Eye, EyeOff, GalleryHorizontal, GalleryHorizontalEnd, LayoutDashboard, LayoutGrid, List, Plus, Ratio, Rows3, Square, Trash2, X } from "lucide-react";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { PickCards, PickChips } from "./option-picker";
+import { DateTimePickerField } from "./date-field";
 import { Button } from "@/components/ui/button";
 import { sliceChars } from "@/lib/links";
 import { BLOCK_CATALOG, COLLAPSE_OPTIONS, CONTACT_FIELDS, COUPANG_DISCLOSURE, LINK_LAYOUTS, LINK_TEXT_COLORS, type LinkBlock } from "@/lib/links/blocks";
@@ -1116,40 +1117,23 @@ export function BlockEditor({
                   {/* 날짜 칸에는 **눈에 보이는 라벨**이 필요하다 — 빈 date 인풋 둘은 둘 다 「yyyy-mm-dd」라
                       어느 쪽이 종료일인지 알 수 없다. 시각 칸은 8.5rem: 한국어 «오후 08:00» 이 7rem 에서 잘린다 */}
                   <div className="grid grid-cols-[1fr_8.5rem] gap-1.5">
-                    <label className="block text-[11px] font-medium text-fg-sub">
+                    {/* label 로 감싸면 안 된다 — 모달이 label 자손이 돼 빈 곳 클릭이 트리거를 재활성한다(쏘넷) */}
+                    <span className="block text-[11px] font-medium text-fg-sub">
                       시작 날짜
-                      <input
-                        type="date"
-                        value={date}
-                        onChange={(e) => setAt(e.target.value, time)}
-                        aria-label={`일정 ${i + 1} 시작 날짜`}
-                        className={`mt-1 ${input}`}
-                      />
-                    </label>
-                    <label className="block text-[11px] font-medium text-fg-sub">
+                      <DateTimePickerField mode="date" value={date} onChange={(v) => setAt(v, time)} ariaLabel={`일정 ${i + 1} 시작 날짜`} placeholder="날짜 고르기" />
+                    </span>
+                    <span className="block text-[11px] font-medium text-fg-sub">
                       시각 (선택)
-                      <input
-                        type="time"
-                        value={time}
-                        onChange={(e) => setAt(date, e.target.value)}
-                        aria-label={`일정 ${i + 1} 시각 (비우면 하루 종일)`}
-                        className={`mt-1 ${input}`}
-                      />
-                    </label>
+                      <DateTimePickerField mode="time" value={time} onChange={(v) => setAt(date, v)} ariaLabel={`일정 ${i + 1} 시각`} placeholder="하루 종일" />
+                    </span>
                   </div>
                   {/* date 인풋은 «yyyy-mm-dd» + 달력 아이콘이 들어갈 최소 폭이 필요하다 —
                       375 에서 2열이면 125px 로 잘린다. 좁으면 한 줄씩 쌓는다 */}
                   <div className="grid grid-cols-1 gap-1.5 min-[400px]:grid-cols-2">
-                    <label className="block text-[11px] font-medium text-fg-sub">
+                    <span className="block text-[11px] font-medium text-fg-sub">
                       종료 날짜 (여러 날일 때)
-                      <input
-                        type="date"
-                        value={typeof it.endAt === "string" ? it.endAt.split("T")[0] : ""}
-                        onChange={(e) => setItem(i, "endAt", e.target.value)}
-                        aria-label={`일정 ${i + 1} 종료 날짜 (선택)`}
-                        className={`mt-1 ${input}`}
-                      />
-                    </label>
+                      <DateTimePickerField mode="date" value={typeof it.endAt === "string" ? it.endAt.split("T")[0] : ""} onChange={(v) => setItem(i, "endAt", v)} ariaLabel={`일정 ${i + 1} 종료 날짜`} placeholder="같은 날이면 비워요" />
+                    </span>
                     <label className="block text-[11px] font-medium text-fg-sub">
                       장소 (선택)
                       <input
