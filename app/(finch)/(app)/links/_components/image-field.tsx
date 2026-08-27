@@ -379,9 +379,12 @@ export function ImageField({
           {/* 제거 버튼은 **클리핑 밖**에 둔다 — 원형 미리보기 안에 넣으면 원 모서리에 잘려
               검은 조각처럼 보인다(2026-08-24). 사각형은 안쪽 여백에 그대로. */}
           <div className={`relative ${cap}`}>
-            <div className={`relative overflow-hidden border border-line bg-plate ${boxCls}`}>
+            {/* 값 미리보기는 **원본 비율 그대로**(2026-08-27 «왜 잘라놨냐 — 전체 비율만 축소») —
+                발행본(그리드 등)이 원본 비율로 그리므로 편집 칸이 잘라 보여주면 거짓말이 된다.
+                원형(프로필)만 실제 화면과 같은 원 크롭을 유지한다. */}
+            <div className={`relative overflow-hidden border border-line bg-plate ${round ? boxCls : "rounded-card"}`}>
               {/* eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL·외부 URL 혼용 */}
-              <img src={value} alt="" className="size-full object-cover" />
+              <img src={value} alt="" className={round ? "size-full object-cover" : "block w-full"} />
             </div>
             <button
               type="button"
