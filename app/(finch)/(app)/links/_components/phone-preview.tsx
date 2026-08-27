@@ -278,13 +278,13 @@ export function PhonePreview({
         <img
           src={page.avatarPath}
           alt=""
-          className="mb-3 size-[78px] rounded-full object-cover shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
+          className="mb-3 size-[78px] rounded-[21px] object-cover shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
         />
       ) : (
         /* 사진이 없으면 이니셜 원 — 공개 페이지와 **같은 변수**로 그린다. 프리셋 원본(theme.card)을
            쓰면 직접 꾸미기 색이 여기만 빠져 발행본과 머리 색이 달라진다(감사 #25). */
         <span
-          className="mb-3 flex size-[78px] items-center justify-center rounded-full bg-[var(--lp-card)] text-[26px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
+          className="mb-3 flex size-[78px] items-center justify-center rounded-[21px] bg-[var(--lp-card)] text-[26px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
           aria-hidden
         >
           {initialOf(page.title || page.slug)}
@@ -399,31 +399,32 @@ export function PhonePreview({
             <img src={page.themeCustom.logoImage} alt="" className="mx-auto mb-4 max-h-10 max-w-[160px] object-contain" />
           ) : null}
           {/* 프로필 위 숨 고르기(리틀리 실측 — 아바타가 천장에 붙지 않는다). 상단 메뉴 바·배경형·숨김은 제외 */}
-          {page.themeCustom?.topbar !== "bar" && page.layout !== "hero" && page.layout !== "hidden" ? <div className="h-6" aria-hidden /> : null}
+          {page.themeCustom?.topbar !== "bar" && (page.layout === "profile" || !page.layout) ? <div className="h-6" aria-hidden /> : null}
           {/* 커버 — 캔버스 편집에선 눌러서 프로필 설정(사진 교체)으로 */}
           {page.layout !== "hidden" && (page.layout === "cover" || page.layout === "cover_profile") ? (
-            page.coverPath ? (
-              editable ? (
-                <button type="button" onClick={edit?.onOpenProfile} aria-label="커버 이미지 바꾸기" className={`${page.layout === "cover_profile" ? "" : "mb-3"} block w-full`}>
-                  {/* eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL */}
-                  <img src={page.coverPath} alt="" className="aspect-[3/1] w-full rounded-[var(--lp-radius)] object-cover" />
-                </button>
-              ) : (
+            /* 풀블리드 4:3 상단 배경(리틀리 재실측 2026-08-26) — 사진이 없으면 회색 판(공개도 동일),
+               편집 캔버스에선 눌러서 프로필 설정으로 */
+            <button
+              type="button"
+              onClick={editable ? edit?.onOpenProfile : undefined}
+              disabled={!editable}
+              aria-label={editable ? "커버 이미지 넣기·바꾸기" : undefined}
+              className={`relative -mx-5 ${page.themeCustom?.topbar === "bar" ? "" : "-mt-8"} ${page.layout === "cover_profile" ? "" : "mb-3"} block self-stretch overflow-hidden`}
+            >
+              {page.coverPath ? (
                 // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
-                <img src={page.coverPath} alt="" className={`${page.layout === "cover_profile" ? "" : "mb-3"} aspect-[3/1] w-full rounded-[var(--lp-radius)] object-cover`} />
-              )
-            ) : editable ? (
-              /* 사진이 없으면 회색 자리 — 리틀리 실측(2026-08-26): 자리가 있어야 카드를 눌렀을 때
-                 레이아웃 차이가 보인다(없으면 «2·3번째가 똑같다»가 된다). 공개 페이지엔 안 나간다. */
-              <button type="button" onClick={edit?.onOpenProfile} aria-label="커버 이미지 넣기" className={`${page.layout === "cover_profile" ? "" : "mb-3"} flex aspect-[3/1] w-full items-center justify-center rounded-[var(--lp-radius)] bg-[var(--lp-border)] text-[var(--lp-muted)]`}>
-                <ImagePlus className="size-6" aria-hidden />
-              </button>
-            ) : null
+                <img src={page.coverPath} alt="" className="aspect-[4/3] w-full object-cover" />
+              ) : (
+                <span className="flex aspect-[4/3] w-full items-center justify-center bg-[var(--lp-border)] text-[var(--lp-muted)]">
+                  {editable ? <ImagePlus className="size-6" aria-hidden /> : null}
+                </span>
+              )}
+            </button>
           ) : null}
 
           {/* 프로필 — cover_profile 은 아바타 반지름(72/2=36px)만큼 올라가 커버를 문다(공개 페이지와 같은 규칙) */}
           {page.layout === "hidden" ? null : (
-          <div className={`relative flex flex-col ${page.layout === "hero" ? "items-center text-center" : align} ${page.layout === "cover_profile" && page.coverPath ? "-mt-9" : ""}`}>
+          <div className={`relative flex flex-col ${page.layout === "hero" ? "items-center text-center" : align} ${page.layout === "cover_profile" ? "-mt-10" : ""}`}>
             {/* 배경형(hero) — 공개 페이지와 같은 층. 편집 캔버스에선 눌러서 프로필 설정으로 */}
             {page.layout === "hero" ? (
               page.avatarPath ? (

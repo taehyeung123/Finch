@@ -326,7 +326,7 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
           split
             ? "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:grid lg:max-w-[1000px] lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] lg:items-start lg:gap-x-16 lg:px-14 lg:pb-16 lg:pt-16"
             : "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:max-w-[600px] lg:px-10 lg:pb-16"
-        } ${topbar ? "pt-4" : snap.layout === "hero" ? "pt-0" : "pt-20"} lg:isolate lg:my-12 lg:min-h-[calc(100dvh-6rem)] ${topbar ? "" : snap.layout === "hero" ? "lg:pt-0" : "lg:pt-16"}`}
+        } ${topbar ? "pt-4" : snap.layout === "hero" || snap.layout === "cover" || snap.layout === "cover_profile" ? "pt-0" : "pt-20"} lg:isolate lg:my-12 lg:min-h-[calc(100dvh-6rem)] ${topbar ? "" : snap.layout === "hero" || snap.layout === "cover" || snap.layout === "cover_profile" ? "lg:pt-0" : "lg:pt-16"}`}
       >
         {/* PC 캔버스 — 판(색·그림자·테두리)과 이미지(사용자 블러 옵션)를 **두 겹으로 분리**한다:
             한 겹에 filter 를 걸면 그림자·라운드 테두리까지 같이 번진다. 이미지 겹은 clip-path 로
@@ -368,15 +368,24 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
           </p>
         ) : null}
 
-        {/* 커버 */}
-        {(snap.layout === "cover" || snap.layout === "cover_profile") && snap.coverPath ? (
-          // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
-          <img
-            src={snap.coverPath}
-            alt=""
-            /* cover_profile 은 아래 여백을 없애고 header 가 음수 마진으로 올라와 겹친다(2026-08-24 비평) */
-            className={`${snap.layout === "cover_profile" ? "" : "mb-4"} aspect-[3/1] w-full rounded-[var(--lp-radius)] object-cover ${split ? "lg:col-start-1" : ""}`}
-          />
+        {/* 커버 — 리틀리 재실측(2026-08-26): 라운드 배너가 아니라 **풀블리드 상단 배경**(4:3).
+            사진이 없어도 회색 판으로 자리가 산다 — 레이아웃을 고른 의도가 화면에 남는다.
+            분리 배치에선 칸을 넘을 수 없어 칸 폭+라운드로 담는다. */}
+        {snap.layout === "cover" || snap.layout === "cover_profile" ? (
+          <div
+            className={`relative overflow-hidden ${snap.layout === "cover_profile" ? "" : "mb-4"} ${
+              split
+                ? "w-full rounded-[var(--lp-radius)] lg:col-start-1"
+                : "-mx-5 self-stretch lg:-mx-10 lg:rounded-t-[28px]"
+            }`}
+          >
+            {snap.coverPath ? (
+              // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
+              <img src={snap.coverPath} alt="" className="aspect-[4/3] w-full object-cover" />
+            ) : (
+              <div aria-hidden className="aspect-[4/3] w-full bg-[var(--lp-border)]" />
+            )}
+          </div>
         ) : null}
 
         {/* 프로필 — 분리 배치에선 왼쪽 칸 고정(명시하지 않으면 앞 항목에 밀려 오른쪽 칸으로 튄다, 소넷 확정) */}
@@ -384,7 +393,7 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
             LAYOUTS 힌트("배너 위에 프로필 사진")가 약속한 모양이 화면에 없었다(2026-08-24 비평) */}
         {snap.layout === "hidden" ? null : (
         <header
-          className={`relative flex flex-col ${snap.layout === "hero" ? "items-center text-center" : align} ${snap.layout === "cover_profile" && snap.coverPath ? "-mt-11" : ""} ${split ? "lg:col-start-1 lg:sticky lg:top-16 lg:self-start" : ""}`}
+          className={`relative flex flex-col ${snap.layout === "hero" ? "items-center text-center" : align} ${snap.layout === "cover_profile" ? "-mt-12" : ""} ${split ? "lg:col-start-1 lg:sticky lg:top-16 lg:self-start" : ""}`}
         >
           {/* 배경형(hero, 리틀리 실측) — 프로필 사진이 상단 전체 배경으로 깔리고
               아래로 갈수록 지면색에 녹는다. 사진이 없으면 이 층 없이 문구만(방문자에게
@@ -404,13 +413,13 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
                 alt=""
                 /* outline 헤어라인 — --lp-shadow 가 none 인 프리셋 8종에서는 box-shadow 선언이
                    통째로 무효라 ring 까지 죽는다. 바깥선 하나로 19종 전부에서 원이 보인다(2026-08-24 비평) */
-                className="mb-3.5 size-[96px] rounded-full object-cover shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
+                className="mb-3.5 size-[96px] rounded-[26px] object-cover shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
               />
             ) : (
               /* 사진이 없으면 이니셜 원. 아무것도 안 그리면 브랜드 페이지 머리가 통째로
                  비어 허전하다 — 편집 미리보기도 같은 것을 그린다(두 화면이 어긋나면 안 된다). */
               <span
-                className="mb-3.5 flex size-[96px] items-center justify-center rounded-full bg-[var(--lp-card)] text-[32px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
+                className="mb-3.5 flex size-[96px] items-center justify-center rounded-[26px] bg-[var(--lp-card)] text-[32px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
                 aria-hidden
               >
                 {initialOf(snap.title || slug)}
