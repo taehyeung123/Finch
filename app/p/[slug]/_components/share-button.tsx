@@ -43,7 +43,7 @@ export function ShareButton({
       className={`${
         inline
           ? "relative size-11 rounded-full bg-[var(--lp-card)]"
-          : "absolute! right-5 top-4 z-20 size-11 rounded-[16px] bg-[color-mix(in_srgb,var(--lp-card)_55%,transparent)] backdrop-blur-lg"
+          : "absolute! right-3.5 top-3.5 z-20 size-10 rounded-[16px] bg-[color-mix(in_srgb,var(--lp-card)_55%,transparent)] backdrop-blur-lg"
       } lp-btn flex items-center justify-center border border-[var(--lp-border)] text-[var(--lp-fg)] shadow-[var(--lp-shadow)]`}
     >
       {done ? <Check className="size-4" aria-hidden /> : <Share2 className="size-4" aria-hidden />}

@@ -52,6 +52,9 @@ export interface LinkThemeCustom {
   bg2?: string;
   /** 배경 이미지(http/https) — 있으면 그라데이션보다 우선 */
   bgImage?: string;
+  /** 프로필 워시 — 프로필 사진을 크게 흐려 파스텔처럼 까는 배경(링크트리 실측 재구현 2026-08-27).
+      켜면 bgImage 는 렌더에서만 접힌다(값은 보존 — 끄면 그대로 돌아온다) */
+  bgWash?: boolean;
   accent?: string;
   card?: string;
   fg?: string;
@@ -300,12 +303,16 @@ function onAccentFor(hex: string): string {
  * 모르는 키·틀린 hex·목록 밖 열거값·이상한 이미지 주소는 조용히 떨군다.
  * 남는 게 없으면 null(= 프리셋 그대로).
  */
+/** 프로필 워시 배경의 노이즈 타일(그라데이션 밴딩 방지) — 링크트리 실측: 4%·overlay 블렌드 */
+export const WASH_NOISE = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA1MTIgNTEyJz48ZmlsdGVyIGlkPSduJz48ZmVUdXJidWxlbmNlIHR5cGU9J2ZyYWN0YWxOb2lzZScgYmFzZUZyZXF1ZW5jeT0nMC43JyBudW1PY3RhdmVzPSczJyBzdGl0Y2hUaWxlcz0nc3RpdGNoJy8+PGZlQ29sb3JNYXRyaXggdHlwZT0nc2F0dXJhdGUnIHZhbHVlcz0nMCcvPjwvZmlsdGVyPjxyZWN0IHdpZHRoPScxMDAlJyBoZWlnaHQ9JzEwMCUnIGZpbHRlcj0ndXJsKCNuKScvPjwvc3ZnPg==";
+
 export function sanitizeThemeCustom(input: unknown): LinkThemeCustom | null {
   if (!input || typeof input !== "object") return null;
   const i = input as Record<string, unknown>;
   const out: LinkThemeCustom = {};
   for (const k of ["bg", "bg2", "accent", "card", "fg"] as const) if (isHex(i[k])) out[k] = (i[k] as string).toUpperCase();
   if (typeof i.bgImage === "string" && IMG_URL.test(i.bgImage)) out.bgImage = i.bgImage;
+  if (i.bgWash === true) out.bgWash = true;
   if (CUSTOM_RADIUS.some((r) => r.key === i.radius)) out.radius = i.radius as LinkThemeCustom["radius"];
   if (CUSTOM_BUTTONS.some((b) => b.key === i.button)) out.button = i.button as LinkThemeCustom["button"];
   if (LINK_FONTS.some((f) => f.key === i.font)) out.font = i.font as string;
@@ -550,20 +557,25 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
   const muted = c.fg || c.bg || c.bg2 ? `color-mix(in srgb, ${fg} 68%, ${bg})` : t.muted;
   const border = c.card || c.fg || c.bg ? `color-mix(in srgb, ${fg} 14%, transparent)` : t.border;
   const radius = c.radius ?? t.radius;
-  /* 배경: 이미지 > 그라데이션 > 단색. 사용자가 단색을 새로 골랐으면 프리셋 그라데이션은 버린다 */
-  const bg2 = c.bg2 ?? (c.bg ? undefined : t.bg2);
+  /* 배경: 이미지 > 그라데이션 > 단색. 사용자가 단색을 새로 골랐으면 프리셋 그라데이션은 버린다.
+     프로필 워시가 켜지면 그라데이션도 사진처럼 렌더에서만 접는다 — 안 접으면 워시 밑에 옛 끝색이
+     남는데 워시 탭엔 그 입력이 없어 지울 수도 없다(쏘넷 점검) */
+  const bg2 = c.bgWash ? undefined : (c.bg2 ?? (c.bg ? undefined : t.bg2));
   /* 배경 필터 — 이미지 위에 덮는 반투명 겹. 그라데이션으로 쌓아 같은 변수 하나로 공개·미리보기가 같다.
      블러는 공개 페이지가 별도 레이어에서만 건다(--lp-bg-blur). */
   /* 배경 사진의 **기본 필터**(2026-08-24 비평) — 없음이 기본이면 사진 위에 글자가 그대로 얹혀
      어떤 대비 가드도 소용이 없다. 밝은 글자면 어둡게, 어두운 글자면 밝게 한 겹 깔아 준다.
      사용자가 「없음」을 명시적으로 고르면 그대로 존중한다(c.bgFilter 가 있으면 그 값). */
   const autoFilter = luminance(HEX.test(fg) ? fg : "#000000") > 0.5 ? "dark" : "light";
-  const filter = c.bgImage ? (c.bgFilter ?? autoFilter) : "none";
+  /* 프로필 워시가 켜지면 저장된 배경 사진·필터는 렌더에서만 접는다 — 워시 겹은 아바타 주소가
+     필요해 페이지 컴포넌트가 따로 깐다(여기는 스냅샷을 모른다) */
+  const bgPhoto = c.bgWash ? undefined : c.bgImage;
+  const filter = bgPhoto ? (c.bgFilter ?? autoFilter) : "none";
   const overlay =
     filter === "light" ? "rgba(255,255,255,.35)" : filter === "dark" ? "rgba(0,0,0,.42)" : filter === "blur" ? "rgba(255,255,255,.22)" : filter === "darkBlur" ? "rgba(0,0,0,.42)" : null;
   /* url("…") 안에 들어간다 — 관문(IMG_URL)이 역슬래시·따옴표를 막지만 직렬화도 따로 안전하게(감사2 C5) */
-  const bgImage = c.bgImage
-    ? `${overlay ? `linear-gradient(${overlay}, ${overlay}), ` : ""}url("${c.bgImage.replace(/[\\"]/g, (m) => `\\${m}`)}")`
+  const bgImage = bgPhoto
+    ? `${overlay ? `linear-gradient(${overlay}, ${overlay}), ` : ""}url("${bgPhoto.replace(/[\\"]/g, (m) => `\\${m}`)}")`
     : bg2
       ? `linear-gradient(160deg, ${bg}, ${bg2})`
       : "none";
@@ -578,7 +590,7 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
   const darkGround = luminance(HEX.test(bg) ? bg : "#ffffff") < 0.35;
   /* 사진 배경이면 지면 밝기를 알 수 없다 — 밝은 겹·어두운 겹을 **함께** 써서 어느 쪽에서도 보이게 한다
      (흰 헤어라인은 어두운 사진 위에서, 검은 그림자는 밝은 사진 위에서 각각 살아난다). */
-  const photoGround = !!c.bgImage;
+  const photoGround = !!bgPhoto;
   const shadowSoft = photoGround
     ? "0 0 0 1px rgba(255,255,255,.10), 0 1px 3px rgba(15,23,42,.10), 0 10px 24px rgba(15,23,42,.18)"
     : darkGround

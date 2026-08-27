@@ -4002,7 +4002,7 @@ function ThemePanel({
   /* 「사진」은 아직 사진이 없어도 눌린 상태여야 한다 — 예전엔 스크롤만 하고 칩이 안 눌려
      3칸 모드 스위치 중 둘만 진짜였다. 저장된 사진이 있으면 bgMode 가 알아서 image 다 */
   const [wantsImage, setWantsImage] = useState(false);
-  const bgTab: "solid" | "gradient" | "image" = custom.bgImage || wantsImage ? "image" : bgMode;
+  const bgTab: "solid" | "gradient" | "image" | "wash" = custom.bgWash ? "wash" : custom.bgImage || wantsImage ? "image" : bgMode;
   /* 스와치용 — 지금 설정에 한 값만 바꿔 **실제 발행본과 같은 CSS 변수**를 받아온다.
      8/14/20px·color-mix 문자열을 패널에 복제하지 않으므로 themeVars 가 단일 출처로 남는다 */
   const varsFor = (patch: Partial<LinkThemeCustom>) => themeVars(preset, { ...custom, ...patch });
@@ -4095,7 +4095,7 @@ function ThemePanel({
         ))}
       </DSection>
 
-      <DSection icon={ImageIcon} tint="bg-tint-blue text-tint-blue-ink" title="배경" hint="단색·그라데이션·사진. 사진엔 필터를 덮어 글자를 살려요.">
+      <DSection icon={ImageIcon} tint="bg-tint-blue text-tint-blue-ink" title="배경" hint="단색·그라데이션·사진·프로필 워시. 사진엔 필터를 덮어 글자를 살려요.">
         <div className="flex flex-wrap gap-1.5">
           <button
             type="button"
@@ -4103,7 +4103,7 @@ function ThemePanel({
             aria-pressed={bgTab === "solid"}
             onClick={() => {
               setWantsImage(false);
-              if (bgMode !== "solid") onCustomChange({ bg2: undefined, bgImage: undefined, bg: custom.bg ?? preset.bg });
+              if (bgMode !== "solid" || custom.bgWash) onCustomChange({ bg2: undefined, bgImage: undefined, bgWash: undefined, bg: custom.bg ?? preset.bg });
             }}
           >
             단색
@@ -4115,13 +4115,32 @@ function ThemePanel({
             /* 끝색 기본값은 배경에 강조색을 살짝 섞은 색 — 강조색 그대로면 기본·다크 프리셋에서 글자색과 같아 아래쪽 제목이 사라진다(감사2 U7) */
             onClick={() => {
               setWantsImage(false);
-              if (bgMode !== "gradient") onCustomChange({ bgImage: undefined, bg2: custom.bg2 ?? preset.bg2 ?? mixHex(custom.bg ?? preset.bg, custom.accent ?? preset.accent, 0.22) });
+              if (bgMode !== "gradient" || custom.bgWash) onCustomChange({ bgImage: undefined, bgWash: undefined, bg2: custom.bg2 ?? preset.bg2 ?? mixHex(custom.bg ?? preset.bg, custom.accent ?? preset.accent, 0.22) });
             }}
           >
             그라데이션
           </button>
-          <button type="button" className={chip(bgTab === "image")} aria-pressed={bgTab === "image"} onClick={() => setWantsImage(true)}>
+          <button
+            type="button"
+            className={chip(bgTab === "image")}
+            aria-pressed={bgTab === "image"}
+            onClick={() => {
+              setWantsImage(true);
+              if (custom.bgWash) onCustomChange({ bgWash: undefined });
+            }}
+          >
             사진
+          </button>
+          <button
+            type="button"
+            className={chip(bgTab === "wash")}
+            aria-pressed={bgTab === "wash"}
+            onClick={() => {
+              setWantsImage(false);
+              if (!custom.bgWash) onCustomChange({ bgWash: true });
+            }}
+          >
+            프로필 워시
           </button>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -4133,6 +4152,11 @@ function ThemePanel({
             </label>
           ) : null}
         </div>
+        {bgTab === "wash" ? (
+          <p className="text-[12px] leading-[1.6] text-fg-sub">
+            프로필 사진을 크게 흐려 은은한 파스텔처럼 깔아요 — 사진 색과 저절로 어울려요. 프로필 사진이 없으면 배경색만 보여요.
+          </p>
+        ) : null}
         {bgTab === "image" ? (
           /* 사진을 지우면 필터도 함께 지운다 — 안 그러면 사진 없는 페이지에 bgFilter 만 남아
              "직접 꾸민 것"으로 잡힌다(감사4). 사진이 있을 때만 필터가 의미를 갖는다 */
@@ -4144,7 +4168,7 @@ function ThemePanel({
             aspect="aspect-[3/1]"
           />
         ) : null}
-        {custom.bgImage ? (
+        {bgTab === "image" && custom.bgImage ? (
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="mr-1 text-[12px] text-fg-sub">사진 필터</span>
             {CUSTOM_FILTERS.map((f) => (

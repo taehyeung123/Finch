@@ -9,7 +9,7 @@ import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, youtubeEmbed } from "@/lib/links";
 import { Collapsible } from "@/app/p/[slug]/_components/collapsible";
 import { BLOCK_ICON } from "./block-icons";
-import { fontStylesheets, themeByKey, themeVars, SNS_KINDS } from "@/lib/links/themes";
+import { fontStylesheets, themeByKey, themeVars, SNS_KINDS, WASH_NOISE } from "@/lib/links/themes";
 import { useFontStylesheets } from "./use-font-stylesheets";
 import { type BlockType,
   BLOCK_CATALOG,
@@ -357,6 +357,13 @@ export function PhonePreview({
             className="pointer-events-none absolute -inset-4 -z-10 bg-[var(--lp-bg)] bg-cover bg-center"
             style={{ backgroundImage: "var(--lp-bg-image)", filter: "blur(var(--lp-bg-blur))" }}
           />
+          {page.themeCustom?.bgWash && page.avatarPath ? (
+            /* 프로필 워시 — 공개 페이지와 같은 겹(blur 는 프레임 축척에 맞춰 40px) */
+            <>
+              <div aria-hidden className="pointer-events-none absolute -inset-4 -z-10 bg-cover bg-center opacity-25 blur-[40px]" style={{ backgroundImage: `url("${page.avatarPath.replace(/[\\"]/g, (m) => `\\${m}`)}")` }} />
+              <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 opacity-[0.04] mix-blend-overlay" style={{ backgroundImage: `url("${WASH_NOISE}")`, backgroundSize: "512px 512px" }} />
+            </>
+          ) : null}
         <div
           className={cn("relative overflow-y-auto px-5 pb-10 pt-8", frame === "device" ? "min-h-0 flex-1" : "max-h-[680px]")}
         >
