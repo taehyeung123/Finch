@@ -417,6 +417,10 @@ export function BlockRenderer({
 
     case "image_card": {
       const src = s(d, "imagePath");
+      /* 업로드 때 잰 치수로 로드 전 자리를 잡는다(CLS, 쏘넷 점검) — 이미지 블록과 같은 가드 */
+      const ciw = n(d, "imgW", 0);
+      const cih = n(d, "imgH", 0);
+      const cardRatio = ciw > 0 && cih > 0 && ciw / cih >= 0.1 && ciw / cih <= 10 ? `${ciw} / ${cih}` : undefined;
       const title = s(d, "title");
       const sub = s(d, "subtitle");
       const url = s(d, "url");
@@ -425,8 +429,10 @@ export function BlockRenderer({
       const inner = (
         <div className={`${cardCls} overflow-hidden`}>
           {src ? (
+            /* 원본 비율 풀블리드(2026-08-27 «상단 전부 사진영역») — 업로드 조정 단계에서 정한
+               크롭이 곧 화면이다. 16:9 로 또 자르면 사용자가 고른 영역이 다시 잘린다. */
             // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
-            <img src={src} alt="" className="aspect-[16/9] w-full object-cover" loading="lazy" />
+            <img src={src} alt="" style={cardRatio ? { aspectRatio: cardRatio } : undefined} className="block w-full object-cover" loading="lazy" />
           ) : null}
           <div className="px-4 py-3.5">
             <p className="text-[15px] font-semibold text-[var(--lp-fg)]">{title}</p>

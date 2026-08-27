@@ -1002,12 +1002,17 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
           <img src={s(d, "imagePath")} alt="" style={ratio ? { aspectRatio: ratio } : undefined} className="w-full rounded-[var(--lp-radius)] object-cover" />
         );
       }
-    case "image_card":
+    case "image_card": {
+      /* CLS 예약 — 공개와 같은 가드(쏘넷 점검) */
+      const ciw = n(d, "imgW", 0);
+      const cih = n(d, "imgH", 0);
+      const cardRatio = ciw > 0 && cih > 0 && ciw / cih >= 0.1 && ciw / cih <= 10 ? `${ciw} / ${cih}` : undefined;
       return (
         <div className={`${card} overflow-hidden`}>
           {s(d, "imagePath") ? (
+            /* 원본 비율 풀블리드 — 공개와 동일(16:9 재크롭 제거) */
             // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
-            <img src={s(d, "imagePath")} alt="" className="aspect-[16/9] w-full object-cover" />
+            <img src={s(d, "imagePath")} alt="" style={cardRatio ? { aspectRatio: cardRatio } : undefined} className="block w-full object-cover" />
           ) : null}
           <div className="px-3 py-2.5">
             <p className="text-[13px] font-semibold">{s(d, "title")}</p>
@@ -1021,6 +1026,7 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
           </div>
         </div>
       );
+    }
     case "video": {
       /* 유튜브만 임베드된다. 그 밖의 주소는 공개 페이지가 "▶ 영상 보러 가기" 링크로
          떨어뜨리므로, 미리보기도 같은 모양이어야 한다(앞서는 늘 ▶ 상자였다).

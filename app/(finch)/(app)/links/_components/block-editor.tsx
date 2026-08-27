@@ -231,7 +231,7 @@ export function BlockEditor({
             value={str("imagePath")}
             onChange={(v) => set("imagePath", v)}
             aspect={(str("layout") || "button") === "button" ? "aspect-square" : "aspect-[16/9]"}
-            {...((str("layout") || "button") === "button" ? { cropAspect: 1, maxW: "max-w-[120px]" } : {})}
+            {...((str("layout") || "button") === "button" ? { cropAspect: 1, maxW: "max-w-[120px]" } : { cropAspect: 16 / 9 })}
           />
 
           {/* 강조 태그 — 최대 3개. 버튼 아래 작은 칩 */}
@@ -487,7 +487,8 @@ export function BlockEditor({
               className={`mt-1.5 ${input}`}
             />
           </div>
-          <ImageField label="상품 이미지 (선택)" value={str("imagePath")} onChange={(v) => set("imagePath", v)} />
+          {/* 렌더러가 16:9 로 그린다 — 조정 단계도 같은 비율로 고정해 «고른 크롭 = 화면»을 지킨다(쏘넷) */}
+          <ImageField label="상품 이미지 (선택)" value={str("imagePath")} onChange={(v) => set("imagePath", v)} aspect="aspect-[16/9]" cropAspect={16 / 9} />
           {/* 고지는 옵션이 아니다 — 편집 중에 미리 보여줘야 발행 후에 놀라지 않는다 */}
           <p className="rounded-card bg-plate px-3 py-2.5 text-[12px] leading-[1.6] text-fg-sub">
             공개 페이지에는 「{COUPANG_DISCLOSURE}」 문구가 자동으로 붙어요 — 공정위 표시 의무라 끌 수 없습니다.
@@ -776,7 +777,9 @@ export function BlockEditor({
                   label={`항목 ${i + 1} 이미지`}
                   value={typeof it.imagePath === "string" ? it.imagePath : ""}
                   onChange={(v) => setItem(i, "imagePath", v)}
-                  aspect="aspect-[3/2]"
+                  {...(block.type === "grid" || (str("layout") || "list") === "list"
+                    ? { aspect: "aspect-square", cropAspect: 1 }
+                    : { aspect: "aspect-[4/3]", cropAspect: 4 / 3 })}
                 />
               </div>
             ))}
@@ -831,7 +834,7 @@ export function BlockEditor({
                     <Trash2 className="size-3.5" />
                   </button>
                 </div>
-                <ImageField label={`사진 ${i + 1}`} value={typeof it.imagePath === "string" ? it.imagePath : ""} onChange={(v) => setItem(i, "imagePath", v)} aspect="aspect-[4/3]" />
+                <ImageField label={`사진 ${i + 1}`} value={typeof it.imagePath === "string" ? it.imagePath : ""} onChange={(v) => setItem(i, "imagePath", v)} {...((str("aspect") || "square") === "square" ? { aspect: "aspect-square", cropAspect: 1 } : { aspect: "aspect-[4/3]" })} />
                 <input value={typeof it.url === "string" ? it.url : ""} onChange={(e) => setItem(i, "url", e.target.value)} placeholder="누르면 갈 주소 (선택)" aria-label={`사진 ${i + 1} 링크`} className={input} />
               </div>
             ))}

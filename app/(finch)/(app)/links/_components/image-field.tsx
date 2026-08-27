@@ -35,10 +35,11 @@ const CROP_RATIOS: { label: string; value: number | null }[] = [
 /** 전송 안전 상한 — Vercel 요청 본문 4.5MB 하드캡을 base64(+33%) 포함해 넘지 않는 선 */
 const WIRE_MAX_BYTES = 3_000_000;
 
-/** 알파 있는 원본의 가장자리 «완전 투명 띠» 경계 — 프로브(≤512px)로 찾아 원본 좌표로
-    돌려준다. 여백이 거의 없으면(양 축 98% 이상 그림) null. 풀사이즈 ImageData 를 만들지 않는다.
-    2026-08-27 지시 «사진으로 아예 꽉 채우던가» — 로고 PNG 의 투명 여백이 그리드 타일에서
-    빈 띠로 보였다. 지우는 건 렌더가 아니라 업로드 단계의 일이다. */
+/** 가장자리 «여백 띠» 경계 — 완전 투명 + **균일 단색 테두리**(합성 이미지의 흰 배경 등)를
+    프로브(≤512px)로 찾아 원본 좌표로 돌려준다. 단색 판정은 네 모서리 색이 서로 같을 때만
+    켠다(실사진의 밝은 하늘 모서리 오탐 방지). 여백이 거의 없으면(양 축 98% 이상 그림) null.
+    풀사이즈 ImageData 를 만들지 않는다. 2026-08-27 «여백 없애» 지시 — 지우는 건 렌더가
+    아니라 업로드 단계의 일이다. */
 function alphaTrimBox(img: HTMLImageElement): { x: number; y: number; w: number; h: number } | null {
   const W = img.naturalWidth;
   const H = img.naturalHeight;
@@ -57,13 +58,30 @@ function alphaTrimBox(img: HTMLImageElement): { x: number; y: number; w: number;
   } catch {
     return null;
   }
+  /* 네 모서리가 같은 불투명 단색이면 그 색도 «여백»으로 본다 — 흰 패딩을 두른 합성 이미지 */
+  const px = (x: number, y: number) => {
+    const i = (y * pw + x) * 4;
+    return [data[i], data[i + 1], data[i + 2], data[i + 3]] as const;
+  };
+  const corners = [px(0, 0), px(pw - 1, 0), px(0, ph - 1), px(pw - 1, ph - 1)];
+  const TOL = 14;
+  const cornersUniform =
+    corners.every((c) => c[3] > 247) &&
+    corners.every((c) => Math.abs(c[0] - corners[0][0]) <= TOL && Math.abs(c[1] - corners[0][1]) <= TOL && Math.abs(c[2] - corners[0][2]) <= TOL);
+  const bg = corners[0];
+  const isPad = (x: number, y: number) => {
+    const i = (y * pw + x) * 4;
+    if (data[i + 3] <= 8) return true;
+    if (!cornersUniform) return false;
+    return data[i + 3] > 247 && Math.abs(data[i] - bg[0]) <= TOL && Math.abs(data[i + 1] - bg[1]) <= TOL && Math.abs(data[i + 2] - bg[2]) <= TOL;
+  };
   let minX = pw;
   let minY = ph;
   let maxX = -1;
   let maxY = -1;
   for (let y = 0; y < ph; y++) {
     for (let x = 0; x < pw; x++) {
-      if (data[(y * pw + x) * 4 + 3] > 8) {
+      if (!isPad(x, y)) {
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
         if (y < minY) minY = y;
@@ -160,6 +178,9 @@ export function ImageField({
   const [adj, setAdj] = useState<{ zoom: number; x: number; y: number; ratio: number | null }>({ zoom: 1, x: 50, y: 50, ratio: null });
   const frameRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ px: number; py: number; x0: number; y0: number; fw: number; fh: number } | null>(null);
+  /** 트림 전 원본 — «원본 유지» 버튼이 트림 없이 조정 단계를 다시 연다(쏘넷 점검: 옵트아웃) */
+  const origRef = useRef<string | null>(null);
+  const [wasTrimmed, setWasTrimmed] = useState(false);
   /* 주소 입력의 로컬 초안 — 부모 value 가 바뀌면(업로드·서버 정규화·지우기) 따라간다 */
   const [draft, setDraft] = useState(value);
   const [prevValue, setPrevValue] = useState(value);
@@ -201,7 +222,7 @@ export function ImageField({
     const r = new FileReader();
     r.onerror = () => setError("파일을 읽지 못했어요.");
     r.onload = () => {
-      let dataUrl = String(r.result);
+      const dataUrl = String(r.result);
       /* gif(애니)·svg(벡터)는 크롭·축소가 원본을 망가뜨린다 — 그대로 올리되 전송 상한만 지킨다.
          Vercel 요청 본문 4.5MB 하드캡(base64 +33% 포함)이 진짜 한계다(2026-08-26 실측·조사) */
       if (/^data:image\/gif/.test(dataUrl)) {
@@ -220,54 +241,63 @@ export function ImageField({
         void upload(dataUrl);
         return;
       }
-      const img = new Image();
-      img.onerror = () => setError("이미지를 읽지 못했어요.");
-      /* 투명 여백 자동 트림 — 잘라낸 사본을 같은 img 로 한 번만 다시 로드해 아래 로직을 그대로 태운다 */
-      let trimmedOnce = false;
-      img.onload = () => {
-        if (!trimmedOnce && /^data:image\/(png|webp)/.test(dataUrl)) {
-          const box = alphaTrimBox(img);
-          if (box) {
-            const tc = document.createElement("canvas");
-            tc.width = box.w;
-            tc.height = box.h;
-            const tx = tc.getContext("2d");
-            if (tx) {
-              tx.drawImage(img, box.x, box.y, box.w, box.h, 0, 0, box.w, box.h);
-              trimmedOnce = true;
-              const mime = /^data:(image\/(?:png|webp))/.exec(dataUrl)?.[1] ?? "image/png";
-              dataUrl = tc.toDataURL(mime, 0.95);
-              img.src = dataUrl;
-              return;
-            }
-          }
-        }
-        /* 조정 단계 **필수**(2026-08-27 «사진 영역·크기 직접 설정하게 전부») — 어떤 원본이든
-           올리기 전에 보일 영역·크기를 직접 정한다. 작업본은 저장 상한(2000px)의 2배로만 줄인다:
-           어떤 비율로 잘라도 창이 상한을 채우고, 원본(최대 25MB)을 메모리에 물지 않는다. */
-        setAdj({ zoom: 1, x: 50, y: 50, ratio: cropAspect ?? null });
-        const PENDING_MAX = CROP_MAX_W * 2;
-        const longest = Math.max(img.naturalWidth, img.naturalHeight);
-        if (longest <= PENDING_MAX) {
-          setPending({ dataUrl, w: img.naturalWidth, h: img.naturalHeight });
-        } else {
-          const c = document.createElement("canvas");
-          const k = PENDING_MAX / longest;
-          c.width = Math.max(1, Math.round(img.naturalWidth * k));
-          c.height = Math.max(1, Math.round(img.naturalHeight * k));
-          const cx = c.getContext("2d");
-          if (cx) {
-            cx.drawImage(img, 0, 0, c.width, c.height);
-            const mime = /^data:(image\/(?:png|webp))/.exec(dataUrl)?.[1] ?? "image/jpeg";
-            setPending({ dataUrl: c.toDataURL(mime, 0.92), w: c.width, h: c.height });
-          } else {
-            setPending({ dataUrl, w: img.naturalWidth, h: img.naturalHeight });
-          }
-        }
-      };
-      img.src = dataUrl;
+      origRef.current = dataUrl;
+      startAdjust(dataUrl, true);
     };
     r.readAsDataURL(f);
+  }
+
+  /** 조정 단계 진입 — (선택적)여백 트림 후 4000px 작업본을 만든다.
+      «원본 유지» 버튼이 같은 함수를 트림 없이 다시 태운다(쏘넷 점검: 무통보 트림 옵트아웃). */
+  function startAdjust(srcUrl: string, allowTrim: boolean) {
+    let dataUrl = srcUrl;
+    const img = new Image();
+    img.onerror = () => setError("이미지를 읽지 못했어요.");
+    /* 투명·단색 여백 자동 트림 — 잘라낸 사본을 같은 img 로 한 번만 다시 로드해 아래를 그대로 태운다 */
+    let trimmedOnce = false;
+    img.onload = () => {
+      if (allowTrim && !trimmedOnce && /^data:image\/(png|webp|jpe?g)/.test(dataUrl)) {
+        const box = alphaTrimBox(img);
+        if (box) {
+          const tc = document.createElement("canvas");
+          tc.width = box.w;
+          tc.height = box.h;
+          const tx = tc.getContext("2d");
+          if (tx) {
+            tx.drawImage(img, box.x, box.y, box.w, box.h, 0, 0, box.w, box.h);
+            trimmedOnce = true;
+            const mime = /^data:(image\/(?:png|webp|jpeg))/.exec(dataUrl)?.[1] ?? "image/png";
+            dataUrl = tc.toDataURL(mime, 0.95);
+            img.src = dataUrl;
+            return;
+          }
+        }
+      }
+      /* 조정 단계 **필수**(2026-08-27 «사진 영역·크기 직접 설정하게 전부») — 어떤 원본이든
+         올리기 전에 보일 영역·크기를 직접 정한다. 작업본은 저장 상한(2000px)의 2배로만 줄인다:
+         어떤 비율로 잘라도 창이 상한을 채우고, 원본(최대 25MB)을 메모리에 물지 않는다. */
+      setAdj({ zoom: 1, x: 50, y: 50, ratio: cropAspect ?? null });
+      setWasTrimmed(trimmedOnce);
+      const PENDING_MAX = CROP_MAX_W * 2;
+      const longest = Math.max(img.naturalWidth, img.naturalHeight);
+      if (longest <= PENDING_MAX) {
+        setPending({ dataUrl, w: img.naturalWidth, h: img.naturalHeight });
+      } else {
+        const c = document.createElement("canvas");
+        const k = PENDING_MAX / longest;
+        c.width = Math.max(1, Math.round(img.naturalWidth * k));
+        c.height = Math.max(1, Math.round(img.naturalHeight * k));
+        const cx = c.getContext("2d");
+        if (cx) {
+          cx.drawImage(img, 0, 0, c.width, c.height);
+          const mime = /^data:(image\/(?:png|webp))/.exec(dataUrl)?.[1] ?? "image/jpeg";
+          setPending({ dataUrl: c.toDataURL(mime, 0.92), w: c.width, h: c.height });
+        } else {
+          setPending({ dataUrl, w: img.naturalWidth, h: img.naturalHeight });
+        }
+      }
+    };
+    img.src = dataUrl;
   }
 
   /** 보일 창(원본 좌표) — 미리보기와 applyCrop 이 같은 수식을 쓴다: «보이는 대로 잘린다» */
@@ -384,6 +414,20 @@ export function ImageField({
                 </button>
               ))}
             </div>
+          ) : null}
+          {wasTrimmed ? (
+            <p className="flex max-w-[320px] items-center justify-between gap-2 text-[12px] text-fg-sub">
+              가장자리 여백을 잘라냈어요.
+              <button
+                type="button"
+                onClick={() => {
+                  if (origRef.current) startAdjust(origRef.current, false);
+                }}
+                className="trans-state shrink-0 rounded-chip border border-line px-2 py-0.5 font-medium hover:bg-tint-hover hover:text-fg"
+              >
+                원본 유지
+              </button>
+            </p>
           ) : null}
           <label className="block max-w-[320px]">
             <span className="text-[12px] text-fg-sub">크기(확대) — 사진을 끌어 위치를 맞추세요</span>
