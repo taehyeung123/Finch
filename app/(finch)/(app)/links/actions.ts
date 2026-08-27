@@ -778,9 +778,10 @@ export async function deleteLinkPage(pageId?: string): Promise<Result> {
    이미지 업로드
    ══════════════════════════════════════════════════════════════════ */
 
-/** 10MB(2026-08-26 «고화질을 왜 버리냐» 지시로 2MB→10MB). 페이지 무게가 커지는 만큼
-    추후 업로드 시 자동 리사이즈/압축을 붙이는 게 숙제다 — 지금은 수용이 우선. */
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+/** 서버 안전망 4MB — 클라이언트가 자동 최적화(2000px·WebP)로 보통 수백 KB 만 보낸다.
+    Vercel 함수 요청 본문이 4.5MB 하드캡이라(base64 +33% 포함) 이 위는 어차피 플랫폼이
+    413 으로 끊는다 — «10MB 허용» 같은 지킬 수 없는 숫자를 적지 않는다(2026-08-26 조사). */
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
 /**
  * data URL 을 link-assets 버킷에 올리고 공개 URL 을 돌려준다.
@@ -801,7 +802,7 @@ export async function uploadLinkImage(dataUrl: string): Promise<{ ok: boolean; u
   if (!m) return { ok: false, error: "PNG·JPG·WEBP·GIF·SVG 이미지만 올릴 수 있어요." };
 
   const buf = Buffer.from(m[2], "base64");
-  if (buf.byteLength > MAX_IMAGE_BYTES) return { ok: false, error: "이미지는 10MB 이하만 올릴 수 있어요." };
+  if (buf.byteLength > MAX_IMAGE_BYTES) return { ok: false, error: "이미지가 너무 커요 — 다시 올려 주세요." };
 
   const ext = m[1].split("/")[1].replace("svg+xml", "svg").replace("jpeg", "jpg");
   const path = `${user.id}/${crypto.randomUUID()}.${ext}`;

@@ -21,8 +21,40 @@ import { FinchLoader } from "@/components/ui/finch-loader";
   저장본 자체가 맞는 비율이라 공개 페이지·미리보기 어디서도 다시 잘리지 않는다.
 */
 
-/** 크롭 결과의 최대 가로 픽셀 — 커버 표시 폭(모바일 프레임)보다 넉넉한 상한 */
-const CROP_MAX_W = 1600;
+/** 저장본의 최대 긴 변 — 표시 최대폭(PC 캔버스 600px)×레티나 3배보다 넉넉한 상한.
+    «고화질을 왜 버리냐»(2026-08-26) 지시로 1600→2000. 이 위는 화질 체감 없이 무게만 는다. */
+const CROP_MAX_W = 2000;
+/** 이 바이트를 넘으면 치수가 작아도 다시 인코딩한다(무거운 PNG 스크린샷 등) */
+const REENCODE_BYTES = 1_500_000;
+/** 전송 안전 상한 — Vercel 요청 본문 4.5MB 하드캡을 base64(+33%) 포함해 넘지 않는 선 */
+const WIRE_MAX_BYTES = 3_000_000;
+
+/** data URL 의 실제 바이트 수(base64 → 원본) */
+function dataUrlBytes(u: string): number {
+  const i = u.indexOf(",");
+  return i < 0 ? 0 : Math.floor(((u.length - i - 1) * 3) / 4);
+}
+
+/** 캔버스를 가장 작게 인코딩 — WebP 우선(알파 보존+고압축), 미지원 브라우저(사파리 일부)는
+    원형식 폴백. 그래도 전송 상한을 넘으면 흰 바탕 JPEG 로 마지막 압축. */
+function encodeCanvas(canvas: HTMLCanvasElement, sourceMime: string): string {
+  if (sourceMime !== "image/jpeg") {
+    const webp = canvas.toDataURL("image/webp", 0.85);
+    if (webp.startsWith("data:image/webp") && dataUrlBytes(webp) <= WIRE_MAX_BYTES) return webp;
+  }
+  const fallback = canvas.toDataURL(sourceMime === "image/png" ? "image/png" : "image/jpeg", 0.85);
+  if (dataUrlBytes(fallback) <= WIRE_MAX_BYTES) return fallback;
+  /* 마지막 수단 — 알파를 포기하고 흰 바탕 JPEG (여기까지 오는 건 극단적 원본뿐) */
+  const flat = document.createElement("canvas");
+  flat.width = canvas.width;
+  flat.height = canvas.height;
+  const fctx = flat.getContext("2d");
+  if (!fctx) return fallback;
+  fctx.fillStyle = "#fff";
+  fctx.fillRect(0, 0, flat.width, flat.height);
+  fctx.drawImage(canvas, 0, 0);
+  return flat.toDataURL("image/jpeg", 0.8);
+}
 
 export function ImageField({
   value,
@@ -89,24 +121,47 @@ export function ImageField({
     e.target.value = "";
     if (!f) return;
     setError(null);
+    /* 읽기 전 조기 차단 — 25MB 를 넘으면 브라우저 메모리부터 위험하다 */
+    if (f.size > 25 * 1024 * 1024) {
+      setError("이미지가 너무 커요 — 25MB 이하로 올려 주세요.");
+      return;
+    }
+    const fileBytes = f.size;
 
     const r = new FileReader();
     r.onerror = () => setError("파일을 읽지 못했어요.");
     r.onload = () => {
       const dataUrl = String(r.result);
-      /* gif(애니)·svg(벡터)는 크롭·축소가 원본을 망가뜨린다 — 그대로 올린다 */
-      if (/^data:image\/(gif|svg)/.test(dataUrl)) {
+      /* gif(애니)·svg(벡터)는 크롭·축소가 원본을 망가뜨린다 — 그대로 올리되 전송 상한만 지킨다.
+         Vercel 요청 본문 4.5MB 하드캡(base64 +33% 포함)이 진짜 한계다(2026-08-26 실측·조사) */
+      if (/^data:image\/gif/.test(dataUrl)) {
+        if (fileBytes > WIRE_MAX_BYTES) {
+          setError("움직이는 GIF는 3MB 이하만 올릴 수 있어요 — 용량을 줄여 다시 시도해 주세요.");
+          return;
+        }
+        void upload(dataUrl);
+        return;
+      }
+      if (/^data:image\/svg/.test(dataUrl)) {
+        if (fileBytes > 1024 * 1024) {
+          setError("SVG는 1MB 이하만 올릴 수 있어요.");
+          return;
+        }
         void upload(dataUrl);
         return;
       }
       const img = new Image();
       img.onerror = () => setError("이미지를 읽지 못했어요.");
       img.onload = () => {
-        /* 긴 변 1600px 로 줄인다 — 4000px 원본이 480px 폰 화면에 그대로 내려가던 것(감사3 C6). 알파 보존을 위해 원래 형식 유지 */
+        /* 자동 최적화(2026-08-26 지시 «고화질 수용 + 리스크 없이») — 긴 변 2000px 로 줄이고
+           WebP(알파 보존) 우선으로 다시 인코딩한다. 치수가 작아도 무거우면(스크린샷 PNG 등)
+           재인코딩 — 원본이 이미 작고 가벼울 때만 그대로 보낸다. */
         const shrink = (): { url: string; w: number; h: number } => {
           const longest = Math.max(img.naturalWidth, img.naturalHeight);
-          if (longest <= CROP_MAX_W) return { url: dataUrl, w: img.naturalWidth, h: img.naturalHeight };
-          const k = CROP_MAX_W / longest;
+          if (longest <= CROP_MAX_W && fileBytes <= REENCODE_BYTES) {
+            return { url: dataUrl, w: img.naturalWidth, h: img.naturalHeight };
+          }
+          const k = Math.min(1, CROP_MAX_W / longest);
           const canvas = document.createElement("canvas");
           canvas.width = Math.max(1, Math.round(img.naturalWidth * k));
           canvas.height = Math.max(1, Math.round(img.naturalHeight * k));
@@ -114,7 +169,7 @@ export function ImageField({
           if (!ctx) return { url: dataUrl, w: img.naturalWidth, h: img.naturalHeight };
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
           const mime = /^data:(image\/(?:png|webp))/.exec(dataUrl)?.[1] ?? "image/jpeg";
-          return { url: canvas.toDataURL(mime, 0.85), w: canvas.width, h: canvas.height };
+          return { url: encodeCanvas(canvas, mime), w: canvas.width, h: canvas.height };
         };
         if (!cropAspect) {
           const sh = shrink();
@@ -157,12 +212,12 @@ export function ImageField({
         setError("이미지를 처리하지 못했어요.");
         return;
       }
-      /* JPEG 엔 알파가 없다 — PNG 투명 영역이 검게 구워지지 않게 흰 바탕 먼저 */
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, x, y, cropW, cropH, 0, 0, canvas.width, canvas.height);
       setPending(null);
-      void upload(canvas.toDataURL("image/jpeg", 0.85), { w: canvas.width, h: canvas.height });
+      /* WebP 우선 — 알파가 살아서 흰 바탕 강제(옛 JPEG 고정)의 투명 손실이 없다.
+         WebP 미지원 폴백은 encodeCanvas 가 흰 바탕 JPEG 로 처리한다 */
+      const srcMime = /^data:(image\/(?:png|webp))/.exec(dataUrl)?.[1] ?? "image/jpeg";
+      void upload(encodeCanvas(canvas, srcMime), { w: canvas.width, h: canvas.height });
     };
     img.src = dataUrl;
   }
@@ -256,7 +311,7 @@ export function ImageField({
               <ImagePlus className="size-5" aria-hidden />
               <span className="text-[14px] font-medium">이미지 올리기</span>
               {/* 작은 원형 칸(프로필 사진)에서는 형식 문구가 원 밖으로 넘친다 — 아래 hint 가 대신 말한다 */}
-              {maxW ? null : <span className="text-[11px]">PNG·JPG·WEBP · 10MB 이하</span>}
+              {maxW ? null : <span className="text-[11px]">고화질 OK — 자동 최적화 · GIF 3MB</span>}
             </>
           )}
         </button>
