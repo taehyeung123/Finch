@@ -527,6 +527,56 @@ export function LinksClient({
       return next as LinkThemeCustom;
     });
   }
+  /* 프로필 실시간 저장(2026-08-27 «텍스트 넣고 다른 모달 넘어가면 반영 안 됨») — 이름·문구·
+     SNS·SEO 가 마지막 남은 수동 저장 레인이었다. 블록·꾸미기와 같은 전용 체인.
+     주소(slug)는 자동 저장에서 **제외**한다: 30일 쿨다운이라 타이핑 중간값이 주소를 바꾸면
+     되돌릴 수 없다 — 서버 주소를 그대로 보내고, 주소 변경은 「중복 확인 → 주소 저장」 버튼이 전담. */
+  const profileChain = useRef<Promise<unknown>>(Promise.resolve());
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSaveFailed, setProfileSaveFailed] = useState(false);
+  const [profileFailTick, setProfileFailTick] = useState(0);
+  const profileFormKey = stableJson(profileForm);
+  useEffect(() => {
+    if (!page || isDemo || !profileDirty) return;
+    /* SNS 미완성 줄(관문 불통과)은 보류 — 확정되면 그때 저장된다(수동 저장 시절의 검사와 동일) */
+    if (profileForm.snsLinks.some((x) => !normalizeSnsUrl(snsHref(x.kind, x.url)))) return;
+    const payload = { ...profileForm, slug: page.slug };
+    /* 주소만 바꿔 적는 중이면 보낼 것이 없다 — 같은 값 재전송 루프 방지 */
+    if (stableJson(payload) === profileServerKey) return;
+    const timer = window.setTimeout(() => {
+      setProfileSaving(true);
+      profileChain.current = profileChain.current
+        .catch(() => {})
+        .then(() => updateLinkProfile(payload, page.id))
+        .then(
+          (res) => {
+            if (res.ok) setProfileSaveFailed(false);
+            else {
+              setProfileSaveFailed(true);
+              setProfileFailTick((t) => t + 1);
+            }
+          },
+          () => {
+            setProfileSaveFailed(true);
+            setProfileFailTick((t) => t + 1);
+          },
+        )
+        .finally(() => setProfileSaving(false));
+    }, profileSaveFailed ? 5000 : 800);
+    return () => window.clearTimeout(timer);
+    /* profileFormKey 가 내용 변화를 대표한다 */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileDirty, profileFormKey, profileServerKey, profileFailTick, isDemo]);
+  const profileFlushRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    profileFlushRef.current = () => {
+      if (!page || isDemo || !profileDirty) return;
+      if (profileForm.snsLinks.some((x) => !normalizeSnsUrl(snsHref(x.kind, x.url)))) return;
+      const payload = { ...profileForm, slug: page.slug };
+      if (stableJson(payload) === profileServerKey) return;
+      void updateLinkProfile(payload, page.id).catch(() => {});
+    };
+  });
   /* 꾸미기 실시간 저장(2026-08-27 «꾸미기 저장 왜 눌러야 반영되냐») — 블록 autosaveChain 과
      같은 문법의 **전용 체인**. run() 은 전역 busy 베일로 화면을 잠그고 겹치면 호출을 삼키므로
      여기 쓰면 안 된다(쏘넷 점검 high — 블록 자동 저장이 run() 을 안 쓰는 이유와 동일).
@@ -580,7 +630,10 @@ export function LinksClient({
     };
   });
   useEffect(() => {
-    return () => customFlushRef.current();
+    return () => {
+      customFlushRef.current();
+      profileFlushRef.current();
+    };
   }, []);
   /* 추가한 블록으로 화면 이동(2026-08-27 지시 «추가하면 바로 내용 넣게») — 새 블록은 목록
      맨 아래라 편집기가 열려도 화면 밖이었다. 행은 서버 목록이 도착해야 생기므로,
@@ -608,11 +661,11 @@ export function LinksClient({
   /* 창 닫기·새로고침 — 저장이 미처 못 나간 순간만 브라우저 기본 경고를 건다(쏘넷 점검 high).
      블록 초안뿐 아니라 꾸미기 레인(디바운스·왕복·재시도·주소 보류)도 지킨다. */
   useEffect(() => {
-    if (isDemo || (!editorDirty && !autoSaving && !customDirty && !customSaving)) return;
+    if (isDemo || (!editorDirty && !autoSaving && !customDirty && !customSaving && !profileDirty && !profileSaving)) return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [editorDirty, autoSaving, customDirty, customSaving, isDemo]);
+  }, [editorDirty, autoSaving, customDirty, customSaving, profileDirty, profileSaving, isDemo]);
   /* 통계 — 편집 탭이 아니라 상단 바에서 여닫는다("만드는 창에 통계가 왜 있냐",
      2026-08-20). 만들기와 성과 보기는 다른 일이다 — 링크팜도 통계는 빌더 밖이다. */
 
@@ -1545,7 +1598,7 @@ export function LinksClient({
           <TopBar
             page={page}
             unsaved={anyDirty}
-            saving={!isDemo && (autoSaving || editorDirty || customSaving || customDirty)}
+            saving={!isDemo && (autoSaving || editorDirty || customSaving || customDirty || profileSaving || profileDirty)}
             autoPublishing={autoPublishing}
             pages={pages}
             pageLimit={pageLimit}
@@ -4003,35 +4056,37 @@ function ProfilePanel({
 
       {/* 입력이 탭 이동에도 살아남게 되면서, "고쳐놓고 저장을 잊는" 경우가
           조용히 길어질 수 있다 — 서버 값과 다르면 여기서 말해 준다 */}
-      {dirty ? (
-        <p className="text-[12px] text-fg-sub">
-          저장 안 한 변경이 있어요 — 탭을 옮겨도 입력은 남아 있고, 「저장」해야 실제로 반영됩니다.
-        </p>
+      {/* 이름·문구·SNS 는 실시간 저장(2026-08-27) — 문구는 짧게, 자리는 흔들리지 않게 */}
+      {dirty && form.slug === page.slug ? <p className="text-[12px] text-fg-sub">저장 중…</p> : null}
+      {form.slug !== page.slug ? (
+        <p className="text-[12px] text-fg-sub">주소 변경은 중복 확인 후 「주소 저장」을 눌러야 반영돼요.</p>
       ) : null}
       {/* 주소를 바꿔 적었으면 중복 확인 통과 전엔 저장이 잠긴다 — 주소 그대로면 동기 판정이
           즉시 통과라 다른 필드만 고치는 저장은 안 막힌다(서버 관문과 같은 원칙). 잠긴 이유는
           원인에 맞게 말한다 — 빈 주소인데 「중복 확인을 하라」고 하면 엉뚱하다(쏘넷 점검). */}
-      <Button
-        variant="secondary"
-        disabled={busy || !profileSlug.passed}
-        title={
-          !profileSlug.passed
-            ? profileSlug.check.level === "idle"
-              ? "주소가 비어 있어요 — 주소를 입력하거나 원래 주소로 되돌려 주세요"
-              : (profileSlug.check.msg ?? "먼저 중복 확인을 해 주세요")
-            : undefined
-        }
-        onClick={onSave}
-      >
-        {busy ? (
-          <span className="inline-flex items-center gap-1.5">
-            <Loader2 className="size-4 animate-spin" aria-hidden />
-            저장 중…
-          </span>
-        ) : (
-          "저장"
-        )}
-      </Button>
+      {form.slug !== page.slug ? (
+        <Button
+          variant="secondary"
+          disabled={busy || !profileSlug.passed}
+          title={
+            !profileSlug.passed
+              ? profileSlug.check.level === "idle"
+                ? "주소가 비어 있어요 — 주소를 입력하거나 원래 주소로 되돌려 주세요"
+                : (profileSlug.check.msg ?? "먼저 중복 확인을 해 주세요")
+              : undefined
+          }
+          onClick={onSave}
+        >
+          {busy ? (
+            <span className="inline-flex items-center gap-1.5">
+              <Loader2 className="size-4 animate-spin" aria-hidden />
+              저장 중…
+            </span>
+          ) : (
+            "주소 저장"
+          )}
+        </Button>
+      ) : null}
     </div>
   );
 }
