@@ -5,8 +5,8 @@ import { AlignCenter, AlignLeft, CalendarOff, CalendarPlus, Columns2, Columns3, 
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { PickCards, PickChips } from "./option-picker";
 import { DateTimePickerField } from "./date-field";
+import { ModalShell } from "@/components/ui/modal-shell";
 import { Button } from "@/components/ui/button";
-import { sliceChars } from "@/lib/links";
 import { BLOCK_CATALOG, COLLAPSE_OPTIONS, CONTACT_FIELDS, COUPANG_DISCLOSURE, LINK_LAYOUTS, LINK_TEXT_COLORS, type LinkBlock } from "@/lib/links/blocks";
 import { ImageField } from "./image-field";
 import { FileField } from "./file-field";
@@ -26,7 +26,8 @@ const input =
   "h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none";
 const area =
   "w-full rounded-card border border-line bg-body px-3 py-2 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none";
-const label = "block text-[14px] font-medium text-fg";
+/* semibold — medium 은 입력값(15px regular)과 무게 차가 얕아 라벨이 묻혔다(2026-08-27 가독성 지적) */
+const label = "block text-[14px] font-semibold text-fg";
 
 /** 편집기가 열릴 때 부모가 포커스를 옮길 자리 */
 export const EDITOR_TITLE_ID = "block-editor-title";
@@ -94,6 +95,8 @@ export function BlockEditor({
   const [tagDraft, setTagDraft] = useState("");
   /* 주소로 제목·이미지 불러오기 — 어느 칸(블록 자체 = -1, 항목 = i)이 도는 중인가 */
   const [fetching, setFetching] = useState<number | null>(null);
+  /* 지도 블록 주소 검색(다음 우편번호) 모달 */
+  const [postcodeOpen, setPostcodeOpen] = useState(false);
   const [fetchMsg, setFetchMsg] = useState<{ slot: number; text: string } | null>(null);
   /* 불러오기는 몇 초 걸린다 — 끝났을 때 이 편집기가 이미 닫혔거나 다른 블록으로 바뀌었으면 결과를 버린다.
      안 버리면 A 블록의 결과가 B 블록의 초안에 들어간다(감사 C5). 같은 블록의 그 사이 입력은 함수형 갱신이 지킨다. */
@@ -284,13 +287,8 @@ export function BlockEditor({
               <input id="b-oprice" value={str("originalPrice")} onChange={(e) => set("originalPrice", e.target.value)} placeholder="39,000원" maxLength={20} className={`mt-1.5 ${input}`} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className={label} htmlFor="b-emoji">
-                아이콘 (선택)
-              </label>
-              <input id="b-emoji" value={str("emoji")} onChange={(e) => set("emoji", sliceChars(e.target.value, 4))} placeholder="🔔" className={`mt-1.5 ${input}`} />
-            </div>
+          {/* 아이콘(이모지) 칸 제거(2026-08-27) — 렌더러도 같은 배치에서 이모지 그리기를 걷어냈다(옛 값은 데이터로만 남는다) */}
+          <div className="grid grid-cols-1 gap-2">
             <div>
               <span className={label}>강조</span>
               <PickCards
@@ -384,6 +382,7 @@ export function BlockEditor({
             onChange={(e) => set("text", e.target.value)}
             rows={block.type === "heading" ? 1 : 3}
             maxLength={500}
+            placeholder={block.type === "heading" ? "소제목" : block.type === "notice" ? "지금 알릴 것 — 예: 가을 공구 오픈, 일요일 밤 마감" : "짧은 설명 문단을 적어 보세요"}
             className={`mt-1.5 ${area}`}
           />
         </div>
@@ -1076,7 +1075,20 @@ export function BlockEditor({
             <label className={label} htmlFor="b-addr">
               주소
             </label>
-            <input id="b-addr" value={str("address")} onChange={(e) => set("address", e.target.value)} placeholder="서울시 강남구 …" maxLength={200} className={`mt-1.5 ${input}`} />
+            {/* 실주소 UX(2026-08-27 지시) — 검색으로 도로명 주소를 고르고, 상세는 따로 적는다.
+                직접 타이핑도 막지 않는다(해외 주소·자유 표기). */}
+            <div className="mt-1.5 flex gap-2">
+              <input id="b-addr" value={str("address")} onChange={(e) => set("address", e.target.value)} placeholder="주소 검색을 눌러 고르세요" maxLength={200} className={input} />
+              <button type="button" onClick={() => setPostcodeOpen(true)} className="trans-state h-10 shrink-0 rounded-card border border-line px-3 text-[14px] font-semibold text-fg hover:bg-tint-hover">
+                주소 검색
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className={label} htmlFor="b-mdetail">
+              상세 주소 (선택)
+            </label>
+            <input id="b-mdetail" value={str("detail")} onChange={(e) => set("detail", e.target.value)} placeholder="3층 301호" maxLength={60} className={`mt-1.5 ${input}`} />
           </div>
           <div>
             <label className={label} htmlFor="b-mlabel">
@@ -1084,6 +1096,15 @@ export function BlockEditor({
             </label>
             <input id="b-mlabel" value={str("label")} onChange={(e) => set("label", e.target.value)} placeholder="찾아오시는 길" maxLength={40} className={`mt-1.5 ${input}`} />
           </div>
+          {postcodeOpen ? (
+            <PostcodeModal
+              onPick={(addr) => {
+                set("address", addr);
+                setPostcodeOpen(false);
+              }}
+              onClose={() => setPostcodeOpen(false)}
+            />
+          ) : null}
         </>
       ) : null}
 
@@ -1145,6 +1166,9 @@ export function BlockEditor({
                     <span className="block text-[11px] font-medium text-fg-sub">
                       종료 날짜 (여러 날일 때)
                       <DateTimePickerField mode="date" value={typeof it.endAt === "string" ? it.endAt.split("T")[0] : ""} onChange={(v) => setItem(i, "endAt", v)} ariaLabel={`일정 ${i + 1} 종료 날짜`} placeholder="같은 날이면 비워요" />
+                      {typeof it.endAt === "string" && it.endAt && date && it.endAt.split("T")[0] < date ? (
+                        <span className="mt-1 block text-[12px] font-medium text-negative-strong">종료 날짜가 시작 날짜보다 빨라요 — 다시 골라 주세요.</span>
+                      ) : null}
                     </span>
                     <label className="block text-[11px] font-medium text-fg-sub">
                       장소 (선택)
@@ -1223,5 +1247,72 @@ export function BlockEditor({
         <span className="text-[12px] text-fg-sub">{dirty ? "저장 중…" : "자동 저장됨"}</span>
       </div>
     </div>
+  );
+}
+
+/** 주소 검색 모달 — 다음 우편번호 위젯(키 불필요, 공식 임베드). 스크립트는 첫 사용 때 한 번 로드. */
+function PostcodeModal({ onPick, onClose }: { onPick: (addr: string) => void; onClose: () => void }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [sdkFailed, setSdkFailed] = useState(false);
+  const onPickRef = useRef(onPick);
+  useEffect(() => {
+    onPickRef.current = onPick;
+  });
+  useEffect(() => {
+    let cancelled = false;
+    type DaumNS = { Postcode: new (o: { oncomplete: (d: { roadAddress?: string; jibunAddress?: string }) => void; width?: string; height?: string }) => { embed: (el: HTMLElement) => void } };
+    const mount = () => {
+      const daum = (window as unknown as { daum?: DaumNS }).daum;
+      if (cancelled || !daum || !boxRef.current) return;
+      boxRef.current.innerHTML = "";
+      new daum.Postcode({
+        oncomplete: (d) => onPickRef.current(d.roadAddress || d.jibunAddress || ""),
+        width: "100%",
+        height: "100%",
+      }).embed(boxRef.current);
+    };
+    if ((window as unknown as { daum?: DaumNS }).daum) {
+      mount();
+      return () => {
+        cancelled = true;
+      };
+    }
+    const id = "daum-postcode-sdk";
+    let el = document.getElementById(id) as HTMLScriptElement | null;
+    if (!el) {
+      el = document.createElement("script");
+      el.id = id;
+      el.src = "https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js";
+      document.head.appendChild(el);
+    }
+    /* 실패는 «없음»이 아니다 — 차단·오프라인이면 load 가 영영 안 온다. error + 8초 타임아웃으로
+       빈 상자 대신 «직접 입력» 안내를 띄운다 */
+    const fail = () => {
+      if (!cancelled) setSdkFailed(true);
+    };
+    el.addEventListener("load", mount);
+    el.addEventListener("error", fail);
+    const timer = window.setTimeout(() => {
+      if (!(window as unknown as { daum?: DaumNS }).daum) fail();
+    }, 8000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      el?.removeEventListener("load", mount);
+      el?.removeEventListener("error", fail);
+    };
+  }, []);
+  return (
+    <ModalShell label="주소 검색" title="주소 검색" onClose={onClose} size="md">
+      {sdkFailed ? (
+        <p className="flex h-[200px] items-center justify-center rounded-card border border-line bg-plate px-6 text-center text-[14px] leading-[1.7] text-fg-sub">
+          주소 검색 창을 불러오지 못했어요.
+          <br />
+          네트워크를 확인하거나, 주소 칸에 직접 입력해 주세요.
+        </p>
+      ) : (
+        <div ref={boxRef} className="h-[440px] w-full overflow-hidden rounded-card border border-line bg-plate" />
+      )}
+    </ModalShell>
   );
 }

@@ -19,8 +19,12 @@ import {
   Loader2,
   AppWindow,
   ExternalLink,
+  Clapperboard,
+  Feather,
   Monitor,
   MousePointerClick,
+  ShoppingBag,
+  Store,
   Pencil,
   Percent,
   RotateCcw,
@@ -149,6 +153,18 @@ import type { LinkGuestbookEntry, LinkLead, LinkPageSummary, LinkPageView, LinkS
 import { BlockEditor, EDITOR_TITLE_ID } from "./block-editor";
 import { ImageField } from "./image-field";
 import { PickCards, PickChips } from "./option-picker";
+
+/* 템플릿 카드 아이콘(2026-08-27 «이모지 빼고 SVG») — key → 픽토그램 */
+const TEMPLATE_ICON: Record<string, LucideIcon> = {
+  creator: Clapperboard,
+  shop: ShoppingBag,
+  brand: Store,
+  simple: Feather,
+};
+function TemplateIcon({ templateKey, className }: { templateKey: string; className?: string }) {
+  const Icon = TEMPLATE_ICON[templateKey] ?? Sparkles;
+  return <Icon className={className} />;
+}
 import { DateTimePickerField } from "./date-field";
 import { ImportLinks, ImportLinksBody } from "./import-links";
 import { BLOCK_ICON } from "./block-icons";
@@ -726,31 +742,37 @@ export function LinksClient({
   );
   const [liveTheme, pickThemeOptimistic] = useOptimistic(page?.theme ?? "");
 
+  /* 바쁠 때 «삼키기» → **대기열**(2026-08-27 «더보기 기능 전부 무반응») — 실시간 저장·자동
+     반영 시대엔 busy 창이 잦아 조작이 자꾸 삼켜졌다. 순서는 대기열이 지키고, busy 는 깊이
+     카운터로 유지한다(마지막 작업이 끝나야 베일이 걷힌다). */
+  const runQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const runDepth = useRef(0);
   function run<T extends { ok: boolean; error?: string }>(fn: () => Promise<T>, onOk?: (res: T) => void, onFail?: () => void) {
-    if (busy) {
-      /* 앞선 작업이 끝날 때까지 조용히 삼킨다. **삼켰다는 사실은 알려야 한다** —
-         ↑↓ 는 포커스가 튀지 않게 일부러 비활성화하지 않으므로, 눌렀는데 아무 일도
-         안 일어나는 게 화면상 구분되지 않는다. */
-      toast("앞선 작업을 처리하는 중이에요. 잠시 후 다시 눌러 주세요.", "warn");
-      return;
-    }
+    runDepth.current += 1;
     setBusy(true);
     setError(null);
-    startTransition(async () => {
-      try {
-        const res = await fn();
-        if (!res.ok) {
-          setError(res.error ?? "처리하지 못했어요.");
-          onFail?.();
-        } else onOk?.(res);
-      } catch {
-        /* 전송 계층 실패(네트워크 단절 등) — 잡지 않으면 busy 만 풀리고 아무 안내가 없다 */
-        setError("네트워크 오류가 발생했어요. 잠시 후 다시 시도해 주세요.");
-        onFail?.();
-      } finally {
-        setBusy(false);
-      }
-    });
+    runQueue.current = runQueue.current.catch(() => {}).then(
+      () =>
+        new Promise<void>((resolve) => {
+          startTransition(async () => {
+            try {
+              const res = await fn();
+              if (!res.ok) {
+                setError(res.error ?? "처리하지 못했어요.");
+                onFail?.();
+              } else onOk?.(res);
+            } catch {
+              /* 전송 계층 실패(네트워크 단절 등) — 잡지 않으면 busy 만 풀리고 아무 안내가 없다 */
+              setError("네트워크 오류가 발생했어요. 잠시 후 다시 시도해 주세요.");
+              onFail?.();
+            } finally {
+              runDepth.current -= 1;
+              if (runDepth.current === 0) setBusy(false);
+              resolve();
+            }
+          });
+        }),
+    );
   }
 
   /* run() 의 전역 busy 는 순서가 중요한 조작(이동·삭제·발행)용이다. 온오프·테마는
@@ -1635,7 +1657,10 @@ export function LinksClient({
           aria-expanded={tplOpen}
           className="flex w-full items-center justify-between px-4 py-2.5 text-[14px] font-semibold"
         >
-          <span>✨ 템플릿 적용하기</span>
+          <span className="flex items-center gap-1.5">
+            <Sparkles className="size-4 text-fg-sub" aria-hidden />
+            템플릿 적용하기
+          </span>
           <ChevronDown
             className={cn("size-4 text-fg-sub transition-transform duration-[240ms] ease-[var(--ease-arrive)]", tplOpen && "rotate-180")}
             aria-hidden
@@ -1685,8 +1710,8 @@ export function LinksClient({
                     <span className="tnum absolute right-2 top-2 rounded-chip bg-scrim px-1.5 py-0.5 text-[11px] font-semibold text-on-scrim">
                       {t.blocks.length}블록
                     </span>
-                    <span className="flex size-8 items-center justify-center rounded-card bg-body text-[17px]" aria-hidden>
-                      {t.emoji}
+                    <span className="flex size-8 items-center justify-center rounded-card bg-body" aria-hidden>
+                      <TemplateIcon templateKey={t.key} className="size-4" />
                     </span>
                     <span className="mt-2 block text-[14px] font-semibold">{t.name}</span>
                     <span className="mt-0.5 block truncate text-[12px] opacity-75">{t.hint}</span>
@@ -2325,9 +2350,15 @@ function BlockListPanel({
   /* ⋯ 메뉴는 바깥 클릭·Esc 로 닫힌다 */
   useEffect(() => {
     if (!menuFor) return;
-    const close = () => setMenuFor(null);
+    /* 포함관계로 판정한다 — stopPropagation 에만 기대면 자동 저장 재렌더와 경합할 때
+       메뉴 안 mousedown 이 바깥으로 새어 «눌렀는데 무반응»이 됐다(2026-08-27 지시) */
+    const close = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.("[data-block-menu]")) return;
+      setMenuFor(null);
+    };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape") setMenuFor(null);
     };
     document.addEventListener("mousedown", close);
     document.addEventListener("keydown", onKey);
@@ -2518,7 +2549,7 @@ function BlockListPanel({
                 <Clock className="size-4" aria-hidden />
                 {hasSched ? <span className="absolute right-1 top-1 size-1.5 rounded-full bg-primary" aria-hidden /> : null}
               </button>
-              <div className="relative">
+              <div className="relative" data-block-menu>
                 <button
                   type="button"
                   onMouseDown={(e) => e.stopPropagation()}
@@ -2788,7 +2819,7 @@ function TemplateModal({
         <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
           <div className="min-w-0">
             <h3 className="text-[17px] font-semibold">
-              {template.emoji} {template.name}{" "}
+              {template.name}{" "}
               <span className="tnum text-[14px] font-normal text-fg-sub">{template.blocks.length}블록</span>
             </h3>
             <p className="mt-0.5 text-[14px] text-fg-sub">{template.hint}</p>
@@ -2804,7 +2835,8 @@ function TemplateModal({
         </div>
         {/* 카드 **안**의 중첩 면은 plate 가 역할이다(지면 bg-surface 가 아니라) */}
         <div className="min-h-0 flex-1 overflow-y-auto bg-plate px-5 py-5">
-          <PhonePreview page={{ ...page, theme: template.theme, themeCustom: null }} blocks={blocks} selectedId={null} />
+          {/* 적용 결과와 같은 모습이어야 한다 — applyTemplate 은 theme_custom 에 tpl.custom 을 저장한다 */}
+          <PhonePreview page={{ ...page, theme: template.theme, themeCustom: sanitizeThemeCustom(template.custom ?? null) }} blocks={blocks} selectedId={null} />
         </div>
         <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-3">
           {error ? (
@@ -3679,7 +3711,12 @@ function AddPanel({
       {/* 템플릿 — 빈 캔버스에서 "뭘 만들지"에 멈추는 지점을 넘긴다.
           적용은 기존 블록을 덮으므로 확인을 받는다. */}
       <details className="rounded-card border border-line">
-        <summary className="cursor-pointer px-3 py-2 text-[14px] font-semibold">✨ 템플릿으로 시작</summary>
+        <summary className="cursor-pointer px-3 py-2 text-[14px] font-semibold">
+          <span className="inline-flex items-center gap-1.5">
+            <Sparkles className="size-4 text-fg-sub" aria-hidden />
+            템플릿으로 시작
+          </span>
+        </summary>
         <div className="space-y-1.5 px-3 pb-3">
           {LINK_TEMPLATES.map((t) => (
             <button

@@ -4,7 +4,7 @@ import { COUPANG_DISCLOSURE, musicEmbed } from "@/lib/links/blocks";
 import { Collapsible } from "./collapsible";
 import { GuestbookForm } from "./guestbook-form";
 import { SearchBlock } from "./search-block";
-import { MapPin, ExternalLink, Download, Info, UserPlus, CalendarPlus } from "lucide-react";
+import { MapPin, ExternalLink, Download, UserPlus, CalendarPlus, Megaphone } from "lucide-react";
 import { buildIcs, eventChip, eventEndEpoch, eventEpoch, formatEventDate, formatEventTime, icsHref, isMultiDay, nowMs, parseEventAt, type EventPart } from "@/lib/links/events";
 import { lpText, lpN, type LpText } from "@/lib/links/i18n";
 
@@ -266,7 +266,7 @@ export function BlockRenderer({
          발행되는 게 가장 흔한 경로다. */
       if (!s(d, "url")) return null;
       const label = s(d, "label") || t.link;
-      const emoji = s(d, "emoji");
+      /* 링크 이모지 폐기(2026-08-27 «아이콘 영역 왜있냐») — 입력칸과 함께 렌더도 걷어냈다 */
       const emphasis = s(d, "emphasis") || "normal";
       const primary = emphasis === "primary";
       const outline = emphasis === "outline";
@@ -303,7 +303,6 @@ export function BlockRenderer({
             ) : null}
             <span className={`min-w-0 flex-1 ${big ? "block px-4 py-3 text-center" : ""}`}>
               <span style={textStyle} className="block text-[15px] font-semibold text-[var(--lp-fg)]">
-                {emoji ? <span aria-hidden>{emoji} </span> : null}
                 {label}
               </span>
               <Price d={d} size={big ? "md" : "sm"} align={big ? "center" : "start"} />
@@ -339,7 +338,6 @@ export function BlockRenderer({
             <img src={thumb} alt="" className="absolute left-2 top-1/2 size-10 -translate-y-1/2 rounded-[calc(var(--lp-radius-btn)/1.4)] object-cover" />
           ) : null}
           <span className="flex items-center gap-2">
-            {emoji ? <span aria-hidden>{emoji}</span> : null}
             {label}
           </span>
           {hasExtras ? (
@@ -577,7 +575,7 @@ export function BlockRenderer({
       const tone = s(d, "tone") || "info";
       /*
         두 톤은 성격이 다르다(2026-08-26 사장님 — 아이콘+띠 구조가 "AI 대시보드 경고" 티가 났다):
-        · info    = 안내. 왼쪽 강조 띠 + Info 아이콘 — 시스템 안내답게.
+        · info    = 안내. 강조색 9% 틴트 면 + 원형 확성기 배지(아래 재디자인 주석).
         · primary = **홍보 배너**. 공구 오픈·이벤트를 외치는 자리다 — 경고 장식(아이콘·띠)을 전부
           걷고, 칩 면(--lp-chip-bg/-ink: 대비 4.5:1 보장된 강조 틴트) 위 가운데 정렬 semibold 한 줄.
           통짜 강조색 채움은 안 쓴다 — 강조 링크 버튼과 실루엣이 겹쳐 «눌러도 안 되는 버튼»이
@@ -594,9 +592,13 @@ export function BlockRenderer({
           </div>
         );
       }
+      /* 안내 톤 재디자인(2026-08-27 «기본 디자인 다시») — 왼쪽 색 띠+아이콘 나열 대신
+         강조색 9% 틴트 면 위에 강조색 원형 확성기 배지 하나. 장식이 줄어 글이 주인공이 된다. */
       return (
-        <div className="flex items-start gap-2.5 rounded-[var(--lp-radius)] border border-l-[3px] border-[var(--lp-border)] border-l-[var(--lp-accent)] bg-[var(--lp-card)] px-4 py-3.5 text-[14px] leading-[1.6] text-[var(--lp-fg)] shadow-[var(--lp-shadow)]">
-          <Info className="mt-0.5 size-4 shrink-0 text-[var(--lp-accent)]" aria-hidden />
+        <div className="flex items-center gap-3 rounded-[var(--lp-radius)] bg-[color-mix(in_srgb,var(--lp-accent)_9%,var(--lp-card))] px-4 py-3.5 text-[14px] font-medium leading-[1.6] text-[var(--lp-fg)] shadow-[var(--lp-shadow)]">
+          <span aria-hidden className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--lp-accent)] text-[var(--lp-on-accent)]">
+            <Megaphone className="size-4" />
+          </span>
           <span className="min-w-0">{s(d, "text")}</span>
         </div>
       );
@@ -824,7 +826,10 @@ export function BlockRenderer({
             </span>
             <span className="min-w-0 flex-1">
               <span className="block text-[15px] font-semibold text-[var(--lp-fg)]">{s(d, "label") || t.map}</span>
-              <span className="mt-0.5 block truncate text-[14px] text-[var(--lp-muted)]">{address}</span>
+              <span className="mt-0.5 block truncate text-[14px] text-[var(--lp-muted)]">
+                {address}
+                {s(d, "detail") ? ` · ${s(d, "detail")}` : ""}
+              </span>
             </span>
             <ExternalLink className="size-3.5 shrink-0 text-[var(--lp-muted)]" aria-hidden />
           </span>

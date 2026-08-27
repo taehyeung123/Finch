@@ -169,6 +169,21 @@ export function LeadForm({
         </p>
       ) : null}
 
+      {/* 개인정보 수집·이용 동의(2026-08-27, 쏘넷 점검 반영) — required 라 미체크 제출은 브라우저가 먼저 막는다.
+          항목 열거는 실제 폼 구성(fields)에서 파생하고 문구는 페이지 언어(i18n)를 따른다 — 고정 리터럴이면
+          구독 폼(이메일만 받음)에 «이름·연락처»를 수집한다는 허위 고지가 된다. */}
+      <label className="flex items-start gap-2 text-[13px] leading-[1.6] text-[var(--lp-muted)]">
+        <input type="checkbox" required className="mt-0.5 size-4 shrink-0 accent-[var(--lp-accent)]" />
+        <span>
+          {t.consent}{" "}
+          <span className="opacity-80">
+            {t.consentSpec
+              .replace("{items}", fields.map((f) => FIELD_LABEL[f]).join(" · "))
+              .replace("{purpose}", kind === "subscribe" ? t.consentPurposeSubscribe : t.consentPurposeContact)}
+          </span>
+        </span>
+      </label>
+
       <button
         type="submit"
         disabled={busy}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MapPin, ExternalLink, ArrowDown, ArrowUp, CalendarPlus, Download, Eye, EyeOff, GripVertical, ImagePlus, Info, Pencil, Plus, Search, Share2, Trash2, UserPlus } from "lucide-react";
+import { MapPin, ExternalLink, ArrowDown, ArrowUp, CalendarPlus, Download, Eye, EyeOff, GripVertical, ImagePlus, Pencil, Plus, Search, Share2, Trash2, UserPlus, Megaphone } from "lucide-react";
 import { eventChip, eventEndEpoch, eventEpoch, formatEventDate, formatEventTime, isMultiDay, nowMs, parseEventAt, type EventPart } from "@/lib/links/events";
 import { cn } from "@/lib/cn";
 import { FinchMark } from "@/components/logo";
@@ -826,11 +826,14 @@ const QUICK_ADD: Array<{ type: BlockType; label: string; hint: string }> = [
    "…하면 보여요"로 뒤집은 것. 자리표시자는 경고가 아니라 다음 할 일을 말해야 한다 */
 const GHOST_HINT: Partial<Record<string, string>> = {
   link: "주소를 넣으면 공개돼요",
+  heading: "소제목을 적으면 보여요",
+  text: "내용을 적으면 보여요",
+  notice: "공지 내용을 적으면 보여요",
   card_row: "링크 있는 항목을 추가하면 보여요",
   grid: "링크 있는 항목을 추가하면 보여요",
   image: "사진을 올리면 보여요",
   gallery: "사진을 올리면 보여요",
-  image_card: "이미지를 올리면 보여요",
+  image_card: "사진이나 내용을 넣으면 보여요",
   video: "영상 주소를 넣으면 보여요",
   music: "음악 주소를 넣으면 보여요",
   map: "주소를 넣으면 지도가 보여요",
@@ -928,7 +931,6 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
             ) : null}
             <span className={`min-w-0 flex-1 ${big ? "block px-3 py-2.5 text-center" : ""}`}>
               <span style={textStyle} className="block text-[13px] font-semibold">
-                {s(d, "emoji") ? <span aria-hidden>{s(d, "emoji")} </span> : null}
                 {s(d, "label") || "링크"}
               </span>
               <PPrice d={d} size={big ? "md" : "sm"} />
@@ -958,7 +960,6 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
             <img src={thumb} alt="" className="absolute left-1.5 top-1/2 size-9 -translate-y-1/2 rounded-[calc(var(--lp-radius-btn)/1.4)] object-cover" />
           ) : null}
           <span className="flex items-center gap-1.5">
-            {s(d, "emoji") ? <span aria-hidden>{s(d, "emoji")}</span> : null}
             {s(d, "label") || "링크"}
           </span>
           {hasExtras ? (
@@ -971,6 +972,7 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
       );
     }
     case "heading":
+      /* 빈 텍스트는 여기 오기 전에 hiddenReason 가드가 GhostCard 로 처리한다(GHOST_HINT 초대 문구) */
       return <p className="pt-4 pb-0.5 text-[15px] font-bold tracking-[-0.02em]">{s(d, "text")}</p>;
     case "text":
       return (
@@ -1114,7 +1116,7 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
     }
     case "notice":
       /* 공개 렌더러와 같은 규칙(block-renderer.tsx notice 주석) — primary 는 홍보 배너(칩 면·중앙
-         semibold, 장식 없음), info 는 안내(띠+아이콘). */
+         semibold, 장식 없음), info 는 안내(틴트 면 + 확성기 배지, 2026-08-27 재디자인). */
       if (s(d, "tone") === "primary") {
         return (
           <div
@@ -1126,8 +1128,11 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
         );
       }
       return (
-        <div className={`${card} flex items-start gap-2 border-l-[3px] border-l-[var(--lp-accent)] px-3 py-2.5 text-[12px] leading-[1.6]`}>
-          <Info className="mt-0.5 size-3.5 shrink-0 text-[var(--lp-accent)]" aria-hidden />
+        /* 공개 렌더러의 안내 톤 재디자인 미러 — 틴트 면 + 확성기 배지 */
+        <div className="flex items-center gap-2.5 rounded-[var(--lp-radius)] bg-[color-mix(in_srgb,var(--lp-accent)_9%,var(--lp-card))] px-3 py-2.5 text-[12px] font-medium leading-[1.6] text-[var(--lp-fg)] shadow-[var(--lp-shadow)]">
+          <span aria-hidden className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--lp-accent)] text-[var(--lp-on-accent)]">
+            <Megaphone className="size-3.5" />
+          </span>
           <span className="min-w-0">{s(d, "text")}</span>
         </div>
       );
@@ -1180,6 +1185,11 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
               {f === "name" ? "이름" : f === "email" ? "이메일" : f === "phone" ? "연락처" : "문의 내용"}
             </span>
           ))}
+          {/* 공개 폼(lead-form)의 개인정보 동의 줄 파리티(2026-08-27) */}
+          <span className="flex items-start gap-1.5 text-[11px] leading-[1.5] text-[var(--lp-muted)]" aria-hidden>
+            <span className="mt-px inline-block size-3 shrink-0 rounded-[3px] border border-[var(--lp-border)]" />
+            개인정보 수집·이용 동의 (필수)
+          </span>
           <span className="flex h-9 items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] text-[12px] font-semibold text-[var(--lp-on-accent)]" aria-hidden>
             {s(d, "buttonLabel") || (block.type === "subscribe" ? "구독하기" : "보내기")}
           </span>
@@ -1305,7 +1315,10 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[13px] font-semibold">{s(d, "label") || "찾아오시는 길"}</span>
-            <span className="mt-0.5 block truncate text-[12px] text-[var(--lp-muted)]">{s(d, "address")}</span>
+            <span className="mt-0.5 block truncate text-[12px] text-[var(--lp-muted)]">
+              {s(d, "address")}
+              {s(d, "detail") ? ` · ${s(d, "detail")}` : ""}
+            </span>
           </span>
           <ExternalLink className="size-3 shrink-0 text-[var(--lp-muted)]" aria-hidden />
         </div>

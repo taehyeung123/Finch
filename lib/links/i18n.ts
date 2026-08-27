@@ -28,6 +28,8 @@ export interface LpText {
     doneSubscribe: string; doneContact: string; doneNote: string;
     titleSubscribe: string; titleContact: string;
     demo: string; send: string; sending: string; subscribe: string;
+    /** 개인정보 동의 — spec 의 {items}는 실제 폼 필드 라벨, {purpose}는 목적 문구로 치환된다 */
+    consent: string; consentSpec: string; consentPurposeContact: string; consentPurposeSubscribe: string;
   };
   guestbook: {
     title: string; placeholder: string; name: string; body: string;
@@ -90,6 +92,9 @@ const ko: LpText = {
     doneSubscribe: "구독 신청이 접수됐어요", doneContact: "문의가 접수됐어요", doneNote: "확인 후 연락드릴게요. 고맙습니다!",
     titleSubscribe: "새 소식 받기", titleContact: "문의하기",
     demo: "예시 폼이에요 — 실제로 접수되지는 않습니다.", send: "보내기", sending: "보내는 중…", subscribe: "구독하기",
+    consent: "개인정보 수집·이용에 동의합니다.",
+    consentSpec: "(항목: {items} / 목적: {purpose} / 보유: 목적 달성 후 지체 없이 파기)",
+    consentPurposeContact: "문의 응대", consentPurposeSubscribe: "소식 발송",
   },
   guestbook: {
     title: "방명록", placeholder: "한마디 남겨 주세요", name: "이름", body: "방명록 내용",
@@ -144,6 +149,9 @@ const en: LpText = {
     doneSubscribe: "You're subscribed", doneContact: "Message received", doneNote: "We'll get back to you soon. Thank you!",
     titleSubscribe: "Get updates", titleContact: "Contact",
     demo: "Sample form — nothing is actually sent.", send: "Send", sending: "Sending…", subscribe: "Subscribe",
+    consent: "I agree to the collection and use of my personal information.",
+    consentSpec: "(Data: {items} / Purpose: {purpose} / Retention: deleted once fulfilled)",
+    consentPurposeContact: "responding to this inquiry", consentPurposeSubscribe: "sending updates",
   },
   guestbook: {
     title: "Guestbook", placeholder: "Leave a note", name: "Name", body: "Your note",
@@ -198,6 +206,9 @@ const ja: LpText = {
     doneSubscribe: "登録を受け付けました", doneContact: "お問い合わせを受け付けました", doneNote: "確認のうえご連絡します。ありがとうございます！",
     titleSubscribe: "お知らせを受け取る", titleContact: "お問い合わせ",
     demo: "サンプルフォームです — 実際には送信されません。", send: "送信", sending: "送信中…", subscribe: "登録する",
+    consent: "個人情報の収集・利用に同意します。",
+    consentSpec: "（項目: {items} ／ 目的: {purpose} ／ 保有: 目的達成後、遅滞なく破棄）",
+    consentPurposeContact: "お問い合わせ対応", consentPurposeSubscribe: "お知らせの送信",
   },
   guestbook: {
     title: "ゲストブック", placeholder: "ひとこと残してください", name: "お名前", body: "メッセージ",

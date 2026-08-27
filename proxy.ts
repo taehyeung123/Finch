@@ -155,7 +155,8 @@ function applySecurityHeaders(response: NextResponse, publicLink = false) {
   // CSP — Pretendard 웹폰트(jsdelivr CDN)만 외부 허용. 개발 모드는 HMR 때문에 unsafe-eval 필요
   const csp = [
     "default-src 'self'",
-    `script-src 'self' 'unsafe-inline' ${toss}${gaScript}${trackerScript}${isDev ? " 'unsafe-eval'" : ""}`,
+    /* t1.daumcdn.net = 다음 우편번호 SDK(편집기 지도 블록 주소 검색) — 없으면 모달이 소리 없이 빈 상자다 */
+    `script-src 'self' 'unsafe-inline' https://t1.daumcdn.net ${toss}${gaScript}${trackerScript}${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
     "font-src 'self' https://cdn.jsdelivr.net",
     // https: 를 통째로 여는 유일한 지시어다. 프로필 링크는 사용자가 **자기 이미지 주소를
@@ -163,7 +164,7 @@ function applySecurityHeaders(response: NextResponse, publicLink = false) {
     // 열거할 방법이 없다. 이미지는 실행되지 않으므로 여는 대가가 가장 작다.
     `img-src 'self' data: blob: https: ${toss} ${igCdn} ${tiktokCdn}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
     `connect-src 'self' ${toss}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}${gaConnect}${trackerConnect}`,
-    `frame-src ${toss} ${youtube} ${musicEmbeds}`,
+    `frame-src ${toss} ${youtube} ${musicEmbeds} https://postcode.map.daum.net`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",

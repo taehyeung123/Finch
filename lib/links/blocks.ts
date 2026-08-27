@@ -392,10 +392,12 @@ export function defaultBlockData(type: BlockType): Record<string, unknown> {
   switch (type) {
     case "link":
       return { label: "새 링크", url: "", emphasis: "normal" };
+    /* 내용성 씨드는 비운다(2026-08-27 «가짜 텍스트를 진짜로 박아놨네») — 자리표시자는
+       편집기 placeholder·미리보기 고스트가 맡고, 빈 채 발행되면 hiddenReason 이 걸러낸다 */
     case "heading":
-      return { text: "소제목" };
+      return { text: "" };
     case "text":
-      return { text: "설명을 입력하세요.", align: "left" };
+      return { text: "", align: "left" };
     case "divider":
       return { style: "line" };
     case "spacer":
@@ -403,15 +405,15 @@ export function defaultBlockData(type: BlockType): Record<string, unknown> {
     case "image":
       return { imagePath: "", alt: "" };
     case "image_card":
-      return { title: "카드 제목", subtitle: "", url: "" };
+      return { title: "", subtitle: "", url: "" };
     case "video":
       return { url: "" };
     case "card_row":
-      return { items: [{ title: "항목 1", url: "" }] };
+      return { items: [{ title: "", url: "" }] };
     case "grid":
-      return { columns: 2, items: [{ title: "항목 1", url: "" }] };
+      return { columns: 2, items: [{ title: "", url: "" }] };
     case "notice":
-      return { text: "공지 내용을 입력하세요.", tone: "info" };
+      return { text: "", tone: "info" };
     case "social_feed":
       return { channel: "instagram", count: 6 };
     case "contact":

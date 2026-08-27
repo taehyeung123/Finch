@@ -1868,7 +1868,8 @@ export async function applyTemplate(key: string, pageId?: string): Promise<Resul
 
   /* 템플릿마다 어울리는 테마가 있다 — 블록만 바뀌고 테마가 그대로면 의도한 인상이 안 난다.
      직접 꾸미기도 함께 비운다(0056 미적용이면 컬럼 없이 재시도). */
-  let themed = await supabase.from("link_pages").update({ theme: tpl.theme, theme_custom: null }).eq("id", page.id);
+  /* 템플릿이 직접 꾸미기(파스텔 배경 등)를 품으면 함께 적용 — 없으면 비운다 */
+  let themed = await supabase.from("link_pages").update({ theme: tpl.theme, theme_custom: tpl.custom ?? null }).eq("id", page.id);
   if (themed.error && /theme_custom/i.test(themed.error.message)) {
     themed = await supabase.from("link_pages").update({ theme: tpl.theme }).eq("id", page.id);
   }
@@ -2147,6 +2148,8 @@ const TEXT_CAPS: Record<string, number> = {
   buttonLabel: 20,
   alt: 100,
   address: 200,
+  /* 지도 상세 주소(동·호수 등) — 주소 검색 뒤 손으로 붙이는 짧은 꼬리 */
+  detail: 80,
   /* 일정 — 날짜는 "2026-09-01T20:00" 16자면 충분하다. 형식 검증은 렌더러의 parseEventAt 이 한다
      (여기서 거절하면 저장 도중의 반쯤 친 날짜가 오류로 튄다 — 잘못된 값은 조용히 안 보이는 게 낫다) */
   startAt: 16,
