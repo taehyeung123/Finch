@@ -593,7 +593,12 @@ export function LinksClient({
     if (!el) return;
     scrollToBlockRef.current = null;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
-    requestAnimationFrame(() => document.getElementById(EDITOR_TITLE_ID)?.focus({ preventScroll: true }));
+    /* 첫 입력칸에 포커스 — 편집기 제목(H3)에 주면 «바로 타이핑»이 안 된다(2026-08-27 실계정 점검).
+       입력칸이 없는 블록(구분선 등)은 제목으로 폴백해 스크린리더 문맥은 유지한다. */
+    requestAnimationFrame(() => {
+      const first = el.querySelector<HTMLElement>('input:not([type="hidden"]):not([type="file"]):not([type="color"]), textarea');
+      (first ?? document.getElementById(EDITOR_TITLE_ID))?.focus({ preventScroll: true });
+    });
   }, [blocks]);
   /* 창 닫기·새로고침 — 저장이 미처 못 나간 순간만 브라우저 기본 경고를 건다(쏘넷 점검 high).
      블록 초안뿐 아니라 꾸미기 레인(디바운스·왕복·재시도·주소 보류)도 지킨다. */
