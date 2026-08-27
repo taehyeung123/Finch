@@ -429,13 +429,13 @@ export function PhonePreview({
             {page.layout === "hero" ? (
               page.avatarPath ? (
                 editable ? (
-                  <button type="button" onClick={edit?.onOpenProfile} aria-label="배경 사진 바꾸기" className="relative -mx-5 -mt-8 mb-3 block self-stretch overflow-hidden">
+                  <button type="button" onClick={edit?.onOpenProfile} aria-label="배경 사진 바꾸기" className={`relative -mx-5 ${page.themeCustom?.topbar === "bar" ? "" : "-mt-8"} mb-3 block self-stretch overflow-hidden`}>
                     {/* eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL */}
                     <img src={page.avatarPath} alt="" className="aspect-[6/5] w-full object-cover" />
                     <span aria-hidden className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-b from-transparent to-[var(--lp-bg)]" />
                   </button>
                 ) : (
-                  <span className="relative -mx-5 -mt-8 mb-3 block self-stretch overflow-hidden">
+                  <span className={`relative -mx-5 ${page.themeCustom?.topbar === "bar" ? "" : "-mt-8"} mb-3 block self-stretch overflow-hidden`}>
                     {/* eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL */}
                     <img src={page.avatarPath} alt="" className="aspect-[6/5] w-full object-cover" />
                     <span aria-hidden className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-b from-transparent to-[var(--lp-bg)]" />
@@ -443,7 +443,7 @@ export function PhonePreview({
                 )
               ) : editable ? (
                 /* 사진 초대 — 리틀리처럼 회색 자리(공개 페이지엔 안 나간다) */
-                <button type="button" onClick={edit?.onOpenProfile} aria-label="배경 사진 넣기" className="-mx-5 -mt-8 mb-3 flex aspect-[6/5] items-center justify-center self-stretch bg-[var(--lp-border)] text-[var(--lp-muted)]">
+                <button type="button" onClick={edit?.onOpenProfile} aria-label="배경 사진 넣기" className={`-mx-5 ${page.themeCustom?.topbar === "bar" ? "" : "-mt-8"} mb-3 flex aspect-[6/5] items-center justify-center self-stretch bg-[var(--lp-border)] text-[var(--lp-muted)]`}>
                   <ImagePlus className="size-8" aria-hidden />
                 </button>
               ) : null

@@ -53,7 +53,16 @@ function encodeCanvas(canvas: HTMLCanvasElement, sourceMime: string): string {
   fctx.fillStyle = "#fff";
   fctx.fillRect(0, 0, flat.width, flat.height);
   fctx.drawImage(canvas, 0, 0);
-  return flat.toDataURL("image/jpeg", 0.8);
+  const jpeg = flat.toDataURL("image/jpeg", 0.8);
+  if (dataUrlBytes(jpeg) <= WIRE_MAX_BYTES) return jpeg;
+  /* 그래도 넘으면 치수를 한 단계 줄여 마지막 한 번 — 상한은 주석이 아니라 코드가 보장한다(쏘넷 점검) */
+  const half = document.createElement("canvas");
+  half.width = Math.max(1, Math.round(flat.width * 0.7));
+  half.height = Math.max(1, Math.round(flat.height * 0.7));
+  const hctx = half.getContext("2d");
+  if (!hctx) return jpeg;
+  hctx.drawImage(flat, 0, 0, half.width, half.height);
+  return half.toDataURL("image/jpeg", 0.72);
 }
 
 export function ImageField({

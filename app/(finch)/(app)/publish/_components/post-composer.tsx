@@ -113,7 +113,9 @@ export function PostComposer({
       ctx.fillStyle = "#fff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      return canvas.toDataURL("image/jpeg", 0.85);
+      const out = canvas.toDataURL("image/jpeg", 0.85);
+      /* 장당 상한 — 고엔트로피 원본이 크게 구워지면 한 단계 낮춰 다시(아래 합산 가드와 짝) */
+      return out.length > 1_400_000 ? canvas.toDataURL("image/jpeg", 0.72) : out;
     } finally {
       URL.revokeObjectURL(url);
     }
@@ -147,6 +149,15 @@ export function PostComposer({
     setSaving(true);
     setError(null);
     try {
+      /* 전송 합산 가드(쏘넷 점검) — 서버 액션 요청 본문은 Vercel 이 4.5MB 에서 끊는다
+         (next.config bodySizeLimit 과 무관 — links 이미지 업로드와 같은 실측 사실).
+         배열째 한 번에 보내는 구조라, 합산이 3MB(원본 기준)를 넘으면 보내기 전에 막고 말한다. */
+      const totalBytes = images.reduce((n, u) => n + Math.floor((u.length * 3) / 4), 0);
+      if (totalBytes > 3_000_000) {
+        setError("사진 용량 합계가 커요 — 몇 장을 빼고 다시 시도해 주세요.");
+        setSaving(false);
+        return;
+      }
       const res = await createPost({ channel, caption: caption.trim(), images, mode, date });
       if (!res.ok) {
         setError(res.error ?? "저장하지 못했어요.");

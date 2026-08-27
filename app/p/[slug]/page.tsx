@@ -324,7 +324,7 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
       <div
         className={`${
           split
-            ? "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:grid lg:max-w-[1000px] lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] lg:items-start lg:gap-x-16 lg:px-14 lg:pb-16 lg:pt-16"
+            ? "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:grid lg:max-w-[1000px] lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] lg:items-start lg:gap-x-16 lg:px-14 lg:pb-16"
             : "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:max-w-[600px] lg:px-10 lg:pb-16"
         } ${topbar ? "pt-4" : snap.layout === "hero" || snap.layout === "cover" || snap.layout === "cover_profile" ? "pt-0" : "pt-20"} lg:isolate lg:my-12 lg:min-h-[calc(100dvh-6rem)] ${topbar ? "" : snap.layout === "hero" || snap.layout === "cover" || snap.layout === "cover_profile" ? "lg:pt-0" : "lg:pt-16"}`}
       >
@@ -399,7 +399,7 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
               아래로 갈수록 지면색에 녹는다. 사진이 없으면 이 층 없이 문구만(방문자에게
               회색 자리표시자를 보여주지 않는다 — 초대는 편집 미리보기의 몫). */}
           {snap.layout === "hero" && snap.avatarPath ? (
-            <div className="relative -mx-5 mb-4 self-stretch overflow-hidden lg:-mx-10 lg:rounded-t-[28px]">
+            <div className={`relative -mx-5 mb-4 self-stretch overflow-hidden ${split ? "lg:mx-0 lg:rounded-[var(--lp-radius)]" : "lg:-mx-10 lg:rounded-t-[28px]"}`}>
               {/* eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL */}
               <img src={snap.avatarPath} alt="" className="aspect-[6/5] w-full object-cover" />
               <div aria-hidden className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-b from-transparent to-[var(--lp-bg)]" />
