@@ -164,7 +164,8 @@ function applySecurityHeaders(response: NextResponse, publicLink = false) {
     // 열거할 방법이 없다. 이미지는 실행되지 않으므로 여는 대가가 가장 작다.
     `img-src 'self' data: blob: https: ${toss} ${igCdn} ${tiktokCdn}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
     `connect-src 'self' ${toss}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}${gaConnect}${trackerConnect}`,
-    `frame-src ${toss} ${youtube} ${musicEmbeds} https://postcode.map.daum.net`,
+    /* 우편번호 임베드는 실측상 postcode.map.kakao.com 을 프레이밍한다(구 daum.net 도 함께 허용) */
+    `frame-src ${toss} ${youtube} ${musicEmbeds} https://postcode.map.daum.net https://postcode.map.kakao.com`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
