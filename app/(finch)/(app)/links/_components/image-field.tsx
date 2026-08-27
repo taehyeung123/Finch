@@ -29,6 +29,54 @@ const REENCODE_BYTES = 1_500_000;
 /** 전송 안전 상한 — Vercel 요청 본문 4.5MB 하드캡을 base64(+33%) 포함해 넘지 않는 선 */
 const WIRE_MAX_BYTES = 3_000_000;
 
+/** 알파 있는 원본의 가장자리 «완전 투명 띠» 경계 — 프로브(≤512px)로 찾아 원본 좌표로
+    돌려준다. 여백이 거의 없으면(양 축 98% 이상 그림) null. 풀사이즈 ImageData 를 만들지 않는다.
+    2026-08-27 지시 «사진으로 아예 꽉 채우던가» — 로고 PNG 의 투명 여백이 그리드 타일에서
+    빈 띠로 보였다. 지우는 건 렌더가 아니라 업로드 단계의 일이다. */
+function alphaTrimBox(img: HTMLImageElement): { x: number; y: number; w: number; h: number } | null {
+  const W = img.naturalWidth;
+  const H = img.naturalHeight;
+  const k = Math.min(1, 512 / Math.max(W, H));
+  const pw = Math.max(1, Math.round(W * k));
+  const ph = Math.max(1, Math.round(H * k));
+  const c = document.createElement("canvas");
+  c.width = pw;
+  c.height = ph;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(img, 0, 0, pw, ph);
+  let data: Uint8ClampedArray;
+  try {
+    data = ctx.getImageData(0, 0, pw, ph).data;
+  } catch {
+    return null;
+  }
+  let minX = pw;
+  let minY = ph;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < ph; y++) {
+    for (let x = 0; x < pw; x++) {
+      if (data[(y * pw + x) * 4 + 3] > 8) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < 0) return null; /* 전부 투명 — 손대지 않는다 */
+  /* 프로브 → 원본 좌표(경계 1px 여유). 스케일 손실로 그림을 자르느니 여백 1px 를 남긴다 */
+  const sx = Math.max(0, Math.floor((minX - 1) / k));
+  const sy = Math.max(0, Math.floor((minY - 1) / k));
+  const ex = Math.min(W, Math.ceil((maxX + 2) / k));
+  const ey = Math.min(H, Math.ceil((maxY + 2) / k));
+  const w = ex - sx;
+  const h = ey - sy;
+  if (w <= 0 || h <= 0 || (w >= W * 0.98 && h >= H * 0.98)) return null;
+  return { x: sx, y: sy, w, h };
+}
+
 /** data URL 의 실제 바이트 수(base64 → 원본) */
 function dataUrlBytes(u: string): number {
   const i = u.indexOf(",");
@@ -145,7 +193,7 @@ export function ImageField({
     const r = new FileReader();
     r.onerror = () => setError("파일을 읽지 못했어요.");
     r.onload = () => {
-      const dataUrl = String(r.result);
+      let dataUrl = String(r.result);
       /* gif(애니)·svg(벡터)는 크롭·축소가 원본을 망가뜨린다 — 그대로 올리되 전송 상한만 지킨다.
          Vercel 요청 본문 4.5MB 하드캡(base64 +33% 포함)이 진짜 한계다(2026-08-26 실측·조사) */
       if (/^data:image\/gif/.test(dataUrl)) {
@@ -166,7 +214,26 @@ export function ImageField({
       }
       const img = new Image();
       img.onerror = () => setError("이미지를 읽지 못했어요.");
+      /* 투명 여백 자동 트림 — 잘라낸 사본을 같은 img 로 한 번만 다시 로드해 아래 로직을 그대로 태운다 */
+      let trimmedOnce = false;
       img.onload = () => {
+        if (!trimmedOnce && /^data:image\/(png|webp)/.test(dataUrl)) {
+          const box = alphaTrimBox(img);
+          if (box) {
+            const tc = document.createElement("canvas");
+            tc.width = box.w;
+            tc.height = box.h;
+            const tx = tc.getContext("2d");
+            if (tx) {
+              tx.drawImage(img, box.x, box.y, box.w, box.h, 0, 0, box.w, box.h);
+              trimmedOnce = true;
+              const mime = /^data:(image\/(?:png|webp))/.exec(dataUrl)?.[1] ?? "image/png";
+              dataUrl = tc.toDataURL(mime, 0.95);
+              img.src = dataUrl;
+              return;
+            }
+          }
+        }
         /* 자동 최적화(2026-08-26 지시 «고화질 수용 + 리스크 없이») — 긴 변 2000px 로 줄이고
            WebP(알파 보존) 우선으로 다시 인코딩한다. 치수가 작아도 무거우면(스크린샷 PNG 등)
            재인코딩 — 원본이 이미 작고 가벼울 때만 그대로 보낸다. */
