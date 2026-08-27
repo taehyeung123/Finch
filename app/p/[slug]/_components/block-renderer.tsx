@@ -541,11 +541,14 @@ export function BlockRenderer({
       const nodes = items.map(({ it, i }) => (
         <a key={i} href={goHref(base, block.id, i)} {...ext} aria-label={s(it, "title") ? undefined : lpN(t.itemLink, i + 1)} className={`lp-btn ${cardCls} overflow-hidden`}>
           {s(it, "imagePath") ? (
-            /* 사진구역 — 텍스트구역과 판을 나눈다(2026-08-27 지시): 투명 PNG(로고 등)의 빈 부분이
-               카드 흰색을 그대로 드러내 어두운 배경에서 도드라졌다. 글자색 7% 섞은 판 + 경계선. */
-            <span className="block w-full border-b border-[var(--lp-border)] bg-[color-mix(in_srgb,var(--lp-fg)_7%,var(--lp-card))]">
+            /* 사진구역 — **같은 사진의 블러 사본**을 뒤에 깔아 빈 부분(투명 PNG·저장된 여백)을
+               사진 자신의 색으로 메운다(2026-08-27 2차: 판에 색을 칠하면 그 색과 사진 사이에
+               띠가 뜬다 — 어떤 판 색도 정답이 아니다). 불투명 사진에선 사본이 완전히 가려진다. */
+            <span className="relative block w-full overflow-hidden border-b border-[var(--lp-border)]">
               {/* eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL */}
-              <img src={s(it, "imagePath")} alt="" className="aspect-square w-full object-cover" loading="lazy" />
+              <img src={s(it, "imagePath")} alt="" aria-hidden className="absolute inset-0 size-full scale-150 object-cover blur-xl" loading="lazy" />
+              {/* eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL */}
+              <img src={s(it, "imagePath")} alt="" className="relative aspect-square w-full object-cover" loading="lazy" />
             </span>
           ) : null}
           {/* 사진 없는 셀은 라벨만이라 40px 이었다 — 그때만 터치 최소치(44px)를 바닥으로 준다.

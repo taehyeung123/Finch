@@ -469,15 +469,15 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
               <img
                 src={snap.avatarPath}
                 alt=""
-                /* outline 헤어라인 — --lp-shadow 가 none 인 프리셋 8종에서는 box-shadow 선언이
-                   통째로 무효라 ring 까지 죽는다. 바깥선 하나로 19종 전부에서 원이 보인다(2026-08-24 비평) */
-                className="mb-3.5 size-[96px] rounded-full object-cover shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
+                /* 링·헤어라인 없이 민짜 원(2026-08-27 지시 «흰 테두리 없애» — 링크트리 동일).
+                   그림자만 테마 값으로 남긴다(다크 프리셋은 원래 none). */
+                className="mb-3.5 size-[96px] rounded-full object-cover shadow-[var(--lp-shadow)]"
               />
             ) : (
               /* 사진이 없으면 이니셜 원. 아무것도 안 그리면 브랜드 페이지 머리가 통째로
                  비어 허전하다 — 편집 미리보기도 같은 것을 그린다(두 화면이 어긋나면 안 된다). */
               <span
-                className="mb-3.5 flex size-[96px] items-center justify-center rounded-full bg-[var(--lp-card)] text-[32px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
+                className="mb-3.5 flex size-[96px] items-center justify-center rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] text-[32px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)]"
                 aria-hidden
               >
                 {initialOf(snap.title || slug)}

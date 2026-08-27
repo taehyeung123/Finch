@@ -278,13 +278,13 @@ export function PhonePreview({
         <img
           src={page.avatarPath}
           alt=""
-          className="mb-3 size-[78px] rounded-full object-cover shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
+          className="mb-3 size-[78px] rounded-full object-cover shadow-[var(--lp-shadow)]"
         />
       ) : (
         /* 사진이 없으면 이니셜 원 — 공개 페이지와 **같은 변수**로 그린다. 프리셋 원본(theme.card)을
            쓰면 직접 꾸미기 색이 여기만 빠져 발행본과 머리 색이 달라진다(감사 #25). */
         <span
-          className="mb-3 flex size-[78px] items-center justify-center rounded-full bg-[var(--lp-card)] text-[26px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
+          className="mb-3 flex size-[78px] items-center justify-center rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] text-[26px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)]"
           aria-hidden
         >
           {initialOf(page.title || page.slug)}
@@ -1087,10 +1087,12 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
       const nodes = items.map((it, i) => (
         <div key={i} className={`${card} overflow-hidden`}>
           {s(it, "imagePath") ? (
-            /* 사진구역/텍스트구역 분리 — 공개 페이지와 같은 판·경계선 */
-            <span className="block w-full border-b border-[var(--lp-border)] bg-[color-mix(in_srgb,var(--lp-fg)_7%,var(--lp-card))]">
+            /* 사진구역 — 공개와 동일: 같은 사진의 블러 사본으로 빈 부분을 사진 색으로 메운다 */
+            <span className="relative block w-full overflow-hidden border-b border-[var(--lp-border)]">
               {/* eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL */}
-              <img src={s(it, "imagePath")} alt="" className="aspect-square w-full object-cover" />
+              <img src={s(it, "imagePath")} alt="" aria-hidden className="absolute inset-0 size-full scale-150 object-cover blur-xl" />
+              {/* eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL */}
+              <img src={s(it, "imagePath")} alt="" className="relative aspect-square w-full object-cover" />
             </span>
           ) : null}
           {/* 공개와 같은 이유로 블록 — flex 자식이면 line-clamp 가 죽는다 */}
