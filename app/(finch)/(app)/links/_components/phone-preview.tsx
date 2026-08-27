@@ -278,13 +278,13 @@ export function PhonePreview({
         <img
           src={page.avatarPath}
           alt=""
-          className="mb-3 size-[78px] rounded-[21px] object-cover shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
+          className="mb-3 size-[78px] rounded-full object-cover shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
         />
       ) : (
         /* 사진이 없으면 이니셜 원 — 공개 페이지와 **같은 변수**로 그린다. 프리셋 원본(theme.card)을
            쓰면 직접 꾸미기 색이 여기만 빠져 발행본과 머리 색이 달라진다(감사 #25). */
         <span
-          className="mb-3 flex size-[78px] items-center justify-center rounded-[21px] bg-[var(--lp-card)] text-[26px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
+          className="mb-3 flex size-[78px] items-center justify-center rounded-full bg-[var(--lp-card)] text-[26px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
           aria-hidden
         >
           {initialOf(page.title || page.slug)}
@@ -379,16 +379,22 @@ export function PhonePreview({
             </div>
           ) : (
             <>
+              {/* 모서리 칩 목업(링크트리 실측 2026-08-27) — 왼쪽 핀치 로고 글라스 칩, 오른쪽 공유·구독 */}
+              {page.themeCustom?.badge === "hide" || page.themeCustom?.logoImage ? null : (
+                <span aria-hidden className="absolute left-3 top-3 z-10 flex size-8 items-center justify-center rounded-[13px] border border-[var(--lp-border)] bg-[color-mix(in_srgb,var(--lp-card)_55%,transparent)] text-[var(--lp-fg)] shadow-[var(--lp-shadow)] backdrop-blur">
+                  <FinchMark className="size-4" />
+                </span>
+              )}
               {page.themeCustom?.share ? (
                 <span
                   aria-hidden
-                  className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] text-[var(--lp-fg)] shadow-[var(--lp-shadow)]"
+                  className="absolute right-3 top-3 z-10 flex size-8 items-center justify-center rounded-[13px] border border-[var(--lp-border)] bg-[color-mix(in_srgb,var(--lp-card)_55%,transparent)] text-[var(--lp-fg)] shadow-[var(--lp-shadow)] backdrop-blur"
                 >
                   <Share2 className="size-3.5" />
                 </span>
               ) : null}
               {page.themeCustom?.subscribe && blocks.some((b) => b.active && b.type === "subscribe" && !isScheduledHidden(b.data)) ? (
-                <span aria-hidden className="absolute left-3 top-3 inline-flex h-8 items-center gap-1 rounded-full bg-[var(--lp-accent)] px-3 text-[11px] font-semibold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)]">
+                <span aria-hidden className={`absolute ${page.themeCustom?.share ? "right-[52px]" : "right-3"} top-3 z-10 inline-flex h-8 items-center gap-1 rounded-full bg-[var(--lp-accent)] px-3 text-[11px] font-semibold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)]`}>
                   ✉ 구독
                 </span>
               ) : null}
@@ -399,7 +405,9 @@ export function PhonePreview({
             <img src={page.themeCustom.logoImage} alt="" className="mx-auto mb-4 max-h-10 max-w-[160px] object-contain" />
           ) : null}
           {/* 프로필 위 숨 고르기(리틀리 실측 — 아바타가 천장에 붙지 않는다). 상단 메뉴 바·배경형·숨김은 제외 */}
-          {page.themeCustom?.topbar !== "bar" && (page.layout === "profile" || !page.layout) ? <div className="h-6" aria-hidden /> : null}
+          {/* hidden 도 공개와 같은 pt(104px 상당)를 받는다 — 스페이서를 빼면 발행본 상단이 더 비어 보인다(쏘넷 점검).
+              hero 무사진은 제외: 편집 캔버스의 회색 초대판이 그 자리를 대신 차지한다 */}
+          {page.themeCustom?.topbar !== "bar" && (page.layout === "profile" || !page.layout || page.layout === "hidden") ? <div className="h-12" aria-hidden /> : null}
           {/* 커버 — 캔버스 편집에선 눌러서 프로필 설정(사진 교체)으로 */}
           {page.layout !== "hidden" && (page.layout === "cover" || page.layout === "cover_profile") ? (
             /* 풀블리드 4:3 상단 배경(리틀리 재실측 2026-08-26) — 사진이 없으면 회색 판(공개도 동일),
@@ -762,7 +770,8 @@ export function PhonePreview({
           {/* 플로팅 알약 목업 — 공개 페이지 FinchPill 과 같은 모양(강조 CTA 있으면 공개처럼 생략).
               함께하세요 문구는 2026-08-26 2차 지시로 제거 — 알약 하나만. */}
           {page.themeCustom?.badge === "hide" || page.themeCustom?.logoImage || emphasized ? null : (
-            <div className="pointer-events-none sticky bottom-3 z-10 mt-4 flex justify-center">
+            /* 하단 스크림 포함 — 공개 페이지 FinchPill 의 모바일 그라데이션과 같은 인상 */
+            <div className="pointer-events-none sticky bottom-0 z-10 -mx-5 mt-4 flex justify-center bg-gradient-to-t from-black/60 to-transparent px-5 pb-3 pt-24">
               <span className="flex items-center gap-1 rounded-full bg-white py-1 pl-3 pr-1.5 text-neutral-900 shadow-[0_10px_24px_-8px_rgba(0,0,0,0.45)]">
                 <FinchMark className="size-3.5 text-primary" aria-hidden />
                 <span className="text-[11px] font-bold">나만의 페이지 만들기</span>

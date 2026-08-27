@@ -20,7 +20,11 @@ export function FinchPill({ label }: { label: string }) {
   }, []);
   if (!show) return null;
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-5 z-30 flex justify-center px-5">
+    <>
+      {/* 하단 스크림(2026-08-27 지시) — 링크트리 모바일처럼 알약 뒤로 검게 녹는 그라데이션.
+          알약과 함께 뜨고 함께 닫힌다. PC 는 지면이 넓어 스크림이 과해서 모바일만. */}
+      <div aria-hidden className="pointer-events-none fixed inset-x-0 bottom-0 z-20 h-40 bg-gradient-to-t from-black/60 to-transparent lg:hidden" />
+      <div className="pointer-events-none fixed inset-x-0 bottom-5 z-30 flex justify-center px-5">
       <div className="lp-pill-in pointer-events-auto flex items-center gap-1 rounded-full bg-white py-1.5 pl-4 pr-1.5 text-neutral-900 shadow-[0_12px_32px_-8px_rgba(0,0,0,0.45)]">
         <Link
           href="/?utm_source=profile_link&utm_medium=pill"
@@ -39,6 +43,7 @@ export function FinchPill({ label }: { label: string }) {
           <X className="size-4" aria-hidden />
         </button>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

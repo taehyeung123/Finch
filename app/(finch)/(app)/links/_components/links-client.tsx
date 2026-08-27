@@ -3595,14 +3595,14 @@ function ProfilePanel({
                   </>
                 ) : l.key === "profile" ? (
                   <>
-                    <span className="mt-2 size-5 rounded-[6px] bg-fg/40" />
+                    <span className="mt-2 size-5 rounded-full bg-fg/40" />
                     <span className="mt-1.5 h-1 w-10 rounded-full bg-fg/20" />
                     <span className="mt-0.5 h-1 w-7 rounded-full bg-fg/15" />
                   </>
                 ) : l.key === "cover_profile" ? (
                   <>
                     <span className="absolute inset-x-0 top-0 h-6 bg-fg/20" />
-                    <span className="relative z-10 mt-4 size-4 rounded-[5px] bg-fg/40 ring-2 ring-body" />
+                    <span className="relative z-10 mt-4 size-4 rounded-full bg-fg/40 ring-2 ring-body" />
                     <span className="mt-1 h-1 w-10 rounded-full bg-fg/20" />
                     <span className="mt-0.5 h-1 w-7 rounded-full bg-fg/15" />
                   </>

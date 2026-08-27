@@ -40,7 +40,11 @@ export function ShareButton({
       type="button"
       onClick={share}
       aria-label={done ? doneLabel : label}
-      className={`${inline ? "relative size-11" : "absolute right-5 top-4 z-20 size-11"} lp-btn flex items-center justify-center rounded-full border border-[var(--lp-border)] bg-[var(--lp-card)] text-[var(--lp-fg)] shadow-[var(--lp-shadow)]`}
+      className={`${
+        inline
+          ? "relative size-11 rounded-full bg-[var(--lp-card)]"
+          : "absolute! right-5 top-4 z-20 size-11 rounded-[16px] bg-[color-mix(in_srgb,var(--lp-card)_55%,transparent)] backdrop-blur-lg"
+      } lp-btn flex items-center justify-center border border-[var(--lp-border)] text-[var(--lp-fg)] shadow-[var(--lp-shadow)]`}
     >
       {done ? <Check className="size-4" aria-hidden /> : <Share2 className="size-4" aria-hidden />}
       {/* 복사 완료를 소리로도 — aria-label 교체만으론 스크린리더가 공지하지 않는다(감사2 U15) */}

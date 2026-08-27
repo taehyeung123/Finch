@@ -12,6 +12,7 @@ import { TrackingScripts } from "./_components/tracking-scripts";
 import { loadPublicPage, movedTo } from "./public-page";
 import { linkWorkspace } from "@/lib/data";
 import { FinchPill } from "./_components/finch-pill";
+import { FinchMark } from "@/components/logo";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, publicLinkUrl, sanitizeSnsLinks } from "@/lib/links";
 import { emphasizedCta, hiddenReason, isScheduledHidden, type BlockType } from "@/lib/links/blocks";
@@ -257,6 +258,9 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
   const logoImage = themeCustom?.logoImage ?? null;
   const logoPos = themeCustom?.logoPos ?? "bottom";
   const screenFx = themeCustom?.screenFx && themeCustom.screenFx !== "none" ? themeCustom.screenFx : null;
+  /* 상단 풀블리드 여부 — 사진 없는 hero 는 풀블리드가 아니다: pt-0 이면 문구가 y0 에서 시작해
+     모서리 로고 칩(z-20)에 첫 줄이 깔린다(쏘넷 점검 2026-08-27). 사진이 있을 때만 pt-0. */
+  const fullBleedTop = snap.layout === "cover" || snap.layout === "cover_profile" || (snap.layout === "hero" && !!snap.avatarPath);
   const logoEl = logoImage ? (
     <div className={`flex justify-center ${logoPos === "top" ? "mb-5" : "mt-10 pb-6"} ${split ? (logoPos === "top" ? "lg:col-span-2" : "lg:col-start-2") : ""}`}>
       {/* eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL */}
@@ -326,7 +330,7 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
           split
             ? "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:grid lg:max-w-[1000px] lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] lg:items-start lg:gap-x-16 lg:px-14 lg:pb-16"
             : "relative mx-auto flex min-h-[100dvh] w-full max-w-[520px] flex-col px-5 pb-14 lg:max-w-[600px] lg:px-10 lg:pb-16"
-        } ${topbar ? "pt-4" : snap.layout === "hero" || snap.layout === "cover" || snap.layout === "cover_profile" ? "pt-0" : "pt-20"} lg:isolate lg:my-12 lg:min-h-[calc(100dvh-6rem)] ${topbar ? "" : snap.layout === "hero" || snap.layout === "cover" || snap.layout === "cover_profile" ? "lg:pt-0" : "lg:pt-16"}`}
+        } ${topbar ? "pt-4" : fullBleedTop ? "pt-0" : "pt-26"} lg:isolate lg:my-12 lg:min-h-[calc(100dvh-6rem)] ${topbar ? "" : fullBleedTop ? "lg:pt-0" : "lg:pt-16"}`}
       >
         {/* PC 캔버스 — 판(색·그림자·테두리)과 이미지(사용자 블러 옵션)를 **두 겹으로 분리**한다:
             한 겹에 filter 를 걸면 그림자·라운드 테두리까지 같이 번진다. 이미지 겹은 clip-path 로
@@ -355,15 +359,27 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
           </div>
         ) : (
           <>
-            {/* 공유 버튼 — 콘텐츠 칸 기준 오른쪽 위(창 끝이 아니라, 소넷 확정). 켜져 있으면 위 여백을 pt-16 으로 벌려
-                오른쪽 정렬 아바타·제목·주인 배너와 겹치지 않는다(감사 L14) */}
+            {/* 모서리 칩(링크트리 실측 2026-08-27) — 왼쪽 핀치 로고·오른쪽 공유/구독, 44px 글라스 칩.
+                콘텐츠 칸 기준(창 끝이 아니라, 소넷 확정). 프로필 상단 여백 104px 가 이 줄의 자리를 만든다.
+                로고는 배지 설정과 한 계열 — 배지 숨김(유료)·내 로고면 안 그린다. */}
+            {themeCustom?.badge === "hide" || logoImage ? null : (
+              <Link
+                href="/?utm_source=profile_link&utm_medium=corner_logo"
+                target="_blank"
+                aria-label="핀치 — 나만의 페이지 만들기"
+                className="lp-btn absolute! left-5 top-4 z-20 flex size-11 items-center justify-center rounded-[16px] border border-[var(--lp-border)] bg-[color-mix(in_srgb,var(--lp-card)_55%,transparent)] text-[var(--lp-fg)] shadow-[var(--lp-shadow)] backdrop-blur-lg"
+              >
+                <FinchMark className="size-5" aria-hidden />
+              </Link>
+            )}
             {themeCustom?.share ? <ShareButton url={publicLinkUrl(slug)} title={snap.title || slug} label={t.share} done={t.copied} /> : null}
-            {subscribeOn ? <SubscribeButton label={t.lead.subscribe} /> : null}
+            {subscribeOn ? <SubscribeButton label={t.lead.subscribe} shift={!!themeCustom?.share} /> : null}
           </>
         )}
         {logoPos === "top" ? logoEl : null}
+        {/* 비공개 배너 — pt-0 상단에서는 모서리 칩(y16~60)이 귀퉁이를 덮어 칩 줄 아래로(쏘넷 점검) */}
         {isOwner && !published ? (
-          <p className={`mb-6 rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-card)] px-4 py-2.5 text-center text-[13px] font-medium ${split ? "lg:col-start-1" : ""}`}>
+          <p className={`mb-6 rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-card)] px-4 py-2.5 text-center text-[13px] font-medium ${!topbar && fullBleedTop ? "mt-16" : ""} ${split ? "lg:col-start-1" : ""}`}>
             비공개 미리보기예요. 나에게만 보입니다.
           </p>
         ) : null}
@@ -413,13 +429,13 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
                 alt=""
                 /* outline 헤어라인 — --lp-shadow 가 none 인 프리셋 8종에서는 box-shadow 선언이
                    통째로 무효라 ring 까지 죽는다. 바깥선 하나로 19종 전부에서 원이 보인다(2026-08-24 비평) */
-                className="mb-3.5 size-[96px] rounded-[26px] object-cover shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
+                className="mb-3.5 size-[96px] rounded-full object-cover shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
               />
             ) : (
               /* 사진이 없으면 이니셜 원. 아무것도 안 그리면 브랜드 페이지 머리가 통째로
                  비어 허전하다 — 편집 미리보기도 같은 것을 그린다(두 화면이 어긋나면 안 된다). */
               <span
-                className="mb-3.5 flex size-[96px] items-center justify-center rounded-[26px] bg-[var(--lp-card)] text-[32px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
+                className="mb-3.5 flex size-[96px] items-center justify-center rounded-full bg-[var(--lp-card)] text-[32px] font-bold text-[var(--lp-muted)] shadow-[var(--lp-shadow)] outline-1 outline-offset-[3px] outline-[var(--lp-border)] ring-4 ring-[var(--lp-card)]"
                 aria-hidden
               >
                 {initialOf(snap.title || slug)}

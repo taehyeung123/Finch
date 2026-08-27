@@ -95,7 +95,8 @@ export function ImageField({
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /** 위치 조정 대기 중인 원본 — cropAspect 와 비율이 다른 이미지만 여기로 온다 */
+  /** 위치 조정 대기 중인 이미지(4000px 캡 축소본) — cropAspect 와 비율이 다른 이미지만 여기로 온다.
+      원본 그대로면 25MB 를 크롭 내내 물고, 2000px 로 깎으면 크롭 후 해상도가 상한에 못 미친다 */
   const [pending, setPending] = useState<{ dataUrl: string; w: number; h: number } | null>(null);
   /** 보일 창의 위치 0~100 — 세로로 긴 원본이면 위아래, 가로로 길면 좌우 */
   const [offset, setOffset] = useState(50);
@@ -193,7 +194,27 @@ export function ImageField({
           return;
         }
         setOffset(50);
-        setPending({ dataUrl, w: img.naturalWidth, h: img.naturalHeight });
+        /* 크롭 대기용 축소본은 저장 상한(2000px)의 2배로만 줄인다 — shrink() 를 그대로 쓰면
+           창을 «자르기 전에» 2000px 로 깎여 세로 원본→4:3 커버가 1500px 로 떨어진다(쏘넷 점검).
+           4000px 이면 어떤 비율로 잘라도 창이 상한을 채우고, 중간 인코딩은 0.92 로 세대 손실을 줄인다. */
+        const PENDING_MAX = CROP_MAX_W * 2;
+        const longest = Math.max(img.naturalWidth, img.naturalHeight);
+        if (longest <= PENDING_MAX) {
+          setPending({ dataUrl, w: img.naturalWidth, h: img.naturalHeight });
+        } else {
+          const c = document.createElement("canvas");
+          const k = PENDING_MAX / longest;
+          c.width = Math.max(1, Math.round(img.naturalWidth * k));
+          c.height = Math.max(1, Math.round(img.naturalHeight * k));
+          const cx = c.getContext("2d");
+          if (cx) {
+            cx.drawImage(img, 0, 0, c.width, c.height);
+            const mime = /^data:(image\/(?:png|webp))/.exec(dataUrl)?.[1] ?? "image/jpeg";
+            setPending({ dataUrl: c.toDataURL(mime, 0.92), w: c.width, h: c.height });
+          } else {
+            setPending({ dataUrl, w: img.naturalWidth, h: img.naturalHeight });
+          }
+        }
       };
       img.src = dataUrl;
     };
