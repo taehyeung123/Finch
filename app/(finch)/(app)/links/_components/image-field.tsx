@@ -265,30 +265,10 @@ export function ImageField({
           }
         }
       }
-      /* 비율은 칸이 정한다(2026-08-27) — 자유 비율 칸(원본 그대로 그려지는 자리)이거나
-         이미 칸 비율과 맞으면(±2%) 조정 없이 바로 최적화 저장. 비율이 다를 때만
-         «내 사진의 어느 부분을 쓸지» 고르는 조정 단계가 뜬다. */
-      const srcRatio = img.naturalWidth / img.naturalHeight;
-      if (!cropAspect || Math.abs(srcRatio - cropAspect) / cropAspect < 0.02) {
-        const longest0 = Math.max(img.naturalWidth, img.naturalHeight);
-        if (longest0 <= CROP_MAX_W && dataUrlBytes(dataUrl) <= 1_500_000) {
-          void upload(dataUrl, { w: img.naturalWidth, h: img.naturalHeight });
-          return;
-        }
-        const k0 = Math.min(1, CROP_MAX_W / longest0);
-        const c0 = document.createElement("canvas");
-        c0.width = Math.max(1, Math.round(img.naturalWidth * k0));
-        c0.height = Math.max(1, Math.round(img.naturalHeight * k0));
-        const x0 = c0.getContext("2d");
-        if (x0) {
-          x0.drawImage(img, 0, 0, c0.width, c0.height);
-          const mime0 = /^data:(image\/(?:png|webp))/.exec(dataUrl)?.[1] ?? "image/jpeg";
-          void upload(encodeCanvas(c0, mime0), { w: c0.width, h: c0.height });
-        } else {
-          void upload(dataUrl, { w: img.naturalWidth, h: img.naturalHeight });
-        }
-        return;
-      }
+      /* 조정 단계는 **모든 업로드에 예외 없이** 뜬다(2026-08-27 «전부 사진 넣고 영역 설정하게»).
+         프레임 비율은 칸이 정한 값(cropAspect), 자유 칸은 원본 비율 — 어느 쪽이든 확대·이동으로
+         «내 사진의 어느 부분을 쓸지»를 정한다. 아무것도 안 바꾸고 올리면 applyCrop 패스스루가
+         원본 바이트 직행이라 화질 손해도 없다. */
       setAdj({ zoom: 1, x: 50, y: 50 });
       setWasTrimmed(trimmedOnce);
       const PENDING_MAX = CROP_MAX_W * 2;
