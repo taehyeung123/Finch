@@ -555,7 +555,15 @@ export function BlockEditor({
 
       {/* ── 이미지·이미지 카드 ── */}
       {block.type === "image" || block.type === "image_card" ? (
-        <ImageField label="이미지" value={str("imagePath")} onChange={setImage} />
+        /* 제품 카드는 **서비스 지정 16:9**(2026-08-27 «우리가 정해놓은 사이즈에 맞게») —
+           비율이 다른 사진만 영역설정이 뜨고, 거의 맞으면 바로 저장된다.
+           이미지 블록은 원본 비율 그대로 그려지는 자리라 자유. */
+        <ImageField
+          label="이미지"
+          value={str("imagePath")}
+          onChange={setImage}
+          {...(block.type === "image_card" ? { cropAspect: 16 / 9, aspect: "aspect-[16/9]" } : {})}
+        />
       ) : null}
 
       {/* 대체 텍스트 — 공개 렌더러가 alt 로 내보낸다(block-renderer.tsx). 입력칸이 없어서

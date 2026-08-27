@@ -1003,16 +1003,12 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
         );
       }
     case "image_card": {
-      /* CLS 예약 — 공개와 같은 가드(쏘넷 점검) */
-      const ciw = n(d, "imgW", 0);
-      const cih = n(d, "imgH", 0);
-      const cardRatio = ciw > 0 && cih > 0 && ciw / cih >= 0.1 && ciw / cih <= 10 ? `${ciw} / ${cih}` : undefined;
       return (
         <div className={`${card} overflow-hidden`}>
           {s(d, "imagePath") ? (
-            /* 원본 비율 풀블리드 — 공개와 동일(16:9 재크롭 제거) */
+            /* 서비스 지정 16:9 프레임 — 공개와 동일 */
             // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
-            <img src={s(d, "imagePath")} alt="" style={cardRatio ? { aspectRatio: cardRatio } : undefined} className="block w-full object-cover" />
+            <img src={s(d, "imagePath")} alt="" className="aspect-[16/9] w-full object-cover" />
           ) : null}
           <div className="px-3 py-2.5">
             <p className="text-[13px] font-semibold">{s(d, "title")}</p>
