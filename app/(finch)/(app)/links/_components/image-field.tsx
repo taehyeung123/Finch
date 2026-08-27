@@ -24,14 +24,6 @@ import { FinchLoader } from "@/components/ui/finch-loader";
 /** 저장본의 최대 긴 변 — 표시 최대폭(PC 캔버스 600px)×레티나 3배보다 넉넉한 상한.
     «고화질을 왜 버리냐»(2026-08-26) 지시로 1600→2000. 이 위는 화질 체감 없이 무게만 는다. */
 const CROP_MAX_W = 2000;
-/** 조정 화면 비율 선택지 — cropAspect 가 없는 칸에서 사용자가 직접 고른다(2026-08-27 지시) */
-const CROP_RATIOS: { label: string; value: number | null }[] = [
-  { label: "원본", value: null },
-  { label: "1:1", value: 1 },
-  { label: "4:3", value: 4 / 3 },
-  { label: "16:9", value: 16 / 9 },
-  { label: "3:1", value: 3 },
-];
 /** 전송 안전 상한 — Vercel 요청 본문 4.5MB 하드캡을 base64(+33%) 포함해 넘지 않는 선 */
 const WIRE_MAX_BYTES = 3_000_000;
 
@@ -173,9 +165,9 @@ export function ImageField({
   /** 조정 대기 중인 이미지(4000px 캡 축소본) — 원본 그대로면 25MB 를 조정 내내 물고,
       2000px 로 깎으면 크롭 후 해상도가 상한에 못 미친다 */
   const [pending, setPending] = useState<{ dataUrl: string; w: number; h: number } | null>(null);
-  /** 조정값(2026-08-27 «영역·크기 직접 설정하게 전부») — 확대 1~3배, 위치 0~100(2축),
-      비율(null=원본 비율). cropAspect 가 있는 칸은 그 비율로 고정된다. */
-  const [adj, setAdj] = useState<{ zoom: number; x: number; y: number; ratio: number | null }>({ zoom: 1, x: 50, y: 50, ratio: null });
+  /** 조정값 — 확대 1~3배, 위치 0~100(2축). 프레임 비율은 **칸이 정한다**(cropAspect):
+      «비율은 우리가 정하고, 사용자는 자기 사진에서 어느 부분을 쓸지만 정한다»(2026-08-27). */
+  const [adj, setAdj] = useState<{ zoom: number; x: number; y: number }>({ zoom: 1, x: 50, y: 50 });
   const frameRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ px: number; py: number; x0: number; y0: number; fw: number; fh: number } | null>(null);
   /** 트림 전 원본 — «원본 유지» 버튼이 트림 없이 조정 단계를 다시 연다(쏘넷 점검: 옵트아웃) */
@@ -273,10 +265,31 @@ export function ImageField({
           }
         }
       }
-      /* 조정 단계 **필수**(2026-08-27 «사진 영역·크기 직접 설정하게 전부») — 어떤 원본이든
-         올리기 전에 보일 영역·크기를 직접 정한다. 작업본은 저장 상한(2000px)의 2배로만 줄인다:
-         어떤 비율로 잘라도 창이 상한을 채우고, 원본(최대 25MB)을 메모리에 물지 않는다. */
-      setAdj({ zoom: 1, x: 50, y: 50, ratio: cropAspect ?? null });
+      /* 비율은 칸이 정한다(2026-08-27) — 자유 비율 칸(원본 그대로 그려지는 자리)이거나
+         이미 칸 비율과 맞으면(±2%) 조정 없이 바로 최적화 저장. 비율이 다를 때만
+         «내 사진의 어느 부분을 쓸지» 고르는 조정 단계가 뜬다. */
+      const srcRatio = img.naturalWidth / img.naturalHeight;
+      if (!cropAspect || Math.abs(srcRatio - cropAspect) / cropAspect < 0.02) {
+        const longest0 = Math.max(img.naturalWidth, img.naturalHeight);
+        if (longest0 <= CROP_MAX_W && dataUrlBytes(dataUrl) <= 1_500_000) {
+          void upload(dataUrl, { w: img.naturalWidth, h: img.naturalHeight });
+          return;
+        }
+        const k0 = Math.min(1, CROP_MAX_W / longest0);
+        const c0 = document.createElement("canvas");
+        c0.width = Math.max(1, Math.round(img.naturalWidth * k0));
+        c0.height = Math.max(1, Math.round(img.naturalHeight * k0));
+        const x0 = c0.getContext("2d");
+        if (x0) {
+          x0.drawImage(img, 0, 0, c0.width, c0.height);
+          const mime0 = /^data:(image\/(?:png|webp))/.exec(dataUrl)?.[1] ?? "image/jpeg";
+          void upload(encodeCanvas(c0, mime0), { w: c0.width, h: c0.height });
+        } else {
+          void upload(dataUrl, { w: img.naturalWidth, h: img.naturalHeight });
+        }
+        return;
+      }
+      setAdj({ zoom: 1, x: 50, y: 50 });
       setWasTrimmed(trimmedOnce);
       const PENDING_MAX = CROP_MAX_W * 2;
       const longest = Math.max(img.naturalWidth, img.naturalHeight);
@@ -301,8 +314,8 @@ export function ImageField({
   }
 
   /** 보일 창(원본 좌표) — 미리보기와 applyCrop 이 같은 수식을 쓴다: «보이는 대로 잘린다» */
-  function cropWindow(p: { w: number; h: number }, a: { zoom: number; x: number; y: number; ratio: number | null }) {
-    const R = a.ratio ?? p.w / p.h;
+  function cropWindow(p: { w: number; h: number }, a: { zoom: number; x: number; y: number }) {
+    const R = cropAspect ?? p.w / p.h;
     const base = Math.min(p.w, p.h * R);
     const winW = base / a.zoom;
     const winH = winW / R;
@@ -398,23 +411,6 @@ export function ImageField({
               }}
             />
           </div>
-          {!cropAspect ? (
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="저장 비율">
-              {CROP_RATIOS.map((r) => (
-                <button
-                  key={r.label}
-                  type="button"
-                  aria-pressed={adj.ratio === r.value}
-                  onClick={() => setAdj((a) => ({ ...a, ratio: r.value, x: 50, y: 50 }))}
-                  className={`trans-state rounded-chip border px-2.5 py-1 text-[12px] font-medium ${
-                    adj.ratio === r.value ? "border-fg bg-fg text-body" : "border-line bg-body text-fg-sub hover:bg-tint-hover hover:text-fg"
-                  }`}
-                >
-                  {r.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
           {wasTrimmed ? (
             <p className="flex max-w-[320px] items-center justify-between gap-2 text-[12px] text-fg-sub">
               가장자리 여백을 잘라냈어요.

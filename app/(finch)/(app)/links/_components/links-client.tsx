@@ -4299,7 +4299,9 @@ function ThemePanel({
             value={custom.bgImage ?? ""}
             onChange={(v) => onCustomChange(v ? { bgImage: v } : { bgImage: undefined, bgFilter: undefined })}
             hint="넣으면 배경색·그라데이션보다 앞에 깔려요 — 글자가 읽히는지 미리보기로 확인하세요"
-            aspect="aspect-[3/1]"
+            aspect="aspect-[9/16]"
+            cropAspect={9 / 16}
+            maxW="max-w-[140px]"
           />
         ) : null}
         {bgTab === "image" && custom.bgImage ? (
@@ -5876,6 +5878,7 @@ function PageSettingsForm({
           }}
           hint="비우면 커버 → 프로필 사진 순. 1200×630 비율이 가장 잘 맞아요."
           aspect="aspect-[1.91/1]"
+          cropAspect={1200 / 630}
         />
         <div>
           <label className={label} htmlFor="ps-favicon">
