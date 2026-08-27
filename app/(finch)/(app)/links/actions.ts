@@ -778,8 +778,9 @@ export async function deleteLinkPage(pageId?: string): Promise<Result> {
    이미지 업로드
    ══════════════════════════════════════════════════════════════════ */
 
-/** 2MB. 프로필 링크는 모바일에서 열리는 페이지라 큰 이미지는 그 자체로 이탈 요인이다 */
-const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+/** 10MB(2026-08-26 «고화질을 왜 버리냐» 지시로 2MB→10MB). 페이지 무게가 커지는 만큼
+    추후 업로드 시 자동 리사이즈/압축을 붙이는 게 숙제다 — 지금은 수용이 우선. */
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 /**
  * data URL 을 link-assets 버킷에 올리고 공개 URL 을 돌려준다.
@@ -800,7 +801,7 @@ export async function uploadLinkImage(dataUrl: string): Promise<{ ok: boolean; u
   if (!m) return { ok: false, error: "PNG·JPG·WEBP·GIF·SVG 이미지만 올릴 수 있어요." };
 
   const buf = Buffer.from(m[2], "base64");
-  if (buf.byteLength > MAX_IMAGE_BYTES) return { ok: false, error: "이미지는 2MB 이하만 올릴 수 있어요." };
+  if (buf.byteLength > MAX_IMAGE_BYTES) return { ok: false, error: "이미지는 10MB 이하만 올릴 수 있어요." };
 
   const ext = m[1].split("/")[1].replace("svg+xml", "svg").replace("jpeg", "jpg");
   const path = `${user.id}/${crypto.randomUUID()}.${ext}`;

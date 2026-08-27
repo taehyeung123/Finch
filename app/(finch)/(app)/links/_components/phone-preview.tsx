@@ -409,7 +409,7 @@ export function PhonePreview({
               onClick={editable ? edit?.onOpenProfile : undefined}
               disabled={!editable}
               aria-label={editable ? "커버 이미지 넣기·바꾸기" : undefined}
-              className={`relative -mx-5 ${page.themeCustom?.topbar === "bar" ? "" : "-mt-8"} ${page.layout === "cover_profile" ? "" : "mb-3"} block self-stretch overflow-hidden`}
+              className={`relative -mx-5 w-[calc(100%+2.5rem)] ${page.themeCustom?.topbar === "bar" ? "" : "-mt-8"} ${page.layout === "cover_profile" ? "" : "mb-3"} block overflow-hidden`}
             >
               {page.coverPath ? (
                 // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL

@@ -376,7 +376,7 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
             className={`relative overflow-hidden ${snap.layout === "cover_profile" ? "" : "mb-4"} ${
               split
                 ? "w-full rounded-[var(--lp-radius)] lg:col-start-1"
-                : "-mx-5 self-stretch lg:-mx-10 lg:rounded-t-[28px]"
+                : "-mx-5 w-[calc(100%+2.5rem)] lg:-mx-10 lg:w-[calc(100%+5rem)] lg:rounded-t-[28px]"
             }`}
           >
             {snap.coverPath ? (

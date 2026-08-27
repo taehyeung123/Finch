@@ -3639,9 +3639,10 @@ function ProfilePanel({
           label="커버 이미지"
           value={page.coverPath ?? ""}
           onChange={(v) => onImages({ coverPath: v || null })}
-          aspect="aspect-[3/1]"
-          cropAspect={3}
-          hint="권장 1200×400(3:1) — 다른 비율은 올릴 때 보일 부분을 직접 고를 수 있어요"
+          aspect="aspect-[4/3]"
+          cropAspect={4 / 3}
+          maxW="max-w-[240px]"
+          hint="권장 1200×900(4:3) — 다른 비율은 올릴 때 보일 부분을 직접 고를 수 있어요"
         />
       ) : null}
 

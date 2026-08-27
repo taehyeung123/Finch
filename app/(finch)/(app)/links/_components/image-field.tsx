@@ -256,7 +256,7 @@ export function ImageField({
               <ImagePlus className="size-5" aria-hidden />
               <span className="text-[14px] font-medium">이미지 올리기</span>
               {/* 작은 원형 칸(프로필 사진)에서는 형식 문구가 원 밖으로 넘친다 — 아래 hint 가 대신 말한다 */}
-              {maxW ? null : <span className="text-[11px]">PNG·JPG·WEBP · 2MB 이하</span>}
+              {maxW ? null : <span className="text-[11px]">PNG·JPG·WEBP · 10MB 이하</span>}
             </>
           )}
         </button>
