@@ -1101,6 +1101,9 @@ export function BlockEditor({
               onPick={(addr) => {
                 set("address", addr);
                 setPostcodeOpen(false);
+                /* 고른 직후 손이 상세 주소로 가게 — «주소 클릭 → 상세 입력» 흐름(2026-08-27 지시).
+                   모달 언마운트 뒤에 걸어야 포커스가 트랩에 되돌아가지 않는다 */
+                requestAnimationFrame(() => document.getElementById("b-mdetail")?.focus());
               }}
               onClose={() => setPostcodeOpen(false)}
             />
