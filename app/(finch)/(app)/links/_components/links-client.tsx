@@ -582,6 +582,19 @@ export function LinksClient({
   useEffect(() => {
     return () => customFlushRef.current();
   }, []);
+  /* 추가한 블록으로 화면 이동(2026-08-27 지시 «추가하면 바로 내용 넣게») — 새 블록은 목록
+     맨 아래라 편집기가 열려도 화면 밖이었다. 행은 서버 목록이 도착해야 생기므로,
+     생기는 순간 한 번만 스크롤하고 편집기 제목에 포커스를 준다. */
+  const scrollToBlockRef = useRef<string | null>(null);
+  useEffect(() => {
+    const id = scrollToBlockRef.current;
+    if (!id) return;
+    const el = document.getElementById(`blk-${id}`);
+    if (!el) return;
+    scrollToBlockRef.current = null;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    requestAnimationFrame(() => document.getElementById(EDITOR_TITLE_ID)?.focus({ preventScroll: true }));
+  }, [blocks]);
   /* 창 닫기·새로고침 — 저장이 미처 못 나간 순간만 브라우저 기본 경고를 건다(쏘넷 점검 high).
      블록 초안뿐 아니라 꾸미기 레인(디바운스·왕복·재시도·주소 보류)도 지킨다. */
   useEffect(() => {
@@ -996,7 +1009,8 @@ export function LinksClient({
             setPrevEditingKey("__gone__");
             setEditingId(addedId);
             setError(null);
-            requestAnimationFrame(() => document.getElementById(EDITOR_TITLE_ID)?.focus());
+            /* 행이 아직 없다 — 서버 목록이 도착해 행이 생기면 위 이펙트가 스크롤·포커스한다 */
+            scrollToBlockRef.current = addedId;
             toast("블록을 추가했어요 — 바로 고쳐 보세요.");
           }
         } else {
@@ -2362,6 +2376,7 @@ function BlockListPanel({
         return (
           <div
             key={b.id}
+            id={`blk-${b.id}`}
             className={cn(
               "rounded-card border bg-body",
               expanded ? "border-primary" : "border-line",
