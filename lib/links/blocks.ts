@@ -463,6 +463,17 @@ export function hiddenReason(type: BlockType, data: Record<string, unknown>, now
       return s("url") ? null : "주소가 비어 공개되지 않아요";
     case "image":
       return s("imagePath") ? null : "이미지가 없어 공개되지 않아요";
+    case "heading":
+    case "text":
+      return s("text").trim() ? null : "내용이 비어 공개되지 않아요";
+    case "notice":
+      return s("text").trim() ? null : "공지 내용이 비어 공개되지 않아요";
+    case "image_card": {
+      const cardCta = s("ctaLabel") && s("url");
+      return s("imagePath") || s("title").trim() || s("subtitle").trim() || s("price").trim() || cardCta
+        ? null
+        : "내용이 비어 공개되지 않아요";
+    }
     case "video":
       return s("url") ? null : "영상 주소가 없어 공개되지 않아요";
     case "map":

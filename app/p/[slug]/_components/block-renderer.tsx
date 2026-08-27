@@ -240,7 +240,7 @@ export function BlockRenderer({
                 <li key={g.id}>
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-[14px] font-semibold text-[var(--lp-fg)]">{g.name}</span>
-                    <span className="tnum text-[11px] text-[var(--lp-muted)]">{g.createdAt.slice(0, 10)}</span>
+                    <span className="tnum text-[11px] text-[var(--lp-muted)]">{new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date(g.createdAt))}</span>
                   </div>
                   <p className="mt-0.5 whitespace-pre-wrap text-[14px] text-[var(--lp-fg)]">{g.message}</p>
                   {g.reply ? (
@@ -354,10 +354,13 @@ export function BlockRenderer({
 
     /* ── 레이아웃 ──────────────────────────────────────────── */
     case "heading":
+      /* 빈 내용은 안 그린다 — 유령 여백만 남는다(쏘넷 점검, hiddenReason 과 한 몸) */
+      if (!s(d, "text").trim()) return null;
       /* 링크 라벨(15px semibold)과 1px 차이라 구획이 안 읽혔다 — 크기·자간·여백으로 확실히 가른다 */
       return <h2 className="pt-5 pb-0.5 text-[17px] font-bold tracking-[-0.02em] text-[var(--lp-fg)]">{s(d, "text")}</h2>;
 
     case "text":
+      if (!s(d, "text").trim()) return null;
       return (
         /* 사용자가 쓴 본문이다 — 보조 문구 색(muted)으로 두면 자기 글이 각주처럼 읽힌다(2026-08-24 비평) */
         <p
@@ -422,6 +425,8 @@ export function BlockRenderer({
       const url = s(d, "url");
       const price = s(d, "price");
       const cta = s(d, "ctaLabel");
+      /* 사진·글·가격·버튼이 전부 비면 흰 카드 껍데기만 나간다 — 안 그린다(쏘넷 점검) */
+      if (!src && !title.trim() && !sub.trim() && !price.trim() && !(cta && url)) return null;
       const inner = (
         <div className={`${cardCls} overflow-hidden`}>
           {src ? (
@@ -578,6 +583,7 @@ export function BlockRenderer({
           통짜 강조색 채움은 안 쓴다 — 강조 링크 버튼과 실루엣이 겹쳐 «눌러도 안 되는 버튼»이
           됐던 이력(위 커밋 bbe5b40)이 있다. 틴트 면은 버튼(진한 채움)과 명확히 갈린다.
       */
+      if (!s(d, "text").trim()) return null;
       if (tone === "primary") {
         return (
           <div

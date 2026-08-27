@@ -596,8 +596,13 @@ export function LinksClient({
     /* 첫 입력칸에 포커스 — 편집기 제목(H3)에 주면 «바로 타이핑»이 안 된다(2026-08-27 실계정 점검).
        입력칸이 없는 블록(구분선 등)은 제목으로 폴백해 스크린리더 문맥은 유지한다. */
     requestAnimationFrame(() => {
-      const first = el.querySelector<HTMLElement>('input:not([type="hidden"]):not([type="file"]):not([type="color"]), textarea');
-      (first ?? document.getElementById(EDITOR_TITLE_ID))?.focus({ preventScroll: true });
+      const first = el.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+        'input:not([type="hidden"]):not([type="file"]):not([type="color"]):not([data-autofocus-skip]), textarea',
+      );
+      (first ?? (document.getElementById(EDITOR_TITLE_ID) as HTMLElement | null))?.focus({ preventScroll: true });
+      /* 씨드 기본 문구(«새 링크» 등)는 전체 선택 — 바로 타이핑하면 교체된다(쏘넷 점검:
+         카레트 0 이라 «가게새 링크»처럼 섞였다) */
+      first?.select?.();
     });
   }, [blocks]);
   /* 창 닫기·새로고침 — 저장이 미처 못 나간 순간만 브라우저 기본 경고를 건다(쏘넷 점검 high).

@@ -506,6 +506,7 @@ export function ImageField({
           }
         }}
         placeholder="또는 이미지 주소 붙여넣기"
+        data-autofocus-skip
         aria-label={`${label} 주소`}
         className="mt-2 h-9 w-full rounded-card border border-line bg-body px-2.5 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
       />

@@ -189,7 +189,8 @@ export function BlockEditor({
                     str("url"),
                     (cur, m) => ({
                       ...cur,
-                      label: (typeof cur.label === "string" && cur.label) || m.title || "",
+                      /* 씨드 «새 링크»는 빈 칸 취급 — 안 그러면 불러오기가 제목을 영영 못 채운다(쏘넷) */
+                      label: (typeof cur.label === "string" && cur.label && cur.label !== "새 링크" && cur.label) || m.title || (typeof cur.label === "string" ? cur.label : ""),
                       imagePath: (typeof cur.imagePath === "string" && cur.imagePath) || m.image || "",
                     }),
                     -1,
@@ -749,7 +750,7 @@ export function BlockEditor({
                             ...cur,
                             items: curItems.map((x, j) =>
                               j === i
-                                ? { ...x, title: (typeof x.title === "string" && x.title) || m.title || "", imagePath: (typeof x.imagePath === "string" && x.imagePath) || m.image || "" }
+                                ? { ...x, title: (typeof x.title === "string" && x.title && x.title !== "항목 1" && x.title) || m.title || (typeof x.title === "string" ? x.title : ""), imagePath: (typeof x.imagePath === "string" && x.imagePath) || m.image || "" }
                                 : x,
                             ),
                           };
