@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { AlignCenter, AlignLeft, CalendarOff, CalendarPlus, Columns2, Columns3, Eye, EyeOff, GalleryHorizontal, GalleryHorizontalEnd, LayoutDashboard, LayoutGrid, List, Plus, Ratio, Rows3, Square, Trash2, X } from "lucide-react";
+import { SnsIcon } from "@/components/sns-brand-icons";
+import { PickCards, PickChips } from "./option-picker";
 import { Button } from "@/components/ui/button";
 import { sliceChars } from "@/lib/links";
 import { BLOCK_CATALOG, COLLAPSE_OPTIONS, CONTACT_FIELDS, COUPANG_DISCLOSURE, LINK_LAYOUTS, LINK_TEXT_COLORS, type LinkBlock } from "@/lib/links/blocks";
@@ -288,38 +290,47 @@ export function BlockEditor({
               <input id="b-emoji" value={str("emoji")} onChange={(e) => set("emoji", sliceChars(e.target.value, 4))} placeholder="🔔" className={`mt-1.5 ${input}`} />
             </div>
             <div>
-              <label className={label} htmlFor="b-emph">
-                강조
-              </label>
-              <select id="b-emph" value={str("emphasis") || "normal"} onChange={(e) => set("emphasis", e.target.value)} className={`mt-1.5 ${input}`}>
-                <option value="normal">기본</option>
-                <option value="primary">채움</option>
-                <option value="outline">테두리</option>
-              </select>
+              <span className={label}>강조</span>
+              <PickCards
+                ariaLabel="강조"
+                value={str("emphasis") || "normal"}
+                onChange={(v) => set("emphasis", v)}
+                options={[
+                  { key: "normal", label: "기본", icon: <span className="block h-[3px] w-7 rounded-full bg-current" /> },
+                  { key: "primary", label: "채움", icon: <span className="block h-3.5 w-7 rounded-full bg-current" /> },
+                  { key: "outline", label: "테두리", icon: <span className="block h-3.5 w-7 rounded-full border-[1.5px] border-current" /> },
+                ]}
+              />
             </div>
           </div>
 
           {/* 텍스트 스타일 — 링크팜의 블록별 크기·굵기·색 카피(2026-08-20 대조 6번) */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className={label} htmlFor="b-tsize">
-                글자 크기
-              </label>
-              <select id="b-tsize" value={str("textSize") || "md"} onChange={(e) => set("textSize", e.target.value)} className={`mt-1.5 ${input}`}>
-                <option value="sm">작게</option>
-                <option value="md">기본</option>
-                <option value="lg">크게</option>
-              </select>
+              <span className={label}>글자 크기</span>
+              <PickCards
+                ariaLabel="글자 크기"
+                value={str("textSize") || "md"}
+                onChange={(v) => set("textSize", v)}
+                options={[
+                  { key: "sm", label: "작게", icon: <span className="text-[10px] font-semibold">가</span> },
+                  { key: "md", label: "기본", icon: <span className="text-[13px] font-semibold">가</span> },
+                  { key: "lg", label: "크게", icon: <span className="text-[17px] font-semibold">가</span> },
+                ]}
+              />
             </div>
             <div>
-              <label className={label} htmlFor="b-tweight">
-                글자 굵기
-              </label>
-              <select id="b-tweight" value={str("textWeight") || "semibold"} onChange={(e) => set("textWeight", e.target.value)} className={`mt-1.5 ${input}`}>
-                <option value="medium">보통</option>
-                <option value="semibold">세미볼드</option>
-                <option value="bold">볼드</option>
-              </select>
+              <span className={label}>글자 굵기</span>
+              <PickCards
+                ariaLabel="글자 굵기"
+                value={str("textWeight") || "semibold"}
+                onChange={(v) => set("textWeight", v)}
+                options={[
+                  { key: "medium", label: "보통", icon: <span className="text-[13px] font-medium">가</span> },
+                  { key: "semibold", label: "세미볼드", icon: <span className="text-[13px] font-semibold">가</span> },
+                  { key: "bold", label: "볼드", icon: <span className="text-[13px] font-bold">가</span> },
+                ]}
+              />
             </div>
           </div>
           <div>
@@ -378,58 +389,59 @@ export function BlockEditor({
 
       {block.type === "notice" ? (
         <div>
-          <label className={label} htmlFor="b-tone">
-            강조
-          </label>
-          <select id="b-tone" value={str("tone") || "info"} onChange={(e) => set("tone", e.target.value)} className={`mt-1.5 ${input}`}>
-            <option value="info">기본</option>
-            <option value="primary">채움</option>
-          </select>
+          <span className={label}>강조</span>
+          <PickCards
+            ariaLabel="강조"
+            value={str("tone") || "info"}
+            onChange={(v) => set("tone", v)}
+            options={[
+              { key: "info", label: "기본", icon: <span className="flex h-4 w-8 items-center justify-center rounded-[4px] border-[1.5px] border-current"><span className="h-[2px] w-4 rounded-full bg-current" /></span> },
+              { key: "primary", label: "채움", icon: <span className="block h-4 w-8 rounded-[4px] bg-current" /> },
+            ]}
+          />
         </div>
       ) : null}
 
       {block.type === "text" ? (
         <div>
-          <label className={label} htmlFor="b-align">
-            정렬
-          </label>
-          <select id="b-align" value={str("align") || "left"} onChange={(e) => set("align", e.target.value)} className={`mt-1.5 ${input}`}>
-            <option value="left">왼쪽</option>
-            <option value="center">가운데</option>
-          </select>
+          <span className={label}>정렬</span>
+          <PickCards
+            ariaLabel="정렬"
+            value={str("align") || "left"}
+            onChange={(v) => set("align", v)}
+            options={[
+              { key: "left", label: "왼쪽", icon: <AlignLeft className="size-4" /> },
+              { key: "center", label: "가운데", icon: <AlignCenter className="size-4" /> },
+            ]}
+          />
         </div>
       ) : null}
 
       {/* ── 구분선·빈 공간 ── */}
       {block.type === "divider" ? (
         <div>
-          <label className={label} htmlFor="b-style">
-            모양
-          </label>
-          <select id="b-style" value={str("style") || "line"} onChange={(e) => set("style", e.target.value)} className={`mt-1.5 ${input}`}>
-            <option value="line">선</option>
-            <option value="dot">점</option>
-          </select>
+          <span className={label}>모양</span>
+          <PickCards
+            ariaLabel="모양"
+            value={str("style") || "line"}
+            onChange={(v) => set("style", v)}
+            options={[
+              { key: "line", label: "선", icon: <span className="block h-[2px] w-8 rounded-full bg-current" /> },
+              { key: "dot", label: "점", icon: <span className="flex items-center gap-1"><span className="size-[3px] rounded-full bg-current" /><span className="size-[3px] rounded-full bg-current" /><span className="size-[3px] rounded-full bg-current" /></span> },
+            ]}
+          />
         </div>
       ) : null}
 
       {block.type === "spacer" ? (
         <div>
-          <label className={label} htmlFor="b-size">
-            높이
-          </label>
-          <select
-            id="b-size"
+          <span className={label}>높이</span>
+          <PickChips
+            ariaLabel="높이"
             value={String(num("size", 24))}
-            onChange={(e) => set("size", Number(e.target.value))}
-            className={`mt-1.5 ${input}`}
-          >
-            {[8, 16, 24, 40].map((v) => (
-              <option key={v} value={v}>
-                {v}px
-              </option>
-            ))}
-          </select>
+            onChange={(v) => set("size", Number(v))}
+            options={[8, 16, 24, 40].map((v) => ({ key: String(v), label: `${v}px` }))}
+          />
         </div>
       ) : null}
 
@@ -638,37 +650,40 @@ export function BlockEditor({
           <div className="grid grid-cols-2 gap-2">
             {block.type === "grid" ? (
               <div>
-                <label className={label} htmlFor="b-cols">
-                  열 수
-                </label>
-                <select id="b-cols" value={String(num("columns", 2))} onChange={(e) => set("columns", Number(e.target.value))} className={`mt-1.5 ${input}`}>
-                  <option value="2">2열</option>
-                  <option value="3">3열</option>
-                </select>
+                <span className={label}>열 수</span>
+                <PickCards
+                  ariaLabel="열 수"
+                  value={String(num("columns", 2))}
+                  onChange={(v) => set("columns", Number(v))}
+                  options={[
+                    { key: "2", label: "2열", icon: <Columns2 className="size-4" /> },
+                    { key: "3", label: "3열", icon: <Columns3 className="size-4" /> },
+                  ]}
+                />
               </div>
             ) : (
               <div>
-                <label className={label} htmlFor="b-layout">
-                  배치
-                </label>
-                <select id="b-layout" value={str("layout") || "list"} onChange={(e) => set("layout", e.target.value)} className={`mt-1.5 ${input}`}>
-                  <option value="list">세로 목록</option>
-                  <option value="carousel">가로 캐러셀</option>
-                </select>
+                <span className={label}>배치</span>
+                <PickCards
+                  ariaLabel="배치"
+                  value={str("layout") || "list"}
+                  onChange={(v) => set("layout", v)}
+                  options={[
+                    { key: "list", label: "세로 목록", icon: <Rows3 className="size-4" /> },
+                    { key: "carousel", label: "가로 캐러셀", icon: <GalleryHorizontalEnd className="size-4" /> },
+                  ]}
+                />
               </div>
             )}
             <div>
-              <label className={label} htmlFor="b-collapse">
-                링크 나열
-              </label>
+              <span className={label}>링크 나열</span>
               {/* 리틀리 「전부 나열 / 접기 적용」 — 처음 N개만 보이고 「더보기」 */}
-              <select id="b-collapse" value={String(num("collapse", 0))} onChange={(e) => set("collapse", Number(e.target.value))} className={`mt-1.5 ${input}`}>
-                {COLLAPSE_OPTIONS.map((c) => (
-                  <option key={c} value={String(c)}>
-                    {c === 0 ? "전부 나열" : `${c}개만 보이고 접기`}
-                  </option>
-                ))}
-              </select>
+              <PickChips
+                ariaLabel="링크 나열"
+                value={String(num("collapse", 0))}
+                onChange={(v) => set("collapse", Number(v))}
+                options={COLLAPSE_OPTIONS.map((c) => ({ key: String(c), label: c === 0 ? "전부 나열" : `${c}개만 보이기` }))}
+              />
             </div>
           </div>
 
@@ -779,25 +794,31 @@ export function BlockEditor({
         <>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className={label} htmlFor="b-glayout">
-                레이아웃
-              </label>
-              <select id="b-glayout" value={str("layout") || "grid"} onChange={(e) => set("layout", e.target.value)} className={`mt-1.5 ${input}`}>
-                <option value="grid">썸네일 보기</option>
-                <option value="list">목록</option>
-                <option value="slide">한 장씩 보기</option>
-                <option value="carousel">캐러셀</option>
-                <option value="masonry">자유</option>
-              </select>
+              <span className={label}>레이아웃</span>
+              <PickCards
+                ariaLabel="레이아웃"
+                value={str("layout") || "grid"}
+                onChange={(v) => set("layout", v)}
+                options={[
+                  { key: "grid", label: "썸네일", icon: <LayoutGrid className="size-4" /> },
+                  { key: "list", label: "목록", icon: <List className="size-4" /> },
+                  { key: "slide", label: "한 장씩", icon: <Square className="size-4" /> },
+                  { key: "carousel", label: "캐러셀", icon: <GalleryHorizontal className="size-4" /> },
+                  { key: "masonry", label: "자유", icon: <LayoutDashboard className="size-4" /> },
+                ]}
+              />
             </div>
             <div>
-              <label className={label} htmlFor="b-aspect">
-                이미지 비율
-              </label>
-              <select id="b-aspect" value={str("aspect") || "square"} onChange={(e) => set("aspect", e.target.value)} className={`mt-1.5 ${input}`}>
-                <option value="square">정사각형</option>
-                <option value="intrinsic">개별 비율 유지</option>
-              </select>
+              <span className={label}>이미지 비율</span>
+              <PickCards
+                ariaLabel="이미지 비율"
+                value={str("aspect") || "square"}
+                onChange={(v) => set("aspect", v)}
+                options={[
+                  { key: "square", label: "정사각형", icon: <Square className="size-4" /> },
+                  { key: "intrinsic", label: "개별 비율", icon: <Ratio className="size-4" /> },
+                ]}
+              />
             </div>
           </div>
           <div className="space-y-3">
@@ -931,33 +952,29 @@ export function BlockEditor({
       {block.type === "social_feed" ? (
         <>
           <div>
-            <label className={label} htmlFor="b-ch">
-              채널
-            </label>
+            <span className={label}>채널</span>
             {/* 틱톡·스레드는 **고를 수 없다.** 고르면 발행 시 빈 배열이 구워지고
                 (actions.ts publishLinkPage), 공개 렌더러가 빈 배열이면 블록을 통째로
                 숨긴다 — 편집기에는 멀쩡히 보이는데 공개 페이지에서 사라졌다. */}
-            <select id="b-ch" value={str("channel") || "instagram"} onChange={(e) => set("channel", e.target.value)} className={`mt-1.5 ${input}`}>
-              <option value="instagram">인스타그램</option>
-              <option value="tiktok" disabled>
-                틱톡 (준비 중)
-              </option>
-              <option value="threads" disabled>
-                스레드 (준비 중)
-              </option>
-            </select>
+            <PickCards
+              ariaLabel="채널"
+              value={str("channel") || "instagram"}
+              onChange={(v) => set("channel", v)}
+              options={[
+                { key: "instagram", label: "인스타그램", icon: <SnsIcon kind="instagram" className="size-4" /> },
+                { key: "tiktok", label: "틱톡", icon: <SnsIcon kind="tiktok" className="size-4" />, disabled: true, note: "준비 중" },
+                { key: "threads", label: "스레드", icon: <SnsIcon kind="threads" className="size-4" />, disabled: true, note: "준비 중" },
+              ]}
+            />
           </div>
           <div>
-            <label className={label} htmlFor="b-cnt">
-              개수
-            </label>
-            <select id="b-cnt" value={String(num("count", 6))} onChange={(e) => set("count", Number(e.target.value))} className={`mt-1.5 ${input}`}>
-              {[3, 6, 9].map((v) => (
-                <option key={v} value={v}>
-                  {v}개
-                </option>
-              ))}
-            </select>
+            <span className={label}>개수</span>
+            <PickChips
+              ariaLabel="개수"
+              value={String(num("count", 6))}
+              onChange={(v) => set("count", Number(v))}
+              options={[3, 6, 9].map((v) => ({ key: String(v), label: `${v}개` }))}
+            />
           </div>
           <p className="text-[12px] leading-snug text-fg-sub">
             <strong className="font-semibold">인스타그램을 연동해 두면</strong> 최근 게시물이
@@ -1166,22 +1183,28 @@ export function BlockEditor({
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className={label} htmlFor="b-epast">
-                지난 일정
-              </label>
-              <select id="b-epast" value={str("past") || "hide"} onChange={(e) => set("past", e.target.value)} className={`mt-1.5 ${input}`}>
-                <option value="hide">지나면 숨기기</option>
-                <option value="dim">흐리게 남기기</option>
-              </select>
+              <span className={label}>지난 일정</span>
+              <PickCards
+                ariaLabel="지난 일정"
+                value={str("past") || "hide"}
+                onChange={(v) => set("past", v)}
+                options={[
+                  { key: "hide", label: "숨기기", icon: <EyeOff className="size-4" /> },
+                  { key: "dim", label: "흐리게", icon: <Eye className="size-4 opacity-50" /> },
+                ]}
+              />
             </div>
             <div>
-              <label className={label} htmlFor="b-eics">
-                캘린더 담기 버튼
-              </label>
-              <select id="b-eics" value={d.ics === false ? "off" : "on"} onChange={(e) => set("ics", e.target.value === "on")} className={`mt-1.5 ${input}`}>
-                <option value="on">보이기</option>
-                <option value="off">숨기기</option>
-              </select>
+              <span className={label}>캘린더 담기 버튼</span>
+              <PickCards
+                ariaLabel="캘린더 담기 버튼"
+                value={d.ics === false ? "off" : "on"}
+                onChange={(v) => set("ics", v === "on")}
+                options={[
+                  { key: "on", label: "보이기", icon: <CalendarPlus className="size-4" /> },
+                  { key: "off", label: "숨기기", icon: <CalendarOff className="size-4" /> },
+                ]}
+              />
             </div>
           </div>
           {/* 예약받기가 아니라는 걸 분명히 — 기대가 어긋나면 "왜 신청이 안 들어오지"가 된다 */}

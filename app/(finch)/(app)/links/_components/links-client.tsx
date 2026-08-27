@@ -17,6 +17,8 @@ import {
   Image as ImageIcon,
   Inbox,
   Loader2,
+  AppWindow,
+  ExternalLink,
   Monitor,
   MousePointerClick,
   Pencil,
@@ -146,6 +148,7 @@ import { LINK_LANGS, LINK_TARGETS, type LinkPageSettings } from "@/lib/links/set
 import type { LinkGuestbookEntry, LinkLead, LinkPageSummary, LinkPageView, LinkSnapshotView, LinkStats } from "@/lib/links/types";
 import { BlockEditor, EDITOR_TITLE_ID } from "./block-editor";
 import { ImageField } from "./image-field";
+import { PickCards, PickChips } from "./option-picker";
 import { ImportLinks, ImportLinksBody } from "./import-links";
 import { BLOCK_ICON } from "./block-icons";
 import { PhonePreview, type CanvasEdit } from "./phone-preview";
@@ -3023,6 +3026,86 @@ function SlugStatusLine({ check }: { check: SlugCheck }) {
 }
 
 /** 유료 게이트 모달(2026-08-26 사장님 지시) — 배지 숨김·내 로고·미리보기 알약 × 가 연다 */
+/** SNS 종류 픽커(2026-08-27 «셀렉트 전부 리틀리처럼») — 90여 채널을 네이티브 드롭다운 대신
+    검색 되는 모달로 고른다. 그룹 구조는 유지, 현재 값은 어두운 칩으로 표시. */
+function SnsKindPicker({ value, onPick }: { value: string; onPick: (k: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+  /* autoFocus 속성은 ModalShell 의 이펙트(포커스 트랩 초기화)가 곧바로 덮어 무효가 되고
+     «이전 포커스» 기록까지 망친다(쏘넷 점검). 부모 이펙트는 자식(ModalShell) 이펙트 **뒤에**
+     돌므로 여기서 잡으면 트랩·복원과 공존한다. */
+  useEffect(() => {
+    if (open) searchRef.current?.focus();
+  }, [open]);
+  const entry = SNS_CATALOG.find((c) => c.key === value);
+  const query = q.trim().toLowerCase();
+  const groups = SNS_GROUPS.map((g) => ({
+    g,
+    list: SNS_CATALOG.filter((c) => c.group === g && (!query || c.label.toLowerCase().includes(query) || c.key.includes(query))),
+  })).filter((x) => x.list.length > 0);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setQ("");
+          setOpen(true);
+        }}
+        aria-haspopup="dialog"
+        aria-label={`SNS 종류 — 지금 ${entry?.label ?? value}`}
+        className="trans-state flex h-10 w-[9.5rem] shrink-0 items-center gap-1.5 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg hover:bg-tint-hover"
+      >
+        <span className="min-w-0 flex-1 truncate text-left">{entry?.label ?? value}</span>
+        <ChevronDown className="size-3.5 shrink-0 text-fg-faint" aria-hidden />
+      </button>
+      {open ? (
+        <ModalShell label="SNS 종류 고르기" title="SNS 종류" onClose={() => setOpen(false)} size="md">
+          <div className="space-y-4">
+            <input
+              ref={searchRef}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="채널 이름 검색"
+              aria-label="채널 검색"
+              className="h-10 w-full rounded-card border border-line bg-body px-3 text-[14px] focus:border-primary focus:outline-none"
+            />
+            {groups.length === 0 ? (
+              <p className="py-6 text-center text-[14px] text-fg-sub">찾는 채널이 없어요 — 「웹사이트」로 넣을 수 있어요.</p>
+            ) : null}
+            {groups.map(({ g, list }) => {
+              return (
+                <div key={g}>
+                  <p className="text-[11px] font-bold tracking-[0.08em] text-fg-sub">{g}</p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {list.map((k) => (
+                      <button
+                        key={k.key}
+                        type="button"
+                        aria-pressed={k.key === value}
+                        onClick={() => {
+                          onPick(k.key);
+                          setOpen(false);
+                        }}
+                        className={`trans-state flex items-center gap-1.5 rounded-chip border px-2.5 py-1.5 text-[12px] font-medium ${
+                          k.key === value ? "border-fg bg-fg text-body" : "border-line bg-body text-fg-sub hover:bg-tint-hover hover:text-fg"
+                        }`}
+                      >
+                        <SnsIcon kind={k.key} className="size-3.5" />
+                        {k.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </ModalShell>
+      ) : null}
+    </>
+  );
+}
+
 function UpgradeModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   return (
@@ -3819,23 +3902,8 @@ function ProfilePanel({
               <span className="flex size-9 shrink-0 items-center justify-center rounded-card bg-plate text-fg-sub" aria-hidden>
                 <SnsIcon kind={s.kind} className="size-4" />
               </span>
-              {/* 90여 채널 — 그룹별 optgroup(리틀리 흡수 4단계) */}
-              <select
-                value={s.kind}
-                onChange={(e) => onChange({ snsLinks: sns.map((x, j) => (j === i ? { ...x, kind: e.target.value } : x)) })}
-                aria-label={`SNS ${i + 1} 종류`}
-                className="h-10 w-[9.5rem] shrink-0 rounded-card border border-line bg-body px-2 text-[14px] text-fg focus:border-primary focus:outline-none"
-              >
-                {SNS_GROUPS.map((g) => (
-                  <optgroup key={g} label={g}>
-                    {SNS_CATALOG.filter((c) => c.group === g).map((k) => (
-                      <option key={k.key} value={k.key}>
-                        {k.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+              {/* 90여 채널 — 검색 되는 모달 픽커(2026-08-27 «셀렉트 전부 리틀리처럼») */}
+              <SnsKindPicker value={s.kind} onPick={(k) => onChange({ snsLinks: sns.map((x, j) => (j === i ? { ...x, kind: k } : x)) })} />
               <input
                 value={s.url}
                 onChange={(e) => onChange({ snsLinks: sns.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)) })}
@@ -5708,29 +5776,28 @@ function PageSettingsForm({
 
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className={label} htmlFor="ps-lang">
-            페이지 언어
-          </label>
-          <select id="ps-lang" value={st.lang} disabled={busy} onChange={(e) => onSettings({ lang: e.target.value as LinkPageSettings["lang"] })} className={`mt-1.5 ${input}`}>
-            {LINK_LANGS.map((l) => (
-              <option key={l.key} value={l.key}>
-                {l.label}
-              </option>
-            ))}
-          </select>
+          <span className={label}>페이지 언어</span>
+          <PickChips
+            ariaLabel="페이지 언어"
+            value={st.lang}
+            disabled={busy}
+            onChange={(v) => onSettings({ lang: v as LinkPageSettings["lang"] })}
+            options={LINK_LANGS.map((l) => ({ key: l.key, label: l.label }))}
+          />
           <p className="mt-1 text-[11px] text-fg-sub">폼 라벨·버튼 같은 고정 문구가 바뀌어요. 내가 쓴 글은 그대로예요.</p>
         </div>
         <div>
-          <label className={label} htmlFor="ps-target">
-            링크 열기
-          </label>
-          <select id="ps-target" value={st.target} disabled={busy} onChange={(e) => onSettings({ target: e.target.value as LinkPageSettings["target"] })} className={`mt-1.5 ${input}`}>
-            {LINK_TARGETS.map((t) => (
-              <option key={t.key} value={t.key}>
-                {t.label}
-              </option>
-            ))}
-          </select>
+          <span className={label}>링크 열기</span>
+          <PickCards
+            ariaLabel="링크 열기"
+            value={st.target}
+            disabled={busy}
+            onChange={(v) => onSettings({ target: v as LinkPageSettings["target"] })}
+            options={[
+              { key: "blank", label: "새 창", icon: <ExternalLink className="size-4" /> },
+              { key: "self", label: "현재 창", icon: <AppWindow className="size-4" /> },
+            ]}
+          />
           <p className="mt-1 text-[11px] text-fg-sub">{LINK_TARGETS.find((t) => t.key === st.target)?.hint}</p>
         </div>
       </div>
