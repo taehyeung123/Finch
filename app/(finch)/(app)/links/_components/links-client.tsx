@@ -437,14 +437,6 @@ export function LinksClient({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 언마운트 전용, ref 만 읽는다
   }, []);
-  /* 창 닫기·새로고침 — 저장이 미처 못 나간 순간만 브라우저 기본 경고를 건다(쏘넷 점검 high).
-     실시간 저장이라 평소엔 안 뜬다. */
-  useEffect(() => {
-    if (isDemo || (!editorDirty && !autoSaving)) return;
-    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [editorDirty, autoSaving, isDemo]);
   /* 편집 중인 블록의 **서버 값**이 바뀌면(↩ 내용 되돌리기·저장 후 서버 정규화) 미저장이 아닐 때만 초안을 다시 심는다 —
      안 그러면 되돌린 뒤에도 편집기·캔버스가 옛 내용을 보여주고 「저장」이 되돌린 값을 다시 쓴다(감사 C4).
      블록이 사라졌으면(삭제·추가 취소·템플릿) 편집 상태를 비운다 — 남겨두면 없는 편집기에 대한 "나갈까요?" 가 뜬다(감사 L8) */
@@ -501,9 +493,15 @@ export function LinksClient({
   const [customForm, setCustomForm] = useState<LinkThemeCustom>(page?.themeCustom ?? {});
   const customServerKey = stableJson(page?.themeCustom ?? {});
   const [prevCustomKey, setPrevCustomKey] = useState(customServerKey);
+  /* 방금 자동 저장으로 보낸 값(새니타이즈 후) — 그 값이 서버에서 돌아왔을 때
+     그 사이의 편집을 덮지 않기 위한 비교 기준 */
+  const lastSentCustom = useRef<string | null>(null);
   if (customServerKey !== prevCustomKey) {
     setPrevCustomKey(customServerKey);
-    setCustomForm(page?.themeCustom ?? {});
+    /* 우리가 보낸 값이 돌아온 것이고 그 사이 더 편집했다면 폼을 덮지 않는다 — 다음 자동 저장이 따라잡는다 */
+    if (!(lastSentCustom.current === customServerKey && stableJson(customForm) !== customServerKey)) {
+      setCustomForm(page?.themeCustom ?? {});
+    }
   }
   const customDirty = stableJson(customForm) !== customServerKey;
   /* 마지막 「꾸미기 저장」이 실패했는가 — customDirty 만 보면 실패해서 되돌아온 상태를
@@ -525,6 +523,69 @@ export function LinksClient({
       return next as LinkThemeCustom;
     });
   }
+  /* 꾸미기 실시간 저장(2026-08-27 «꾸미기 저장 왜 눌러야 반영되냐») — 블록 autosaveChain 과
+     같은 문법의 **전용 체인**. run() 은 전역 busy 베일로 화면을 잠그고 겹치면 호출을 삼키므로
+     여기 쓰면 안 된다(쏘넷 점검 high — 블록 자동 저장이 run() 을 안 쓰는 이유와 동일).
+     0.8초 조용하면 보낸다. 실패는 5초 간격으로 **계속** 재시도 — 횟수 상한을 두면 일시 장애
+     (첫 진입 503 등 ~10초 hiccup) 뒤 영구 정지가 된다(쏘넷 점검 high). */
+  const customChain = useRef<Promise<unknown>>(Promise.resolve());
+  const [customSaving, setCustomSaving] = useState(false);
+  const [customFailTick, setCustomFailTick] = useState(0);
+  const customFormKey = stableJson(customForm);
+  /* 자유 입력 주소(bgImage·logoImage)가 관문을 못 넘는 동안은 보류 — 패널 상태칩이
+     «저장 중» 대신 진짜 이유를 말한다(쏘넷 점검: 조용한 보류는 유실로 읽힌다) */
+  const customClean = sanitizeThemeCustom(customForm);
+  const customHold = !!((customForm.bgImage && !customClean?.bgImage) || (customForm.logoImage && !customClean?.logoImage));
+  useEffect(() => {
+    if (!page || isDemo || !customDirty) return;
+    const payload = customForm;
+    const clean = sanitizeThemeCustom(payload);
+    if ((payload.bgImage && !clean?.bgImage) || (payload.logoImage && !clean?.logoImage)) return;
+    const timer = window.setTimeout(() => {
+      lastSentCustom.current = stableJson(clean ?? {});
+      setCustomSaving(true);
+      customChain.current = customChain.current
+        .catch(() => {})
+        .then(() => updateLinkThemeCustom(payload, page.id))
+        .then(
+          (res) => {
+            if (res.ok) setCustomSaveFailed(false);
+            else {
+              setCustomSaveFailed(true);
+              setCustomFailTick((t) => t + 1);
+            }
+          },
+          () => {
+            setCustomSaveFailed(true);
+            setCustomFailTick((t) => t + 1);
+          },
+        )
+        .finally(() => setCustomSaving(false));
+    }, customSaveFailed ? 5000 : 800);
+    return () => window.clearTimeout(timer);
+    /* customFormKey 가 내용 변화를 대표한다 — customForm 객체 자체는 렌더마다 새것 */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customDirty, customFormKey, customServerKey, customFailTick, isDemo]);
+  /* 언마운트 플러시 — 디바운스 창·보류 중 사이드바로 나가면 마지막 꾸미기가 사라진다(쏘넷 점검).
+     관문에 걸린 주소만 빼고(clean) 보낸다 — 색·버튼 등 유효한 편집은 살린다. */
+  const customFlushRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    customFlushRef.current = () => {
+      if (!page || isDemo || !customDirty) return;
+      void updateLinkThemeCustom(sanitizeThemeCustom(customForm) ?? {}, page.id).catch(() => {});
+    };
+  });
+  useEffect(() => {
+    return () => customFlushRef.current();
+  }, []);
+  /* 창 닫기·새로고침 — 저장이 미처 못 나간 순간만 브라우저 기본 경고를 건다(쏘넷 점검 high).
+     블록 초안뿐 아니라 꾸미기 레인(디바운스·왕복·재시도·주소 보류)도 지킨다. */
+  useEffect(() => {
+    if (isDemo || (!editorDirty && !autoSaving && !customDirty && !customSaving)) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [editorDirty, autoSaving, customDirty, customSaving, isDemo]);
   /* 통계 — 편집 탭이 아니라 상단 바에서 여닫는다("만드는 창에 통계가 왜 있냐",
      2026-08-20). 만들기와 성과 보기는 다른 일이다 — 링크팜도 통계는 빌더 밖이다. */
 
@@ -1456,7 +1517,7 @@ export function LinksClient({
           <TopBar
             page={page}
             unsaved={anyDirty}
-            saving={!isDemo && (autoSaving || editorDirty)}
+            saving={!isDemo && (autoSaving || editorDirty || customSaving || customDirty)}
             autoPublishing={autoPublishing}
             pages={pages}
             pageLimit={pageLimit}
@@ -1677,31 +1738,11 @@ export function LinksClient({
                 custom={customForm}
                 customDirty={customDirty}
                 customSaveFailed={customSaveFailed}
+                customHold={customHold}
+                demo={isDemo}
                 busy={busy}
                 onCustomChange={patchCustom}
                 onCustomReset={() => setCustomForm({})}
-                onCustomSave={() => {
-                  /* 서버 관문은 틀린 값을 **조용히** 떨군다 — 그러면 저장 직후 미리보기에
-                     있던 배경 이미지가 말없이 사라진다. 보내기 전에 같은 관문을 태워
-                     떨어질 값이 있으면 여기서 알린다(색 인풋·칩은 틀릴 수 없고 주소만 자유 입력). */
-                  const clean = sanitizeThemeCustom(customForm);
-                  if (customForm.bgImage && !clean?.bgImage) {
-                    setError("배경 이미지 주소는 http(s)로 시작해야 하고 공백·따옴표·괄호·역슬래시가 없어야 해요.");
-                    setCustomSaveFailed(true);
-                    return;
-                  }
-                  /* 로고도 같은 관문(IMG_URL)을 탄다 — 검사 없이 보내면 저장 「성공」 후 로고만 말없이 사라진다(감사4) */
-                  if (customForm.logoImage && !clean?.logoImage) {
-                    setError("로고 이미지 주소는 http(s)로 시작해야 하고 공백·따옴표·괄호·역슬래시가 없어야 해요.");
-                    setCustomSaveFailed(true);
-                    return;
-                  }
-                  run(
-                    () => updateLinkThemeCustom(customForm, page.id),
-                    () => setCustomSaveFailed(false),
-                    () => setCustomSaveFailed(true),
-                  );
-                }}
                 current={liveTheme}
                 /* 누르는 즉시 칠한다 — 로딩·비활성 없음. 실패하면 트랜지션 종료와 함께
                    서버 값으로 자동 복귀한다(2026-08-20 "굳이 로딩 걸어야 되나") */
@@ -3946,18 +3987,23 @@ function ThemePanel({
   custom,
   customDirty,
   customSaveFailed = false,
+  customHold = false,
+  demo = false,
   busy,
   hasSubscribeBlock,
   onPick,
   onCustomChange,
   onCustomReset,
-  onCustomSave,
 }: {
   current: string;
   custom: LinkThemeCustom;
   customDirty: boolean;
   /** 마지막 저장이 실패했는가 — «저장됨»이라고 말하지 않기 위해 필요하다 */
   customSaveFailed?: boolean;
+  /** 이미지 주소가 관문을 못 넘어 자동 저장이 보류 중인가 — 이유를 말해준다 */
+  customHold?: boolean;
+  /** 데모 모드 — 저장이 없으므로 상태칩을 접는다 */
+  demo?: boolean;
   busy: boolean;
   /** 구독신청 블록이 켜져 있는가 — 상단 구독 버튼은 그 블록으로 스크롤한다 */
   hasSubscribeBlock: boolean;
@@ -3966,7 +4012,6 @@ function ThemePanel({
   paid: boolean;
   onUpgrade: () => void;
   onCustomReset: () => void;
-  onCustomSave: () => void;
 }) {
   const groups = useMemo(() => {
     const m = new Map<string, typeof LINK_THEMES>();
@@ -4002,7 +4047,7 @@ function ThemePanel({
   /* 「사진」은 아직 사진이 없어도 눌린 상태여야 한다 — 예전엔 스크롤만 하고 칩이 안 눌려
      3칸 모드 스위치 중 둘만 진짜였다. 저장된 사진이 있으면 bgMode 가 알아서 image 다 */
   const [wantsImage, setWantsImage] = useState(false);
-  const bgTab: "solid" | "gradient" | "image" | "wash" = custom.bgWash ? "wash" : custom.bgImage || wantsImage ? "image" : bgMode;
+  const bgTab: "solid" | "gradient" | "image" | "wash" | "pastel" = custom.bgWash ? "wash" : custom.bgPastel ? "pastel" : custom.bgImage || wantsImage ? "image" : bgMode;
   /* 스와치용 — 지금 설정에 한 값만 바꿔 **실제 발행본과 같은 CSS 변수**를 받아온다.
      8/14/20px·color-mix 문자열을 패널에 복제하지 않으므로 themeVars 가 단일 출처로 남는다 */
   const varsFor = (patch: Partial<LinkThemeCustom>) => themeVars(preset, { ...custom, ...patch });
@@ -4028,17 +4073,21 @@ function ThemePanel({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-[17px] font-semibold">디자인</h3>
-          <p className="mt-0.5 text-[14px] text-fg-sub">고르는 즉시 오른쪽 미리보기에 비쳐요. 테마는 바로 저장되고, 직접 꾸미기는 아래 「저장」으로 굳어요.</p>
+          <p className="mt-0.5 text-[14px] text-fg-sub">고르는 즉시 오른쪽 미리보기에 비치고, 잠시 뒤 저절로 저장돼요.</p>
         </div>
         <div className="flex items-center gap-2">
+          {demo ? null : customSaveFailed ? (
+            <span className="text-[12px] font-medium text-negative">저장이 늦어지고 있어요 — 자동 재시도 중</span>
+          ) : customHold ? (
+            <span className="text-[12px] font-medium text-negative">이미지 주소를 확인해 주세요 — http(s):// 로 시작해야 저장돼요</span>
+          ) : customDirty ? (
+            <span className="text-[12px] text-fg-sub">저장 중…</span>
+          ) : null}
           {hasCustom ? (
             <Button variant="ghost" size="sm" onClick={onCustomReset} disabled={busy}>
               프리셋으로 되돌리기
             </Button>
           ) : null}
-          <Button size="sm" disabled={busy || !customDirty} onClick={onCustomSave}>
-            {customSaveFailed ? "다시 저장" : customDirty ? "꾸미기 저장" : "저장됨"}
-          </Button>
         </div>
       </div>
 
@@ -4095,7 +4144,7 @@ function ThemePanel({
         ))}
       </DSection>
 
-      <DSection icon={ImageIcon} tint="bg-tint-blue text-tint-blue-ink" title="배경" hint="단색·그라데이션·사진·프로필 워시. 사진엔 필터를 덮어 글자를 살려요.">
+      <DSection icon={ImageIcon} tint="bg-tint-blue text-tint-blue-ink" title="배경" hint="단색·그라데이션·사진·워시·파스텔. 사진엔 필터를 덮어 글자를 살려요.">
         <div className="flex flex-wrap gap-1.5">
           <button
             type="button"
@@ -4103,7 +4152,7 @@ function ThemePanel({
             aria-pressed={bgTab === "solid"}
             onClick={() => {
               setWantsImage(false);
-              if (bgMode !== "solid" || custom.bgWash) onCustomChange({ bg2: undefined, bgImage: undefined, bgWash: undefined, bg: custom.bg ?? preset.bg });
+              if (bgMode !== "solid" || custom.bgWash || custom.bgPastel) onCustomChange({ bg2: undefined, bgImage: undefined, bgWash: undefined, bgPastel: undefined, bg: custom.bg ?? preset.bg });
             }}
           >
             단색
@@ -4115,7 +4164,7 @@ function ThemePanel({
             /* 끝색 기본값은 배경에 강조색을 살짝 섞은 색 — 강조색 그대로면 기본·다크 프리셋에서 글자색과 같아 아래쪽 제목이 사라진다(감사2 U7) */
             onClick={() => {
               setWantsImage(false);
-              if (bgMode !== "gradient" || custom.bgWash) onCustomChange({ bgImage: undefined, bgWash: undefined, bg2: custom.bg2 ?? preset.bg2 ?? mixHex(custom.bg ?? preset.bg, custom.accent ?? preset.accent, 0.22) });
+              if (bgMode !== "gradient" || custom.bgWash || custom.bgPastel) onCustomChange({ bgImage: undefined, bgWash: undefined, bgPastel: undefined, bg2: custom.bg2 ?? preset.bg2 ?? mixHex(custom.bg ?? preset.bg, custom.accent ?? preset.accent, 0.22) });
             }}
           >
             그라데이션
@@ -4126,7 +4175,7 @@ function ThemePanel({
             aria-pressed={bgTab === "image"}
             onClick={() => {
               setWantsImage(true);
-              if (custom.bgWash) onCustomChange({ bgWash: undefined });
+              if (custom.bgWash || custom.bgPastel) onCustomChange({ bgWash: undefined, bgPastel: undefined });
             }}
           >
             사진
@@ -4137,10 +4186,21 @@ function ThemePanel({
             aria-pressed={bgTab === "wash"}
             onClick={() => {
               setWantsImage(false);
-              if (!custom.bgWash) onCustomChange({ bgWash: true });
+              if (!custom.bgWash) onCustomChange({ bgWash: true, bgPastel: undefined });
             }}
           >
             프로필 워시
+          </button>
+          <button
+            type="button"
+            className={chip(bgTab === "pastel")}
+            aria-pressed={bgTab === "pastel"}
+            onClick={() => {
+              setWantsImage(false);
+              if (!custom.bgPastel) onCustomChange({ bgPastel: true, bgWash: undefined });
+            }}
+          >
+            파스텔
           </button>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -4155,6 +4215,11 @@ function ThemePanel({
         {bgTab === "wash" ? (
           <p className="text-[12px] leading-[1.6] text-fg-sub">
             프로필 사진을 크게 흐려 은은한 파스텔처럼 깔아요 — 사진 색과 저절로 어울려요. 프로필 사진이 없으면 배경색만 보여요.
+          </p>
+        ) : null}
+        {bgTab === "pastel" ? (
+          <p className="text-[12px] leading-[1.6] text-fg-sub">
+            군데군데 파스텔을 칠한 듯한 은은한 배경 — 버튼색을 살짝 섞어 내 페이지 톤이 돼요.
           </p>
         ) : null}
         {bgTab === "image" ? (
@@ -4532,18 +4597,11 @@ function ThemePanel({
         </div>
       </DSection>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
-        <p className={`text-[14px] ${customSaveFailed ? "text-negative" : "text-fg-sub"}`}>
-          {customSaveFailed
-            ? "저장하지 못했어요 — 위 안내를 확인하고 다시 눌러 주세요."
-            : customDirty
-              ? "저장 안 한 변경이 있어요 — 미리보기엔 보이지만 「저장」해야 실제로 반영돼요."
-              : "모두 저장됐어요."}
+      {customSaveFailed ? (
+        <p className="border-t border-line pt-5 text-[14px] text-negative">
+          저장이 늦어지고 있어요 — 연결이 돌아오면 자동으로 저장돼요. 이 화면을 닫으면 마지막 변경이 빠질 수 있어요.
         </p>
-        <Button disabled={busy || !customDirty} onClick={onCustomSave}>
-          {customSaveFailed ? "다시 저장" : "꾸미기 저장"}
-        </Button>
-      </div>
+      ) : null}
     </div>
   );
 }

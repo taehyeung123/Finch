@@ -264,6 +264,7 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
   /* 프로필 워시 — 아바타를 크게 흐려 은은한 파스텔 배경으로(링크트리 실측 2026-08-27:
      110% 확대·blur 50px·25% + 노이즈 4% overlay). 사진이 없으면 배경색만 남는다. */
   const wash = themeCustom?.bgWash && snap.avatarPath ? snap.avatarPath.replace(/[\\"]/g, (m) => `\\${m}`) : null;
+  const pastel = !!themeCustom?.bgPastel;
   const logoEl = logoImage ? (
     <div className={`flex justify-center ${logoPos === "top" ? "mb-5" : "mt-10 pb-6"} ${split ? (logoPos === "top" ? "lg:col-span-2" : "lg:col-start-2") : ""}`}>
       {/* eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL */}
@@ -315,10 +316,10 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
         style={{ backgroundImage: "var(--lp-bg-image)", filter: "blur(var(--lp-bg-blur))" }}
       />
       {wash ? (
-        <>
-          <div aria-hidden className="pointer-events-none fixed inset-[-5%] -z-20 bg-cover bg-center opacity-25 blur-[50px]" style={{ backgroundImage: `url("${wash}")` }} />
-          <div aria-hidden className="pointer-events-none fixed inset-0 -z-20 opacity-[0.04] mix-blend-overlay" style={{ backgroundImage: `url("${WASH_NOISE}")`, backgroundSize: "512px 512px" }} />
-        </>
+        <div aria-hidden className="pointer-events-none fixed inset-[-5%] -z-20 bg-cover bg-center opacity-25 blur-[50px]" style={{ backgroundImage: `url("${wash}")` }} />
+      ) : null}
+      {wash || pastel ? (
+        <div aria-hidden className="pointer-events-none fixed inset-0 -z-20 opacity-[0.04] mix-blend-overlay" style={{ backgroundImage: `url("${WASH_NOISE}")`, backgroundSize: "512px 512px" }} />
       ) : null}
       {/* PC 무대(2026-08-26 사장님 지시 «PC 레이아웃 전부 조정») — 링크인바이오 표준 문법의 재구현:
           넓은 화면에서는 테마 배경을 그대로 펼치지 않고, 흐리고 어둡게 눌러 «무대»로 깔고
@@ -353,25 +354,39 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 -z-10 hidden bg-cover bg-center lg:block"
-          style={{ backgroundImage: "var(--lp-bg-image)", filter: "blur(var(--lp-bg-blur))", clipPath: "inset(0 round 28px)" }}
+          style={{ backgroundImage: pastel ? "none" : "var(--lp-bg-image)", filter: "blur(var(--lp-bg-blur))", clipPath: "inset(0 round 28px)" }}
         />
+        {pastel ? (
+          /* 파스텔 메시는 %-반경이라 콘텐츠 전체 높이 겹에 그리면 방울이 세로로 풀린다(쏘넷 점검).
+             뷰포트 높이 겹에 그리고 아래로는 마스크로 흘려보낸다 — 모바일·미리보기와 같은 모습. */
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 -z-10 hidden h-[100lvh] max-h-full lg:block"
+            style={{
+              backgroundImage: "var(--lp-bg-image)",
+              clipPath: "inset(0 round 28px)",
+              maskImage: "linear-gradient(to bottom, black 75%, transparent)",
+              WebkitMaskImage: "linear-gradient(to bottom, black 75%, transparent)",
+            }}
+          />
+        ) : null}
         {wash ? (
           /* PC 캔버스 안에도 같은 워시 — 무대(-z-10 아래 fixed 겹)는 검게 눌려 배경 무드만 남고,
              또렷한 워시는 캔버스가 든다. 겹을 32px 키운 뒤 clip 으로 되잘라야 가장자리에서
              블러가 투명과 섞여 빠지지 않고(모바일 -5% 과확장과 같은 기법), 노이즈도 모바일과
              동일하게 한 겹 — 넓은 모니터에서 밴딩이 그대로 드러난다(쏘넷 점검). */
-          <>
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -inset-8 -z-10 hidden bg-cover bg-center opacity-25 lg:block"
-              style={{ backgroundImage: `url("${wash}")`, filter: "blur(50px)", clipPath: "inset(32px round 28px)" }}
-            />
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-0 -z-10 hidden opacity-[0.04] mix-blend-overlay lg:block"
-              style={{ backgroundImage: `url("${WASH_NOISE}")`, backgroundSize: "512px 512px", clipPath: "inset(0 round 28px)" }}
-            />
-          </>
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -inset-8 -z-10 hidden bg-cover bg-center opacity-25 lg:block"
+            style={{ backgroundImage: `url("${wash}")`, filter: "blur(50px)", clipPath: "inset(32px round 28px)" }}
+          />
+        ) : null}
+        {wash || pastel ? (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 -z-10 hidden opacity-[0.04] mix-blend-overlay lg:block"
+            style={{ backgroundImage: `url("${WASH_NOISE}")`, backgroundSize: "512px 512px", clipPath: "inset(0 round 28px)" }}
+          />
         ) : null}
         {/* 상단 메뉴 줄 — 스크롤해도 붙어 있는 제목 + 공유/구독(리틀리 「상단 메뉴」). 없으면 버튼은 모서리에 떠 있는다 */}
         {topbar ? (

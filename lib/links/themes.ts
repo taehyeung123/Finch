@@ -55,6 +55,8 @@ export interface LinkThemeCustom {
   /** 프로필 워시 — 프로필 사진을 크게 흐려 파스텔처럼 까는 배경(링크트리 실측 재구현 2026-08-27).
       켜면 bgImage 는 렌더에서만 접힌다(값은 보존 — 끄면 그대로 돌아온다) */
   bgWash?: boolean;
+  /** 파스텔 메시 — 군데군데 파스텔을 칠한 듯한 색 방울 배경(2026-08-27 지시). 접기 규칙은 워시와 동일 */
+  bgPastel?: boolean;
   accent?: string;
   card?: string;
   fg?: string;
@@ -313,6 +315,7 @@ export function sanitizeThemeCustom(input: unknown): LinkThemeCustom | null {
   for (const k of ["bg", "bg2", "accent", "card", "fg"] as const) if (isHex(i[k])) out[k] = (i[k] as string).toUpperCase();
   if (typeof i.bgImage === "string" && IMG_URL.test(i.bgImage)) out.bgImage = i.bgImage;
   if (i.bgWash === true) out.bgWash = true;
+  if (i.bgPastel === true) out.bgPastel = true;
   if (CUSTOM_RADIUS.some((r) => r.key === i.radius)) out.radius = i.radius as LinkThemeCustom["radius"];
   if (CUSTOM_BUTTONS.some((b) => b.key === i.button)) out.button = i.button as LinkThemeCustom["button"];
   if (LINK_FONTS.some((f) => f.key === i.font)) out.font = i.font as string;
@@ -560,7 +563,7 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
   /* 배경: 이미지 > 그라데이션 > 단색. 사용자가 단색을 새로 골랐으면 프리셋 그라데이션은 버린다.
      프로필 워시가 켜지면 그라데이션도 사진처럼 렌더에서만 접는다 — 안 접으면 워시 밑에 옛 끝색이
      남는데 워시 탭엔 그 입력이 없어 지울 수도 없다(쏘넷 점검) */
-  const bg2 = c.bgWash ? undefined : (c.bg2 ?? (c.bg ? undefined : t.bg2));
+  const bg2 = c.bgWash || c.bgPastel ? undefined : (c.bg2 ?? (c.bg ? undefined : t.bg2));
   /* 배경 필터 — 이미지 위에 덮는 반투명 겹. 그라데이션으로 쌓아 같은 변수 하나로 공개·미리보기가 같다.
      블러는 공개 페이지가 별도 레이어에서만 건다(--lp-bg-blur). */
   /* 배경 사진의 **기본 필터**(2026-08-24 비평) — 없음이 기본이면 사진 위에 글자가 그대로 얹혀
@@ -569,16 +572,32 @@ export function themeVars(t: LinkTheme, custom?: LinkThemeCustom | null): Record
   const autoFilter = luminance(HEX.test(fg) ? fg : "#000000") > 0.5 ? "dark" : "light";
   /* 프로필 워시가 켜지면 저장된 배경 사진·필터는 렌더에서만 접는다 — 워시 겹은 아바타 주소가
      필요해 페이지 컴포넌트가 따로 깐다(여기는 스냅샷을 모른다) */
-  const bgPhoto = c.bgWash ? undefined : c.bgImage;
+  const bgPhoto = c.bgWash || c.bgPastel ? undefined : c.bgImage;
   const filter = bgPhoto ? (c.bgFilter ?? autoFilter) : "none";
   const overlay =
     filter === "light" ? "rgba(255,255,255,.35)" : filter === "dark" ? "rgba(0,0,0,.42)" : filter === "blur" ? "rgba(255,255,255,.22)" : filter === "darkBlur" ? "rgba(0,0,0,.42)" : null;
   /* url("…") 안에 들어간다 — 관문(IMG_URL)이 역슬래시·따옴표를 막지만 직렬화도 따로 안전하게(감사2 C5) */
-  const bgImage = bgPhoto
-    ? `${overlay ? `linear-gradient(${overlay}, ${overlay}), ` : ""}url("${bgPhoto.replace(/[\\"]/g, (m) => `\\${m}`)}")`
-    : bg2
-      ? `linear-gradient(160deg, ${bg}, ${bg2})`
-      : "none";
+  /* 파스텔 메시(2026-08-27 «군데군데 파스텔 칠한 것처럼») — 모서리마다 은은한 색 방울 4개.
+     버튼색을 살짝 섞어 페이지마다 자기 톤이 된다. CSS 변수 하나로 나가므로
+     모바일 고정 겹·PC 캔버스·미리보기가 자동으로 같은 모습이다. */
+  /* 방울은 55% 알파 — 불투명이면 다크 프리셋(어두운 지면·흰 글자)에서 밝은 얼룩이 글자를
+     지운다(쏘넷 점검: 대비 1.1:1). 알파면 어느 지면에서든 지면색과 섞여 «은은하게» 남는다. */
+  const pastelDrop = (mix: string) => `color-mix(in srgb, ${mix} 55%, transparent)`;
+  const pastelMesh = c.bgPastel
+    ? [
+        `radial-gradient(42% 36% at 12% 10%, ${pastelDrop(`color-mix(in srgb, ${accent} 16%, #FFE1E7)`)}, transparent 72%)`,
+        `radial-gradient(46% 40% at 88% 18%, ${pastelDrop(`color-mix(in srgb, ${accent} 10%, #E3E9FF)`)}, transparent 72%)`,
+        `radial-gradient(50% 44% at 20% 88%, ${pastelDrop(`color-mix(in srgb, ${accent} 12%, #FFECD9)`)}, transparent 74%)`,
+        `radial-gradient(44% 40% at 85% 78%, ${pastelDrop(`color-mix(in srgb, ${accent} 10%, #DFF5EC)`)}, transparent 72%)`,
+      ].join(", ")
+    : null;
+  const bgImage = pastelMesh
+    ? pastelMesh
+    : bgPhoto
+      ? `${overlay ? `linear-gradient(${overlay}, ${overlay}), ` : ""}url("${bgPhoto.replace(/[\\"]/g, (m) => `\\${m}`)}")`
+      : bg2
+        ? `linear-gradient(160deg, ${bg}, ${bg2})`
+        : "none";
   const bgBlur = filter === "blur" || filter === "darkBlur" ? "10px" : "0px";
   const font = LINK_FONTS.find((f) => f.key === c.font)?.family ?? "inherit";
   /* 그림자 — 검정 그림자는 **어두운 지면에서 보이지 않는다**. 「진하게」를 골라도 아무 변화가 없어

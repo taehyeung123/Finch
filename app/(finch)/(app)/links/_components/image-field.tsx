@@ -90,8 +90,12 @@ export function ImageField({
   /** 원형 미리보기 — 실제로 원으로 보이는 자리(프로필 사진)와 모양을 맞춘다 */
   round?: boolean;
 }) {
-  /* 세 상태(조정 중·값 있음·빈 칸)가 같은 크기·모양이어야 한 자리처럼 읽힌다 */
-  const boxCls = `${maxW ?? ""} ${round ? "rounded-full" : "rounded-card"} ${aspect}`.trim();
+  /* 세 상태(조정 중·값 있음·빈 칸)가 같은 크기·모양이어야 한 자리처럼 읽힌다.
+     기본 상한 200px(2026-08-27 «사진 넣는 칸이 다 너무 크다») — 넓어야 하는 칸만 maxW 로 푼다.
+     크롭 조정 중에는 280px: 어디를 남길지 고르는 화면이라 조금 더 크게. */
+  const cap = maxW ?? "max-w-[200px]";
+  const boxCls = `${cap} ${round ? "rounded-full" : "rounded-card"} ${aspect}`.trim();
+  const cropBoxCls = `${maxW ?? "max-w-[280px]"} ${round ? "rounded-full" : "rounded-card"} ${aspect}`.trim();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -262,7 +266,7 @@ export function ImageField({
 
       {pending ? (
         <div className="mt-1.5 space-y-2">
-          <div className={`relative overflow-hidden border border-line bg-plate ${boxCls}`}>
+          <div className={`relative overflow-hidden border border-line bg-plate ${cropBoxCls}`}>
             {/* eslint-disable-next-line @next/next/no-img-element -- 업로드 전 로컬 data URL */}
             <img
               src={pending.dataUrl}
@@ -307,7 +311,7 @@ export function ImageField({
         <div className="mt-1.5 space-y-2">
           {/* 제거 버튼은 **클리핑 밖**에 둔다 — 원형 미리보기 안에 넣으면 원 모서리에 잘려
               검은 조각처럼 보인다(2026-08-24). 사각형은 안쪽 여백에 그대로. */}
-          <div className={`relative ${maxW ?? ""}`}>
+          <div className={`relative ${cap}`}>
             <div className={`relative overflow-hidden border border-line bg-plate ${boxCls}`}>
               {/* eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL·외부 URL 혼용 */}
               <img src={value} alt="" className="size-full object-cover" />
@@ -331,17 +335,17 @@ export function ImageField({
           /* busy 중엔 로더가 내용이라 흐리게 하지 않는다 */
           /* w-full 은 항상 둔다 — 빼면 button 이 내용 폭(fit-content)으로 쪼그라들어
              사진이 있을 때(152px)와 없을 때 칸 크기가 달라진다. 상한은 max-w 가 잡는다 */
-          className={`trans-state mt-1.5 flex w-full flex-col items-center justify-center gap-1.5 border border-dashed border-line bg-plate text-fg-sub hover:border-primary hover:text-fg ${boxCls}`}
+          className={`trans-state mt-1.5 flex w-full items-center justify-center gap-1.5 border border-dashed border-line bg-plate text-fg-sub hover:border-primary hover:text-fg ${boxCls}`}
         >
           {busy ? (
             /* 올리는 동안은 핀치 로더 — "로딩 중이면 로딩 화면" (2026-08-22 지시) */
             <FinchLoader label="올리는 중…" />
           ) : (
             <>
+              {/* 한 줄 구성 — 4:1(내 로고)·3:1(배경) 칸은 200px 폭에서 높이가 50~67px 뿐이라
+                  세로 쌓기가 비율을 밀어 올렸다(쏘넷 점검). 형식 안내는 각 칸의 hint 가 말한다. */}
               <ImagePlus className="size-5" aria-hidden />
               <span className="text-[14px] font-medium">이미지 올리기</span>
-              {/* 작은 원형 칸(프로필 사진)에서는 형식 문구가 원 밖으로 넘친다 — 아래 hint 가 대신 말한다 */}
-              {maxW ? null : <span className="text-[11px]">고화질 OK — 자동 최적화 · GIF 3MB</span>}
             </>
           )}
         </button>

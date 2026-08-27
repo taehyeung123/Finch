@@ -359,10 +359,10 @@ export function PhonePreview({
           />
           {page.themeCustom?.bgWash && page.avatarPath ? (
             /* 프로필 워시 — 공개 페이지와 같은 겹(blur 는 프레임 축척에 맞춰 40px) */
-            <>
-              <div aria-hidden className="pointer-events-none absolute -inset-4 -z-10 bg-cover bg-center opacity-25 blur-[40px]" style={{ backgroundImage: `url("${page.avatarPath.replace(/[\\"]/g, (m) => `\\${m}`)}")` }} />
-              <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 opacity-[0.04] mix-blend-overlay" style={{ backgroundImage: `url("${WASH_NOISE}")`, backgroundSize: "512px 512px" }} />
-            </>
+            <div aria-hidden className="pointer-events-none absolute -inset-4 -z-10 bg-cover bg-center opacity-25 blur-[40px]" style={{ backgroundImage: `url("${page.avatarPath.replace(/[\\"]/g, (m) => `\\${m}`)}")` }} />
+          ) : null}
+          {(page.themeCustom?.bgWash && page.avatarPath) || page.themeCustom?.bgPastel ? (
+            <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 opacity-[0.04] mix-blend-overlay" style={{ backgroundImage: `url("${WASH_NOISE}")`, backgroundSize: "512px 512px" }} />
           ) : null}
         <div
           className={cn("relative overflow-y-auto px-5 pb-10 pt-8", frame === "device" ? "min-h-0 flex-1" : "max-h-[680px]")}
@@ -776,9 +776,23 @@ export function PhonePreview({
           ) : null}
           {/* 플로팅 알약 목업 — 공개 페이지 FinchPill 과 같은 모양(강조 CTA 있으면 공개처럼 생략).
               함께하세요 문구는 2026-08-26 2차 지시로 제거 — 알약 하나만. */}
-          {page.themeCustom?.badge === "hide" || page.themeCustom?.logoImage || emphasized ? null : (
-            /* 하단 스크림 포함 — 공개 페이지 FinchPill 의 모바일 그라데이션과 같은 인상 */
-            <div className="pointer-events-none sticky bottom-0 z-10 -mx-5 mt-4 flex justify-center bg-gradient-to-t from-black/60 to-transparent px-5 pb-3 pt-24">
+          {/* 강조 블록 하단 고정 CTA — 공개 페이지와 같은 모양·같은 자리(흐름 맨 뒤, 프레임 안 sticky) */}
+          {emphasized ? (
+            <div className="pointer-events-none sticky bottom-3 z-10 mt-4 flex justify-center">
+              <span className="inline-flex min-h-[44px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-5 text-[14px] font-bold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)]">
+                {emphasized.cta.label}
+              </span>
+            </div>
+          ) : null}
+        </div>
+        {/* 알약+스크림 — 스크롤 흐름이 아니라 **프레임 바닥에 고정**(공개 FinchPill fixed 와 동형).
+            흐름 안 sticky 는 콘텐츠가 짧으면 중간에 뜨고 띠 경계가 그대로 보였다(2026-08-27 지시). */}
+        {frame !== "device" || page.themeCustom?.badge === "hide" || page.themeCustom?.logoImage || emphasized ? null : (
+          /* 기기 프레임 전용 — fluid(템플릿 모달)는 래퍼 높이가 콘텐츠로 붕괴해 스크림이
+             마지막 블록 위에 눌어붙는다(쏘넷 점검). 거기선 브랜딩 목업이 필요 없다. */
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
+            <div aria-hidden className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/60 to-transparent" />
+            <div className="relative flex justify-center pb-3">
               <span className="flex items-center gap-1 rounded-full bg-white py-1 pl-3 pr-1.5 text-neutral-900 shadow-[0_10px_24px_-8px_rgba(0,0,0,0.45)]">
                 <FinchMark className="size-3.5 text-primary" aria-hidden />
                 <span className="text-[11px] font-bold">나만의 페이지 만들기</span>
@@ -791,17 +805,8 @@ export function PhonePreview({
                 )}
               </span>
             </div>
-          )}
-
-          {/* 강조 블록 하단 고정 CTA — 공개 페이지와 같은 모양·같은 자리(흐름 맨 뒤, 프레임 안 sticky) */}
-          {emphasized ? (
-            <div className="pointer-events-none sticky bottom-3 z-10 mt-4 flex justify-center">
-              <span className="inline-flex min-h-[44px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-5 text-[14px] font-bold text-[var(--lp-on-accent)] shadow-[var(--lp-shadow)]">
-                {emphasized.cta.label}
-              </span>
-            </div>
-          ) : null}
-        </div>
+          </div>
+        )}
         </div>
       </div>
       </div>
@@ -1082,8 +1087,11 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
       const nodes = items.map((it, i) => (
         <div key={i} className={`${card} overflow-hidden`}>
           {s(it, "imagePath") ? (
-            // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
-            <img src={s(it, "imagePath")} alt="" className="aspect-square w-full object-cover" />
+            /* 사진구역/텍스트구역 분리 — 공개 페이지와 같은 판·경계선 */
+            <span className="block w-full border-b border-[var(--lp-border)] bg-[color-mix(in_srgb,var(--lp-fg)_7%,var(--lp-card))]">
+              {/* eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL */}
+              <img src={s(it, "imagePath")} alt="" className="aspect-square w-full object-cover" />
+            </span>
           ) : null}
           {/* 공개와 같은 이유로 블록 — flex 자식이면 line-clamp 가 죽는다 */}
           {/* 사진 없는 셀은 라벨만이라 낮아진다 — 공개와 같은 바닥(비율 축소값) */}

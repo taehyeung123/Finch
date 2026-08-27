@@ -541,8 +541,12 @@ export function BlockRenderer({
       const nodes = items.map(({ it, i }) => (
         <a key={i} href={goHref(base, block.id, i)} {...ext} aria-label={s(it, "title") ? undefined : lpN(t.itemLink, i + 1)} className={`lp-btn ${cardCls} overflow-hidden`}>
           {s(it, "imagePath") ? (
-            // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
-            <img src={s(it, "imagePath")} alt="" className="aspect-square w-full object-cover" loading="lazy" />
+            /* 사진구역 — 텍스트구역과 판을 나눈다(2026-08-27 지시): 투명 PNG(로고 등)의 빈 부분이
+               카드 흰색을 그대로 드러내 어두운 배경에서 도드라졌다. 글자색 7% 섞은 판 + 경계선. */
+            <span className="block w-full border-b border-[var(--lp-border)] bg-[color-mix(in_srgb,var(--lp-fg)_7%,var(--lp-card))]">
+              {/* eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL */}
+              <img src={s(it, "imagePath")} alt="" className="aspect-square w-full object-cover" loading="lazy" />
+            </span>
           ) : null}
           {/* 사진 없는 셀은 라벨만이라 40px 이었다 — 그때만 터치 최소치(44px)를 바닥으로 준다.
               사진 있는 셀까지 밀면 짧은 제목 아래 빈 칸이 생겨 격자 리듬이 헐거워진다(소넷 확정) */}
