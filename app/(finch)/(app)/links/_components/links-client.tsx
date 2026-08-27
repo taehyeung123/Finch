@@ -1937,17 +1937,18 @@ export function LinksClient({
           >
             {/* published(공개 스위치)를 먼저 본다 — 발행만 하고 공개를 안 켠 상태에서
                 "공개 주소와 같은 모습" 이라고 말하면 방문자는 404 인데 소유자는 모른다(감사 #4) */}
+            {/* 전부 한 줄 길이로 유지한다 — 길어져 줄바꿈되면 폰 미리보기가 밀리며 흔들린다(2026-08-27 지시) */}
             {profileDirty || customDirty || editorDirty
-              ? "지금 고치는 중인 모습이에요 — 블록 편집은 자동 저장되고, 공개 주소에는 잠시 뒤 자동 반영돼요."
+              ? "고치는 중 — 잠시 뒤 자동 반영돼요."
               : !page.published
                 ? page.publishedAt
-                  ? "비공개예요 — 설정에서 「공개」를 켜야 방문자가 볼 수 있어요."
-                  : "지금 모습이에요 — 「라이브 반영」 후 설정에서 「공개」를 켜면 주소가 살아나요."
+                  ? "비공개예요 — 「공개」를 켜야 보여요."
+                  : "「라이브 반영」 후 「공개」를 켜면 보여요."
                 : page.publishedAt
                   ? page.dirty
-                    ? "지금 모습이에요 — 「라이브 반영」을 누르면 공개 주소에 반영돼요."
+                    ? "「라이브 반영」을 누르면 반영돼요."
                     : "공개 주소와 같은 모습이에요."
-                  : "지금 모습이에요 — 「라이브 반영」을 누르면 공개 주소가 살아나요."}
+                  : "「라이브 반영」을 누르면 주소가 살아나요."}
           </ShareBox>
         </div>
       </div>
@@ -3431,7 +3432,7 @@ function ShareBox({
         </button>
       </div>
       {/* 문구는 한 줄만 — 두 줄이면 박스가 20px 길어지고 그만큼 폰이 짧아진다(왼쪽 칸은 화면 높이에 갇혀 있다) */}
-      {children ? <p className="text-center text-[12px] leading-[1.6] text-fg-sub">{children}</p> : null}
+      {children ? <p className="h-[1.25rem] truncate whitespace-nowrap text-center text-[12px] leading-[1.6] text-fg-sub">{children}</p> : null}
       {qr ? <QrModal url={url} onClose={() => setQr(false)} /> : null}
     </div>
   );
