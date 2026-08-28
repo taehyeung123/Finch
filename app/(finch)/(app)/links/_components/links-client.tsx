@@ -4653,8 +4653,8 @@ function ThemePanel({
             </button>
           ))}
         </div>
-        {/* 공유·구독 — 리틀리식 선택제 칩(2026-08-26 사장님 스크린샷 스펙): 기본값(비공개)만 무료,
-            바꾸는 건 유료. 자물쇠 칩을 누르면 유료 안내가 뜬다. */}
+        {/* 공유·구독 — 리틀리식 선택제 칩. 공유는 무료(2026-08-28 지시 «별거 아닌 기능»),
+            구독 버튼(노출 포함)만 유료. 자물쇠 칩을 누르면 유료 안내가 뜬다. */}
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="mr-1 text-[12px] text-fg-sub">공유·구독 버튼</span>
           {(
@@ -4666,7 +4666,7 @@ function ThemePanel({
             ] as const
           ).map((o) => {
             const sel = custom.share && custom.subscribe ? "both" : custom.share ? "share" : custom.subscribe ? "sub" : "none";
-            const locked = !paid && o.key !== "none";
+            const locked = !paid && (o.key === "both" || o.key === "sub");
             const noSub = o.needsSub && !hasSubscribeBlock && sel !== o.key;
             return (
               <button

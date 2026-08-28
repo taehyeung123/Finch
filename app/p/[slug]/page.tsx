@@ -409,7 +409,7 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
                 href="/?utm_source=profile_link&utm_medium=corner_logo"
                 target="_blank"
                 aria-label="핀치 — 나만의 페이지 만들기"
-                className="lp-btn absolute! left-3.5 top-3.5 z-20 flex size-10 items-center justify-center rounded-[16px] border border-[var(--lp-border)] bg-[color-mix(in_srgb,var(--lp-card)_55%,transparent)] text-[var(--lp-fg)] shadow-[var(--lp-shadow)] backdrop-blur-lg"
+                className="lp-btn absolute! left-3.5 top-3.5 sm:left-7 sm:top-7 z-20 flex size-10 items-center justify-center rounded-[16px] border border-[var(--lp-border)] bg-[color-mix(in_srgb,var(--lp-card)_55%,transparent)] text-[var(--lp-fg)] shadow-[var(--lp-shadow)] backdrop-blur-lg"
               >
                 <FinchMark className="size-[18px]" aria-hidden />
               </Link>
@@ -556,6 +556,19 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
             </a>
           </div>
         ) : null}
+
+        {/* 법적 풋터(2026-08-28 «링크트리 맨 하단») — 호스팅 서비스 고지라 배지 숨김과 무관하게 항상.
+            신고(Report) 창구는 운영 메일이 정해지면 여기에 추가한다. 미리보기에는 안 그린다 —
+            편집 대상이 아닌 서비스 고지라 캔버스 소음만 된다(파리티 예외를 여기 명시). */}
+        <footer className={`mt-8 flex items-center justify-center gap-2 pb-3 text-[11px] text-[var(--lp-muted)] opacity-75 ${split ? "lg:col-span-2" : ""}`}>
+          <a href="/terms" target="_blank" rel="noopener" className="hover:underline">
+            {t.legalTerms}
+          </a>
+          <span aria-hidden>·</span>
+          <a href="/privacy" target="_blank" rel="noopener" className="hover:underline">
+            {t.legalPrivacy}
+          </a>
+        </footer>
       </div>
     </main>
   );

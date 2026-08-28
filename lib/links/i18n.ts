@@ -38,6 +38,9 @@ export interface LpText {
   /* count 는 {n} 을 결과 수로 바꿔 쓴다(lpN). clear 는 지우기 버튼의 보조기기 이름 */
   search: { placeholder: string; empty: string; aria: string; count: string; clear: string };
   vcard: string;
+  /** 법적 풋터 — 이용약관·개인정보처리방침 */
+  legalTerms: string;
+  legalPrivacy: string;
   file: string;
   music: string;
   video: string;
@@ -103,6 +106,8 @@ const ko: LpText = {
   },
   search: { placeholder: "무엇을 찾으세요?", empty: "찾는 내용이 없어요.", aria: "페이지 안 검색", count: "{n}개 찾았어요", clear: "검색어 지우기" },
   vcard: "연락처 저장",
+  legalTerms: "이용약관",
+  legalPrivacy: "개인정보처리방침",
   file: "파일",
   music: "음악",
   video: "영상 보러 가기",
@@ -160,6 +165,8 @@ const en: LpText = {
   },
   search: { placeholder: "Search this page", empty: "Nothing found.", aria: "Search within page", count: "{n} found", clear: "Clear search" },
   vcard: "Save contact",
+  legalTerms: "Terms",
+  legalPrivacy: "Privacy",
   file: "File",
   music: "Music",
   video: "Watch video",
@@ -217,6 +224,8 @@ const ja: LpText = {
   },
   search: { placeholder: "ページ内を検索", empty: "見つかりませんでした。", aria: "ページ内検索", count: "{n}件見つかりました", clear: "検索をクリア" },
   vcard: "連絡先を保存",
+  legalTerms: "利用規約",
+  legalPrivacy: "プライバシー",
   file: "ファイル",
   music: "音楽",
   video: "動画を見る",
