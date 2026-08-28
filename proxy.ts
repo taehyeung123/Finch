@@ -155,15 +155,17 @@ function applySecurityHeaders(response: NextResponse, publicLink = false) {
   // CSP — Pretendard 웹폰트(jsdelivr CDN)만 외부 허용. 개발 모드는 HMR 때문에 unsafe-eval 필요
   const csp = [
     "default-src 'self'",
-    /* t1.daumcdn.net = 다음 우편번호 SDK(편집기 지도 블록 주소 검색) — 없으면 모달이 소리 없이 빈 상자다 */
-    `script-src 'self' 'unsafe-inline' https://t1.daumcdn.net ${toss}${gaScript}${trackerScript}${isDev ? " 'unsafe-eval'" : ""}`,
+    /* t1.daumcdn.net = 다음 우편번호 SDK **그리고 카카오맵 엔진(mapjsapi — dapi 로더가 2차로 주입)** —
+       우편번호를 없애더라도 이 항목을 지우면 지도가 조용히 깨진다(쏘넷 점검, 실측). */
+    /* dapi.kakao.com = 카카오맵 JS SDK 로더(지도 블록). 타일 이미지는 img-src https: 가 이미 연다 */
+    `script-src 'self' 'unsafe-inline' https://t1.daumcdn.net https://dapi.kakao.com ${toss}${gaScript}${trackerScript}${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
     "font-src 'self' https://cdn.jsdelivr.net",
     // https: 를 통째로 여는 유일한 지시어다. 프로필 링크는 사용자가 **자기 이미지 주소를
     // 붙여넣는** 제품이고(노션·드롭박스·기존 홈페이지에 이미 올려둔 것), 호스트를
     // 열거할 방법이 없다. 이미지는 실행되지 않으므로 여는 대가가 가장 작다.
     `img-src 'self' data: blob: https: ${toss} ${igCdn} ${tiktokCdn}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
-    `connect-src 'self' ${toss}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}${gaConnect}${trackerConnect}`,
+    `connect-src 'self' https://dapi.kakao.com ${toss}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}${gaConnect}${trackerConnect}`,
     /* 우편번호 임베드는 실측상 postcode.map.kakao.com 을 프레이밍한다(구 daum.net 도 함께 허용) */
     `frame-src ${toss} ${youtube} ${musicEmbeds} https://postcode.map.daum.net https://postcode.map.kakao.com`,
     "frame-ancestors 'none'",

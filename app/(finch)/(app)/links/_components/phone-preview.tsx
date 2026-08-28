@@ -8,6 +8,7 @@ import { FinchMark } from "@/components/logo";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, youtubeEmbed } from "@/lib/links";
 import { Collapsible } from "@/app/p/[slug]/_components/collapsible";
+import { KakaoMap } from "@/app/p/[slug]/_components/kakao-map";
 import { BLOCK_ICON } from "./block-icons";
 import { fontStylesheets, themeByKey, themeVars, SNS_KINDS, WASH_NOISE } from "@/lib/links/themes";
 import { useFontStylesheets } from "./use-font-stylesheets";
@@ -1304,8 +1305,10 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
 
     case "map":
       return (
-        /* 공개 렌더러와 같은 모양 — 아이콘 칩 + 외부 링크 표시(눌러서 지도가 열린다는 신호) */
-        <div className={`${card} flex items-center gap-2.5 px-3 py-2.5`}>
+        /* 공개 렌더러와 같은 모양 — 위 실제 지도 + 아래 주소 줄(눌러서 지도가 열린다는 신호) */
+        <div className={`${card} overflow-hidden`}>
+          <KakaoMap address={s(d, "address")} className="h-[120px]" />
+        <div className="flex items-center gap-2.5 px-3 py-2.5">
           <span
             className="flex size-8 shrink-0 items-center justify-center rounded-[calc(var(--lp-radius)/1.6)]"
             style={{ backgroundColor: "var(--lp-chip-bg)", color: "var(--lp-chip-ink)" }}
@@ -1321,6 +1324,7 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
             </span>
           </span>
           <ExternalLink className="size-3 shrink-0 text-[var(--lp-muted)]" aria-hidden />
+        </div>
         </div>
       );
 

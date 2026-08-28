@@ -3,6 +3,7 @@ import type { BlockType } from "@/lib/links/blocks";
 import { COUPANG_DISCLOSURE, musicEmbed } from "@/lib/links/blocks";
 import { Collapsible } from "./collapsible";
 import { GuestbookForm } from "./guestbook-form";
+import { KakaoMap } from "./kakao-map";
 import { SearchBlock } from "./search-block";
 import { MapPin, ExternalLink, Download, UserPlus, CalendarPlus, Megaphone } from "lucide-react";
 import { buildIcs, eventChip, eventEndEpoch, eventEpoch, formatEventDate, formatEventTime, icsHref, isMultiDay, nowMs, parseEventAt, type EventPart } from "@/lib/links/events";
@@ -810,10 +811,15 @@ export function BlockRenderer({
       const address = s(d, "address");
       if (!address) return null;
       return (
+        <div className={`${cardCls} overflow-hidden`}>
+          {/* 실제 지도(2026-08-28) — 뷰포트 진입 시에만 SDK 로드, 실패·자유 표기 주소면
+              지도만 접히고 아래 주소·길찾기 줄이 그대로 카드 역할을 한다 */}
+          <KakaoMap address={address} className="h-[176px]" />
         <a
           href={`https://map.kakao.com/link/search/${encodeURIComponent(address)}`}
           {...ext}
-          className={`lp-btn ${cardCls} block min-h-[56px] px-4 py-3.5`}
+          /* 포커스 링은 안쪽으로 — 바깥 카드가 overflow-hidden 이라 UA 기본 아웃라인은 3면이 잘린다(쏘넷 점검) */
+          className="lp-btn block min-h-[56px] px-4 py-3.5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--lp-accent)]"
         >
           {/* 아이콘·외부 표시가 없어 눌러서 지도가 열린다는 걸 알 수 없었다(2026-08-24 비평) */}
           <span className="flex items-center gap-2.5">
@@ -834,6 +840,7 @@ export function BlockRenderer({
             <ExternalLink className="size-3.5 shrink-0 text-[var(--lp-muted)]" aria-hidden />
           </span>
         </a>
+        </div>
       );
     }
 
