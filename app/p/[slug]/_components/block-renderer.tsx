@@ -4,6 +4,8 @@ import { COUPANG_DISCLOSURE, musicEmbed } from "@/lib/links/blocks";
 import { Collapsible } from "./collapsible";
 import { GuestbookForm } from "./guestbook-form";
 import { KakaoMap } from "./kakao-map";
+import { SnsIcon } from "@/components/sns-brand-icons";
+import { detectSnsKind } from "@/lib/links/sns-catalog";
 import { SearchBlock } from "./search-block";
 import { MapPin, ExternalLink, Download, UserPlus, CalendarPlus, Megaphone } from "lucide-react";
 import { buildIcs, eventChip, eventEndEpoch, eventEpoch, formatEventDate, formatEventTime, icsHref, isMultiDay, nowMs, parseEventAt, type EventPart } from "@/lib/links/events";
@@ -283,6 +285,9 @@ export function BlockRenderer({
       if (/^#[0-9a-fA-F]{6}$/.test(s(d, "textColor"))) textStyle.color = s(d, "textColor");
       const layout = s(d, "layout") || "button";
       const thumb = s(d, "imagePath");
+      /* 자동 브랜드 로고(2026-08-28) — 썸네일이 없을 때만, 호스트를 아는 주소만.
+         강조(채움) 버튼 위에서는 컬러 대신 글자색을 따른다(브랜드색이 강조색과 싸운다) */
+      const brandKind = thumb ? null : detectSnsKind(s(d, "url"));
       /* 카드 레이아웃(리틀리 작은/중간/큰 카드) — 썸네일·태그·가격이 함께 보인다 */
       if (layout === "small" || layout === "medium" || layout === "large") {
         const big = layout === "large";
@@ -301,6 +306,11 @@ export function BlockRenderer({
                 className={big ? "aspect-[16/9] w-full object-cover" : `${thumbCls} shrink-0 rounded-[calc(var(--lp-radius)/1.6)] object-cover`}
                 loading="lazy"
               />
+            ) : brandKind && !big ? (
+              /* 칩은 항상 흰색 — 테마 불문 로고 대비 보장(헤더 SNS 칩과 같은 규칙, 쏘넷 점검) */
+              <span className={`${thumbCls} flex shrink-0 items-center justify-center rounded-[calc(var(--lp-radius)/1.6)] bg-white`} aria-hidden>
+                <SnsIcon kind={brandKind} colored className={layout === "small" ? "size-7" : "size-10"} />
+              </span>
             ) : null}
             <span className={`min-w-0 flex-1 ${big ? "block px-4 py-3 text-center" : ""}`}>
               <span style={textStyle} className="block text-[15px] font-semibold text-[var(--lp-fg)]">
@@ -322,7 +332,7 @@ export function BlockRenderer({
             "lp-btn relative flex min-h-[56px] w-full items-center justify-center rounded-[var(--lp-radius-btn)] py-3 text-center text-[15px] font-semibold",
             /* 썸네일이 있으면 왼쪽에 고정하고 라벨은 가운데 그대로 — 양쪽 패딩을 똑같이
                벌려 긴 라벨이 이미지 밑으로 파고들지 않게 한다(2026-08-26 링크 버튼 로고) */
-            thumb ? "px-[60px]" : "px-5",
+            thumb || brandKind ? "px-[60px]" : "px-5",
             /* gap 은 **하나만** 건다 — gap-2 와 gap-0.5 를 겹쳐 쓰면 어느 쪽이 이길지가
                Tailwind 방출 순서에 달린다(2026-08-24 비평) */
             hasExtras ? "flex-col gap-0.5" : "gap-2",
@@ -337,6 +347,18 @@ export function BlockRenderer({
           {thumb ? (
             // eslint-disable-next-line @next/next/no-img-element -- Storage 공개 URL
             <img src={thumb} alt="" className="absolute left-2 top-1/2 size-10 -translate-y-1/2 rounded-[calc(var(--lp-radius-btn)/1.4)] object-cover" />
+          ) : brandKind ? (
+            primary ? (
+              /* 강조 채움 위엔 칩 없이 글자색 단색 — 강조색과 싸우지 않는다 */
+              <span className="absolute left-4 top-1/2 -translate-y-1/2" aria-hidden>
+                <SnsIcon kind={brandKind} className="size-6" />
+              </span>
+            ) : (
+              /* 흰 칩 + 브랜드색 — 다크 테마·«버튼색 전체 적용»에서도 항상 읽힌다(쏘넷 점검) */
+              <span className="absolute left-2.5 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-white shadow-[var(--lp-shadow)]" aria-hidden>
+                <SnsIcon kind={brandKind} colored className="size-5" />
+              </span>
+            )
           ) : null}
           <span className="flex items-center gap-2">
             {label}

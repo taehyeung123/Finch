@@ -9,6 +9,7 @@ import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, youtubeEmbed } from "@/lib/links";
 import { Collapsible } from "@/app/p/[slug]/_components/collapsible";
 import { KakaoMap } from "@/app/p/[slug]/_components/kakao-map";
+import { detectSnsKind } from "@/lib/links/sns-catalog";
 import { BLOCK_ICON } from "./block-icons";
 import { fontStylesheets, themeByKey, themeVars, SNS_KINDS, WASH_NOISE } from "@/lib/links/themes";
 import { useFontStylesheets } from "./use-font-stylesheets";
@@ -916,6 +917,8 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
       if (/^#[0-9a-fA-F]{6}$/.test(s(d, "textColor"))) textStyle.color = s(d, "textColor");
       const layout = s(d, "layout") || "button";
       const thumb = s(d, "imagePath");
+      /* 자동 브랜드 로고 — 공개 렌더러와 같은 규칙(썸네일 없을 때만·강조 버튼은 단색) */
+      const brandKind = thumb ? null : detectSnsKind(s(d, "url"));
       if (layout === "small" || layout === "medium" || layout === "large") {
         const big = layout === "large";
         return (
@@ -927,6 +930,10 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
                 alt=""
                 className={big ? "aspect-[16/9] w-full object-cover" : `${layout === "small" ? "size-10" : "size-16"} shrink-0 rounded-[calc(var(--lp-radius)/1.6)] object-cover`}
               />
+            ) : brandKind && !big ? (
+              <span className={`${layout === "small" ? "size-10" : "size-16"} flex shrink-0 items-center justify-center rounded-[calc(var(--lp-radius)/1.6)] bg-white`} aria-hidden>
+                <SnsIcon kind={brandKind} colored className={layout === "small" ? "size-5" : "size-8"} />
+              </span>
             ) : !big && mode === "edit" ? (
               /* 회색 칸은 캔버스의 "여기 사진 넣으세요" 초대다 — 공개 페이지는 안 그리므로 읽기 전용 미리보기에도 안 그린다(감사 L12) */
               <span className={`${layout === "small" ? "size-10" : "size-16"} shrink-0 rounded-[calc(var(--lp-radius)/1.6)] bg-[var(--lp-border)]`} aria-hidden />
@@ -948,7 +955,7 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
           className={[
             "lp-btn relative flex min-h-[48px] items-center justify-center gap-1.5 rounded-[var(--lp-radius-btn)] py-2.5 text-center text-[13px] font-semibold",
             /* 공개 페이지와 같은 규칙(2026-08-26 링크 버튼 로고) — 썸네일 왼쪽 고정, 양쪽 패딩 동일 */
-            thumb ? "px-[52px]" : "px-4",
+            thumb || brandKind ? "px-[52px]" : "px-4",
             hasExtras ? "flex-col gap-0.5" : "",
             emphasis === "primary"
               ? "bg-[var(--lp-accent)] text-[var(--lp-on-accent)]"
@@ -960,6 +967,16 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
           {thumb ? (
             // eslint-disable-next-line @next/next/no-img-element -- 미리보기용 원격 URL
             <img src={thumb} alt="" className="absolute left-1.5 top-1/2 size-9 -translate-y-1/2 rounded-[calc(var(--lp-radius-btn)/1.4)] object-cover" />
+          ) : brandKind ? (
+            emphasis === "primary" ? (
+              <span className="absolute left-3 top-1/2 -translate-y-1/2" aria-hidden>
+                <SnsIcon kind={brandKind} className="size-5" />
+              </span>
+            ) : (
+              <span className="absolute left-2 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full bg-white shadow-[var(--lp-shadow)]" aria-hidden>
+                <SnsIcon kind={brandKind} colored className="size-4" />
+              </span>
+            )
           ) : null}
           <span className="flex items-center gap-1.5">
             {s(d, "label") || "링크"}

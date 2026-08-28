@@ -133,3 +133,154 @@ export function snsHref(kind: string, value: string): string {
   if (entry?.scheme === "sms") return v.startsWith("sms:") ? v : `sms:${v.replace(/[^\d+]/g, "")}`;
   return v;
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   링크 버튼 자동 브랜드 로고(2026-08-28 «리틀리처럼 컬러로») — 주소의 호스트로 채널을 알아낸다.
+
+   규칙:
+   · **구체적인 서브도메인이 먼저다** — music.youtube.com 이 youtube.com 보다 위에 있어야 한다
+     (검사가 위에서부터 순서대로라 배열 순서가 곧 우선순위다).
+   · naver.com·kakao.com·google.com 통짜 매칭은 두지 않는다 — 네이버 뉴스 링크에
+     지도 아이콘이 붙는 오인식이 «없음»보다 나쁘다. 서브도메인 단위로만 안다.
+   · 모르는 호스트는 null — 버튼은 지금처럼 텍스트로만 남는다.
+   ══════════════════════════════════════════════════════════════════ */
+const HOST_KINDS: ReadonlyArray<readonly [string, string]> = [
+  /* 서브도메인 구분이 필요한 큰 집들 먼저 */
+  ["music.youtube.com", "youtubemusic"],
+  ["podcasts.apple.com", "applepodcasts"],
+  ["music.apple.com", "applemusic"],
+  ["apps.apple.com", "appstore"],
+  ["play.google.com", "googleplay"],
+  ["maps.google.com", "googlemaps"],
+  ["maps.app.goo.gl", "googlemaps"],
+  ["blog.naver.com", "naverblog"],
+  ["post.naver.com", "naverpost"],
+  ["cafe.naver.com", "navercafe"],
+  ["tv.naver.com", "navertv"],
+  ["map.naver.com", "navermap"],
+  ["naver.me", "navermap"],
+  ["smartstore.naver.com", "smartstore"],
+  ["brand.naver.com", "smartstore"],
+  ["booking.naver.com", "naverreservation"],
+  ["chzzk.naver.com", "chzzk"],
+  ["grafolio.naver.com", "grafolio"],
+  ["open.kakao.com", "kakao"],
+  ["pf.kakao.com", "kakaochannel"],
+  ["store.kakao.com", "kakaostore"],
+  ["gift.kakao.com", "kakaogift"],
+  ["map.kakao.com", "kakaomap"],
+  ["kakaopay.com", "kakaopay"],
+  ["cafe.daum.net", "daumcafe"],
+  /* 소셜 */
+  ["instagram.com", "instagram"],
+  ["threads.net", "threads"],
+  ["threads.com", "threads"],
+  ["x.com", "x"],
+  ["twitter.com", "x"],
+  ["facebook.com", "facebook"],
+  ["fb.com", "facebook"],
+  ["messenger.com", "messenger"],
+  ["m.me", "messenger"],
+  ["bsky.app", "bluesky"],
+  ["snapchat.com", "snapchat"],
+  ["pinterest.com", "pinterest"],
+  ["pin.it", "pinterest"],
+  ["tumblr.com", "tumblr"],
+  ["reddit.com", "reddit"],
+  ["linkedin.com", "linkedin"],
+  ["xiaohongshu.com", "xiaohongshu"],
+  ["xhslink.com", "xiaohongshu"],
+  ["weibo.com", "weibo"],
+  ["vk.com", "vk"],
+  /* 영상·방송 */
+  ["youtube.com", "youtube"],
+  ["youtu.be", "youtube"],
+  ["tiktok.com", "tiktok"],
+  ["twitch.tv", "twitch"],
+  ["sooplive.co.kr", "soop"],
+  ["afreecatv.com", "soop"],
+  ["kick.com", "kick"],
+  ["vimeo.com", "vimeo"],
+  ["bilibili.com", "bilibili"],
+  ["b23.tv", "bilibili"],
+  /* 음악·팟캐스트 */
+  ["spotify.com", "spotify"],
+  ["soundcloud.com", "soundcloud"],
+  ["melon.com", "melon"],
+  ["genie.co.kr", "genie"],
+  ["bugs.co.kr", "bugs"],
+  ["podbbang.com", "podbbang"],
+  ["bandcamp.com", "bandcamp"],
+  /* 글·블로그 */
+  ["tistory.com", "tistory"],
+  ["brunch.co.kr", "brunch"],
+  ["velog.io", "velog"],
+  ["medium.com", "medium"],
+  ["substack.com", "substack"],
+  ["notion.site", "notion"],
+  ["notion.so", "notion"],
+  /* 메신저·커뮤니티 */
+  ["band.us", "naverband"],
+  ["line.me", "line"],
+  ["t.me", "telegram"],
+  ["telegram.me", "telegram"],
+  ["discord.gg", "discord"],
+  ["discord.com", "discord"],
+  ["wa.me", "whatsapp"],
+  ["whatsapp.com", "whatsapp"],
+  ["weixin.qq.com", "wechat"],
+  /* 쇼핑·판매 */
+  ["coupang.com", "coupang"],
+  ["musinsa.com", "musinsa"],
+  ["oliveyoung.co.kr", "oliveyoung"],
+  ["idus.com", "idus"],
+  ["etsy.com", "etsy"],
+  ["amazon.com", "amazon"],
+  ["amzn.to", "amazon"],
+  ["kmong.com", "kmong"],
+  ["soomgo.com", "soomgo"],
+  ["class101.net", "class101"],
+  ["wadiz.kr", "wadiz"],
+  ["tumblbug.com", "tumblbug"],
+  /* 창작·개발 */
+  ["github.com", "github"],
+  ["github.io", "github"],
+  ["behance.net", "behance"],
+  ["dribbble.com", "dribbble"],
+  ["pixiv.net", "pixiv"],
+  ["artstation.com", "artstation"],
+  ["unsplash.com", "unsplash"],
+  ["notefolio.net", "notefolio"],
+  /* 후원·결제 */
+  ["toss.me", "toss"],
+  ["paypal.com", "paypal"],
+  ["paypal.me", "paypal"],
+  ["patreon.com", "patreon"],
+  ["ko-fi.com", "kofi"],
+  ["buymeacoffee.com", "buymeacoffee"],
+  /* 여행·장소 */
+  ["airbnb.com", "airbnb"],
+  ["airbnb.co.kr", "airbnb"],
+  ["tripadvisor.com", "tripadvisor"],
+  ["tripadvisor.co.kr", "tripadvisor"],
+  ["catchtable.co.kr", "catchtable"],
+  ["baemin.com", "baemin"],
+];
+
+/** 주소 → 채널 키. 모르면 null(버튼은 텍스트로만 — 오인식이 없음보다 나쁘다) */
+export function detectSnsKind(url: string): string | null {
+  let host: string;
+  /* 스킴 없는 붙여넣기(instagram.com/foo)가 흔하다 — 저장 관문(normalizeUrl)이 https:// 를
+     붙이는 것과 같은 보정을 해야 편집 초안과 발행본의 로고가 갈리지 않는다(쏘넷 점검) */
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(url.trim()) ? url.trim() : `https://${url.trim()}`;
+  try {
+    host = new URL(withScheme).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+  host = host.replace(/^www\./, "");
+  for (const [h, k] of HOST_KINDS) {
+    if (host === h || host.endsWith(`.${h}`)) return k;
+  }
+  return null;
+}

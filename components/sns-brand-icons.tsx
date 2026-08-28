@@ -90,13 +90,32 @@ import {
   전부 currentColor 라 사용자 테마 위에 그대로 얹힌다(카카오 공식 노란 배경은 쓰지 않는다).
 */
 
-type IconProps = { className?: string };
-type Si = { path: string };
+type IconProps = { className?: string; colored?: boolean };
+type Si = { path: string; hex?: string };
+
+/* 컬러 글리프(2026-08-28 «리틀리처럼 컬러로») — simple-icons 의 브랜드 공식색.
+
+   컬러 글리프는 **항상 흰 칩 위에** 그려진다(렌더러가 칩을 깐다 — 헤더 SNS 아이콘과 같은
+   문법). 흰 칩이 다크 테마의 검정 로고(X·스레드·틱톡…)와 «버튼색 전체 적용» 강조 채움까지
+   구조적으로 해결한다(쏘넷 점검: 배경을 모르는 밝기 컷은 어느 방향으로든 뚫렸다).
+   노랑 계열만은 흰 칩 위에서도 안 보여 브랜드의 공식 짝색으로 바꾼다. */
+const GLYPH_OVERRIDES: Record<string, string> = {
+  FFCD00: "#3C1E1E", // 카카오 전 계열 — 공식 «초콜릿» 글리프색(노랑 배경 위 검정 말풍선의 그 색)
+  FFFC00: "#0F0F0F", // 스냅챗 — 검정 윤곽이 공식
+  FFDD00: "#0D0C22", // Buy Me a Coffee — 공식 네이비
+  "53FC19": "#0E9C00", // 킥 — 형광 연두를 읽히는 초록으로
+};
+function glyphFill(hex: string | undefined): string | null {
+  if (!hex || !/^[0-9A-Fa-f]{6}$/.test(hex)) return null;
+  const key = hex.toUpperCase();
+  return GLYPH_OVERRIDES[key] ?? `#${key}`;
+}
 
 function brand(icon: Si) {
-  return function BrandIcon({ className }: IconProps) {
+  return function BrandIcon({ className, colored }: IconProps) {
+    const fill = colored ? (glyphFill(icon.hex) ?? "currentColor") : "currentColor";
     return (
-      <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <svg viewBox="0 0 24 24" fill={fill} className={className} aria-hidden>
         <path d={icon.path} />
       </svg>
     );
@@ -220,8 +239,8 @@ const ICONS: Record<string, (p: IconProps) => React.ReactNode> = {
 };
 
 /** 채널 키 → 아이콘. 모르는 키면 지구본(링크는 링크다) */
-export function SnsIcon({ kind, className }: { kind: string; className?: string }) {
+export function SnsIcon({ kind, className, colored }: { kind: string; className?: string; colored?: boolean }) {
   /* 자기 키만 — 프로토타입 이름("constructor")이 Object 를 꺼내 렌더를 터뜨리지 않게(감사 L2) */
   const Icon = Object.hasOwn(ICONS, kind) ? ICONS[kind] : ICONS.website;
-  return <>{Icon({ className })}</>;
+  return <>{Icon({ className, colored })}</>;
 }
