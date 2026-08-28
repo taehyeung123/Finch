@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="900" viewBox="0 0 900 900">
+  <!-- 장비 카드 v2 — 88px 썸네일에서 «조명·카메라·마이크» 셋이 다 읽히게:
+       큰 링 라이트 + 큰 카메라 + 스탠드 마이크, 굵은 선·확실한 명도차 -->
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0D1526"/>
+      <stop offset="1" stop-color="#151233"/>
+    </linearGradient>
+    <radialGradient id="pool" cx="0.42" cy="0.4" r="0.75">
+      <stop offset="0" stop-color="#6EA8FF" stop-opacity="0.3"/>
+      <stop offset="0.65" stop-color="#8B7CF6" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#8B7CF6" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.05 0"/>
+    </filter>
+  </defs>
+  <rect width="900" height="900" fill="url(#base)"/>
+  <rect width="900" height="900" fill="url(#pool)"/>
+
+  <!-- 조명(링 라이트) — 왼쪽 뒤, 화면에서 가장 큰 원 -->
+  <g>
+    <circle cx="330" cy="360" r="230" fill="none" stroke="#8B7CF6" stroke-width="34" stroke-opacity="0.9"/>
+    <circle cx="330" cy="360" r="230" fill="#F2ECFF" fill-opacity="0.07"/>
+    <line x1="330" y1="592" x2="330" y2="790" stroke="#5B4BC4" stroke-width="20" stroke-linecap="round"/>
+    <line x1="240" y1="792" x2="420" y2="792" stroke="#5B4BC4" stroke-width="20" stroke-linecap="round"/>
+  </g>
+
+  <!-- 마이크 — 오른쪽 스탠드 -->
+  <g>
+    <rect x="668" y="220" width="96" height="190" rx="48" fill="#22335C" stroke="#9FC3FF" stroke-width="10"/>
+    <g stroke="#9FC3FF" stroke-opacity="0.65" stroke-width="7">
+      <line x1="684" y1="268" x2="748" y2="268"/><line x1="684" y1="304" x2="748" y2="304"/><line x1="684" y1="340" x2="748" y2="340"/>
+    </g>
+    <line x1="716" y1="410" x2="716" y2="560" stroke="#9FC3FF" stroke-width="14" stroke-linecap="round"/>
+  </g>
+
+  <!-- 카메라 — 앞 오른쪽, 주인공 -->
+  <g>
+    <rect x="380" y="470" width="400" height="260" rx="36" fill="#1B2A4A" stroke="#E8F0FF" stroke-width="12"/>
+    <rect x="430" y="430" width="120" height="52" rx="14" fill="#1B2A4A" stroke="#E8F0FF" stroke-width="12"/>
+    <circle cx="580" cy="600" r="92" fill="#101A32" stroke="#E8F0FF" stroke-width="12"/>
+    <circle cx="580" cy="600" r="54" fill="#22335C" stroke="#6EA8FF" stroke-width="10"/>
+    <circle cx="580" cy="600" r="18" fill="#9FC3FF"/>
+    <circle cx="726" cy="512" r="12" fill="#FF5D5D"/>
+  </g>
+  <rect width="900" height="900" filter="url(#grain)"/>
+</svg>

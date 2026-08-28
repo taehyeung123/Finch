@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="900" viewBox="0 0 900 900">
+  <!-- 상품 카드 — 리브 니트 양말 3켤레: 접힌 페어 세 개, 톤온톤 -->
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FBEFE2"/>
+      <stop offset="1" stop-color="#F5E0CC"/>
+    </linearGradient>
+    <pattern id="rib" width="14" height="14" patternUnits="userSpaceOnUse">
+      <line x1="4" y1="0" x2="4" y2="14" stroke="#5A2E18" stroke-opacity="0.14" stroke-width="3"/>
+      <line x1="11" y1="0" x2="11" y2="14" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="2"/>
+    </pattern>
+    <filter id="softsh" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#8A4A28" flood-opacity="0.2"/>
+    </filter>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.35  0 0 0 0 0.2  0 0 0 0 0.1  0 0 0 0.045 0"/>
+    </filter>
+  </defs>
+  <rect width="900" height="900" fill="url(#base)"/>
+  <!-- 접힌 양말 페어: 발목 커프 + 늘어진 발 부분 -->
+  <g filter="url(#softsh)" transform="translate(160 170)">
+    <rect x="0" y="0" width="150" height="96" rx="26" fill="#E8A87C"/>
+    <rect x="0" y="0" width="150" height="96" rx="26" fill="url(#rib)"/>
+    <path d="M12 84 C 6 250, 26 330, 96 356 C 152 374, 186 332, 160 286 C 136 246, 138 160, 138 88 Z" fill="#F0BE97"/>
+    <path d="M12 84 C 6 250, 26 330, 96 356 C 152 374, 186 332, 160 286 C 136 246, 138 160, 138 88 Z" fill="url(#rib)"/>
+  </g>
+  <g filter="url(#softsh)" transform="translate(380 240)">
+    <rect x="0" y="0" width="150" height="96" rx="26" fill="#C7502B"/>
+    <rect x="0" y="0" width="150" height="96" rx="26" fill="url(#rib)"/>
+    <path d="M12 84 C 6 250, 26 330, 96 356 C 152 374, 186 332, 160 286 C 136 246, 138 160, 138 88 Z" fill="#D45F38"/>
+    <path d="M12 84 C 6 250, 26 330, 96 356 C 152 374, 186 332, 160 286 C 136 246, 138 160, 138 88 Z" fill="url(#rib)"/>
+  </g>
+  <g filter="url(#softsh)" transform="translate(600 170)">
+    <rect x="0" y="0" width="150" height="96" rx="26" fill="#8A563A"/>
+    <rect x="0" y="0" width="150" height="96" rx="26" fill="url(#rib)"/>
+    <path d="M12 84 C 6 250, 26 330, 96 356 C 152 374, 186 332, 160 286 C 136 246, 138 160, 138 88 Z" fill="#9A6647"/>
+    <path d="M12 84 C 6 250, 26 330, 96 356 C 152 374, 186 332, 160 286 C 136 246, 138 160, 138 88 Z" fill="url(#rib)"/>
+  </g>
+  <!-- 발끝 스티치 라벨 태그 -->
+  <g transform="translate(430 680) rotate(-8)" filter="url(#softsh)">
+    <rect x="-90" y="-34" width="180" height="68" rx="14" fill="#FFF6EC" stroke="#E3C4A6" stroke-width="2"/>
+    <circle cx="-64" cy="0" r="6" fill="none" stroke="#C7502B" stroke-width="3"/>
+    <line x1="-44" y1="-10" x2="66" y2="-10" stroke="#D9B392" stroke-width="6" stroke-linecap="round"/>
+    <line x1="-44" y1="12" x2="30" y2="12" stroke="#E7CCAF" stroke-width="6" stroke-linecap="round"/>
+  </g>
+  <rect width="900" height="900" filter="url(#grain)"/>
+</svg>

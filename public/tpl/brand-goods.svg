@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="900" viewBox="0 0 900 900">
+  <!-- 스토어 카드 — 원두 봉투 정물: 크라프트 봉투 + 콩 + 세이지 라벨 -->
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#EFF4ED"/>
+      <stop offset="1" stop-color="#E3ECE0"/>
+    </linearGradient>
+    <linearGradient id="bag" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#D9BFA0"/>
+      <stop offset="1" stop-color="#C5A67F"/>
+    </linearGradient>
+    <filter id="softsh" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#2A523B" flood-opacity="0.2"/>
+    </filter>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.15  0 0 0 0 0.25  0 0 0 0 0.16  0 0 0 0.05 0"/>
+    </filter>
+  </defs>
+  <rect width="900" height="900" fill="url(#base)"/>
+  <!-- 봉투 -->
+  <g filter="url(#softsh)">
+    <path d="M300 260 L600 260 L640 760 L260 760 Z" fill="url(#bag)"/>
+    <!-- 접힌 상단 -->
+    <path d="M290 260 L610 260 L600 208 L300 208 Z" fill="#B8946C"/>
+    <line x1="300" y1="260" x2="600" y2="260" stroke="#8F6F4C" stroke-width="3"/>
+    <!-- 옆면 주름 -->
+    <path d="M300 260 L340 760" stroke="#B8946C" stroke-width="3" fill="none"/>
+    <path d="M600 260 L560 760" stroke="#B8946C" stroke-width="3" fill="none"/>
+    <!-- 라벨 -->
+    <rect x="352" y="420" width="196" height="196" rx="18" fill="#FFFFFF" stroke="#CFDECB" stroke-width="2"/>
+    <circle cx="450" cy="486" r="34" fill="none" stroke="#4F7C5A" stroke-width="5"/>
+    <path d="M450 462 C 462 474, 462 498, 450 510 C 438 498, 438 474, 450 462 Z" fill="#4F7C5A"/>
+    <line x1="394" y1="556" x2="506" y2="556" stroke="#7BA98A" stroke-width="7" stroke-linecap="round"/>
+    <line x1="410" y1="580" x2="490" y2="580" stroke="#B4CBB2" stroke-width="6" stroke-linecap="round"/>
+  </g>
+  <!-- 흩어진 원두 -->
+  <g fill="#6B4A2F" filter="url(#softsh)">
+    <g transform="translate(238 806) rotate(-18)"><ellipse rx="26" ry="18"/><path d="M-22 0 Q 0 10, 22 0" stroke="#3F2A18" stroke-width="4" fill="none"/></g>
+    <g transform="translate(320 838) rotate(16)"><ellipse rx="26" ry="18"/><path d="M-22 0 Q 0 10, 22 0" stroke="#3F2A18" stroke-width="4" fill="none"/></g>
+    <g transform="translate(650 820) rotate(-8)"><ellipse rx="26" ry="18"/><path d="M-22 0 Q 0 10, 22 0" stroke="#3F2A18" stroke-width="4" fill="none"/></g>
+    <g transform="translate(706 776) rotate(28)"><ellipse rx="24" ry="16"/><path d="M-20 0 Q 0 9, 20 0" stroke="#3F2A18" stroke-width="4" fill="none"/></g>
+  </g>
+  <!-- 잎 -->
+  <g fill="#5E8F6B">
+    <ellipse cx="676" cy="300" rx="34" ry="16" transform="rotate(-30 676 300)"/>
+    <ellipse cx="712" cy="264" rx="28" ry="13" transform="rotate(-58 712 264)"/>
+  </g>
+  <rect width="900" height="900" filter="url(#grain)"/>
+</svg>

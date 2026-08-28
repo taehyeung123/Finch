@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <!-- 공구 히어로 v2 — «사막 노을»이 아니라 «니트 원단»으로 읽히게:
+       스티치를 키우고, 앞자락에 골지 커프·스티치 라벨을 얹고, 털실·바늘을 주인공급으로 -->
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFF6EC"/>
+      <stop offset="1" stop-color="#FBEADB"/>
+    </linearGradient>
+    <linearGradient id="fold1" x1="0" y1="0" x2="1" y2="0.3">
+      <stop offset="0" stop-color="#E8A87C"/>
+      <stop offset="1" stop-color="#D97F53"/>
+    </linearGradient>
+    <linearGradient id="fold2" x1="0" y1="0" x2="1" y2="0.2">
+      <stop offset="0" stop-color="#C7502B"/>
+      <stop offset="1" stop-color="#A93F22"/>
+    </linearGradient>
+    <linearGradient id="fold3" x1="0" y1="0" x2="1" y2="0.25">
+      <stop offset="0" stop-color="#F3C9AC"/>
+      <stop offset="1" stop-color="#E8AE87"/>
+    </linearGradient>
+    <!-- 니트 V 스티치 — 크게, 진하게: 원단임을 말하는 주역 -->
+    <pattern id="knit" width="46" height="32" patternUnits="userSpaceOnUse">
+      <path d="M0 4 L11.5 20 L23 4" fill="none" stroke="#5A2E18" stroke-opacity="0.22" stroke-width="5" stroke-linecap="round"/>
+      <path d="M23 4 L34.5 20 L46 4" fill="none" stroke="#5A2E18" stroke-opacity="0.22" stroke-width="5" stroke-linecap="round"/>
+    </pattern>
+    <pattern id="rib" width="22" height="22" patternUnits="userSpaceOnUse">
+      <line x1="6" y1="0" x2="6" y2="22" stroke="#5A2E18" stroke-opacity="0.25" stroke-width="5"/>
+      <line x1="16" y1="0" x2="16" y2="22" stroke="#FFFFFF" stroke-opacity="0.3" stroke-width="3"/>
+    </pattern>
+    <filter id="softsh" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#8A4A28" flood-opacity="0.18"/>
+    </filter>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.35  0 0 0 0 0.2  0 0 0 0 0.1  0 0 0 0.045 0"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="675" fill="url(#base)"/>
+  <!-- 뒤 원단 — 밝은 살구 -->
+  <g filter="url(#softsh)">
+    <path d="M-40 330 C 240 250, 520 400, 780 320 S 1240 240, 1240 330 L1240 700 L-40 700 Z" fill="url(#fold3)"/>
+    <path d="M-40 330 C 240 250, 520 400, 780 320 S 1240 240, 1240 330 L1240 700 L-40 700 Z" fill="url(#knit)"/>
+  </g>
+  <!-- 중간 원단 — 테라코타 -->
+  <g filter="url(#softsh)">
+    <path d="M-40 440 C 260 360, 540 520, 820 430 S 1240 360, 1240 450 L1240 700 L-40 700 Z" fill="url(#fold1)"/>
+    <path d="M-40 440 C 260 360, 540 520, 820 430 S 1240 360, 1240 450 L1240 700 L-40 700 Z" fill="url(#knit)"/>
+  </g>
+  <!-- 앞 원단 — 딥 테라코타 + 골지 커프 밴드 -->
+  <g filter="url(#softsh)">
+    <path d="M-40 560 C 300 480, 560 630, 860 545 S 1240 480, 1240 570 L1240 700 L-40 700 Z" fill="url(#fold2)"/>
+    <path d="M-40 560 C 300 480, 560 630, 860 545 S 1240 480, 1240 570 L1240 700 L-40 700 Z" fill="url(#knit)"/>
+    <path d="M-40 560 C 300 480, 560 630, 860 545 S 1240 480, 1240 570 L1240 610 C 900 520, 580 668, 300 596 S -40 600, -40 600 Z" fill="#B8461F"/>
+    <path d="M-40 560 C 300 480, 560 630, 860 545 S 1240 480, 1240 570 L1240 610 C 900 520, 580 668, 300 596 S -40 600, -40 600 Z" fill="url(#rib)"/>
+  </g>
+  <!-- 스티치 케어 라벨 — 원단에 꿰맨 태그 -->
+  <g transform="translate(250 600) rotate(-6)" filter="url(#softsh)">
+    <rect x="-86" y="-32" width="172" height="64" rx="12" fill="#FFF6EC" stroke="#E3C4A6" stroke-width="3"/>
+    <g stroke="#D9B392" stroke-width="6" stroke-linecap="round">
+      <line x1="-58" y1="-8" x2="58" y2="-8"/>
+      <line x1="-58" y1="14" x2="20" y2="14"/>
+    </g>
+    <g stroke="#C7502B" stroke-width="3">
+      <line x1="-78" y1="-24" x2="-70" y2="-16"/><line x1="70" y1="-24" x2="78" y2="-16"/>
+      <line x1="-78" y1="24" x2="-70" y2="16"/><line x1="70" y1="24" x2="78" y2="16"/>
+    </g>
+  </g>
+  <!-- 털실 타래 + 바늘 — 크게 -->
+  <g transform="translate(950 170)">
+    <circle r="112" fill="#C7502B"/>
+    <g fill="none" stroke="#F3C9AC" stroke-opacity="0.8" stroke-width="6">
+      <path d="M-104 -26 C -40 -76, 40 -76, 104 -20"/>
+      <path d="M-108 8 C -40 -40, 44 -44, 108 10"/>
+      <path d="M-104 40 C -32 -6, 36 -8, 104 42"/>
+      <path d="M-86 70 C -20 28, 28 26, 88 68"/>
+      <path d="M-58 94 C -6 62, 14 60, 62 92"/>
+    </g>
+    <path d="M112 6 C 160 30, 168 74, 150 120" fill="none" stroke="#C7502B" stroke-width="8" stroke-linecap="round"/>
+    <line x1="-150" y1="-124" x2="92" y2="84" stroke="#7C4A2D" stroke-width="11" stroke-linecap="round"/>
+    <line x1="-120" y1="-150" x2="116" y2="52" stroke="#8A563A" stroke-width="11" stroke-linecap="round"/>
+    <circle cx="-150" cy="-124" r="10" fill="#5A3820"/>
+    <circle cx="-120" cy="-150" r="10" fill="#6B452B"/>
+  </g>
+  <rect width="1200" height="675" filter="url(#grain)"/>
+</svg>

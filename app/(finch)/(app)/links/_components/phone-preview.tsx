@@ -83,12 +83,13 @@ function previewFileSize(d: Record<string, unknown>): string {
   return size >= 1024 * 1024 ? `${(size / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(size / 1024))}KB`;
 }
 
-function PPrice({ d, size = "sm" }: { d: Record<string, unknown>; size?: "sm" | "md" }) {
+function PPrice({ d, size = "sm", align = "start" }: { d: Record<string, unknown>; size?: "sm" | "md"; align?: "center" | "start" }) {
   const price = s(d, "price");
   if (!price) return null;
   const orig = s(d, "originalPrice");
   return (
-    <span className={`tnum mt-0.5 flex items-baseline gap-1 ${size === "sm" ? "text-[12px]" : "text-[15px]"}`}>
+    /* 정렬은 공개 렌더러 Price 와 같은 규칙 — 가운데 카드에서 가격만 왼쪽에 붙는 회귀(쏘넷 점검) */
+    <span className={`tnum mt-0.5 flex items-baseline gap-1 ${align === "center" ? "justify-center" : ""} ${size === "sm" ? "text-[12px]" : "text-[15px]"}`}>
       <span className="font-bold">{price}</span>
       {orig ? <span className="text-[10px] opacity-70 line-through">{orig}</span> : null}
     </span>
@@ -934,7 +935,7 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
               <span style={textStyle} className="block text-[13px] font-semibold">
                 {s(d, "label") || "링크"}
               </span>
-              <PPrice d={d} size={big ? "md" : "sm"} />
+              <PPrice d={d} size={big ? "md" : "sm"} align={big ? "center" : "start"} />
               <PTags d={d} align={big ? "center" : "start"} />
             </span>
           </div>
@@ -1016,7 +1017,8 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
           <div className="px-3 py-2.5">
             <p className="text-[13px] font-semibold">{s(d, "title")}</p>
             {s(d, "subtitle") ? <p className="mt-0.5 text-[12px] text-[var(--lp-muted)]">{s(d, "subtitle")}</p> : null}
-            {s(d, "price") ? <p className="tnum mt-1.5 text-[15px] font-bold">{s(d, "price")}</p> : null}
+            {/* 할인 원가까지 — 공개(Price)와 같은 규칙 */}
+            <PPrice d={d} size="md" />
             {s(d, "ctaLabel") && s(d, "url") ? (
               <span className="mt-2 flex min-h-[32px] items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] px-3 text-[12px] font-semibold text-[var(--lp-on-accent)]">
                 {s(d, "ctaLabel")}
@@ -1102,7 +1104,7 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
           {/* 사진 없는 셀은 라벨만이라 낮아진다 — 공개와 같은 바닥(비율 축소값) */}
           <span className={`block px-2.5 py-2 text-center text-[12px] font-medium ${s(it, "imagePath") ? "" : "min-h-9"}`}>
             <span className="line-clamp-2">{s(it, "title")}</span>
-            <PPrice d={it} />
+            <PPrice d={it} align="center" />
           </span>
         </div>
       ));

@@ -438,7 +438,8 @@ export function BlockRenderer({
           <div className="px-4 py-3.5">
             <p className="text-[15px] font-semibold text-[var(--lp-fg)]">{title}</p>
             {sub ? <p className="mt-1 text-[14px] text-[var(--lp-muted)]">{sub}</p> : null}
-            {price ? <p className="tnum mt-2 text-[17px] font-bold text-[var(--lp-fg)]">{price}</p> : null}
+            {/* 할인 원가(originalPrice)까지 — 링크·그리드와 같은 Price 규칙(2026-08-28 템플릿 재제작) */}
+            <Price d={d} />
             {/* 카드 전체가 이미 링크다 — 버튼은 <span> 이어야 한다(<a> 중첩은 무효 HTML).
                 url 이 없으면 누를 수 없으므로 버튼도 안 그린다. */}
             {cta && url ? (

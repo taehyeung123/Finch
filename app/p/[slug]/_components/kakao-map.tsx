@@ -96,6 +96,8 @@ export function KakaoMap({ address, className = "" }: { address: string; classNa
      주소를 고쳐 쓰면(편집 미리보기) 같은 컨테이너로 재시도할 수 있다. */
   const [state, setState] = useState<"pending" | "shown" | "failed">("pending");
   const [seen, setSeen] = useState(false);
+  /* 첫 로드는 즉시 — 0.6초 디바운스는 «타이핑 중 주소 변경»용이지 첫 표시용이 아니다(쏘넷: 빈 판) */
+  const firstRun = useRef(true);
 
   /* ① 뷰포트에 들어와야 시작 — 쿼터는 «지도를 실제로 본 방문»만 쓴다 */
   useEffect(() => {
@@ -124,6 +126,8 @@ export function KakaoMap({ address, className = "" }: { address: string; classNa
     const q = address.trim();
     if (!seen || !q) return;
     let cancelled = false;
+    const delay = firstRun.current ? 0 : 600;
+    firstRun.current = false;
     const timer = window.setTimeout(async () => {
       const kakao = await loadSdk();
       if (cancelled) return;
@@ -172,7 +176,7 @@ export function KakaoMap({ address, className = "" }: { address: string; classNa
         geoCache.set(q, { lat, lng });
         draw(lat, lng);
       });
-    }, 600);
+    }, delay);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
@@ -194,7 +198,17 @@ export function KakaoMap({ address, className = "" }: { address: string; classNa
          «보조기기엔 없는데 Tab 으론 닿는» 요소가 된다. inert 로 탭 정지까지 걷는다 */
       aria-hidden
       inert
-      className={`w-full overflow-hidden ${state === "failed" || !address.trim() ? "hidden" : ""} ${state === "pending" ? "animate-pulse bg-[var(--lp-border)]" : ""} ${className}`}
-    />
+      className={`relative w-full overflow-hidden ${state === "failed" || !address.trim() ? "hidden" : ""} ${state === "pending" ? "animate-pulse bg-[var(--lp-border)]" : ""} ${className}`}
+    >
+      {state === "pending" ? (
+        /* 로드 전에도 «지도 자리»로 읽히게 — 빈 회색 판은 고장으로 보인다(쏘넷 점검) */
+        <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--lp-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.55">
+            <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+            <circle cx="12" cy="10" r="3" />
+          </svg>
+        </span>
+      ) : null}
+    </div>
   );
 }

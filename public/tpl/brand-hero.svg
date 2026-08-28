@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <!-- 브랜드 «초록 문» v2 — 차양·문 겹침 해소(차양이 아치 위), 창문 두 짝에만 불빛,
+       간판은 위에서 내려온 와이어, 벽은 페이지 지면보다 확실히 어둡게 -->
+  <defs>
+    <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E7EFE3"/>
+      <stop offset="1" stop-color="#D9E4D4"/>
+    </linearGradient>
+    <linearGradient id="door" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#35684A"/>
+      <stop offset="1" stop-color="#2A523B"/>
+    </linearGradient>
+    <linearGradient id="warmwin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFE7B8"/>
+      <stop offset="1" stop-color="#FFC97F"/>
+    </linearGradient>
+    <filter id="softsh" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#2A523B" flood-opacity="0.22"/>
+    </filter>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.15  0 0 0 0 0.25  0 0 0 0 0.16  0 0 0 0.05 0"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="675" fill="url(#wall)"/>
+  <!-- 바닥 -->
+  <rect y="560" width="1200" height="115" fill="#CBD8C5"/>
+  <line x1="0" y1="560" x2="1200" y2="560" stroke="#AFC2A9" stroke-width="2"/>
+  <g stroke="#BCCBB5" stroke-width="1.5">
+    <line x1="150" y1="560" x2="80" y2="675"/><line x1="400" y1="560" x2="360" y2="675"/>
+    <line x1="650" y1="560" x2="640" y2="675"/><line x1="900" y1="560" x2="930" y2="675"/>
+    <line x1="1120" y1="560" x2="1180" y2="675"/>
+  </g>
+
+  <!-- 차양 — 문 아치보다 위에서 끝난다 -->
+  <g filter="url(#softsh)">
+    <rect x="440" y="156" width="320" height="14" rx="7" fill="#2F5D42"/>
+    <g stroke="#9DB79A" stroke-width="2">
+      <path d="M448 170 h60 l-10 32 h-40 Z" fill="#3B7052"/>
+      <path d="M508 170 h60 l-10 32 h-40 Z" fill="#F2F7EF"/>
+      <path d="M568 170 h60 l-10 32 h-40 Z" fill="#3B7052"/>
+      <path d="M628 170 h60 l-10 32 h-40 Z" fill="#F2F7EF"/>
+      <path d="M688 170 h60 l-10 32 h-40 Z" fill="#3B7052"/>
+    </g>
+  </g>
+
+  <!-- 아치 문 — 꼭대기(y=236)가 차양 밑단(202)보다 아래 -->
+  <g filter="url(#softsh)">
+    <path d="M500 560 L500 336 A100 100 0 0 1 700 336 L700 560 Z" fill="url(#door)"/>
+    <path d="M516 560 L516 340 A84 84 0 0 1 684 340 L684 560 Z" fill="none" stroke="#DCEADF" stroke-opacity="0.45" stroke-width="3"/>
+    <line x1="600" y1="238" x2="600" y2="560" stroke="#22422F" stroke-width="5"/>
+    <!-- 유리창 두 짝 — 불빛은 여기에서만 -->
+    <path d="M528 352 A72 72 0 0 1 590 292 L590 424 L528 424 Z" fill="url(#warmwin)" stroke="#22422F" stroke-width="4"/>
+    <path d="M610 292 A72 72 0 0 1 672 352 L672 424 L610 424 Z" fill="url(#warmwin)" stroke="#22422F" stroke-width="4"/>
+    <g stroke="#B8862F" stroke-opacity="0.5" stroke-width="3">
+      <line x1="536" y1="332" x2="582" y2="310"/><line x1="618" y1="310" x2="664" y2="332"/>
+    </g>
+    <!-- 손잡이 — 놋쇠 -->
+    <circle cx="576" cy="472" r="9" fill="#E8C67A" stroke="#8F6F2F" stroke-width="2"/>
+    <circle cx="624" cy="472" r="9" fill="#E8C67A" stroke="#8F6F2F" stroke-width="2"/>
+  </g>
+
+  <!-- 문 앞 화분 -->
+  <g filter="url(#softsh)">
+    <path d="M415 560 L405 502 L471 502 L461 560 Z" fill="#B5806A"/>
+    <g stroke="#4F7C5A" stroke-width="6" fill="none" stroke-linecap="round">
+      <path d="M438 502 C 438 452, 420 434, 406 418"/>
+      <path d="M438 502 C 440 448, 458 432, 474 414"/>
+      <path d="M438 502 C 436 456, 446 440, 438 406"/>
+    </g>
+    <g fill="#5E8F6B">
+      <ellipse cx="402" cy="414" rx="16" ry="9" transform="rotate(-38 402 414)"/>
+      <ellipse cx="478" cy="410" rx="16" ry="9" transform="rotate(34 478 410)"/>
+      <ellipse cx="437" cy="400" rx="15" ry="9" transform="rotate(-6 437 400)"/>
+    </g>
+  </g>
+
+  <!-- 걸이 간판 — 위에서 내려온 와이어 -->
+  <g filter="url(#softsh)">
+    <line x1="846" y1="0" x2="846" y2="298" stroke="#8FA98D" stroke-width="3"/>
+    <rect x="782" y="298" width="128" height="58" rx="12" fill="#FFFFFF" stroke="#C9D8C4" stroke-width="2"/>
+    <line x1="806" y1="320" x2="886" y2="320" stroke="#7BA98A" stroke-width="6" stroke-linecap="round"/>
+    <line x1="806" y1="338" x2="860" y2="338" stroke="#A7C2A9" stroke-width="6" stroke-linecap="round"/>
+  </g>
+  <rect width="1200" height="675" filter="url(#grain)"/>
+</svg>

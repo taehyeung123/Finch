@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="900" viewBox="0 0 900 900">
+  <!-- 머플러 v2 — 명암을 바깥(진함)→안(밝음) 단조로 정렬해 «말린 원단»으로,
+       이음새 자락을 바깥 링에 붙여 나선이 이어지게 -->
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FBEFE2"/>
+      <stop offset="1" stop-color="#F5E0CC"/>
+    </linearGradient>
+    <pattern id="knit" width="30" height="21" patternUnits="userSpaceOnUse">
+      <path d="M0 3 L7.5 13 L15 3 M15 3 L22.5 13 L30 3" fill="none" stroke="#5A2E18" stroke-opacity="0.18" stroke-width="3.4" stroke-linecap="round"/>
+    </pattern>
+    <filter id="softsh" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#8A4A28" flood-opacity="0.22"/>
+    </filter>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.35  0 0 0 0 0.2  0 0 0 0 0.1  0 0 0 0.045 0"/>
+    </filter>
+  </defs>
+  <rect width="900" height="900" fill="url(#base)"/>
+  <!-- 롤 — 바깥에서 안으로 갈수록 밝게(단조), 중심은 살짝 어긋나게 -->
+  <g filter="url(#softsh)">
+    <circle cx="450" cy="410" r="238" fill="#A93F22"/>
+    <circle cx="450" cy="410" r="238" fill="url(#knit)"/>
+    <circle cx="434" cy="424" r="182" fill="#C7502B"/>
+    <circle cx="434" cy="424" r="182" fill="url(#knit)"/>
+    <circle cx="452" cy="438" r="130" fill="#D97F53"/>
+    <circle cx="452" cy="438" r="130" fill="url(#knit)"/>
+    <circle cx="468" cy="450" r="84" fill="#E8A87C"/>
+    <circle cx="468" cy="450" r="84" fill="url(#knit)"/>
+    <circle cx="480" cy="460" r="42" fill="#F3C9AC"/>
+    <circle cx="480" cy="460" r="42" fill="url(#knit)"/>
+  </g>
+  <!-- 풀린 자락 — 바깥 링에서 이어져 내려온다 -->
+  <g filter="url(#softsh)">
+    <path d="M604 610 C 668 648, 716 652, 764 686 L764 758 C 700 722, 648 722, 566 676 Z" fill="#A93F22"/>
+    <path d="M604 610 C 668 648, 716 652, 764 686 L764 758 C 700 722, 648 722, 566 676 Z" fill="url(#knit)"/>
+    <g stroke="#8F3419" stroke-width="7" stroke-linecap="round">
+      <line x1="704" y1="740" x2="698" y2="798"/>
+      <line x1="730" y1="748" x2="726" y2="806"/>
+      <line x1="756" y1="755" x2="754" y2="813"/>
+    </g>
+  </g>
+  <rect width="900" height="900" filter="url(#grain)"/>
+</svg>
