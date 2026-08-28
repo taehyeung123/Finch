@@ -16,6 +16,9 @@ import { LINK_TEMPLATES } from "@/lib/links/templates";
 import { parseLittlyHtml } from "@/lib/links/littly";
 import { parseInpockHtml } from "@/lib/links/inpock";
 import { getLinkFeedItems } from "@/lib/data/live";
+import { createClaudeClient, CHAT_MODEL } from "@/lib/ai/claude";
+import { CREDIT_COSTS, chargeGeneration, refundGenerationCredits } from "@/lib/actions/credits";
+import { AI_FIELDS, AI_GOALS, AI_MOODS, fallbackCopy, type AiBrief, type AiCopy } from "@/lib/links/ai-design";
 
 /*
   프로필 링크 편집 — 블록 빌더(2026-08-17 재작성).
@@ -2395,4 +2398,209 @@ function sanitizeBlockData(input: Record<string, unknown>): { data?: Record<stri
   }
 
   return { data: out };
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   AI 디자인(2026-08-28 사장님 지시) — 인터뷰 → 카피 생성 → 시안 적용
+
+   생성은 카피만 AI 에 맡긴다(시안 조립은 lib/links/ai-design.ts 엔진 —
+   색·대비·블록 구조가 우리 스키마 안에서만 나온다). 키 미설정·데모는
+   fallback:true 로 돌려 엔진 카피로 동작한다(스튜디오와 같은 원칙).
+   ══════════════════════════════════════════════════════════════════ */
+
+export type AiCopyResult =
+  | { ok: true; copy: AiCopy }
+  | { ok: false; fallback: true }
+  | { ok: false; fallback?: false; error: string };
+
+export async function generateAiLinkCopy(brief: AiBrief): Promise<AiCopyResult> {
+  /* 선택지 밖 값은 받지 않는다 — 프롬프트 주입 면적을 좁힌다 */
+  if (
+    !AI_FIELDS.some((f) => f.key === brief.field) ||
+    !AI_GOALS.some((g) => g.key === brief.goal) ||
+    !AI_MOODS.some((m) => m.key === brief.mood)
+  ) {
+    return { ok: false, error: "선택지를 다시 확인해 주세요." };
+  }
+  const intro = sliceChars((brief.intro ?? "").trim(), 200);
+
+  if (isDemoMode() || !process.env.ANTHROPIC_API_KEY) return { ok: false, fallback: true };
+  const claude = createClaudeClient();
+  if (!claude) return { ok: false, fallback: true };
+
+  const charge = await chargeGeneration({
+    metric: "ai_link_design",
+    creditCost: CREDIT_COSTS.aiDesign,
+    reason: "link_ai_design",
+  });
+  if (!charge.ok) return { ok: false, error: charge.error };
+  const refundIfCharged = async () => {
+    if (charge.via === "credits") {
+      await refundGenerationCredits(charge.userId, CREDIT_COSTS.aiDesign, "generate_fail_refund: link_ai_design");
+    }
+  };
+
+  const fieldLabel = AI_FIELDS.find((f) => f.key === brief.field)!.label;
+  const goalLabel = AI_GOALS.find((g) => g.key === brief.goal)!.label;
+  const moodLabel = AI_MOODS.find((m) => m.key === brief.mood)!.label;
+
+  try {
+    const response = await claude.messages.create({
+      model: CHAT_MODEL,
+      max_tokens: 900,
+      /* 소넷 기본 adaptive thinking 이 900 상한을 잠식하면 JSON 이 잘린다(쏘넷 점검) —
+         짧은 카피 6개에 생각 토큰은 낭비다 */
+      thinking: { type: "disabled" },
+      output_config: {
+        format: {
+          type: "json_schema",
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["notice", "cta", "intro", "leadTitle", "leadDesc", "closing"],
+            properties: {
+              notice: { type: "string", description: "페이지 맨 위 알림 배너 한 줄, 24자 이내. 구체적 사실 어투(무엇을·언제)." },
+              cta: { type: "string", description: "대표 버튼 문구, 14자 이내. 동사로 끝난다." },
+              intro: { type: "string", description: "소개 1~2문장, 70자 이내. 사용자가 쓴 소개의 말투를 보존해 다듬는다." },
+              leadTitle: { type: "string", description: "구독/문의 폼 제목, 12자 이내." },
+              leadDesc: { type: "string", description: "폼 설명 한 줄, 45자 이내. 스팸 걱정을 덜어주는 어투." },
+              closing: { type: "string", description: "페이지 맨 아래 클로징 한 줄, 24자 이내. 무드와 어울리는 여운." },
+            },
+          },
+        },
+      },
+      messages: [
+        {
+          role: "user",
+          content: `프로필 링크 페이지(링크 모음 한 페이지)에 들어갈 한국어 카피 6개를 써라.
+
+[페이지 주인]
+- 분야: ${fieldLabel}
+- 페이지 목적: ${goalLabel}
+- 원하는 무드: ${moodLabel}
+- 본인이 쓴 소개: ${intro || "(없음 — 분야에 맞는 소개를 새로 써라)"}
+
+[카피 규칙 — 전부 지켜라]
+- 사람이 쓴 말처럼. 광고 문구·감탄사·과장 금지("최고", "미쳤다" 금지).
+- 이모지·해시태그·영문 슬로건 금지. 존댓말.
+- notice 는 구체적 사실 하나를 담는다(요일·주기·무엇 중 하나).
+- 소개는 페이지 주인의 말투를 살린다 — 본인이 쓴 소개가 있으면 그 문장을 거의 그대로 다듬는 수준으로.
+- 다른 링크 서비스 이름을 절대 언급하지 않는다.`,
+        },
+      ],
+    });
+    const text = response.content.find((b) => b.type === "text")?.text;
+    const raw = text ? (JSON.parse(text) as Record<string, unknown>) : null;
+    if (!raw) throw new Error("empty");
+    /* 길이는 서버가 최종 관문 — 스키마의 자수 가이드는 프롬프트 수준이다 */
+    const fb = fallbackCopy({ ...brief, intro });
+    const pick = (k: keyof AiCopy, cap: number) =>
+      typeof raw[k] === "string" && (raw[k] as string).trim() ? sliceChars((raw[k] as string).trim(), cap) : fb[k];
+    return {
+      ok: true,
+      copy: {
+        notice: pick("notice", 60),
+        cta: pick("cta", 20),
+        intro: pick("intro", 160),
+        leadTitle: pick("leadTitle", 20),
+        leadDesc: pick("leadDesc", 80),
+        closing: pick("closing", 40),
+      },
+    };
+  } catch (e) {
+    console.error("[links] AI 디자인 카피 생성 실패:", e instanceof Error ? e.message : e);
+    await refundIfCharged();
+    /* 오류로 막지 않는다 — 엔진 카피로 이어간다(환불 완료) */
+    return { ok: false, fallback: true };
+  }
+}
+
+/**
+ * AI 시안 적용 — applyTemplate 과 같은 «넣고 나서 지운다» 순서.
+ * 템플릿과 달리 데이터가 클라이언트에서 오므로 **전 관문을 태운다**:
+ * 블록은 sanitizeBlockData, 꾸미기는 sanitizeThemeCustom, 타입은 BLOCK_TYPES 화이트리스트.
+ */
+export async function applyAiDesign(
+  input: {
+    theme: string;
+    custom: Record<string, unknown> | null;
+    blocks: Array<{ type: string; data: Record<string, unknown> }>;
+    /** 인터뷰에서 새로 올린 프로필 사진(선택) — 적용 시점에 함께 저장 */
+    avatarDataUrl?: string;
+    /** AI 소개 — 헤더 bio 로 반영(블록 소개와 두 벌이 되지 않게) */
+    bio?: string;
+  },
+  pageId?: string,
+): Promise<Result> {
+  if (isDemoMode()) return DEMO;
+  const page = await myPage(pageId);
+  if (!page) return { ok: false, error: "먼저 프로필 링크를 만들어 주세요." };
+
+  if (!Array.isArray(input.blocks) || input.blocks.length === 0 || input.blocks.length > 20) {
+    return { ok: false, error: "적용할 구성이 올바르지 않아요." };
+  }
+  const rows: Array<{ page_id: string; type: BlockType; data: Record<string, unknown>; sort_order: number }> = [];
+  for (const b of input.blocks) {
+    if (!BLOCK_TYPES.includes(b.type as BlockType)) return { ok: false, error: "적용할 구성이 올바르지 않아요." };
+    const cleaned = sanitizeBlockData(b.data ?? {});
+    if (cleaned.error) return { ok: false, error: cleaned.error };
+    rows.push({ page_id: page.id, type: b.type as BlockType, data: cleaned.data ?? {}, sort_order: rows.length });
+  }
+  const theme = themeByKey(input.theme) ? input.theme : DEFAULT_THEME_KEY;
+  const custom = sanitizeThemeCustom(input.custom);
+
+  const supabase = await createClient();
+  const { data: oldRows, error: listErr } = await supabase.from("link_blocks").select("id").eq("page_id", page.id);
+  if (listErr) return { ok: false, error: "적용하지 못했어요." };
+  const oldIds = (oldRows ?? []).map((r) => r.id as string);
+
+  const { data: inserted, error } = await supabase.from("link_blocks").insert(rows).select("id");
+  if (error) {
+    console.error("[links] AI 디자인 적용 실패:", error.message);
+    return { ok: false, error: "적용하지 못했어요." };
+  }
+  if (oldIds.length) {
+    const { error: delErr } = await supabase.from("link_blocks").delete().in("id", oldIds);
+    if (delErr) {
+      const newIds = (inserted ?? []).map((r) => r.id as string);
+      if (newIds.length) await supabase.from("link_blocks").delete().in("id", newIds);
+      revalidatePath("/links");
+      return { ok: false, error: "적용하지 못했어요. 화면을 새로고침해 주세요." };
+    }
+  }
+
+  /* AI 소개(copy.intro)는 헤더 bio 로 — 블록에 또 넣으면 소개가 두 벌이 된다(쏘넷 점검) */
+  const bio = typeof input.bio === "string" && input.bio.trim() ? sliceChars(input.bio.trim(), 150) : undefined;
+  let themed = await supabase
+    .from("link_pages")
+    .update({ theme, theme_custom: custom, ...(bio ? { bio } : {}) })
+    .eq("id", page.id);
+  if (themed.error && /theme_custom/i.test(themed.error.message)) {
+    themed = await supabase.from("link_pages").update({ theme, ...(bio ? { bio } : {}) }).eq("id", page.id);
+  }
+  if (themed.error) {
+    console.error("[links] AI 디자인 테마 적용 실패:", themed.error.message);
+    /* 블록은 이미 교체됐다 — 새 상태를 내려보내지 않으면 편집기≠DB 로 갈린다(쏘넷 점검) */
+    revalidatePath("/links");
+    return { ok: false, error: "구성은 바뀌었는데 꾸미기를 적용하지 못했어요. 다시 시도해 주세요." };
+  }
+
+  /* 새 프로필 사진은 **모든 단계가 성공한 뒤** — 중간 실패 시 «사진만 바뀐 반쪽»과
+     재시도마다 쌓이는 고아 파일을 막는다(쏘넷 점검). 기존 업로드·프로필 관문 재사용. */
+  if (input.avatarDataUrl) {
+    const up = await uploadLinkImage(input.avatarDataUrl);
+    if (!up.ok || !up.url) {
+      revalidatePath("/links");
+      return { ok: false, error: "디자인은 적용됐는데 사진을 저장하지 못했어요. 프로필에서 다시 올려 주세요." };
+    }
+    const set = await updateLinkImages({ avatarPath: up.url }, page.id);
+    if (!set.ok) {
+      revalidatePath("/links");
+      return { ok: false, error: "디자인은 적용됐는데 사진을 저장하지 못했어요. 프로필에서 다시 올려 주세요." };
+    }
+  }
+
+  revalidatePath("/links");
+  return { ok: true };
 }

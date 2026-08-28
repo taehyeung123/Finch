@@ -34,6 +34,8 @@ export const CREDIT_COSTS = {
   brandTone: 10,
   /** AI 에이전트 메시지 1건 — 실측 35원 */
   agentChat: 4,
+  /** 프로필 링크 AI 디자인 1회(시안 3종 카피 생성, 소넷 1콜) — 실측 ~40원 상한 */
+  aiDesign: 5,
   /**
    * 풀 영상 AI 분석 1회(새 분석만 — 캐시 히트는 무료).
    * 2 → 5 (2026-08-15 실측 후 인상). 쏘넷 5 도입가 기준 18.1원, 2026-09-01 정가
@@ -60,6 +62,8 @@ export const FREE_MONTHLY_LIMITS: Record<string, number> = {
   ai_ideas: 0,
   ai_brand_tone: 0,
   ai_agent_chat: 3,
+  /* 프로필 링크 AI 디자인 — 무료 월 3회(첫 꾸미기 온보딩 성격이라 체험을 넉넉히) */
+  ai_link_design: 3,
   // 2026-08-14 사장님 확정: 무료는 새 분석 월 1회 (캐시 히트는 횟수 미차감·무료)
   ai_video_analysis: 1,
   board_saves: 20, // 미사용(연결 안 됨) — 위 설명 참고

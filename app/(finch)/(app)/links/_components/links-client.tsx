@@ -22,6 +22,7 @@ import {
   Clapperboard,
   Feather,
   Monitor,
+  WandSparkles,
   MousePointerClick,
   ShoppingBag,
   Store,
@@ -153,6 +154,7 @@ import type { LinkGuestbookEntry, LinkLead, LinkPageSummary, LinkPageView, LinkS
 import { BlockEditor, EDITOR_TITLE_ID } from "./block-editor";
 import { ImageField } from "./image-field";
 import { PickCards, PickChips } from "./option-picker";
+import { AiDesignModal } from "./ai-design-modal";
 
 /* 템플릿 카드 아이콘(2026-08-27 «이모지 빼고 SVG») — key → 픽토그램 */
 const TEMPLATE_ICON: Record<string, LucideIcon> = {
@@ -418,6 +420,8 @@ export function LinksClient({
      "하던 게 날아간" 것처럼 보인다(2026-08-20 지적). 서버 호출은 「이 템플릿 적용」
      때만. */
   const [tplPreview, setTplPreview] = useState<LinkTemplate | null>(null);
+  /* AI 디자인 위저드(2026-08-28) — 상단 배너에서 연다 */
+  const [aiDesignOpen, setAiDesignOpen] = useState(false);
   /* 예약 공개 모달 — 어느 블록의 예약을 고치는 중인가 */
   const [scheduleFor, setScheduleFor] = useState<string | null>(null);
   /* 편집 중인 블록 값은 **여기서** 들고 있다 — 편집기 안에 가둬 두면 탭을 누르는
@@ -1364,6 +1368,20 @@ export function LinksClient({
         />
       ) : null}
 
+      {aiDesignOpen && page ? (
+        <AiDesignModal
+          page={draftPageView}
+          isDemo={isDemo}
+          onClose={() => setAiDesignOpen(false)}
+          onApplied={() => {
+            /* 서버 액션이 revalidatePath 로 새 상태를 내려보낸다 — 여기선 이력만 비우고 알린다 */
+            clearHistory();
+            setAiDesignOpen(false);
+            toast("AI 디자인을 적용했어요. 마음에 안 들면 다시 만들 수 있어요.");
+          }}
+        />
+      ) : null}
+
       {/* 최초 「주소 정하기」 — 무작위 주소(6kt139hq 류)를 정식 주소로. 30일 쿨다운의 시작점 */}
       {slugSetup && page ? (
         <SlugSetupModal
@@ -1649,6 +1667,21 @@ export function LinksClient({
           />
           {tab === "page" ? (
             <>
+              {/* AI 디자인 배너(2026-08-28 «상단에 잘 보이게») — 디자인을 못 해도 되는 입구.
+                  새 배경색을 만들지 않는다: card-face 위에 primary 칩·버튼만. */}
+              <div className="card-face flex min-w-0 items-center gap-3 p-4">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-card bg-primary text-on-primary" aria-hidden>
+                  <WandSparkles className="size-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-bold">AI 디자인</p>
+                  <p className="truncate text-[14px] text-fg-sub">사진 한 장과 몇 가지 답이면, 디자인을 통째로 만들어드려요</p>
+                </div>
+                <Button size="sm" onClick={() => setAiDesignOpen(true)}>
+                  시작하기
+                </Button>
+              </div>
+
               {/* 템플릿 적용하기 — 접이식 스트립. 넘치는 쪽은 가장자리 페이드. 첫 칸은 가져오기. */}
               <div className="card-face min-w-0">
         <button
