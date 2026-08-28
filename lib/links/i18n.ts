@@ -41,6 +41,7 @@ export interface LpText {
   /** 법적 풋터 — 이용약관·개인정보처리방침 */
   legalTerms: string;
   legalPrivacy: string;
+  legalReport: string;
   file: string;
   music: string;
   video: string;
@@ -108,6 +109,7 @@ const ko: LpText = {
   vcard: "연락처 저장",
   legalTerms: "이용약관",
   legalPrivacy: "개인정보처리방침",
+  legalReport: "이 페이지 신고",
   file: "파일",
   music: "음악",
   video: "영상 보러 가기",
@@ -167,6 +169,7 @@ const en: LpText = {
   vcard: "Save contact",
   legalTerms: "Terms",
   legalPrivacy: "Privacy",
+  legalReport: "Report this page",
   file: "File",
   music: "Music",
   video: "Watch video",
@@ -226,6 +229,7 @@ const ja: LpText = {
   vcard: "連絡先を保存",
   legalTerms: "利用規約",
   legalPrivacy: "プライバシー",
+  legalReport: "このページを通報",
   file: "ファイル",
   music: "音楽",
   video: "動画を見る",

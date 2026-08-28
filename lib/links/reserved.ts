@@ -15,7 +15,7 @@
 */
 
 /** app/(finch)/(marketing)/ 아래 공개 페이지 (+ PRD PART 13.2 가 URL 예시로 명시한 예정 라우트 features) */
-const MARKETING = ["brand", "features", "goodbye", "instagram", "pricing", "privacy", "reference", "terms", "threads", "tiktok"];
+const MARKETING = ["brand", "features", "goodbye", "instagram", "pricing", "privacy", "reference", "report", "terms", "threads", "tiktok"];
 
 /** app/(finch)/(app)/ 아래 로그인 화면 (구 경로 스텁 포함) */
 const APP = [
@@ -51,7 +51,7 @@ const IMPERSONATION = [
   "cs", "notice", "qna", "faq", "mypage", "join",
   // 계정·결제·보안 피싱의 정석 이름들
   "account", "verify", "password", "payment", "pay", "security", "abuse", "legal",
-  "unsubscribe", "report", "invite", "download", "partners",
+  "unsubscribe", "invite", "download", "partners",
 ];
 
 /** 웹 인프라 관례 — 사용자에게 내줘 봐야 스쿼팅 가치뿐인 이름들 */

@@ -568,6 +568,11 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
           <a href="/privacy" target="_blank" rel="noopener" className="hover:underline">
             {t.legalPrivacy}
           </a>
+          <span aria-hidden>·</span>
+          {/* 신고 — 무기명 접수함(/report, 0071). 대상 주소를 미리 채워 보낸다 */}
+          <a href={`/report?slug=${encodeURIComponent(slug)}`} target="_blank" rel="noopener" className="hover:underline">
+            {t.legalReport}
+          </a>
         </footer>
       </div>
     </main>
