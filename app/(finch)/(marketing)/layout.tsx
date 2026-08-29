@@ -82,6 +82,11 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             <h3 className="text-[13px] font-bold text-fg-sub">기능</h3>
             <ul className="mt-3 space-y-2 text-[14px] text-fg-sub">
               <li>
+                <Link href="/profile-link" className="hover:text-fg">
+                  프로필 링크
+                </Link>
+              </li>
+              <li>
                 <Link href="/instagram" className="hover:text-fg">
                   인스타그램 분석
                 </Link>

@@ -20,6 +20,7 @@ const STATIC: MetadataRoute.Sitemap = [
   { url: "https://finch.ai.kr/instagram", lastModified: D("2026-08-24"), changeFrequency: "weekly", priority: 0.9 },
   { url: "https://finch.ai.kr/instagram/auto-dm", lastModified: D("2026-08-24"), changeFrequency: "monthly", priority: 0.8 },
   { url: "https://finch.ai.kr/instagram/visitor-check", lastModified: D("2026-08-24"), changeFrequency: "monthly", priority: 0.7 },
+  { url: "https://finch.ai.kr/profile-link", lastModified: D("2026-08-29"), changeFrequency: "weekly", priority: 0.9 },
   { url: "https://finch.ai.kr/reference", lastModified: D("2026-08-24"), changeFrequency: "weekly", priority: 0.8 },
   { url: "https://finch.ai.kr/tiktok", lastModified: D("2026-08-24"), changeFrequency: "weekly", priority: 0.8 },
   { url: "https://finch.ai.kr/threads", lastModified: D("2026-08-29"), changeFrequency: "weekly", priority: 0.7 },

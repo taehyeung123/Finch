@@ -15,7 +15,7 @@
 */
 
 /** app/(finch)/(marketing)/ 아래 공개 페이지 (+ PRD PART 13.2 가 URL 예시로 명시한 예정 라우트 features) */
-const MARKETING = ["brand", "features", "goodbye", "instagram", "pricing", "privacy", "reference", "report", "terms", "threads", "tiktok"];
+const MARKETING = ["brand", "features", "goodbye", "instagram", "pricing", "privacy", "profile-link", "reference", "report", "terms", "threads", "tiktok"];
 
 /** app/(finch)/(app)/ 아래 로그인 화면 (구 경로 스텁 포함) */
 const APP = [
