@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { movedTo, resolveSubSlug } from "../public-page";
 import { redirect } from "next/navigation";
-import PublicLinkPage, { generateMetadata as pageMetadata } from "../page";
+import PublicLinkPage, { generateMetadata as pageMetadata, generateViewport as pageViewport } from "../page";
 
 /*
   서브 페이지(0060) — /p/{부모slug}/{sub} 를 자식의 전역 slug 로 풀어 **같은 렌더러**를 태운다.
@@ -16,6 +16,14 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const child = await resolveSubSlug(slug, sub);
   if (!child) return { title: "페이지를 찾을 수 없어요", robots: { index: false, follow: false } };
   return pageMetadata({ params: Promise.resolve({ slug: child }) });
+}
+
+/* 사파리 상단바 색 — 부모 페이지 규칙(자식 테마) 재사용 */
+export async function generateViewport({ params }: { params: Promise<{ slug: string; sub: string }> }) {
+  const { slug, sub } = await params;
+  const child = await resolveSubSlug(slug, sub);
+  if (!child) return {};
+  return pageViewport({ params: Promise.resolve({ slug: child }) });
 }
 
 export default async function PublicSubPage({ params }: { params: Promise<{ slug: string; sub: string }> }) {

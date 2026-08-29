@@ -1,5 +1,5 @@
 import { cache } from "react";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -80,6 +80,21 @@ const load = cache(async (slug: string) => {
   if (!snap && !p.isOwner && !p.locked) return null;
   return { pageId: p.id, published: p.published, isOwner: p.isOwner, locked: p.locked, settings: p.settings, snap };
 });
+
+/* 사파리(iOS)는 상태바·노치 영역 색을 theme-color 로 정한다 — 없으면 body(앱 흰색)를 집어
+   «맨 위까지 페이지 색»이 안 됐다(2026-08-29 지시, 리틀리 대조). 스냅샷 테마의 지면색을 준다.
+   load 는 cache() 라 metadata·본문과 같은 요청에서 추가 조회가 없다. */
+export async function generateViewport({ params }: { params: Promise<{ slug: string }> }): Promise<Viewport> {
+  const { slug } = await params;
+  const data = await load(slug);
+  const snap = data?.snap;
+  /* 잠긴 페이지는 스냅샷을 읽지 않는 원칙 그대로 — 잠금 화면과 같은 기본 테마 색 */
+  const usable = !!snap && !data?.locked;
+  const theme = themeByKey(usable ? snap.theme : DEFAULT_LINK_THEME_KEY);
+  const custom = usable ? sanitizeThemeCustom((snap as { themeCustom?: unknown }).themeCustom) : null;
+  const bg = themeVars(theme, custom)["--lp-bg"];
+  return /^#[0-9A-Fa-f]{6}$/.test(bg ?? "") ? { themeColor: bg } : {};
+}
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -176,6 +191,7 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
         style={themeVars(theme, null) as React.CSSProperties}
         className="relative isolate flex min-h-[100dvh] items-center justify-center bg-[var(--lp-bg)] px-5 text-[var(--lp-fg)]"
       >
+        <style>{`html{background:${theme.bg}}`}</style>
         <LockScreen slug={slug} urlBase={base} message={settings.lockMessage} t={t.lock} errors={t.errors} />
       </main>
     );
@@ -199,6 +215,7 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
   const theme = themeByKey(snap.theme);
   /* 직접 꾸미기 — 스냅샷에 굳은 값. 발행 전 잘못 들어온 값이 있어도 관문을 한 번 더 태운다 */
   const themeCustom = sanitizeThemeCustom((snap as { themeCustom?: unknown }).themeCustom);
+  const lpVars = themeVars(theme, themeCustom);
   /* 예약 공개·숨김은 **요청 시점**에 판정한다(이 페이지는 force-dynamic). 스냅샷은 그대로 두고 그리는 목록만 거른다 */
   const visibleBlocks = snap.blocks.filter((b) => !isScheduledHidden(b.data));
   const emphasized = (() => {
@@ -295,11 +312,14 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
       lang={settings.lang}
       /* 커서는 themeVars 가 결정해 넣는다 — 여기서 var(--lp-cursor) 를 쓰면 기본 커서 페이지에서도
          style 문자열에 토큰 이름이 남아 링크의 손가락 커서가 죽는다(themes.ts 주석) */
-      style={{ ...themeVars(theme, themeCustom), fontFamily: "var(--lp-font)" } as React.CSSProperties}
+      style={{ ...lpVars, fontFamily: "var(--lp-font)" } as React.CSSProperties}
       className="relative isolate min-h-[100dvh] bg-[var(--lp-bg)] text-[var(--lp-fg)]"
       data-lp-fx={fx}
       data-lp-anim={anim}
     >
+      {/* html 배경 — 사파리 상단바 자동 추출·오버스크롤 고무줄까지 페이지 색(2026-08-29).
+          값은 테마/관문(sanitize)産 hex 만 — 형식이 다르면 안 심는다 */}
+      {/^#[0-9A-Fa-f]{6}$/.test(lpVars["--lp-bg"] ?? "") ? <style>{`html{background:${lpVars["--lp-bg"]}}`}</style> : null}
       {/* 글꼴 — fontsource(jsdelivr). React 19 가 precedence 로 <head> 에 올린다 */}
       {fonts.length ? <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="" /> : null}
       {fonts.map((href) => (
