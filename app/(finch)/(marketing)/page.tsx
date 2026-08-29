@@ -438,7 +438,7 @@ export default function LandingPage() {
       <section className="relative mx-auto max-w-6xl overflow-clip px-5 pb-16 pt-14 text-center md:px-6 md:pb-20 md:pt-24">
         <span
           aria-hidden
-          className="pointer-events-none absolute -top-24 left-1/2 -z-10 size-[420px] -translate-x-[62%] rounded-full bg-primary-weak blur-3xl md:size-[560px]"
+          className="pointer-events-none absolute -top-24 left-1/2 -z-10 size-[420px] -translate-x-[62%] rounded-full bg-tint-coral blur-3xl md:size-[560px]"
         />
         <span
           aria-hidden
@@ -455,7 +455,7 @@ export default function LandingPage() {
           채널 분석부터 광고 관리까지,{" "}
           {/* 그라데이션 글자 — 단색 코랄 한 덩어리보다 색이 산다. 배경을 글자에만 클립한다.
             지원하지 않는 브라우저에서는 text-primary-ink 가 그대로 보인다(폴백 안전). */}
-          <span className="bg-gradient-to-r from-primary via-primary-hover to-tint-purple-ink bg-clip-text text-primary-ink [-webkit-text-fill-color:transparent]">
+          <span className="bg-gradient-to-r from-primary-ink via-primary-hover to-tint-purple-ink bg-clip-text text-primary-ink [-webkit-text-fill-color:transparent]">
             대시보드 하나로
           </span>
         </h1>
@@ -492,13 +492,13 @@ export default function LandingPage() {
       <section className="border-y border-line bg-body">
         <div className="mx-auto max-w-6xl px-5 py-20 md:px-6 md:py-24">
           <Reveal>
-            <div className="mb-3 flex justify-center"><span className="rounded-chip bg-plate px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-fg-sub">WHY</span></div>
+            <div className="mb-3 flex justify-center"><span className="rounded-chip border border-line bg-body px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-fg-sub">WHY</span></div>
             <h2 className="text-center text-[26px] font-bold leading-[1.3] tracking-[-0.02em] md:text-[32px]">이런 고민 있으신가요?</h2>
           </Reveal>
           <div className="mt-10 grid gap-4 md:grid-cols-3">
             {PAIN_POINTS.map(({ icon: Icon, tone, persona, pain, solution }, i) => (
               <Reveal key={persona} delay={0.05 * i} className="h-full">
-                <div className="h-full rounded-card border border-line bg-body p-6 transition-transform hover:-translate-y-1">
+                <div className="card-face card-hover h-full p-6">
                   <span className={`flex size-10 items-center justify-center rounded-card ${TONE[tone]}`}>
                     <Icon className="size-5" aria-hidden />
                   </span>
@@ -520,7 +520,7 @@ export default function LandingPage() {
       <section id="features" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-20 md:px-6 md:py-24">
         <Reveal>
           {/* 프로필 링크가 들어오면서 «분석»만으로는 섹션을 덮지 못한다(2026-08-29) */}
-          <div className="mb-3 flex justify-center"><span className="rounded-chip bg-plate px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-fg-sub">FEATURES</span></div>
+          <div className="mb-3 flex justify-center"><span className="rounded-chip border border-line bg-body px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-fg-sub">FEATURES</span></div>
             <h2 className="text-center text-[26px] font-bold leading-[1.3] tracking-[-0.02em] md:text-[32px]">무엇을 할 수 있나요?</h2>
           <p className="mx-auto mt-3 max-w-lg text-center text-[15px] text-fg-sub">
             프로필을 정리하고, 분석하고, 비교하고, 만들어내는 것까지. SNS 마케팅의 반복 작업을 핀치가 대신합니다.
@@ -571,7 +571,7 @@ export default function LandingPage() {
       <section id="channels" className="border-y border-line bg-body">
         <div className="mx-auto max-w-6xl scroll-mt-20 px-5 py-20 md:px-6 md:py-24">
           <Reveal>
-            <div className="mb-3 flex justify-center"><span className="rounded-chip bg-plate px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-fg-sub">CHANNELS</span></div>
+            <div className="mb-3 flex justify-center"><span className="rounded-chip border border-line bg-body px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-fg-sub">CHANNELS</span></div>
             <h2 className="text-center text-[26px] font-bold leading-[1.3] tracking-[-0.02em] md:text-[32px]">
               채널마다 보는 것이 다릅니다
             </h2>
@@ -662,7 +662,7 @@ export default function LandingPage() {
       <section className="border-y border-line bg-body">
         <div className="mx-auto max-w-6xl px-5 py-20 md:px-6 md:py-24">
           <Reveal>
-            <div className="mb-3 flex justify-center"><span className="rounded-chip bg-plate px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-fg-sub">PRICING</span></div>
+            <div className="mb-3 flex justify-center"><span className="rounded-chip border border-line bg-body px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-fg-sub">PRICING</span></div>
             <h2 className="text-center text-[26px] font-bold leading-[1.3] tracking-[-0.02em] md:text-[32px]">요금제</h2>
             <p className="mt-3 text-center text-[15px] leading-[1.7] text-fg-sub">무료로 시작하고, 필요할 때 올리세요.</p>
           </Reveal>
@@ -674,8 +674,8 @@ export default function LandingPage() {
             {PLAN_CARDS.map((p, i) => (
               <Reveal key={p.key} delay={0.05 * i} className="h-full">
                 <div
-                  className={`h-full rounded-card border p-5 transition-transform hover:-translate-y-1 ${
-                    p.key === "pro" ? "border-primary bg-primary-weak" : "border-line bg-body"
+                  className={`card-face card-hover h-full p-5 ${
+                    p.key === "pro" ? "border-primary! bg-primary-weak!" : ""
                   }`}
                 >
                   <h3 className="flex items-center gap-2 text-[17px] font-bold">

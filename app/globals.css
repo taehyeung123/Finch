@@ -1672,3 +1672,24 @@ input[type="search"]::-webkit-search-cancel-button {
 }
 .chip-row::-webkit-scrollbar { display: none; }
 .chip-row > * { flex: 0 0 auto; }
+
+/* ───────────────────────────────────────────────────────────────
+   움직임 감소 — 마지막 안전망 (2026-08-29 점검)
+
+   앞의 감소 블록들은 우리가 이름 붙인 클래스(.anim-*·.reveal·.marquee-track·.shimmer)만
+   껐다. 그런데 실제로 화면을 움직이는 것 중 상당수는 **Tailwind 유틸**이다 —
+   `hover:-translate-y-1`(카드), `transition-[transform,opacity]`(하단 CTA·떠 있는 버튼).
+   이름으로 하나씩 잡으면 새 유틸이 들어올 때마다 구멍이 다시 생기므로,
+   여기서 «움직임» 자체를 끈다. 색·투명도 전환은 살려 둔다 — 그건 어지럼증을 만들지 않고
+   눌렀는지 여부를 알려 주는 필수 피드백이다.
+─────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
