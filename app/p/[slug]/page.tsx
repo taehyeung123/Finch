@@ -96,8 +96,15 @@ export async function generateViewport({ params }: { params: Promise<{ slug: str
   return /^#[0-9A-Fa-f]{6}$/.test(bg ?? "") ? { themeColor: bg } : {};
 }
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+/*
+  urlBase — 방문자가 실제로 보고 있는 주소(본문 렌더러와 같은 개념, 아래 주석 참조).
+  서브 페이지는 `{부모}/{서브}` 로 들어오는데 데이터는 자식의 전역 slug 로 읽는다.
+  이걸 안 넘기면 canonical·og:url 이 **아무도 쓰지 않는 내부 주소**를 가리켜,
+  수집기가 정본을 그쪽으로 잡고 공유 카드 링크도 그 주소로 나간다(2026-08-29 쏘넷 점검).
+*/
+export async function generateMetadata({ params, urlBase }: { params: Promise<{ slug: string }>; urlBase?: string }): Promise<Metadata> {
   const { slug } = await params;
+  const canonicalPath = `/${urlBase ?? slug}`;
   const data = await load(slug);
   if (data?.locked) {
     /* 잠긴 페이지 — 제목·소개는 스냅샷 안에 있고 스냅샷은 열기 전엔 안 읽는다. 카드에도 아무것도 안 새게 */
@@ -125,7 +132,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
        읽으므로 사용자 브랜드만 나간다. 두 경로가 다른 필드를 보는 걸 이용한 분리다. */
     title: { absolute: `${title} | 핀치` },
     description,
-    alternates: { canonical: `/${slug}` },
+    alternates: { canonical: canonicalPath },
     /* openGraph 를 정의하지 않으면 루트 레이아웃의 핀치 OG 이미지·siteName 을 그대로
        물려받는다. 남의 브랜드 페이지에 우리 로고가 걸리는 게 그 경로였다. */
     openGraph: {
@@ -133,7 +140,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       siteName: s.title || slug,
       title: ogTitle,
       description,
-      url: `/${slug}`,
+      url: canonicalPath,
       images: image ? [image] : [],
     },
     twitter: {

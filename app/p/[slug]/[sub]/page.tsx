@@ -15,7 +15,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug, sub } = await params;
   const child = await resolveSubSlug(slug, sub);
   if (!child) return { title: "페이지를 찾을 수 없어요", robots: { index: false, follow: false } };
-  return pageMetadata({ params: Promise.resolve({ slug: child }) });
+  /* 데이터는 자식 slug 로, 정본 주소(canonical·og:url)는 방문자가 들어온 `{부모}/{서브}` 로 —
+     본문 렌더러가 하는 것과 같은 분리다(쏘넷 점검: 내부 slug 가 정본으로 새어 나갔다) */
+  return pageMetadata({ params: Promise.resolve({ slug: child }), urlBase: `${slug}/${sub}` });
 }
 
 /* 사파리 상단바 색 — 부모 페이지 규칙(자식 테마) 재사용 */

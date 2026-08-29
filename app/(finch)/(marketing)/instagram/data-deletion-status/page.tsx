@@ -10,7 +10,8 @@ import { FinchLogo } from "@/components/logo";
 */
 
 export const metadata: Metadata = {
-  title: "데이터 삭제 처리 확인 — 핀치",
+  /* 레이아웃 템플릿이 «| 핀치 (Finch)» 를 붙인다 — 브랜드를 직접 쓰면 이중 표기 */
+  title: "데이터 삭제 처리 확인",
   robots: { index: false, follow: false },
 };
 

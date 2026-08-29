@@ -4,6 +4,8 @@ import { FinchMark } from "@/components/logo";
 
 export const metadata: Metadata = {
   title: "탈퇴 완료",
+  /* 없으면 랜딩의 서비스 소개문이 그대로 상속돼 «탈퇴 완료» 화면에 엉뚱한 설명이 붙는다 */
+  description: "계정과 연동 정보, 저장한 콘텐츠가 모두 삭제되었습니다. 그동안 이용해 주셔서 고맙습니다.",
   robots: { index: false, follow: false },
 };
 

@@ -7,7 +7,8 @@ import { Reveal } from "@/components/landing/reveal";
 import { AppIconTile } from "@/components/icons/brand";
 
 export const metadata: Metadata = {
-  title: "틱톡 분석 사이트 핀치 — 계정 팔로워·조회수·참여율 통계와 트렌드 분석",
+  /* 레이아웃 템플릿이 «| 핀치 (Finch)» 를 붙인다 — 여기 브랜드를 또 쓰면 이중 표기 */
+  title: "틱톡 분석 사이트 — 계정 팔로워·조회수·참여율 통계와 트렌드 분석",
   description:
     "핀치의 틱톡 분석은 내 틱톡 계정의 팔로워·조회수·참여율 통계를 확인하고 영상별 성과를 진단하는 틱톡 분석 사이트입니다. 틱톡 해시태그·트렌드·인플루언서 분석은 제휴 데이터 공급사를 통해 함께 제공합니다.",
   alternates: { canonical: "/tiktok" },

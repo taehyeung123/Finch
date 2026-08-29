@@ -106,6 +106,12 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
                   쓰레드 분석
                 </Link>
               </li>
+              {/* /reference 는 사이트맵에 있는데 내부 링크가 한 곳도 없었다 — 수집기가 닿는 길이 없다 */}
+              <li>
+                <Link href="/reference" className="hover:text-fg">
+                  레퍼런스 수집
+                </Link>
+              </li>
             </ul>
           </div>
           <div>

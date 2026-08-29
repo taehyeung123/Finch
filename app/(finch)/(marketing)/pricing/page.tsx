@@ -101,6 +101,8 @@ const JSON_LD = {
       description:
         "핀치는 무료 플랜과 유료 4단계(Creator·Pro·Agency·Enterprise) 요금제를 제공하는 SNS 통합 분석 도구입니다. 유료 플랜은 월 크레딧 하나로 모든 AI 기능을 씁니다.",
       brand: { "@type": "Brand", name: "핀치 (Finch)" },
+      /* Product 에 image 가 없으면 검색 결과의 상품 카드가 그림 없이 나간다 */
+      image: "https://finch.ai.kr/brand/finch-og-1200.png",
       offers: PLAN_CARDS.filter((p) => p.price > 0).map((p) => ({
         "@type": "Offer",
         name: p.name,
