@@ -245,6 +245,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
           }
         />
         <CardBody className="overflow-x-auto">
+          <p className="mb-2 text-[12px] text-fg-faint sm:hidden">← 옆으로 밀면 댓글·좋아요·최근 반응를 볼 수 있어요</p>
           {view.topEngagers.length > 0 ? (
             <>
               <table className="w-full min-w-[560px] text-[15px]">

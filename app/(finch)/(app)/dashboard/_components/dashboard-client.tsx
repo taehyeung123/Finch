@@ -191,6 +191,7 @@ export function DashboardClient({
             }
           />
           <CardBody className="overflow-x-auto">
+            <p className="mb-2 text-[12px] text-fg-faint sm:hidden">← 옆으로 밀면 조회수·좋아요·댓글·추이를 볼 수 있어요</p>
             {posts.length > 0 ? (
               <table className="w-full min-w-[540px] text-[15px]">
                 <thead>

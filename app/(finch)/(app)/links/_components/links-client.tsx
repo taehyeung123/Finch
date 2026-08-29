@@ -1263,7 +1263,7 @@ export function LinksClient({
         disabled={undoStack.length === 0 || busy}
         aria-label={undoStack.length ? `실행취소: ${undoStack[undoStack.length - 1].label}` : "실행취소"}
         title={undoStack.length ? `실행취소: ${undoStack[undoStack.length - 1].label}` : undefined}
-        className="trans-state rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg disabled:opacity-30"
+        className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg disabled:opacity-30"
       >
         <Undo2 className="size-4" aria-hidden />
       </button>
@@ -1273,7 +1273,7 @@ export function LinksClient({
         disabled={redoStack.length === 0 || busy}
         aria-label={redoStack.length ? `다시실행: ${redoStack[redoStack.length - 1].label}` : "다시실행"}
         title={redoStack.length ? `다시실행: ${redoStack[redoStack.length - 1].label}` : undefined}
-        className="trans-state rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg disabled:opacity-30"
+        className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg disabled:opacity-30"
       >
         <Redo2 className="size-4" aria-hidden />
       </button>
@@ -2409,7 +2409,7 @@ function BlockListPanel({
     setOverId(null);
   }
 
-  const iconBtn = "trans-state rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg disabled:opacity-40";
+  const iconBtn = "trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg disabled:opacity-40";
 
   return (
     <div className="space-y-2">
@@ -2861,7 +2861,7 @@ function TemplateModal({
             type="button"
             aria-label="닫기"
             onClick={onClose}
-            className="trans-state rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg"
+            className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg"
           >
             <X className="size-4" aria-hidden />
           </button>
@@ -4065,7 +4065,7 @@ function ProfilePanel({
                 type="button"
                 onClick={() => onChange({ snsLinks: sns.filter((_, j) => j !== i) })}
                 aria-label="SNS 링크 삭제"
-                className="trans-state rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-negative"
+                className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-negative"
               >
                 <Trash2 className="size-4" />
               </button>

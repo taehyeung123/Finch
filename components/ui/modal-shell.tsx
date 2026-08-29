@@ -91,7 +91,7 @@ export function ModalShell({
               aria-label="닫기"
               disabled={busy}
               onClick={onClose}
-              className="trans-state -mr-1.5 -mt-1 rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg disabled:opacity-40"
+              className="trans-state -mr-1.5 -mt-1 relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg disabled:opacity-40"
             >
               <X className="size-4" />
             </button>

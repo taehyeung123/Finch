@@ -213,6 +213,7 @@ export default function CompetitorsPage() {
           </div>
 
           <div className="overflow-x-auto">
+            <p className="mb-2 text-[12px] text-fg-faint sm:hidden">← 옆으로 밀면 경쟁 계정별 지표를 볼 수 있어요</p>
             <table className="w-full min-w-[520px] text-[15px]">
               <thead>
                 <tr className="border-b border-line text-left text-xs text-fg-faint">

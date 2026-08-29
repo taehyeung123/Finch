@@ -161,7 +161,7 @@ export function BlockEditor({
           type="button"
           onClick={onClose}
           aria-label="편집 닫기"
-          className="trans-state rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg"
+          className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg"
         >
           <X className="size-4" />
         </button>

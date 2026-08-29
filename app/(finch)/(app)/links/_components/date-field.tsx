@@ -172,7 +172,7 @@ export function DateTimePickerField({
                     type="button"
                     aria-label="이전 달"
                     onClick={() => setView((v) => (v.m === 1 ? { y: v.y - 1, m: 12 } : { y: v.y, m: v.m - 1 }))}
-                    className="trans-state rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg"
+                    className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg"
                   >
                     <ChevronLeft className="size-4" />
                   </button>
@@ -183,7 +183,7 @@ export function DateTimePickerField({
                     type="button"
                     aria-label="다음 달"
                     onClick={() => setView((v) => (v.m === 12 ? { y: v.y + 1, m: 1 } : { y: v.y, m: v.m + 1 }))}
-                    className="trans-state rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg"
+                    className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg"
                   >
                     <ChevronRight className="size-4" />
                   </button>

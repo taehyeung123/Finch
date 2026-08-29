@@ -810,7 +810,7 @@ export default function CampaignsPage() {
                               type="button"
                               aria-label={`${i + 1}번째 카드 삭제`}
                               onClick={() => removeCard(card.id)}
-                              className="shrink-0 rounded-card p-1.5 text-fg-faint trans-state hover:bg-tint-hover hover:text-fg"
+                              className="shrink-0 relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-faint trans-state hover:bg-tint-hover hover:text-fg"
                             >
                               <X className="size-4" aria-hidden />
                             </button>

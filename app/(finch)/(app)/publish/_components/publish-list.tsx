@@ -302,7 +302,7 @@ export function PublishList({
                     type="button"
                     onClick={() => setCursor((c) => shiftMonth(c.year, c.month, -1))}
                     aria-label="이전 달"
-                    className="trans-state rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg"
+                    className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg"
                   >
                     <ChevronLeft className="size-4" />
                   </button>
@@ -321,7 +321,7 @@ export function PublishList({
                     type="button"
                     onClick={() => setCursor((c) => shiftMonth(c.year, c.month, 1))}
                     aria-label="다음 달"
-                    className="trans-state rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg"
+                    className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-fg"
                   >
                     <ChevronRight className="size-4" />
                   </button>
@@ -552,7 +552,7 @@ export function PublishList({
                       <button
                         type="button"
                         onClick={() => cancel(post.id)}
-                        className="trans-state rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-negative"
+                        className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-negative"
                         aria-label="예약 취소"
                         title="예약 취소"
                       >
@@ -586,7 +586,7 @@ export function PublishList({
                             if (window.confirm("이 글을 지울까요? 되돌릴 수 없어요.")) runDraft(post.id, "delete");
                           }}
                           disabled={draftBusy !== null}
-                          className="trans-state rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-negative disabled:opacity-40"
+                          className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-negative disabled:opacity-40"
                           aria-label="삭제"
                           title="삭제"
                         >
@@ -650,7 +650,7 @@ export function PublishList({
                       disabled={draftBusy !== null}
                       aria-label="초안 삭제"
                       title="초안 삭제"
-                      className="trans-state rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-negative disabled:opacity-40"
+                      className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-negative disabled:opacity-40"
                     >
                       <Trash2 className="size-4" />
                     </button>

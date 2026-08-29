@@ -126,7 +126,7 @@ export function AgentPanel() {
               type="button"
               onClick={() => setOpen(false)}
               aria-label="닫기"
-              className="rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg"
+              className="relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg"
             >
               <X className="size-5" />
             </button>

@@ -291,7 +291,7 @@ export default function PricingPage() {
                         데이터 행과 같은 구조로 «고정되는 라벨 칸 + 나머지를 메우는 칸» 으로 나눈다. */}
                     <tr>
                       <th
-                        scope="colgroup"
+                        scope="rowgroup"
                         className="sticky left-0 z-10 border-t border-line-strong bg-plate px-5 py-2.5 text-left text-[12px] font-bold uppercase tracking-[0.1em] text-fg-sub"
                       >
                         {group.label}

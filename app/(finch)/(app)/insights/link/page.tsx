@@ -198,6 +198,7 @@ export default function AnalyzePage() {
       <Card>
         <CardHeader title="분석 히스토리" description="최근에 분석한 게시물" />
         <CardBody className="overflow-x-auto">
+          <p className="mb-2 text-[12px] text-fg-faint sm:hidden">← 옆으로 밀면 채널·분석 시각·조회수를 볼 수 있어요</p>
           <table className="w-full min-w-[520px] text-[15px]">
             <thead>
               <tr className="border-b border-line text-left text-xs text-fg-faint">

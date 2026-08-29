@@ -226,7 +226,7 @@ export function PostComposer({
             type="button"
             aria-label="닫기"
             onClick={requestClose}
-            className="rounded-card p-1.5 text-fg hover:bg-tint-hover"
+            className="relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg hover:bg-tint-hover"
           >
             <X className="size-5" />
           </button>

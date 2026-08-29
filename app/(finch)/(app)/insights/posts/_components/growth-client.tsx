@@ -174,6 +174,7 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
               description="저장률이 높은 순서. 공식 인사이트(저장·도달)에서 직접 계산한 실제 값이에요."
             />
             <CardBody className="overflow-x-auto">
+              <p className="mb-2 text-[12px] text-fg-faint sm:hidden">← 옆으로 밀면 유형·저장률·참여율·도달를 볼 수 있어요</p>
               <table className="w-full min-w-[640px] text-[15px]">
                 <thead>
                   <tr className="border-b border-line text-left text-xs text-fg-faint">

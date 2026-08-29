@@ -10,7 +10,7 @@ import { AppIconTile, InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/compon
 export const metadata: Metadata = {
   title: "인스타 자동디엠 — 댓글 키워드에 자동 DM 발송 (ManyChat 대안)",
   description:
-    "인스타 자동디엠(자동 DM)은 인스타그램 게시물에 특정 키워드 댓글이 달리면 자동으로 DM을 보내주는 기능입니다. 게시물마다 다른 메시지를 설정하고, 공식 인스타그램 메시지 API로 안전하게 발송합니다. 콘텐츠 마케터·광고대행사·인플루언서·쇼핑몰을 위한 인스타 자동 응답 도구, 핀치에서 만나보세요.",
+    "인스타 자동디엠(자동 DM)은 인스타그램 게시물에 특정 키워드 댓글이 달리면 자동으로 DM을 보내주는 기능입니다. 게시물마다 다른 메시지를 설정하고, 메타가 허용한 정식 방식으로 안전하게 발송합니다. 콘텐츠 마케터·광고대행사·인플루언서·쇼핑몰을 위한 인스타 자동 응답 도구, 핀치에서 만나보세요.",
   keywords: [
     "인스타 자동디엠",
     "인스타 자동 DM",
@@ -74,7 +74,7 @@ const IG_ONLY_REASONS = [
     channel: "tiktok" as const,
     label: "TikTok",
     ok: false,
-    text: "틱톡은 외부 서비스가 사용할 수 있는 공식 DM 발송 API를 제공하지 않습니다. 우회 방식은 정책 위반이라, 핀치는 틱톡 자동 DM을 제공하지 않습니다.",
+    text: "틱톡은 외부 서비스가 대신 DM을 보내는 길을 열어 두지 않았습니다. 우회하는 방식은 규정 위반이라, 핀치는 틱톡 자동 DM을 제공하지 않습니다.",
   },
 ];
 
@@ -100,7 +100,7 @@ const FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: "스레드나 틱톡에서도 자동 DM이 되나요?",
-    a: "자동 DM은 인스타그램 전용 기능입니다. 스레드는 DM 발송 API가 없고(메시지는 인스타그램으로 연결됩니다), 틱톡은 외부 서비스용 공식 DM API를 제공하지 않습니다. 두 채널에서는 자동 DM을 제공하지 않습니다.",
+    a: "자동 DM은 인스타그램 전용 기능입니다. 스레드는 DM을 보내는 길 자체가 없고(메시지는 인스타그램으로 연결됩니다), 틱톡은 외부 서비스가 대신 보내는 것을 허용하지 않습니다. 두 채널에서는 자동 DM을 제공하지 않습니다.",
   },
   {
     q: "ManyChat 같은 서비스와 무엇이 다른가요?",
@@ -192,7 +192,7 @@ export default function AutoDmPage() {
             플랜별 발송 한도 보기
           </ButtonLink>
         </div>
-        <p className="mt-4 text-[13px] text-fg-sub">공식 인스타그램 메시지 API 기반 · 인스타그램 전용</p>
+        <p className="mt-4 text-[13px] text-fg-sub">메타가 허용한 정식 방식 · 인스타그램 전용</p>
       </section>
 
       {/* 질문형 섹션 */}

@@ -261,7 +261,7 @@ export function AdDetailModal({
               type="button"
               aria-label="닫기"
               onClick={onClose}
-              className="trans-state cursor-pointer rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg md:hidden"
+              className="trans-state cursor-pointer relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg md:hidden"
             >
               <X className="size-4" aria-hidden />
             </button>
@@ -361,7 +361,7 @@ export function AdDetailModal({
               type="button"
               aria-label="닫기"
               onClick={onClose}
-              className="trans-state hidden cursor-pointer rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg md:block"
+              className="trans-state hidden cursor-pointer relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-fg md:block"
             >
               <X className="size-4" aria-hidden />
             </button>
