@@ -38,7 +38,7 @@ export function SignupForm({ nextPath = "/onboarding" }: { nextPath?: string }) 
 
   return (
     <div className="w-full max-w-[360px]">
-      <Link href="/" aria-label="핀치 홈으로 이동" className="mb-8 inline-flex rounded-card lg:hidden">
+      <Link href="/" aria-label="핀치 홈으로 이동" className="mb-8 inline-flex items-center rounded-card py-2 lg:hidden">
         <FinchLogo />
       </Link>
 
@@ -81,11 +81,11 @@ export function SignupForm({ nextPath = "/onboarding" }: { nextPath?: string }) 
 
       <p className="mt-4 text-center text-xs text-fg-faint">
         가입 시{" "}
-        <Link href="/terms" className="underline underline-offset-2 hover:text-fg-sub">
+        <Link href="/terms" className="-my-1 inline-block py-1.5 underline underline-offset-2 hover:text-fg-sub">
           이용약관
         </Link>
         과{" "}
-        <Link href="/privacy" className="underline underline-offset-2 hover:text-fg-sub">
+        <Link href="/privacy" className="-my-1 inline-block py-1.5 underline underline-offset-2 hover:text-fg-sub">
           개인정보처리방침
         </Link>
         에 동의하게 됩니다
@@ -93,7 +93,7 @@ export function SignupForm({ nextPath = "/onboarding" }: { nextPath?: string }) 
 
       <p className="mt-6 text-center text-[14px] text-fg-sub">
         이미 계정이 있나요?{" "}
-        <Link href="/login" className="font-semibold text-primary hover:text-primary-hover">
+        <Link href="/login" className="-my-1.5 inline-block px-1 py-2 font-semibold text-primary hover:text-primary-hover">
           로그인
         </Link>
       </p>

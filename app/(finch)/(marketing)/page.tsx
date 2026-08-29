@@ -222,7 +222,7 @@ function ProfileLinkPanel() {
             민
           </span>
           <p className="mt-2 text-[14px] font-bold">민지의 공구방</p>
-          <p className="mt-0.5 text-[11px] text-fg-sub">이번 주 공동구매 진행 중</p>
+          <p className="mt-0.5 text-[12px] text-fg-sub">이번 주 공동구매 진행 중</p>
         </div>
         <div className="mt-3.5 space-y-2">
           {[
@@ -233,7 +233,7 @@ function ProfileLinkPanel() {
             <div key={r.label} className="flex items-center gap-2.5 rounded-card border border-line bg-body px-2.5 py-2">
               <AppIconTile app={r.app} size={22} />
               <span className="text-[12px] font-semibold">{r.label}</span>
-              <span className="tnum ml-auto text-[11px] text-fg-sub">{r.hits}</span>
+              <span className="tnum ml-auto text-[12px] text-fg-sub">{r.hits}</span>
             </div>
           ))}
         </div>
@@ -334,7 +334,7 @@ function AiStudioPanel() {
             순서가 전부예요
           </p>
           <div className="mt-3 h-1.5 w-10 rounded-chip bg-primary" />
-          <p className="mt-3 text-[11px] text-fg-sub">AI 생성 표시 자동 부착</p>
+          <p className="mt-3 text-[12px] text-fg-sub">AI 생성 표시 자동 부착</p>
         </div>
       </div>
     </div>

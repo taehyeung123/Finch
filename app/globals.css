@@ -1615,3 +1615,23 @@ input[type="search"]::-webkit-search-cancel-button {
 @media (prefers-reduced-motion: reduce) {
   .lp-pill-in { animation: none; }
 }
+
+/* ───────────────────────────────────────────────────────────────
+   모바일 입력칸 최소 글자 크기 (2026-08-29 모바일 정리)
+
+   iOS 사파리는 글자가 16px 미만인 입력칸을 누르면 **화면을 확대**한다.
+   확대된 채로 남아 다음 칸을 누르러 가는 길이 어긋나고, 폼이 통째로 틀어진다.
+   maximum-scale 로 확대를 막는 방법도 있지만 그건 **손으로 확대하는 것까지 막아**
+   접근성을 해친다 — 글자를 키우는 쪽이 옳다.
+
+   레이어 밖에 두는 이유: Tailwind 유틸(@layer utilities)의 text-[15px] 를 이겨야 한다
+   (레이어 없는 규칙이 레이어 있는 규칙을 이긴다 — 이 저장소에서 이미 겪은 규칙).
+   지금 공개 폼 중 16px 보다 큰 입력칸은 없어서 «최소»가 «고정»이 되는 부작용은 없다.
+─────────────────────────────────────────────────────────────── */
+@media (pointer: coarse) and (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}

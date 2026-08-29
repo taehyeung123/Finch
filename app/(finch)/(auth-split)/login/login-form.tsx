@@ -49,7 +49,7 @@ function LoginCard() {
 
   return (
     <div className="w-full max-w-[360px]">
-      <Link href="/" aria-label="핀치 홈으로 이동" className="mb-8 inline-flex rounded-card lg:hidden">
+      <Link href="/" aria-label="핀치 홈으로 이동" className="mb-8 inline-flex items-center rounded-card py-2 lg:hidden">
         <FinchLogo />
       </Link>
 
@@ -103,7 +103,7 @@ function LoginCard() {
 
       <p className="mt-6 text-center text-[14px] text-fg-sub">
         아직 계정이 없나요?{" "}
-        <Link href="/signup" className="font-semibold text-primary hover:text-primary-hover">
+        <Link href="/signup" className="-my-1.5 inline-block px-1 py-2 font-semibold text-primary hover:text-primary-hover">
           회원가입
         </Link>
       </p>

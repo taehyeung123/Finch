@@ -25,11 +25,13 @@ export function FinchPill({ label }: { label: string }) {
           알약과 함께 뜨고 함께 닫힌다. PC 는 지면이 넓어 스크림이 과해서 모바일만. */}
       <div aria-hidden className="pointer-events-none fixed inset-x-0 bottom-0 z-20 h-40 bg-gradient-to-t from-black/60 to-transparent lg:hidden" />
       <div className="pointer-events-none fixed inset-x-0 bottom-5 z-30 flex justify-center px-5">
+      {/* 손가락 표적 — 알약은 모바일 전용 UI 인데 링크가 28px 이었다(2026-08-29 실측).
+          링크·닫기 모두 36px 로 세우고 알약 높이는 그만큼만 자란다. */}
       <div className="lp-pill-in pointer-events-auto flex items-center gap-1 rounded-full bg-white py-1.5 pl-4 pr-1.5 text-neutral-900 shadow-[0_12px_32px_-8px_rgba(0,0,0,0.45)]">
         <Link
           href="/?utm_source=profile_link&utm_medium=pill"
           target="_blank"
-          className="flex items-center gap-2 text-[13px] font-bold"
+          className="flex min-h-9 items-center gap-2 pr-1 text-[13px] font-bold"
         >
           <FinchMark className="size-4 text-primary" aria-hidden />
           {label}
@@ -37,7 +39,7 @@ export function FinchPill({ label }: { label: string }) {
         <button
           type="button"
           aria-label="닫기"
-          className="flex size-7 items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
+          className="flex size-9 items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
           onClick={() => setShow(false)}
         >
           <X className="size-4" aria-hidden />

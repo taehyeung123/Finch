@@ -796,11 +796,12 @@ export function PhonePreview({
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
             <div aria-hidden className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/60 to-transparent" />
             <div className="relative flex justify-center pb-3">
-              <span className="flex items-center gap-1 rounded-full bg-white py-1 pl-3 pr-1.5 text-neutral-900 shadow-[0_10px_24px_-8px_rgba(0,0,0,0.45)]">
+              {/* 공개 알약이 손가락 표적 때문에 높아졌다(min-h-9) — 폰 프레임 비율로 축소해 따라간다 */}
+              <span className="flex min-h-8 items-center gap-1 rounded-full bg-white py-1 pl-3 pr-1.5 text-neutral-900 shadow-[0_10px_24px_-8px_rgba(0,0,0,0.45)]">
                 <FinchMark className="size-3.5 text-primary" aria-hidden />
                 <span className="text-[11px] font-bold">나만의 페이지 만들기</span>
                 {edit?.onUpgrade ? (
-                  <button type="button" aria-label="배지 없애기 — 유료 안내" onClick={edit.onUpgrade} className="pointer-events-auto flex size-5 items-center justify-center rounded-full text-[12px] text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700">
+                  <button type="button" aria-label="배지 없애기 — 유료 안내" onClick={edit.onUpgrade} className="pointer-events-auto flex size-7 items-center justify-center rounded-full text-[12px] text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700">
                     ×
                   </button>
                 ) : (
