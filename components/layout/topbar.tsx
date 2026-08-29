@@ -23,6 +23,9 @@ const NAV_TITLES: ReadonlyArray<{ href: string; label: string }> = [
   { href: NAV_HOME.href, label: NAV_HOME.label },
   ...NAV_GROUPS.flatMap((g) => g.items.map((i) => ({ href: i.href as string, label: i.label as string }))),
   ...NAV_FOOTER_ITEMS.map((i) => ({ href: i.href, label: i.label })),
+  /* 사이드바에 없는 화면 — 알림은 메뉴에서 빼고 이 벨이 유일한 진입점이라 목록에 없다.
+     그래도 이름은 있어야 상단바가 비지 않는다. */
+  { href: "/notifications", label: "알림" },
 ];
 
 function screenTitle(pathname: string): string | null {

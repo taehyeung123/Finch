@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import {
   ArrowRight,
   BellRing,
@@ -356,11 +357,14 @@ function MarqueeGroup() {
     <div className="flex shrink-0 items-center">
       {Array.from({ length: 3 }).flatMap((_, r) =>
         MARQUEE_ITEMS.map((item) => (
+          /* 모바일에서는 한 항목이 커서 화면에 1.5개만 걸렸다 — «무엇을 지원하는지»가
+             읽히지 않는다(2026-08-29 실측). 간격·글자를 줄여 서너 개가 함께 흐르게 한다. */
           <span
             key={`${item.app}-${r}`}
-            className="mx-7 inline-flex items-center gap-3 text-lg font-bold text-fg-sub"
+            className="mx-4 inline-flex items-center gap-2 text-[15px] font-bold text-fg-sub sm:mx-7 sm:gap-3 sm:text-lg"
           >
-            <AppIconTile app={item.app} size={40} />
+            <AppIconTile app={item.app} size={28} className="sm:hidden" />
+            <AppIconTile app={item.app} size={40} className="hidden sm:block" />
             {item.label}
           </span>
         )),
@@ -509,19 +513,33 @@ export default function LandingPage() {
               채널마다 확인할 수 있는 지표와 기능이 조금씩 달라요. 아래에서 채널별로 자세히 살펴보세요.
             </p>
           </Reveal>
+          {/* 예전에는 ghost 버튼 세 개가 가운데 흩어져 있었다 — 테두리도 배경도 없어
+              «누를 수 있는 것»으로 안 보이고, 모바일에서 2+1 로 어긋나 섹션이 휑했다
+              (2026-08-29 실측). 채널 로고를 단 행 카드로 바꿔 눌러야 할 것으로 만든다. */}
           <Reveal delay={0.15}>
-            <p className="mt-8 text-center text-[13px] font-semibold text-fg-sub">채널별로 더 자세히 보기</p>
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-              <ButtonLink href="/instagram" variant="ghost" size="sm">
-                인스타그램 분석 자세히 보기
-              </ButtonLink>
-              <ButtonLink href="/tiktok" variant="ghost" size="sm">
-                틱톡 분석 자세히 보기
-              </ButtonLink>
-              <ButtonLink href="/threads" variant="ghost" size="sm">
-                쓰레드 분석 자세히 보기
-              </ButtonLink>
-            </div>
+            <ul className="mx-auto mt-8 grid max-w-3xl gap-2.5 sm:grid-cols-3">
+              {(
+                [
+                  { href: "/instagram", app: "instagram", name: "인스타그램", note: "팔로워·참여율·게시물" },
+                  { href: "/tiktok", app: "tiktok", name: "틱톡", note: "조회수·트렌드·해시태그" },
+                  { href: "/threads", app: "threads", name: "쓰레드", note: "게시물 반응·인사이트" },
+                ] as { href: string; app: BrandApp; name: string; note: string }[]
+              ).map((c) => (
+                <li key={c.href}>
+                  <Link
+                    href={c.href}
+                    className="card-face card-hover flex items-center gap-3 p-4 sm:flex-col sm:items-start sm:gap-2.5"
+                  >
+                    <AppIconTile app={c.app} size={36} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[15px] font-bold">{c.name} 분석</span>
+                      <span className="mt-0.5 block text-[13px] text-fg-sub">{c.note}</span>
+                    </span>
+                    <ArrowRight className="size-4 shrink-0 text-fg-faint sm:hidden" aria-hidden />
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </Reveal>
         </div>
       </section>

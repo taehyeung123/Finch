@@ -55,7 +55,7 @@ export default function AnalyzePage() {
             onChange={(e) => setUrl(e.target.value)}
             /* 지원 범위를 사실대로 적는다 — 틱톡·스레드는 서버가 거절하고(actions.ts), 타 계정도 아직이다.
                안내가 받는다고 해 놓고 서버가 막으면 사용자는 자기가 잘못한 줄 안다. */
-            placeholder="https://www.instagram.com/reel/... (연동한 인스타그램 계정의 게시물)"
+            placeholder="https://www.instagram.com/reel/..."
             aria-label="분석할 게시물 URL"
             className="h-10 flex-1 rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint trans-state hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
           />
