@@ -18,11 +18,11 @@ export default function AuthSplitLayout({ children }: { children: React.ReactNod
       <div className="relative flex flex-1 items-center justify-center px-4 py-16">
         {children}
         <footer className="absolute inset-x-0 bottom-6 flex items-center justify-center gap-3 text-[12px] text-fg-faint">
-          <Link href="/terms" className="hover:text-fg-sub">
+          <Link href="/terms" className="-mx-1.5 -my-1 inline-block px-1.5 py-2 hover:text-fg-sub">
             이용약관
           </Link>
           <span aria-hidden>·</span>
-          <Link href="/privacy" className="hover:text-fg-sub">
+          <Link href="/privacy" className="-mx-1.5 -my-1 inline-block px-1.5 py-2 hover:text-fg-sub">
             개인정보처리방침
           </Link>
         </footer>

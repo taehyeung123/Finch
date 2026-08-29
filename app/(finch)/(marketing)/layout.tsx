@@ -6,6 +6,13 @@ import { InstagramGlyph, MetaGlyph, ThreadsGlyph, TiktokGlyph } from "@/componen
 import { ThemeToggle } from "@/components/theme-toggle";
 
 /* 공개 마케팅 영역 — SEO/GEO 최우선 적용 (PART 13.1) */
+/*
+  푸터 링크의 손가락 표적 — 글자 높이만으로는 16px 이라 모바일에서 옆 줄을 누르기 쉽다
+  (2026-08-29 실측). 위아래 여백으로 36px 을 만들고 줄 간격을 좁혀 푸터가 덜 길어지게 한다.
+  좌우 음수 여백은 여백만 넓히고 정렬선은 그대로 두기 위한 것 — 글자는 원래 자리에 선다.
+*/
+const footLink = "-mx-2 block rounded-card px-2 py-2.5 trans-state hover:text-fg";
+
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
@@ -80,40 +87,40 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           {/* 기능 페이지 내부 링크 — 브랜드 검색 사이트링크 후보는 이런 명확한 앵커텍스트에서 나온다 (PART 13.2) */}
           <div>
             <h3 className="text-[13px] font-bold text-fg-sub">기능</h3>
-            <ul className="mt-3 space-y-2 text-[14px] text-fg-sub">
+            <ul className="mt-2 space-y-0.5 text-[14px] text-fg-sub">
               <li>
-                <Link href="/profile-link" className="hover:text-fg">
+                <Link href="/profile-link" className={footLink}>
                   프로필 링크
                 </Link>
               </li>
               <li>
-                <Link href="/instagram" className="hover:text-fg">
+                <Link href="/instagram" className={footLink}>
                   인스타그램 분석
                 </Link>
               </li>
               <li>
-                <Link href="/instagram/auto-dm" className="hover:text-fg">
+                <Link href="/instagram/auto-dm" className={footLink}>
                   인스타 자동디엠
                 </Link>
               </li>
               <li>
-                <Link href="/instagram/visitor-check" className="hover:text-fg">
+                <Link href="/instagram/visitor-check" className={footLink}>
                   인스타 방문자 분석
                 </Link>
               </li>
               <li>
-                <Link href="/tiktok" className="hover:text-fg">
+                <Link href="/tiktok" className={footLink}>
                   틱톡 분석
                 </Link>
               </li>
               <li>
-                <Link href="/threads" className="hover:text-fg">
+                <Link href="/threads" className={footLink}>
                   쓰레드 분석
                 </Link>
               </li>
               {/* /reference 는 사이트맵에 있는데 내부 링크가 한 곳도 없었다 — 수집기가 닿는 길이 없다 */}
               <li>
-                <Link href="/reference" className="hover:text-fg">
+                <Link href="/reference" className={footLink}>
                   레퍼런스 수집
                 </Link>
               </li>
@@ -121,24 +128,24 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           </div>
           <div>
             <h3 className="text-[13px] font-bold text-fg-sub">제품</h3>
-            <ul className="mt-3 space-y-2 text-[14px] text-fg-sub">
+            <ul className="mt-2 space-y-0.5 text-[14px] text-fg-sub">
               <li>
-                <Link href="/#features" className="hover:text-fg">
+                <Link href="/#features" className={footLink}>
                   기능 소개
                 </Link>
               </li>
               <li>
-                <Link href="/pricing" className="hover:text-fg">
+                <Link href="/pricing" className={footLink}>
                   요금제
                 </Link>
               </li>
               <li>
-                <Link href="/signup" className="hover:text-fg">
+                <Link href="/signup" className={footLink}>
                   무료로 시작하기
                 </Link>
               </li>
               <li>
-                <Link href="/brand" className="hover:text-fg">
+                <Link href="/brand" className={footLink}>
                   브랜드 · 로고
                 </Link>
               </li>
@@ -146,15 +153,15 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           </div>
           <div>
             <h3 className="text-[13px] font-bold text-fg-sub">정책</h3>
-            <ul className="mt-3 space-y-2 text-[14px] text-fg-sub">
+            <ul className="mt-2 space-y-0.5 text-[14px] text-fg-sub">
               {/* 초안 게시 — 정식 출시 전 법률 검토 후 확정 (PART 12) */}
               <li>
-                <Link href="/terms" className="hover:text-fg">
+                <Link href="/terms" className={footLink}>
                   이용약관
                 </Link>
               </li>
               <li>
-                <Link href="/privacy" className="hover:text-fg">
+                <Link href="/privacy" className={footLink}>
                   개인정보처리방침
                 </Link>
               </li>

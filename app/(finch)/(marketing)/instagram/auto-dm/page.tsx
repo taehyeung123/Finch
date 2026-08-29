@@ -34,7 +34,7 @@ const HOW_SECTIONS: { q: string; body: string[]; points: string[] }[] = [
       "인스타그램 게시물에 댓글이 달리면, 미리 설정한 조건에 맞을 때 자동으로 다이렉트 메시지(DM)를 보내주는 기능입니다. 예를 들어 게시물에 '정보'나 '구매'라는 단어가 포함된 댓글이 달리면, 상세 페이지 링크가 담긴 DM이 즉시 발송됩니다.",
       "핀치는 인스타그램 공식 메시지 API를 사용합니다. 아이디·비밀번호를 넘겨받는 비공식 매크로 방식이 아니라, 메타가 허용하는 범위 안에서 안전하게 동작합니다.",
     ],
-    points: ["댓글 키워드 조건 설정", "조건 충족 시 즉시 자동 DM", "공식 API 기반 안전 발송"],
+    points: ["댓글 키워드 조건 설정", "조건 충족 시 즉시 자동 DM", "계정 안전을 지키는 발송 방식"],
   },
   {
     q: "게시물마다 다른 DM을 보낼 수 있나요?",
@@ -162,7 +162,7 @@ export default function AutoDmPage() {
 
       {/* 브레드크럼 */}
       <nav aria-label="브레드크럼" className="mx-auto max-w-3xl px-4 pt-8 text-[13px] text-fg-sub md:px-6">
-        <Link href="/instagram" className="hover:text-fg-sub">
+        <Link href="/instagram" className="-mx-1.5 -my-1 inline-block px-1.5 py-2 hover:text-fg-sub">
           인스타그램 분석
         </Link>
         <span className="mx-1.5">/</span>

@@ -81,7 +81,8 @@ export function ReportForm({ prefill }: { prefill: string }) {
               aria-checked={reason === r}
               onClick={() => setReason(r)}
               className={cn(
-                "trans-state rounded-chip border px-3 py-1.5 text-[14px]",
+                /* 라디오 칩은 손가락으로 고르는 것이다 — 36px 에서 44px 로(2026-08-29 모바일 실측) */
+                "trans-state inline-flex min-h-11 items-center rounded-chip border px-4 text-[14px]",
                 reason === r ? "border-fg bg-fg font-semibold text-body" : "border-line text-fg-sub hover:border-fg hover:text-fg",
               )}
             >

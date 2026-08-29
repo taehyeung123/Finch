@@ -5,6 +5,7 @@ import {
   Check,
   Compass,
   LayoutDashboard,
+  Link2,
   Megaphone,
   MessageCircleQuestion,
   Sparkles,
@@ -31,19 +32,19 @@ export const metadata: Metadata = {
 const FAQ_ITEMS: FaqItem[] = [
   {
     q: "어떤 채널을 지원하나요?",
-    a: "인스타그램, 틱톡, 쓰레드 3개 채널과 메타 광고 계정을 지원합니다. 채널마다 공식 API가 제공하는 데이터 범위가 달라, 핀치는 기능별 지원 범위를 화면에 투명하게 표시합니다.",
+    a: "인스타그램, 틱톡, 쓰레드 3개 채널과 메타 광고 계정을 지원합니다. 채널마다 볼 수 있는 지표가 조금씩 다르고, 핀치는 채워지지 않는 값을 추정으로 메우지 않습니다.",
   },
   {
     q: "개인 인스타그램 계정도 연동할 수 있나요?",
-    a: "인스타그램은 비즈니스 또는 크리에이터 계정만 공식 API 연동이 가능합니다. 개인 계정이라면 온보딩 과정에서 전환 방법을 단계별로 안내해드립니다.",
+    a: "인스타그램은 비즈니스 또는 크리에이터 계정만 연동할 수 있습니다. 개인 계정이라면 전환하는 방법을 시작 과정에서 단계별로 안내해드립니다. 전환은 무료이고 몇 번의 터치로 끝납니다.",
   },
   {
     q: "경쟁사 광고 모니터링은 어떻게 동작하나요?",
-    a: "Meta가 투명성 목적으로 공개 운영하는 광고 라이브러리(Ad Library) 공식 API를 사용합니다. 등록한 경쟁사 페이지를 주기적으로 확인해 새 광고가 감지되면 알림을 보내드립니다.",
+    a: "메타가 투명성 목적으로 누구나 볼 수 있게 공개한 광고 라이브러리를 근거로 합니다. 등록한 경쟁사를 주기적으로 확인해 새 광고가 감지되면 알림을 보내드립니다. 오래 집행되는 광고는 성과가 나온다는 신호로 읽을 수 있습니다.",
   },
   {
-    q: "트렌드·타 계정 데이터는 어디서 오나요?",
-    a: "내 계정 데이터는 각 플랫폼 공식 API에서, 카테고리 트렌드와 타 계정 정밀 분석은 제휴 데이터 공급사에서 가져옵니다. 데이터 출처와 갱신 시점을 항상 함께 표기합니다.",
+    q: "트렌드·타 계정 데이터는 얼마나 믿을 수 있나요?",
+    a: "내 계정 지표는 플랫폼에서 직접 받아온 값이라 앱에서 보는 숫자와 같습니다. 카테고리 트렌드나 타 계정 분석은 공개된 정보를 모아 계산한 값이라 실제와 차이가 날 수 있고, 화면에 갱신 시점을 함께 표시합니다. 핀치가 자체적으로 계산한 지표에는 계산 근거를 볼 수 있는 설명을 붙입니다.",
   },
   {
     q: "AI가 만든 콘텐츠는 어떻게 표시되나요?",
@@ -63,7 +64,7 @@ const FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: "인스타그램 팔로워 나이대 분석도 되나요?",
-    a: "인스타그램 공식 API가 제공하는 팔로워 연령대·성별 통계를 대시보드에서 확인할 수 있습니다.",
+    a: "인스타그램이 계정 주인에게 제공하는 팔로워 연령대·성별 통계를 대시보드에서 확인할 수 있습니다. 앱에서 보는 것과 같은 값입니다.",
   },
 ];
 
@@ -137,10 +138,19 @@ const FEATURES = [
     points: ["채널별·전체 요약 지표", "최근 게시물 성과 추이", "콘텐츠 유형 비중 분석"],
   },
   {
+    icon: Link2,
+    title: "프로필 링크",
+    description:
+      "인스타그램·틱톡 프로필에 넣는 링크 모음 페이지를 finch.ai.kr/내아이디 주소로 만듭니다. 디자인이 막히면 AI가 프로필 사진 색에 맞춰 대신 만들고, 어떤 링크가 눌렸는지는 채널 분석과 같은 화면에서 봅니다.",
+    points: ["블록 24종으로 자유 구성", "AI 디자인이 시안 3종 제안", "방문·클릭 집계 내장"],
+    href: "/profile-link",
+    cta: "프로필 링크 자세히 보기",
+  },
+  {
     icon: BellRing,
     title: "경쟁사 광고 자동 모니터링",
     description:
-      "Meta 광고 라이브러리 공식 API 기반. 등록해둔 경쟁사가 새 광고를 시작하면 자동으로 감지해 알려드립니다. 오래 운영되는 광고는 성과 신호로 읽을 수 있어요.",
+      "메타가 공개한 광고 라이브러리를 근거로, 등록해둔 경쟁사가 새 광고를 시작하면 자동으로 감지해 알려드립니다. 오래 집행되는 광고는 성과가 나온다는 신호로 읽을 수 있어요.",
     points: ["신규 광고 감지 알림", "게재 기간·노출 플랫폼 확인", "소재 아카이브"],
   },
   {
@@ -190,6 +200,43 @@ function DashboardPanel() {
       <div className="mt-3 rounded-card border border-line bg-plate p-3.5">
         <p className="text-xs text-fg-sub">최근 30일 조회수</p>
         <Sparkline data={[18, 26, 24, 39, 33, 52, 47, 68, 74, 88]} width={320} height={44} className="mt-1.5 w-full" />
+      </div>
+    </div>
+  );
+}
+
+/* 프로필 링크 — 실제 공개 페이지의 축소판(프로필 + 브랜드 칩 링크 + 클릭 수) */
+function ProfileLinkPanel() {
+  return (
+    <div className={panelBase} aria-hidden>
+      <div className="flex items-center justify-between gap-3">
+        <p className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-fg-sub">
+          <Link2 className="size-4 text-primary-ink" aria-hidden />
+          finch.ai.kr/mylink
+        </p>
+        <AppIconTile app="instagram" size={28} />
+      </div>
+      <div className="mt-4 rounded-card border border-line bg-plate p-4">
+        <div className="flex flex-col items-center">
+          <span className="flex size-11 items-center justify-center rounded-full bg-primary-weak text-[15px] font-bold text-primary-ink">
+            민
+          </span>
+          <p className="mt-2 text-[14px] font-bold">민지의 공구방</p>
+          <p className="mt-0.5 text-[11px] text-fg-sub">이번 주 공동구매 진행 중</p>
+        </div>
+        <div className="mt-3.5 space-y-2">
+          {[
+            { app: "instagram" as BrandApp, label: "인스타그램", hits: "1,240" },
+            { app: "tiktok" as BrandApp, label: "틱톡", hits: "860" },
+            { app: "threads" as BrandApp, label: "쓰레드", hits: "412" },
+          ].map((r) => (
+            <div key={r.label} className="flex items-center gap-2.5 rounded-card border border-line bg-body px-2.5 py-2">
+              <AppIconTile app={r.app} size={22} />
+              <span className="text-[12px] font-semibold">{r.label}</span>
+              <span className="tnum ml-auto text-[11px] text-fg-sub">{r.hits}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -294,7 +341,7 @@ function AiStudioPanel() {
   );
 }
 
-const FEATURE_PANELS = [DashboardPanel, AdMonitorPanel, TrendPanel, AiStudioPanel];
+const FEATURE_PANELS = [DashboardPanel, ProfileLinkPanel, AdMonitorPanel, TrendPanel, AiStudioPanel];
 
 /* 채널 로고 마퀴 아이템 — 트랙이 항상 컨테이너보다 넓도록 그룹 안에서 3회 반복 */
 const MARQUEE_ITEMS: { app: BrandApp; label: string }[] = [
@@ -404,13 +451,14 @@ export default function LandingPage() {
       {/* 핵심 기능 하이라이트 — 지그재그 (PART 6.1-4) */}
       <section id="features" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20 md:px-6">
         <Reveal>
-          <h2 className="text-center text-2xl font-bold md:text-3xl">핵심 기능 — 무엇을 분석할 수 있나요?</h2>
+          {/* 프로필 링크가 들어오면서 «분석»만으로는 섹션을 덮지 못한다(2026-08-29) */}
+          <h2 className="text-center text-2xl font-bold md:text-3xl">핵심 기능 — 무엇을 할 수 있나요?</h2>
           <p className="mx-auto mt-3 max-w-lg text-center text-[15px] text-fg-sub">
-            검색하고, 분석하고, 비교하고, 만들어내는 것까지. SNS 마케팅의 반복 작업을 핀치가 대신합니다.
+            프로필을 정리하고, 분석하고, 비교하고, 만들어내는 것까지. SNS 마케팅의 반복 작업을 핀치가 대신합니다.
           </p>
         </Reveal>
         <div className="mt-14 space-y-16">
-          {FEATURES.map(({ icon: Icon, title, description, points }, i) => {
+          {FEATURES.map(({ icon: Icon, title, description, points, href, cta }, i) => {
             const Panel = FEATURE_PANELS[i];
             return (
               <Reveal key={title}>
@@ -430,11 +478,17 @@ export default function LandingPage() {
                     <ul className="mt-4 space-y-2">
                       {points.map((p) => (
                         <li key={p} className="flex items-center gap-2 text-[14px] text-fg-sub">
-                          <Check className="size-4 text-positive" aria-hidden />
+                          <Check className="size-4 shrink-0 text-positive" aria-hidden />
                           {p}
                         </li>
                       ))}
                     </ul>
+                    {/* 전용 소개 페이지가 있는 기능만 — 홈에서 그 페이지로 가는 길이자 앵커텍스트다 */}
+                    {href ? (
+                      <ButtonLink href={href} variant="secondary" size="sm" className="mt-5">
+                        {cta} <ArrowRight className="size-4" aria-hidden />
+                      </ButtonLink>
+                    ) : null}
                   </div>
                   <Panel />
                 </div>

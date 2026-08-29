@@ -129,7 +129,8 @@ function AssetCard({ asset, wide = false }: { asset: Asset; wide?: boolean }) {
             key={f.href}
             href={f.href}
             download
-            className="inline-flex items-center gap-1 rounded-chip border border-line bg-overlay px-3 py-1 text-xs font-semibold text-fg-sub trans-state hover:border-primary hover:text-primary-ink"
+            /* py-1(26px)은 손가락으로 누르기엔 작다 — 모바일 실측 후 40px 로(2026-08-29) */
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-chip border border-line bg-overlay px-3.5 py-2 text-xs font-semibold text-fg-sub trans-state hover:border-primary hover:text-primary-ink"
           >
             <Download className="size-3" aria-hidden />
             {f.label}

@@ -236,7 +236,13 @@ export default function PricingPage() {
           </p>
         </div>
 
-        <div className="mt-8 rounded-card border border-line bg-body">
+        {/* 모바일에서는 Free 열까지만 보이고 나머지 넷은 화면 밖에 있다 — 밀린다는 것을
+            알려 주지 않으면 «플랜이 하나뿐»으로 읽힌다(2026-08-29 실측). 표에 닿기 전에 말한다. */}
+        <p className="mt-8 flex items-center gap-1.5 text-[13px] text-fg-sub md:hidden">
+          <ArrowRight className="size-3.5 shrink-0" aria-hidden />
+          표를 옆으로 밀면 나머지 플랜이 보여요
+        </p>
+        <div className="mt-3 rounded-card border border-line bg-body md:mt-8">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] border-collapse text-left">
               <caption className="sr-only">Free·Creator·Pro·Agency·Enterprise 플랜별 기능 비교</caption>
@@ -248,7 +254,12 @@ export default function PricingPage() {
               </colgroup>
               <thead>
                 <tr>
-                  <th scope="col" className="px-5 pb-4 pt-6 text-[11px] font-bold uppercase tracking-[0.1em] text-fg-sub">
+                  {/* 행 이름 열은 가로로 밀어도 붙어 있어야 한다 — 안 그러면 오른쪽 플랜을 보는 순간
+                      «이 숫자가 무슨 항목이었는지»를 잃는다. 스크롤 아래로 비치지 않게 배경을 준다. */}
+                  <th
+                    scope="col"
+                    className="sticky left-0 z-10 bg-body px-5 pb-4 pt-6 text-[12px] font-bold uppercase tracking-[0.1em] text-fg-sub"
+                  >
                     기능
                   </th>
                   {TABLE_COLS.map((c) => (
@@ -277,7 +288,7 @@ export default function PricingPage() {
                       <th
                         scope="colgroup"
                         colSpan={6}
-                        className="border-t border-line-strong bg-plate px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.1em] text-fg-sub"
+                        className="sticky left-0 z-10 border-t border-line-strong bg-plate px-5 py-2.5 text-[12px] font-bold uppercase tracking-[0.1em] text-fg-sub"
                       >
                         {group.label}
                       </th>
@@ -291,7 +302,7 @@ export default function PricingPage() {
                       const strip = (v: string) => (isRate ? v.replace(/^크레딧\s*/, "") : v);
                       return (
                         <tr key={label} className="border-b border-line last:border-0">
-                          <th scope="row" className="px-5 py-3.5 text-[13.5px] font-medium text-fg">
+                          <th scope="row" className="sticky left-0 z-10 bg-body px-5 py-3.5 text-[13.5px] font-medium text-fg">
                             {label}
                             {isRate ? <span className="ml-1 text-[12px] text-fg-sub">(크레딧)</span> : null}
                           </th>
