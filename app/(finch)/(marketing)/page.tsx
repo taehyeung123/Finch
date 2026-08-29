@@ -18,6 +18,7 @@ import { Sparkline } from "@/components/ui/charts";
 import { FaqAccordion, type FaqItem } from "@/components/landing/faq";
 import { Reveal } from "@/components/landing/reveal";
 import { HeroVisual } from "@/components/landing/hero-visual";
+import { StickyCta } from "@/components/landing/sticky-cta";
 import { AppIconTile, type BrandApp } from "@/components/icons/brand";
 import { PLAN_CARDS } from "@/components/pricing/plan-cards";
 
@@ -377,6 +378,8 @@ export default function LandingPage() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }} />
+      {/* 모바일 하단 고정 CTA — 9000px 짜리 랜딩에서 가입 버튼이 계속 손에 닿게(2026-08-29) */}
+      <StickyCta />
 
       {/* Hero (PART 6.1-2) — 좌측 텍스트 스태거 진입 + 우측 플로팅 비주얼 */}
       {/* ── 히어로 — 2026-08-15 재구성.
@@ -428,9 +431,10 @@ export default function LandingPage() {
 
       {/* 문제 제기 (PART 6.1-3) */}
       <section className="border-y border-line bg-body">
-        <div className="mx-auto max-w-6xl px-4 py-20 md:px-6">
+        <div className="mx-auto max-w-6xl px-5 py-20 md:px-6 md:py-24">
           <Reveal>
-            <h2 className="text-center text-2xl font-bold md:text-3xl">이런 고민 있으신가요?</h2>
+            <div className="mb-3 flex justify-center"><span className="rounded-chip bg-plate px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-fg-sub">WHY</span></div>
+            <h2 className="text-center text-[26px] font-bold leading-[1.3] tracking-[-0.02em] md:text-[32px]">이런 고민 있으신가요?</h2>
           </Reveal>
           <div className="mt-10 grid gap-4 md:grid-cols-3">
             {PAIN_POINTS.map(({ icon: Icon, persona, pain, solution }, i) => (
@@ -453,10 +457,11 @@ export default function LandingPage() {
       </section>
 
       {/* 핵심 기능 하이라이트 — 지그재그 (PART 6.1-4) */}
-      <section id="features" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20 md:px-6">
+      <section id="features" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-20 md:px-6 md:py-24">
         <Reveal>
           {/* 프로필 링크가 들어오면서 «분석»만으로는 섹션을 덮지 못한다(2026-08-29) */}
-          <h2 className="text-center text-2xl font-bold md:text-3xl">핵심 기능 — 무엇을 할 수 있나요?</h2>
+          <div className="mb-3 flex justify-center"><span className="rounded-chip bg-plate px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-fg-sub">FEATURES</span></div>
+            <h2 className="text-center text-[26px] font-bold leading-[1.3] tracking-[-0.02em] md:text-[32px]">무엇을 할 수 있나요?</h2>
           <p className="mx-auto mt-3 max-w-lg text-center text-[15px] text-fg-sub">
             프로필을 정리하고, 분석하고, 비교하고, 만들어내는 것까지. SNS 마케팅의 반복 작업을 핀치가 대신합니다.
           </p>
@@ -504,13 +509,16 @@ export default function LandingPage() {
 
       {/* 채널별 자세히 보기 진입 (PART 6.1-5) */}
       <section id="channels" className="border-y border-line bg-body">
-        <div className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20 md:px-6">
+        <div className="mx-auto max-w-6xl scroll-mt-20 px-5 py-20 md:px-6 md:py-24">
           <Reveal>
-            <h2 className="text-center text-2xl font-bold md:text-3xl">
-              인스타그램·틱톡·쓰레드, 각각 무엇을 볼 수 있나요?
+            <div className="mb-3 flex justify-center"><span className="rounded-chip bg-plate px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-fg-sub">CHANNELS</span></div>
+            <h2 className="text-center text-[26px] font-bold leading-[1.3] tracking-[-0.02em] md:text-[32px]">
+              채널마다 보는 것이 다릅니다
             </h2>
-            <p className="mx-auto mt-3 max-w-xl text-center text-[15px] text-fg-sub">
-              채널마다 확인할 수 있는 지표와 기능이 조금씩 달라요. 아래에서 채널별로 자세히 살펴보세요.
+            <p className="mx-auto mt-3 max-w-[30ch] text-center text-[15px] leading-[1.7] text-fg-sub">
+              확인할 수 있는 지표가 채널마다 달라요.
+              <br />
+              어떤 걸 볼 수 있는지 먼저 확인해 보세요.
             </p>
           </Reveal>
           {/* 예전에는 ghost 버튼 세 개가 가운데 흩어져 있었다 — 테두리도 배경도 없어
@@ -545,7 +553,7 @@ export default function LandingPage() {
       </section>
 
       {/* AI 데모 (PART 6.1-6) */}
-      <section className="mx-auto max-w-6xl px-4 py-20 md:px-6">
+      <section className="mx-auto max-w-6xl px-5 py-20 md:px-6 md:py-24">
         <div className="grid items-center gap-10 md:grid-cols-2">
           <Reveal>
             <h2 className="text-2xl font-bold md:text-3xl">
@@ -592,10 +600,11 @@ export default function LandingPage() {
 
       {/* 요금제 미리보기 (PART 6.1-7) */}
       <section className="border-y border-line bg-body">
-        <div className="mx-auto max-w-6xl px-4 py-20 md:px-6">
+        <div className="mx-auto max-w-6xl px-5 py-20 md:px-6 md:py-24">
           <Reveal>
-            <h2 className="text-center text-2xl font-bold md:text-3xl">요금제</h2>
-            <p className="mt-3 text-center text-[15px] text-fg-sub">무료로 시작하고, 필요할 때 올리세요.</p>
+            <div className="mb-3 flex justify-center"><span className="rounded-chip bg-plate px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-fg-sub">PRICING</span></div>
+            <h2 className="text-center text-[26px] font-bold leading-[1.3] tracking-[-0.02em] md:text-[32px]">요금제</h2>
+            <p className="mt-3 text-center text-[15px] leading-[1.7] text-fg-sub">무료로 시작하고, 필요할 때 올리세요.</p>
           </Reveal>
           {/* 이 미리보기는 **PLAN_CARDS 에서만** 값을 가져온다.
               앞서는 손으로 적은 구 요금 모델이 남아 "Creator 카드뉴스 무제한"(실제
@@ -651,7 +660,7 @@ export default function LandingPage() {
 
       {/* FAQ (PART 6.1-9) */}
       <section id="faq" className="border-y border-line bg-body">
-        <div className="mx-auto max-w-3xl scroll-mt-20 px-4 py-20 md:px-6">
+        <div className="mx-auto max-w-3xl scroll-mt-20 px-5 py-20 md:px-6 md:py-24">
           <Reveal>
             <h2 className="flex items-center justify-center gap-2 text-center text-2xl font-bold md:text-3xl">
               <MessageCircleQuestion className="size-7 text-primary-ink" aria-hidden />
@@ -667,7 +676,7 @@ export default function LandingPage() {
       </section>
 
       {/* 최종 CTA (PART 6.1-10) */}
-      <section className="mx-auto max-w-6xl px-4 py-24 text-center md:px-6">
+      <section className="mx-auto max-w-6xl px-5 py-24 text-center md:px-6 md:py-28">
         <Reveal>
           <h2 className="text-3xl font-bold md:text-4xl">
             오늘 올릴 콘텐츠,

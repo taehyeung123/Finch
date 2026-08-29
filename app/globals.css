@@ -661,16 +661,35 @@ body {
 /* 스크롤 리빌 — IntersectionObserver가 .in-view를 붙인다 */
 .reveal {
   opacity: 0;
-  transform: translateY(24px);
+  /* 이동 거리를 키우고 아주 옅은 흐림을 더한다(2026-08-29 — 벤치마크 대조).
+     24px 은 «떠오른다»가 아니라 «살짝 흔들린다»로 읽혔다. 32px + blur 는 요소가
+     지면 뒤에서 올라오는 인상을 만든다. 흐림은 2px 이하 — 넘으면 글자가 뭉개진다. */
+  transform: translateY(32px);
+  filter: blur(2px);
   transition:
-    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity 0.72s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.72s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.5s ease-out;
   transition-delay: var(--reveal-delay, 0s);
+  /* 애니메이션 동안만 합성 레이어로 — 상시 will-change 는 메모리를 잡아먹는다 */
+  will-change: opacity, transform;
 }
 
 .reveal.in-view {
   opacity: 1;
   transform: translateY(0);
+  filter: blur(0);
+  will-change: auto;
+}
+
+/* 움직임을 줄여 달라는 설정이면 연출 없이 바로 보인다 — 안 그러면 내용이 영영 안 보인다 */
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
 }
 
 /* 무한 로고 마퀴 — 트랙 내용을 2회 반복해 -50%까지 이동 */
