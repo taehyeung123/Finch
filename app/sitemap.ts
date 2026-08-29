@@ -49,7 +49,10 @@ async function publishedPages(): Promise<MetadataRoute.Sitemap> {
   if (!admin) return [];
   const { data, error } = await admin
     .from("link_pages")
-    .select("slug, settings, updated_at")
+    /* 스냅샷은 통째로 읽지 않는다 — 제목 한 칸만 뽑는다(수천 장이면 수십 MB 가 된다).
+       별칭이 필요하다: link_pages 에는 **초안** title 컬럼이 따로 있어 이름이 겹친다.
+       여기서 봐야 하는 건 초안이 아니라 실제로 발행된 스냅샷의 제목이다. */
+    .select("slug, settings, updated_at, snapTitle:published_snapshot->>title")
     .eq("published", true)
     .order("updated_at", { ascending: false })
     .limit(MAX_PAGES);
@@ -59,6 +62,10 @@ async function publishedPages(): Promise<MetadataRoute.Sitemap> {
   return data.flatMap((row) => {
     const s = (row.settings ?? {}) as { robots?: string; locked?: boolean };
     if (s.robots === "noindex" || s.locked === true) return [];
+    /* 이름도 안 붙인 페이지는 부르지 않는다 — 빈 페이지가 수천 장 색인되면 사이트 전체의
+       품질 신호가 희석된다(링크인바이오 서비스가 흔히 겪는 문제). 사이트맵은 «와서 보라»는
+       추천이지 목록이 아니다 — 내용이 있는 것만 추천한다. */
+    if (!String((row as { snapTitle?: unknown }).snapTitle ?? "").trim()) return [];
     const slug = String(row.slug ?? "");
     if (!/^[a-z0-9-]{1,80}$/.test(slug)) return [];
     const at = row.updated_at ? new Date(String(row.updated_at)) : undefined;
