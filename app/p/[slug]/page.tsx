@@ -622,16 +622,16 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
             신고(Report) 창구는 운영 메일이 정해지면 여기에 추가한다. 미리보기에는 안 그린다 —
             편집 대상이 아닌 서비스 고지라 캔버스 소음만 된다(파리티 예외를 여기 명시). */}
         <footer className={`mt-8 flex items-center justify-center gap-2 pb-3 text-[11px] text-[var(--lp-muted)] opacity-75 ${split ? "lg:col-span-2" : ""}`}>
-          <a href="/terms" target="_blank" rel="noopener" className="-my-1 inline-block px-1 py-2 hover:underline">
+          <a href="/terms" target="_blank" rel="noopener" className="-my-1.5 inline-block px-1.5 py-2.5 hover:underline">
             {t.legalTerms}
           </a>
           <span aria-hidden>·</span>
-          <a href="/privacy" target="_blank" rel="noopener" className="-my-1 inline-block px-1 py-2 hover:underline">
+          <a href="/privacy" target="_blank" rel="noopener" className="-my-1.5 inline-block px-1.5 py-2.5 hover:underline">
             {t.legalPrivacy}
           </a>
           <span aria-hidden>·</span>
           {/* 신고 — 무기명 접수함(/report, 0071). 대상 주소를 미리 채워 보낸다 */}
-          <a href={`/report?slug=${encodeURIComponent(slug)}`} target="_blank" rel="noopener" className="-my-1 inline-block px-1 py-2 hover:underline">
+          <a href={`/report?slug=${encodeURIComponent(slug)}`} target="_blank" rel="noopener" className="-my-1.5 inline-block px-1.5 py-2.5 hover:underline">
             {t.legalReport}
           </a>
         </footer>

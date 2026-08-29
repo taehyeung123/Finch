@@ -81,11 +81,11 @@ export function SignupForm({ nextPath = "/onboarding" }: { nextPath?: string }) 
 
       <p className="mt-4 text-center text-xs text-fg-faint">
         가입 시{" "}
-        <Link href="/terms" className="-my-1 inline-block py-1.5 underline underline-offset-2 hover:text-fg-sub">
+        <Link href="/terms" className="-my-2 inline-block py-2.5 underline underline-offset-2 hover:text-fg-sub">
           이용약관
         </Link>
         과{" "}
-        <Link href="/privacy" className="-my-1 inline-block py-1.5 underline underline-offset-2 hover:text-fg-sub">
+        <Link href="/privacy" className="-my-2 inline-block py-2.5 underline underline-offset-2 hover:text-fg-sub">
           개인정보처리방침
         </Link>
         에 동의하게 됩니다

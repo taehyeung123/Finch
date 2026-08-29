@@ -99,7 +99,7 @@ export default function VisitorCheckPage() {
 
       {/* 브레드크럼 — 상단 인스타그램 허브 링크 겸용 */}
       <nav aria-label="브레드크럼" className="mx-auto max-w-3xl px-4 pt-8 text-[13px] text-fg-sub md:px-6">
-        <Link href="/instagram" className="-mx-2.5 -my-1 inline-block px-2.5 py-2 hover:text-fg-sub">
+        <Link href="/instagram" className="-mx-3.5 -my-1.5 inline-block px-3.5 py-2.5 hover:text-fg-sub">
           인스타그램 분석
         </Link>
         <span className="mx-1.5">/</span>
