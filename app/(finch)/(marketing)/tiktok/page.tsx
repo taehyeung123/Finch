@@ -10,18 +10,18 @@ export const metadata: Metadata = {
   /* 레이아웃 템플릿이 «| 핀치 (Finch)» 를 붙인다 — 여기 브랜드를 또 쓰면 이중 표기 */
   title: "틱톡 분석 사이트 — 계정 팔로워·조회수·참여율 통계와 트렌드 분석",
   description:
-    "핀치의 틱톡 분석은 내 틱톡 계정의 팔로워·조회수·참여율 통계를 확인하고 영상별 성과를 진단하는 틱톡 분석 사이트입니다. 틱톡 해시태그·트렌드·인플루언서 분석은 제휴 데이터 공급사를 통해 함께 제공합니다.",
+    "핀치의 틱톡 분석은 내 틱톡 계정의 팔로워·조회수·참여율 통계를 확인하고 영상별 성과를 진단하는 틱톡 분석 사이트입니다. 틱톡 해시태그·트렌드·인플루언서 분석도 함께 제공합니다.",
   alternates: { canonical: "/tiktok" },
 };
 
 const FAQ_ITEMS: FaqItem[] = [
   {
     q: "틱톡 팔로워 분석은 어떻게 확인하나요?",
-    a: "틱톡 공식 API로 내 계정을 연동하면 팔로워 수 변화, 조회수, 참여율, 영상별 성과 통계를 대시보드에서 바로 확인할 수 있습니다. 완전 지원 항목이라 별도 제휴 데이터 없이 실시간에 가깝게 갱신됩니다.",
+    a: "틱톡 계정을 연동하면 팔로워 수 변화, 조회수, 참여율, 영상별 성과 통계를 대시보드에서 바로 확인할 수 있습니다. 내 계정 지표라 앱에서 보는 값과 같고, 실시간에 가깝게 갱신됩니다.",
   },
   {
     q: "틱톡 트렌드·해시태그·인플루언서 분석 데이터는 어디서 오나요?",
-    a: "틱톡은 타 계정과 트렌드에 대한 공식 API 제공 범위가 좁아, 핀치는 검증된 제휴 데이터 공급사를 통해 해시태그 분석과 인플루언서 순위, 카테고리 트렌드를 제공합니다. 화면에는 항상 데이터 출처와 갱신 시점을 함께 표기합니다.",
+    a: "내 계정이 아닌 타 계정과 트렌드는 틱톡이 밖으로 내주는 정보가 적습니다. 그래서 핀치는 공개된 정보를 모아 해시태그 분석과 인플루언서 순위, 카테고리 트렌드를 만듭니다. 실제와 차이가 날 수 있어 화면에 갱신 시점을 함께 표시합니다.",
   },
   {
     q: "무료로 틱톡 계정 진단을 해볼 수 있나요?",
@@ -75,7 +75,7 @@ export default function TiktokPage() {
           <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-fg-sub">
             핀치의 틱톡 분석은 내 틱톡 계정의 팔로워·조회수·참여율 통계를 한 화면에서 확인하고 영상별
             성과를 진단하는 틱톡 분석 사이트입니다. 틱톡 트렌드·해시태그·인플루언서 순위 같은 타
-            계정 데이터는 제휴 데이터 공급사를 통해 함께 제공합니다.
+            계정 데이터는 공개된 정보를 모아 함께 제공합니다.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <ButtonLink href="/signup" size="lg">
@@ -92,7 +92,7 @@ export default function TiktokPage() {
         </div>
       </section>
 
-      {/* 완전 지원: 내 계정 분석 */}
+      {/* 내 계정 분석 */}
       <section className="border-y border-line bg-body">
         <div className="mx-auto max-w-6xl px-4 py-16 md:px-6">
           <Reveal>
@@ -124,7 +124,7 @@ export default function TiktokPage() {
         </div>
       </section>
 
-      {/* 제휴 데이터: 트렌드·해시태그·인플루언서 */}
+      {/* 타 계정·트렌드(공개 정보 수집) */}
       <section className="mx-auto max-w-6xl px-4 py-16 md:px-6">
         <Reveal>
           <div className="flex flex-wrap items-center gap-3">

@@ -696,7 +696,8 @@ export function BlockRenderer({
             >
               {t.coupangView}
             </a>
-            <p className="mt-2 text-[11px] leading-[1.6] text-[var(--lp-muted)]">{COUPANG_DISCLOSURE}</p>
+            {/* 법정 고지 — 라벨이 아니라 읽으라고 있는 문장이다. 11px 는 모바일에서 읽히지 않는다(2026-08-29) */}
+            <p className="mt-2 text-[12px] leading-[1.6] text-[var(--lp-muted)]">{COUPANG_DISCLOSURE}</p>
           </div>
         </div>
       );

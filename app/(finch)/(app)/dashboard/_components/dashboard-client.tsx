@@ -175,7 +175,10 @@ export function DashboardClient({
         </section>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3 lg:items-start">
+      {/* [&>*]:min-w-0 — 그리드 아이템의 기본 min-width 는 auto 라, 안쪽 표(overflow-x-auto)의
+          min-content 폭이 트랙을 그대로 부풀린다. 모바일 1열에서 문서가 598px 로 넓어져
+          대시보드 전체가 가로로 밀렸다(2026-08-29 실측, +208px). 랜딩 기능 섹션과 같은 함정. */}
+      <div className="grid gap-6 [&>*]:min-w-0 lg:grid-cols-3 lg:items-start">
         {/* 최근 게시물 (PART 4.1) */}
         <Card className="lg:col-span-2">
           <CardHeader

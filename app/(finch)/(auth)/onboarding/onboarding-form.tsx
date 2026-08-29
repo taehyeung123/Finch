@@ -65,7 +65,7 @@ export function OnboardingForm() {
         </ol>
         <Link
           href="/dashboard"
-          className="text-[14px] text-fg-sub trans-state hover:text-fg-sub"
+          className="-mx-2 -my-1.5 inline-block px-2 py-2.5 text-[14px] text-fg-sub trans-state hover:text-fg-sub"
         >
           건너뛰기
         </Link>

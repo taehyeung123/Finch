@@ -21,7 +21,7 @@ const FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: "다른 사람 쓰레드 계정도 분석할 수 있나요?",
-    a: "아직은 지원하지 않습니다. 쓰레드는 공식 API가 비교적 최근에 열려, 현재 핀치는 내 쓰레드 계정의 게시물 성과·인사이트·팔로워 분석에 집중하고 있습니다. API 제공 범위가 넓어지는 대로 타 계정 분석도 순차적으로 지원할 예정입니다.",
+    a: "아직은 지원하지 않습니다. 쓰레드는 밖으로 내주는 정보가 아직 적어, 현재 핀치는 내 쓰레드 계정의 게시물 성과·인사이트·팔로워 분석에 집중하고 있습니다. 볼 수 있는 범위가 넓어지는 대로 타 계정 분석도 순차적으로 지원할 예정입니다.",
   },
 ];
 
@@ -63,7 +63,7 @@ const FEATURES = [
   {
     icon: BarChart3,
     title: "스레드 인사이트",
-    description: "노출수 등 쓰레드 공식 API가 제공하는 기본 인사이트 지표를 확인합니다.",
+    description: "노출수 등 쓰레드가 계정 주인에게 보여 주는 기본 인사이트 지표를 확인합니다.",
   },
   {
     icon: Users,
@@ -103,7 +103,7 @@ export default function ThreadsPage() {
           <Reveal>
             <h2 className="text-center text-2xl font-bold md:text-3xl">쓰레드 계정 분석, 무엇을 볼 수 있나요?</h2>
             <p className="mx-auto mt-3 max-w-xl text-center text-[15px] leading-relaxed text-fg-sub">
-              쓰레드는 공식 API가 비교적 최근에 열려, 핀치는 우선 내 쓰레드 계정을 중심으로 게시물 성과·스레드
+              쓰레드는 밖으로 내주는 정보가 아직 적어, 핀치는 우선 내 쓰레드 계정을 중심으로 게시물 성과·스레드
               인사이트·팔로워 통계를 분석합니다.
             </p>
           </Reveal>
@@ -128,7 +128,7 @@ export default function ThreadsPage() {
         <Reveal>
           <h2 className="text-center text-2xl font-bold md:text-3xl">쓰레드 팔로워는 어떻게 확인하나요?</h2>
           <p className="mx-auto mt-3 max-w-xl text-center text-[15px] leading-relaxed text-fg-sub">
-            내 쓰레드 계정을 연동하면 공식 API 기준으로 스레드 팔로워 분석과 확인이 가능합니다. 팔로워 수와
+            내 쓰레드 계정을 연동하면 스레드 팔로워 분석과 확인이 가능합니다. 팔로워 수와
             증감 추이 같은 스레드 통계를 인스타그램·틱톡 지표와 같은 화면에서 나란히 비교할 수 있어, 채널별로
             앱을 오갈 필요가 없습니다.
           </p>

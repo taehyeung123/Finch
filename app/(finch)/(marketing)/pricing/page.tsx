@@ -238,11 +238,13 @@ export default function PricingPage() {
 
         {/* 모바일에서는 Free 열까지만 보이고 나머지 넷은 화면 밖에 있다 — 밀린다는 것을
             알려 주지 않으면 «플랜이 하나뿐»으로 읽힌다(2026-08-29 실측). 표에 닿기 전에 말한다. */}
-        <p className="mt-8 flex items-center gap-1.5 text-[13px] text-fg-sub md:hidden">
+        {/* 표는 min-w-[900px] 이라 md(768px)에서도 여전히 밀어야 한다 — 안내를 md 에서 끄면
+            768~947px 구간이 «밀리는데 안내는 없는» 사각지대가 된다(쏘넷 점검). lg 에서 끈다. */}
+        <p className="mt-8 flex items-center gap-1.5 text-[13px] text-fg-sub lg:hidden">
           <ArrowRight className="size-3.5 shrink-0" aria-hidden />
           표를 옆으로 밀면 나머지 플랜이 보여요
         </p>
-        <div className="mt-3 rounded-card border border-line bg-body md:mt-8">
+        <div className="mt-3 rounded-card border border-line bg-body lg:mt-8">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] border-collapse text-left">
               <caption className="sr-only">Free·Creator·Pro·Agency·Enterprise 플랜별 기능 비교</caption>
@@ -284,14 +286,17 @@ export default function PricingPage() {
                   /* Fragment 에 key 를 주지 않으면 React 가 "unique key" 경고를 낸다 —
                      구획 머리행 + 본문행들을 한 덩어리로 반환하는 구조라 여기가 목록의 자식이다. */
                   <Fragment key={group.label}>
+                    {/* 구획 머리행 — colSpan=6 한 칸에 sticky 를 걸면 셀 폭이 표 전체라
+                        고정이 되지 않고 라벨만 왼쪽으로 사라진다(2026-08-29 실측: 회색 띠만 남았다).
+                        데이터 행과 같은 구조로 «고정되는 라벨 칸 + 나머지를 메우는 칸» 으로 나눈다. */}
                     <tr>
                       <th
                         scope="colgroup"
-                        colSpan={6}
-                        className="sticky left-0 z-10 border-t border-line-strong bg-plate px-5 py-2.5 text-[12px] font-bold uppercase tracking-[0.1em] text-fg-sub"
+                        className="sticky left-0 z-10 border-t border-line-strong bg-plate px-5 py-2.5 text-left text-[12px] font-bold uppercase tracking-[0.1em] text-fg-sub"
                       >
                         {group.label}
                       </th>
+                      <td colSpan={5} aria-hidden className="border-t border-line-strong bg-plate" />
                     </tr>
                     {group.rows.map((label) => {
                       const row = planFeatures.find((f) => f.label === label);
