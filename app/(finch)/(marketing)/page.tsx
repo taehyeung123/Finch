@@ -20,7 +20,9 @@ import { AppIconTile, type BrandApp } from "@/components/icons/brand";
 import { PLAN_CARDS } from "@/components/pricing/plan-cards";
 
 export const metadata: Metadata = {
-  title: "핀치 (Finch) — 인스타그램·틱톡·쓰레드 SNS 통합 분석 & 메타광고 관리",
+  /* 제목에 브랜드가 이미 있다 — 레이아웃 템플릿(«%s | 핀치 (Finch)»)이 또 붙으면
+     검색 결과에 브랜드가 두 번 나온다(네이버 노출 실측). absolute 로 템플릿을 끈다 */
+  title: { absolute: "핀치 (Finch) — 인스타그램·틱톡·쓰레드 SNS 통합 분석 & 메타광고 관리" },
   description:
     "핀치는 인스타그램·틱톡·쓰레드를 한 곳에서 보는 SNS 통합 분석 사이트입니다. 경쟁사 광고 모니터링, 트렌드 탐색, AI 콘텐츠 제작까지 크리에이터를 위한 소셜미디어 분석 도구를 하나의 대시보드에서 제공합니다.",
   alternates: { canonical: "/" },
