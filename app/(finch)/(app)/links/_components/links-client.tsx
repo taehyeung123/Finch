@@ -2839,7 +2839,7 @@ function TemplateModal({
       <div
         ref={boxRef}
         tabIndex={-1}
-        className="modal-card-in shadow-pop relative flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-card border border-line bg-overlay outline-none"
+        className="modal-card-in shadow-pop relative flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-card border border-line bg-overlay outline-none"
         onKeyDown={(e) => trapFocus(boxRef.current, e)}
       >
         {/* 적용 중 — 핀치 로더(로고 주위로 도는 빛)로 덮는다. 모달을 닫지 않는다 */}
@@ -4259,7 +4259,7 @@ function ThemePanel({
      가장자리 클릭이 옆 칩을 누른다 */
   const chip = (on: boolean) =>
     cn(
-      "trans-state cursor-pointer rounded-chip px-3.5 py-1.5 text-[14px] font-semibold",
+      "trans-state inline-flex min-h-9 cursor-pointer items-center rounded-chip px-3.5 text-[14px] font-semibold",
       "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
       on ? "bg-primary text-on-primary" : "border border-line bg-body text-fg-sub hover:bg-tint-hover hover:text-fg",
     );

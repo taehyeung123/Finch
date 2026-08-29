@@ -265,7 +265,7 @@ export function PublishList({
                 aria-selected={on}
                 onClick={() => setView(t.key)}
                 className={cn(
-                  "trans-state inline-flex items-center gap-1.5 rounded-chip px-3.5 py-1.5 text-[14px] font-medium",
+                  "trans-state inline-flex min-h-9 items-center gap-1.5 rounded-chip px-3.5 text-[14px] font-medium",
                   on ? "bg-primary text-on-primary" : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",
                 )}
               >

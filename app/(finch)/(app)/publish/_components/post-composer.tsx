@@ -218,7 +218,7 @@ export function PostComposer({
       <div
         ref={containerRef}
         tabIndex={-1}
-        className="modal-card-in shadow-pop flex max-h-[92vh] w-full max-w-[550px] flex-col overflow-hidden rounded-card border border-line bg-body outline-none sm:max-h-[88vh]"
+        className="modal-card-in shadow-pop flex max-h-[92dvh] w-full max-w-[550px] flex-col overflow-hidden rounded-card border border-line bg-body outline-none sm:max-h-[88dvh]"
       >
         <div className="flex items-center gap-2 px-5 pt-4">
           <h2 className="flex-1 text-[17px] font-semibold">새 게시물 포스팅</h2>

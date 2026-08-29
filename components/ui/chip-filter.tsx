@@ -8,16 +8,21 @@ export function ChipFilter<T extends string>({
   value,
   onChange,
   className,
+  wrap = false,
 }: {
   options: { value: T; label: string }[];
   value: T;
   onChange: (v: T) => void;
   className?: string;
+  /**
+   * 항목이 많아 **한눈에 다 보여야 하는** 목록(카테고리 고르기 등)은 줄바꿈으로 둔다.
+   * 기본값은 한 줄 가로 스크롤 — 탭처럼 몇 개뿐인 줄이 모바일에서 두 줄로 깨지면
+   * «탭 줄»로 안 읽힌다(2026-08-29). 둘은 성격이 다른 UI 라 호출부가 고른다.
+   */
+  wrap?: boolean;
 }) {
   return (
-    /* chip-row — 좁은 화면에서 줄바꿈 대신 옆으로 민다. flex-wrap 이면 탭이 두 줄로 깨져
-       «탭 줄» 로 안 읽힌다(2026-08-29 모바일 실측: 설정·알림·발행에서 전부 2줄). */
-    <div className={cn("chip-row gap-1.5", className)} role="tablist">
+    <div className={cn(wrap ? "flex flex-wrap gap-1.5" : "chip-row gap-1.5", className)} role="tablist">
       {options.map((opt) => {
         const active = opt.value === value;
         return (

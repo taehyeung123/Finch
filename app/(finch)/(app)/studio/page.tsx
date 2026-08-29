@@ -945,7 +945,9 @@ export default function StudioPage() {
                   {ideaError}
                 </p>
               ) : null}
+              {/* 카테고리는 «다 보고 고르는» 목록이다 — 한 줄로 밀면 뒤쪽 카테고리를 못 본다 */}
               <ChipFilter
+                wrap
                 options={TREND_CATEGORIES.map((c) => ({ value: c, label: c }))}
                 value={ideaCategory}
                 onChange={setIdeaCategory}

@@ -120,7 +120,7 @@ export function InterestPicker({
                   type="button"
                   aria-label={`${name} 삭제`}
                   onClick={() => onChange(value.filter((v) => v !== name))}
-                  className="trans-state hover:text-fg"
+                  className="relative after:absolute after:-inset-2 after:content-[''] trans-state hover:text-fg"
                 >
                   <X className="size-3.5" aria-hidden />
                 </button>

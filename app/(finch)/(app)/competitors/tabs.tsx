@@ -18,7 +18,7 @@ export function CompetitorTabs({ current }: { current: (typeof TABS)[number]["ke
             href={tab.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "rounded-chip px-3.5 py-1.5 text-[14px] font-semibold trans-state",
+              "inline-flex min-h-9 items-center rounded-chip px-3.5 text-[14px] font-semibold trans-state",
               active
                 ? "bg-primary text-on-primary"
                 : "border border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg",

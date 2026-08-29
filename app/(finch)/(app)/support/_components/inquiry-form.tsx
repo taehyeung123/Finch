@@ -49,7 +49,7 @@ export function InquiryForm() {
               onClick={() => setType(t)}
               aria-pressed={type === t}
               className={cn(
-                "rounded-chip px-3.5 py-1.5 text-[14px] font-semibold trans-state",
+                "inline-flex min-h-9 items-center rounded-chip px-3.5 text-[14px] font-semibold trans-state",
                 type === t
                   ? "bg-primary text-on-primary"
                   : "bg-overlay text-fg-sub border border-line hover:border-line-strong hover:text-fg",

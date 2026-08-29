@@ -373,7 +373,7 @@ export function AiDesignModal({
             </button>
             {error ? <p role="alert" className="text-[12px] text-negative-strong">{error}</p> : null}
           </div>
-          <div className="min-h-0 rounded-card bg-plate p-4 md:max-h-[62vh] md:overflow-y-auto">
+          <div className="min-h-0 rounded-card bg-plate p-4 md:max-h-[62dvh] md:overflow-y-auto">
             {previewDesign ? (
               <PhonePreview
                 page={{

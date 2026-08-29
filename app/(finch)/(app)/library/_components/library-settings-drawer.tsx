@@ -471,7 +471,7 @@ export function LibrarySettingsDrawer({
                   aria-pressed={settings.krOnly}
                   onClick={() => onUpdateSettings({ ...settings, krOnly: !settings.krOnly })}
                   className={cn(
-                    "inline-flex cursor-pointer items-center rounded-chip px-3.5 py-1.5 text-[14px] font-semibold trans-state",
+                    "inline-flex min-h-9 cursor-pointer items-center rounded-chip px-3.5 text-[14px] font-semibold trans-state",
                     settings.krOnly
                       ? "bg-primary text-on-primary"
                       : "border border-line bg-body text-fg-sub hover:border-line-strong hover:text-fg",

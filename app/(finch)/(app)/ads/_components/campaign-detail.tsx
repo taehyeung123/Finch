@@ -128,7 +128,7 @@ export function CampaignDetailModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="modal-card-in shadow-pop flex max-h-[94vh] w-full max-w-5xl flex-col rounded-card border border-line bg-body">
+      <div className="modal-card-in shadow-pop flex max-h-[94dvh] w-full max-w-5xl flex-col rounded-card border border-line bg-body">
         {/* 헤더 */}
         <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
           <div className="flex min-w-0 items-center gap-3.5">

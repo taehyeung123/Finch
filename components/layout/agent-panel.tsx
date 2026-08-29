@@ -126,6 +126,8 @@ export function AgentPanel() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="AI 에이전트 열기"
+        aria-hidden={hidden || undefined}
+        tabIndex={hidden ? -1 : undefined}
         className={cn(
           "fixed bottom-20 right-4 z-40 flex size-13 items-center justify-center rounded-chip bg-primary text-on-primary transition-[transform,opacity] duration-200 ease-out hover:bg-primary-hover md:bottom-6 md:right-6",
           hidden ? "pointer-events-none translate-y-24 opacity-0 md:translate-y-0 md:opacity-100 md:pointer-events-auto" : "translate-y-0 opacity-100",

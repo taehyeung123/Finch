@@ -185,7 +185,7 @@ export function ScrapClient({
               aria-selected={on}
               onClick={() => setTab(t.key)}
               className={cn(
-                "trans-state rounded-chip px-3.5 py-1.5 text-[14px] font-medium",
+                "trans-state inline-flex min-h-9 items-center rounded-chip px-3.5 text-[14px] font-medium",
                 on
                   ? "bg-primary text-on-primary"
                   : "border border-line text-fg-sub hover:bg-tint-hover hover:text-fg",

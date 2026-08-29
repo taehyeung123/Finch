@@ -199,7 +199,7 @@ export default function CompetitorsPage() {
                   }
                   onClick={() => toggleCompare(c.id)}
                   className={cn(
-                    "rounded-chip px-3.5 py-1.5 text-[14px] font-semibold trans-state",
+                    "inline-flex min-h-9 items-center rounded-chip px-3.5 text-[14px] font-semibold trans-state",
                     locked && "cursor-not-allowed opacity-60",
                     active
                       ? "bg-primary text-on-primary"

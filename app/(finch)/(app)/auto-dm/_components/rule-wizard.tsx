@@ -433,7 +433,7 @@ export function RuleWizard({
         ref={containerRef}
         tabIndex={-1}
         onKeyDown={trapFocus}
-        className="modal-card-in shadow-pop flex h-[min(849px,88vh)] max-h-[92vh] w-full max-w-[550px] flex-col overflow-hidden rounded-card border border-line bg-body outline-none sm:max-h-[88vh]"
+        className="modal-card-in shadow-pop flex h-[min(849px,88dvh)] max-h-[92dvh] w-full max-w-[550px] flex-col overflow-hidden rounded-card border border-line bg-body outline-none sm:max-h-[88dvh]"
       >
         {/* 헤더 — 뒤로가기(2단계부터) + 제목 + 닫기 (리틀리: 흰 헤더, 타이틀 18px/600) */}
         <div className="flex items-center gap-2 px-5 pt-4">
@@ -638,7 +638,7 @@ export function RuleWizard({
                             type="button"
                             aria-label={`${k} 삭제`}
                             onClick={() => setKeywords((prev) => prev.filter((x) => x !== k))}
-                            className="text-fg-faint hover:text-fg"
+                            className="relative text-fg-faint after:absolute after:-inset-2 after:content-[''] hover:text-fg"
                           >
                             <X className="size-3" />
                           </button>
