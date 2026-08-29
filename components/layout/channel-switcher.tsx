@@ -107,7 +107,7 @@ export function ChannelSwitcher({
             onClick={() => onChange(opt.value)}
             className={cn(
               /* 모바일은 글리프만 남아 폭이 확 줄어든다 — 그래도 손가락 표적(min-h-9)은 지킨다 */
-              "inline-flex min-h-9 items-center gap-1.5 rounded-chip px-3.5 py-1.5 text-[14px] font-semibold trans-state",
+              "inline-flex min-h-9 items-center gap-1.5 rounded-chip px-2.5 py-1.5 text-[14px] font-semibold trans-state sm:px-3.5",
               active
                 ? "bg-primary text-on-primary"
                 : "bg-overlay text-fg-sub border border-line hover:border-line-strong hover:text-fg",

@@ -97,7 +97,7 @@ export function Topbar({ unread = 0 }: { unread?: number }) {
      상시 z-50 으로 두지 않는 이유: 탐색의 필터 스크림(z-30, DOM 나중)이 상단바를 함께
      가라앉히는 연출이 z-30 전제를 딛고 서 있다(search-console.tsx 주석). */
   return (
-    <header className={cn("sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-body/90 px-4 backdrop-blur md:px-6", menuOpen && "z-50")}>
+    <header className={cn("sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-line bg-body/90 px-3 backdrop-blur md:gap-3 md:px-6", menuOpen && "z-50")}>
       {/* 브랜드 마크 — 모바일에는 사이드바가 없어 **화면 어디에도 로고가 없었다**
           (2026-08-29 사장님 지적). 데스크톱은 사이드바가 로고를 지므로 여기선 감춘다. */}
       <Link href="/dashboard" aria-label="핀치 홈" className="-my-1 flex shrink-0 items-center py-1 md:hidden">
