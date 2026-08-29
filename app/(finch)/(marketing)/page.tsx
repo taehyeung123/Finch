@@ -110,21 +110,59 @@ const JSON_LD = {
   ],
 };
 
+
+/*
+  기능·고민마다 **다른 색**을 준다(2026-08-29 사장님 지시 «너무 밋밋하다»).
+  앞서는 아이콘 타일 다섯 개가 전부 코랄(primary-weak) 하나여서, 스크롤해도
+  같은 그림이 반복되는 인상이었다 — 디자인 시스템에 틴트 8종이 있는데 랜딩만 안 썼다.
+  틴트는 반투명 + 짝이 되는 -ink 색이라 라이트·다크 양쪽에서 대비가 유지된다.
+*/
+/** 잉크만 — 배경 없이 글자·아이콘 색만 필요한 자리(해결 문장 등) */
+/** 플랜 색 점 — 요금제 표의 열 색과 같은 체계(화면이 달라도 같은 플랜은 같은 색) */
+const PLAN_DOT: Record<string, string> = {
+  free: "bg-plan-free-ink",
+  creator: "bg-plan-creator-ink",
+  pro: "bg-primary",
+  agency: "bg-plan-agency-ink",
+  enterprise: "bg-plan-ent-ink",
+};
+
+const TONE_INK: Record<string, string> = {
+  coral: "text-tint-coral-ink",
+  blue: "text-tint-blue-ink",
+  purple: "text-tint-purple-ink",
+  amber: "text-tint-amber-ink",
+  teal: "text-tint-teal-ink",
+  pink: "text-tint-pink-ink",
+};
+
+const TONE: Record<string, string> = {
+  coral: "bg-tint-coral text-tint-coral-ink",
+  blue: "bg-tint-blue text-tint-blue-ink",
+  purple: "bg-tint-purple text-tint-purple-ink",
+  amber: "bg-tint-amber text-tint-amber-ink",
+  teal: "bg-tint-teal text-tint-teal-ink",
+  pink: "bg-tint-pink text-tint-pink-ink",
+};
+
 const PAIN_POINTS = [
   {
     icon: LayoutDashboard,
+    tone: "blue",
     persona: "크리에이터·브랜드 운영자",
     pain: "앱을 오가며 채널 성과를 따로 확인하고, 콘텐츠 기획은 감에 의존하고 있어요.",
     solution: "3채널 통합 대시보드와 데이터 기반 트렌드 탐색으로 해결합니다.",
   },
   {
     icon: Megaphone,
+    tone: "amber",
     persona: "메타광고 광고주",
     pain: "광고 성과와 오가닉 성과를 따로 봐야 하고, 경쟁사가 어떤 소재를 쓰는지 알기 어려워요.",
     solution: "광고+오가닉 통합 뷰와 경쟁사 광고 자동 모니터링으로 해결합니다.",
   },
   {
     icon: Users,
+    tone: "purple",
     persona: "콘텐츠 마케터·대행사",
     pain: "클라이언트 보고서를 수작업으로 취합하고, 아이디어 발굴에 시간이 너무 들어요.",
     solution: "자동 리포트와 AI 콘텐츠 아이디어·카드뉴스 생성으로 해결합니다.",
@@ -134,6 +172,7 @@ const PAIN_POINTS = [
 const FEATURES = [
   {
     icon: LayoutDashboard,
+    tone: "blue",
     title: "3채널 통합 대시보드",
     description:
       "인스타그램·틱톡·쓰레드의 팔로워·조회수·참여율을 한 화면에서 봅니다. 광고 계정을 연동하면 광고 성과까지 나란히 놓입니다.",
@@ -141,6 +180,7 @@ const FEATURES = [
   },
   {
     icon: Link2,
+    tone: "coral",
     title: "프로필 링크",
     description:
       "프로필에 넣는 링크 모음 페이지를 finch.ai.kr/내아이디 주소로 만듭니다. 디자인이 막히면 AI가 프로필 사진 색에 맞춰 대신 만들어 줍니다.",
@@ -150,6 +190,7 @@ const FEATURES = [
   },
   {
     icon: BellRing,
+    tone: "amber",
     title: "경쟁사 광고 자동 모니터링",
     description:
       "등록해둔 경쟁사가 새 광고를 시작하면 자동으로 감지해 알려드립니다. 오래 집행되는 광고는 성과가 나온다는 신호예요.",
@@ -157,6 +198,7 @@ const FEATURES = [
   },
   {
     icon: Compass,
+    tone: "teal",
     title: "카테고리 트렌드 탐색",
     description:
       "뷰티·푸드·패션 등 분야별로 지금 뜨는 콘텐츠를 봅니다. 팔로워 대비 조회수로 «진짜 터진» 것만 가려냅니다.",
@@ -164,6 +206,7 @@ const FEATURES = [
   },
   {
     icon: Sparkles,
+    tone: "purple",
     title: "AI 콘텐츠 스튜디오",
     description:
       "주제만 입력하면 카드뉴스 카피와 슬라이드가 완성됩니다. 다음에 뭘 만들지도 데이터를 근거로 추천해요.",
@@ -388,7 +431,19 @@ export default function LandingPage() {
              어떻게 생겼는지 전달하지 못했다.
              벤치마크(스니핏·링크팜)는 둘 다 **중앙 정렬 글 → 그 아래 앱 화면 통짜**다.
              글은 폭 전체를 쓰고, 화면은 넓게 깔린다. 그 구조로 바꿨다. ── */}
-      <section className="mx-auto max-w-6xl overflow-x-clip px-5 pb-16 pt-14 text-center md:px-6 md:pb-20 md:pt-24">
+      {/* 히어로 배경 — 회색 지면에 검정 글씨뿐이라 첫 화면이 무채색이었다(2026-08-29 «너무 밋밋»).
+          브랜드 색 오브 두 개를 크게 흐려 깔아 «색이 있는 지면»으로 만든다.
+          overflow-clip 안에 두어 밖으로 새지 않고, pointer-events-none 이라 조작을 막지 않는다.
+          다크에서도 같은 토큰이라 자동으로 어두운 코랄/보라가 된다. */}
+      <section className="relative mx-auto max-w-6xl overflow-clip px-5 pb-16 pt-14 text-center md:px-6 md:pb-20 md:pt-24">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -top-24 left-1/2 -z-10 size-[420px] -translate-x-[62%] rounded-full bg-primary-weak blur-3xl md:size-[560px]"
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -top-10 left-1/2 -z-10 size-[320px] translate-x-[10%] rounded-full bg-tint-purple blur-3xl md:size-[460px]"
+        />
         {/* GEO: 자기완결적 정의 문장 (PART 13.3) */}
         <p className="anim-fade-up text-[13px] font-semibold tracking-[0.02em] text-primary-ink">
           SNS 통합 분석 &amp; 메타광고 관리
@@ -398,7 +453,11 @@ export default function LandingPage() {
           style={{ animationDelay: "0.08s" }}
         >
           채널 분석부터 광고 관리까지,{" "}
-          <span className="text-primary-ink">대시보드 하나로</span>
+          {/* 그라데이션 글자 — 단색 코랄 한 덩어리보다 색이 산다. 배경을 글자에만 클립한다.
+            지원하지 않는 브라우저에서는 text-primary-ink 가 그대로 보인다(폴백 안전). */}
+          <span className="bg-gradient-to-r from-primary via-primary-hover to-tint-purple-ink bg-clip-text text-primary-ink [-webkit-text-fill-color:transparent]">
+            대시보드 하나로
+          </span>
         </h1>
         <p
           className="anim-fade-up mx-auto mt-5 max-w-[54ch] text-[16px] leading-[1.65] text-fg-sub md:mt-6 md:text-[18px]"
@@ -437,15 +496,16 @@ export default function LandingPage() {
             <h2 className="text-center text-[26px] font-bold leading-[1.3] tracking-[-0.02em] md:text-[32px]">이런 고민 있으신가요?</h2>
           </Reveal>
           <div className="mt-10 grid gap-4 md:grid-cols-3">
-            {PAIN_POINTS.map(({ icon: Icon, persona, pain, solution }, i) => (
+            {PAIN_POINTS.map(({ icon: Icon, tone, persona, pain, solution }, i) => (
               <Reveal key={persona} delay={0.05 * i} className="h-full">
                 <div className="h-full rounded-card border border-line bg-body p-6 transition-transform hover:-translate-y-1">
-                  <span className="flex size-10 items-center justify-center rounded-card bg-primary-weak text-primary-ink">
+                  <span className={`flex size-10 items-center justify-center rounded-card ${TONE[tone]}`}>
                     <Icon className="size-5" aria-hidden />
                   </span>
                   <h3 className="mt-4 text-[15px] font-bold">{persona}</h3>
                   <p className="mt-2 text-[14px] leading-relaxed text-fg-sub">&ldquo;{pain}&rdquo;</p>
-                  <p className="mt-3 flex items-start gap-1.5 text-[14px] font-medium text-primary-ink">
+                  {/* 해결 문장도 카드 색을 따른다 — 아이콘만 색이 갈리고 글자는 전부 코랄이라 따로 놀았다 */}
+                  <p className={`mt-3 flex items-start gap-1.5 text-[14px] font-medium ${TONE_INK[tone]}`}>
                     <Check className="mt-0.5 size-4 shrink-0" aria-hidden />
                     {solution}
                   </p>
@@ -467,7 +527,7 @@ export default function LandingPage() {
           </p>
         </Reveal>
         <div className="mt-14 space-y-16">
-          {FEATURES.map(({ icon: Icon, title, description, points, href, cta }, i) => {
+          {FEATURES.map(({ icon: Icon, tone, title, description, points, href, cta }, i) => {
             const Panel = FEATURE_PANELS[i];
             return (
               <Reveal key={title}>
@@ -479,7 +539,7 @@ export default function LandingPage() {
                   className={`grid items-center gap-8 [&>*]:min-w-0 md:grid-cols-2 ${i % 2 === 1 ? "md:[&>*:first-child]:order-2" : ""}`}
                 >
                   <div>
-                    <span className="flex size-11 items-center justify-center rounded-card bg-primary-weak text-primary-ink">
+                    <span className={`flex size-11 items-center justify-center rounded-card ${TONE[tone]}`}>
                       <Icon className="size-5" aria-hidden />
                     </span>
                     <h3 className="mt-4 text-xl font-bold">{title}</h3>
@@ -618,7 +678,10 @@ export default function LandingPage() {
                     p.key === "pro" ? "border-primary bg-primary-weak" : "border-line bg-body"
                   }`}
                 >
-                  <h3 className="text-[17px] font-bold">{p.name}</h3>
+                  <h3 className="flex items-center gap-2 text-[17px] font-bold">
+                    <span aria-hidden className={`size-2 shrink-0 rounded-full ${PLAN_DOT[p.key] ?? "bg-plan-free-ink"}`} />
+                    {p.name}
+                  </h3>
                   <p className="tnum mt-1 text-[15px] font-semibold text-fg">
                     {p.price === 0 ? "무료" : `${p.price.toLocaleString("ko-KR")}원 / 월`}
                   </p>
