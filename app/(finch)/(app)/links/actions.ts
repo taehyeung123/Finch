@@ -18,6 +18,8 @@ import { parseInpockHtml } from "@/lib/links/inpock";
 import { getLinkFeedItems } from "@/lib/data/live";
 import { createClaudeClient, CHAT_MODEL } from "@/lib/ai/claude";
 import { CREDIT_COSTS, chargeGeneration, refundGenerationCredits } from "@/lib/actions/credits";
+import { getCurrentPlan } from "@/lib/data/internal";
+import { isPaidPlan } from "@/lib/toss/config";
 import { AI_FIELDS, AI_GOALS, AI_MOODS, fallbackCopy, type AiBrief, type AiCopy } from "@/lib/links/ai-design";
 
 /*
@@ -488,6 +490,17 @@ export async function updateLinkThemeCustom(input: unknown, pageId?: string): Pr
   const user = await getAuthUser();
   if (!user) return AUTH;
   const custom = sanitizeThemeCustom(input);
+  /* 로고 감추기·내 로고는 **유료 기능**인데 잠금이 편집기 칩에만 있었다(쏘넷 점검) —
+     이 액션을 직접 부르면 무료 플랜도 배지를 지울 수 있었다. 서버에서 다시 막는다.
+     플랜 조회가 실패하면 «free» 로 본다(fail-closed) — 결제 기능은 열어 주는 쪽이 아니라 닫는 쪽이 안전하다. */
+  if (custom && (custom.badge === "hide" || custom.logoImage)) {
+    const plan = await getCurrentPlan();
+    if (!isPaidPlan(plan ?? "free")) {
+      delete custom.badge;
+      delete custom.logoImage;
+      delete custom.logoPos;
+    }
+  }
   const page = await myPage(pageId);
   if (!page) return { ok: false, error: "프로필 링크가 없어요." };
   const supabase = await createClient();
