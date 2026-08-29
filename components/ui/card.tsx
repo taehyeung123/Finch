@@ -38,7 +38,10 @@ export function CardHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-start justify-between gap-3 p-4 pb-0", className)}>
+    /* 모바일에서는 동작 버튼을 아래로 내린다 — 제목 옆에 두면 좁은 폭에서 버튼이 눌려 찌그러지고,
+       **화면 오른쪽 아래 구석**에 놓여 떠 있는 AI 버튼과 겹쳤다(2026-08-29 실측: 성장 진단의
+       «AI 진단 받기» 가 통째로 가려짐). sm 부터는 원래대로 한 줄에 나란히. */
+    <div className={cn("flex flex-col items-start gap-2.5 p-4 pb-0 sm:flex-row sm:items-start sm:justify-between sm:gap-3", className)}>
       <div className="min-w-0">
         <h3 className="text-[17px] font-semibold leading-snug">{title}</h3>
         {description ? <p className="mt-0.5 text-[14px] text-fg-sub">{description}</p> : null}

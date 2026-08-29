@@ -79,7 +79,8 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
       ) : (
         <>
           {/* 계정 평균 요약 (실측) */}
-          <div className="grid gap-4 sm:grid-cols-3">
+          {/* 모바일 2열 — 짧은 숫자 카드를 1열로 쌓으면 세 장이 한 화면을 다 먹는다(홈과 같은 규칙) */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
             <SummaryCard
               label="평균 저장률"
               value={`${performance.avgSaveRate}%`}

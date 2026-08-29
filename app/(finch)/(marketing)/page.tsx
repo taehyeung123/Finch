@@ -381,20 +381,20 @@ export default function LandingPage() {
              어떻게 생겼는지 전달하지 못했다.
              벤치마크(스니핏·링크팜)는 둘 다 **중앙 정렬 글 → 그 아래 앱 화면 통짜**다.
              글은 폭 전체를 쓰고, 화면은 넓게 깔린다. 그 구조로 바꿨다. ── */}
-      <section className="mx-auto max-w-6xl overflow-x-clip px-4 pb-16 pt-16 text-center md:px-6 md:pb-20 md:pt-24">
+      <section className="mx-auto max-w-6xl overflow-x-clip px-5 pb-16 pt-14 text-center md:px-6 md:pb-20 md:pt-24">
         {/* GEO: 자기완결적 정의 문장 (PART 13.3) */}
         <p className="anim-fade-up text-[13px] font-semibold tracking-[0.02em] text-primary-ink">
           SNS 통합 분석 &amp; 메타광고 관리
         </p>
         <h1
-          className="anim-fade-up mx-auto mt-4 max-w-[19ch] text-[clamp(34px,5.6vw,60px)] font-bold leading-[1.12]"
+          className="anim-fade-up mx-auto mt-4 max-w-[19ch] text-[clamp(30px,5.6vw,60px)] font-bold leading-[1.18] md:leading-[1.12]"
           style={{ animationDelay: "0.08s" }}
         >
           채널 분석부터 광고 관리까지,{" "}
           <span className="text-primary-ink">대시보드 하나로</span>
         </h1>
         <p
-          className="anim-fade-up mx-auto mt-6 max-w-[54ch] text-[17px] leading-[1.6] text-fg-sub md:text-[18px]"
+          className="anim-fade-up mx-auto mt-5 max-w-[54ch] text-[16px] leading-[1.65] text-fg-sub md:mt-6 md:text-[18px]"
           style={{ animationDelay: "0.16s" }}
         >
           핀치는 인스타그램·틱톡·쓰레드를 한 곳에서 분석하고 메타광고 집행까지 관리하는 SNS 마케팅
