@@ -6,7 +6,8 @@ import { Reveal } from "@/components/landing/reveal";
 import { AppIconTile } from "@/components/icons/brand";
 
 export const metadata: Metadata = {
-  title: "쓰레드(Threads) 분석 사이트 — 스레드 계정·팔로워·인사이트 확인 | 핀치",
+  /* 레이아웃 템플릿이 «| 핀치 (Finch)» 를 붙인다 — 여기 «| 핀치» 를 또 쓰면 이중 표기 */
+  title: "쓰레드(Threads) 분석 사이트 — 스레드 계정·팔로워·인사이트 확인",
   description:
     "핀치는 내 쓰레드(Threads) 계정의 게시물 성과와 인사이트, 팔로워 통계를 확인하는 스레드 분석 사이트입니다. 인스타그램·틱톡과 함께 한 대시보드에서 스레드 계정 분석과 팔로워 확인을 무료로 시작해보세요.",
   alternates: { canonical: "/threads" },

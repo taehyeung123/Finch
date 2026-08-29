@@ -119,10 +119,11 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const noindex = !data.published || data.locked || st.robots === "noindex";
 
   return {
-    /* absolute 로 루트 레이아웃의 `%s | 핀치 (Finch)` 접미사를 끊는다.
-       링크인바이오의 주 유입은 카카오톡·인스타 DM 붙여넣기다 — 사용자 브랜드 페이지
-       공유 카드에 우리 이름이 붙으면 그건 우리 홍보지 그 사람의 페이지가 아니다. */
-    title: { absolute: title },
+    /* absolute 로 루트 레이아웃의 `%s | 핀치 (Finch)` 템플릿을 끊고, 문서 제목에만
+       «| 핀치»를 짧게 붙인다(2026-08-29 검색 노출 지시) — 검색 결과·브라우저 탭에는
+       브랜드가 실리고, 카카오톡·인스타 DM 공유 카드는 아래 openGraph.title(접미사 없음)을
+       읽으므로 사용자 브랜드만 나간다. 두 경로가 다른 필드를 보는 걸 이용한 분리다. */
+    title: { absolute: `${title} | 핀치` },
     description,
     alternates: { canonical: `/${slug}` },
     /* openGraph 를 정의하지 않으면 루트 레이아웃의 핀치 OG 이미지·siteName 을 그대로

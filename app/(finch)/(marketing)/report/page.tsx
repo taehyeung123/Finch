@@ -4,7 +4,9 @@ import { ReportForm } from "./report-form";
 /* 신고 접수 — 공개 프로필 페이지 하단 «신고» 링크의 목적지(2026-08-28).
    검색에 잡힐 이유가 없는 절차 화면이라 noindex. */
 export const metadata: Metadata = {
-  title: "페이지 신고 | 핀치",
+  /* 레이아웃 템플릿이 «| 핀치 (Finch)» 를 붙인다 — 브랜드를 직접 쓰면 이중 표기 */
+  title: "페이지 신고",
+  description: "문제가 있는 프로필 링크 페이지를 알려 주세요. 확인 후 필요한 조치를 합니다.",
   robots: { index: false },
 };
 
