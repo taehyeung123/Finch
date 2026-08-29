@@ -236,6 +236,35 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
   /* SNS 줄은 **여기서 한 번 더 거른다** — 스냅샷은 본인 행 직접 PATCH 로 아무 값이나 들어올 수
      있고, 그대로 <a href> 로 찍으면 javascript: 저장형 XSS 가 된다(감사 #5). themeCustom 과 같은 원칙. */
   const snsLinks = sanitizeSnsLinks((snap as { snsLinks?: unknown }).snsLinks);
+
+  /*
+    구조화 데이터(2026-08-29) — 이 페이지의 주인은 우리가 아니라 **사용자**다.
+    ProfilePage + Person 으로 «이 사람의 공식 링크 묶음»이라고 알려 주고, SNS 줄을
+    sameAs 로 넘겨 검색·AI 가 계정들을 한 사람으로 잇게 한다(지식그래프).
+    색인 대상일 때만 낸다 — 미발행·잠금·검색 비노출 페이지는 robots 와 신호가 어긋나면 안 된다.
+  */
+  const pageUrl = `https://finch.ai.kr/${base}`;
+  const sameAs = snsLinks.map((s) => s.url).filter((u) => /^https?:\/\//i.test(u));
+  const avatarAbs = snap.avatarPath && /^https?:\/\//i.test(snap.avatarPath) ? snap.avatarPath : null;
+  const profileLd = {
+    "@context": "https://schema.org",
+    "@type": "ProfilePage",
+    url: pageUrl,
+    name: snap.title || slug,
+    ...(snap.bio ? { description: snap.bio } : {}),
+    mainEntity: {
+      "@type": "Person",
+      name: snap.title || slug,
+      url: pageUrl,
+      ...(snap.bio ? { description: snap.bio } : {}),
+      ...(avatarAbs ? { image: avatarAbs } : {}),
+      ...(sameAs.length ? { sameAs } : {}),
+    },
+  };
+  /* `<` 를 이스케이프하지 않으면 제목·소개에 넣은 `</script>` 로 스크립트를 닫고 나올 수 있다
+     — JSON 문법상 < 는 같은 문자라 파서는 그대로 읽는다(저장형 XSS 차단) */
+  const profileLdJson = JSON.stringify(profileLd).replace(/</g, "\\u003c");
+
   const snsNav =
     snsLinks.length > 0 ? (
       <nav
@@ -321,6 +350,10 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
       {/* html 배경 — 사파리 상단바 자동 추출·오버스크롤 고무줄까지 페이지 색(2026-08-29).
           값은 테마/관문(sanitize)産 hex 만 — 형식이 다르면 안 심는다 */}
       {/^#[0-9A-Fa-f]{6}$/.test(lpVars["--lp-bg"] ?? "") ? <style>{`html,body{background:${lpVars["--lp-bg"]}}`}</style> : null}
+      {/* 구조화 데이터 — generateMetadata 의 noindex 판정(미발행·잠금·검색 비노출)과 같은 조건 */}
+      {published && settings.robots !== "noindex" ? (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: profileLdJson }} />
+      ) : null}
       {/* 글꼴 — fontsource(jsdelivr). React 19 가 precedence 로 <head> 에 올린다 */}
       {fonts.length ? <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="" /> : null}
       {fonts.map((href) => (
