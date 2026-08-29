@@ -191,7 +191,7 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
         style={themeVars(theme, null) as React.CSSProperties}
         className="relative isolate flex min-h-[100dvh] items-center justify-center bg-[var(--lp-bg)] px-5 text-[var(--lp-fg)]"
       >
-        <style>{`html{background:${theme.bg}}`}</style>
+        <style>{`html,body{background:${theme.bg}}`}</style>
         <LockScreen slug={slug} urlBase={base} message={settings.lockMessage} t={t.lock} errors={t.errors} />
       </main>
     );
@@ -319,7 +319,7 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
     >
       {/* html 배경 — 사파리 상단바 자동 추출·오버스크롤 고무줄까지 페이지 색(2026-08-29).
           값은 테마/관문(sanitize)産 hex 만 — 형식이 다르면 안 심는다 */}
-      {/^#[0-9A-Fa-f]{6}$/.test(lpVars["--lp-bg"] ?? "") ? <style>{`html{background:${lpVars["--lp-bg"]}}`}</style> : null}
+      {/^#[0-9A-Fa-f]{6}$/.test(lpVars["--lp-bg"] ?? "") ? <style>{`html,body{background:${lpVars["--lp-bg"]}}`}</style> : null}
       {/* 글꼴 — fontsource(jsdelivr). React 19 가 precedence 로 <head> 에 올린다 */}
       {fonts.length ? <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="" /> : null}
       {fonts.map((href) => (
