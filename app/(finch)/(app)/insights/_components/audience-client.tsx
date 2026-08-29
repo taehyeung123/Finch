@@ -43,7 +43,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
   if (!view || view.daily.length === 0) {
     return (
       <div className="space-y-6">
-        <PageHeader title="팔로워 분석" description="내 프로필을 찾아오는 흐름을 공식 지표로 분석합니다." />
+        <PageHeader title="팔로워 분석" description="내 프로필을 찾아오는 흐름을 확인할 수 있는 지표로 분석합니다." />
         <EmptyState
           icon={ShieldAlert}
           title="채널을 연동하면 팔로워 분석이 시작돼요"
@@ -73,7 +73,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
     <div className="space-y-6">
       <PageHeader
         title="팔로워 분석"
-        description="내 프로필을 찾아오는 흐름을 공식 지표로 분석합니다."
+        description="내 프로필을 찾아오는 흐름을 확인할 수 있는 지표로 분석합니다."
         action={
           <div className="flex items-center gap-2">
             <ChannelBadge channel="instagram" />
@@ -122,7 +122,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
             <>
               팔로워 순증감
               <InfoTip>
-                공식 API는 팔로워 수의 순변화만 제공합니다. 누가 팔로우를 취소했는지 개인 식별은 제공되지
+                인스타그램은 팔로워 수의 순변화만 알려 줍니다. 누가 팔로우를 취소했는지는 밖으로 내주지
                 않습니다.
               </InfoTip>
             </>
@@ -151,7 +151,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
             &ldquo;누가 내 프로필을 봤는지&rdquo;의 개인 식별은 인스타그램이 어떤 앱에도 제공하지 않는
             데이터입니다.
           </span>{" "}
-          이를 알려준다고 주장하는 서비스는 모두 허위이며 계정 정지 위험이 있습니다. 핀치는 공식 API가
+          이를 알려준다고 주장하는 서비스는 모두 허위이며 계정 정지 위험이 있습니다. 핀치는 인스타그램이
           제공하는 집계 지표(도달·참여 계정·팔로워 증감)와 공개 상호작용(댓글·좋아요)만 분석합니다.
         </p>
       </Card>

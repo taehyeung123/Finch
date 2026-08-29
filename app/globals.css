@@ -1635,3 +1635,21 @@ input[type="search"]::-webkit-search-cancel-button {
     font-size: 16px;
   }
 }
+
+/* ───────────────────────────────────────────────────────────────
+   한 줄 칩 줄 — 상단바처럼 **높이가 고정된 곳**에서 쓰는 가로 스크롤 띠.
+   flex-wrap 을 쓰면 좁은 화면에서 두 줄이 되어 고정 높이(h-14)를 뚫고 나간다
+   (2026-08-29 모바일 실측: 대시보드 상단바에서 칩이 잘리고 아이콘과 겹쳤다).
+   줄바꿈 대신 옆으로 밀게 하고, 스크롤바는 감춘다(모바일엔 원래 안 보인다).
+─────────────────────────────────────────────────────────────── */
+.chip-row {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  /* 스크롤 띠가 헤더 패딩 밖까지 흐르지 않도록 — 자식은 shrink-0 로 제 크기를 지킨다 */
+  min-width: 0;
+}
+.chip-row::-webkit-scrollbar { display: none; }
+.chip-row > * { flex: 0 0 auto; }

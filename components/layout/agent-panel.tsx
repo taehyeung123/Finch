@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Send, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { FinchMark } from "@/components/logo";
@@ -100,6 +100,26 @@ export function AgentPanel() {
     }
   }
 
+  /*
+    스크롤을 내리는 동안에는 비켜 준다(모바일) — 52px 코랄 원이 화면 오른쪽 아래에
+    늘 떠 있어 **캘린더 날짜 칸·카드 버튼을 덮었다**(2026-08-29 실측: /publish 에서
+    토요일 칸이 가려짐). 읽으려고 내릴 때 사라지고, 올리면 바로 돌아온다.
+    데스크톱(md~)은 지면이 넓어 겹치지 않으므로 항상 보인다.
+  */
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    let last = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      /* 작은 흔들림은 무시 — 6px 이상 움직였을 때만 방향으로 친다 */
+      if (Math.abs(y - last) < 6) return;
+      setHidden(y > last && y > 120);
+      last = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
     <>
       <button
@@ -107,7 +127,8 @@ export function AgentPanel() {
         onClick={() => setOpen(true)}
         aria-label="AI 에이전트 열기"
         className={cn(
-          "fixed bottom-20 right-4 z-40 flex size-13 items-center justify-center rounded-chip bg-primary text-on-primary trans-state hover:bg-primary-hover md:bottom-6 md:right-6",
+          "fixed bottom-20 right-4 z-40 flex size-13 items-center justify-center rounded-chip bg-primary text-on-primary transition-[transform,opacity] duration-200 ease-out hover:bg-primary-hover md:bottom-6 md:right-6",
+          hidden ? "pointer-events-none translate-y-24 opacity-0 md:translate-y-0 md:opacity-100 md:pointer-events-auto" : "translate-y-0 opacity-100",
           open && "hidden",
         )}
       >

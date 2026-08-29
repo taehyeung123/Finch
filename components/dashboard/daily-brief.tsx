@@ -186,7 +186,9 @@ export function HomeSearch({ stats }: { stats: PoolHomeStats }) {
 
       {/* 칩도 좌측 정렬 — 가운데 정렬은 좌우 빈 공간을 더 도드라지게 한다 */}
       {stats.searchChips.length > 0 ? (
-        <div className="mt-3.5 flex flex-wrap items-center gap-2">
+        /* 추천 검색어는 한 줄로 흘린다 — 줄바꿈하면 홈 첫 화면에서 두 줄을 먹어
+           바로 아래 지표 카드가 접히는 선 밖으로 밀린다(2026-08-29 모바일) */
+        <div className="chip-row mt-3.5 items-center gap-2">
           {stats.searchChips.map((chip, i) => (
             <Link
               key={chip}

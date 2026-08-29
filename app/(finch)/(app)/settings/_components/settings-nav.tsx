@@ -25,8 +25,9 @@ const TABS = [
 export function SettingsNav() {
   const pathname = usePathname();
 
+  /* chip-row — 다섯 탭이 390px 에서 두 줄로 깨졌다(2026-08-29 실측). 옆으로 민다 */
   return (
-    <nav aria-label="설정 메뉴" className="flex flex-wrap gap-1.5">
+    <nav aria-label="설정 메뉴" className="chip-row gap-1.5">
       {TABS.map((tab) => {
         const active = pathname === tab.href;
         return (

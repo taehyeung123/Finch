@@ -11,6 +11,27 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/cn";
 import { useChannel } from "./channel-context";
 import { ChannelIndicator, ChannelSwitcher, getChannelScope } from "./channel-switcher";
+import { NAV_FOOTER_ITEMS, NAV_GROUPS, NAV_HOME } from "./sidebar";
+
+/*
+  현재 화면 이름 — 채널 표시가 없는 페이지에서 상단바 왼쪽이 **통째로 비어 있었다**
+  (2026-08-29 모바일 실측: 아이콘 셋만 오른쪽에 떠 있는 빈 바). 모바일에는 사이드바가
+  없어 «지금 어디인지»를 말해 주는 곳이 여기뿐이다. 이름표는 sidebar.ts 목록에서 가져온다 —
+  IA 를 두 벌로 두지 않는다.
+*/
+const NAV_TITLES: ReadonlyArray<{ href: string; label: string }> = [
+  { href: NAV_HOME.href, label: NAV_HOME.label },
+  ...NAV_GROUPS.flatMap((g) => g.items.map((i) => ({ href: i.href as string, label: i.label as string }))),
+  ...NAV_FOOTER_ITEMS.map((i) => ({ href: i.href, label: i.label })),
+];
+
+function screenTitle(pathname: string): string | null {
+  /* 더 구체적인 경로가 이기게 — /studio 와 /studio/brand 가 함께 걸린다 */
+  const hit = [...NAV_TITLES]
+    .sort((x, y) => y.href.length - x.href.length)
+    .find((n) => pathname === n.href || pathname.startsWith(n.href + "/"));
+  return hit ? hit.label : null;
+}
 
 const menuItem =
   "flex w-full items-center gap-2 rounded-card px-2.5 py-2 text-left text-[15px] text-fg-sub trans-state hover:bg-tint-hover hover:text-fg";
@@ -79,7 +100,7 @@ export function Topbar({ unread = 0 }: { unread?: number }) {
       ) : scope.mode === "indicator" ? (
         <ChannelIndicator scope={scope} />
       ) : (
-        <div aria-hidden />
+        <p className="truncate text-[15px] font-semibold text-fg">{screenTitle(pathname) ?? ""}</p>
       )}
 
       <div className="ml-auto hidden items-center gap-2 sm:flex">
@@ -94,12 +115,12 @@ export function Topbar({ unread = 0 }: { unread?: number }) {
       </div>
 
       {/* 검색이 숨는 모바일에서는 토글이 오른쪽 정렬을 맡는다 */}
-      <ThemeToggle className="ml-auto sm:ml-0" />
+      <ThemeToggle className="ml-auto shrink-0 sm:ml-0" />
 
       <Link
         href="/notifications"
         aria-label={`알림 ${unread}건`}
-        className="relative rounded-card p-2 text-fg-sub hover:bg-tint-hover hover:text-fg"
+        className="relative shrink-0 rounded-card p-2 text-fg-sub hover:bg-tint-hover hover:text-fg"
       >
         <Bell className="size-[18px]" aria-hidden />
         {/* 알림이 사이드바에서 빠져 이 벨이 유일한 상시 진입점 — 점 대신 미읽음 개수를 노출한다 */}
@@ -110,7 +131,7 @@ export function Topbar({ unread = 0 }: { unread?: number }) {
         ) : null}
       </Link>
 
-      <div ref={menuRef} className="relative">
+      <div ref={menuRef} className="relative shrink-0">
         <button
           type="button"
           aria-label="계정 메뉴"

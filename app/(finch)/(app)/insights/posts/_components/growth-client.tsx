@@ -182,7 +182,7 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
                     <th className="px-3 pb-2 font-medium">유형</th>
                     <th className="px-3 pb-2 text-right font-medium">
                       저장률
-                      <InfoTip>저장 수 ÷ 도달 수 × 100. 공식 API 값에서 계산한 실측 비율입니다.</InfoTip>
+                      <InfoTip>저장 수 ÷ 도달 수 × 100. 플랫폼이 준 값에서 계산한 실측 비율입니다.</InfoTip>
                     </th>
                     <th className="px-3 pb-2 text-right font-medium">참여율</th>
                     <th className="px-3 pb-2 text-right font-medium">도달</th>

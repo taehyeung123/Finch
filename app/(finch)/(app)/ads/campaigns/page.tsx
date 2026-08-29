@@ -911,7 +911,7 @@ export default function CampaignsPage() {
                       <p className="text-[15px] font-semibold">게재는 아직 준비 중입니다</p>
                     </div>
                     <p className="mt-1 text-[14px] leading-relaxed text-fg-sub">
-                      캠페인 생성·수정은 Meta Advanced Access 심사 완료 후 활성화됩니다.
+                      캠페인 생성·수정은 준비 중이에요. 지금은 성과 확인만 할 수 있습니다.
                     </p>
                   </div>
                   <button

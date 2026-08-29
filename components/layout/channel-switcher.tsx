@@ -91,8 +91,10 @@ export function ChannelSwitcher({
   value: ChannelFilter;
   onChange: (v: ChannelFilter) => void;
 }) {
+  /* chip-row — 좁은 화면에서 줄바꿈 대신 옆으로 민다.
+     flex-wrap 이면 칩이 두 줄이 되어 상단바(h-14)를 뚫고 나간다(2026-08-29 실측). */
   return (
-    <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="채널 선택">
+    <div className="chip-row gap-1.5" role="tablist" aria-label="채널 선택">
       {CHANNEL_OPTIONS.map((opt) => {
         const active = opt.value === value;
         return (
@@ -101,9 +103,11 @@ export function ChannelSwitcher({
             type="button"
             role="tab"
             aria-selected={active}
+            aria-label={opt.label}
             onClick={() => onChange(opt.value)}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-chip px-3.5 py-1.5 text-[14px] font-semibold trans-state",
+              /* 모바일은 글리프만 남아 폭이 확 줄어든다 — 그래도 손가락 표적(min-h-9)은 지킨다 */
+              "inline-flex min-h-9 items-center gap-1.5 rounded-chip px-3.5 py-1.5 text-[14px] font-semibold trans-state",
               active
                 ? "bg-primary text-on-primary"
                 : "bg-overlay text-fg-sub border border-line hover:border-line-strong hover:text-fg",
@@ -114,7 +118,10 @@ export function ChannelSwitcher({
                 {opt.glyph}
               </span>
             ) : null}
-            {opt.label}
+            {/* 모바일에서는 브랜드 글리프만 — 네 칩의 글자를 다 펼치면 390px 상단바에 안 들어가
+                마지막 칩이 잘린다(2026-08-29 실측). 로고는 그 자체로 채널을 말한다.
+                글자를 감추므로 버튼 이름은 aria-label 이 진다. */}
+            <span className={opt.glyph ? "hidden sm:inline" : undefined}>{opt.label}</span>
           </button>
         );
       })}

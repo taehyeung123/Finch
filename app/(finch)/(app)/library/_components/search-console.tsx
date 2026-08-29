@@ -1232,7 +1232,7 @@ export function SearchConsole({
               submitQuery(e.currentTarget.value);
             }}
             maxLength={60}
-            placeholder="브랜드·문구·계정·해시태그로 찾기"
+            placeholder="브랜드·계정·해시태그로 찾기"
             aria-label="레퍼런스 검색"
             className="h-full min-w-0 flex-1 bg-transparent px-3 text-[15px] font-medium text-fg outline-none placeholder:font-normal placeholder:text-fg-faint"
           />
@@ -1266,7 +1266,10 @@ export function SearchConsole({
               setRecentOpen(false);
             }}
             className={cn(
-              "trans-state mr-1 inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-card px-3 text-[15px] font-semibold",
+              /* lg 미만에서는 감춘다 — 아래에 전폭 「필터」 시트 버튼이 따로 있어 **같은 것이 두 개**였고,
+                 검색창 안이 아이콘 셋으로 꽉 차 placeholder 가 잘렸다(2026-08-29 모바일 실측).
+                 인라인 패널은 지면이 넓은 데스크톱의 방식이다. */
+              "trans-state mr-1 hidden h-10 shrink-0 cursor-pointer items-center gap-2 rounded-card px-3 text-[15px] font-semibold lg:inline-flex",
               panelOpen ? "bg-plate text-fg" : "text-fg-sub hover:bg-tint-hover hover:text-fg",
             )}
           >

@@ -15,7 +15,9 @@ export function ChipFilter<T extends string>({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-wrap gap-1.5", className)} role="tablist">
+    /* chip-row — 좁은 화면에서 줄바꿈 대신 옆으로 민다. flex-wrap 이면 탭이 두 줄로 깨져
+       «탭 줄» 로 안 읽힌다(2026-08-29 모바일 실측: 설정·알림·발행에서 전부 2줄). */
+    <div className={cn("chip-row gap-1.5", className)} role="tablist">
       {options.map((opt) => {
         const active = opt.value === value;
         return (
@@ -26,7 +28,7 @@ export function ChipFilter<T extends string>({
             aria-selected={active}
             onClick={() => onChange(opt.value)}
             className={cn(
-              "cursor-pointer rounded-chip px-3.5 py-1.5 text-[14px] font-semibold trans-state",
+              "inline-flex min-h-9 cursor-pointer items-center rounded-chip px-3.5 text-[14px] font-semibold trans-state",
               active
                 ? "bg-primary text-on-primary"
                 : "bg-overlay text-fg-sub border border-line hover:border-line-strong hover:text-fg",

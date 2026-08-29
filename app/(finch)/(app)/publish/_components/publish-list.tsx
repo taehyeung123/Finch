@@ -246,7 +246,8 @@ export function PublishList({
 
       {/* 서브탭(링크팜 실측: 포스팅/초안/발행예약/발행완료) + 새 게시물 CTA */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="발행 보기">
+        {/* chip-row — 네 탭이 모바일에서 두 줄로 깨졌다(2026-08-29 실측) */}
+        <div className="chip-row gap-1.5" role="tablist" aria-label="발행 보기">
           {(
             [
               { key: "calendar", label: "캘린더", icon: CalendarClock, count: null },

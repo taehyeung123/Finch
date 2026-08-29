@@ -124,7 +124,7 @@ export default function AnalyzePage() {
                   </>
                 ) : (
                   <p className="py-8 text-center text-[14px] leading-relaxed text-fg-sub">
-                    시간대별 누적 조회는 인스타그램 공식 API가 제공하지 않는 데이터예요.
+                    시간대별 누적 조회는 인스타그램이 밖으로 내주지 않는 데이터예요.
                     <br />
                     현재 누적 지표(조회·좋아요·댓글·공유)는 위 카드에서 확인할 수 있습니다.
                   </p>

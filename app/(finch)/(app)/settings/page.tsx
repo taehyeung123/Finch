@@ -288,8 +288,7 @@ export default async function SettingsPage({
 
             {card.channel === "tiktok" ? (
               <div className="mt-4 rounded-card bg-warning-weak p-3 text-[14px] leading-relaxed text-warning-strong">
-                팔로워·좋아요·영상 수 등 기본 정보만 표시돼요 — 조회수·참여율 등 상세 분석은
-                TikTok 앱 심사 완료 후 제공됩니다.
+                팔로워·좋아요·영상 수 등 기본 정보만 표시돼요 — 조회수·참여율 등 상세 분석은 준비 중이에요.
               </div>
             ) : null}
           </Card>
