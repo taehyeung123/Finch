@@ -136,14 +136,14 @@ const FEATURES = [
     icon: LayoutDashboard,
     title: "3채널 통합 대시보드",
     description:
-      "인스타그램·틱톡·쓰레드의 팔로워, 조회수, 참여율을 한 화면에서. 광고 계정을 연동하면 광고 성과까지 나란히 볼 수 있습니다.",
+      "인스타그램·틱톡·쓰레드의 팔로워·조회수·참여율을 한 화면에서 봅니다. 광고 계정을 연동하면 광고 성과까지 나란히 놓입니다.",
     points: ["채널별·전체 요약 지표", "최근 게시물 성과 추이", "콘텐츠 유형 비중 분석"],
   },
   {
     icon: Link2,
     title: "프로필 링크",
     description:
-      "인스타그램·틱톡 프로필에 넣는 링크 모음 페이지를 finch.ai.kr/내아이디 주소로 만듭니다. 디자인이 막히면 AI가 프로필 사진 색에 맞춰 대신 만들고, 어떤 링크가 눌렸는지는 채널 분석과 같은 화면에서 봅니다.",
+      "프로필에 넣는 링크 모음 페이지를 finch.ai.kr/내아이디 주소로 만듭니다. 디자인이 막히면 AI가 프로필 사진 색에 맞춰 대신 만들어 줍니다.",
     points: ["블록 24종으로 자유 구성", "AI 디자인이 시안 3종 제안", "방문·클릭 집계 내장"],
     href: "/profile-link",
     cta: "프로필 링크 자세히 보기",
@@ -152,21 +152,21 @@ const FEATURES = [
     icon: BellRing,
     title: "경쟁사 광고 자동 모니터링",
     description:
-      "메타가 공개한 광고 라이브러리를 근거로, 등록해둔 경쟁사가 새 광고를 시작하면 자동으로 감지해 알려드립니다. 오래 집행되는 광고는 성과가 나온다는 신호로 읽을 수 있어요.",
+      "등록해둔 경쟁사가 새 광고를 시작하면 자동으로 감지해 알려드립니다. 오래 집행되는 광고는 성과가 나온다는 신호예요.",
     points: ["신규 광고 감지 알림", "게재 기간·노출 플랫폼 확인", "소재 아카이브"],
   },
   {
     icon: Compass,
     title: "카테고리 트렌드 탐색",
     description:
-      "뷰티, 푸드, 패션 등 분야별로 지금 뜨는 콘텐츠를 발견하세요. 팔로워 대비 조회수 비율로 '진짜 터진' 콘텐츠를 가려냅니다.",
+      "뷰티·푸드·패션 등 분야별로 지금 뜨는 콘텐츠를 봅니다. 팔로워 대비 조회수로 «진짜 터진» 것만 가려냅니다.",
     points: ["실시간·카테고리별 탐색", "팔로워 대비 도달 스코어", "관심 계정 저장"],
   },
   {
     icon: Sparkles,
     title: "AI 콘텐츠 스튜디오",
     description:
-      "주제만 입력하면 카드뉴스 카피와 슬라이드가 완성됩니다. 트렌드 데이터를 근거로 콘텐츠 아이디어도 추천해드려요.",
+      "주제만 입력하면 카드뉴스 카피와 슬라이드가 완성됩니다. 다음에 뭘 만들지도 데이터를 근거로 추천해요.",
     points: ["카드뉴스 자동 생성", "데이터 기반 아이디어 추천", "AI 생성 표시 자동 부착"],
   },
 ];
@@ -483,7 +483,7 @@ export default function LandingPage() {
                       <Icon className="size-5" aria-hidden />
                     </span>
                     <h3 className="mt-4 text-xl font-bold">{title}</h3>
-                    <p className="mt-3 max-w-md text-[15px] leading-relaxed text-fg-sub">{description}</p>
+                    <p className="mt-3 max-w-md text-[15px] leading-[1.75] text-fg-sub">{description}</p>
                     <ul className="mt-4 space-y-2">
                       {points.map((p) => (
                         <li key={p} className="flex items-center gap-2 text-[14px] text-fg-sub">

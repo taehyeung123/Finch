@@ -44,7 +44,10 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             <ButtonLink href="/login" variant="ghost" size="sm" className="text-[14px]">
               로그인
             </ButtonLink>
-            <span className="inline-flex transition-transform duration-200 hover:-translate-y-0.5">
+            {/* 모바일에서는 숨긴다 — 스크롤하면 하단 고정 CTA 가 뜨는데 같은 버튼이 화면에
+                둘이면 소음이다(2026-08-29 벤치마크 대조). 히어로 안에는 큰 버튼이 따로 있어
+                맨 위에서도 시작할 길이 비지 않는다. */}
+            <span className="hidden transition-transform duration-200 hover:-translate-y-0.5 sm:inline-flex">
               <ButtonLink href="/signup" size="sm">
                 무료로 시작하기
               </ButtonLink>
