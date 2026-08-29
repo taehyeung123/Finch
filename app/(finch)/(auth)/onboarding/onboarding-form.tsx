@@ -131,6 +131,10 @@ export function OnboardingForm() {
                     <ChannelBadge channel={channel} />
                   </div>
                   {channel === "instagram" ? (
+                    /* 페이지가 아니라 **API 라우트**다 — 서버가 메타 OAuth 로 302 를 쏜다.
+                       next/link 는 클라이언트 라우팅을 시도해 리다이렉트를 삼키므로 여기선 쓰면 안 된다
+                       (린트 규칙은 내부 «페이지» 링크를 겨냥한 것이라 이 경우를 구분하지 못한다). */
+                    // eslint-disable-next-line @next/next/no-html-link-for-pages
                     <a href="/api/auth/instagram/start" className={buttonClasses("secondary", "sm")}>
                       연동하기
                     </a>
