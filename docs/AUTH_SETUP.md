@@ -27,6 +27,18 @@
 7. **Audience 페이지 > Test users**에 본인 구글 이메일 추가 — Testing 상태에선 등록된 계정만 로그인된다
    (미등록 계정은 access_denied — 코드 버그가 아님). 정식 오픈 전 같은 페이지의 **Publish app** 클릭
 8. 반영이 5분~몇 시간 걸릴 수 있다 — redirect_uri_mismatch가 나면 오타 확인 후 기다릴 것
+9. **브랜딩 + 브랜드 확인(무료) — 동의 화면에서 `supabase.co` 를 없애는 방법**
+   - 구글 문서 그대로: 브랜딩과 확인을 마치면 동의 화면에 **Supabase 프로젝트 ID 대신 우리 로고와 이름**이 뜬다.
+     Supabase 유료 커스텀 도메인 없이도 된다(2026-08-30 확인 — 유료가 필요하다고 적었던 앞선 안내는 틀렸다).
+   - https://console.cloud.google.com/auth/branding
+     · 앱 이름 `핀치` · 앱 로고(정사각 PNG, 예: `public/brand/finch-mark-coral-512.png`)
+     · 앱 홈페이지 `https://finch.ai.kr` · 개인정보처리방침 `https://finch.ai.kr/privacy` · 이용약관 `https://finch.ai.kr/terms`
+     · 승인된 도메인에 `finch.ai.kr` 추가(도메인 소유 확인이 필요할 수 있다)
+   - https://console.cloud.google.com/auth/scopes 에서 범위는 `openid`(직접 추가) + `userinfo.email` + `userinfo.profile` 셋만.
+     민감·제한 범위를 넣으면 심사가 길어진다.
+   - https://console.cloud.google.com/auth/verification 에서 **브랜드 확인 제출**. 자동이 아니라 **영업일 며칠** 걸린다.
+   - (선택) Supabase 커스텀 도메인은 주소 자체를 `auth.finch.ai.kr` 로 바꾸는 별개 유료 애드온이다 —
+     브랜딩만으로 이름·로고는 해결되므로 급하지 않다.
 
 ## B. Kakao — 비즈 앱 전환이 선행 필수 (최대 함정)
 
@@ -70,7 +82,8 @@ Authentication > **URL Configuration**:
 
 ## D. 동작 확인
 
-- `/login` → Google 버튼 → 계정 선택 → `/dashboard` 복귀 (동의 화면에 "wdutrxqryvjqbufxwxem.supabase.co로 이동" 문구가 보이는 건 정상)
+- `/login` → Google 버튼 → 계정 선택 → `/dashboard` 복귀
+  (동의 화면에 `wdutrxqryvjqbufxwxem.supabase.co` 가 보이면 **브랜딩 미설정 상태**다 — 아래 A-9 참고. 정상이 아니다)
 - `/login` → 카카오 버튼 → 동의 화면 → `/dashboard` 복귀
 - 첫 로그인 후 Supabase 대시보드 > Table Editor > `users_profile`에 행이 자동 생성됐는지 확인 (0001 트리거)
 - 상단바 아바타 → 이메일 표시·로그아웃 / 로그아웃 상태에서 `/dashboard` 접근 시 `/login` 리다이렉트
