@@ -39,7 +39,12 @@ function addDays(base: Date, days: number): Date {
 
 export function ReportsClient({ initial }: { initial: ReportItem[] }) {
   const [items, setItems] = useState<ReportItem[]>(initial);
-  const [formOpen, setFormOpen] = useState(true);
+  /*
+    폼은 기본으로 접는다 — 리포트를 매번 만들지는 않는데 폼이 화면 위쪽을 크게 먹어
+    정작 «만들어 둔 리포트»가 아래로 밀려 있었다(2026-08-30 화면 점검).
+    단 아직 하나도 없으면 열어 둔다 — 처음 온 사람은 만들러 온 것이다.
+  */
+  const [formOpen, setFormOpen] = useState(initial.length === 0);
   const [period, setPeriod] = useState<PeriodValue>("30d");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
@@ -259,7 +264,13 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
                   key={r.id}
                   className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 py-4 first:pt-0 last:pb-0 sm:grid-cols-[auto_minmax(0,1fr)_auto]"
                 >
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-card border border-line bg-plate text-fg-sub">
+                  {/* 형식 색 — 회색 타일 하나로 PDF·엑셀이 구분되지 않았다.
+                      둘은 사람들이 이미 색으로 아는 형식이라 색이 곧 정보다. */}
+                  <span
+                    className={`flex size-9 shrink-0 items-center justify-center rounded-card ${
+                      r.format === "pdf" ? "bg-tint-coral text-tint-coral-ink" : "bg-tint-green text-tint-green-ink"
+                    }`}
+                  >
                     {r.format === "pdf" ? (
                       <FileText className="size-4" aria-hidden />
                     ) : (

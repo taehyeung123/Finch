@@ -11,6 +11,7 @@ import {
   ArrowUpRight,
   Info,
   Lightbulb,
+  Users,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -30,6 +31,19 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
 
   const connected = performance !== null;
   const hasData = connected && performance.sampleSize >= 3;
+  /*
+    평균 밑 한 줄 — «최고·최저»는 표에 있는 실제 값에서 뽑는다(만들어 낸 기준선이 아니다).
+    posts 는 저장률 내림차순이라 저장률의 양끝은 첫·마지막 항목이고,
+    참여율은 따로 훑는다(정렬 기준이 다르다).
+  */
+  const list = performance?.posts ?? [];
+  const saveRange =
+    list.length >= 2 ? `최고 ${list[0].saveRate}% · 최저 ${list[list.length - 1].saveRate}%` : undefined;
+  const engageRates = list.map((x) => x.engagementRate);
+  const engageRange =
+    engageRates.length >= 2
+      ? `최고 ${Math.max(...engageRates)}% · 최저 ${Math.min(...engageRates)}%`
+      : undefined;
 
   async function runDiagnosis() {
     if (loading) return;
@@ -80,24 +94,36 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
         <>
           {/* 계정 평균 요약 (실측) */}
           {/* 모바일 2열 — 짧은 숫자 카드를 1열로 쌓으면 세 장이 한 화면을 다 먹는다(홈과 같은 규칙) */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
             <SummaryCard
               label="평균 저장률"
               value={`${performance.avgSaveRate}%`}
               hint="저장 수 ÷ 도달 수. 콘텐츠가 다시 볼 가치가 있다는 강한 신호예요."
               icon={Bookmark}
+              tone="save"
+              foot={saveRange}
             />
             <SummaryCard
               label="평균 참여율"
               value={`${performance.avgEngagementRate}%`}
-              hint="총 상호작용 ÷ 도달 수. 공식 인사이트 값에서 계산했어요."
+              hint="총 상호작용(좋아요·댓글·저장·공유) ÷ 도달 수로 계산한 실측 비율이에요."
               icon={TrendingUp}
+              tone="engage"
+              foot={engageRange}
+            />
+            <SummaryCard
+              label="평균 도달"
+              value={formatCompact(performance.avgReach)}
+              hint="게시물 하나가 평균 몇 개 계정에 닿았는지예요. 저장률·참여율의 분모가 되는 값입니다."
+              icon={Users}
+              tone="reach"
             />
             <SummaryCard
               label="분석 게시물"
               value={`${performance.sampleSize}개`}
               hint="최근 게시물 중 도달 데이터가 있는 게시물을 분석했어요."
               icon={Sparkles}
+              tone="count"
             />
           </div>
 
@@ -172,7 +198,7 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
           <Card>
             <CardHeader
               title="게시물별 성과"
-              description="저장률이 높은 순서. 공식 인사이트(저장·도달)에서 직접 계산한 실제 값이에요."
+              description="저장률이 높은 순서. 플랫폼이 준 저장·도달 값에서 직접 계산한 실제 비율이에요."
             />
             <CardBody className="overflow-x-auto">
               <p className="mb-2 text-[12px] text-fg-faint sm:hidden">← 옆으로 밀면 유형·저장률·참여율·도달를 볼 수 있어요</p>
@@ -213,7 +239,12 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
                             )}
                           </div>
                         </td>
-                        <td className="px-3 py-2.5 text-fg-sub">{p.kind}</td>
+                        <td className="px-3 py-2.5">
+                          {/* 유형은 성과를 가르는 축이라 색으로 구분한다 — 무채 글자면 표에서 스캔이 안 된다 */}
+                          <span className={`inline-flex rounded-chip px-2 py-0.5 text-[12px] font-semibold ${KIND_TONE[p.kind] ?? "bg-tint-slate text-tint-slate-ink"}`}>
+                            {p.kind}
+                          </span>
+                        </td>
                         <td className={`tnum px-3 py-2.5 text-right font-semibold ${strong ? "text-positive" : "text-fg-sub"}`}>
                           {p.saveRate}%
                         </td>
@@ -245,25 +276,50 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
   );
 }
 
+/** 게시물 유형 색 — lib/data/growth.ts 의 PostKind 와 어휘를 공유한다 */
+const KIND_TONE: Record<string, string> = {
+  릴스: "bg-tint-pink text-tint-pink-ink",
+  영상: "bg-tint-purple text-tint-purple-ink",
+  캐러셀: "bg-tint-blue text-tint-blue-ink",
+  피드: "bg-tint-teal text-tint-teal-ink",
+  스토리: "bg-tint-amber text-tint-amber-ink",
+};
+
+/** 지표별 색 — 네 장이 전부 무채라 스크롤해도 같은 카드가 반복되는 인상이었다(2026-08-30) */
+const CARD_TONE: Record<string, string> = {
+  save: "bg-tint-blue text-tint-blue-ink",
+  engage: "bg-tint-purple text-tint-purple-ink",
+  reach: "bg-tint-teal text-tint-teal-ink",
+  count: "bg-tint-amber text-tint-amber-ink",
+};
+
 function SummaryCard({
   label,
   value,
   hint,
   icon: Icon,
+  tone,
+  foot,
 }: {
   label: string;
   value: string;
   hint: string;
   icon: React.ElementType;
+  tone: keyof typeof CARD_TONE;
+  /** 평균 밑에 붙는 한 줄 — 최고·최저처럼 **실제 데이터에서 계산한** 맥락만 쓴다 */
+  foot?: React.ReactNode;
 }) {
   return (
     <Card className="p-5">
       <div className="flex items-center gap-2 text-fg-sub">
-        <Icon className="size-4" aria-hidden />
+        <span className={`flex size-7 shrink-0 items-center justify-center rounded-card ${CARD_TONE[tone]}`}>
+          <Icon className="size-4" aria-hidden />
+        </span>
         <span className="text-[14px] font-medium">{label}</span>
         <InfoTip>{hint}</InfoTip>
       </div>
-      <p className="tnum mt-2 text-3xl font-bold">{value}</p>
+      <p className="tnum mt-2.5 text-3xl font-bold">{value}</p>
+      {foot ? <p className="tnum mt-1.5 text-[12px] text-fg-sub">{foot}</p> : null}
     </Card>
   );
 }

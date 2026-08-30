@@ -68,6 +68,26 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
     prevDays.length > 0 && prevReach > 0 ? ((reach - prevReach) / prevReach) * 100 : undefined;
   const followerNet = sum(days, "followerNet");
   const totals = period === 7 ? view.totals7 : view.totals14;
+  /*
+    합산 지표(참여 계정·프로필 링크 클릭)에는 일별 시계열이 없어 추이선을 못 그린다.
+    대신 **직전 구간과의 비교**는 낼 수 있다 — totals14 는 최근 14일, totals7 은 최근 7일이라
+    그 차가 정확히 «직전 7일»이다(live.ts 의 since7/since14). 7일 탭에서만 성립한다:
+    14일 탭은 비교할 직전 14일 표본이 없다(도달 증감과 같은 이유로 undefined 로 둔다 —
+    «비교할 게 없는 것»과 «변화가 없는 것»은 다르다).
+  */
+  const pct = (cur: number, prev: number) =>
+    period === 7 && prev > 0 ? Number((((cur - prev) / prev) * 100).toFixed(1)) : undefined;
+  const prevTotals = {
+    accountsEngaged: view.totals14.accountsEngaged - view.totals7.accountsEngaged,
+    profileLinksTaps: view.totals14.profileLinksTaps - view.totals7.profileLinksTaps,
+  };
+  const engagedDelta = pct(view.totals7.accountsEngaged, prevTotals.accountsEngaged);
+  const tapsDelta = pct(view.totals7.profileLinksTaps, prevTotals.profileLinksTaps);
+  const prevFollowerNet = sum(prevDays, "followerNet");
+  const followerDelta =
+    prevDays.length > 0 && prevFollowerNet > 0
+      ? Number((((followerNet - prevFollowerNet) / prevFollowerNet) * 100).toFixed(1))
+      : undefined;
 
   return (
     <div className="space-y-6">
@@ -110,12 +130,14 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
             <>
               참여 계정
               <InfoTip>
-                이 기간 내 콘텐츠에 좋아요·댓글·저장 등으로 반응한 순 계정 수입니다 (Instagram 공식
-                accounts_engaged 지표).
+                이 기간 내 콘텐츠에 좋아요·댓글·저장 등으로 반응한 순 계정 수입니다.
+                같은 사람이 여러 번 반응해도 한 명으로 셉니다.
               </InfoTip>
             </>
           }
           value={formatCompact(totals.accountsEngaged)}
+          delta={engagedDelta}
+          deltaLabel="직전 7일 대비"
         />
         <StatCard
           label={
@@ -128,18 +150,23 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
             </>
           }
           value={formatDeltaCompact(followerNet)}
+          delta={followerDelta}
+          deltaLabel={`지난 ${period}일 대비`}
+          trend={days.map((d) => d.followerNet)}
         />
         <StatCard
           label={
             <>
               프로필 링크 클릭
               <InfoTip>
-                프로필의 웹사이트·연락 버튼 등 링크가 클릭된 횟수입니다 (Instagram 공식
-                profile_links_taps 지표).
+                프로필의 웹사이트·연락 버튼 등 링크가 눌린 횟수입니다.
+                프로필 링크를 쓰고 있다면 이 숫자가 그 페이지 방문의 출발점이에요.
               </InfoTip>
             </>
           }
           value={formatCompact(totals.profileLinksTaps)}
+          delta={tapsDelta}
+          deltaLabel="직전 7일 대비"
         />
       </section>
 
