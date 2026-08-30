@@ -30,14 +30,21 @@ export const INSTAGRAM_SCOPES = [
   "instagram_business_content_publish",
 ] as const;
 
-/** 사람이 읽는 권한 설명 — 설정 화면 투명성 고지용 (스코프와 1:1, 순서도 같게 유지) */
-export const INSTAGRAM_SCOPE_LABELS = [
-  "프로필 기본 정보 조회",
-  "게시물·계정 인사이트 조회",
-  "댓글 조회·답글 및 비공개 답장(DM)",
-  "다이렉트 메시지 송수신",
-  "예약한 게시물 발행",
-];
+/**
+ * 사람이 읽는 권한 설명 — 설정 화면 투명성 고지용.
+ *
+ * 배열 두 벌이 아니라 **스코프를 키로 한 한 벌**이다. 예전엔 나란한 두 배열이라
+ * 스코프만 추가하고 라벨을 빠뜨려도 타입 오류도 런타임 오류도 안 났다 —
+ * 설정 화면이 라벨만 순회하므로 «사용자에게 안 알리고 받아가는 권한»이 조용히 생긴다.
+ * 이제 여기 한 줄을 빼면 컴파일이 막는다.
+ */
+export const INSTAGRAM_SCOPE_LABELS: Record<(typeof INSTAGRAM_SCOPES)[number], string> = {
+  instagram_business_basic: "프로필 기본 정보 조회",
+  instagram_business_manage_insights: "게시물·계정 인사이트 조회",
+  instagram_business_manage_comments: "댓글 조회·답글 및 비공개 답장(DM)",
+  instagram_business_manage_messages: "다이렉트 메시지 송수신",
+  instagram_business_content_publish: "예약한 게시물 발행",
+};
 
 export interface InstagramOAuthConfig {
   appId: string;

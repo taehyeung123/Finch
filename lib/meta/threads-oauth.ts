@@ -25,14 +25,15 @@ export const THREADS_SCOPES = [
   "threads_manage_insights",
 ] as const;
 
-/** 사람이 읽는 권한 설명 — 설정 화면 투명성 고지용 (스코프와 1:1) */
-export const THREADS_SCOPE_LABELS = [
-  "프로필 기본 정보 조회",
-  "게시물 발행(카드뉴스 예약 발행)",
-  "답글 작성",
-  "답글 조회",
-  "계정·게시물 인사이트 조회",
-];
+/** 사람이 읽는 권한 설명 — 스코프를 키로 묶어 누락이 컴파일에서 걸리게 한다
+ *  (근거: lib/meta/instagram-oauth.ts 의 같은 상수 주석) */
+export const THREADS_SCOPE_LABELS: Record<(typeof THREADS_SCOPES)[number], string> = {
+  threads_basic: "프로필 기본 정보 조회",
+  threads_content_publish: "게시물 발행(카드뉴스 예약 발행)",
+  threads_manage_replies: "답글 작성",
+  threads_read_replies: "답글 조회",
+  threads_manage_insights: "계정·게시물 인사이트 조회",
+};
 
 export interface ThreadsOAuthConfig {
   appId: string;

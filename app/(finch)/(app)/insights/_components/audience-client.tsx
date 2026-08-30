@@ -26,6 +26,10 @@ export interface AudienceView {
   daily: { date: string; reach: number; followerNet: number }[];
   totals7: AudienceTotals;
   totals14: AudienceTotals;
+  /** 직전 7일(14일 전~7일 전) — 서버가 구간을 따로 조회해 내려준다(live.ts prev7 주석 참조) */
+  prev7: AudienceTotals;
+  /** 합산 지표 조회 성공 여부 — false 면 위 세 값은 자리채움이라 «—»로 표시한다 */
+  totalsOk: boolean;
   topEngagers: TopEngager[];
   isLive: boolean;
 }
@@ -59,35 +63,39 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
 
   const reach = sum(days, "reach");
   const prevReach = sum(prevDays, "reach");
-  /* 비교 구간 표본이 **없으면** 증감을 계산하지 않는다(undefined).
-     daily 가 14일치뿐이라 period=14 면 prevDays 가 늘 빈 배열이고, 예전엔 그걸 0 으로 눌러
+  /* 비교 구간이 **같은 길이일 때만** 증감을 낸다.
+     daily 가 14일치라 period=14 면 prevDays 가 늘 비고, 예전엔 그걸 0 으로 눌러
      「0% 지난주 대비」= «변화 없음» 이라고 단정했다. 비교할 게 없는 것과 변화가 없는 것은 다르다.
-     실제 모드도 같다 — live.ts 가 14일 창만 조회하므로 연동 계정에서도 14일 탭은 늘 0% 였다.
+     예전 가드는 prevDays.length > 0 뿐이었다 — 연동 열흘 된 계정이면 7일치를 3일치와 나눠
+     아무 변화가 없어도 «+133%»가 떴다. 표본이 없는 것도, 짧은 것도 비교가 아니다.
+     (live.ts 가 daily 를 14행으로 자르지만, 그 불변식을 화면이 다시 믿지는 않는다.)
      StatCard 는 delta 가 undefined 면 증감 줄 자체를 그리지 않는다. */
+  const canCompareDaily = prevDays.length === period;
   const reachDelta =
-    prevDays.length > 0 && prevReach > 0 ? ((reach - prevReach) / prevReach) * 100 : undefined;
+    canCompareDaily && prevReach > 0 ? ((reach - prevReach) / prevReach) * 100 : undefined;
   const followerNet = sum(days, "followerNet");
+  const prevFollowerNet = sum(prevDays, "followerNet");
+  /* 팔로워 순증감은 «변화량»이라 백분율의 기저가 없다 — 지난주 -500 → 이번 주 -50 은
+     손실이 90% 줄어든 가장 좋은 소식인데 백분율로는 표현할 자리가 없고(분모가 음수),
+     +500 → -100 은 «-120%»라는 읽을 수 없는 수가 된다. 절대 차이(명)로 낸다. */
+  const followerDelta = canCompareDaily ? followerNet - prevFollowerNet : undefined;
+
   const totals = period === 7 ? view.totals7 : view.totals14;
   /*
     합산 지표(참여 계정·프로필 링크 클릭)에는 일별 시계열이 없어 추이선을 못 그린다.
-    대신 **직전 구간과의 비교**는 낼 수 있다 — totals14 는 최근 14일, totals7 은 최근 7일이라
-    그 차가 정확히 «직전 7일»이다(live.ts 의 since7/since14). 7일 탭에서만 성립한다:
-    14일 탭은 비교할 직전 14일 표본이 없다(도달 증감과 같은 이유로 undefined 로 둔다 —
-    «비교할 게 없는 것»과 «변화가 없는 것»은 다르다).
+    비교 기준은 서버가 구간을 따로 조회해 내려준 prev7 을 쓴다 — totals14 − totals7 로
+    빼면 안 된다(참여 계정은 순 계정 수라 겹침이 사라진다, live.ts prev7 주석).
+    7일 탭에서만 성립한다: 14일 탭은 비교할 직전 14일 표본이 없다.
   */
   const pct = (cur: number, prev: number) =>
-    period === 7 && prev > 0 ? Number((((cur - prev) / prev) * 100).toFixed(1)) : undefined;
-  const prevTotals = {
-    accountsEngaged: view.totals14.accountsEngaged - view.totals7.accountsEngaged,
-    profileLinksTaps: view.totals14.profileLinksTaps - view.totals7.profileLinksTaps,
-  };
-  const engagedDelta = pct(view.totals7.accountsEngaged, prevTotals.accountsEngaged);
-  const tapsDelta = pct(view.totals7.profileLinksTaps, prevTotals.profileLinksTaps);
-  const prevFollowerNet = sum(prevDays, "followerNet");
-  const followerDelta =
-    prevDays.length > 0 && prevFollowerNet > 0
-      ? Number((((followerNet - prevFollowerNet) / prevFollowerNet) * 100).toFixed(1))
+    period === 7 && view.totalsOk && prev > 0
+      ? Number((((cur - prev) / prev) * 100).toFixed(1))
       : undefined;
+  const engagedDelta = pct(view.totals7.accountsEngaged, view.prev7.accountsEngaged);
+  const tapsDelta = pct(view.totals7.profileLinksTaps, view.prev7.profileLinksTaps);
+  /* 조회 실패는 0이 아니다 — 값 자체를 «—»로 둔다. 그러지 않으면 «참여 계정 0 · -100%»가
+     «다 떨어져 나갔다»는 확언으로 읽힌다(실제로는 못 가져온 것뿐이다). */
+  const totalOrDash = (n: number) => (view.totalsOk ? formatCompact(n) : "—");
 
   return (
     <div className="space-y-6">
@@ -122,7 +130,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
           label="도달"
           value={formatCompact(reach)}
           delta={reachDelta === undefined ? undefined : Number(reachDelta.toFixed(1))}
-          deltaLabel={`지난 ${period}일 대비`}
+          deltaLabel={`직전 ${period}일 대비`}
           trend={days.map((d) => d.reach)}
         />
         <StatCard
@@ -135,7 +143,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
               </InfoTip>
             </>
           }
-          value={formatCompact(totals.accountsEngaged)}
+          value={totalOrDash(totals.accountsEngaged)}
           delta={engagedDelta}
           deltaLabel="직전 7일 대비"
         />
@@ -151,8 +159,8 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
           }
           value={formatDeltaCompact(followerNet)}
           delta={followerDelta}
-          deltaLabel={`지난 ${period}일 대비`}
-          trend={days.map((d) => d.followerNet)}
+          deltaUnit="명"
+          deltaLabel={`직전 ${period}일 대비`}
         />
         <StatCard
           label={
@@ -164,7 +172,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
               </InfoTip>
             </>
           }
-          value={formatCompact(totals.profileLinksTaps)}
+          value={totalOrDash(totals.profileLinksTaps)}
           delta={tapsDelta}
           deltaLabel="직전 7일 대비"
         />
@@ -272,7 +280,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
           }
         />
         <CardBody className="overflow-x-auto">
-          <p className="mb-2 text-[12px] text-fg-faint sm:hidden">← 옆으로 밀면 댓글·좋아요·최근 반응를 볼 수 있어요</p>
+          <p className="mb-2 text-[12px] text-fg-sub sm:hidden">← 옆으로 밀면 댓글·좋아요·최근 반응를 볼 수 있어요</p>
           {view.topEngagers.length > 0 ? (
             <>
               <table className="w-full min-w-[560px] text-[15px]">
@@ -307,7 +315,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
                           </span>
                           <span className="min-w-0">
                             <span className="block truncate font-medium">{e.displayName}</span>
-                            <span className="block truncate text-xs text-fg-faint">{e.handle}</span>
+                            <span className="block truncate text-xs text-fg-sub">{e.handle}</span>
                           </span>
                         </div>
                       </td>
@@ -321,7 +329,7 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
                   ))}
                 </tbody>
               </table>
-              <p className="mt-4 text-xs text-fg-faint">
+              <p className="mt-4 text-xs text-fg-sub">
                 미팔로우인데 반응이 잦은 계정은 잠재 팬 또는 경쟁사일 수 있어요.
               </p>
             </>

@@ -109,15 +109,20 @@ export interface AccountTotals {
  * 기간 합산 계정 인사이트 — since/until은 unix 초.
  * total_value + since/until이면 data[].total_value.value가 기간 합계다.
  * until을 시간 단위로 라운딩해 호출하면 URL이 안정되어 fetch 캐시(300초)가 공유된다.
+ *
+ * **조회 실패는 null이다 — 0이 아니다.** 예전엔 전부 0인 객체를 돌려줬는데,
+ * 그러면 «이 기간에 아무 일도 없었다»와 «레이트리밋에 걸렸다»가 구분되지 않는다.
+ * 두 창을 비교하는 화면에서 한쪽만 실패하면 그 0이 «-100% 급락»이라는 빨간 확언으로
+ * 둔갑한다(2026-08-30 점검에서 성과 분석·대시보드 두 곳 적발).
+ * 호출측은 null을 받으면 값과 증감을 모두 «—»로 두어야 한다.
  */
 export async function fetchAccountInsightsRange(
   igUserId: string,
   accessToken: string,
   sinceUnix: number,
   untilUnix: number,
-): Promise<AccountTotals> {
+): Promise<AccountTotals | null> {
   const metrics = ["reach", "views", "accounts_engaged", "total_interactions", "profile_links_taps"];
-  const empty: AccountTotals = { reach: 0, views: 0, accountsEngaged: 0, totalInteractions: 0, profileLinksTaps: 0 };
   try {
     const res = await graphGet<{ data?: TotalValueRow[] }>(
       `/${igUserId}/insights?metric=${metrics.join(",")}&metric_type=total_value&period=day&since=${sinceUnix}&until=${untilUnix}`,
@@ -133,7 +138,7 @@ export async function fetchAccountInsightsRange(
     };
   } catch (e) {
     console.error("[ig-insights] 기간 합산 조회 실패:", e instanceof Error ? e.message : String(e));
-    return empty;
+    return null;
   }
 }
 

@@ -11,9 +11,9 @@ import { accounts as mockAccounts } from "@/lib/data";
 import { isDemoMode } from "@/lib/supabase/config";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
-import { INSTAGRAM_SCOPE_LABELS, isInstagramOAuthConfigured } from "@/lib/meta/instagram-oauth";
-import { THREADS_SCOPE_LABELS, isThreadsOAuthConfigured } from "@/lib/meta/threads-oauth";
-import { TIKTOK_SCOPE_LABELS, isTiktokOAuthConfigured } from "@/lib/tiktok/oauth";
+import { INSTAGRAM_SCOPES, INSTAGRAM_SCOPE_LABELS, isInstagramOAuthConfigured } from "@/lib/meta/instagram-oauth";
+import { THREADS_SCOPES, THREADS_SCOPE_LABELS, isThreadsOAuthConfigured } from "@/lib/meta/threads-oauth";
+import { TIKTOK_SCOPES, TIKTOK_SCOPE_LABELS, isTiktokOAuthConfigured } from "@/lib/tiktok/oauth";
 import { SettingsNav } from "./_components/settings-nav";
 import { disconnectAccount } from "./actions";
 
@@ -327,26 +327,31 @@ export default async function SettingsPage({
           <ShieldCheck className="size-5 text-fg-sub" aria-hidden />
           핀치가 접근하는 권한
         </h3>
+        {/* 목록은 «요청하는 스코프»에서 직접 만든다 — 라벨 배열을 따로 순회하면
+            스코프만 늘고 라벨이 빠졌을 때 고지에서 조용히 사라진다(oauth 파일 주석 참조).
+            인스타 블록도 형제들과 같이 미설정이면 숨긴다 — 안 쓰는 연동의 권한을 고지할 이유가 없다. */}
         <div className="mt-3 space-y-4">
-          <div>
-            <h4 className="text-[14px] font-semibold text-fg-sub">인스타그램</h4>
-            <ul className="mt-1.5 space-y-2">
-              {INSTAGRAM_SCOPE_LABELS.map((scope) => (
-                <li key={scope} className="flex items-center gap-2 text-[15px] text-fg-sub">
-                  <Check className="size-4 text-positive" aria-hidden />
-                  {scope}
-                </li>
-              ))}
-            </ul>
-          </div>
+          {instagramOAuthConfigured ? (
+            <div>
+              <h4 className="text-[14px] font-semibold text-fg-sub">인스타그램</h4>
+              <ul className="mt-1.5 space-y-2">
+                {INSTAGRAM_SCOPES.map((s) => (
+                  <li key={s} className="flex items-center gap-2 text-[15px] text-fg-sub">
+                    <Check className="size-4 text-positive" aria-hidden />
+                    {INSTAGRAM_SCOPE_LABELS[s]}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {threadsOAuthConfigured ? (
             <div>
               <h4 className="text-[14px] font-semibold text-fg-sub">Threads</h4>
               <ul className="mt-1.5 space-y-2">
-                {THREADS_SCOPE_LABELS.map((scope) => (
-                  <li key={scope} className="flex items-center gap-2 text-[15px] text-fg-sub">
+                {THREADS_SCOPES.map((s) => (
+                  <li key={s} className="flex items-center gap-2 text-[15px] text-fg-sub">
                     <Check className="size-4 text-positive" aria-hidden />
-                    {scope}
+                    {THREADS_SCOPE_LABELS[s]}
                   </li>
                 ))}
               </ul>
@@ -356,10 +361,10 @@ export default async function SettingsPage({
             <div>
               <h4 className="text-[14px] font-semibold text-fg-sub">TikTok</h4>
               <ul className="mt-1.5 space-y-2">
-                {TIKTOK_SCOPE_LABELS.map((scope) => (
-                  <li key={scope} className="flex items-center gap-2 text-[15px] text-fg-sub">
+                {TIKTOK_SCOPES.map((s) => (
+                  <li key={s} className="flex items-center gap-2 text-[15px] text-fg-sub">
                     <Check className="size-4 text-positive" aria-hidden />
-                    {scope}
+                    {TIKTOK_SCOPE_LABELS[s]}
                   </li>
                 ))}
               </ul>

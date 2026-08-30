@@ -279,6 +279,14 @@ async function ensureFreshTiktokToken(row: AccountRow): Promise<string | null> {
 
 const DAY = 86_400;
 
+/*
+  인사이트 조회가 실패하면 어댑터가 null 을 준다(instagram.ts·threads.ts 주석).
+  «값을 못 가져왔다»와 «정말 0이었다»는 다르므로, 아래 상수는 **표시용 자리채움**일 뿐이고
+  증감 계산은 반드시 canCompare(두 창 모두 성공)로 따로 막는다.
+*/
+const ZERO_ACCOUNT_TOTALS = { reach: 0, views: 0, accountsEngaged: 0, totalInteractions: 0, profileLinksTaps: 0 };
+const ZERO_THREADS_TOTALS = { views: 0, likes: 0, replies: 0, reposts: 0, quotes: 0, clicks: 0 };
+
 /** until을 시간 경계로 라운딩 — 요청 간 URL이 같아져 fetch 캐시(300초)가 공유된다 */
 function hourAlignedNowUnix(): number {
   return Math.floor(Date.now() / 1000 / 3600) * 3600;
@@ -441,20 +449,26 @@ async function computeInstagramPiece(row: AccountRow): Promise<DashboardPiece | 
 
   const followersDelta7d = followerSeries.slice(-7).reduce((s, p) => s + p.value, 0);
   const avg = (xs: number[]) => (xs.length > 0 ? xs.reduce((s, v) => s + v, 0) / xs.length : 0);
-  const engagementRate = cur7.reach > 0 ? (cur7.totalInteractions / cur7.reach) * 100 : 0;
-  const prevEngagementRate = prev7.reach > 0 ? (prev7.totalInteractions / prev7.reach) * 100 : 0;
+  /* 인사이트 조회 실패는 null 이다(instagram.ts 주석). 한쪽만 실패했는데 0 으로 눌러 비교하면
+     «-100% 급락»이 나온다 — 두 창이 **모두** 성공했을 때만 증감을 낸다. */
+  const canCompare = cur7 !== null && prev7 !== null;
+  const c7 = cur7 ?? ZERO_ACCOUNT_TOTALS;
+  const p7 = prev7 ?? ZERO_ACCOUNT_TOTALS;
+  const engagementRate = c7.reach > 0 ? (c7.totalInteractions / c7.reach) * 100 : 0;
+  const prevEngagementRate = p7.reach > 0 ? (p7.totalInteractions / p7.reach) * 100 : 0;
 
   const summary: DashboardSummary = {
     channel: "instagram",
     followers,
     followersDelta: followersDelta7d,
-    weeklyViews: cur7.views,
-    weeklyViewsDelta: prev7.views > 0 ? Number((((cur7.views - prev7.views) / prev7.views) * 100).toFixed(1)) : 0,
+    weeklyViews: c7.views,
+    weeklyViewsDelta:
+      canCompare && p7.views > 0 ? Number((((c7.views - p7.views) / p7.views) * 100).toFixed(1)) : 0,
     postCount,
     avgLikes: Math.round(avg(media.map((m) => m.likeCount))),
     avgComments: Math.round(avg(media.map((m) => m.commentsCount))),
     engagementRate: Number(engagementRate.toFixed(2)),
-    engagementDelta: Number((engagementRate - prevEngagementRate).toFixed(2)),
+    engagementDelta: canCompare ? Number((engagementRate - prevEngagementRate).toFixed(2)) : 0,
   };
 
   const posts: Post[] = withInsights.map((m, i) => ({
@@ -532,16 +546,16 @@ async function computeInstagramPiece(row: AccountRow): Promise<DashboardPiece | 
     raw: {
       followers,
       followersDelta: followersDelta7d,
-      views7: cur7.views,
-      viewsPrev7: prev7.views,
+      views7: c7.views,
+      viewsPrev7: p7.views,
       postCount,
       likesSum: media.reduce((s, m) => s + m.likeCount, 0),
       commentsSum: media.reduce((s, m) => s + m.commentsCount, 0),
       sampleCount: media.length,
-      interactions7: cur7.totalInteractions,
-      interactionsPrev7: prev7.totalInteractions,
-      denominator7: cur7.reach,
-      denominatorPrev7: prev7.reach,
+      interactions7: c7.totalInteractions,
+      interactionsPrev7: p7.totalInteractions,
+      denominator7: c7.reach,
+      denominatorPrev7: p7.reach,
       typeCounts,
     },
   };
@@ -605,10 +619,14 @@ async function computeThreadsPiece(row: AccountRow): Promise<DashboardPiece | nu
   const sampleCount = withInsights.length;
   const avg = (sum: number, n: number) => (n > 0 ? sum / n : 0);
 
-  const interactions7 = cur7.likes + cur7.replies + cur7.reposts + cur7.quotes;
-  const interactionsPrev7 = prev7.likes + prev7.replies + prev7.reposts + prev7.quotes;
-  const engagementRate = cur7.views > 0 ? (interactions7 / cur7.views) * 100 : 0;
-  const prevEngagementRate = prev7.views > 0 ? (interactionsPrev7 / prev7.views) * 100 : 0;
+  /* 실패는 null(threads.ts 주석) — 두 창이 모두 성공했을 때만 증감을 낸다 */
+  const canCompare = cur7 !== null && prev7 !== null;
+  const c7 = cur7 ?? ZERO_THREADS_TOTALS;
+  const p7 = prev7 ?? ZERO_THREADS_TOTALS;
+  const interactions7 = c7.likes + c7.replies + c7.reposts + c7.quotes;
+  const interactionsPrev7 = p7.likes + p7.replies + p7.reposts + p7.quotes;
+  const engagementRate = c7.views > 0 ? (interactions7 / c7.views) * 100 : 0;
+  const prevEngagementRate = p7.views > 0 ? (interactionsPrev7 / p7.views) * 100 : 0;
 
   const displayName = info?.name ?? row.display_name ?? row.handle;
 
@@ -616,8 +634,9 @@ async function computeThreadsPiece(row: AccountRow): Promise<DashboardPiece | nu
     channel: "threads",
     followers,
     followersDelta: 0, // Threads 팔로워는 스냅샷만 제공 — 일별 순증감 산출 불가(TODO, 스펙 5절)
-    weeklyViews: cur7.views,
-    weeklyViewsDelta: prev7.views > 0 ? Number((((cur7.views - prev7.views) / prev7.views) * 100).toFixed(1)) : 0,
+    weeklyViews: c7.views,
+    weeklyViewsDelta:
+      canCompare && p7.views > 0 ? Number((((c7.views - p7.views) / p7.views) * 100).toFixed(1)) : 0,
     postCount,
     avgLikes: Math.round(avg(likesSum, sampleCount)),
     avgComments: Math.round(avg(repliesSum, sampleCount)),
@@ -691,16 +710,16 @@ async function computeThreadsPiece(row: AccountRow): Promise<DashboardPiece | nu
     raw: {
       followers,
       followersDelta: 0,
-      views7: cur7.views,
-      viewsPrev7: prev7.views,
+      views7: c7.views,
+      viewsPrev7: p7.views,
       postCount,
       likesSum,
       commentsSum: repliesSum,
       sampleCount,
       interactions7,
       interactionsPrev7,
-      denominator7: cur7.views, // Threads엔 reach 지표가 없어 조회수로 대체
-      denominatorPrev7: prev7.views,
+      denominator7: c7.views, // Threads엔 reach 지표가 없어 조회수로 대체
+      denominatorPrev7: p7.views,
       typeCounts,
     },
   };
@@ -962,6 +981,22 @@ export interface LiveAudience {
   /** 합산 지표 — 기간(7/14일)별로 UI가 선택 */
   totals7: { accountsEngaged: number; totalInteractions: number; profileLinksTaps: number };
   totals14: { accountsEngaged: number; totalInteractions: number; profileLinksTaps: number };
+  /**
+   * 직전 7일(14일 전 ~ 7일 전) — 7일 탭의 증감 비교 기준.
+   *
+   * ⚠️ 이걸 «totals14 − totals7» 로 빼서 구하면 안 된다. accountsEngaged 는 창 안에서
+   * **중복 제거된 순 계정 수**라 두 주에 걸쳐 반응한 사람이 14일 값에 한 번만 들어간다 —
+   * 빼면 그 겹침이 직전 구간에서 통째로 사라져 분모가 늘 과소집계되고 증감이 상승 쪽으로
+   * 치우친다(2026-08-30 점검에서 적발). 그래서 Meta 에 구간을 **따로 질의**한다.
+   * 대시보드(computeInstagramPiece)도 같은 이유로 같은 방식을 쓴다.
+   */
+  prev7: { accountsEngaged: number; totalInteractions: number; profileLinksTaps: number };
+  /**
+   * 합산 지표 조회가 **전부 성공했는가.** false 면 위 세 값은 자리채움(0)이라 화면에 숫자로
+   * 내보내면 안 된다 — 한쪽 창만 실패해도 «-100% 급락»이 만들어진다(2026-08-30 적발).
+   * 일별(daily)은 별도 호출이라 이 플래그와 무관하게 채워질 수 있다.
+   */
+  totalsOk: boolean;
 }
 
 type AudienceTotals = LiveAudience["totals7"];
@@ -988,40 +1023,52 @@ export async function getLiveAudience(): Promise<LiveAudience | null> {
   let igDaily: LiveAudience["daily"] = [];
   let igTotals7: AudienceTotals = ZERO_AUDIENCE_TOTALS;
   let igTotals14: AudienceTotals = ZERO_AUDIENCE_TOTALS;
+  let igPrev7: AudienceTotals = ZERO_AUDIENCE_TOTALS;
+  let igTotalsOk = true;
 
   if (igToken && igRow?.platform_user_id) {
     const ig = igRow.platform_user_id;
-    const [reachSeries, followerSeries, cur7, cur14] = await Promise.all([
+    const [reachSeries, followerSeries, cur7, cur14, prv7] = await Promise.all([
       fetchDailySeries(ig, igToken, "reach", since14, until),
       fetchDailySeries(ig, igToken, "follower_count", since14, until),
       fetchAccountInsightsRange(ig, igToken, since7, until), // 대시보드와 동일 URL — 캐시 공유
       fetchAccountInsightsRange(ig, igToken, since14, until),
+      fetchAccountInsightsRange(ig, igToken, since14, since7), // 직전 7일 — 뺄셈 금지(위 prev7 주석)
     ]);
     const followerByDate = new Map(followerSeries.map((p) => [p.date, p.value]));
     igDaily =
       reachSeries.length > 0
         ? reachSeries.map((p) => ({ date: p.date, reach: p.value, followerNet: followerByDate.get(p.date) ?? 0 }))
         : followerSeries.map((p) => ({ date: p.date, reach: 0, followerNet: p.value }));
-    igTotals7 = { accountsEngaged: cur7.accountsEngaged, totalInteractions: cur7.totalInteractions, profileLinksTaps: cur7.profileLinksTaps };
-    igTotals14 = { accountsEngaged: cur14.accountsEngaged, totalInteractions: cur14.totalInteractions, profileLinksTaps: cur14.profileLinksTaps };
+    igTotalsOk = cur7 !== null && cur14 !== null && prv7 !== null;
+    const [i7, i14, ip7] = [cur7 ?? ZERO_ACCOUNT_TOTALS, cur14 ?? ZERO_ACCOUNT_TOTALS, prv7 ?? ZERO_ACCOUNT_TOTALS];
+    igTotals7 = { accountsEngaged: i7.accountsEngaged, totalInteractions: i7.totalInteractions, profileLinksTaps: i7.profileLinksTaps };
+    igTotals14 = { accountsEngaged: i14.accountsEngaged, totalInteractions: i14.totalInteractions, profileLinksTaps: i14.profileLinksTaps };
+    igPrev7 = { accountsEngaged: ip7.accountsEngaged, totalInteractions: ip7.totalInteractions, profileLinksTaps: ip7.profileLinksTaps };
   }
 
   let thDaily: LiveAudience["daily"] = [];
   let thTotals7: AudienceTotals = ZERO_AUDIENCE_TOTALS;
   let thTotals14: AudienceTotals = ZERO_AUDIENCE_TOTALS;
+  let thPrev7: AudienceTotals = ZERO_AUDIENCE_TOTALS;
+  let thTotalsOk = true;
 
   if (thToken && thRow?.platform_user_id) {
     const th = thRow.platform_user_id;
-    const [viewsSeries, cur7, cur14] = await Promise.all([
+    const [viewsSeries, cur7, cur14, prv7] = await Promise.all([
       fetchThreadsDailyViews(th, thToken, since14, until),
       fetchThreadsAccountInsightsRange(th, thToken, since7, until),
       fetchThreadsAccountInsightsRange(th, thToken, since14, until),
+      fetchThreadsAccountInsightsRange(th, thToken, since14, since7),
     ]);
     // followerNet: Threads 팔로워는 스냅샷만 제공돼 일별 순증감 산출 불가 — 0 고정
     thDaily = viewsSeries.map((p) => ({ date: p.date, reach: p.value, followerNet: 0 }));
     // accountsEngaged 대응 지표 없음(TODO) — totalInteractions은 좋아요+답글+리포스트+인용, profileLinksTaps 대용은 clicks
-    thTotals7 = { accountsEngaged: 0, totalInteractions: cur7.likes + cur7.replies + cur7.reposts + cur7.quotes, profileLinksTaps: cur7.clicks };
-    thTotals14 = { accountsEngaged: 0, totalInteractions: cur14.likes + cur14.replies + cur14.reposts + cur14.quotes, profileLinksTaps: cur14.clicks };
+    thTotalsOk = cur7 !== null && cur14 !== null && prv7 !== null;
+    const [t7, t14, tp7] = [cur7 ?? ZERO_THREADS_TOTALS, cur14 ?? ZERO_THREADS_TOTALS, prv7 ?? ZERO_THREADS_TOTALS];
+    thTotals7 = { accountsEngaged: 0, totalInteractions: t7.likes + t7.replies + t7.reposts + t7.quotes, profileLinksTaps: t7.clicks };
+    thTotals14 = { accountsEngaged: 0, totalInteractions: t14.likes + t14.replies + t14.reposts + t14.quotes, profileLinksTaps: t14.clicks };
+    thPrev7 = { accountsEngaged: 0, totalInteractions: tp7.likes + tp7.replies + tp7.reposts + tp7.quotes, profileLinksTaps: tp7.clicks };
   }
 
   // 날짜 기준 병합(두 채널 다 있으면 같은 날짜끼리 합산)
@@ -1031,7 +1078,13 @@ export async function getLiveAudience(): Promise<LiveAudience | null> {
     const prev = dateMap.get(d.date) ?? { reach: 0, followerNet: 0 };
     dateMap.set(d.date, { reach: prev.reach + d.reach, followerNet: prev.followerNet + d.followerNet });
   }
-  const merged = [...dateMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, ...v }));
+  /* 14일 창 조회지만 API 가 시간 정렬(hourAlignedNowUnix)이라 달력상 15일을 걸칠 수 있다.
+     화면이 «최근 N일 / 직전 N일» 을 slice 로 자르므로 길이를 여기서 못 박는다 —
+     안 그러면 7일치를 3일치와 비교해 증감이 부풀려진다(2026-08-30 적발). */
+  const merged = [...dateMap.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, v]) => ({ date, ...v }))
+    .slice(-14);
 
   return {
     daily: merged,
@@ -1045,6 +1098,12 @@ export async function getLiveAudience(): Promise<LiveAudience | null> {
       totalInteractions: igTotals14.totalInteractions + thTotals14.totalInteractions,
       profileLinksTaps: igTotals14.profileLinksTaps + thTotals14.profileLinksTaps,
     },
+    prev7: {
+      accountsEngaged: igPrev7.accountsEngaged + thPrev7.accountsEngaged,
+      totalInteractions: igPrev7.totalInteractions + thPrev7.totalInteractions,
+      profileLinksTaps: igPrev7.profileLinksTaps + thPrev7.profileLinksTaps,
+    },
+    totalsOk: igTotalsOk && thTotalsOk,
   };
 }
 

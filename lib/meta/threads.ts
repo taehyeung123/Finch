@@ -52,8 +52,6 @@ export interface ThreadsAccountTotals {
   clicks: number;
 }
 
-const EMPTY_TOTALS: ThreadsAccountTotals = { views: 0, likes: 0, replies: 0, reposts: 0, quotes: 0, clicks: 0 };
-
 /**
  * 기간 합산 계정 인사이트 — since/until은 unix 초. 2024-04-13 이전 날짜는 since/until 미지원(스펙 8절).
  * until을 시간 단위로 라운딩해 호출하면 URL이 안정되어 fetch 캐시(300초)가 공유된다(호출측 책임).
@@ -63,7 +61,7 @@ export async function fetchThreadsAccountInsightsRange(
   accessToken: string,
   sinceUnix: number,
   untilUnix: number,
-): Promise<ThreadsAccountTotals> {
+): Promise<ThreadsAccountTotals | null> {
   const metrics = ["views", "likes", "replies", "reposts", "quotes", "clicks"];
   try {
     const res = await graphGet<{ data?: InsightRow[] }>(
@@ -80,8 +78,9 @@ export async function fetchThreadsAccountInsightsRange(
       clicks: extractTotal(map.get("clicks")),
     };
   } catch (e) {
+    // 실패는 null — 0으로 내리면 «-100% 급락»으로 둔갑한다(instagram.ts 같은 함수 주석 참조)
     console.error("[threads-insights] 기간 합산 조회 실패:", e instanceof Error ? e.message : String(e));
-    return EMPTY_TOTALS;
+    return null;
   }
 }
 

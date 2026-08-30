@@ -94,7 +94,9 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
         <>
           {/* 계정 평균 요약 (실측) */}
           {/* 모바일 2열 — 짧은 숫자 카드를 1열로 쌓으면 세 장이 한 화면을 다 먹는다(홈과 같은 규칙) */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+          {/* 4열은 lg 부터 — sm(640)에서 4열이면 카드가 116px 이라 한글 라벨이 음절 단위로
+              쌓이고 숫자까지 두 줄로 쪼개진다(2026-08-30 실측). 그 사이 구간은 2열로 버틴다. */}
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <SummaryCard
               label="평균 저장률"
               value={`${performance.avgSaveRate}%`}
@@ -174,7 +176,7 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
                       </div>
                     </div>
 
-                    <p className="flex items-start gap-1.5 text-[12px] leading-relaxed text-fg-faint">
+                    <p className="flex items-start gap-1.5 text-[12px] leading-relaxed text-fg-sub">
                       <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
                       강점·약점·아이디어는 위 실제 성과 수치를 근거로 한 AI 해석입니다. 실제 반응은 계정 상황에 따라 달라질 수 있어요.
                     </p>
@@ -201,7 +203,7 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
               description="저장률이 높은 순서. 플랫폼이 준 저장·도달 값에서 직접 계산한 실제 비율이에요."
             />
             <CardBody className="overflow-x-auto">
-              <p className="mb-2 text-[12px] text-fg-faint sm:hidden">← 옆으로 밀면 유형·저장률·참여율·도달를 볼 수 있어요</p>
+              <p className="mb-2 text-[12px] text-fg-sub sm:hidden">← 옆으로 밀면 유형·저장률·참여율·도달를 볼 수 있어요</p>
               <table className="w-full min-w-[640px] text-[15px]">
                 <thead>
                   <tr className="border-b border-line text-left text-xs text-fg-faint">
@@ -277,7 +279,7 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
 }
 
 /** 게시물 유형 색 — lib/data/growth.ts 의 PostKind 와 어휘를 공유한다 */
-const KIND_TONE: Record<string, string> = {
+const KIND_TONE: Record<string, string | undefined> = {
   릴스: "bg-tint-pink text-tint-pink-ink",
   영상: "bg-tint-purple text-tint-purple-ink",
   캐러셀: "bg-tint-blue text-tint-blue-ink",
@@ -285,13 +287,15 @@ const KIND_TONE: Record<string, string> = {
   스토리: "bg-tint-amber text-tint-amber-ink",
 };
 
-/** 지표별 색 — 네 장이 전부 무채라 스크롤해도 같은 카드가 반복되는 인상이었다(2026-08-30) */
-const CARD_TONE: Record<string, string> = {
+/* 지표별 색 — 네 장이 전부 무채라 스크롤해도 같은 카드가 반복되는 인상이었다(2026-08-30).
+   ⚠️ Record<string,string> 으로 두면 아래 `keyof typeof` 가 string 으로 넓어져 오타가
+   컴파일에서 안 걸리고, 타일 배경이 `undefined` 로 나가 조용히 투명해진다. as const 를 유지할 것. */
+const CARD_TONE = {
   save: "bg-tint-blue text-tint-blue-ink",
   engage: "bg-tint-purple text-tint-purple-ink",
   reach: "bg-tint-teal text-tint-teal-ink",
   count: "bg-tint-amber text-tint-amber-ink",
-};
+} as const;
 
 function SummaryCard({
   label,
@@ -312,13 +316,14 @@ function SummaryCard({
   return (
     <Card className="p-5">
       <div className="flex items-center gap-2 text-fg-sub">
-        <span className={`flex size-7 shrink-0 items-center justify-center rounded-card ${CARD_TONE[tone]}`}>
+        <span className={`flex size-7 shrink-0 items-center justify-center rounded-card ${CARD_TONE[tone] ?? "bg-tint-slate text-tint-slate-ink"}`}>
           <Icon className="size-4" aria-hidden />
         </span>
         <span className="text-[14px] font-medium">{label}</span>
         <InfoTip>{hint}</InfoTip>
       </div>
-      <p className="tnum mt-2.5 text-3xl font-bold">{value}</p>
+      {/* 타입 7단계 준수 — text-3xl(30px)은 스케일 밖이고, 4열에선 숫자가 두 줄로 쪼개졌다 */}
+      <p className="tnum mt-2.5 text-[20px] font-bold">{value}</p>
       {foot ? <p className="tnum mt-1.5 text-[12px] text-fg-sub">{foot}</p> : null}
     </Card>
   );

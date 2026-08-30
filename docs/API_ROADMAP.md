@@ -45,7 +45,13 @@
 3. 앱에 제품 추가: **Facebook 로그인**, **Instagram Graph API**
 4. 앱 대시보드에 아이콘 업로드 — `public/brand/finch-app-icon-1024.png`
 5. **Ad Library API**는 심사 없이 사용 가능: https://www.facebook.com/ads/library/api 에서 본인 확인 후 액세스 토큰 발급 → 경쟁사 광고 모니터링이 3단계 중 가장 먼저 실데이터로 전환 가능
-6. Instagram 연동 심사(App Review): `instagram_basic`, `instagram_manage_insights`, `pages_read_engagement` 권한 신청 — 데모 영상·사용 사유 제출 (수일~수주)
+6. Instagram 연동 심사(App Review) — **신청 목록의 정본은 [docs/REAL_API_SPEC.md](REAL_API_SPEC.md) 1절이다.** 아래는 그 사본:
+   `instagram_business_basic` · `instagram_business_manage_insights` · `instagram_business_manage_comments` ·
+   `instagram_business_manage_messages` · `instagram_business_content_publish`(예약 발행) — 데모 영상·사용 사유 제출 (수일~수주)
+   - ⚠️ 이 목록은 **Instagram Login 경로**(graph.instagram.com) 값이다. `instagram_basic`·`instagram_manage_*`·
+     `pages_read_engagement` 는 Facebook Login 경로 값이라 섞어 신청하면 안 된다 —
+     예전 이 자리에 그 이름들이 적혀 있었고 발행 권한은 아예 빠져 있었다(2026-08-30 적발).
+     그대로 신청했으면 심사를 통과하고도 예약 발행이 권한 오류로 실패했다.
    - 앱 대시보드 > 설정 > 기본 설정에 **Data Deletion Instructions URL**(또는 콜백) 등록 필수 —
      인스타그램용 `https://finch.ai.kr/api/auth/instagram/data-deletion`, Threads용
      `https://finch.ai.kr/api/auth/threads/data-deletion` (코드는 이미 구현됨, 등록만 하면 됨)
@@ -53,7 +59,7 @@
 8. (Claude Code 작업) OAuth 연동 플로우 + 수집 배치(하루 4회) + `lib/data` 교체
 
 **3-확장) 인스타 댓글 자동 DM** — 이 Meta 앱에 얹는 별도 권한·웹훅:
-- 추가 권한: `instagram_manage_messages`(business_manage_messages) + `instagram_manage_comments` — **별도 앱 심사·사업자 인증 필요(수주~수개월), 조기 병행 신청**
+- 추가 권한: `instagram_business_manage_messages` + `instagram_business_manage_comments` — **별도 앱 심사·사업자 인증 필요(수주~수개월), 조기 병행 신청**
 - 댓글 웹훅 구독 + `app/api/webhooks/instagram` 라우트(서명검증은 이미 스캐폴드 완료) → 매칭 댓글만 큐잉 → Private Reply 발송
 - 하드 제약: 댓글당 비공개 답장 **1회·7일**, 계정당 레이트리밋, 토큰 60일 만료
 - 법률: 정보통신망법(광고성 정보 동의·(광고) 표기·수신거부·야간), 개인정보보호법(수탁자 DPA)

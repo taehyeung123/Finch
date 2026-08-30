@@ -58,7 +58,12 @@ async function buildAccountContext(): Promise<string> {
     if (ctx) {
       const until = Math.floor(Date.now() / 1000 / 3600) * 3600;
       const cur = await fetchAccountInsightsRange(ctx.igUserId, ctx.token, until - 7 * DAY, until);
-      insightsLine = `최근 7일 지표: 도달 ${cur.reach}, 조회 ${cur.views}, 참여 계정 ${cur.accountsEngaged}, 총 상호작용 ${cur.totalInteractions}, 프로필 링크 클릭 ${cur.profileLinksTaps}.`;
+      /* 조회 실패(null)면 지표 줄을 아예 넣지 않는다 — 예전엔 전부 0인 객체가 와서
+         «도달 0, 참여 계정 0» 이 실데이터로 프롬프트에 실렸고, 바로 아래 문장이
+         «위 수치는 공식 API 실데이터다» 라고 못박아 AI 가 «성과가 없다»고 상담했다. */
+      if (cur) {
+        insightsLine = `최근 7일 지표: 도달 ${cur.reach}, 조회 ${cur.views}, 참여 계정 ${cur.accountsEngaged}, 총 상호작용 ${cur.totalInteractions}, 프로필 링크 클릭 ${cur.profileLinksTaps}.`;
+      }
     }
     return [
       `연동 계정: ${account.handle} (팔로워 ${account.followers}, 게시물 ${account.posts}).`,

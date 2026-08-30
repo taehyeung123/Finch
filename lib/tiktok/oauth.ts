@@ -23,12 +23,13 @@
  *  video.list 등 영상 목록/인사이트 관련 스코프는 심사 없이 동작한다는 확답을 얻지 못해 요청하지 않는다. */
 export const TIKTOK_SCOPES = ["user.info.basic", "user.info.profile", "user.info.stats"] as const;
 
-/** 사람이 읽는 권한 설명 — 설정 화면 투명성 고지용 (스코프와 1:1) */
-export const TIKTOK_SCOPE_LABELS = [
-  "프로필 기본 정보 조회(닉네임·아바타)",
-  "사용자명(고유 아이디) 조회",
-  "팔로워·좋아요·영상 수 조회",
-];
+/** 사람이 읽는 권한 설명 — 스코프를 키로 묶어 누락이 컴파일에서 걸리게 한다
+ *  (근거: lib/meta/instagram-oauth.ts 의 같은 상수 주석) */
+export const TIKTOK_SCOPE_LABELS: Record<(typeof TIKTOK_SCOPES)[number], string> = {
+  "user.info.basic": "프로필 기본 정보 조회(닉네임·아바타)",
+  "user.info.profile": "사용자명(고유 아이디) 조회",
+  "user.info.stats": "팔로워·좋아요·영상 수 조회",
+};
 
 export interface TiktokOAuthConfig {
   clientKey: string;
