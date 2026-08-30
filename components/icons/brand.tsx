@@ -79,7 +79,7 @@ export function AppIconTile({
     // SVG def/id 대신 CSS 그라디언트를 쓴다: 타일이 여러 개일 때 id 충돌이 없어 견고하다.
     return (
       <span
-        className={cn("flex shrink-0 items-center justify-center rounded-[22%] text-white", className)}
+        className={cn("app-tile flex shrink-0 items-center justify-center rounded-[22%] text-white", className)}
         style={{
           width: size,
           height: size,
@@ -100,7 +100,7 @@ export function AppIconTile({
 
   return (
     <span
-      className={cn("flex shrink-0 items-center justify-center rounded-[22%]", bg, className)}
+      className={cn("app-tile flex shrink-0 items-center justify-center rounded-[22%]", bg, className)}
       style={{ width: size, height: size }}
       aria-hidden
     >
