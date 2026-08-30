@@ -36,7 +36,14 @@
      · 승인된 도메인에 `finch.ai.kr` 추가(도메인 소유 확인이 필요할 수 있다)
    - https://console.cloud.google.com/auth/scopes 에서 범위는 `openid`(직접 추가) + `userinfo.email` + `userinfo.profile` 셋만.
      민감·제한 범위를 넣으면 심사가 길어진다.
-   - https://console.cloud.google.com/auth/verification 에서 **브랜드 확인 제출**. 자동이 아니라 **영업일 며칠** 걸린다.
+   - ⚠️ **먼저 «대상 > 앱 게시»로 프로덕션 전환을 해야 한다.** 테스트 상태에서는
+     인증 센터가 «테스트 게시 상태라 인증이 필요하지 않습니다»만 띄우고, **브랜딩도 적용되지 않는다**
+     (2026-08-30 실측). 범위가 openid·email·profile 셋뿐이면 게시는 확인 한 번으로 즉시 끝난다 —
+     민감 범위가 없어 심사가 걸리지 않는다.
+   - 게시하면 테스트 사용자 제한도 풀린다. **테스트 상태에서는 등록한 계정만 로그인된다** —
+     오픈 전에 반드시 게시해야 남들이 가입할 수 있다.
+   - 게시 후 https://console.cloud.google.com/auth/verification 에서 **브랜드 확인 제출**.
+     자동이 아니라 **영업일 며칠** 걸린다.
    - (선택) Supabase 커스텀 도메인은 주소 자체를 `auth.finch.ai.kr` 로 바꾸는 별개 유료 애드온이다 —
      브랜딩만으로 이름·로고는 해결되므로 급하지 않다.
 
