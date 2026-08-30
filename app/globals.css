@@ -1715,3 +1715,5 @@ input[type="search"]::-webkit-search-cancel-button {
 .app-tile {
   box-shadow: inset 0 0 0 1px var(--tile-edge);
 }
+
+/* 재빌드 유도 — 앞선 배포에서 globals.css 변경이 산출 CSS 에 반영되지 않았다(2026-08-30) */
