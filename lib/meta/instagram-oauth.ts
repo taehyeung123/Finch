@@ -14,20 +14,29 @@
 
 import { GRAPH_INSTAGRAM_BASE } from "./graph";
 
-/** 인사이트 + 댓글 + 메시징에 필요한 신형 스코프 (구형 값은 2025-01-27 폐기) */
+/**
+ * 인사이트 + 댓글 + 메시징 + 발행에 필요한 신형 스코프 (구형 값은 2025-01-27 폐기).
+ *
+ * ⚠️ content_publish 는 예약 발행(lib/meta/instagram-publish.ts)이 쓴다 — 여기서 빠지면
+ * 발급된 토큰에 발행 권한이 없어 크론이 도는 순간에야 Meta 가 권한 오류로 거절한다.
+ * 스코프는 **동의 시점에** 결정되므로 나중에 배열만 고쳐도 이미 연동한 사용자는
+ * 재연동해야 한다 — 연동 시작 전에 맞춰 두는 것이 중요하다(2026-08-30 점검에서 누락 적발).
+ */
 export const INSTAGRAM_SCOPES = [
   "instagram_business_basic",
   "instagram_business_manage_insights",
   "instagram_business_manage_comments",
   "instagram_business_manage_messages",
+  "instagram_business_content_publish",
 ] as const;
 
-/** 사람이 읽는 권한 설명 — 설정 화면 투명성 고지용 (스코프와 1:1) */
+/** 사람이 읽는 권한 설명 — 설정 화면 투명성 고지용 (스코프와 1:1, 순서도 같게 유지) */
 export const INSTAGRAM_SCOPE_LABELS = [
   "프로필 기본 정보 조회",
   "게시물·계정 인사이트 조회",
   "댓글 조회·답글 및 비공개 답장(DM)",
   "다이렉트 메시지 송수신",
+  "예약한 게시물 발행",
 ];
 
 export interface InstagramOAuthConfig {

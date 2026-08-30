@@ -28,6 +28,7 @@ graph.facebook.com + Page 연결 + pages_* 스코프가 필요해 온보딩이 �
 - `instagram_business_manage_insights` — 계정·미디어 인사이트
 - `instagram_business_manage_comments` — 댓글 조회/모더레이션 + Private Reply 게이팅
 - `instagram_business_manage_messages` — DM 송수신
+- `instagram_business_content_publish` — 예약 발행(캐러셀/카드뉴스 게시)
 
 구형 값(`business_basic`, `business_manage_messages` 등)은 2025-01-27 폐기. `instagram_manage_*`(business 없는)는
 Facebook Login 경로 값이라 혼용 금지.

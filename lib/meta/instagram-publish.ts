@@ -1,7 +1,8 @@
 /**
  * Instagram 콘텐츠 발행 어댑터 — 캐러셀(카드뉴스) 자동 게시.
- * graph.instagram.com v25.0(Instagram Login), scope instagram_business_content_publish 필요
- * (docs/REAL_API_SPEC.md 1절 — 이미 OAuth 스코프에 포함되어 있어 추가 동의 불필요).
+ * graph.instagram.com v25.0(Instagram Login), scope instagram_business_content_publish 필요 —
+ * 연동 동의 때 함께 받는다(lib/meta/instagram-oauth.ts 의 INSTAGRAM_SCOPES).
+ * 그 배열에서 빠지면 여기서는 아무 신호도 없고, 크론이 도는 새벽에야 권한 오류로 실패한다.
  *
  * 흐름: 이미지별 아이템 컨테이너 생성 → 캐러셀 컨테이너 생성(children) → 상태 폴링 → 발행.
  * Meta가 image_url을 직접 크롤링하므로 공개 접근 가능한 URL이어야 한다(Supabase Storage 공개 버킷).
