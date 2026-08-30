@@ -136,10 +136,10 @@ export default function ThreadsPage() {
         <Reveal delay={0.1}>
           <p className="mt-8 text-center text-[13px] font-semibold text-fg-sub">다른 채널도 함께 분석하기</p>
           <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-            <ButtonLink href="/instagram" variant="ghost" size="sm">
+            <ButtonLink href="/instagram" variant="secondary" size="sm" className="rounded-chip">
               인스타그램 분석 자세히 보기
             </ButtonLink>
-            <ButtonLink href="/tiktok" variant="ghost" size="sm">
+            <ButtonLink href="/tiktok" variant="secondary" size="sm" className="rounded-chip">
               틱톡 분석 자세히 보기
             </ButtonLink>
           </div>

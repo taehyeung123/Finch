@@ -227,7 +227,7 @@ export default function VisitorCheckPage() {
 
       {/* 하단 — 인스타그램 허브로 돌아가는 링크 */}
       <section className="mx-auto max-w-3xl px-4 py-16 text-center md:px-6">
-        <ButtonLink href="/instagram" variant="ghost" size="sm">
+        <ButtonLink href="/instagram" variant="secondary" size="sm" className="rounded-chip">
           인스타그램 분석 기능 더 살펴보기 <ArrowRight className="size-4" aria-hidden />
         </ButtonLink>
       </section>

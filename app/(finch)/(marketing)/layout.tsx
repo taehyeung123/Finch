@@ -41,7 +41,16 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           </nav>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <ButtonLink href="/login" variant="ghost" size="sm" className="text-[14px]">
+            {/* ghost 는 배경도 테두리도 없어 «버튼»으로 안 읽혔다 — 회색 글자 하나로 떠 있었다
+                (2026-08-30 사장님 지적). 테두리 있는 알약 + 브랜드 잉크로 누를 것임을 보인다.
+                코랄로 꽉 채우지는 않는다 — 그건 「무료로 시작하기」의 자리이고,
+                한 화면에 꽉 찬 코랄이 둘이면 어느 쪽이 주된 행동인지 흐려진다. */}
+            <ButtonLink
+              href="/login"
+              variant="secondary"
+              size="sm"
+              className="rounded-chip border-primary/30 text-[14px] font-semibold text-primary-ink hover:border-primary"
+            >
               로그인
             </ButtonLink>
             {/* 모바일에서는 숨긴다 — 스크롤하면 하단 고정 CTA 가 뜨는데 같은 버튼이 화면에
