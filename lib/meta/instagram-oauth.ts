@@ -22,12 +22,28 @@ import { GRAPH_INSTAGRAM_BASE } from "./graph";
  * 스코프는 **동의 시점에** 결정되므로 나중에 배열만 고쳐도 이미 연동한 사용자는
  * 재연동해야 한다 — 연동 시작 전에 맞춰 두는 것이 중요하다(2026-08-30 점검에서 누락 적발).
  */
+/*
+  ⚠️ **진단 중 임시 축소(2026-08-31).** 원래 5개인데 지금 4개만 요청한다.
+
+  왜: 재연동이 «Error validating verification code» 로 계속 막혔다. 인가(동의 화면)는
+  통과하므로 client_id 는 유효하고, redirect_uri 도 메타 등록값과 글자까지 같은 것을 확인했다.
+  7월 18일에는 같은 자격증명으로 연동에 성공했으므로 시크릿·앱ID 가 원인일 수 없다
+  (틀렸으면 그때도 안 됐다). **그 사이 바뀐 유일한 입력이 이 배열**이다 —
+  2026-08-30 에 content_publish 를 추가했다.
+
+  그래서 그 한 줄만 빼고 되돌려 원인을 가른다:
+   · 이걸로 연동이 되면 → 원인은 이 스코프다(메타 앱에서 그 권한을 아직 못 쓰는 상태)
+   · 이걸로도 안 되면 → 스코프는 무관하고 메타 쪽 앱 설정(시크릿 재발급 등)을 봐야 한다
+
+  ⚠️ 원인이 갈리면 **반드시 content_publish 를 다시 넣는다.** 그게 없으면 예약 발행이
+  새벽 크론에서 권한 오류로 실패한다(그 사고를 막으려고 0075 를 만들었다).
+*/
 export const INSTAGRAM_SCOPES = [
   "instagram_business_basic",
   "instagram_business_manage_insights",
   "instagram_business_manage_comments",
   "instagram_business_manage_messages",
-  "instagram_business_content_publish",
+  // "instagram_business_content_publish", // ← 진단 중 임시 제외. 결과 나오면 되살릴 것
 ] as const;
 
 /**
@@ -43,7 +59,7 @@ export const INSTAGRAM_SCOPE_LABELS: Record<(typeof INSTAGRAM_SCOPES)[number], s
   instagram_business_manage_insights: "게시물·계정 인사이트 조회",
   instagram_business_manage_comments: "댓글 조회·답글 및 비공개 답장(DM)",
   instagram_business_manage_messages: "다이렉트 메시지 송수신",
-  instagram_business_content_publish: "예약한 게시물 발행",
+  // instagram_business_content_publish: "예약한 게시물 발행", // ← 위 배열과 함께 되살릴 것
 };
 
 export interface InstagramOAuthConfig {
