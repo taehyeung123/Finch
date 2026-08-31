@@ -349,6 +349,9 @@ function zeroSummary(channel: ChannelFilter): DashboardSummary {
     avgComments: 0,
     engagementRate: 0,
     engagementDelta: 0,
+    /* 미연동 채널의 «0» 은 조회 실패가 아니라 **정말 없는 것**이다 —
+       화면이 「연동되지 않았어요」 안내로 덮으므로 숫자가 나가지 않는다. */
+    insightsOk: true,
   };
 }
 
@@ -373,6 +376,8 @@ interface DashboardPieceRaw {
   denominatorPrev7: number;
   /** 콘텐츠 유형별 원시 개수(합산용) — ContentMix는 비율만 갖고 있어 병합 전 단계 값이 필요 */
   typeCounts: Partial<Record<PostType, number>>;
+  /** 이 채널의 인사이트 조회가 성공했는가 — «전체» 합산이 하나라도 실패하면 숫자를 확언하지 않는다 */
+  insightsOk: boolean;
 }
 
 interface DashboardPiece {
@@ -417,12 +422,15 @@ async function computeInstagramPiece(row: AccountRow): Promise<DashboardPiece | 
     fetchRecentMedia(ig, token, 12),
   ]);
 
-  // 팔로워/게시물 수·프로필 사진 최신화 — 실패는 무시 (다음 로드에서 재시도)
+  /* 팔로워/게시물 수·프로필 사진 최신화 — 실패는 무시 (다음 로드에서 재시도).
+     ⚠️ followers·posts 가 null 이면 **컬럼을 아예 빼고** 갱신한다. 100팔로워 미만 계정은
+     인스타그램이 그 값을 안 주는데, 그걸 0 으로 덮으면 이미 아는 숫자까지 0 이 된다
+     (그리고 다음 크론이 그 0 을 보고 «팔로워가 크게 줄었어요» 알림을 쏜다). */
   if (info) {
     const supabase = await createClient();
     const patch = {
-      followers: info.followersCount,
-      posts: info.mediaCount,
+      ...(info.followersCount !== null ? { followers: info.followersCount } : {}),
+      ...(info.mediaCount !== null ? { posts: info.mediaCount } : {}),
       display_name: info.name ?? info.username ?? null,
       bio: info.biography,
     };
@@ -469,6 +477,9 @@ async function computeInstagramPiece(row: AccountRow): Promise<DashboardPiece | 
     avgComments: Math.round(avg(media.map((m) => m.commentsCount))),
     engagementRate: Number(engagementRate.toFixed(2)),
     engagementDelta: canCompare ? Number((engagementRate - prevEngagementRate).toFixed(2)) : 0,
+    /* 현재 창 조회가 실패했으면 위 숫자들은 자리채움이다 — 화면이 «—»로 그린다.
+       직전 창만 실패한 경우는 값 자체는 진짜이므로 증감만 접는다(canCompare). */
+    insightsOk: cur7 !== null,
   };
 
   const posts: Post[] = withInsights.map((m, i) => ({
@@ -557,6 +568,7 @@ async function computeInstagramPiece(row: AccountRow): Promise<DashboardPiece | 
       denominator7: c7.reach,
       denominatorPrev7: p7.reach,
       typeCounts,
+      insightsOk: cur7 !== null,
     },
   };
 }
@@ -641,7 +653,8 @@ async function computeThreadsPiece(row: AccountRow): Promise<DashboardPiece | nu
     avgLikes: Math.round(avg(likesSum, sampleCount)),
     avgComments: Math.round(avg(repliesSum, sampleCount)),
     engagementRate: Number(engagementRate.toFixed(2)),
-    engagementDelta: Number((engagementRate - prevEngagementRate).toFixed(2)),
+    engagementDelta: canCompare ? Number((engagementRate - prevEngagementRate).toFixed(2)) : 0,
+    insightsOk: cur7 !== null,
   };
 
   const posts: Post[] = withInsights.map((p, i) => ({
@@ -721,6 +734,7 @@ async function computeThreadsPiece(row: AccountRow): Promise<DashboardPiece | nu
       denominator7: c7.views, // Threads엔 reach 지표가 없어 조회수로 대체
       denominatorPrev7: p7.views,
       typeCounts,
+      insightsOk: cur7 !== null,
     },
   };
 }
@@ -796,6 +810,9 @@ async function computeTiktokPiece(row: AccountRow): Promise<DashboardPiece | nul
       denominator7: 0,
       denominatorPrev7: 0,
       typeCounts: {},
+      /* TikTok 은 심사 없이 확인된 범위가 프로필뿐이라 인사이트를 아예 조회하지 않는다 —
+         «실패» 가 아니라 «없는 기능» 이므로 true 다(화면이 이미 그렇게 고지한다). */
+      insightsOk: true,
     },
   };
 }
@@ -834,6 +851,9 @@ function mergeSummaries(raws: (DashboardPieceRaw | null | undefined)[]): Dashboa
     avgComments: sampleCount > 0 ? Math.round(commentsSum / sampleCount) : 0,
     engagementRate: Number(engagementRate.toFixed(2)),
     engagementDelta: Number((engagementRate - prevEngagementRate).toFixed(2)),
+    /* 한 채널이라도 조회에 실패했으면 합산 숫자도 확언하지 않는다 —
+       그 채널 몫이 0 으로 들어가 있어 «전체»가 실제보다 작게 나온다. */
+    insightsOk: valid.every((r) => r.insightsOk),
   };
 }
 

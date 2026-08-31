@@ -427,7 +427,10 @@ export async function GET(request: Request) {
     // 2) 일일 계정 스냅샷 — 팔로워 급변 감지 + followers(·인스타그램은 posts도) 최신화
     // Threads는 프로필 필드에 총 게시물 수가 없어(스펙 5절) followers만 갱신한다.
     try {
-      let followersCount: number;
+      /* ⚠️ null = «플랫폼이 안 알려준다». 0 이 아니다.
+         이걸 0 으로 받으면 아래 급변 감지가 «팔로워가 전부 빠져나갔다»고 읽고
+         사용자에게 거짓 알림을 쏜다 — 100팔로워 미만 계정에서 매일 일어난다. */
+      let followersCount: number | null;
       let postsCount: number | null = null;
       if (channel === "threads") {
         followersCount = await fetchThreadsFollowersCount(acc.platform_user_id ?? "", token);
@@ -437,8 +440,8 @@ export async function GET(request: Request) {
         postsCount = info.mediaCount;
       }
       const prev = acc.followers ?? 0;
-      const delta = followersCount - prev;
-      if (prev > 0 && Math.abs(delta) >= Math.max(SPIKE_MIN_ABS, Math.round(prev * SPIKE_MIN_PCT))) {
+      const delta = followersCount === null ? 0 : followersCount - prev;
+      if (followersCount !== null && prev > 0 && Math.abs(delta) >= Math.max(SPIKE_MIN_ABS, Math.round(prev * SPIKE_MIN_PCT))) {
         const up = delta > 0;
         const sent = await notifyUser(admin, {
           userId: acc.user_id,
@@ -450,10 +453,15 @@ export async function GET(request: Request) {
         });
         if (sent) spikes++;
       }
-      await admin
-        .from("connected_accounts")
-        .update(postsCount !== null ? { followers: followersCount, posts: postsCount } : { followers: followersCount })
-        .eq("id", acc.id);
+      /* null 인 컬럼은 아예 빼고 갱신한다 — 모르는 값으로 아는 값을 덮지 않는다.
+         둘 다 null 이면 갱신 자체를 건너뛴다(빈 update 는 updated_at 만 흔든다). */
+      const snapshot = {
+        ...(followersCount !== null ? { followers: followersCount } : {}),
+        ...(postsCount !== null ? { posts: postsCount } : {}),
+      };
+      if (Object.keys(snapshot).length > 0) {
+        await admin.from("connected_accounts").update(snapshot).eq("id", acc.id);
+      }
     } catch (e) {
       // 스냅샷 실패는 치명적이지 않다 — 다음 실행에서 재시도
       console.warn("[cron:refresh] 계정 스냅샷 실패:", acc.id, e instanceof Error ? e.message : String(e));

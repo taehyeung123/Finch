@@ -209,9 +209,10 @@ export interface InstagramAccountInfo {
   id: string;
   username: string;
   name: string | null;
-  followersCount: number;
-  followsCount: number;
-  mediaCount: number;
+  /** 100팔로워 미만 계정은 인스타그램이 안 준다 — 그때는 null 이다(0 이 아니다) */
+  followersCount: number | null;
+  followsCount: number | null;
+  mediaCount: number | null;
   profilePictureUrl: string | null;
   biography: string | null;
   website: string | null;
@@ -229,9 +230,12 @@ export async function fetchAccountInfo(accessToken: string): Promise<InstagramAc
     id: String(json.id),
     username: typeof json.username === "string" ? json.username : "",
     name: typeof json.name === "string" ? json.name : null,
-    followersCount: typeof json.followers_count === "number" ? json.followers_count : 0,
-    followsCount: typeof json.follows_count === "number" ? json.follows_count : 0,
-    mediaCount: typeof json.media_count === "number" ? json.media_count : 0,
+    /* ⚠️ 결측을 0 으로 확정하지 않는다. 100팔로워 미만 계정은 followers_count 가 **아예 안 온다**
+       (스펙 1절 «소액 계정 제약»). 0 으로 두면 화면이 «팔로워 0» 을 확언하고, 그 값이 DB 까지
+       덮어써 실제로 팔로워가 있는 계정도 0 이 된다. 모르는 것과 없는 것은 다르다 — null 로 둔다. */
+    followersCount: typeof json.followers_count === "number" ? json.followers_count : null,
+    followsCount: typeof json.follows_count === "number" ? json.follows_count : null,
+    mediaCount: typeof json.media_count === "number" ? json.media_count : null,
     profilePictureUrl: typeof json.profile_picture_url === "string" ? json.profile_picture_url : null,
     biography: typeof json.biography === "string" ? json.biography : null,
     website: typeof json.website === "string" ? json.website : null,

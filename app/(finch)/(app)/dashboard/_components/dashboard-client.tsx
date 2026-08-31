@@ -88,6 +88,12 @@ export function DashboardClient({
       ? sumSeries([trends.instagram?.views ?? [], trends.tiktok?.views ?? [], trends.threads?.views ?? []])
       : trends[channel]?.views ?? [];
 
+  /* 인사이트 조회가 실패하면 조회수·참여율은 자리채움(0)이다 — 숫자로 내보내면
+     «못 가져왔다»가 «이번 주 조회수가 정말 0이다»로 읽힌다. 성과 분석 화면이 쓰는 것과 같은 규칙.
+     팔로워·게시물 수는 계정 정보라 별개 호출이므로 그대로 보여준다. */
+  const insightsOk = summary.insightsOk !== false;
+  const statOrDash = (n: number, fmt: (v: number) => string) => (insightsOk ? fmt(n) : "—");
+
   const summaryCards = (
     <>
       <StatCard
@@ -100,8 +106,8 @@ export function DashboardClient({
       />
       <StatCard
         label="이번 주 조회수"
-        value={formatCompact(summary.weeklyViews)}
-        delta={summary.weeklyViewsDelta}
+        value={statOrDash(summary.weeklyViews, formatCompact)}
+        delta={insightsOk ? summary.weeklyViewsDelta : undefined}
         trend={viewsTrend}
       />
       <StatCard label="게시물 수" value={summary.postCount.toLocaleString("ko-KR")} />
@@ -115,8 +121,8 @@ export function DashboardClient({
             </InfoTip>
           </>
         }
-        value={formatPercent(summary.engagementRate)}
-        delta={summary.engagementDelta}
+        value={statOrDash(summary.engagementRate, formatPercent)}
+        delta={insightsOk ? summary.engagementDelta : undefined}
         deltaUnit="%p"
       />
     </>

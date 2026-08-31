@@ -18,6 +18,9 @@ import { fetchTiktokUserInfo } from "@/lib/tiktok/api";
  */
 export const runtime = "nodejs";
 
+/** 로그 접두 — 세 채널이 같은 형태로 남아야 원인을 대조할 수 있다 */
+const TAG = "tiktok-oauth";
+
 const STATE_COOKIE = "tk_oauth_state";
 
 function settingsRedirect(origin: string, params: Record<string, string>): NextResponse {
@@ -37,9 +40,20 @@ export async function GET(request: Request) {
   // 일회성 state — 결과와 무관하게 즉시 소거
   cookieStore.delete(STATE_COOKIE);
 
-  // 사용자가 인가를 거부했거나 TikTok이 에러를 반환
+  /* 인가 서버가 error 를 달고 돌려보낸 경우.
+     ⚠️ 이걸 전부 «연동이 취소되었습니다» 로 뭉개면 안 된다 — 개통 첫날 가장 흔한 원인은
+     «테스터로 등록되지 않은 계정»·«심사 미승인 스코프»이고, 아무도 취소하지 않았다.
+     원인은 error_reason·error_description 에 온다. 화면 문구는 갈라 주고, 상세는 로그로 남긴다
+     (고객 화면에 인가 서버 원문을 그대로 뿌리지는 않는다 — 내부 운영 정보다). */
   if (oauthError) {
-    return settingsRedirect(origin, { connect: "error", reason: "denied" });
+    const errReason = url.searchParams.get("error_reason") ?? "";
+    const errDesc = url.searchParams.get("error_description") ?? "";
+    console.error("[" + TAG + "] 인가 실패:", oauthError, errReason, errDesc);
+    const userCancelled = /access_denied/i.test(oauthError) || /user_denied|user_cancel/i.test(errReason);
+    return settingsRedirect(origin, {
+      connect: "error",
+      reason: userCancelled ? "denied" : "not_allowed",
+    });
   }
   // CSRF 방어: state 불일치/누락이면 중단
   if (!code || !returnedState || !savedState || returnedState !== savedState) {
@@ -98,25 +112,26 @@ export async function GET(request: Request) {
     const { data: existing } = await supabase
       .from("connected_accounts")
       .select("id")
+      .eq("user_id", user.id)
       .eq("channel", "tiktok")
       .limit(1)
       .maybeSingle();
 
     let write = existing
-      ? await supabase.from("connected_accounts").update(rowWithAvatar).eq("id", existing.id)
-      : await supabase.from("connected_accounts").insert(rowWithAvatar);
+      ? await supabase.from("connected_accounts").update(rowWithAvatar).eq("id", existing.id).select("id")
+      : await supabase.from("connected_accounts").insert(rowWithAvatar).select("id");
     if (write.error && /avatar_url/i.test(write.error.message)) {
       write = existing
-        ? await supabase.from("connected_accounts").update(row).eq("id", existing.id)
-        : await supabase.from("connected_accounts").insert(row);
+        ? await supabase.from("connected_accounts").update(row).eq("id", existing.id).select("id")
+        : await supabase.from("connected_accounts").insert(row).select("id");
     }
     if (write.error && /refresh_token_cipher/i.test(write.error.message)) {
       // 0011 미적용 DB — refresh_token 저장은 포기하고 access_token만 저장(다음 갱신 시 재연동 필요)
       const { refresh_token_cipher: _drop, ...withoutRefresh } = row;
       void _drop;
       write = existing
-        ? await supabase.from("connected_accounts").update(withoutRefresh).eq("id", existing.id)
-        : await supabase.from("connected_accounts").insert(withoutRefresh);
+        ? await supabase.from("connected_accounts").update(withoutRefresh).eq("id", existing.id).select("id")
+        : await supabase.from("connected_accounts").insert(withoutRefresh).select("id");
     }
 
     if (write.error) {
@@ -125,6 +140,16 @@ export async function GET(request: Request) {
         return settingsRedirect(origin, { connect: "error", reason: "already_linked" });
       }
       console.error("[tiktok-oauth] 계정 저장 실패:", write.error.message);
+      return settingsRedirect(origin, { connect: "error", reason: "save_failed" });
+    }
+
+    /* ⚠️ error 만 보면 안 된다 — PostgREST 는 조건에 맞는 행이 **0개여도 오류를 내지 않는다.**
+       팀 멤버가 연동할 때 실제로 이 경로를 탄다: 읽기 정책은 소유자 행까지 열어 주는데
+       쓰기 정책은 본인 행만 허용하므로, 소유자 행 id 를 잡아 UPDATE 하면 0행이 갱신되고
+       사용자에게는 «연동이 완료되었어요» 배너만 뜬다. 몇 번을 눌러도 같고 로그도 안 남는다.
+       같은 함정을 연동 해제(settings/actions.ts)는 이미 .select() 로 막고 있었다. */
+    if (!write.data || write.data.length === 0) {
+      console.error("[tiktok-oauth] 저장 결과 0행 — RLS 로 막혔을 가능성(user_id 불일치)");
       return settingsRedirect(origin, { connect: "error", reason: "save_failed" });
     }
 

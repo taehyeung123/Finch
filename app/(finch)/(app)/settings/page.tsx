@@ -12,6 +12,7 @@ import { isDemoMode } from "@/lib/supabase/config";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { INSTAGRAM_SCOPES, INSTAGRAM_SCOPE_LABELS, isInstagramOAuthConfigured } from "@/lib/meta/instagram-oauth";
+import { isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
 import { THREADS_SCOPES, THREADS_SCOPE_LABELS, isThreadsOAuthConfigured } from "@/lib/meta/threads-oauth";
 import { TIKTOK_SCOPES, TIKTOK_SCOPE_LABELS, isTiktokOAuthConfigured } from "@/lib/tiktok/oauth";
 import { SettingsNav } from "./_components/settings-nav";
@@ -113,6 +114,12 @@ async function loadAccountCards(): Promise<AccountCard[] | null> {
 // 연동 성공은 handle 쿼리파라미터로 구체적인 계정을 보여준다(아래 SettingsPage에서 조합).
 const CONNECT_MESSAGES: Record<string, { tone: "positive" | "warning" | "negative"; text: string }> = {
   denied: { tone: "warning", text: "연동이 취소되었습니다." },
+  /* «취소» 와 구분한다 — 개통 초기에 실제로 가장 흔한 원인은 «앱 테스터로 등록되지 않은 계정»이다.
+     그걸 «취소되었습니다» 라고 하면 사용자도 운영자도 엉뚱한 데를 본다(상세 원인은 서버 로그). */
+  not_allowed: {
+    tone: "negative",
+    text: "이 계정에는 아직 연동 권한이 없어요. 계정을 확인하고 다시 시도해 주세요.",
+  },
   state: { tone: "negative", text: "보안 검증에 실패했어요. 다시 시도해 주세요." },
   unconfigured: {
     tone: "warning",
@@ -123,10 +130,24 @@ const CONNECT_MESSAGES: Record<string, { tone: "positive" | "warning" | "negativ
     text: "토큰 암호화 키가 설정되지 않아 연동을 중단했어요. 관리자 설정이 필요합니다.",
   },
   already_linked: { tone: "warning", text: "이미 다른 핀치 계정에 연동된 계정이에요." },
+  /* 데모 모드에서는 연동해도 그 계정이 화면에 안 나온다(live.ts 가 목데이터를 쓴다).
+     사용자에게 «데모 모드»라는 내부 상태를 말하지 않고, 지금 할 수 없다는 사실만 전한다. */
+  demo_mode: {
+    tone: "warning",
+    text: "지금은 예시 데이터를 보고 계셔서 계정을 연동할 수 없어요.",
+  },
   save_failed: { tone: "negative", text: "연동 정보 저장 중 오류가 발생했어요. 다시 시도해 주세요." },
   exchange: { tone: "negative", text: "토큰 교환 중 오류가 발생했어요. 다시 시도해 주세요." },
   encrypt_failed: { tone: "negative", text: "토큰 암호화 중 오류가 발생했어요. 다시 시도해 주세요." },
   disconnect_failed: { tone: "negative", text: "연동 해제 중 오류가 발생했어요. 다시 시도해 주세요." },
+  /* 연동 자체는 됐지만 계정별 웹훅 구독이 실패한 경우.
+     이걸 «성공» 으로 덮으면 댓글 자동 DM 이 **한 통도 안 나가는데 화면은 전부 정상**으로 보인다 —
+     규칙은 «활성» 이고 오류도 없어서, 서버 로그를 뒤지지 않는 한 원인을 못 찾는다.
+     재연동이 곧 재시도이므로 사용자가 할 수 있는 일을 그대로 말해 준다. */
+  partial_webhook: {
+    tone: "warning",
+    text: "연동은 됐지만 댓글 알림 연결에 실패했어요. 댓글 자동 DM을 쓰시려면 다시 연동해 주세요.",
+  },
 };
 
 function ConnectActions({ card, oauthReady }: { card: AccountCard; oauthReady: boolean }) {
@@ -175,23 +196,30 @@ export default async function SettingsPage({
   const connectParam = typeof sp.connect === "string" ? sp.connect : null;
   const reasonParam = typeof sp.reason === "string" ? sp.reason : null;
   const handleParam = typeof sp.handle === "string" ? sp.handle : null;
+  /* connect=warn — 연동은 됐지만 부수 작업이 실패한 «절반 성공».
+     성공으로 덮으면 사용자가 못 고치고, 실패로 덮으면 실제로 된 연동을 다시 하게 만든다. */
   const banner =
     connectParam === "success"
       ? { tone: "positive" as const, text: `${handleParam ?? "채널"} 연동이 완료되었어요.` }
       : connectParam === "disconnected"
         ? { tone: "positive" as const, text: "연동이 해제되었습니다." }
-        : connectParam === "error" && reasonParam
+        : (connectParam === "error" || connectParam === "warn") && reasonParam
           ? (CONNECT_MESSAGES[reasonParam] ?? CONNECT_MESSAGES.exchange)
           : null;
 
   const instagramOAuthConfigured = isInstagramOAuthConfigured();
   const threadsOAuthConfigured = isThreadsOAuthConfigured();
   const tiktokOAuthConfigured = isTiktokOAuthConfigured();
+  /* ⚠️ 암호화 키도 **버튼 조건에 포함**한다. 콜백에서만 확인하면, 앱 ID 만 넣고 키를 미룬 상태에서
+     버튼이 켜지고 — 사용자가 인스타 로그인·권한 동의를 전부 마친 **뒤에야** 「암호화 키가 없어
+     연동을 중단했어요」로 튕긴다. 인스타 쪽에는 핀치가 «승인된 앱»으로 남고 우리에겐 아무것도 없다.
+     세 채널이 같은 키를 쓰므로 한 번에 건다. */
+  const tokenEncryptionReady = isTokenEncryptionConfigured();
   // 자격증명 존재 여부로 버튼 자체를 켠다 — 미설정이면 사유를 노출하지 않고 "연동 준비중" 배지만 보여준다.
   const OAUTH_READY: Record<Channel, boolean> = {
-    instagram: instagramOAuthConfigured,
-    tiktok: tiktokOAuthConfigured,
-    threads: threadsOAuthConfigured,
+    instagram: instagramOAuthConfigured && tokenEncryptionReady,
+    tiktok: tiktokOAuthConfigured && tokenEncryptionReady,
+    threads: threadsOAuthConfigured && tokenEncryptionReady,
   };
 
   return (

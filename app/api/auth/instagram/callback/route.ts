@@ -18,6 +18,9 @@ import {
  */
 export const runtime = "nodejs";
 
+/** 로그 접두 — 세 채널이 같은 형태로 남아야 원인을 대조할 수 있다 */
+const TAG = "ig-oauth";
+
 const STATE_COOKIE = "ig_oauth_state";
 
 function settingsRedirect(origin: string, params: Record<string, string>): NextResponse {
@@ -37,9 +40,20 @@ export async function GET(request: Request) {
   // 일회성 state — 결과와 무관하게 즉시 소거
   cookieStore.delete(STATE_COOKIE);
 
-  // 사용자가 인가를 거부했거나 Meta가 에러를 반환
+  /* 인가 서버가 error 를 달고 돌려보낸 경우.
+     ⚠️ 이걸 전부 «연동이 취소되었습니다» 로 뭉개면 안 된다 — 개통 첫날 가장 흔한 원인은
+     «테스터로 등록되지 않은 계정»·«심사 미승인 스코프»이고, 아무도 취소하지 않았다.
+     원인은 error_reason·error_description 에 온다. 화면 문구는 갈라 주고, 상세는 로그로 남긴다
+     (고객 화면에 인가 서버 원문을 그대로 뿌리지는 않는다 — 내부 운영 정보다). */
   if (oauthError) {
-    return settingsRedirect(origin, { connect: "error", reason: "denied" });
+    const errReason = url.searchParams.get("error_reason") ?? "";
+    const errDesc = url.searchParams.get("error_description") ?? "";
+    console.error("[" + TAG + "] 인가 실패:", oauthError, errReason, errDesc);
+    const userCancelled = /access_denied/i.test(oauthError) || /user_denied|user_cancel/i.test(errReason);
+    return settingsRedirect(origin, {
+      connect: "error",
+      reason: userCancelled ? "denied" : "not_allowed",
+    });
   }
   // CSRF 방어: state 불일치/누락이면 중단
   if (!code || !returnedState || !savedState || returnedState !== savedState) {
@@ -83,8 +97,10 @@ export async function GET(request: Request) {
       display_name: info.name ?? info.username ?? null,
       bio: info.biography,
       connected: true,
-      followers: info.followersCount,
-      posts: info.mediaCount,
+      /* 최초 저장이라 비교할 이전 값이 없다 — 모르면 0 으로 시작한다.
+         이후 갱신 경로(live.ts)는 null 일 때 컬럼을 아예 건드리지 않는다. */
+      followers: info.followersCount ?? 0,
+      posts: info.mediaCount ?? 0,
       access_token_cipher: cipher,
       token_expires_at: expiresAt,
       platform_user_id: info.id,
@@ -96,17 +112,18 @@ export async function GET(request: Request) {
     const { data: existing } = await supabase
       .from("connected_accounts")
       .select("id")
+      .eq("user_id", user.id)
       .eq("channel", "instagram")
       .limit(1)
       .maybeSingle();
 
     let write = existing
-      ? await supabase.from("connected_accounts").update(rowWithAvatar).eq("id", existing.id)
-      : await supabase.from("connected_accounts").insert(rowWithAvatar);
+      ? await supabase.from("connected_accounts").update(rowWithAvatar).eq("id", existing.id).select("id")
+      : await supabase.from("connected_accounts").insert(rowWithAvatar).select("id");
     if (write.error && /avatar_url/i.test(write.error.message)) {
       write = existing
-        ? await supabase.from("connected_accounts").update(row).eq("id", existing.id)
-        : await supabase.from("connected_accounts").insert(row);
+        ? await supabase.from("connected_accounts").update(row).eq("id", existing.id).select("id")
+        : await supabase.from("connected_accounts").insert(row).select("id");
     }
 
     if (write.error) {
@@ -118,11 +135,25 @@ export async function GET(request: Request) {
       return settingsRedirect(origin, { connect: "error", reason: "save_failed" });
     }
 
-    // 계정별 웹훅 구독 — 이게 없으면 이 계정의 댓글/메시지 웹훅이 발송되지 않는다(자동 DM 필수).
-    // 실패해도 연동은 유효 — 로그만 남긴다 (재연동 시 재시도됨).
+    /* ⚠️ error 만 보면 안 된다 — PostgREST 는 조건에 맞는 행이 **0개여도 오류를 내지 않는다.**
+       팀 멤버가 연동할 때 실제로 이 경로를 탄다: 읽기 정책은 소유자 행까지 열어 주는데
+       쓰기 정책은 본인 행만 허용하므로, 소유자 행 id 를 잡아 UPDATE 하면 0행이 갱신되고
+       사용자에게는 «연동이 완료되었어요» 배너만 뜬다. 몇 번을 눌러도 같고 로그도 안 남는다.
+       같은 함정을 연동 해제(settings/actions.ts)는 이미 .select() 로 막고 있었다. */
+    if (!write.data || write.data.length === 0) {
+      console.error("[ig-oauth] 저장 결과 0행 — RLS 로 막혔을 가능성(user_id 불일치)");
+      return settingsRedirect(origin, { connect: "error", reason: "save_failed" });
+    }
+
+    /* 계정별 웹훅 구독 — 이게 없으면 이 계정의 댓글/메시지 웹훅이 **발송되지 않는다**(자동 DM 필수).
+       연동 자체는 유효하므로 실패해도 되돌리지 않지만, **성공으로 덮지도 않는다.**
+       예전엔 console.error 하나로 끝냈는데, 그러면 사용자는 «연동 완료» 를 보고 규칙을 만들고
+       댓글이 달려도 DM 이 한 통도 안 나가는데 화면 어디에도 오류가 없다.
+       재연동이 곧 재시도라, 사용자가 할 수 있는 일을 화면에서 말해 준다. */
     const sub = await subscribeWebhookFields(longLived.accessToken);
     if (!sub.ok) {
-      console.error("[ig-oauth] 웹훅 구독 실패(연동은 유지):", sub.error);
+      console.error("[" + TAG + "] 웹훅 구독 실패(연동은 유지):", sub.error);
+      return settingsRedirect(origin, { connect: "warn", reason: "partial_webhook", handle: row.handle });
     }
 
     return settingsRedirect(origin, { connect: "success", handle: row.handle });

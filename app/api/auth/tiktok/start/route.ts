@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
 import {
   buildTiktokAuthorizeUrl,
   getTiktokOAuthConfig,
@@ -22,9 +22,14 @@ const STATE_COOKIE = "tk_oauth_state";
 export async function GET(request: Request) {
   const origin = new URL(request.url).origin;
 
-  // 연동은 로그인 사용자에 귀속된다 — 세션 없으면 로그인으로
-  if (!isSupabaseConfigured()) {
-    return NextResponse.redirect(`${origin}/settings?connect=unconfigured`);
+  /* 연동은 로그인 사용자에 귀속된다 — 세션 없으면 로그인으로.
+     ⚠️ isDemoMode 도 막는다. 데모가 켜져 있으면 lib/data/live.ts 가 통째로 목데이터를 쓰므로
+     (loadAccountRow 첫 줄이 isDemoMode 면 null), 연동에 **성공해도 그 계정이 화면에 영영 안 나온다.**
+     예전엔 여기서 isSupabaseConfigured 만 봐서, 데모를 못 끈 상태로 진짜 인가를 통과하고
+     토큰까지 저장한 뒤 «연동 완료» 배너를 보는데 카드는 계속 목 계정인 상황이 만들어졌다.
+     NEXT_PUBLIC_ 변수는 빌드 시점에 박히므로 «껐는데 왜 그대로냐»는 재배포 문제이기도 하다. */
+  if (!isSupabaseConfigured() || isDemoMode()) {
+    return NextResponse.redirect(`${origin}/settings?connect=error&reason=demo_mode`);
   }
   const supabase = await createClient();
   const {

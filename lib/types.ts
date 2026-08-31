@@ -75,6 +75,14 @@ export interface DashboardSummary {
   avgComments: number;
   engagementRate: number;
   engagementDelta: number;
+  /**
+   * 인사이트 조회가 **성공했는가.** false 면 위의 weeklyViews·engagementRate 등은 자리채움(0)이라
+   * 화면에 숫자로 내보내면 안 된다 — «못 가져왔다»가 «이번 주 조회수가 정말 0이다»로 읽힌다.
+   *
+   * 성과 분석 화면은 2026-08-30 에 같은 이유로 totalsOk 를 도입했는데 대시보드에는 안 들어와 있었다
+   * (2026-08-31 적발). 데모·목데이터 경로는 조회가 없으므로 항상 true 다.
+   */
+  insightsOk?: boolean;
 }
 
 /** 콘텐츠 유형 비중 (대시보드 스타일 분석) */
