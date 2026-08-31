@@ -14,8 +14,8 @@
 | Supabase (Auth+DB) | ✅ 완료 | ✅ Pro 결제·설정 완료 | 마이그레이션 적용 유지 |
 | Anthropic Claude | ✅ 완료 (크레딧 과금·모델 3단 배치까지) | ✅ 키 설정 완료 | 없음 |
 | ScrapeCreators (광고·레퍼런스 수집) | ✅ 완료 (공용 풀 크론 가동) | ✅ 키 설정 완료 | 없음 |
-| Instagram (지표·발행·자동DM) | ✅ 완료 | ❌ `INSTAGRAM_APP_ID`·`TOKEN_ENCRYPTION_KEY` 미설정 | Meta 앱 생성 → 키 → 심사 |
-| Threads (지표·발행) | ✅ 완료 (2026-08-31 발행 추가) | ❌ `THREADS_APP_ID/SECRET` 미설정 | 같은 Meta 앱에 제품 추가 |
+| Instagram (지표·발행·자동DM) | ✅ 완료 | ✅ **프로덕션 설정 완료** | ⚠️ 재연동(발행 권한) → 심사 |
+| Threads (지표·발행) | ✅ 완료 (2026-08-31 발행 추가) | ✅ **프로덕션 설정 완료** | 심사 |
 | TikTok (프로필 지표) | ✅ 완료 | ❌ `TIKTOK_CLIENT_KEY/SECRET` 미설정 | 앱 등록(심사 불요로 개발 가능) |
 | Toss Payments | ✅ 완료 (위젯·빌링·웹훅) | ❌ 키 미설정 | 계약 → 키 |
 | Meta 광고 관리 (Marketing API) | ❌ **미착수** | — | 어댑터부터 신규 개발 |
@@ -47,21 +47,41 @@ Pro 결제·프로젝트 생성 완료. Google/Kakao 로그인 동작 중(구글
 
 ## 3. Meta 개발자 앱 — 인스타그램 + 스레드 (심사 리드타임이 가장 길다)
 
-**코드는 완성돼 있다.** OAuth(장기토큰 교환·리프레시·웹훅 구독), 지표 조회, 예약 발행, 댓글 자동 DM
-파이프라인 전부. 남은 건 **앱 생성 → 자격증명 → 심사**다.
+> ## ✅ 앱 생성·자격증명·연동은 **이미 끝났다** (2026-08-31 라이브 DB 확인)
+>
+> `connected_accounts` 에 인스타(@__taaae_h, 팔로워 1,114, 2026-07-18 연동)와
+> 스레드(2026-07-24 연동)가 살아 있고, 토큰이 `v1:` 포맷으로 암호화돼 저장돼 있다
+> — 즉 `INSTAGRAM_APP_ID`·`THREADS_APP_ID/SECRET`·`TOKEN_ENCRYPTION_KEY` 가
+> **Vercel 환경변수에 이미 설정돼 있다**(로컬 `.env.local` 에만 없다).
+> 두 행의 `updated_at` 이 매일 갱신되고 있어 토큰 갱신 크론도 정상 동작 중이다.
+>
+> ### ⚠️ 그런데 인스타 토큰에는 **발행 권한이 없다**
+>
+> 토큰은 2026-07-18 발급인데 `instagram_business_content_publish` 는 **2026-08-30 에야**
+> 스코프 배열에 들어갔다(git 대조 완료 — 그 시점 배열은 4개뿐이었다).
+> **스코프는 동의 시점에 고정**되므로 배열만 고쳐도 이미 발급된 토큰은 안 바뀐다.
+> → **설정에서 인스타를 다시 연동해야 예약 발행이 된다.** 재연동은 토큰 만료도 60일로 리셋한다.
+>
+> ### ⚠️ `TOKEN_ENCRYPTION_KEY` 를 **새로 만들면 안 된다**
+>
+> 저장된 토큰이 그 키로 봉인돼 있다. 바꾸면 복호화가 `null` 이 되고, 코드는 그걸
+> «연동 없음» 처럼 다뤄 **화면에 오류 하나 없이** 지표가 통째로 빈다. 빌링키도 같은 키를 쓴다.
 
-1. 사전 준비: 비즈니스용 Facebook 계정. 도메인(`finch.ai.kr`)·개인정보처리방침(`/privacy`)은 **이미 게시됨**.
+**코드는 완성돼 있다.** OAuth(장기토큰 교환·리프레시·웹훅 구독), 지표 조회, 예약 발행, 댓글 자동 DM
+파이프라인 전부. 아래 1~6은 **처음 세팅할 때의 절차 기록**이다.
+
+1. 사전 준비: 비즈니스용 Facebook 계정. 도메인(`finch.ai.kr`)·개인정보처리방침(`/privacy`)은 게시됨.
 2. https://developers.facebook.com → 앱 생성 (유형: Business)
 3. 앱에 제품 추가: **Instagram**(Instagram Login 경로) + **Threads API**
    - ⚠️ Facebook 로그인 제품이 아니다. 핀치는 페이지 없이 크리에이터 계정을 직접 잇는
      Instagram Login 경로를 쓴다(`docs/REAL_API_SPEC.md` 1절).
 4. 앱 대시보드에 아이콘 업로드 — `public/brand/finch-app-icon-1024.png`
-5. **자격증명을 환경변수에 넣는다** — 이게 지금 비어 있어 연동 버튼이 비활성이다:
-   `INSTAGRAM_APP_ID`, `THREADS_APP_ID`, `THREADS_APP_SECRET`, `META_APP_SECRET`(설정됨),
-   그리고 **`TOKEN_ENCRYPTION_KEY`**.
-   - ⚠️ `TOKEN_ENCRYPTION_KEY`가 없으면 OAuth 콜백이 «연동 중단»으로 조용히 끝난다.
-     사용자에게는 «연동 실패»로만 보인다 — 세 채널 콜백 모두 같다.
-6. **개발·테스트는 심사 없이 지금 가능하다.** Standard Access(앱에 역할이 있는 테스터 계정)로
+5. 자격증명: `INSTAGRAM_APP_ID`, `THREADS_APP_ID`, `THREADS_APP_SECRET`, `META_APP_SECRET`,
+   `TOKEN_ENCRYPTION_KEY`(32바이트 base64 또는 64자 hex —
+   `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`).
+   - ⚠️ `INSTAGRAM_APP_SECRET` 이라는 변수는 **없다.** 코드는 `META_APP_SECRET` 하나만 읽는다
+     (웹훅 서명검증과 시크릿을 공유해야 해서다).
+6. **개발·테스트는 심사 없이 가능하다.** Standard Access(앱에 역할이 있는 테스터 계정)로
    전 기능을 돌려볼 수 있다. 심사는 **일반 사용자에게 열 때** 필요하다.
 7. Instagram 앱 심사(App Review) — **신청 목록의 정본은 [docs/REAL_API_SPEC.md](REAL_API_SPEC.md) 1절.** 사본:
    `instagram_business_basic` · `instagram_business_manage_insights` · `instagram_business_manage_comments` ·
@@ -153,8 +173,10 @@ Pro 결제·프로젝트 생성 완료. Google/Kakao 로그인 동작 중(구글
 
 **남은 것**
 
-- [ ] **Meta 개발자 앱 생성** → `INSTAGRAM_APP_ID`·`THREADS_APP_ID`·`THREADS_APP_SECRET` 발급
-- [ ] **`TOKEN_ENCRYPTION_KEY` 설정** — 없으면 세 채널 연동이 전부 조용히 실패한다
+- [x] ~~Meta 개발자 앱 생성 + 자격증명 + `TOKEN_ENCRYPTION_KEY`~~ — **이미 끝났다**(3절 참조).
+      ⚠️ 암호화 키를 **새로 만들지 말 것** — 저장된 토큰·빌링키가 전부 죽는다.
+- [ ] ⚠️ **인스타그램 재연동** — 지금 토큰에는 발행 권한이 없다(2026-07-18 발급, 4개 스코프 시절).
+      설정 화면에서 다시 연동하면 발행 권한 획득 + 토큰 만료 60일 리셋 + 웹훅 구독 재시도가 한 번에 된다.
 - [ ] **`LINK_COOKIE_SECRET` 설정** — 없으면 서비스 롤 키를 대신 쓰므로, 그 키를 돌리는 순간
       모든 프로필 링크 잠금해제 쿠키가 무효가 된다
 - [ ] Meta 앱 심사 신청 (위 3-7·3-8 스코프 목록 그대로)
