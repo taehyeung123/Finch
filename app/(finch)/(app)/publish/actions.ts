@@ -5,6 +5,7 @@ import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { earliestPublishDate } from "@/lib/calendar";
 import { eulReul } from "@/lib/josa";
+import { REQUIRED_SCOPE, checkScope } from "@/lib/meta/granted-scopes";
 import {
   PUBLISHABLE_CHANNELS,
   channelRules,
@@ -24,6 +25,54 @@ import {
   두 액션 다 RLS(auth.uid()=user_id) 위에서 돌고, 추가로 .eq("status","draft") 를
   건다 — id 만 맞으면 이미 발행된 글까지 손댈 수 있으면 안 된다.
 */
+
+/**
+ * 연동 계정 + 부여된 스코프 조회. 0075 미적용 DB 폴백 포함.
+ *
+ * ⚠️ granted_scopes 컬럼이 없는 DB 에서 그냥 select 하면 **예약 자체가 깨진다** —
+ * 지금 잘 돌아가는 기능을 마이그레이션 적용 전까지 죽이는 셈이다. 컬럼 없음이면 없이 다시 조회한다.
+ * 반환의 scopes=null 은 «확인 불가» 다(«권한 없음» 이 아니다).
+ */
+async function loadConnectedAccount(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  channel: PublishChannel,
+): Promise<{ ok: true; found: boolean; scopes: string[] | null } | { ok: false }> {
+  const base = () =>
+    supabase
+      .from("connected_accounts")
+      .select("id, granted_scopes")
+      .eq("user_id", userId)
+      .eq("channel", channel)
+      .eq("connected", true)
+      .limit(1)
+      .maybeSingle();
+
+  const res = await base();
+  if (isMissingColumnError(res.error, /granted_scopes/i)) {
+    const fallback = await supabase
+      .from("connected_accounts")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("channel", channel)
+      .eq("connected", true)
+      .limit(1)
+      .maybeSingle();
+    if (fallback.error) {
+      console.error("[publish] 연동 확인 실패:", fallback.error.message);
+      return { ok: false };
+    }
+    return { ok: true, found: !!fallback.data, scopes: null };
+  }
+  if (res.error) {
+    /* 조회 실패를 «연동 없음»으로 읽으면 멀쩡히 연동한 사람에게 연동하라고 말한다 —
+       이 저장소가 반복해 밟은 «실패는 없음이 아니다» 함정이다. */
+    console.error("[publish] 연동 확인 실패:", res.error.message);
+    return { ok: false };
+  }
+  const row = res.data as { granted_scopes?: string[] | null } | null;
+  return { ok: true, found: !!row, scopes: row?.granted_scopes ?? null };
+}
 
 /** 초안 → 예약. date 는 "YYYY-MM-DD"(KST). */
 export async function scheduleDraft(id: string, date: string): Promise<{ ok: boolean; error?: string }> {
@@ -77,21 +126,23 @@ export async function scheduleDraft(id: string, date: string): Promise<{ ok: boo
      있어 팀원이 **소유자의** 연동 행을 읽는다 — 안 좁히면 자기 계정엔 연동이 없는데
      게이트를 통과하고, 발행 크론은 user_id 로 토큰을 찾으므로 그 예약은 반드시
      실패한다(설정 화면·크론이 이미 쓰는 패턴과 맞춘다). */
-  const { data: account, error: accountErr } = await supabase
-    .from("connected_accounts")
-    .select("id")
-    .eq("user_id", user.id)
-    .eq("channel", channel)
-    .eq("connected", true)
-    .limit(1)
-    .maybeSingle();
-  /* 조회 실패를 «연동 없음»으로 읽으면 멀쩡히 연동한 사람에게 연동하라고 말한다 —
-     이 저장소가 반복해 밟은 «실패는 없음이 아니다» 함정이다(lib/data/internal.ts 규칙). */
-  if (accountErr) {
-    console.error("[publish] 연동 확인 실패:", accountErr.message);
-    return { ok: false, error: "잠시 후 다시 시도해 주세요." };
+  const acc = await loadConnectedAccount(supabase, user.id, channel);
+  if (!acc.ok) return { ok: false, error: "잠시 후 다시 시도해 주세요." };
+  if (!acc.found) return { ok: false, error: `먼저 설정에서 ${channelLabel(channel)} 계정을 연동해 주세요.` };
+
+  /* 발행 권한이 **확실히 없으면** 여기서 막는다. 예약을 받아 두면 새벽 6시 크론이 돌 때
+     권한 오류로 실패하고, 그 사이 사용자는 발행될 거라고 믿는다.
+     확인 불가(0075 이전 연동)면 통과시킨다 — 모른다고 멀쩡한 예약을 막지 않는다. */
+  const scopeCheck = checkScope(
+    acc.scopes,
+    channel === "threads" ? REQUIRED_SCOPE.threadsPublish : REQUIRED_SCOPE.instagramPublish,
+  );
+  if (scopeCheck.state === "missing") {
+    return {
+      ok: false,
+      error: `${channelLabel(channel)} 발행 권한이 없어요. 설정에서 다시 연동하면 바로 쓸 수 있어요.`,
+    };
   }
-  if (!account) return { ok: false, error: `먼저 설정에서 ${channelLabel(channel)} 계정을 연동해 주세요.` };
 
   /* 배치는 KST 06:00 에 돈다(vercel.json "0 21 * * *" = UTC 21시). 그 날 아침에
      집히려면 scheduled_at 이 그 시각 이전이어야 하므로 KST 자정(=UTC 15:00 전날)으로 둔다. */
@@ -230,19 +281,20 @@ export async function createPost(input: {
   /* 예약은 발행 약속이다 — 연동 없이 예약하면 배치가 반드시 실패한다.
      초안은 연동을 요구하지 않는다(아직 발행이 아니다). scheduleDraft 와 같은 규칙. */
   if (input.mode === "schedule") {
-    const { data: account, error: accountErr } = await supabase
-      .from("connected_accounts")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("channel", channel)
-      .eq("connected", true)
-      .limit(1)
-      .maybeSingle();
-    if (accountErr) {
-      console.error("[publish] 연동 확인 실패:", accountErr.message);
-      return { ok: false, error: "잠시 후 다시 시도해 주세요." };
+    const acc = await loadConnectedAccount(supabase, user.id, channel);
+    if (!acc.ok) return { ok: false, error: "잠시 후 다시 시도해 주세요." };
+    if (!acc.found) return { ok: false, error: `먼저 설정에서 ${channelLabel(channel)} 계정을 연동해 주세요.` };
+    /* 위 scheduleDraft 와 같은 관문 — 예약은 발행 약속이므로 권한을 여기서 본다 */
+    const scopeCheck = checkScope(
+      acc.scopes,
+      channel === "threads" ? REQUIRED_SCOPE.threadsPublish : REQUIRED_SCOPE.instagramPublish,
+    );
+    if (scopeCheck.state === "missing") {
+      return {
+        ok: false,
+        error: `${channelLabel(channel)} 발행 권한이 없어요. 설정에서 다시 연동하면 바로 쓸 수 있어요.`,
+      };
     }
-    if (!account) return { ok: false, error: `먼저 설정에서 ${channelLabel(channel)} 계정을 연동해 주세요.` };
   }
 
   /* 이미지 업로드 — 카드뉴스와 같은 버킷·같은 본인 폴더 규칙(0010 RLS).

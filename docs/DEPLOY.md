@@ -92,8 +92,11 @@ NEXT_PUBLIC_ 값은 빌드 시점에 JS 번들에 박제되므로, 빼먹고 배
 - [ ] **Data Deletion Instructions URL** 2개 — 메타가 요구하고 코드는 이미 있다:
       `https://finch.ai.kr/api/auth/instagram/data-deletion`,
       `https://finch.ai.kr/api/auth/threads/data-deletion`
-- [ ] **Threads Deauthorize Callback** `https://finch.ai.kr/api/auth/threads/deauthorize`
-      (사용자가 Threads 쪽에서 먼저 끊으면 우리 DB 도 즉시 미연동으로 반영한다)
+- [ ] **연동 해제(Deauthorize) 콜백 2개** — 사용자가 메타/스레드 쪽에서 먼저 끊었을 때
+      우리 DB 도 즉시 미연동으로 반영한다. 등록하지 않으면 죽은 토큰으로 지표 조회가
+      매번 실패하고 예약 발행 크론이 매일 새벽 실패 알림을 보낸다.
+      `https://finch.ai.kr/api/auth/instagram/deauthorize`
+      `https://finch.ai.kr/api/auth/threads/deauthorize`
 - [ ] Vercel 플랜 확인 → Pro 면 `package.json` build 에 `--pro` 추가
 
 ## 이후 자동 배포

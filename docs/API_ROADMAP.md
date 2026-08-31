@@ -73,9 +73,11 @@ Pro 결제·프로젝트 생성 완료. Google/Kakao 로그인 동작 중(구글
 8. Threads 앱 심사 — 스코프 **5개**다(`lib/meta/threads-oauth.ts`):
    `threads_basic` · `threads_content_publish`(발행) · `threads_manage_replies` ·
    `threads_read_replies` · `threads_manage_insights`
-9. 앱 대시보드 > 설정 > 기본 설정에 **Data Deletion Instructions URL** 등록:
-   `https://finch.ai.kr/api/auth/instagram/data-deletion`, `https://finch.ai.kr/api/auth/threads/data-deletion`
-   (코드는 구현돼 있다 — 등록만 하면 된다)
+9. 앱 대시보드 > 설정 > 기본 설정에 콜백 URL 4개 등록 — **코드는 전부 구현돼 있다, 등록만 하면 된다**:
+   - Data Deletion Instructions: `/api/auth/instagram/data-deletion` · `/api/auth/threads/data-deletion`
+   - Deauthorize(연동 해제): `/api/auth/instagram/deauthorize` · `/api/auth/threads/deauthorize`
+   (전부 `https://finch.ai.kr` 기준. 해제 콜백을 빠뜨리면 사용자가 메타 쪽에서 끊어도 우리 DB 는
+   «연동됨»으로 남아 죽은 토큰으로 계속 호출한다.)
 
 **3-확장) 인스타 댓글 자동 DM** — 파이프라인 전체가 **이미 완성**돼 있다:
 웹훅 서명검증(타이밍 세이프 HMAC), 즉시 200 후 비동기 처리, 규칙 매칭, `reserve_dm_send`

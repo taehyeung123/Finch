@@ -104,6 +104,11 @@ export async function GET(request: Request) {
       access_token_cipher: cipher,
       token_expires_at: expiresAt,
       platform_user_id: info.id,
+      /* 동의 시점에 실제로 받은 권한 — 스코프는 여기서 고정되므로 나중에 배열을 늘려도
+         이 토큰은 안 바뀐다. 기록해 두면 «예약 발행이 새벽에 권한 오류로 실패»하기 전에
+         화면에서 재연동을 안내할 수 있다(0075). 응답에 permissions 가 없으면 빈 배열이 오는데,
+         그건 «권한 없음»이 아니라 «모름»이라 컬럼을 아예 비워 둔다. */
+      ...(shortLived.permissions.length > 0 ? { granted_scopes: shortLived.permissions } : {}),
     };
     // 프로필 사진 — 0006 마이그레이션 미적용이면 컬럼이 없어 실패하므로 폴백으로 재시도
     const rowWithAvatar = { ...row, avatar_url: info.profilePictureUrl };
@@ -120,6 +125,14 @@ export async function GET(request: Request) {
     let write = existing
       ? await supabase.from("connected_accounts").update(rowWithAvatar).eq("id", existing.id).select("id")
       : await supabase.from("connected_accounts").insert(rowWithAvatar).select("id");
+    if (write.error && /granted_scopes/i.test(write.error.message)) {
+      // 0075 미적용 DB — 스코프 기록은 포기하고 나머지는 저장한다(계단식 폴백)
+      const { granted_scopes: _s, ...withoutScopes } = rowWithAvatar as Record<string, unknown>;
+      void _s;
+      write = existing
+        ? await supabase.from("connected_accounts").update(withoutScopes).eq("id", existing.id).select("id")
+        : await supabase.from("connected_accounts").insert(withoutScopes).select("id");
+    }
     if (write.error && /avatar_url/i.test(write.error.message)) {
       write = existing
         ? await supabase.from("connected_accounts").update(row).eq("id", existing.id).select("id")
