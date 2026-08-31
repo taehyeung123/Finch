@@ -591,7 +591,7 @@ async function computeThreadsPiece(row: AccountRow): Promise<DashboardPiece | nu
 
   const infoPromise = fetchThreadsAccountInfo(token).catch(() => null);
 
-  const [info, followers, cur7, prev7, media] = await Promise.all([
+  const [info, followersFetched, cur7, prev7, media] = await Promise.all([
     infoPromise,
     fetchThreadsFollowersCount(th, token),
     fetchThreadsAccountInsightsRange(th, token, since7, until),
@@ -601,11 +601,16 @@ async function computeThreadsPiece(row: AccountRow): Promise<DashboardPiece | nu
 
   const postCount = media.length; // 근사치 — 위 함수 주석 참고
 
+  /* 팔로워 조회가 실패하면(null) **DB 에 안 쓰고 저장된 값을 그대로 쓴다.**
+     0 으로 덮으면 실제 팔로워 수가 지워지고, 다음 크론이 그 0 을 보고
+     «팔로워가 크게 줄었어요» 거짓 알림을 쏜다(인스타 쪽과 같은 규칙). */
+  const followers = followersFetched ?? row.followers;
+
   // 계정 정보 최신화 — 실패는 무시 (다음 로드에서 재시도)
   if (info) {
     const supabase = await createClient();
     const patch = {
-      followers,
+      ...(followersFetched !== null ? { followers: followersFetched } : {}),
       posts: postCount,
       display_name: info.name ?? info.username ?? null,
       bio: info.biography,

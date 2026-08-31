@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getInstagramOAuthConfig } from "@/lib/meta/instagram-oauth";
 import { parseSignedRequest } from "@/lib/meta/signed-request";
@@ -33,12 +33,25 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   if (admin) {
     // 데이터 삭제 요청이므로 비활성화가 아니라 행 자체를 제거한다(토큰 포함 완전 삭제).
-    const { error } = await admin
+    const { data: removed, error } = await admin
       .from("connected_accounts")
       .delete()
       .eq("channel", "instagram")
-      .eq("platform_user_id", payload.user_id);
+      .eq("platform_user_id", payload.user_id)
+      .select("id");
     if (error) console.error("[instagram-data-deletion] 삭제 반영 실패:", error.message);
+
+    /* 확인 코드를 기록한다 — 안 남기면 상태 페이지가 조회할 것이 없어
+       아무 코드에나 «삭제 완료» 를 확언하게 된다(0076).
+       식별자는 원문 대신 해시로 — 삭제 이력에 지운 값을 그대로 두면 앞뒤가 안 맞는다.
+       기록 실패가 삭제를 되돌리지는 않는다(삭제는 이미 끝났다) — 로그만 남긴다. */
+    const { error: logErr } = await admin.from("data_deletion_requests").insert({
+      confirmation_code: confirmationCode,
+      channel: "instagram",
+      platform_user_hash: createHash("sha256").update(payload.user_id).digest("hex").slice(0, 32),
+      deleted_rows: removed?.length ?? 0,
+    });
+    if (logErr) console.error("[instagram-data-deletion] 요청 기록 실패(0076 미적용 가능):", logErr.message);
   }
 
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin).replace(/\/$/, "");

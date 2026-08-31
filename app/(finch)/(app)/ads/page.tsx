@@ -8,6 +8,7 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { ButtonLink } from "@/components/ui/button";
 import { formatCompact, formatKRW, formatPercent } from "@/lib/format";
 import { accounts, campaignDetails, campaigns, dashboardSummaries, IS_SAMPLE_DATA } from "@/lib/data";
+import { getLiveDashboard } from "@/lib/data/live";
 import { aggregateCampaigns } from "@/lib/ads/metrics";
 import { CampaignTable } from "./_components/campaign-table";
 
@@ -25,13 +26,22 @@ const SAMPLE_AI_ALERTS = [
   },
 ];
 
-export default function AdsPage() {
+export default async function AdsPage() {
   // 전체 캠페인 누적 기준 — 가중 평균(공통 유틸)으로 계산해 대시보드와 기준을 공유한다
   const totals = aggregateCampaigns(campaigns);
-  const organicWeeklyViews = dashboardSummaries.all.weeklyViews;
-  /* 오가닉 칸도 같은 규칙을 탄다 — 바로 옆 광고 칸은 «—» 인데 여기만 «0» 이라고 단정하고 있었다.
+
+  /* 오가닉 칸은 **라이브 값**을 본다. 예전엔 lib/data 정적 export 만 읽어서,
+     인스타를 연동하고 홈에서 «이번 주 조회수 12,340» 을 본 사람이 여기로 넘어오면
+     같은 지표가 «—/채널 연결 전» 으로 나왔다 — 한 화면은 연동됐다 하고 다른 화면은 아니라고 한다.
+     조회 실패(insightsOk=false)면 «—» 로 둔다(홈과 같은 규칙). */
+  const live = await getLiveDashboard();
+  const liveAll = live?.summaries.all;
+  const organicWeeklyViews = liveAll?.weeklyViews ?? dashboardSummaries.all.weeklyViews;
+  /* 채널 연결 여부도 라이브 우선. 바로 옆 광고 칸은 «—» 인데 여기만 «0» 이라고 단정하고 있었다 —
      채널을 아직 연결하지 않은 사람에게 「이번 주 조회수 0」은 사실이 아니라 «모른다»이다. */
-  const channelLinked = accounts.some((a) => a.connected);
+  const channelLinked = live
+    ? live.accounts.some((a) => a.connected) && liveAll?.insightsOk !== false
+    : accounts.some((a) => a.connected);
   /* 연동 전에는 «0» 이 아니라 «—» 다. 0원·0.0배는 "안 썼다·성과가 없다"는 **사실 주장**이라,
      아직 광고 계정을 연결하지 않은 사람에게는 거짓이다(2026-08-25 감사에서 통계·리드·방명록에
      같은 함정을 고쳤다 — 실패·미연동을 «없음»으로 단정하지 않는다). */

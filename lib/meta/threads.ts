@@ -88,7 +88,10 @@ export async function fetchThreadsAccountInsightsRange(
  * 현재 팔로워 수 — Threads 프로필 필드에는 followers_count가 없어(스펙 5절) insights로만 조회 가능.
  * period=lifetime(스냅샷값, since/until 없이) — 일별 시계열이 아니라 "현재 총 팔로워"로 추정.
  */
-export async function fetchThreadsFollowersCount(threadsUserId: string, accessToken: string): Promise<number> {
+export async function fetchThreadsFollowersCount(
+  threadsUserId: string,
+  accessToken: string,
+): Promise<number | null> {
   try {
     const res = await graphGet<{ data?: InsightRow[] }>(
       `/${threadsUserId}/threads_insights?metric=followers_count&period=lifetime`,
@@ -96,8 +99,14 @@ export async function fetchThreadsFollowersCount(threadsUserId: string, accessTo
     );
     return extractTotal(res.data?.[0]);
   } catch (e) {
+    /* ⚠️ 실패는 null 이다 — 0 이 아니다. 같은 파일의 기간 합산 함수는 이미 그렇게 고쳤는데
+       팔로워만 옛 방식이 남아 있었다(2026-08-31 적발). 0 을 돌려주면 세 곳으로 번진다:
+       ① 크론이 그 0 을 DB 에 써서 **실제 팔로워 수를 지운다**
+       ② 같은 크론이 prev 와 비교해 «팔로워가 크게 줄었어요 — 하루 사이 -5,000명» 거짓 알림을 쏜다
+       ③ 대시보드가 «팔로워 0» 을 확언한다
+       한 번의 레이트리밋으로 이 셋이 동시에 일어난다. */
     console.error("[threads-insights] 팔로워 수 조회 실패:", e instanceof Error ? e.message : String(e));
-    return 0;
+    return null;
   }
 }
 

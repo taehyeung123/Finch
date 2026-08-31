@@ -83,8 +83,10 @@ export async function GET(request: Request) {
     const shortLived = await exchangeThreadsCodeForToken({ code, redirectUri, config });
     const longLived = await exchangeThreadsForLongLivedToken({ shortLivedToken: shortLived.accessToken, config });
     const info = await fetchThreadsAccountInfo(longLived.accessToken);
-    // 프로필 필드엔 팔로워 수가 없어(스펙 6절) insights로 별도 조회 — 실패해도 연동 자체는 진행(0 저장)
-    const followersCount = await fetchThreadsFollowersCount(info.id, longLived.accessToken);
+    /* 프로필 필드엔 팔로워 수가 없어(스펙 5절) insights 로 별도 조회.
+       실패해도 연동 자체는 진행한다 — 최초 저장이라 비교할 이전 값이 없으므로 0 으로 시작하고,
+       이후 갱신 경로(live.ts·크론)는 null 일 때 컬럼을 아예 건드리지 않는다. */
+    const followersCount = (await fetchThreadsFollowersCount(info.id, longLived.accessToken)) ?? 0;
 
     const cipher = encryptToken(longLived.accessToken);
     if (!cipher) {

@@ -48,6 +48,16 @@ export async function GET(
     return new NextResponse("인스타그램 계정을 먼저 연동해 주세요.", { status: 400 });
   }
 
+  /* ⚠️ getLiveDashboard 는 **세 채널 중 하나라도** 연동돼 있으면 값을 돌려주고,
+     미연동 채널은 0 으로 채운다. 그런데 이 리포트는 인스타 요약 하나만 읽는다.
+     그래서 스레드만 연동한 사용자가 받으면 **전부 0인데 표지에 «Instagram 공식 API»가
+     찍힌 파일**이 나갔다 — 그걸 광고주에게 보낸다(2026-08-31 적발).
+     연동 여부는 계정 카드로 판단한다(요약의 0 은 «미연동»과 «정말 0»을 구분하지 못한다). */
+  const igConnected = dashboard.accounts.some((a) => a.channel === "instagram" && a.connected);
+  if (!igConnected) {
+    return new NextResponse("인스타그램 계정을 먼저 연동해 주세요.", { status: 400 });
+  }
+
   const s = dashboard.summaries.instagram;
 
   /*
