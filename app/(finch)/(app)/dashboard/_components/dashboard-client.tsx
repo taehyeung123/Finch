@@ -12,13 +12,14 @@ import { Sparkline } from "@/components/ui/charts";
 import { InfoTip } from "@/components/ui/info-tip";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { formatAgo, formatCompact, formatDeltaCompact, formatKRW, formatPercent } from "@/lib/format";
+import { formatAgo, formatCompact, formatDeltaCompact, formatMoney, formatPercent } from "@/lib/format";
 import { aggregateActive } from "@/lib/ads/metrics";
 import { CHANNEL_LABEL } from "@/lib/channels";
 import { ChannelProfilePanel } from "@/components/dashboard/channel-profile-panel";
 import { PerformanceTrend } from "@/components/dashboard/performance-trend";
 import { ArchiveStatus, DailyBriefHero, HomeSearch, NextActions } from "@/components/dashboard/daily-brief";
 import type { PoolHomeStats } from "@/lib/pool/home-stats";
+import type { DashboardAdsSummary } from "@/lib/data/ads";
 import type {
   AdCampaign,
   Channel,
@@ -58,11 +59,14 @@ export interface DashboardData {
 export function DashboardClient({
   data,
   campaigns,
+  adsSummary,
   poolStats,
   isLive,
 }: {
   data: DashboardData;
   campaigns: AdCampaign[];
+  /** 실 모드의 광고 요약. null 이면 데모 — 아래 샘플 campaigns 집계를 쓴다 */
+  adsSummary: DashboardAdsSummary | null;
   /** 오늘의 핀치 브리핑 — 공용 풀 수집 현황 (스니핏식 홈 상단) */
   poolStats: PoolHomeStats;
   /** true면 연동 계정의 Instagram 공식 API 실데이터 */
@@ -73,8 +77,17 @@ export function DashboardClient({
   const summary = summaries[channel];
   const posts = channel === "all" ? allPosts : allPosts.filter((p) => p.channel === channel);
   const disconnected = accounts.filter((a) => !a.connected);
-  // 진행 중 캠페인 기준 — /ads 페이지와 같은 공통 유틸로 계산 (화면 간 수치 불일치 방지)
-  const activeTotals = aggregateActive(campaigns);
+  /* 광고 현황 — 실 모드는 서버가 만든 요약(adsSummary), 데모는 샘플 캠페인 집계.
+     ⚠️ 광고 계정을 연결하지 않았으면 **숫자를 쓰지 않는다.** 「집행 금액 0원 · 캠페인 0개」는
+     «모른다»가 아니라 «돈을 안 썼다»는 사실 주장이라, 연결 전인 사람에게는 거짓이다. */
+  const sampleActive = aggregateActive(campaigns);
+  const ads = adsSummary ?? {
+    connected: true,
+    spend: sampleActive.spend,
+    activeCount: sampleActive.count,
+    roas: sampleActive.count > 0 ? sampleActive.roas : null,
+    currency: "KRW" as string | null,
+  };
   // 개별 채널 선택 시 우측 프로필 미러링 패널에 쓸 계정
   const selectedAccount = channel === "all" ? null : accounts.find((a) => a.channel === channel);
 
@@ -262,18 +275,27 @@ export function DashboardClient({
             <CardBody className="space-y-3">
               <div className="flex items-baseline justify-between">
                 <span className="text-[14px] text-fg-sub">집행 금액</span>
-                <span className="tnum text-lg font-bold">{formatKRW(activeTotals.spend)}</span>
+                <span className="tnum text-lg font-bold">
+                  {ads.spend === null ? "—" : formatMoney(ads.spend, ads.currency)}
+                </span>
               </div>
               <div className="flex items-baseline justify-between">
                 <span className="text-[14px] text-fg-sub">진행 중 캠페인</span>
-                <span className="tnum font-semibold">{activeTotals.count}개</span>
+                <span className="tnum font-semibold">
+                  {ads.activeCount === null ? "—" : `${ads.activeCount}개`}
+                </span>
               </div>
               <div className="flex items-baseline justify-between">
                 <span className="text-[14px] text-fg-sub">평균 ROAS</span>
                 <span className="tnum font-semibold text-positive">
-                  {activeTotals.count > 0 ? `${activeTotals.roas.toFixed(1)}배` : "-"}
+                  {ads.roas === null ? "—" : `${ads.roas.toFixed(1)}배`}
                 </span>
               </div>
+              {!ads.connected ? (
+                <p className="text-[12px] text-fg-faint">
+                  광고 계정을 연결하면 집행 현황이 여기에 표시돼요.
+                </p>
+              ) : null}
             </CardBody>
           </Card>
 

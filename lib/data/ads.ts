@@ -214,6 +214,41 @@ export async function getLiveAds(options?: {
   };
 }
 
+/* ── 홈 «광고 현황» 카드 ─────────────────────────────────────────── */
+
+/**
+ * 홈 우측 레일의 광고 요약. 클라이언트 컴포넌트로 넘어가므로 **직렬화 가능한 값만** 담는다.
+ *
+ * ⚠️ 예전 홈은 광고 계정을 연결하지 않은 사람에게도 「집행 금액 0원 · 진행 중 캠페인 0개」를
+ * 단정했다. 그건 «모른다»가 아니라 «돈을 안 썼다»는 사실 주장이라 거짓이다.
+ * connected=false 면 화면이 숫자 대신 «—» 를 그린다.
+ */
+export interface DashboardAdsSummary {
+  connected: boolean;
+  spend: number | null;
+  activeCount: number | null;
+  roas: number | null;
+  currency: string | null;
+}
+
+/** 게재 중인 캠페인만 추린 요약 — 홈 카드가 «진행 중 캠페인 기준»이라고 적고 있다 */
+export function summarizeActiveAds(state: LiveAdsState): DashboardAdsSummary {
+  if (state.state !== "ok") {
+    /* 미연동·만료·실패·미설정 전부 «모름»이다. 넷을 여기서 구분하지 않는 이유는
+       홈 카드가 숫자 세 줄뿐이라 안내를 실을 자리가 없어서다 — 구분은 /ads 화면이 한다. */
+    return { connected: false, spend: null, activeCount: null, roas: null, currency: null };
+  }
+  const active = state.campaigns.filter((c) => (c.effectiveStatus ?? c.status) === "ACTIVE");
+  const totals = aggregateLiveCampaigns(active);
+  return {
+    connected: true,
+    spend: totals.spend,
+    activeCount: active.length,
+    roas: totals.roas,
+    currency: state.selected.currency,
+  };
+}
+
 /* ── 합계 ────────────────────────────────────────────────────────── */
 
 export interface LiveAdTotals {
