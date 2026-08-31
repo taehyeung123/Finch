@@ -439,7 +439,9 @@ PART 3 각주와 PART 4.5 가 «제휴 데이터 공급사 배지를 붙이라»
 - **하드 제약(반드시 반영)**: 댓글당 Private Reply **1회·7일 이내**, 계정당 레이트리밋, 토큰 60일 만료. 자동 드립/재참여 발송은 정책 위반이므로 미구현.
 - **법·정책**: 정보통신망법 제50조(광고성 정보 사전 동의·(광고) 표기·수신거부·야간 발송), 개인정보보호법(댓글·핸들·메시지 = 개인정보, 수탁자 DPA). 상세는 `docs/AUTO_DM_COST_RISK.md`.
 - **요금제**: 유료 전용(Creator 이상), 플랜별 월 발송 한도(PART 9). 한도는 플랫폼 안전 상한 아래로 설정.
-- **MVP 포함**: 확장 제안 — UI/데이터/보안 스캐폴드는 완료, 실제 발송은 Meta 앱 심사(instagram_manage_messages + instagram_manage_comments) 이후 Phase 3+.
+- **MVP 포함**: 확장 제안 — 발송 파이프라인까지 **실구현 완료**(2026-08 대조). 남은 것은 Meta 앱 심사뿐이고,
+  신청 권한은 신형 값 `instagram_business_manage_messages` + `instagram_business_manage_comments` 다
+  (구형 `instagram_manage_*` 는 2025-01-27 폐기 — 그대로 신청하면 오신청이다).
 
 ---
 

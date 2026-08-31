@@ -155,7 +155,7 @@
 - [ ] 개인정보 최소수집 + 보존 TTL + 자동 파기, 원본 웹훅 30~90일 파티션 DROP
 - [ ] 월 한도 예약-확정(성공만 차감) + 사용량 미터·알림
 - [ ] Supavisor 풀러 + 컴퓨트 사이징
-- [ ] 앱 심사(instagram_manage_messages + instagram_manage_comments) + 사업자 인증(병행 착수)
+- [ ] 앱 심사(`instagram_business_manage_messages` + `instagram_business_manage_comments` — 신형 값) + 비즈니스 인증(사업자등록증, 병행 착수)
 - [ ] 인앱 DPA(제26조) 동의 + 수탁자 고지 스니펫 + 국외이전 고지
 - [ ] 광고성/정보성 템플릿 분리 + 광고 문구 린터 + 광고 수신 동의 게이팅
 - [ ] 미성년·비한국어·키워드 오탐 방어(제외 키워드·언어 필터·드라이런·수동 승인 모드)

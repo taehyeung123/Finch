@@ -24,7 +24,8 @@
 심사 승인 전에는 앱 관리자/개발자/테스터 계정(최대 25명)에만 동작한다. 이 단계에서 파이프라인 전체를 실검증한다.
 
 1. 본인 IG 비즈니스 계정을 앱 역할(관리자/테스터)에 추가
-2. 그래프 API 탐색기에서 `instagram_manage_messages`, `instagram_manage_comments`, `pages_manage_metadata` 권한이 든 토큰 발급 → `IG_TEST_ACCESS_TOKEN`에 임시 입력 (OAuth 연동 전 브릿지)
+2. 그래프 API 탐색기에서 `instagram_business_manage_messages`, `instagram_business_manage_comments` 권한이 든 토큰 발급 → `IG_TEST_ACCESS_TOKEN`에 임시 입력 (OAuth 연동 전 브릿지)
+   - ⚠️ **신형 값(`instagram_business_*`)만 쓴다.** 구형 `instagram_manage_*`·`pages_manage_metadata` 는 Facebook Login 경로 값이고 2025-01-27 폐기됐다. 정본은 `lib/meta/instagram-oauth.ts` 의 `INSTAGRAM_SCOPES` 다.
 3. Supabase `connected_accounts`에 본인 계정 행 추가하고 `platform_user_id`에 IG 사용자 id 입력 (웹훅 entry.id와 매핑되는 값)
 4. `users_profile.plan`을 `creator` 이상으로 변경 (free는 월 발송 한도 0 — 발송이 전부 skipped 처리됨)
 5. 앱 `/auto-dm`에서 규칙 생성(실제 DB `auto_dm_rules`에 저장됨) → 본인 게시물에 키워드 댓글 → DM 도착 확인
@@ -33,7 +34,10 @@
 ## 4. 앱 심사 (Advanced Access) — 리드타임 수주~수개월, 최우선 착수
 
 1. 사업자 인증(Business Verification) 먼저 — 사업자등록증 필요
-2. App Review 신청 권한: `instagram_manage_messages`, `instagram_manage_comments` (+ 기존 분석 권한과 별개)
+2. App Review 신청 권한: `instagram_business_manage_messages`, `instagram_business_manage_comments`
+   — **신청 목록의 정본은 코드다**(`lib/meta/instagram-oauth.ts`). 5개를 한 번에 신청한다:
+   `instagram_business_basic` · `_manage_insights` · `_manage_comments` · `_manage_messages` · `_content_publish`.
+   스코프는 **동의 시점에 확정**되므로 나중에 추가하면 기존 연동자가 전부 재연동해야 한다.
 3. 스크린캐스트 필수 — 반려 1순위 원인. 반드시 담을 것:
    - 사용자가 게시물·키워드·메시지를 직접 설정하는 화면 (자동 스팸이 아니라 사용자 의도 기반임을 증명)
    - 댓글 → DM 수신 전체 흐름
