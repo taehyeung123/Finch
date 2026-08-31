@@ -12,6 +12,7 @@ import {
 } from "@/lib/meta/ads-oauth";
 import { fetchAdAccounts } from "@/lib/meta/ads";
 import { isMissingColumnError } from "@/lib/publish-rules";
+import { isMissingTableError } from "@/lib/supabase/errors";
 
 /**
  * 메타 광고 연동 콜백 — code → 장기 토큰 → 광고 계정 목록 → 저장.
@@ -127,11 +128,11 @@ export async function GET(request: Request) {
     }
     if (conn.error) {
       console.error(`[${TAG}] 연동 저장 실패:`, conn.error.message);
-      /* 0077 미적용이면 표가 통째로 없다 — «저장 실패»가 아니라 운영자가 할 일이 있다는 뜻이다 */
-      const missingTable = conn.error.code === "42P01";
+      /* 0077 미적용이면 표가 통째로 없다 — «저장 실패»가 아니라 운영자가 할 일이 있다는 뜻이다.
+         이걸 «다시 시도해 주세요»로 말하면 사용자가 될 때까지 재시도하게 된다. */
       return settingsRedirect(origin, {
         connect: "error",
-        reason: missingTable ? "migration_needed" : "save_failed",
+        reason: isMissingTableError(conn.error) ? "migration_needed" : "save_failed",
       });
     }
     if (!conn.data || conn.data.length === 0) {

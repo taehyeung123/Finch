@@ -19,6 +19,7 @@ import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { getWorkspaceOwnerId } from "@/lib/team";
 import { decryptToken } from "@/lib/crypto/tokens";
+import { isMissingTableError } from "@/lib/supabase/errors";
 import { isMetaAdsOAuthConfigured } from "@/lib/meta/ads-oauth";
 import { fetchCampaignInsights, fetchCampaigns, type FbCampaign } from "@/lib/meta/ads";
 
@@ -118,9 +119,9 @@ export async function getLiveAds(options?: {
     .maybeSingle();
 
   if (connErr) {
-    /* 0077 미적용이면 표가 없다 — «연동 안 함»으로 단정하지 않는다.
-       그렇게 하면 «연결하기»를 눌러 연동에 성공해도 화면이 계속 미연동으로 보인다. */
-    if (connErr.code === "42P01") return { state: "disconnected" };
+    /* 0077 미적용이면 표 자체가 없다 — 그건 «조회 실패»가 아니라 아직 열리지 않은 기능이다.
+       실패로 다루면 「지금은 불러오지 못했어요」가 전원에게 뜨고, 새로고침해도 영영 그대로다. */
+    if (isMissingTableError(connErr)) return { state: "disconnected" };
     console.error("[live-ads] 연동 조회 실패:", connErr.message);
     return { state: "error" };
   }

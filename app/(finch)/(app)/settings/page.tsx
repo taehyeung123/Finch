@@ -11,6 +11,7 @@ import { accounts as mockAccounts } from "@/lib/data";
 import { isDemoMode } from "@/lib/supabase/config";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
+import { isMissingTableError } from "@/lib/supabase/errors";
 import { INSTAGRAM_SCOPES, INSTAGRAM_SCOPE_LABELS, isInstagramOAuthConfigured } from "@/lib/meta/instagram-oauth";
 import { isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
 import { THREADS_SCOPES, THREADS_SCOPE_LABELS, isThreadsOAuthConfigured } from "@/lib/meta/threads-oauth";
@@ -154,8 +155,9 @@ async function loadAdsCard(): Promise<AdsCard | null> {
     .maybeSingle();
 
   if (error) {
-    /* 0077 미적용이면 표가 없다 — 그건 «조회 실패»가 아니라 아직 열리지 않은 기능이다 */
-    if (error.code === "42P01") {
+    /* 0077 미적용이면 표가 없다 — 그건 «조회 실패»가 아니라 아직 열리지 않은 기능이다.
+       실패로 다루면 마이그레이션 전까지 모든 사용자에게 «상태 확인 실패» 배지가 뜬다. */
+    if (isMissingTableError(error)) {
       return { connectionId: null, connected: false, accountCount: 0, primaryName: null, expiresInDays: null };
     }
     console.error("[settings] 광고 연동 조회 실패:", error.message);
