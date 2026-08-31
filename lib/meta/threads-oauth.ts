@@ -177,7 +177,7 @@ export interface ThreadsAccountInfo {
 
 /**
  * 연동 직후 계정 기본 정보 조회 (설정·대시보드 표시용).
- * 주의: Threads 프로필 필드에는 followers_count/media_count가 없다(스펙 6절) —
+ * 주의: Threads 프로필 필드에는 followers_count/media_count가 없다(스펙 5절) —
  * 팔로워 수는 lib/meta/threads.ts의 threads_insights(followers_count)로 별도 조회해야 한다.
  */
 export async function fetchThreadsAccountInfo(accessToken: string): Promise<ThreadsAccountInfo> {

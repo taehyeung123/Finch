@@ -5,7 +5,7 @@
 
 핀치 프로젝트 고정값:
 - Supabase 콜백 URL: `https://wdutrxqryvjqbufxwxem.supabase.co/auth/v1/callback`
-- 로컬 개발 콜백: `http://localhost:3170/auth/callback` (launch.json이 3170 포트 사용. `npm run dev` 단독 실행 시 3000)
+- 로컬 개발 콜백: `http://localhost:3000/auth/callback` (`npm run dev` 기본 포트. `.claude/launch.json` 도 3000 + autoPort)
 - 운영 콜백: `https://finch.ai.kr/auth/callback`
 
 ## A. Google — Google Auth Platform
@@ -28,6 +28,9 @@
    (미등록 계정은 access_denied — 코드 버그가 아님). 정식 오픈 전 같은 페이지의 **Publish app** 클릭
 8. 반영이 5분~몇 시간 걸릴 수 있다 — redirect_uri_mismatch가 나면 오타 확인 후 기다릴 것
 9. **브랜딩 + 브랜드 확인(무료) — 동의 화면에서 `supabase.co` 를 없애는 방법**
+   > ✅ **핀치는 이 단계를 끝냈다(2026-08-31).** 앱 게시·브랜딩·브랜드 확인이 모두 완료돼
+   > 동의 화면이 핀치 이름·로고로 뜨고 테스트 사용자 제한도 풀렸다.
+   > 아래는 다시 볼 일이 있을 때를 위한 절차 기록이다.
    - 구글 문서 그대로: 브랜딩과 확인을 마치면 동의 화면에 **Supabase 프로젝트 ID 대신 우리 로고와 이름**이 뜬다.
      Supabase 유료 커스텀 도메인 없이도 된다(2026-08-30 확인 — 유료가 필요하다고 적었던 앞선 안내는 틀렸다).
    - https://console.cloud.google.com/auth/branding
@@ -77,9 +80,9 @@
 ## C. Supabase URL Configuration
 
 Authentication > **URL Configuration**:
-- Site URL: `https://finch.ai.kr` (배포 전 임시로 `http://localhost:3170`)
+- Site URL: `https://finch.ai.kr` (배포 전 임시로 `http://localhost:3000`)
 - Redirect URLs에 전부 추가:
-  - `http://localhost:3170/auth/callback`
+  - `http://localhost:3000/auth/callback`
   - `http://localhost:3000/auth/callback` (npm run dev 단독 실행 대비)
   - `https://finch.ai.kr/auth/callback`
   - `https://<프로젝트>.vercel.app/auth/callback` (배포 후 Vercel 기본 URL)

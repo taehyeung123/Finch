@@ -7,6 +7,8 @@ import { Button, ButtonLink } from "@/components/ui/button";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { batchPassedToday, earliestPublishDate } from "@/lib/calendar";
 import { createPost } from "../actions";
+import { COMPOSER_CHANNELS, channelLabel, channelRules, isPublishableChannel } from "@/lib/publish-rules";
+import { eunNeun, iGa } from "@/lib/josa";
 
 /*
   새 게시물 포스팅 — 링크팜 포스팅 실측(2026-08-19) 재구현.
@@ -20,12 +22,13 @@ import { createPost } from "../actions";
   거짓이 되고, 실시간 발행 API 배선은 지시대로 맨 마지막 단계다. 없는 기능을 있는
   것처럼 두지 않는다(이 레포가 계속 걷어내 온 그것).
 
-  채널: 실제 발행 함수가 인스타그램뿐이다(lib/meta/instagram-publish.ts).
-  tiktok·threads 는 "(준비 중)" 비활성 — social_feed 채널 선택과 같은 규칙.
-*/
+  채널: 발행 어댑터가 있는 인스타그램·스레드가 활성이다(lib/meta/*-publish.ts).
+  틱톡은 발행 API 자체가 없어 "(준비 중)" 비활성 — social_feed 채널 선택과 같은 규칙.
 
-const CAPTION_MAX = 2200; // 인스타그램 캡션 상한
-const MAX_IMAGES = 10; // 캐러셀 상한(0010 check 와 동일)
+  **글자·장수 상한은 채널마다 다르다**(인스타 2200자·이미지 필수 / 스레드 500자·글만도 가능).
+  값은 lib/publish-rules.ts 한 곳에서 서버 액션과 함께 본다 — 여기 하드코딩하면
+  「화면은 막는데 서버는 받는」 식으로 갈라진다.
+*/
 
 export interface ComposerChannel {
   channel: string;
@@ -51,6 +54,11 @@ export function PostComposer({
 
   const earliest = earliestPublishDate();
   const [channel, setChannel] = useState("instagram");
+  /* 채널을 바꾸면 상한도 바뀐다 — 인스타 2200자로 쓰다 스레드로 넘기면 500자에 걸린다.
+     그 사실을 저장 버튼을 누른 뒤가 아니라 글자수 카운터에서 즉시 보이게 한다. */
+  const rules = channelRules(channel);
+  const MAX_IMAGES = rules.maxImages;
+  const CAPTION_MAX = rules.textMax;
   const [images, setImages] = useState<string[]>([]);
   const [caption, setCaption] = useState("");
   const [mode, setMode] = useState<"schedule" | "draft">(defaultDate ? "schedule" : "schedule");
@@ -137,12 +145,40 @@ export function PostComposer({
     }
   }
 
+  /* 스레드는 글만 있는 게시물이 정상이라 이미지를 요구하지 않는다(rules.minImages=0).
+     인스타는 캡션도 이미지도 둘 다 필수다 — requiresText 와 minImages 는 별개 관문이다. */
+  const overText = caption.length > CAPTION_MAX;
+  const underImages = images.length < rules.minImages;
+  const overImages = images.length > MAX_IMAGES;
+  const missingText = rules.requiresText && caption.trim().length === 0;
   const canSave =
-    images.length > 0 &&
-    caption.trim().length > 0 &&
-    caption.length <= CAPTION_MAX &&
+    !missingText &&
+    !underImages &&
+    !overImages &&
+    !overText &&
+    (caption.trim().length > 0 || images.length > 0) &&
     (mode === "draft" || date >= earliest) &&
     !saving;
+
+  /* 채널을 바꾸면 이미 쓴 내용이 소급해 무효가 될 수 있다(인스타 1000자 → 스레드 500자,
+     스레드 글 전용 → 인스타 이미지 필수). 예전엔 저장 버튼만 조용히 꺼져서 **왜 막혔는지
+     화면 어디에도 없었다** — 특히 이미지 쪽은 빨개지는 것조차 없었다(2026-08-31 점검 적발). */
+  function switchChannel(next: string) {
+    setChannel(next);
+    const r = channelRules(next);
+    const name = channelLabel(next);
+    if (caption.length > r.textMax) {
+      setError(`${eunNeun(name)} ${r.textMax}자까지 쓸 수 있어요 — ${caption.length - r.textMax}자를 줄여 주세요.`);
+    } else if (images.length < r.minImages) {
+      setError(`${eunNeun(name)} 이미지가 ${r.minImages}장 이상 필요해요.`);
+    } else if (images.length > r.maxImages) {
+      setError(`${eunNeun(name)} 이미지를 ${r.maxImages}장까지 올릴 수 있어요.`);
+    } else if (r.requiresText && caption.trim().length === 0) {
+      setError(`${eunNeun(name)} ${iGa(r.textLabel)} 필요해요.`);
+    } else {
+      setError(null); // 이전 채널의 경고를 남기지 않는다
+    }
+  }
 
   async function save() {
     if (!canSave) return;
@@ -239,9 +275,9 @@ export function PostComposer({
             {/* flex-wrap 없이 칩 3개를 한 줄에 눌러 담아서, 390px 에서 라벨이 «인스타그/램» 처럼
                 단어 중간에 끊겼다(실측: 칩 높이 60.8px·2줄). 위 채널 스트립은 이미 wrap 이다 — 규칙을 맞춘다. */}
             <div className="mt-1.5 flex flex-wrap gap-2" role="radiogroup" aria-label="발행 채널">
-              {(["instagram", "tiktok", "threads"] as const).map((ch) => {
+              {COMPOSER_CHANNELS.map((ch) => {
                 const meta = channels.find((c) => c.channel === ch);
-                const publishable = ch === "instagram"; // 발행 함수가 인스타그램뿐
+                const publishable = isPublishableChannel(ch); // 발행 어댑터가 있는 채널만
                 const usable = publishable && (isDemo || !!meta?.connected);
                 return (
                   <button
@@ -250,14 +286,14 @@ export function PostComposer({
                     role="radio"
                     aria-checked={channel === ch}
                     disabled={!usable}
-                    onClick={() => setChannel(ch)}
+                    onClick={() => switchChannel(ch)}
                     className={cn(
                       "trans-state inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-chip border px-3 py-1.5 text-[14px] font-medium disabled:cursor-not-allowed disabled:opacity-45",
                       channel === ch ? "border-2 border-primary" : "border-line hover:bg-tint-hover",
                     )}
                   >
                     <SnsIcon kind={ch} className="size-3.5" />
-                    {ch === "instagram" ? "인스타그램" : ch === "tiktok" ? "틱톡" : "스레드"}
+                    {channelLabel(ch)}
                     {!publishable ? <span className="text-[11px] text-fg-faint">준비 중</span> : null}
                   </button>
                 );
@@ -268,7 +304,12 @@ export function PostComposer({
           {/* 이미지 — 1~10장(캐러셀 상한) */}
           <div>
             <p className="text-[12px] font-medium text-fg-sub">
-              이미지 <span className="tnum">{images.length}/{MAX_IMAGES}</span>
+              이미지{" "}
+              {rules.minImages === 0 ? <span className="font-normal text-fg-faint">(선택)</span> : null}{" "}
+              {/* 부족·초과를 캡션 카운터와 같은 신호로 — 예전엔 이미지만 아무 표시가 없었다 */}
+              <span className={cn("tnum", underImages || overImages ? "text-negative" : undefined)}>
+                {images.length}/{MAX_IMAGES}
+              </span>
             </p>
             <div className="mt-1.5 grid grid-cols-4 gap-1.5">
               {images.map((src, i) => (
@@ -310,7 +351,7 @@ export function PostComposer({
           <div>
             <div className="flex items-center justify-between">
               <label htmlFor="pc-caption" className="text-[12px] font-medium text-fg-sub">
-                캡션
+                {rules.textLabel}
               </label>
               <span className={cn("tnum text-[12px]", caption.length > CAPTION_MAX ? "text-negative" : "text-fg-sub")}>
                 {caption.length}/{CAPTION_MAX}

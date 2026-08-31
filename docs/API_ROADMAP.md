@@ -1,111 +1,165 @@
-# API 연동 로드맵 — 종류별 스텝바이스텝
+# API 연동 로드맵 — 무엇이 끝났고 무엇이 남았나
 
-각 API가 무엇을 채우는지, 발급 절차, 코드 연동 지점을 순서대로 정리한 문서.
-페이지는 전부 `lib/data/index.ts`를 바라보므로, 연동이 끝날 때마다 그 파일의 해당 export만 실제 소스로 교체하면 화면이 채워진다.
+> **최종 대조: 2026-08-31.** 이 문서는 «앞으로 할 일» 목록이라 실제와 어긋나면 곧장 헛수고가 된다.
+> 2026-08-30 점검에서 **20건 넘는 항목이 이미 끝난 일을 «할 일»로 붙들고 있었다** — 전면 개정했다.
+> 고칠 때는 반드시 코드를 열어 확인할 것. 기억으로 쓰면 다시 같은 상태가 된다.
 
-진행 순서 요약 (앞 번호일수록 먼저):
+연동은 두 종류다. **키만 넣으면 도는 것**과 **Meta·TikTok 승인이 있어야 실사용자에게 열리는 것**.
+코드는 대부분 이미 짜여 있다 — 남은 건 자격증명과 승인이다.
 
-| 순서 | API | 채워지는 화면 | 심사 필요 | 예상 소요 |
-|---|---|---|---|---|
-| 1 | Supabase (Auth+DB) | 로그인, 알림·리포트·사용량 | 없음 | 반나절 |
-| 2 | Anthropic Claude API | AI 스튜디오, AI 에이전트 | 없음 | 반나절~1일 |
-| 3 | Meta 개발자 앱 | 대시보드·오디언스·분석(IG), 경쟁사 광고, 광고 관리 | 있음 (수일~수주) | 신청 즉시 시작 권장 |
-| 4 | Threads API | Threads 지표 | Meta 앱에 포함 | 3과 병행 |
-| 5 | TikTok for Developers | TikTok 지표 | 있음 (수주) | 신청만 미리 |
-| 6 | 3rd party 트렌드 데이터 | 탐색(트렌드·검색), 타계정 정밀 | 계약 | Phase 2 |
-| 7 | Toss Payments | 요금제 결제 | 계약 심사 | 출시 직전 |
+## 현재 상태 한눈에
+
+| 연동 | 코드 | 자격증명 | 남은 일 |
+|---|---|---|---|
+| Supabase (Auth+DB) | ✅ 완료 | ✅ Pro 결제·설정 완료 | 마이그레이션 적용 유지 |
+| Anthropic Claude | ✅ 완료 (크레딧 과금·모델 3단 배치까지) | ✅ 키 설정 완료 | 없음 |
+| ScrapeCreators (광고·레퍼런스 수집) | ✅ 완료 (공용 풀 크론 가동) | ✅ 키 설정 완료 | 없음 |
+| Instagram (지표·발행·자동DM) | ✅ 완료 | ❌ `INSTAGRAM_APP_ID`·`TOKEN_ENCRYPTION_KEY` 미설정 | Meta 앱 생성 → 키 → 심사 |
+| Threads (지표·발행) | ✅ 완료 (2026-08-31 발행 추가) | ❌ `THREADS_APP_ID/SECRET` 미설정 | 같은 Meta 앱에 제품 추가 |
+| TikTok (프로필 지표) | ✅ 완료 | ❌ `TIKTOK_CLIENT_KEY/SECRET` 미설정 | 앱 등록(심사 불요로 개발 가능) |
+| Toss Payments | ✅ 완료 (위젯·빌링·웹훅) | ❌ 키 미설정 | 계약 → 키 |
+| Meta 광고 관리 (Marketing API) | ❌ **미착수** | — | 어댑터부터 신규 개발 |
 
 ---
 
-## 1. Supabase — 인증 + 데이터베이스 (선행 조건: 무료 슬롯 확보 또는 Pro 결제)
+## 1. Supabase — 인증 + 데이터베이스 ✅
 
-**채우는 것**: Google/카카오 로그인 실동작, `notifications`·`reports`·`usageStats`·경쟁사 등록 목록 등 서비스 내부 데이터 전부.
+Pro 결제·프로젝트 생성 완료. Google/Kakao 로그인 동작 중(구글은 동의화면 브랜딩·인증까지 끝).
 
-1. https://supabase.com/dashboard 에서 새 프로젝트 생성 (무료 슬롯이 없으면 기존 프로젝트 하나 일시정지 후 생성)
-2. **DB 스키마 마이그레이션 적용 — 이미 작성 완료**: `supabase/migrations/0001_core.sql`~`0003_functions.sql` (users_profile·connected_accounts·usage_counters·notifications·reports·auto_dm_*·use_quota 함수, RLS 포함). 적용 순서·방법은 `supabase/README.md`.
-3. Google/Kakao 로그인 키 발급·등록 — 상세 절차는 `docs/AUTH_SETUP.md` 체크리스트 그대로
-4. `.env.local`에 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` 입력 → 로그인 즉시 동작 (코드 수정 불필요)
-5. `lib/data/index.ts`의 내부 데이터 export를 Supabase 조회로 교체 (competitors·competitor_ads_snapshot 등 채널/광고 테이블은 해당 API 연동 시 추가 마이그레이션)
+**⚠️ 마이그레이션은 74개다**(`0001`~`0074`). 옛 문서가 «0001~0003이면 된다»고 적어 두었는데
+그것만 적용하면 결제·예약발행·틱톡·팀·크레딧·레퍼런스·공용 풀·프로필 링크가 전부 없는 반쪽 DB가 된다.
+적용 순서·주의사항은 `supabase/README.md` — 특히 **이미 돌아가는 프로젝트에 `apply_all`을 다시 돌리지 말 것**
+(`create or replace`가 뒤 마이그레이션이 고쳐 놓은 함수를 옛 버전으로 되돌린다).
 
-## 2. Anthropic Claude API — AI 기능 (심사 불필요, 가장 빨리 "진짜"가 되는 기능)
+새 마이그레이션은 사장님이 Supabase 대시보드 → SQL Editor 에 직접 붙여넣어 적용한다.
 
-**채우는 것**: AI 스튜디오 카드뉴스 카피 생성·아이디어 추천, AI 에이전트 챗 실응답, (추후) 댓글 감성분석.
+## 2. Anthropic Claude API ✅
 
-1. https://console.anthropic.com 가입 → API Keys에서 키 발급 → 결제 수단 등록 (사용량 과금, 소액 크레딧으로 시작 가능)
-2. `.env.local`에 `ANTHROPIC_API_KEY=` 추가 (서버 전용 — NEXT_PUBLIC 금지)
-3. (Claude Code 작업) `/api/ai/*` 라우트 생성: 카드뉴스 카피 생성, 아이디어 추천, 에이전트 대화(function calling으로 내부 기능 호출)
-4. 비용 가드: 라우트에 사용량 카운터(플랜별 한도) + rate limit 적용 — PRD 13.4
+키 설정 완료, 코드도 이미 그 키로 돈다(`lib/ai/claude.ts`).
 
-## 3. Meta 개발자 앱 — 인스타그램 + 경쟁사 광고 + 광고 관리 (가장 중요, 심사 리드타임 김)
+**옛 문서가 «만들어야 한다»고 적은 것들은 전부 이미 있다:**
+- `/api/ai/*` 라우트는 만들지 말 것 — 같은 기능이 **서버 액션**으로 구현돼 있다
+  (`studio/actions.ts`의 카드뉴스·아이디어, `lib/actions/agent-chat.ts`의 에이전트 챗).
+  라우트로 다시 만들면 중복이다.
+- 비용 가드도 이미 있다 — 모든 AI 호출이 `chargeGeneration()`(`lib/actions/credits.ts`)을 거치고
+  실패 시 환불한다. 단가는 `lib/pricing/credit-config.ts`, DB 한도는 `use_quota()`.
+- 모델도 기능별로 갈라져 있다(`lib/ai/claude.ts`): 스튜디오 Opus · 챗/분석 Sonnet · 감성분류 Haiku.
 
-**채우는 것**: `accounts`·`dashboardSummaries`·`recentPosts`·`audienceDaily`(인스타그램), `competitorAds`(광고 라이브러리), `campaigns`(광고 리포트).
+## 3. Meta 개발자 앱 — 인스타그램 + 스레드 (심사 리드타임이 가장 길다)
 
-1. 사전 준비: 비즈니스용 Facebook 계정, 서비스 도메인(임시로 Vercel 도메인 가능), 개인정보처리방침 URL(심사 필수 — 준비 중이면 초안이라도 게시)
+**코드는 완성돼 있다.** OAuth(장기토큰 교환·리프레시·웹훅 구독), 지표 조회, 예약 발행, 댓글 자동 DM
+파이프라인 전부. 남은 건 **앱 생성 → 자격증명 → 심사**다.
+
+1. 사전 준비: 비즈니스용 Facebook 계정. 도메인(`finch.ai.kr`)·개인정보처리방침(`/privacy`)은 **이미 게시됨**.
 2. https://developers.facebook.com → 앱 생성 (유형: Business)
-3. 앱에 제품 추가: **Facebook 로그인**, **Instagram Graph API**
+3. 앱에 제품 추가: **Instagram**(Instagram Login 경로) + **Threads API**
+   - ⚠️ Facebook 로그인 제품이 아니다. 핀치는 페이지 없이 크리에이터 계정을 직접 잇는
+     Instagram Login 경로를 쓴다(`docs/REAL_API_SPEC.md` 1절).
 4. 앱 대시보드에 아이콘 업로드 — `public/brand/finch-app-icon-1024.png`
-5. **Ad Library API**는 심사 없이 사용 가능: https://www.facebook.com/ads/library/api 에서 본인 확인 후 액세스 토큰 발급 → 경쟁사 광고 모니터링이 3단계 중 가장 먼저 실데이터로 전환 가능
-6. Instagram 연동 심사(App Review) — **신청 목록의 정본은 [docs/REAL_API_SPEC.md](REAL_API_SPEC.md) 1절이다.** 아래는 그 사본:
+5. **자격증명을 환경변수에 넣는다** — 이게 지금 비어 있어 연동 버튼이 비활성이다:
+   `INSTAGRAM_APP_ID`, `THREADS_APP_ID`, `THREADS_APP_SECRET`, `META_APP_SECRET`(설정됨),
+   그리고 **`TOKEN_ENCRYPTION_KEY`**.
+   - ⚠️ `TOKEN_ENCRYPTION_KEY`가 없으면 OAuth 콜백이 «연동 중단»으로 조용히 끝난다.
+     사용자에게는 «연동 실패»로만 보인다 — 세 채널 콜백 모두 같다.
+6. **개발·테스트는 심사 없이 지금 가능하다.** Standard Access(앱에 역할이 있는 테스터 계정)로
+   전 기능을 돌려볼 수 있다. 심사는 **일반 사용자에게 열 때** 필요하다.
+7. Instagram 앱 심사(App Review) — **신청 목록의 정본은 [docs/REAL_API_SPEC.md](REAL_API_SPEC.md) 1절.** 사본:
    `instagram_business_basic` · `instagram_business_manage_insights` · `instagram_business_manage_comments` ·
-   `instagram_business_manage_messages` · `instagram_business_content_publish`(예약 발행) — 데모 영상·사용 사유 제출 (수일~수주)
-   - ⚠️ 이 목록은 **Instagram Login 경로**(graph.instagram.com) 값이다. `instagram_basic`·`instagram_manage_*`·
-     `pages_read_engagement` 는 Facebook Login 경로 값이라 섞어 신청하면 안 된다 —
-     예전 이 자리에 그 이름들이 적혀 있었고 발행 권한은 아예 빠져 있었다(2026-08-30 적발).
-     그대로 신청했으면 심사를 통과하고도 예약 발행이 권한 오류로 실패했다.
-   - 앱 대시보드 > 설정 > 기본 설정에 **Data Deletion Instructions URL**(또는 콜백) 등록 필수 —
-     인스타그램용 `https://finch.ai.kr/api/auth/instagram/data-deletion`, Threads용
-     `https://finch.ai.kr/api/auth/threads/data-deletion` (코드는 이미 구현됨, 등록만 하면 됨)
-7. 광고 리포트는 Standard Access로 본인 광고 계정 조회 가능. 타사(클라이언트) 계정 관리는 Advanced Access(사업자등록증 + 비즈니스 인증) — Phase 3
-8. (Claude Code 작업) OAuth 연동 플로우 + 수집 배치(하루 4회) + `lib/data` 교체
+   `instagram_business_manage_messages` · `instagram_business_content_publish`(예약 발행)
+   - ⚠️ 전부 **Instagram Login 경로** 값이다. `instagram_basic`·`instagram_manage_*`·`pages_read_engagement`는
+     Facebook Login 경로 값이라 섞어 신청하면 안 된다. 예전 이 자리에 그 이름들이 적혀 있었고
+     발행 권한은 아예 빠져 있었다(2026-08-30 적발) — 그대로 신청했으면 심사를 통과하고도
+     예약 발행이 권한 오류로 실패했다.
+8. Threads 앱 심사 — 스코프 **5개**다(`lib/meta/threads-oauth.ts`):
+   `threads_basic` · `threads_content_publish`(발행) · `threads_manage_replies` ·
+   `threads_read_replies` · `threads_manage_insights`
+9. 앱 대시보드 > 설정 > 기본 설정에 **Data Deletion Instructions URL** 등록:
+   `https://finch.ai.kr/api/auth/instagram/data-deletion`, `https://finch.ai.kr/api/auth/threads/data-deletion`
+   (코드는 구현돼 있다 — 등록만 하면 된다)
 
-**3-확장) 인스타 댓글 자동 DM** — 이 Meta 앱에 얹는 별도 권한·웹훅:
-- 추가 권한: `instagram_business_manage_messages` + `instagram_business_manage_comments` — **별도 앱 심사·사업자 인증 필요(수주~수개월), 조기 병행 신청**
-- 댓글 웹훅 구독 + `app/api/webhooks/instagram` 라우트(서명검증은 이미 스캐폴드 완료) → 매칭 댓글만 큐잉 → Private Reply 발송
+**3-확장) 인스타 댓글 자동 DM** — 파이프라인 전체가 **이미 완성**돼 있다:
+웹훅 서명검증(타이밍 세이프 HMAC), 즉시 200 후 비동기 처리, 규칙 매칭, `reserve_dm_send`
+(멱등·하루상한·옵트아웃·24h 쿨다운을 한 트랜잭션에서), 야간 보류, 광고 표기, 재처리 크론까지.
+- 남은 건 권한 심사뿐: `instagram_business_manage_messages` + `instagram_business_manage_comments`
+  — **별도 심사·사업자 인증(수주~수개월), 조기 병행 신청**
 - 하드 제약: 댓글당 비공개 답장 **1회·7일**, 계정당 레이트리밋, 토큰 60일 만료
 - 법률: 정보통신망법(광고성 정보 동의·(광고) 표기·수신거부·야간), 개인정보보호법(수탁자 DPA)
-- **착수 전 반드시 [docs/AUTO_DM_COST_RISK.md](AUTO_DM_COST_RISK.md) 정독** — 비용(Inngest 실행량·Supabase 컴퓨트)·정책·운영 체크리스트
+- 비용·운영 체크리스트: [docs/AUTO_DM_COST_RISK.md](AUTO_DM_COST_RISK.md)
 
-## 4. Threads API — Meta 앱에 포함
+## 4. Meta 광고 관리 (Marketing API) — **유일하게 코드가 없는 항목**
 
-1. 3번 Meta 앱에 **Threads API** 제품 추가, `threads_basic`, `threads_manage_insights` 권한 신청
-2. 나머지는 3번과 동일한 흐름 — 별도 앱 불필요
+`/ads`·`/ads/campaigns` 화면(5단계 캠페인 마법사 포함)은 완성돼 있지만, **Marketing API 호출 코드가
+저장소에 0건**이다. 화면 자체가 「Phase 3 예정」·「상태 변경은 목 동작」이라고 적고 있다.
 
-## 5. TikTok for Developers
+남은 일(전부 신규 개발):
+1. `ads_management`·`ads_read` 스코프를 요청하는 광고 계정 연결 플로우 — 지금 IG/Threads OAuth엔 광고 스코프가 없다
+2. `lib/meta/ads.ts` 어댑터 — `/act_{id}/campaigns`·`/insights` 조회, Campaign→AdSet→Ad 3단 생성
+3. 캠페인·인사이트 저장용 마이그레이션 (현재 관련 테이블 0건)
+4. `lib/data/index.ts`의 `campaigns` export를 실 조회로 교체
+5. 접근 수준: **본인 광고 계정**은 Standard Access. **고객 광고 계정 대행**은 Advanced Access
+   (사업자등록증 + 비즈니스 인증) — 사업자 나온 뒤
 
-**채우는 것**: TikTok `accounts`·게시물 지표. (타계정/트렌드는 공식 API 미지원 — 6번으로 해결)
+> ⚠️ **경쟁사 광고 수집과 혼동하지 말 것.** 그건 별개 기능이고 **이미 돌아간다**(6번).
 
-1. https://developers.tiktok.com → 앱 등록 (서비스 소개, 도메인, 개인정보처리방침 필요)
-2. **Login Kit** + **Display API** 신청 → 심사 수주 소요, 지금 신청만 해두기
-3. 승인 후 (Claude Code 작업) OAuth + 지표 수집 배치
+## 5. TikTok for Developers — 프로필 지표 (발행은 로드맵 밖)
 
-## 6. 3rd party 데이터 공급사 — 레퍼런스 수집함/타계정 정밀 (Phase 2)
+**코드는 완료**(`lib/tiktok/oauth.ts`, `lib/tiktok/api.ts`, 콜백 라우트, 토큰 회전 컬럼).
 
-**채우는 것**: `reference_items`(레퍼런스 수집함 `/library` 전체 — 검색·카테고리·후킹·정렬), 타계정 정밀 분석.
+1. https://developers.tiktok.com → 앱 등록 (서비스 소개, 도메인, 개인정보처리방침)
+2. **심사 없이 개발 가능** — Sandbox 모드 + target user(테스터 계정 최대 10개)
+3. `TIKTOK_CLIENT_KEY`·`TIKTOK_CLIENT_SECRET` 설정
+4. 요청 스코프는 프로필 3종뿐이다(`user.info.basic`·`profile`·`stats`) —
+   영상 목록/인사이트 스코프는 심사 없이 동작한다는 확답을 못 얻어 요청하지 않는다
 
-> 구 `trendItems`(탐색 전용 목데이터)는 제거됐다 — `/discover`가 `/library`로 흡수되면서
-> 수집 파이프라인이 채우는 `reference_items` 하나로 통일했다 (PRD PART 4.4 흡수 기록).
+**틱톡 자동발행은 이 로드맵에 없다.** 하려면 Content Posting API 심사를 새로 받고
+`video.publish` 스코프·영상 업로드 파이프라인을 처음부터 만들어야 한다.
 
-1. 소액 테스트: HikerAPI(인스타그램, 요청당 ~$0.0006)로 데이터 품질 검증
-2. 본계약: EnsembleData(TikTok·IG 커버, 월 $100~) 또는 Modash — 월 예산 상한을 먼저 정할 것 (PRD 2.3)
-3. (Claude Code 작업) 공급사 응답 → `ReferenceItem` 타입 매핑 어댑터(`lib/reference/engine.ts`) + 수집 배치
-   - 게시 시각은 `reference_items.posted_at`(0019)에 저장 → `ReferenceItem.postedAgoHours`로 노출.
-     공급사가 게시 시각을 주지 않는 경로에서는 `undefined`이므로 "게시 최신순" 정렬에 가드가 필요하다.
-4. 화면의 데이터 출처 배지는 노출하지 않는다(2026-07 결정) — 갱신 시점 표기만 유지
+## 6. 레퍼런스·경쟁사 광고 수집 ✅ — **이미 돌아간다**
 
-## 7. Toss Payments — 결제 (출시 직전)
+공급사는 **ScrapeCreators**(+ 인스타 키워드용 Apify 폴백)이고 자가 발급 키다. `.env.local`에 설정돼 있다.
 
-1. https://developers.tosspayments.com 가입 → 테스트 키로 개발 시작 가능
-2. 정기(자동)결제는 별도 계약 필요 — 사업자등록증으로 신청, 심사 수일
-3. (Claude Code 작업) 결제 위젯 + 웹훅(서명 검증 필수) + 플랜/사용량 연동
-4. 크레딧·선불 요소가 생기면 전자금융업 해당 여부 법률 검토 (PRD 12)
+- 광고 라이브러리 검색: `lib/reference/meta-ads.ts` (한국 상업광고는 공식 Meta `ads_archive`가
+  EU/UK만 반환해 이 경로를 쓴다)
+- 공용 풀 크론: `pool-plan`(1회/일) → `pool-work`(8회/일) → `pool-finalize`(1회/일), `vercel.json` 등록됨
+- 화면: `/library`(레퍼런스), `/scrap`
+
+**원가는 사용자 수와 분리돼 있다** — 사용자별 자동수집 크론은 2026-08-10 폐기하고 공용 풀로 옮겼다.
+운영 문서: [docs/POOL_OPERATIONS.md](POOL_OPERATIONS.md)
+
+> ⚠️ `.env.example`에 `SCRAPECREATORS_API_KEY`·`UPSTAGE_API_KEY`·`LINK_COOKIE_SECRET`이 빠져 있다.
+
+## 7. Toss Payments — 결제
+
+**코드는 완료**: 결제 위젯(`toss-checkout.tsx`), 정기결제(`lib/toss/billing.ts`), 웹훅
+(`app/api/webhooks/toss/route.ts`), 플랜·크레딧 연동.
+
+1. https://developers.tosspayments.com — 테스트 키로 개발 가능
+2. **정기(자동)결제는 별도 계약** — 사업자등록증으로 신청, 심사 수일
+3. `NEXT_PUBLIC_TOSS_CLIENT_KEY`·`TOSS_SECRET_KEY`·`NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY`·`TOSS_BILLING_SECRET_KEY` 설정
+4. ⚠️ **결제 웹훅에는 서명이 없다**(payout/seller 웹훅만 서명이 있다). 공식 IP 허용목록도 없다 —
+   그래서 코드는 본문을 믿지 않고 `GET /v1/payments/{paymentKey}` **재조회 결과**를 진위 근거로 쓴다.
+   옛 문서의 「서명 검증 필수」는 사실과 반대였다.
+5. 크레딧·선불 요소의 전자금융업 해당 여부 법률 검토 (PRD 12)
 
 ---
 
-## 지금 당장 할 일 체크리스트 (사람)
+## 사람이 해야 할 일 (2026-08-31 기준)
 
-- [ ] Supabase 슬롯 확보 (기존 프로젝트 정리 또는 결제 결정)
-- [ ] Anthropic API 키 발급 — 즉시 가능, 가장 빠른 성과
-- [ ] Meta 개발자 앱 생성 + Ad Library 토큰 발급 — 심사 리드타임 때문에 최우선 신청
-- [ ] TikTok 개발자 앱 신청 (심사 대기 병행)
-- [ ] 개인정보처리방침 초안 게시 (Meta/TikTok 심사 공통 요구사항)
-- [ ] Vercel 배포 (심사용 데모 URL 필요)
+**끝난 것** — Supabase Pro·프로젝트 생성 · Anthropic 키 · ScrapeCreators 키 ·
+개인정보처리방침 게시 · Vercel 배포 · 도메인(finch.ai.kr) · 네이버·구글 사이트등록 ·
+구글 OAuth 브랜딩·인증
+
+**남은 것**
+
+- [ ] **Meta 개발자 앱 생성** → `INSTAGRAM_APP_ID`·`THREADS_APP_ID`·`THREADS_APP_SECRET` 발급
+- [ ] **`TOKEN_ENCRYPTION_KEY` 설정** — 없으면 세 채널 연동이 전부 조용히 실패한다
+- [ ] **`LINK_COOKIE_SECRET` 설정** — 없으면 서비스 롤 키를 대신 쓰므로, 그 키를 돌리는 순간
+      모든 프로필 링크 잠금해제 쿠키가 무효가 된다
+- [ ] Meta 앱 심사 신청 (위 3-7·3-8 스코프 목록 그대로)
+- [ ] TikTok 개발자 앱 등록 → `TIKTOK_CLIENT_KEY/SECRET`
+- [ ] 사업자등록증 발급 후: Toss 정기결제 계약, Meta 비즈니스 인증(Advanced Access),
+      개인정보처리방침·약관의 사업자 항목 채우기
+- [ ] **Vercel 플랜 확인** — 지금 코드는 Hobby 제약에 맞춰져 있다(크론 하나가 하루 1회만
+      돌 수 있어 `pool-work`를 시각만 다른 8줄로 쪼갰고, `maxDuration`도 60초로 묶여 있다).
+      토스 정기결제가 붙은 서비스는 Vercel이 상업적 이용으로 보므로 Hobby면 약관 위반이다.
+      Pro로 올리면 **예약 발행을 하루 1회 배치가 아니라 자주 돌릴 수 있다** — 제품이 달라진다.

@@ -89,7 +89,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://finch.ai.kr/api/cron/pool-p
 curl -H "Authorization: Bearer $CRON_SECRET" https://finch.ai.kr/api/cron/pool-work
 ```
 
-여기서 실제로 호출한다. 1회 실행 = 최대 24요청 = 약 62원. 응답의 `callsUsed`·`newCreatives`를 본다.
+여기서 실제로 호출한다. 1회 실행 = 최대 16요청 = 약 41원(MAX_JOBS_PER_RUN 8 × CURSOR_PAGES 2, 30행 표와 같은 값). 응답의 `callsUsed`·`newCreatives`를 본다.
 
 ```bash
 curl -H "Authorization: Bearer $CRON_SECRET" https://finch.ai.kr/api/cron/pool-finalize
@@ -179,16 +179,23 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://finch.ai.kr/api/cron/pool-f
 ## 7-1. 과금 게이트가 없던 기능들 (2026-08-11 감사에서 발견·수정)
 
 아래 넷은 **유료 호출인데 횟수 상한이 아예 없었다.** 지금은 `CREDIT_COSTS`·
-`FREE_MONTHLY_LIMITS`(`lib/actions/credits.ts`)에 등록돼 무료 체험분을 넘기면 크레딧을 쓴다.
+`FREE_MONTHLY_LIMITS` 에 등록돼 무료 체험분을 넘기면 크레딧을 쓴다.
 
-| 기능 | 나가던 비용 | 무료 월 한도 |
-|---|---|---|
-| 릴스 대본 추출 | 공급사 1크레딧(실비) | 1회 |
-| 아이디어 추천 | Claude 16k 토큰 + adaptive thinking | 1회 |
-| 브랜드 톤 학습 | Claude 호출 | 1회 |
-| AI 에이전트 채팅 | Claude 호출(건당 소액) | 10건 |
+**정본은 `lib/pricing/credit-config.ts` 다.** (`lib/actions/credits.ts` 는 그것을 재export 할 뿐이다 —
+마케팅 요금제 페이지가 `server-only` 를 끌지 않게 분리했다.) 2026-08-31 대조 값:
 
-한도를 바꾸려면 `FREE_MONTHLY_LIMITS` 의 해당 줄만 고치면 된다.
+| 기능 | 나가던 비용 | 무료 월 한도 | 크레딧 단가 |
+|---|---|---|---|
+| 릴스 대본 추출 | 공급사 1크레딧(실비) | 1회 | 1 |
+| 아이디어 추천 | Claude 16k 토큰 + adaptive thinking | **0회**(유료 전용) | 20 |
+| 브랜드 톤 학습 | Claude 호출 | **0회**(유료 전용) | 10 |
+| AI 에이전트 채팅 | Claude 호출(건당 소액) | **3건** | 4 |
+| 레퍼런스 수집 · 광고 수집 | 공급사 요청 | 각 1회 | 각 10 |
+| 프로필 링크 AI 디자인 | Claude 1콜 | 3회 | 5 |
+| 풀 영상 AI 분석 | Claude(새 분석만, 캐시 히트는 무료) | 1회 | 5 |
+| 콘텐츠 분석 | — | 10회 | (유료는 이 계량기를 안 탄다) |
+
+⚠️ DB 시드(`0047`·`0065` 의 `free_plan_limits`)와 **같이** 움직여야 한다 — 한쪽만 고치면 어긋난다.
 
 ---
 
@@ -212,7 +219,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://finch.ai.kr/api/cron/pool-f
 | 공급사 크레딧 소진 | 공급사가 402 를 돌려줄 때 | 크레딧을 채워야 재개된다 |
 | 오늘 예산 소진 | `calls_limit` 도달 | 내일 자동 재개. 급하면 상한을 올린다 |
 
-같은 경보는 20시간에 한 번만 보낸다 — 2시간마다 도는 크론이 하루 12통을 보내면
+같은 경보는 20시간에 한 번만 보낸다 — 3시간마다(하루 8회) 도는 크론이 매번 보내면
 그 순간부터 아무도 안 읽는다.
 
 크레딧을 채우면 **따로 켤 것이 없다.** 대기 중이던 작업이 그대로 남아 있어
@@ -231,7 +238,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://finch.ai.kr/api/cron/pool-f
 | 수집 빈도 | `vercel.json`의 `pool-work` 스케줄 |
 | 회차당 처리량 | `app/api/cron/pool-work/route.ts`의 `MAX_JOBS_PER_RUN`·`TIME_BUDGET_MS` |
 | 업종 노출 기준 | `lib/industry/taxonomy.ts`의 `INDUSTRY_VISIBLE_MIN_*` + `0030`의 롤업 함수 |
-| 유료 기능 무료 한도 | `lib/actions/credits.ts`의 `FREE_MONTHLY_LIMITS` |
+| 유료 기능 무료 한도 | `lib/pricing/credit-config.ts`의 `FREE_MONTHLY_LIMITS` (+ DB 시드 0047·0065) |
 | 업종·검색어 목록 | `lib/industry/list.ts` · `seeds.ts` 고친 뒤 `node scripts/gen-industry-seed.mjs` |
 | 유명 브랜드 목록 | `lib/industry/brand-seeds.ts` 고친 뒤 `node scripts/gen-brand-seed.mjs` |
 | 경보 받을 주소 | 환경변수 `OWNER_EMAIL` |

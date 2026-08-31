@@ -28,8 +28,8 @@ export const metadata: Metadata = {
   (초안의 scheduled_at 은 "만든 시각"이다) 상위 200위를 초안이 채워 진짜 미래 예약이
   화면에서 사라진다. 성격이 다른 목록은 쿼리도 나눈다.
 
-  ⚠️ **발행은 현재 인스타그램만 된다.** 실제 발행 함수가 lib/meta/instagram-publish.ts
-  하나뿐이고 TikTok·Threads 발행 API 는 코드에 없다. 화면이 "발행"이라고만 하면
+  ⚠️ **발행이 되는 채널은 인스타그램·스레드 둘이다**(lib/meta/instagram-publish.ts,
+  threads-publish.ts). 틱톡은 발행 API 자체가 코드에 없다. 화면이 "발행"이라고만 하면
   다채널 예약처럼 읽히므로 헤더에 명시한다 — 없는 기능을 있는 것처럼 두지 않는다.
 */
 /** 최신순 절삭 한도 — 넘치면 화면이 조용히 거짓말하지 않도록 truncated 로 알린다 */
@@ -105,7 +105,7 @@ export default async function PublishPage() {
     <div className="space-y-5">
       <PageHeader
         title="발행"
-        description="인스타그램 예약 발행을 확인하고 관리합니다. 예약일 아침 배치에서 자동으로 발행됩니다."
+        description="인스타그램·스레드 예약 발행을 확인하고 관리합니다. 예약일 아침 배치에서 자동으로 발행됩니다."
       />
       <PublishList initialItems={items} channels={channels} isDemo={isDemoMode()} truncated={truncated} loadFailed={failed} />
     </div>

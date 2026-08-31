@@ -1,10 +1,18 @@
 # 배포 가이드 — Vercel + 가비아(finch.ai.kr) 연결 (2026 기준)
 
+> **대조 2026-08-31.** 아래 1~4절은 «처음 세팅할 때» 절차다. 지금은 **이미 배포돼 운영 중**이고
+> 도메인·SSL·환경변수·검색엔진 등록이 전부 끝났다 — 5절 체크리스트에 현재 상태를 표시해 뒀다.
+
 전제: GitHub `taehyeung123/Finch` 저장소, Supabase 프로젝트(`wdutrxqryvjqbufxwxem`) 생성·마이그레이션 완료.
 
 ## 1. Vercel 프로젝트 생성
 
-1. https://vercel.com → **Continue with GitHub**로 가입/로그인 (개인 계정 프라이빗 저장소는 무료 Hobby 플랜으로 배포 가능)
+1. https://vercel.com → **Continue with GitHub**로 가입/로그인
+   - ⚠️ **Hobby(무료)로는 지금의 `vercel.json` 이 배포되지 않는다.** 크론이 13개이고
+     Hobby 는 크론 개수·빈도에 제한이 있다. 게다가 토스 정기결제가 붙은 서비스는
+     Vercel 이 상업적 이용으로 보므로 Hobby 는 약관 위반이다.
+   - `npm run build` 가 `scripts/check-vercel-json.mjs` 를 **Hobby 기준**으로 돌린다.
+     Pro 로 올렸으면 `package.json` 의 build 스크립트에 `--pro` 를 붙여 검사도 함께 풀 것.
 2. 대시보드 우측 상단 **Add New… > Project**
 3. **Import Git Repository**에서 `taehyeung123/Finch` 선택 (처음이면 GitHub 앱 권한 승인 — 해당 저장소만 허용해도 됨)
 4. 설정 화면: Framework Preset = **Next.js 자동 감지**(그대로), Root Directory = `./`(그대로)
@@ -21,8 +29,22 @@ NEXT_PUBLIC_ 값은 빌드 시점에 JS 번들에 박제되므로, 빼먹고 배
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | (anon public 키 — `.env.local`과 동일) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase 대시보드 > Project Settings > API Keys > service_role (웹훅용, 서버 전용) |
 
-나중 단계에서 추가할 것: `IG_WEBHOOK_VERIFY_TOKEN`, `META_APP_SECRET`(메타 웹훅),
-`NEXT_PUBLIC_NAVER_SITE_VERIFICATION`, `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION`(서치어드바이저/서치콘솔).
+**필수인데 위 표에 없어서 자주 빠지는 것 — 없으면 기능이 조용히 멎는다:**
+
+| Key | 없으면 어떻게 되나 |
+|---|---|
+| `CRON_SECRET` | `isAuthorizedCron` 이 **무조건 false** → 크론 13개가 전부 401. 토큰 자동갱신·예약 발행·DM 재처리가 조용히 멈춘다 |
+| `TOKEN_ENCRYPTION_KEY` | IG·Threads·TikTok **연동 콜백이 중단**된다. 사용자에겐 «연동 실패»로만 보인다. 빌링키 저장도 불가 |
+| `ANTHROPIC_API_KEY` | AI 기능 전부(카드뉴스·진단·챗·AI 디자인)가 폴백으로 떨어진다 |
+| `SCRAPECREATORS_API_KEY` | 공용 풀 수집이 통째로 죽는다 |
+| `LINK_COOKIE_SECRET` | 서비스 롤 키로 대체 서명 → **롤 키를 교체하는 순간 모든 프로필 링크 잠금해제 쿠키가 무효** |
+| `RESEND_API_KEY` | 메일이 조용히 no-op — `OWNER_EMAIL` 을 넣어도 운영 경보가 한 통도 안 간다 |
+
+전체 목록과 설명은 `.env.example` 이 정본이다.
+
+나중 단계(연동 시작 시): `IG_WEBHOOK_VERIFY_TOKEN`, `META_APP_SECRET`, `INSTAGRAM_APP_ID`,
+`THREADS_APP_ID/SECRET`, `TIKTOK_CLIENT_KEY/SECRET`, 토스 키 4종,
+`NEXT_PUBLIC_NAVER_SITE_VERIFICATION`, `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION`.
 
 5. **Deploy** 클릭 → 빌드 완료 후 `https://<프로젝트>.vercel.app`에서 사이트 확인
 
@@ -53,16 +75,26 @@ NEXT_PUBLIC_ 값은 빌드 시점에 JS 번들에 박제되므로, 빼먹고 배
 
 3. 저장 후 몇 분~수십 분 내 Vercel Domains 화면이 **Valid Configuration**으로 바뀌고 SSL(Let's Encrypt)이 자동 발급된다
 
-## 5. 배포 후 마무리 체크리스트
+## 5. 배포 후 마무리 체크리스트 (2026-08-31 현재)
 
-- [ ] Supabase > Authentication > **URL Configuration**: Site URL = `https://finch.ai.kr`,
-      Redirect URLs에 `https://finch.ai.kr/auth/callback` + `https://<프로젝트>.vercel.app/auth/callback` 추가
-- [ ] https://finch.ai.kr 에서 Google/카카오 로그인 실동작 확인
-- [ ] https://finch.ai.kr/sitemap.xml , /robots.txt , /llms.txt 응답 확인
-- [ ] 네이버 서치어드바이저(searchadvisor.naver.com) 등록 → HTML 태그 코드 → Vercel env `NEXT_PUBLIC_NAVER_SITE_VERIFICATION` → **Redeploy** → 소유확인 → 사이트맵 제출 + 수집 요청
-- [ ] 구글 서치콘솔 동일 절차 (`NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION`)
-- [ ] Google Auth Platform > Audience > **Publish app** (정식 오픈 시)
-- [ ] 메타 앱 웹훅 콜백 `https://finch.ai.kr/api/webhooks/instagram` 등록 (docs/AUTO_DM_SETUP.md)
+**끝난 것**
+
+- [x] Supabase URL Configuration (Site URL·Redirect URLs)
+- [x] Google/카카오 로그인 실동작
+- [x] sitemap.xml · robots.txt · llms.txt
+- [x] 네이버 서치어드바이저 등록·소유확인·사이트맵 제출
+- [x] 구글 서치콘솔 등록
+- [x] Google Auth Platform **Publish app + 브랜드 확인** — 동의화면이 핀치 이름·로고로 뜬다
+
+**남은 것 — 전부 Meta 앱을 만든 뒤에 하는 일이다**
+
+- [ ] 메타 앱 웹훅 콜백 `https://finch.ai.kr/api/webhooks/instagram` (docs/AUTO_DM_SETUP.md)
+- [ ] **Data Deletion Instructions URL** 2개 — 메타가 요구하고 코드는 이미 있다:
+      `https://finch.ai.kr/api/auth/instagram/data-deletion`,
+      `https://finch.ai.kr/api/auth/threads/data-deletion`
+- [ ] **Threads Deauthorize Callback** `https://finch.ai.kr/api/auth/threads/deauthorize`
+      (사용자가 Threads 쪽에서 먼저 끊으면 우리 DB 도 즉시 미연동으로 반영한다)
+- [ ] Vercel 플랜 확인 → Pro 면 `package.json` build 에 `--pro` 추가
 
 ## 이후 자동 배포
 

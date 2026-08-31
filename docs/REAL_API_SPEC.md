@@ -1,8 +1,15 @@
 # 실 API 연동 스펙 (2026 검증본)
 
 이 문서는 핀치의 실 데이터/결제 연동에 필요한 외부 API 스펙을 2026년 7월 웹검증한 결과다.
-구현 파일(`lib/meta/*`, `lib/toss/*`, `app/api/auth/instagram/*`)의 근거이며, 엔드포인트·필드가 바뀌면
-여기부터 갱신한다. 각 항목의 출처는 developers.facebook.com / docs.tosspayments.com 공식 문서다.
+**코드와 최종 대조: 2026-08-31.** 엔드포인트·필드가 바뀌면 여기부터 갱신한다.
+각 항목의 출처는 developers.facebook.com / docs.tosspayments.com 공식 문서다.
+
+구현 파일: `lib/meta/*`(instagram·instagram-oauth·instagram-publish·threads·threads-oauth·**threads-publish**·graph),
+`lib/tiktok/*`(oauth·api), `lib/toss/*`(server·billing·config), `app/api/auth/{instagram,threads,tiktok}/*`.
+
+> ⚠️ **절 번호는 1~6뿐이다**(1·2 Instagram / 3 Ad Library / 4 Toss / 5 Threads / 6 TikTok).
+> 코드 주석이 «스펙 8절»을 가리키던 시절이 있었는데 그런 절은 없다 — 절을 추가·재배치하면
+> 코드 주석의 참조도 함께 고칠 것.
 
 ## 1. Instagram OAuth — "Instagram API with Instagram Login" 채택
 
@@ -93,9 +100,18 @@ Facebook Login 경로 값이라 혼용 금지.
 - 정치광고만 impressions/spend(범위값)·demographic/region 분포 제공. 상업광고는 이런 지표 전무.
 - KR 상업광고 정식 경로는 Meta Content Library(CASD 연구자 승인) — 제품 연동용 아님.
 
-**핀치 대응:** 경쟁사 "광고" 모니터링은 KR에서 불가로 확정. 경쟁사 **비교**(오가닉)는 IG Graph의
-`business_discovery`로 공개 비즈니스/크리에이터 계정의 `followers_count`, `media_count`, 최근 미디어를
-조회하는 경로가 유효(연동 계정 토큰 필요). competitorAds는 실 API 연동 대신 명시적 "예시/수동" 데이터로 유지.
+**핀치 대응:** 위 제약은 **공식 Meta Ad Library API 이야기**이고 지금도 유효하다.
+다만 핀치는 그 경로를 쓰지 않는다 — **제3자 공급사(ScrapeCreators)로 KR 상업광고를 실제로 수집해
+운영 중**이다(2026-08-08 실측: `country=KR` + 한글 키워드로 국내 상업광고 정상 반환).
+구현: `lib/reference/meta-ads.ts`(`api.scrapecreators.com/v1/facebook/adLibrary/search/ads`,
+cursor 페이지네이션 — `page` 파라미터는 먹지 않는다), 소비 경로는 `lib/pool/**` 공용 풀 크론과
+`lib/actions/ads-reference.ts`. 환경변수 `SCRAPECREATORS_API_KEY`.
+
+경쟁사 **비교**(오가닉)는 IG Graph의 `business_discovery`로 공개 비즈니스/크리에이터 계정의
+`followers_count`, `media_count`, 최근 미디어를 조회하는 경로가 유효(연동 계정 토큰 필요).
+
+> ⚠️ 화면 `/competitors/ads` 는 아직 이 수집 엔진과 **연결돼 있지 않다** —
+> 풀 엔진은 키워드 검색이고 그 화면은 «등록한 경쟁사 페이지 고정 감시»라 방식이 다르다.
 
 ## 4. Toss Payments (테스트 모드, v2 결제위젯)
 
@@ -136,7 +152,20 @@ await widgets.requestPayment({ orderId, orderName, successUrl, failUrl });
 
 ### 정기결제
 
-`자동결제`(billing)는 **별도 계약** 후 `POST /v1/billing/authorizations/issue` 등 사용 가능. 테스트 자가활성 불가.
+`자동결제`(billing)는 **테스트 키로 개발·테스트가 가능하다.** 별도 계약이 필요한 것은 **라이브 전환**이다
+(2026-08-31 정정 — 예전엔 «테스트 자가활성 불가»라고 적혀 있었으나 코드·`.env.example` 과 어긋났다).
+
+구현 완료: `lib/toss/billing.ts`(`issueBillingKey` → `POST /v1/billing/authorizations/issue`,
+`chargeBilling`), `app/api/billing/{start,issue}`, `app/(finch)/(app)/settings/billing/subscribe`.
+
+⚠️ 빌링은 **API 개별 연동 키**(`test_ck_`/`test_sk_`)를 써야 한다 — 위젯 키로 호출하면 오류다.
+
+### 웹훅 검증 (중요)
+
+결제 웹훅(`PAYMENT_STATUS_CHANGED` 등)에는 **서명이 없고** 공식 IP 허용목록도 없다
+(서명 헤더가 오는 건 `payout.changed`/`seller.changed` 뿐). 그래서 본문을 신뢰하지 않고
+`GET /v1/payments/{paymentKey}` **재조회 결과**를 진위의 근거로 삼는다
+(`app/api/webhooks/toss/route.ts`). 「서명 검증 필수」로 적힌 다른 문서가 있다면 그쪽이 틀렸다.
 
 ## 5. Threads OAuth·인사이트·발행 (2026 조사본)
 
@@ -180,8 +209,20 @@ Instagram과 동일하게 **Standard Access(개발자 모드, 앱 역할에 등�
    `text`(최대 500자), `image_url`/`video_url`, `is_carousel_item`, `children`(캐러셀 2~20개),
    `link_attachment`, `gif_attachment`, `topic_tag`
 2. 발행: `POST /{threads-user-id}/threads_publish` — `creation_id` 필수. 처리 대기 권장(평균 30초).
-   (현재 코드베이스엔 미구현 — Instagram의 `lib/meta/instagram-publish.ts` 2단계 폴링 패턴을 그대로
-   이식하면 된다. TODO로 남겨둔 후속 작업.)
+
+**구현 완료(2026-08-31): `lib/meta/threads-publish.ts`.** 예약 발행 크론
+(`app/api/cron/publish-scheduled/route.ts`)이 `channel='threads'` 행을 이 어댑터로 보낸다.
+분기: 이미지 0장 `TEXT` / 1장 `IMAGE` / 2장 이상 `CAROUSEL`.
+
+인스타와 다른 점 셋 — 이식할 때 여기서 어긋난다:
+- 본문 파라미터가 `caption` 이 아니라 **`text`**, 상한 **500자**(인스타 2200)
+- **글만 있는 게시물이 정상**이다(인스타는 이미지 필수). DB 는 0074 가 채널별로 장수 규칙을 가른다
+- 단일 이미지도 `media_type=IMAGE` 를 **명시**해야 한다(인스타는 `image_url` 만 줘도 된다)
+
+> ⚠️ **컨테이너 상태 조회 필드 이름이 실 계정으로 확정되지 않았다.** 인스타는 `status_code`,
+> Threads 문서는 `status` 로 보인다. 어댑터는 두 이름을 모두 읽고, 어느 쪽도 못 읽으면
+> 실패로 단정하지 않되 **권고치(30초)만큼 기다린 뒤** 발행으로 넘어간다.
+> 테스터 계정으로 1회 호출해 확정하면 이 절과 어댑터를 함께 줄일 것.
 
 ### 인사이트
 
@@ -213,7 +254,12 @@ tiktok-api-v2-get-user-info, add-a-sandbox) + bulletin(user-info-scope-migration
 
 **현재 구현 범위(정직 고지):** 심사 없이 확인된 범위는 `GET /v2/user/info/`의 기본 프로필
 (팔로워·좋아요·영상 수·아바타·닉네임)뿐이다. 영상 목록(`video.list`)·조회수/참여율 등 인사이트 계열은
-아래 5항 사유로 미구현이며, 설정 화면에도 "상세 분석은 앱 심사 후 제공"으로 고지한다.
+아래 5항 사유로 미구현이다.
+
+> ⚠️ 화면 문구에 **심사·자격증명 같은 내부 운영 정보를 쓰지 않는다**(CLAUDE.md 2026-07 결정).
+> 예전에 이 자리에 «상세 분석은 앱 심사 후 제공»으로 고지하라고 적혀 있었는데 그건 규칙 위반이다.
+> 실제 화면은 «팔로워·좋아요·영상 수 등 기본 정보만 표시돼요 — 조회수·참여율 등 상세 분석은
+> 준비 중이에요.» 로 되어 있고, 이쪽이 맞다.
 
 ### 접근 수준 — 사업자등록·앱심사 불요로 바로 개발 가능
 

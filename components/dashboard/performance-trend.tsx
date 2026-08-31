@@ -89,7 +89,9 @@ export function PerformanceTrend({
           <div key={metric} className="anim-swap flex min-h-[232px] items-center justify-center">
             <p className="max-w-md text-center text-[14px] leading-relaxed text-fg-sub">
               {metric === "engagement"
-                ? "일별 참여율은 공식 API가 제공하지 않아 추이를 그릴 수 없어요. 기간 합산 참여율은 위 요약 카드에서 확인하세요."
+                /* 데이터 출처(«공식 API» 등)는 고객 화면에 쓰지 않는다 — 내부 운영 정보다.
+                   사용자에게 필요한 건 «왜 안 보이는가»가 아니라 «어디서 볼 수 있는가»다. */
+                ? "참여율은 날짜별 추이를 제공하지 않아요. 기간 합산 참여율은 위 요약 카드에서 확인하세요."
                 : "이 지표의 추이 데이터가 아직 없어요. 데이터가 쌓이면 자동으로 표시됩니다."}
             </p>
           </div>

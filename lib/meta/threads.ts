@@ -53,7 +53,7 @@ export interface ThreadsAccountTotals {
 }
 
 /**
- * 기간 합산 계정 인사이트 — since/until은 unix 초. 2024-04-13 이전 날짜는 since/until 미지원(스펙 8절).
+ * 기간 합산 계정 인사이트 — since/until은 unix 초. 2024-04-13 이전 날짜는 since/until 미지원(스펙 5절).
  * until을 시간 단위로 라운딩해 호출하면 URL이 안정되어 fetch 캐시(300초)가 공유된다(호출측 책임).
  */
 export async function fetchThreadsAccountInsightsRange(
@@ -85,7 +85,7 @@ export async function fetchThreadsAccountInsightsRange(
 }
 
 /**
- * 현재 팔로워 수 — Threads 프로필 필드에는 followers_count가 없어(스펙 6절) insights로만 조회 가능.
+ * 현재 팔로워 수 — Threads 프로필 필드에는 followers_count가 없어(스펙 5절) insights로만 조회 가능.
  * period=lifetime(스냅샷값, since/until 없이) — 일별 시계열이 아니라 "현재 총 팔로워"로 추정.
  */
 export async function fetchThreadsFollowersCount(threadsUserId: string, accessToken: string): Promise<number> {
@@ -182,7 +182,7 @@ export interface ThreadsPostInsights {
   shares: number;
 }
 
-/** 게시물 레벨 인사이트 (스펙 8절: views, likes, replies, reposts, quotes, shares) */
+/** 게시물 레벨 인사이트 (스펙 5절: views, likes, replies, reposts, quotes, shares) */
 export async function fetchThreadsPostInsights(mediaId: string, accessToken: string): Promise<ThreadsPostInsights | null> {
   const metrics = ["views", "likes", "replies", "reposts", "quotes", "shares"];
   try {

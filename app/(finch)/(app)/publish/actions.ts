@@ -4,6 +4,14 @@ import { revalidatePath } from "next/cache";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { earliestPublishDate } from "@/lib/calendar";
+import { eulReul } from "@/lib/josa";
+import {
+  PUBLISHABLE_CHANNELS,
+  channelRules,
+  channelLabel,
+  isMissingColumnError,
+  type PublishChannel,
+} from "@/lib/publish-rules";
 
 /*
   초안 관리 — 2026-08-16 신설.
@@ -39,21 +47,51 @@ export async function scheduleDraft(id: string, date: string): Promise<{ ok: boo
   if (!user) return { ok: false, error: "로그인이 필요해요." };
   const supabase = await createClient();
 
-  /* 인스타그램 연동이 없으면 예약해도 배치가 실패로 끝난다 — 여기서 막는다.
+  /* 어느 채널로 예약하는 글인지 먼저 읽는다 — 예전엔 무조건 인스타그램 연동을 물어서,
+     스레드 초안을 예약하려면 쓰지도 않는 인스타를 연동해야 했다(2026-08-31 스레드 발행 추가).
+     channel 은 0053 컬럼이고, 미적용 DB 의 큐는 전부 인스타 시절 것이다.
+
+     ⚠️ 세 갈래를 뭉치면 안 된다 — «에러든 빈 결과든 인스타»로 두면 조회가 한 번 실패했을 때
+     스레드 글을 예약하려던 사람에게 «인스타그램을 연동하세요»라고 말한다.
+     instagram 으로 단정해도 되는 경우는 «컬럼 자체가 없다» 하나뿐이다. */
+  let channel: PublishChannel = "instagram";
+  const withCh = await supabase.from("scheduled_posts").select("channel").eq("id", id).maybeSingle();
+  if (withCh.error) {
+    if (!isMissingColumnError(withCh.error, /channel/i)) {
+      console.error("[publish] 채널 조회 실패:", withCh.error.message);
+      return { ok: false, error: "잠시 후 다시 시도해 주세요." };
+    }
+    // 0053 미적용 — 그 시절 큐는 전부 인스타 카드뉴스였다
+  } else if (!withCh.data) {
+    return { ok: false, error: "이미 처리된 글이에요." };
+  } else if (withCh.data.channel) {
+    channel = withCh.data.channel as PublishChannel;
+  }
+  if (!PUBLISHABLE_CHANNELS.includes(channel)) {
+    return { ok: false, error: `${channelLabel(channel)} 발행은 아직 지원하지 않아요.` };
+  }
+
+  /* 연동이 없으면 예약해도 배치가 실패로 끝난다 — 여기서 막는다.
      초안 저장 때는 연동을 요구하지 않지만(아직 발행이 아니다), 예약은 발행 약속이다. */
   /* ⚠️ user_id 로 반드시 좁힌다. connected_accounts 에는 "team members read" 정책이
      있어 팀원이 **소유자의** 연동 행을 읽는다 — 안 좁히면 자기 계정엔 연동이 없는데
      게이트를 통과하고, 발행 크론은 user_id 로 토큰을 찾으므로 그 예약은 반드시
      실패한다(설정 화면·크론이 이미 쓰는 패턴과 맞춘다). */
-  const { data: account } = await supabase
+  const { data: account, error: accountErr } = await supabase
     .from("connected_accounts")
     .select("id")
     .eq("user_id", user.id)
-    .eq("channel", "instagram")
+    .eq("channel", channel)
     .eq("connected", true)
     .limit(1)
     .maybeSingle();
-  if (!account) return { ok: false, error: "먼저 설정에서 인스타그램 계정을 연동해 주세요." };
+  /* 조회 실패를 «연동 없음»으로 읽으면 멀쩡히 연동한 사람에게 연동하라고 말한다 —
+     이 저장소가 반복해 밟은 «실패는 없음이 아니다» 함정이다(lib/data/internal.ts 규칙). */
+  if (accountErr) {
+    console.error("[publish] 연동 확인 실패:", accountErr.message);
+    return { ok: false, error: "잠시 후 다시 시도해 주세요." };
+  }
+  if (!account) return { ok: false, error: `먼저 설정에서 ${channelLabel(channel)} 계정을 연동해 주세요.` };
 
   /* 배치는 KST 06:00 에 돈다(vercel.json "0 21 * * *" = UTC 21시). 그 날 아침에
      집히려면 scheduled_at 이 그 시각 이전이어야 하므로 KST 자정(=UTC 15:00 전날)으로 둔다. */
@@ -105,10 +143,8 @@ export async function deleteDraft(id: string): Promise<{ ok: boolean; error?: st
    새 게시물 포스팅 — 링크팜 포스팅 실측(2026-08-19) 대응
    ══════════════════════════════════════════════════════════════════ */
 
-/** 인스타그램 캡션 상한 */
-const CAPTION_MAX = 2200;
-/** 캐러셀 상한 — 0010 의 image_urls check 와 동일 */
-const MAX_IMAGES = 10;
+/* 글자·장수 상한은 채널마다 다르다 — lib/publish-rules.ts 한 곳에서 화면과 함께 본다
+   (인스타 2200자·이미지 필수 / 스레드 500자·글만도 가능) */
 /** 장당 업로드 상한(2차 방어) — 정상 경로는 컴포저가 1440px JPEG 로 축소해
     장당 ~1.5MB 다. 이 8MB 는 축소를 우회한 직접 호출을 막는 서버측 가드이고,
     요청 전체는 그 전에 next.config.ts 의 bodySizeLimit(25mb)이 자른다. */
@@ -118,11 +154,13 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
  * 게시물을 직접 만들어 예약/초안으로 넣는다.
  *
  * 지금까지 발행 대기열(scheduled_posts)에 넣는 길은 스튜디오 카드뉴스뿐이었다 —
- * 링크팜은 포스팅 화면에서 이미지+캡션을 바로 써서 올린다. 그 길을 연다.
+ * 포스팅 화면에서 이미지+글을 바로 써서 올리는 길을 연다.
  *
- * 채널: 실제 발행 함수가 인스타그램뿐이라(lib/meta/instagram-publish.ts) 여기서도
- * instagram 만 받는다. 컴포저의 틱톡·스레드는 "(준비 중)" 비활성 — 값이 오면
- * 사용자가 아니라 코드가 잘못된 것이므로 명확히 거절한다.
+ * 채널: 실제 발행 어댑터가 있는 것만 받는다(instagram·threads).
+ * 틱톡은 발행 API 자체가 없어 "(준비 중)" 비활성 — 값이 오면 사용자가 아니라
+ * 코드가 잘못된 것이므로 명확히 거절한다.
+ *
+ * 채널별 상한(글자·장수)은 lib/publish-rules.ts 가 정한다 — 컴포저와 같은 값을 본다.
  *
  * "즉시 발행"은 없다 — 발행은 KST 06:00 배치라 "즉시"가 거짓이 된다.
  * 실시간 발행 API 배선(맨 마지막 단계) 전까지 mode 는 schedule | draft 둘뿐이다.
@@ -140,16 +178,31 @@ export async function createPost(input: {
   const user = await getAuthUser();
   if (!user) return { ok: false, error: "로그인이 필요해요." };
 
-  if (input.channel !== "instagram") {
-    return { ok: false, error: "지금은 인스타그램 발행만 지원해요. 틱톡·스레드는 준비 중입니다." };
+  if (!PUBLISHABLE_CHANNELS.includes(input.channel as PublishChannel)) {
+    return { ok: false, error: `${channelLabel(input.channel)} 발행은 준비 중이에요.` };
   }
+  const channel = input.channel as PublishChannel;
+  const rules = channelRules(channel);
+
   const caption = input.caption.trim();
-  if (!caption) return { ok: false, error: "캡션을 입력해 주세요." };
-  if (caption.length > CAPTION_MAX) return { ok: false, error: `캡션은 ${CAPTION_MAX}자까지예요.` };
-  if (!Array.isArray(input.images) || input.images.length === 0) {
-    return { ok: false, error: "이미지를 1장 이상 올려 주세요." };
+  const images = Array.isArray(input.images) ? input.images : [];
+  /* ⚠️ 글 요구와 이미지 요구는 **별개**다. 스레드를 열면서 이 검사를 «둘 다 비었을 때만»으로
+     바꿨더니 인스타에서 캡션 없는 캐러셀이 통과했다 — minImages 는 이미지만 본다. */
+  if (rules.requiresText && !caption) {
+    return { ok: false, error: `${eulReul(rules.textLabel)} 입력해 주세요.` };
   }
-  if (input.images.length > MAX_IMAGES) return { ok: false, error: `이미지는 ${MAX_IMAGES}장까지예요.` };
+  if (!caption && images.length === 0) {
+    return { ok: false, error: "내용을 입력해 주세요." };
+  }
+  if (caption.length > rules.textMax) {
+    return { ok: false, error: `${rules.textLabel} ${rules.textMax}자까지 쓸 수 있어요.` };
+  }
+  if (images.length < rules.minImages) {
+    return { ok: false, error: `이미지를 ${rules.minImages}장 이상 올려 주세요.` };
+  }
+  if (images.length > rules.maxImages) {
+    return { ok: false, error: `이미지는 ${rules.maxImages}장까지예요.` };
+  }
 
   /* 날짜 검증은 초안 예약 전환(scheduleDraft)과 같은 규칙 — 관문이 갈리면 어긋난다 */
   let scheduledAt: string;
@@ -177,22 +230,26 @@ export async function createPost(input: {
   /* 예약은 발행 약속이다 — 연동 없이 예약하면 배치가 반드시 실패한다.
      초안은 연동을 요구하지 않는다(아직 발행이 아니다). scheduleDraft 와 같은 규칙. */
   if (input.mode === "schedule") {
-    const { data: account } = await supabase
+    const { data: account, error: accountErr } = await supabase
       .from("connected_accounts")
       .select("id")
       .eq("user_id", user.id)
-      .eq("channel", "instagram")
+      .eq("channel", channel)
       .eq("connected", true)
       .limit(1)
       .maybeSingle();
-    if (!account) return { ok: false, error: "먼저 설정에서 인스타그램 계정을 연동해 주세요." };
+    if (accountErr) {
+      console.error("[publish] 연동 확인 실패:", accountErr.message);
+      return { ok: false, error: "잠시 후 다시 시도해 주세요." };
+    }
+    if (!account) return { ok: false, error: `먼저 설정에서 ${channelLabel(channel)} 계정을 연동해 주세요.` };
   }
 
   /* 이미지 업로드 — 카드뉴스와 같은 버킷·같은 본인 폴더 규칙(0010 RLS).
      전부 올린 뒤에 insert 한다: insert 먼저 하면 업로드 실패 시 이미지 없는
      행이 남고, 그 행은 배치에서 반드시 실패한다. */
   const urls: string[] = [];
-  for (const dataUrl of input.images) {
+  for (const dataUrl of images) {
     const m = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(dataUrl);
     if (!m) return { ok: false, error: "PNG·JPG·WEBP 이미지만 올릴 수 있어요." };
     const buf = Buffer.from(m[2], "base64");
@@ -211,7 +268,8 @@ export async function createPost(input: {
   }
 
   /* channel 은 0053 컬럼 — 미적용 DB 폴백(계단식, auto-dm 0052 와 같은 패턴).
-     instagram 만 받으므로 컬럼이 없어도 의미는 유실되지 않는다(기본값이 instagram). */
+     ⚠️ 스레드는 컬럼이 없으면 **인스타로 저장돼 엉뚱한 계정에 발행**된다. 폴백은
+     인스타일 때만 쓴다 — 조용히 채널을 바꾸느니 저장을 거절하는 편이 낫다. */
   const row = {
     user_id: user.id,
     caption,
@@ -219,11 +277,29 @@ export async function createPost(input: {
     scheduled_at: scheduledAt,
     status: input.mode === "schedule" ? "scheduled" : "draft",
   };
-  let { error } = await supabase.from("scheduled_posts").insert({ ...row, channel: input.channel });
-  if (error && /channel/i.test(error.message) && /column|schema/i.test(error.message)) {
+  let { error } = await supabase.from("scheduled_posts").insert({ ...row, channel });
+  if (isMissingColumnError(error, /channel/i)) {
+    if (channel !== "instagram") {
+      console.error("[publish] channel 컬럼 미적용 — 스레드 저장 거절:", error?.message);
+      return { ok: false, error: "스레드 발행 준비가 아직 끝나지 않았어요. 잠시 후 다시 시도해 주세요." };
+    }
     ({ error } = await supabase.from("scheduled_posts").insert(row));
   }
   if (error) {
+    /* image_urls 체크에 걸린 경우 — 「저장 실패」로 뭉뚱그리면 뭘 고쳐야 하는지 알 수 없다.
+       문구는 채널 규칙에서 만든다: 스레드에 «이미지를 1장 이상»은 틀린 안내다.
+       (0074 미적용이어도 스레드 글 전용은 통과한다 — 빈 배열의 array_length 가 null 이라
+        0010 의 체크가 위반으로 보지 않는다. 0074 는 그 우연을 명시적 규칙으로 바꾼다.) */
+    if (/image_urls/i.test(error.message)) {
+      console.error("[publish] image_urls 체크 위반:", error.message);
+      return {
+        ok: false,
+        error:
+          rules.minImages > 0
+            ? `이미지를 ${rules.minImages}장 이상 올려 주세요.`
+            : `이미지는 ${rules.maxImages}장까지예요.`,
+      };
+    }
     console.error("[publish] 게시물 생성 실패:", error.message);
     return { ok: false, error: "저장하지 못했어요. 잠시 후 다시 시도해 주세요." };
   }

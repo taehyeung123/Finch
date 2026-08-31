@@ -1,6 +1,6 @@
 import { cn } from "@/lib/cn";
-import type { Channel, DataSource, SupportLevel } from "@/lib/types";
-import { CHANNEL_LABEL, SUPPORT_LEVEL_LABEL } from "@/lib/channels";
+import type { Channel } from "@/lib/types";
+import { CHANNEL_LABEL } from "@/lib/channels";
 import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 
 /* 칩/뱃지 라운드 32px, 12px/600 (PART 7.6) */
@@ -41,42 +41,11 @@ export function ChannelBadge({ channel, className }: { channel: Channel; classNa
   );
 }
 
-/* 채널별 기능 지원 수준 배지 (PART 3 매트릭스) */
-const supportTone: Record<SupportLevel, Tone> = {
-  full: "positive",
-  partial: "warning",
-  thirdparty: "primary",
-  none: "neutral",
-};
-
-export function SupportBadge({ level, className }: { level: SupportLevel; className?: string }) {
-  return (
-    <Badge tone={supportTone[level]} className={className}>
-      <span className="size-1.5 rounded-full bg-current" aria-hidden />
-      {SUPPORT_LEVEL_LABEL[level]}
-    </Badge>
-  );
-}
-
-/* 데이터 출처 배지 — 공식 API vs 제휴 데이터 공급사 (PART 3, 4.4) */
-export function DataSourceBadge({ source, className }: { source: DataSource; className?: string }) {
-  if (source === "official") {
-    return (
-      <Badge tone="positive" className={className}>
-        공식 API
-      </Badge>
-    );
-  }
-  if (source === "thirdparty") {
-    return (
-      <Badge tone="primary" className={className}>
-        제휴 데이터
-      </Badge>
-    );
-  }
-  return (
-    <Badge tone="neutral" className={className}>
-      자체 분석
-    </Badge>
-  );
-}
+/*
+  ── 삭제됨: SupportBadge · DataSourceBadge (2026-08-31) ──────────────
+  데이터 출처·지원수준 배지는 **고객 화면에 노출하지 않는다**(2026-07 결정, CLAUDE.md).
+  두 컴포넌트는 사용처가 0곳인 죽은 코드였는데 «공식 API»·«제휴 데이터» 리터럴을 품고
+  남아 있었다 — 자동완성으로 되살아나는 순간 규칙 위반이 조용히 화면에 뜬다.
+  지우는 것이 규칙을 지키는 방법이다. components/ui/data-source-note.tsx 도 같은 이유로 삭제.
+  법적으로 필요한 고지는 약관·개인정보처리방침에서 다룬다.
+*/
