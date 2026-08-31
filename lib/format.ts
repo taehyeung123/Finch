@@ -12,6 +12,26 @@ export function formatKRW(n: number): string {
   return `${n.toLocaleString("ko-KR")}원`;
 }
 
+/**
+ * 계정 통화 그대로 표기 — 메타 광고 계정은 원화가 아닐 수 있다(달러·엔 계정이 흔하다).
+ * ⚠️ **환산하지 않는다.** 환율을 끌어와 곱하면 그 값이 어느 시점 환율인지 아무도 모르게 된다.
+ * 통화 코드를 모르면(연동 전 DB 행 등) 숫자만 내보낸다 — «원»을 붙여 단정하지 않는다.
+ */
+export function formatMoney(n: number, currency: string | null): string {
+  if (!currency) return n.toLocaleString("ko-KR");
+  if (currency === "KRW") return formatKRW(n);
+  try {
+    return new Intl.NumberFormat("ko-KR", {
+      style: "currency",
+      currency,
+      /* 소수 자릿수는 통화가 정한다(USD 2자리·JPY 0자리) — 직접 정하면 한쪽이 틀린다 */
+    }).format(n);
+  } catch {
+    // 알 수 없는 코드 — 던지지 않고 코드를 그대로 붙인다
+    return `${n.toLocaleString("ko-KR")} ${currency}`;
+  }
+}
+
 /** 증감 표기: +1.2% / -0.8% */
 export function formatDelta(n: number, unit = "%"): string {
   const sign = n > 0 ? "+" : "";

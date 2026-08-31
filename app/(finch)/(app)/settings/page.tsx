@@ -15,8 +15,13 @@ import { INSTAGRAM_SCOPES, INSTAGRAM_SCOPE_LABELS, isInstagramOAuthConfigured } 
 import { isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
 import { THREADS_SCOPES, THREADS_SCOPE_LABELS, isThreadsOAuthConfigured } from "@/lib/meta/threads-oauth";
 import { TIKTOK_SCOPES, TIKTOK_SCOPE_LABELS, isTiktokOAuthConfigured } from "@/lib/tiktok/oauth";
+import {
+  META_ADS_SCOPES,
+  META_ADS_SCOPE_LABELS,
+  isMetaAdsOAuthConfigured,
+} from "@/lib/meta/ads-oauth";
 import { SettingsNav } from "./_components/settings-nav";
-import { disconnectAccount } from "./actions";
+import { disconnectAccount, disconnectMetaAds } from "./actions";
 
 /*
   계정 연동 관리 (PRD PART 4.2)
@@ -110,6 +115,73 @@ async function loadAccountCards(): Promise<AccountCard[] | null> {
   });
 }
 
+/* OAuth 시작은 **전체 페이지 이동**이어야 한다(외부 인가 화면으로 나간다) — next/link 는 쓰면 안 된다.
+   상수로 빼 두는 것은 채널 쪽 CONNECT_START_PATH 와 같은 이유다(문자열 리터럴이면 린트가 Link 를 강요한다). */
+const META_ADS_START_PATH = "/api/auth/meta-ads/start";
+
+/** 메타 광고 연동 카드 — 표가 둘이라 채널 카드와 로더를 공유하지 않는다(0077) */
+interface AdsCard {
+  connectionId: string | null;
+  connected: boolean;
+  accountCount: number;
+  /** 대표 계정 이름 — 여러 개면 «외 N개» 로 덧붙인다 */
+  primaryName: string | null;
+  /** ⚠️ 갱신이 불가능한 토큰이라 이 값을 **숨기지 않는다**(틱톡과 반대) */
+  expiresInDays: number | null;
+}
+
+/** null 이면 조회 실패 — «연동 없음»과 다르다 */
+async function loadAdsCard(): Promise<AdsCard | null> {
+  if (isDemoMode()) {
+    return {
+      connectionId: "demo-meta-ads",
+      connected: true,
+      accountCount: 1,
+      primaryName: "핀치 마케팅",
+      expiresInDays: 52,
+    };
+  }
+
+  const supabase = await createClient();
+  const user = await getAuthUser();
+  if (!user) return { connectionId: null, connected: false, accountCount: 0, primaryName: null, expiresInDays: null };
+
+  const { data: conn, error } = await supabase
+    .from("meta_ad_connections")
+    .select("id, connected, token_expires_at, meta_ad_accounts(account_name, is_default)")
+    .eq("user_id", user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    /* 0077 미적용이면 표가 없다 — 그건 «조회 실패»가 아니라 아직 열리지 않은 기능이다 */
+    if (error.code === "42P01") {
+      return { connectionId: null, connected: false, accountCount: 0, primaryName: null, expiresInDays: null };
+    }
+    console.error("[settings] 광고 연동 조회 실패:", error.message);
+    return null;
+  }
+  if (!conn) {
+    return { connectionId: null, connected: false, accountCount: 0, primaryName: null, expiresInDays: null };
+  }
+
+  const row = conn as {
+    id: string;
+    connected: boolean;
+    token_expires_at: string | null;
+    meta_ad_accounts?: { account_name: string | null; is_default: boolean }[] | null;
+  };
+  const list = row.meta_ad_accounts ?? [];
+  const primary = list.find((a) => a.is_default) ?? list[0] ?? null;
+  return {
+    connectionId: row.id,
+    connected: row.connected,
+    accountCount: list.length,
+    primaryName: primary?.account_name ?? null,
+    expiresInDays: daysUntil(row.token_expires_at),
+  };
+}
+
 // 채널명을 박지 않은 범용 메시지 — 인스타그램·Threads가 같은 콜백 파라미터 규약을 쓴다.
 // 연동 성공은 handle 쿼리파라미터로 구체적인 계정을 보여준다(아래 SettingsPage에서 조합).
 const CONNECT_MESSAGES: Record<string, { tone: "positive" | "warning" | "negative"; text: string }> = {
@@ -130,6 +202,25 @@ const CONNECT_MESSAGES: Record<string, { tone: "positive" | "warning" | "negativ
     text: "토큰 암호화 키가 설정되지 않아 연동을 중단했어요. 관리자 설정이 필요합니다.",
   },
   already_linked: { tone: "warning", text: "이미 다른 핀치 계정에 연동된 계정이에요." },
+  /* 광고 연동 — 토큰은 저장됐는데 광고 계정을 못 읽은 «절반 성공».
+     실패로 덮으면 이미 승인한 연동을 처음부터 다시 하게 만든다. */
+  ads_accounts_unavailable: {
+    tone: "warning",
+    text: "연동은 됐지만 광고 계정 목록을 불러오지 못했어요. 잠시 후 광고 화면을 다시 열어 주세요.",
+  },
+  no_ad_account: {
+    tone: "warning",
+    text: "연동은 됐지만 접근할 수 있는 광고 계정이 없어요. 메타에서 이 계정에 광고 계정 권한이 있는지 확인해 주세요.",
+  },
+  ads_profile: {
+    tone: "negative",
+    text: "계정 정보를 읽지 못했어요. 잠시 후 다시 시도해 주세요.",
+  },
+  /* 운영자가 할 일이 있는 상태 — 사용자에게 «저장 실패»라고 하면 계속 재시도하게 된다 */
+  migration_needed: {
+    tone: "warning",
+    text: "지금은 이 연동을 마무리할 수 없어요. 준비가 끝나는 대로 안내드릴게요.",
+  },
   /* 데모 모드에서는 연동해도 그 계정이 화면에 안 나온다(live.ts 가 목데이터를 쓴다).
      사용자에게 «데모 모드»라는 내부 상태를 말하지 않고, 지금 할 수 없다는 사실만 전한다. */
   demo_mode: {
@@ -205,7 +296,7 @@ export default async function SettingsPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const cards = await loadAccountCards();
+  const [cards, adsCard] = await Promise.all([loadAccountCards(), loadAdsCard()]);
   const sp = await searchParams;
   const connectParam = typeof sp.connect === "string" ? sp.connect : null;
   const reasonParam = typeof sp.reason === "string" ? sp.reason : null;
@@ -236,6 +327,9 @@ export default async function SettingsPage({
      연동을 중단했어요」로 튕긴다. 인스타 쪽에는 핀치가 «승인된 앱»으로 남고 우리에겐 아무것도 없다.
      세 채널이 같은 키를 쓰므로 한 번에 건다. */
   const tokenEncryptionReady = isTokenEncryptionConfigured();
+  /* 광고는 **Facebook 앱** 자격증명이 따로 필요하다(META_APP_ID) — 인스타 설정과 별개다.
+     데모 모드에서는 카드 흐름을 체험할 수 있게 켜 두되, start 라우트가 데모를 막는다. */
+  const metaAdsReady = (isMetaAdsOAuthConfigured() && tokenEncryptionReady) || isDemoMode();
   // 자격증명 존재 여부로 버튼 자체를 켠다 — 미설정이면 사유를 노출하지 않고 "연동 준비중" 배지만 보여준다.
   const OAUTH_READY: Record<Channel, boolean> = {
     instagram: instagramOAuthConfigured && tokenEncryptionReady,
@@ -347,7 +441,7 @@ export default async function SettingsPage({
           </Card>
         ))}
 
-        {/* Meta 광고 계정 — 채널 계정과 별도 연동 (PART 4.2). Marketing API 연동은 후속. */}
+        {/* Meta 광고 계정 — 채널 계정과 별도 연동 (PART 4.2). 표가 둘이라 카드도 따로다(0077). */}
         <Card className="p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 items-start gap-3.5">
@@ -361,14 +455,68 @@ export default async function SettingsPage({
                     </span>
                     Meta 광고
                   </Badge>
-                  {/* 상태 배지는 카드당 1개, 채널 카드와 동일하게 연동됨=positive */}
-                  {isDemoMode() ? <Badge tone="positive">연동됨</Badge> : <Badge tone="neutral">연동 준비중</Badge>}
+                  {/* 상태 배지는 카드당 1개. 조회 실패(null)를 «미연동»으로 단정하지 않는다. */}
+                  {adsCard === null ? (
+                    <Badge tone="warning">상태 확인 실패</Badge>
+                  ) : adsCard.connected ? (
+                    <Badge tone="positive">연동됨</Badge>
+                  ) : metaAdsReady ? (
+                    <Badge tone="neutral">미연동</Badge>
+                  ) : (
+                    <Badge tone="neutral">연동 준비중</Badge>
+                  )}
                 </div>
                 <p className="mt-2 text-[15px] text-fg-sub">
-                  {isDemoMode() ? "핀치 마케팅 · 광고 계정 act-2048" : "Marketing API 연동 준비중입니다."}
+                  {adsCard === null
+                    ? "연동 상태를 확인하지 못했어요. 잠시 후 새로고침해 주세요."
+                    : adsCard.connected
+                      ? `${adsCard.primaryName ?? "광고 계정"}${
+                          adsCard.accountCount > 1 ? ` 외 ${adsCard.accountCount - 1}개` : ""
+                        }`
+                      : metaAdsReady
+                        ? "광고 계정을 연결하면 캠페인 집행 금액·노출·CTR·ROAS를 핀치에서 볼 수 있어요."
+                        : "곧 열릴 예정이니 조금만 기다려 주세요."}
                 </p>
+                {/* ⚠️ 만료일을 **숨기지 않는다.** 이 연결은 자동 갱신이 안 되므로,
+                    조용히 끊기면 어느 날 광고 성과가 통째로 사라진다. */}
+                {adsCard?.connected && adsCard.expiresInDays !== null ? (
+                  <p
+                    className={
+                      adsCard.expiresInDays <= 14
+                        ? "mt-1 text-[14px] text-warning-strong"
+                        : "mt-1 text-[14px] text-fg-faint"
+                    }
+                  >
+                    {adsCard.expiresInDays <= 0
+                      ? "연결이 만료됐어요 — 다시 연결해 주세요."
+                      : `${adsCard.expiresInDays}일 뒤 다시 연결이 필요해요 (메타 정책)`}
+                  </p>
+                ) : null}
               </div>
             </div>
+
+            {adsCard?.connected && adsCard.connectionId ? (
+              <div className="flex items-center gap-2">
+                {metaAdsReady ? (
+                  <a href={META_ADS_START_PATH} className={buttonClasses("secondary", "sm")}>
+                    재연동
+                  </a>
+                ) : null}
+                <ConfirmSubmit
+                  action={disconnectMetaAds}
+                  hiddenFields={{ connectionId: adsCard.connectionId }}
+                  title="광고 연동 해제"
+                  description="연동을 해제하면 저장된 토큰이 삭제되고 광고 성과 조회가 중단됩니다. 해제할까요?"
+                  confirmLabel="해제"
+                  pendingLabel="해제 중…"
+                  trigger="해제"
+                />
+              </div>
+            ) : metaAdsReady && adsCard !== null ? (
+              <a href={META_ADS_START_PATH} className={buttonClasses("primary", "sm")}>
+                연동하기
+              </a>
+            ) : null}
           </div>
         </Card>
       </section>
@@ -405,6 +553,19 @@ export default async function SettingsPage({
                   <li key={s} className="flex items-center gap-2 text-[15px] text-fg-sub">
                     <Check className="size-4 text-positive" aria-hidden />
                     {THREADS_SCOPE_LABELS[s]}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {isMetaAdsOAuthConfigured() ? (
+            <div>
+              <h4 className="text-[14px] font-semibold text-fg-sub">Meta 광고</h4>
+              <ul className="mt-1.5 space-y-2">
+                {META_ADS_SCOPES.map((s) => (
+                  <li key={s} className="flex items-center gap-2 text-[15px] text-fg-sub">
+                    <Check className="size-4 text-positive" aria-hidden />
+                    {META_ADS_SCOPE_LABELS[s]}
                   </li>
                 ))}
               </ul>

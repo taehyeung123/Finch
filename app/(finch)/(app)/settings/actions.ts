@@ -43,3 +43,46 @@ export async function disconnectAccount(formData: FormData): Promise<void> {
   revalidatePath("/settings");
   redirect("/settings?connect=disconnected");
 }
+
+/**
+ * 메타 광고 연동 해제 — meta_ad_connections 행을 지운다.
+ * meta_ad_accounts 는 connection_id 외래키의 on delete cascade 로 함께 사라진다(0077).
+ *
+ * 채널 해제와 표가 달라 함수를 따로 둔다 — 하나로 합치면 «어느 표를 지울지»를
+ * 폼 값으로 받아야 하고, 그건 사용자가 보내는 값으로 지울 표를 고르는 것과 같다.
+ */
+export async function disconnectMetaAds(formData: FormData): Promise<void> {
+  const connectionId = formData.get("connectionId");
+  if (typeof connectionId !== "string" || !connectionId) {
+    redirect("/settings?connect=error&reason=disconnect_failed");
+  }
+  if (isDemoMode()) {
+    redirect("/settings?connect=disconnected");
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/settings?connect=error&reason=disconnect_failed");
+  }
+
+  // 0행 삭제를 성공으로 덮지 않는다 — «해제했는데 그대로예요»가 된다(위와 같은 규칙)
+  const { data: deleted, error } = await supabase
+    .from("meta_ad_connections")
+    .delete()
+    .eq("id", connectionId)
+    .eq("user_id", user.id)
+    .select("id");
+  if (error || !deleted || deleted.length === 0) {
+    console.error(
+      "[settings] 광고 연동 해제 실패:",
+      error?.message ?? "0행 삭제(권한 또는 이미 삭제됨)",
+    );
+    redirect("/settings?connect=error&reason=disconnect_failed");
+  }
+  revalidatePath("/settings");
+  revalidatePath("/ads");
+  redirect("/settings?connect=disconnected");
+}

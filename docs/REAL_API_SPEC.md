@@ -325,3 +325,73 @@ TikTok avatar_url은 매 응답마다 서명된 전체 URL로 내려오는 방�
 
 https://developers.tiktok.com → "Manage apps" → 앱 생성("Connect an app") 후 App details 상단에
 Client Key(=App ID), Client Secret이 표시된다.
+
+## 7. Meta Marketing API — 광고 성과 조회 (2026-09-01 조사본, 1단계 읽기 전용)
+
+**경로가 인스타·스레드와 완전히 다르다.** 이걸 헷갈리면 «기존 토큰으로 되겠지» 하다가 시간을 버린다.
+
+| | 인스타 | 스레드 | **광고** |
+|---|---|---|---|
+| 호스트 | `graph.instagram.com` | `graph.threads.net` | **`graph.facebook.com`** |
+| 인가 화면 | `www.instagram.com/oauth/authorize` | `threads.net/oauth/authorize` | **`www.facebook.com/v25.0/dialog/oauth`** |
+| 자격증명 | `INSTAGRAM_APP_ID/SECRET` | `THREADS_APP_ID/SECRET` | **`META_APP_ID` + `META_APP_SECRET`** |
+| 장기토큰 갱신 | `ig_refresh_token` ✅ | `th_refresh_token` ✅ | **불가 ❌ — 재로그인만** |
+
+### OAuth 3단계
+
+```
+1. 인가   GET https://www.facebook.com/v25.0/dialog/oauth
+          ?client_id=&redirect_uri=&state=&response_type=code&scope=ads_read
+2. 교환   GET https://graph.facebook.com/v25.0/oauth/access_token
+          ?client_id=&client_secret=&redirect_uri=&code=          → 단기 토큰
+3. 장기   GET https://graph.facebook.com/v25.0/oauth/access_token
+          ?grant_type=fb_exchange_token&client_id=&client_secret=&fb_exchange_token=
+```
+
+`redirect_uri` 는 1·2 단계가 **글자까지 같아야** 한다(다르면 «Error validating verification code»).
+
+### ⚠️ 장기 토큰은 자동 갱신이 없다
+
+약 60일 뒤 만료되고 **사용자가 다시 로그인하는 것 외에 방법이 없다.**
+인스타·스레드·틱톡은 전부 갱신 엔드포인트가 있는데 페이스북 사용자 토큰만 없다.
+→ 화면이 만료일을 **숨기지 않고 보여준다**(틱톡은 24h 토큰이 매일 갱신돼서 숨기는데, 여기선 반대다).
+
+### 부여된 스코프 확인
+
+인스타는 토큰 교환 응답에 `permissions` 가 딸려 오지만 **페이스북은 안 준다** —
+`GET /me/permissions` 를 따로 불러야 `{data:[{permission, status}]}` 로 확인할 수 있다(`status==="granted"` 만 유효).
+
+### 조회 엔드포인트
+
+- `GET /me/adaccounts?fields=account_id,name,currency,timezone_name,account_status`
+  `account_id` 는 **`act_` 접두가 없는 숫자**다. 호출할 땐 `act_{id}` 로 조립한다(둘을 섞으면 조용히 404).
+- `GET /act_{id}/campaigns?fields=id,name,objective,status,effective_status,daily_budget,lifetime_budget`
+  - `status` 는 사용자가 설정한 값, **`effective_status` 가 실제 게재 여부**다(심사중·거부됨·결제필요가 여기 온다).
+  - 예산은 **계정 통화의 최소 단위 문자열**이고, 캠페인에 없으면 광고 세트 예산(ABO)이라는 뜻 — 0원이 아니다.
+- `GET /act_{id}/insights?level=campaign&date_preset=last_30d&fields=…`
+  - **캠페인마다 부르지 말 것** — `level=campaign` 한 번이면 전부 온다(안 그러면 레이트리밋에 바로 걸린다).
+  - `spend` 는 **주 단위 문자열**(`"12345.67"`)이다. 예산의 최소 단위와 다르다.
+  - `clicks` 는 «모든 클릭»(좋아요·프로필 등 포함)이다 — 링크 클릭은 `inline_link_clicks`.
+    `ctr`/`cpc` 도 전체 클릭 기준이라 링크 기준으로 쓰려면 직접 계산해야 한다.
+  - 전환·매출은 `actions`/`action_values` 배열의 `action_type` 으로 뽑는다(`purchase`·`omni_purchase`·
+    `offsite_conversion.fb_pixel_purchase`). **픽셀이 없으면 배열 자체가 없다** — 그건 «전환 0»이 아니라
+    «추적 안 함»이므로 `null` 로 둔다(0.0배 ROAS 로 만들면 성과가 없다고 확언하는 셈이다).
+  - 조회 기간에 노출이 없는 캠페인은 **행 자체가 안 온다** — 캠페인 목록과 조인해야 전부 보인다.
+
+### 접근 수준
+
+**본인 광고 계정 조회는 Standard Access 로 된다**(심사 불요, 앱에 역할이 있는 사람 기준).
+`ads_management`(생성·수정)와 **고객 광고 계정 대행**은 Advanced Access — 사업자등록증 + 비즈니스 인증이 필요하다.
+
+### 앱 대시보드에 등록할 것
+
+메타 앱에 **광고 관리(Facebook 로그인) 이용 사례**를 추가하고 URL 3종을 넣는다:
+
+```
+유효한 OAuth 리디렉션 URI : https://finch.ai.kr/api/auth/meta-ads/callback
+연동 해제 콜백 URL        : https://finch.ai.kr/api/auth/meta-ads/deauthorize
+데이터 삭제 요청 URL      : https://finch.ai.kr/api/auth/meta-ads/data-deletion
+```
+
+두 콜백의 `signed_request` 는 **Facebook 앱 시크릿**(`META_APP_SECRET`)으로 서명된다 —
+Instagram 제품 시크릿이 아니다.

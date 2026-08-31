@@ -1,6 +1,6 @@
 # API 연동 로드맵 — 무엇이 끝났고 무엇이 남았나
 
-> **최종 대조: 2026-08-31.** 이 문서는 «앞으로 할 일» 목록이라 실제와 어긋나면 곧장 헛수고가 된다.
+> **최종 대조: 2026-09-01.** 이 문서는 «앞으로 할 일» 목록이라 실제와 어긋나면 곧장 헛수고가 된다.
 > 2026-08-30 점검에서 **20건 넘는 항목이 이미 끝난 일을 «할 일»로 붙들고 있었다** — 전면 개정했다.
 > 고칠 때는 반드시 코드를 열어 확인할 것. 기억으로 쓰면 다시 같은 상태가 된다.
 
@@ -16,9 +16,9 @@
 | ScrapeCreators (광고·레퍼런스 수집) | ✅ 완료 (공용 풀 크론 가동) | ✅ 키 설정 완료 | 없음 |
 | Instagram (지표·발행·자동DM) | ✅ 완료 | ✅ **프로덕션 설정 완료** | ⚠️ 재연동(발행 권한) → 심사 |
 | Threads (지표·발행) | ✅ 완료 (2026-08-31 발행 추가) | ✅ **프로덕션 설정 완료** | 심사 |
-| TikTok (프로필 지표) | ✅ 완료 | ❌ `TIKTOK_CLIENT_KEY/SECRET` 미설정 | 앱 등록(심사 불요로 개발 가능) |
+| TikTok (프로필 지표) | ✅ 완료 | ✅ **Sandbox 키 설정·연동 확인 완료** | 정식 공개는 앱 심사(데모 영상) |
 | Toss Payments | ✅ 완료 (위젯·빌링·웹훅) | ❌ 키 미설정 | 계약 → 키 |
-| Meta 광고 관리 (Marketing API) | ❌ **미착수** | — | 어댑터부터 신규 개발 |
+| Meta 광고 관리 (Marketing API) | ✅ 1단계 완료 (읽기 전용, 2026-09-01) | ❌ `META_APP_ID` 미설정 | 앱에 광고 이용사례 추가 → 환경변수 → 0077·0078 |
 
 ---
 
@@ -26,7 +26,7 @@
 
 Pro 결제·프로젝트 생성 완료. Google/Kakao 로그인 동작 중(구글은 동의화면 브랜딩·인증까지 끝).
 
-**⚠️ 마이그레이션은 74개다**(`0001`~`0074`). 옛 문서가 «0001~0003이면 된다»고 적어 두었는데
+**⚠️ 마이그레이션은 78개다**(`0001`~`0078`). 이 중 `0077`·`0078` 은 아직 미적용이다. 옛 문서가 «0001~0003이면 된다»고 적어 두었는데
 그것만 적용하면 결제·예약발행·틱톡·팀·크레딧·레퍼런스·공용 풀·프로필 링크가 전부 없는 반쪽 DB가 된다.
 적용 순서·주의사항은 `supabase/README.md` — 특히 **이미 돌아가는 프로젝트에 `apply_all`을 다시 돌리지 말 것**
 (`create or replace`가 뒤 마이그레이션이 고쳐 놓은 함수를 옛 버전으로 되돌린다).
@@ -79,8 +79,10 @@ Pro 결제·프로젝트 생성 완료. Google/Kakao 로그인 동작 중(구글
 5. 자격증명: `INSTAGRAM_APP_ID`, `THREADS_APP_ID`, `THREADS_APP_SECRET`, `META_APP_SECRET`,
    `TOKEN_ENCRYPTION_KEY`(32바이트 base64 또는 64자 hex —
    `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`).
-   - ⚠️ `INSTAGRAM_APP_SECRET` 이라는 변수는 **없다.** 코드는 `META_APP_SECRET` 하나만 읽는다
-     (웹훅 서명검증과 시크릿을 공유해야 해서다).
+   - ⚠️ 인스타 토큰 교환은 **`INSTAGRAM_APP_SECRET`**(Instagram 제품의 시크릿)을 쓴다 —
+     `META_APP_SECRET`(설정 > 기본 설정의 앱 시크릿 코드)과 **다른 값**이다. 미설정이면 후자로 폴백한다.
+     2026-08-06 에 이 둘을 «통일»한다며 합쳤다가 토큰 교환이 6주간 조용히 깨져 있었다(2026-08-31 적발).
+     웹훅 서명검증은 그대로 `META_APP_SECRET` 을 쓴다 — 제품이 다르면 시크릿도 다르다.
 6. **개발·테스트는 심사 없이 가능하다.** Standard Access(앱에 역할이 있는 테스터 계정)로
    전 기능을 돌려볼 수 있다. 심사는 **일반 사용자에게 열 때** 필요하다.
 7. Instagram 앱 심사(App Review) — **신청 목록의 정본은 [docs/REAL_API_SPEC.md](REAL_API_SPEC.md) 1절.** 사본:
@@ -108,18 +110,40 @@ Pro 결제·프로젝트 생성 완료. Google/Kakao 로그인 동작 중(구글
 - 법률: 정보통신망법(광고성 정보 동의·(광고) 표기·수신거부·야간), 개인정보보호법(수탁자 DPA)
 - 비용·운영 체크리스트: [docs/AUTO_DM_COST_RISK.md](AUTO_DM_COST_RISK.md)
 
-## 4. Meta 광고 관리 (Marketing API) — **유일하게 코드가 없는 항목**
+## 4. Meta 광고 관리 (Marketing API) — 1단계(읽기 전용) 코드 완료 · 자격증명 대기
 
-`/ads`·`/ads/campaigns` 화면(5단계 캠페인 마법사 포함)은 완성돼 있지만, **Marketing API 호출 코드가
-저장소에 0건**이다. 화면 자체가 「Phase 3 예정」·「상태 변경은 목 동작」이라고 적고 있다.
+**2026-09-01 에 1단계를 지었다.** 읽기 전용이다 — 광고 계정·캠페인·성과를 **보는** 것까지.
+캠페인 생성·수정(`ads_management`)은 Advanced Access 가 필요해 뒤로 미뤘다.
 
-남은 일(전부 신규 개발):
-1. `ads_management`·`ads_read` 스코프를 요청하는 광고 계정 연결 플로우 — 지금 IG/Threads OAuth엔 광고 스코프가 없다
-2. `lib/meta/ads.ts` 어댑터 — `/act_{id}/campaigns`·`/insights` 조회, Campaign→AdSet→Ad 3단 생성
-3. 캠페인·인사이트 저장용 마이그레이션 (현재 관련 테이블 0건)
-4. `lib/data/index.ts`의 `campaigns` export를 실 조회로 교체
-5. 접근 수준: **본인 광고 계정**은 Standard Access. **고객 광고 계정 대행**은 Advanced Access
-   (사업자등록증 + 비즈니스 인증) — 사업자 나온 뒤
+**있는 것:**
+
+| 파일 | 하는 일 |
+|---|---|
+| `lib/meta/ads-oauth.ts` | Facebook Login OAuth (인가·토큰교환·장기토큰·`/me`·`/me/permissions`) |
+| `lib/meta/ads.ts` | `/me/adaccounts`·`/act_{id}/campaigns`·`/act_{id}/insights` 조회 |
+| `lib/data/ads.ts` | DB 조회 → 토큰 복호화 → 어댑터 호출, 5개 상태 반환 |
+| `lib/ads/meta-labels.ts` | 목표·게재상태·계정상태 코드 → 한국어 |
+| `app/api/auth/meta-ads/{start,callback,deauthorize,data-deletion}` | 연동 4종 라우트 |
+| `supabase/migrations/0077_meta_ad_accounts.sql` | `meta_ad_connections` + `meta_ad_accounts` |
+
+**⚠️ 이 연동만 다른 점 셋:**
+
+1. **네 번째 자격증명이 필요하다.** `META_APP_ID`(Facebook 앱 ID) + `META_APP_SECRET`.
+   인스타 토큰으로는 광고를 한 줄도 못 부른다 — 호스트(`graph.facebook.com`)·자격증명·스코프가 전부 다르다.
+2. **장기 토큰이 자동 갱신되지 않는다.** 약 60일 뒤 만료되고 재로그인 외에 방법이 없다.
+   인스타(`ig_refresh_token`)·스레드(`th_refresh_token`)·틱톡(`refresh_token`)은 전부 갱신되는데 광고만 예외다.
+   그래서 설정·광고 화면이 만료일을 **숨기지 않고 보여준다**(틱톡과 정반대 규칙).
+3. **표를 `connected_accounts` 와 공유하지 않는다.** 채널 check 제약·전역 유니크·«채널당 1행» 전제 때문에
+   재사용이 불가능하다. 근거는 `0077` 헤더 주석에 적어 뒀다.
+
+**남은 일:**
+1. 메타 앱에 **광고(Facebook Login) 이용 사례** 추가 + 콜백 URL 3종 등록 (`.env.example` 참고)
+2. `META_APP_ID` 환경변수 설정 → 재배포 (`META_APP_SECRET` 은 이미 있다)
+3. 마이그레이션 `0077`·`0078` 적용
+4. **2단계(캠페인 생성·수정)** — `ads_management` 스코프, Advanced Access 심사, Campaign→AdSet→Ad 3단 생성.
+   `/ads/campaigns` 5단계 마법사 화면은 이미 있고 저장만 목 동작이다.
+5. 접근 수준: **본인 광고 계정**은 Standard Access(지금 상태로 동작). **고객 광고 계정 대행**은
+   Advanced Access(사업자등록증 + 비즈니스 인증)
 
 > ⚠️ **경쟁사 광고 수집과 혼동하지 말 것.** 그건 별개 기능이고 **이미 돌아간다**(6번).
 

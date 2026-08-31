@@ -15,9 +15,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
   코드를 무차별 대입해 남의 요청을 확인하는 길을 만들지 않기 위해서다.
 */
 
-const CHANNEL_LABEL = { instagram: "Instagram", threads: "Threads" } as const;
+const CHANNEL_LABEL = { instagram: "Instagram", threads: "Threads", meta_ads: "Meta 광고" } as const;
 
 type Channel = keyof typeof CHANNEL_LABEL;
+
+/** 사용자가 삭제를 요청한 «자리» — 채널마다 메뉴가 다르다. 안내가 틀리면 찾아갈 수가 없다. */
+const REQUEST_PLACE: Record<Channel, string> = {
+  instagram: "Instagram 앱 설정",
+  threads: "Threads 앱 설정",
+  meta_ads: "페이스북 설정의 비즈니스 통합",
+};
 
 type Status =
   | { kind: "done"; deletedRows: number; at: string }
@@ -82,8 +89,8 @@ export async function DeletionStatus({ channel, code }: { channel: Channel; code
           <SearchX className="size-10 text-fg-faint" aria-hidden />
           <h1 className="text-xl font-bold">확인 코드를 찾을 수 없어요</h1>
           <p className="text-[14px] leading-relaxed text-fg-sub">
-            주소가 잘못됐거나 이 코드로 접수된 요청이 없습니다. {label} 앱 설정에서 받은 링크를 그대로 열어
-            주세요.
+            주소가 잘못됐거나 이 코드로 접수된 요청이 없습니다. {REQUEST_PLACE[channel]}에서 받은 링크를 그대로
+            열어 주세요.
           </p>
         </>
       ) : status.kind === "no_code" ? (
@@ -91,8 +98,8 @@ export async function DeletionStatus({ channel, code }: { channel: Channel; code
           <HelpCircle className="size-10 text-fg-faint" aria-hidden />
           <h1 className="text-xl font-bold">확인 코드가 필요해요</h1>
           <p className="text-[14px] leading-relaxed text-fg-sub">
-            {label} 앱 설정에서 데이터 삭제를 요청하시면 확인 코드가 담긴 링크를 받게 됩니다. 그 링크로 들어오시면
-            처리 상태를 보여드려요.
+            {REQUEST_PLACE[channel]}에서 데이터 삭제를 요청하시면 확인 코드가 담긴 링크를 받게 됩니다. 그 링크로
+            들어오시면 처리 상태를 보여드려요.
           </p>
         </>
       ) : (
