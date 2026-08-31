@@ -84,9 +84,10 @@ export async function GET(request: Request) {
      계정 유형(개인 계정) 문제인지가 전부 같은 문구로 나왔다(2026-08-31 실제로 여기서 막혔다).
      사용자에게는 «무엇을 하면 되는지»가 다르므로 문구도 갈라야 한다. */
   let stage: "code" | "longlived" | "account" = "code";
+  /* 진단용으로 catch 에서도 읽는다 — «어떤 주소를 보냈는지»가 이 오류의 핵심 정보다 */
+  const redirectUri = resolveCallbackUri(request);
 
   try {
-    const redirectUri = resolveCallbackUri(request);
     console.info("[" + TAG + "] 토큰 교환 시작 redirect_uri=" + redirectUri);
     const shortLived = await exchangeCodeForToken({ code, redirectUri, config });
     stage = "longlived";
@@ -193,6 +194,12 @@ export async function GET(request: Request) {
        로그만으로는 원인을 못 찾는 상황이 실제로 벌어졌다(2026-08-31): Vercel 로그를 뒤져도
        안 나오고, 세 번을 시도해도 같은 문구만 반복돼 추측만 쌓였다.
        고객에게는 여전히 안 보인다 — CLAUDE.md 내부 운영 정보 비노출 규칙을 지킨다. */
-    return settingsRedirect(origin, { connect: "error", reason, detail: msg.slice(0, 300) });
+    /* 우리가 실제로 보낸 redirect_uri 를 함께 보여준다.
+       메타 앱에 등록된 값과 **글자 단위로** 다른 곳을 눈으로 찾을 수 있어야 한다. */
+    return settingsRedirect(origin, {
+      connect: "error",
+      reason,
+      detail: (msg + " | redirect_uri=" + redirectUri).slice(0, 400),
+    });
   }
 }

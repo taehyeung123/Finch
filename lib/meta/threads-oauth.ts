@@ -61,8 +61,14 @@ export const THREADS_CALLBACK_PATH = "/api/auth/threads/callback";
 export function resolveThreadsCallbackUri(request: Request): string {
   const configured = process.env.NEXT_PUBLIC_SITE_URL;
   if (configured) return `${configured.replace(/\/$/, "")}${THREADS_CALLBACK_PATH}`;
-  const proto = request.headers.get("x-forwarded-proto") ?? "https";
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "localhost:3170";
+  /* ⚠️ 프록시가 여러 겹이면 이 헤더가 «https,https» · «a.com,b.com» 처럼 **쉼표로 누적**된다.
+     그대로 쓰면 redirect_uri 가 망가지고, 두 요청(인가·토큰교환)에서 값이 달라져
+     Meta 가 «redirect_uri 가 인가 때와 다르다» 로 거절한다(2026-08-31 실제로 여기서 막혔다).
+     첫 값만 취한다 — 원본 클라이언트에 가장 가까운 값이다. */
+  const first = (v: string | null) => v?.split(",")[0]?.trim() || null;
+  const proto = first(request.headers.get("x-forwarded-proto")) ?? "https";
+  const host =
+    first(request.headers.get("x-forwarded-host")) ?? first(request.headers.get("host")) ?? "localhost:3000";
   return `${proto}://${host}${THREADS_CALLBACK_PATH}`;
 }
 
