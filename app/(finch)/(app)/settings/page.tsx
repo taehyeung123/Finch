@@ -138,6 +138,20 @@ const CONNECT_MESSAGES: Record<string, { tone: "positive" | "warning" | "negativ
   },
   save_failed: { tone: "negative", text: "연동 정보 저장 중 오류가 발생했어요. 다시 시도해 주세요." },
   exchange: { tone: "negative", text: "토큰 교환 중 오류가 발생했어요. 다시 시도해 주세요." },
+  /* 위 exchange 를 단계별로 가른 것 — 사용자가 할 일이 단계마다 다르다.
+     한 문구로 뭉치면 앱 설정 문제인지 계정 유형 문제인지 구분이 안 된다(2026-08-31). */
+  exchange_code: {
+    tone: "negative",
+    text: "연동 승인은 받았는데 그다음 단계에서 막혔어요. 앱 설정 문제일 수 있어요 — 잠시 후 다시 시도해 주세요.",
+  },
+  exchange_longlived: {
+    tone: "negative",
+    text: "장기 접속 권한을 받는 중에 막혔어요. 잠시 후 다시 시도해 주세요.",
+  },
+  account_info: {
+    tone: "negative",
+    text: "계정 정보를 읽지 못했어요. 인스타그램이 비즈니스 또는 크리에이터 계정인지 확인해 주세요.",
+  },
   encrypt_failed: { tone: "negative", text: "토큰 암호화 중 오류가 발생했어요. 다시 시도해 주세요." },
   disconnect_failed: { tone: "negative", text: "연동 해제 중 오류가 발생했어요. 다시 시도해 주세요." },
   /* 연동 자체는 됐지만 계정별 웹훅 구독이 실패한 경우.

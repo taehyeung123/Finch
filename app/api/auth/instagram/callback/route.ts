@@ -78,10 +78,20 @@ export async function GET(request: Request) {
     return settingsRedirect(origin, { connect: "error", reason: "no_encryption_key" });
   }
 
+  /* 어느 단계에서 실패했는지 추적한다.
+     예전엔 세 호출을 try 하나로 묶고 전부 «토큰 교환 중 오류» 로 뭉갰는데,
+     그러면 **원인을 좁힐 수가 없다** — 앱 시크릿 문제인지, redirect_uri 불일치인지,
+     계정 유형(개인 계정) 문제인지가 전부 같은 문구로 나왔다(2026-08-31 실제로 여기서 막혔다).
+     사용자에게는 «무엇을 하면 되는지»가 다르므로 문구도 갈라야 한다. */
+  let stage: "code" | "longlived" | "account" = "code";
+
   try {
     const redirectUri = resolveCallbackUri(request);
+    console.info("[" + TAG + "] 토큰 교환 시작 redirect_uri=" + redirectUri);
     const shortLived = await exchangeCodeForToken({ code, redirectUri, config });
+    stage = "longlived";
     const longLived = await exchangeForLongLivedToken({ shortLivedToken: shortLived.accessToken, config });
+    stage = "account";
     const info = await fetchAccountInfo(longLived.accessToken);
 
     const cipher = encryptToken(longLived.accessToken);
@@ -171,7 +181,14 @@ export async function GET(request: Request) {
 
     return settingsRedirect(origin, { connect: "success", handle: row.handle });
   } catch (e) {
-    console.error("[ig-oauth] 콜백 처리 실패:", e instanceof Error ? e.message : String(e));
-    return settingsRedirect(origin, { connect: "error", reason: "exchange" });
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[" + TAG + "] 콜백 처리 실패 stage=" + stage + ":", msg);
+    /* 단계별로 사용자가 할 일이 다르다:
+       code      — 앱 자격증명·콜백 주소 문제(운영자가 고칠 것)
+       longlived — 단기→장기 교환 실패. 시크릿 문제일 때가 많다
+       account   — 토큰은 받았는데 프로필을 못 읽는다. **개인 계정**이 대표 원인이다 */
+    const reason =
+      stage === "account" ? "account_info" : stage === "longlived" ? "exchange_longlived" : "exchange_code";
+    return settingsRedirect(origin, { connect: "error", reason });
   }
 }
