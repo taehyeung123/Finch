@@ -189,6 +189,10 @@ export async function GET(request: Request) {
        account   — 토큰은 받았는데 프로필을 못 읽는다. **개인 계정**이 대표 원인이다 */
     const reason =
       stage === "account" ? "account_info" : stage === "longlived" ? "exchange_longlived" : "exchange_code";
-    return settingsRedirect(origin, { connect: "error", reason });
+    /* 원문을 detail 로 함께 넘긴다 — 화면은 **운영자에게만** 보여준다(설정 화면에서 판정).
+       로그만으로는 원인을 못 찾는 상황이 실제로 벌어졌다(2026-08-31): Vercel 로그를 뒤져도
+       안 나오고, 세 번을 시도해도 같은 문구만 반복돼 추측만 쌓였다.
+       고객에게는 여전히 안 보인다 — CLAUDE.md 내부 운영 정보 비노출 규칙을 지킨다. */
+    return settingsRedirect(origin, { connect: "error", reason, detail: msg.slice(0, 300) });
   }
 }

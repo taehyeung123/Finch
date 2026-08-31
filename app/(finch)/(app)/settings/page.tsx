@@ -210,6 +210,13 @@ export default async function SettingsPage({
   const connectParam = typeof sp.connect === "string" ? sp.connect : null;
   const reasonParam = typeof sp.reason === "string" ? sp.reason : null;
   const handleParam = typeof sp.handle === "string" ? sp.handle : null;
+  /* 연동 실패 원문 — **운영자에게만** 보여준다. 고객에게는 내부 운영 정보라 노출하지 않는다.
+     이게 없으면 «앱 설정 문제일 수 있어요» 같은 두루뭉술한 문구만 남아, 메타가 실제로 뭐라고
+     거절했는지 알 길이 없다(로그를 못 찾는 상황이 실제로 있었다). */
+  const detailParam = typeof sp.detail === "string" ? sp.detail : null;
+  const viewer = await getAuthUser();
+  const ownerEmail = process.env.OWNER_EMAIL?.trim().toLowerCase();
+  const isOwner = !!ownerEmail && viewer?.email?.trim().toLowerCase() === ownerEmail;
   /* connect=warn — 연동은 됐지만 부수 작업이 실패한 «절반 성공».
      성공으로 덮으면 사용자가 못 고치고, 실패로 덮으면 실제로 된 연동을 다시 하게 만든다. */
   const banner =
@@ -253,6 +260,10 @@ export default async function SettingsPage({
           role="status"
         >
           {banner.text}
+          {/* 원문은 운영자에게만 — 고객 화면에 메타 오류를 그대로 뿌리지 않는다 */}
+          {isOwner && detailParam ? (
+            <p className="mt-2 break-all font-mono text-[12px] leading-relaxed opacity-80">{detailParam}</p>
+          ) : null}
         </div>
       ) : null}
 
