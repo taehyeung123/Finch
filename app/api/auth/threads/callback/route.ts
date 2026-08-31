@@ -106,6 +106,11 @@ export async function GET(request: Request) {
       access_token_cipher: cipher,
       token_expires_at: expiresAt,
       platform_user_id: info.id,
+      /* 인스타와 같은 규칙 — 동의 시점 권한을 기록해 두면 «발행 권한 없는 토큰» 을
+         새벽 크론이 아니라 예약하는 순간에 잡을 수 있다(0075).
+         Threads 응답의 permissions 는 스펙에 명시돼 있지 않아 빈 배열로 올 수 있는데,
+         그건 «권한 없음» 이 아니라 «모름» 이라 컬럼을 아예 비워 둔다. */
+      ...(shortLived.permissions.length > 0 ? { granted_scopes: shortLived.permissions } : {}),
     };
     // 프로필 사진 — 0006 마이그레이션 미적용이면 컬럼이 없어 실패하므로 폴백으로 재시도
     const rowWithAvatar = { ...row, avatar_url: info.profilePictureUrl };
@@ -122,6 +127,14 @@ export async function GET(request: Request) {
     let write = existing
       ? await supabase.from("connected_accounts").update(rowWithAvatar).eq("id", existing.id).select("id")
       : await supabase.from("connected_accounts").insert(rowWithAvatar).select("id");
+    if (write.error && /granted_scopes/i.test(write.error.message)) {
+      // 0075 미적용 DB — 스코프 기록만 포기하고 나머지는 저장한다(계단식 폴백)
+      const { granted_scopes: _s, ...withoutScopes } = rowWithAvatar as Record<string, unknown>;
+      void _s;
+      write = existing
+        ? await supabase.from("connected_accounts").update(withoutScopes).eq("id", existing.id).select("id")
+        : await supabase.from("connected_accounts").insert(withoutScopes).select("id");
+    }
     if (write.error && /avatar_url/i.test(write.error.message)) {
       write = existing
         ? await supabase.from("connected_accounts").update(row).eq("id", existing.id).select("id")
