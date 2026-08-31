@@ -22,28 +22,12 @@ import { GRAPH_INSTAGRAM_BASE } from "./graph";
  * 스코프는 **동의 시점에** 결정되므로 나중에 배열만 고쳐도 이미 연동한 사용자는
  * 재연동해야 한다 — 연동 시작 전에 맞춰 두는 것이 중요하다(2026-08-30 점검에서 누락 적발).
  */
-/*
-  ⚠️ **진단 중 임시 축소(2026-08-31).** 원래 5개인데 지금 4개만 요청한다.
-
-  왜: 재연동이 «Error validating verification code» 로 계속 막혔다. 인가(동의 화면)는
-  통과하므로 client_id 는 유효하고, redirect_uri 도 메타 등록값과 글자까지 같은 것을 확인했다.
-  7월 18일에는 같은 자격증명으로 연동에 성공했으므로 시크릿·앱ID 가 원인일 수 없다
-  (틀렸으면 그때도 안 됐다). **그 사이 바뀐 유일한 입력이 이 배열**이다 —
-  2026-08-30 에 content_publish 를 추가했다.
-
-  그래서 그 한 줄만 빼고 되돌려 원인을 가른다:
-   · 이걸로 연동이 되면 → 원인은 이 스코프다(메타 앱에서 그 권한을 아직 못 쓰는 상태)
-   · 이걸로도 안 되면 → 스코프는 무관하고 메타 쪽 앱 설정(시크릿 재발급 등)을 봐야 한다
-
-  ⚠️ 원인이 갈리면 **반드시 content_publish 를 다시 넣는다.** 그게 없으면 예약 발행이
-  새벽 크론에서 권한 오류로 실패한다(그 사고를 막으려고 0075 를 만들었다).
-*/
 export const INSTAGRAM_SCOPES = [
   "instagram_business_basic",
   "instagram_business_manage_insights",
   "instagram_business_manage_comments",
   "instagram_business_manage_messages",
-  // "instagram_business_content_publish", // ← 진단 중 임시 제외. 결과 나오면 되살릴 것
+  "instagram_business_content_publish",
 ] as const;
 
 /**
@@ -59,7 +43,7 @@ export const INSTAGRAM_SCOPE_LABELS: Record<(typeof INSTAGRAM_SCOPES)[number], s
   instagram_business_manage_insights: "게시물·계정 인사이트 조회",
   instagram_business_manage_comments: "댓글 조회·답글 및 비공개 답장(DM)",
   instagram_business_manage_messages: "다이렉트 메시지 송수신",
-  // instagram_business_content_publish: "예약한 게시물 발행", // ← 위 배열과 함께 되살릴 것
+  instagram_business_content_publish: "예약한 게시물 발행",
 };
 
 export interface InstagramOAuthConfig {
@@ -69,13 +53,20 @@ export interface InstagramOAuthConfig {
 
 /**
  * 앱 설정 로드 — 미설정이면 null (연동 버튼은 비활성 안내).
- * appSecret은 META_APP_SECRET을 쓴다 — Instagram Login과 웹훅(app/api/webhooks/instagram)이
- * 같은 Meta 앱(Instagram 제품)에 속해 시크릿이 하나뿐이라, 별도 INSTAGRAM_APP_SECRET을 두면
- * 배포 시 둘 중 하나만 채우고 넘어가 웹훅 서명검증이 조용히 실패하는 사고가 난다.
  */
 export function getInstagramOAuthConfig(): InstagramOAuthConfig | null {
   const appId = process.env.INSTAGRAM_APP_ID;
-  const appSecret = process.env.META_APP_SECRET;
+  /* ⚠️ **Instagram 제품의 시크릿**을 쓴다 — 페이스북 앱 기본설정의 «앱 시크릿 코드» 와 다른 값이다.
+     Instagram Login 은 제품 단위로 ID·시크릿 **한 쌍**을 발급하고, 토큰 교환은 그 쌍을 요구한다.
+     (스레드도 THREADS_APP_ID/THREADS_APP_SECRET 한 쌍을 쓴다 — 인스타만 짝이 어긋나 있었다.)
+
+     2026-08-06 커밋 «메타 앱 시크릿 이름 통일»(404fdb5)이 이걸 META_APP_SECRET 으로 바꿨다.
+     «웹훅과 시크릿이 하나뿐» 이라는 전제였는데 그게 틀렸다. 그 뒤 6주 동안 OAuth 를 한 번도
+     돌리지 않아 아무도 몰랐고, 2026-08-31 재연동에서 «Error validating verification code» 로 터졌다.
+     인가는 client_id 만 쓰므로 동의 화면은 멀쩡히 뜨고, 시크릿을 처음 쓰는 토큰 교환에서 죽는다.
+
+     폴백을 남긴다 — 전용 변수가 없는 환경에서 기존 동작을 깨지 않기 위해서다. */
+  const appSecret = process.env.INSTAGRAM_APP_SECRET || process.env.META_APP_SECRET;
   if (!appId || !appSecret) return null;
   return { appId, appSecret };
 }
