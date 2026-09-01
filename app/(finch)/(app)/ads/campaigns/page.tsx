@@ -733,7 +733,7 @@ export default function CampaignsPage() {
                       disabled
                       icon={Layers}
                       title="컬렉션"
-                      desc="Phase 3 예정"
+                      desc="준비 중"
                     />
                   </div>
                 </fieldset>
@@ -744,11 +744,11 @@ export default function CampaignsPage() {
                       {/* ⚠️ 업로드는 아직 배선이 없다(파일 입력도 onDrop 도 없음). 예전엔 그 사실을
                           화면이 감춰서, 「파일 선택」을 눌러도 **아무 일도 안 일어났다** — 오류도 없고
                           변화도 없으니 사용자는 자기 브라우저가 고장 난 줄 안다.
-                          같은 화면의 「게재」가 이미 쓰는 방식(Phase 3 예정 뱃지)으로 통일한다.
+                          같은 화면의 「게재」가 이미 쓰는 방식(«준비 중» 뱃지)으로 통일한다.
                           살아 있는 것처럼 보이는 죽은 컨트롤보다, 아직 없다고 말하는 편이 낫다. */}
                       <div className="flex flex-col items-center justify-center gap-2 rounded-card border border-dashed border-line bg-plate px-6 py-10 text-center">
                         <Upload className="size-8 text-fg-faint" aria-hidden />
-                        <Badge tone="primary">Phase 3 예정</Badge>
+                        <Badge tone="primary">준비 중</Badge>
                         <p className="text-[15px] font-semibold text-fg-sub">소재 업로드는 아직 준비 중이에요</p>
                         <p className="text-[14px] text-fg-sub">
                           1:1 또는 4:5 비율 · JPG · PNG · MP4 · 최대 30MB 로 열릴 예정이에요. 지금은 문구·타깃만 저장돼요.
@@ -907,7 +907,7 @@ export default function CampaignsPage() {
                   <Lock className="mt-0.5 size-4 shrink-0 text-fg-faint" aria-hidden />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone="primary">Phase 3 예정</Badge>
+                      <Badge tone="primary">준비 중</Badge>
                       <p className="text-[15px] font-semibold">게재는 아직 준비 중입니다</p>
                     </div>
                     <p className="mt-1 text-[14px] leading-relaxed text-fg-sub">
@@ -1061,7 +1061,7 @@ export default function CampaignsPage() {
 
       {/* ---------------- 구성 3 — 기존 캠페인 목록 ---------------- */}
       <Card>
-        <CardHeader title="기존 캠페인" description="상태 변경은 목 동작이며 저장되지 않습니다" />
+        <CardHeader title="기존 캠페인" description="지금은 목록만 보여드려요 — 상태 변경은 아직 저장되지 않아요" />
         <CardBody className="space-y-3">
           {campaigns.length > 0 ? (
             campaigns.map((c) => {

@@ -107,7 +107,9 @@ export function CampaignDetailModal({
     unitCost: string | null;
     hint?: string;
   }[] = [
-    { label: "노출", value: formatCompact(campaign.impressions), delta: detail.deltas.impressions, direction: "up", unitCost: `CPM ${formatKRW(Math.round((campaign.spend / campaign.impressions) * 1000))}` },
+    /* 노출 0 이면 CPM 은 존재하지 않는다 — 나누면 Infinity 가 그대로 «Infinity원» 으로 찍힌다
+       (막 만든 캠페인·심사 중 캠페인이 실제로 노출 0 이다) */
+    { label: "노출", value: formatCompact(campaign.impressions), delta: detail.deltas.impressions, direction: "up", unitCost: campaign.impressions > 0 ? `CPM ${formatKRW(Math.round((campaign.spend / campaign.impressions) * 1000))}` : null },
     { label: "도달", value: reach === null ? "-" : formatCompact(reach), delta: detail.deltas.reach, direction: "up", unitCost: reach ? `1천명 도달당 ${formatKRW(Math.round((campaign.spend / reach) * 1000))}` : null },
     { label: "빈도", value: frequency === null ? "-" : frequency.toFixed(2), delta: detail.deltas.frequency, direction: "neutral", unitCost: null, hint: "한 사람이 이 광고를 본 평균 횟수 (노출 ÷ 도달)." },
     { label: "링크 클릭", value: formatCompact(campaign.clicks), delta: detail.deltas.linkClicks, direction: "up", unitCost: `클릭당 ${formatKRW(campaign.cpc)}` },
