@@ -112,18 +112,20 @@ export async function GET(request: Request) {
       ...(granted && granted.length > 0 ? { granted_scopes: granted } : {}),
     };
 
-    /* 재연동이면 갱신. unique(user_id, fb_user_id) 라 upsert 로 한 번에 처리한다.
+    /* 재연동이면 갱신. 사용자당 연결은 하나라 unique(user_id) 로 upsert 한다(0077).
+       다른 페이스북 계정으로 다시 연동하면 같은 행의 fb_user_id 가 바뀐다 —
+       행이 둘로 늘면 화면과 해제가 서로 다른 행을 보게 된다.
        ⚠️ .select() 없이는 RLS 로 0행이 되어도 오류가 안 난다 — 반드시 결과 행을 확인한다. */
     let conn = await supabase
       .from("meta_ad_connections")
-      .upsert(connRow, { onConflict: "user_id,fb_user_id" })
+      .upsert(connRow, { onConflict: "user_id" })
       .select("id");
     if (conn.error && isMissingColumnError(conn.error, /granted_scopes/i)) {
       const { granted_scopes: _s, ...withoutScopes } = connRow;
       void _s;
       conn = await supabase
         .from("meta_ad_connections")
-        .upsert(withoutScopes, { onConflict: "user_id,fb_user_id" })
+        .upsert(withoutScopes, { onConflict: "user_id" })
         .select("id");
     }
     if (conn.error) {

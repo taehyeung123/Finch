@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getMetaAdsOAuthConfig } from "@/lib/meta/ads-oauth";
 import { parseSignedRequest } from "@/lib/meta/signed-request";
+import { recordDeletionRequest } from "@/lib/legal/deletion-log";
 
 /**
  * 메타 광고 데이터 삭제 요청 콜백. 응답은 Meta 스펙대로 { url, confirmation_code } JSON.
@@ -39,14 +40,17 @@ export async function POST(request: Request) {
     if (error) console.error("[meta-ads-data-deletion] 삭제 반영 실패:", error.message);
 
     /* 확인 코드를 남기지 않으면 상태 페이지가 조회할 것이 없어 아무 코드에나 «완료»를 확언하게 된다(0076).
-       식별자는 해시로 — 삭제 이력에 지운 값을 그대로 두면 앞뒤가 안 맞는다. */
-    const { error: logErr } = await admin.from("data_deletion_requests").insert({
-      confirmation_code: confirmationCode,
+       식별자는 해시로 — 삭제 이력에 지운 값을 그대로 두면 앞뒤가 안 맞는다.
+       ⚠️ 삭제가 **실패했으면 그렇게 적는다.** 예전엔 실패해도 deleted_rows=0 이 들어갔고,
+       0 의 뜻은 «지울 것이 없었다» 라서 공개 상태 페이지가 「저장된 정보가 없었습니다」 라고
+       확언했다 — 토큰이 그대로 남아 있는데도. 실패는 «없음»이 아니다. */
+    await recordDeletionRequest(admin, {
+      confirmationCode,
       channel: "meta_ads",
-      platform_user_hash: createHash("sha256").update(payload.user_id).digest("hex").slice(0, 32),
-      deleted_rows: removed?.length ?? 0,
+      platformUserId: payload.user_id,
+      deletedRows: removed?.length ?? 0,
+      failed: Boolean(error),
     });
-    if (logErr) console.error("[meta-ads-data-deletion] 요청 기록 실패(0077 미적용 가능):", logErr.message);
   }
 
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin).replace(/\/$/, "");

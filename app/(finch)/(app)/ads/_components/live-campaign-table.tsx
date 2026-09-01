@@ -66,10 +66,10 @@ export function LiveCampaignTable({
                 </td>
                 {/* 예산이 «없다»는 건 광고 세트에서 관리한다는 뜻이다 — 0원이 아니다 */}
                 <td className="tnum py-3 text-right">
-                  {c.dailyBudgetMinor === null ? (
+                  {c.dailyBudget === null ? (
                     <span className="text-fg-faint">세트별</span>
                   ) : (
-                    money(c.dailyBudgetMinor)
+                    money(c.dailyBudget)
                   )}
                 </td>
                 <td className="tnum py-3 text-right">{cell(c.spend, money)}</td>

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getThreadsOAuthConfig } from "@/lib/meta/threads-oauth";
 import { parseSignedRequest } from "@/lib/meta/signed-request";
+import { recordDeletionRequest } from "@/lib/legal/deletion-log";
 
 /**
  * Threads 데이터 삭제 요청 콜백 — 사용자가 Threads 쪽에서 "앱의 내 데이터 삭제"를 요청하면
@@ -43,15 +44,16 @@ export async function POST(request: Request) {
 
     /* 확인 코드를 기록한다 — 안 남기면 상태 페이지가 조회할 것이 없어
        아무 코드에나 «삭제 완료» 를 확언하게 된다(0076).
-       식별자는 원문 대신 해시로 — 삭제 이력에 지운 값을 그대로 두면 앞뒤가 안 맞는다.
-       기록 실패가 삭제를 되돌리지는 않는다(삭제는 이미 끝났다) — 로그만 남긴다. */
-    const { error: logErr } = await admin.from("data_deletion_requests").insert({
-      confirmation_code: confirmationCode,
+       ⚠️ 삭제가 **실패했으면 그렇게 적는다.** deleted_rows=0 의 뜻은 «지울 것이 없었다» 라서,
+       실패를 0 으로 적으면 상태 페이지가 「저장된 정보가 없었습니다」 라고 확언한다 —
+       토큰이 그대로 남아 있는데도. 기록 실패가 삭제를 되돌리지는 않는다(삭제는 이미 끝났다). */
+    await recordDeletionRequest(admin, {
+      confirmationCode,
       channel: "threads",
-      platform_user_hash: createHash("sha256").update(payload.user_id).digest("hex").slice(0, 32),
-      deleted_rows: removed?.length ?? 0,
+      platformUserId: payload.user_id,
+      deletedRows: removed?.length ?? 0,
+      failed: Boolean(error),
     });
-    if (logErr) console.error("[threads-data-deletion] 요청 기록 실패(0076 미적용 가능):", logErr.message);
   }
 
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin).replace(/\/$/, "");

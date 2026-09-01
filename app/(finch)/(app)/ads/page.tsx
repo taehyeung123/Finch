@@ -1,4 +1,4 @@
-import { AlertTriangle, Megaphone, SlidersHorizontal, Sparkles } from "lucide-react";
+import { AlertTriangle, Megaphone, ShieldAlert, SlidersHorizontal, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -9,7 +9,12 @@ import { ButtonLink } from "@/components/ui/button";
 import { formatCompact, formatKRW, formatMoney, formatPercent } from "@/lib/format";
 import { accounts, campaignDetails, campaigns, dashboardSummaries, IS_SAMPLE_DATA } from "@/lib/data";
 import { getLiveDashboard } from "@/lib/data/live";
-import { aggregateLiveCampaigns, getLiveAds, type LiveAdsState } from "@/lib/data/ads";
+import {
+  aggregateLiveCampaigns,
+  datePresetLabel,
+  getLiveAds,
+  type LiveAdsState,
+} from "@/lib/data/ads";
 import { accountStatusWarning } from "@/lib/ads/meta-labels";
 import { aggregateCampaigns } from "@/lib/ads/metrics";
 import { CampaignTable } from "./_components/campaign-table";
@@ -31,7 +36,8 @@ const SAMPLE_AI_ALERTS = [
 
 /**
  * 연동 상태별 안내 — 「아직 연결한 광고 계정이 없어요」 하나로 뭉치지 않는다.
- * 조회에 실패한 사람에게 «연결하세요» 라고 하면 이미 연결한 계정을 또 연결하러 간다.
+ * 조회에 실패한 사람에게 «연결하세요» 라고 하면 이미 연결한 계정을 또 연결하러 가고,
+ * 권한이 없어 영영 안 풀리는 상태에 «잠시 후 새로고침» 이라고 하면 계속 새로고침만 한다.
  */
 function AdsNotice({ live }: { live: LiveAdsState }) {
   if (live.state === "ok") return null;
@@ -59,8 +65,24 @@ function AdsNotice({ live }: { live: LiveAdsState }) {
       />
     );
   }
-  if (live.state === "error") {
+  if (live.state === "no_accounts") {
+    /* 새로고침으로는 절대 안 풀린다 — 메타에서 사람이 권한을 줘야 한다.
+       그래서 «잠시 후 다시»가 아니라 **어디서 무엇을 할지**를 말한다. */
     return (
+      <EmptyState
+        icon={ShieldAlert}
+        title="이 계정으로 볼 수 있는 광고 계정이 없어요"
+        description="연결은 됐지만 광고 계정 접근 권한이 없습니다. 메타 비즈니스 설정에서 이 계정에 광고 계정 권한을 준 뒤 다시 연결해 주세요."
+        action={
+          <ButtonLink href="/settings" size="sm" variant="secondary">
+            다시 연결하기
+          </ButtonLink>
+        }
+      />
+    );
+  }
+  return (
+    live.state === "error" ? (
       <EmptyState
         icon={AlertTriangle}
         title="지금은 광고 성과를 불러오지 못했어요"
@@ -71,20 +93,36 @@ function AdsNotice({ live }: { live: LiveAdsState }) {
           </ButtonLink>
         }
       />
-    );
-  }
-  return (
-    <EmptyState
-      icon={Megaphone}
-      title="아직 연결한 광고 계정이 없어요"
-      description="메타 광고 계정을 연결하면 캠페인별 집행 금액·노출·CTR·ROAS 가 여기에 쌓여요."
-      action={
-        <ButtonLink href="/settings" size="sm" variant="secondary">
-          광고 계정 연결하기
-        </ButtonLink>
-      }
-    />
+    ) : (
+      <EmptyState
+        icon={Megaphone}
+        title="아직 연결한 광고 계정이 없어요"
+        description="메타 광고 계정을 연결하면 캠페인별 집행 금액·노출·CTR·ROAS 가 여기에 쌓여요."
+        action={
+          <ButtonLink href="/settings" size="sm" variant="secondary">
+            광고 계정 연결하기
+          </ButtonLink>
+        }
+      />
+    )
   );
+}
+
+/** 광고 칸 아래 한 줄 — 상태마다 다른 사실을 말한다(전부 «연결 전»으로 뭉개지 않는다) */
+function adsFootnote(live: LiveAdsState | null, periodLabel: string): string {
+  if (!live) return "캠페인 전체 합산";
+  switch (live.state) {
+    case "ok":
+      return `${periodLabel} · 캠페인 합산`;
+    case "expired":
+      return "연결 만료 — 다시 연결 필요";
+    case "no_accounts":
+      return "광고 계정 권한 없음";
+    case "error":
+      return "지금은 불러오지 못했어요";
+    default:
+      return "광고 계정 연결 전";
+  }
 }
 
 export default async function AdsPage() {
@@ -98,6 +136,9 @@ export default async function AdsPage() {
   const sampleTotals = aggregateCampaigns(campaigns);
   const liveTotals = liveOk ? aggregateLiveCampaigns(liveOk.campaigns) : null;
   const currency = liveOk?.selected.currency ?? null;
+  /* ⚠️ 라벨을 «누적»이라고 쓰면 거짓이다 — 실제로 부르는 건 기간 조회다(기본 최근 30일).
+     기간은 데이터를 만든 쪽이 정하므로 라벨도 거기서 받아 온다. */
+  const periodLabel = liveOk ? datePresetLabel(liveOk.datePreset) : "최근 30일";
 
   /* 오가닉 칸은 **라이브 값**을 본다. 예전엔 lib/data 정적 export 만 읽어서,
      인스타를 연동하고 홈에서 «이번 주 조회수 12,340» 을 본 사람이 여기로 넘어오면
@@ -125,41 +166,53 @@ export default async function AdsPage() {
         roas: liveTotals?.roas != null ? `${liveTotals.roas.toFixed(1)}배` : "—",
       };
 
-  const accountWarning = liveOk ? accountStatusWarning(liveOk.selected.accountStatus) : null;
-  /* 갱신이 없는 토큰이라 만료를 미리 알린다 — 조용히 끊기면 성과가 통째로 사라진다 */
-  const expiryWarning =
+  /* 두 경고는 사용자가 할 일이 다르다 — 결제는 메타에서, 만료는 핀치에서 재연동이다.
+     ⚠️ 예전엔 `accountWarning ?? expiryWarning` 한 줄이라 둘 다 걸리면 만료 경고가 사라졌다.
+     하필 그 조합(미납 + 만료 임박)이 가장 위험한데 재연동 안내만 조용히 없어졌다. */
+  const warnings = [
+    liveOk ? accountStatusWarning(liveOk.selected.accountStatus) : null,
     liveOk && liveOk.expiresInDays !== null && liveOk.expiresInDays <= 14
       ? `광고 계정 연결이 ${liveOk.expiresInDays}일 뒤 만료돼요. 설정에서 다시 연결해 두면 성과가 끊기지 않아요.`
-      : null;
+      : null,
+  ].filter((w): w is string => w !== null);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="광고 관리"
         description={
-          liveOk
-            ? `${liveOk.selected.name ?? "광고 계정"} · 최근 30일`
-            : "Meta 광고 계정 성과 리포트"
+          liveOk ? `${liveOk.selected.name ?? "광고 계정"} · ${periodLabel}` : "Meta 광고 계정 성과 리포트"
         }
         action={
-          <ButtonLink href="/ads/campaigns" size="sm" variant="secondary">
-            <SlidersHorizontal className="size-4" aria-hidden />
-            캠페인 관리
-          </ButtonLink>
+          /* ⚠️ 실 모드에서 캠페인 관리 화면은 아직 목이다 — 연동한 사람을 «연동하면 표시됩니다»
+             화면으로 보내면 방금 한 연동이 안 된 줄 안다. 데모에서만 연다. */
+          IS_SAMPLE_DATA ? (
+            <ButtonLink href="/ads/campaigns" size="sm" variant="secondary">
+              <SlidersHorizontal className="size-4" aria-hidden />
+              캠페인 관리
+            </ButtonLink>
+          ) : null
         }
       />
 
-      {accountWarning || expiryWarning ? (
-        <div className="flex items-start gap-2.5 rounded-card border border-line bg-warning-weak p-3 text-[14px] text-warning">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <p>{accountWarning ?? expiryWarning}</p>
+      {warnings.length > 0 ? (
+        <div className="space-y-2">
+          {warnings.map((w) => (
+            <div
+              key={w}
+              className="flex items-start gap-2.5 rounded-card border border-line bg-warning-weak p-3 text-[14px] text-warning-strong"
+            >
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <p>{w}</p>
+            </div>
+          ))}
         </div>
       ) : null}
 
-      {/* 요약 지표 (PART 4.7) — 전체 캠페인 누적, 가중 평균 */}
+      {/* 요약 지표 (PART 4.7) — 가중 평균 */}
       <section aria-label="광고 요약 지표" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="누적 집행 금액" value={summary.spend} />
-        <StatCard label="누적 노출수" value={summary.impressions} />
+        <StatCard label={`집행 금액 (${periodLabel})`} value={summary.spend} />
+        <StatCard label={`노출수 (${periodLabel})`} value={summary.impressions} />
         <StatCard
           label={
             <>
@@ -192,7 +245,7 @@ export default async function AdsPage() {
           description={
             IS_SAMPLE_DATA
               ? "캠페인별 집행 현황과 핵심 지표 — 캠페인을 클릭하면 상세 성과를 볼 수 있어요"
-              : "캠페인별 집행 현황과 핵심 지표 (최근 30일)"
+              : `캠페인별 집행 현황과 핵심 지표 (${periodLabel})`
           }
         />
         <CardBody className="overflow-x-auto">
@@ -242,13 +295,21 @@ export default async function AdsPage() {
             title={
               <span className="inline-flex items-center gap-2">
                 AI 추천
-                <InfoTip>
-                  캠페인 지표를 계정 평균과 비교하는 규칙 기반 자동 알림이며, 광고 성과를 보장하지
-                  않습니다. 플랫폼 공식 데이터가 아닌 핀치 자체 추정치입니다.
-                </InfoTip>
+                {IS_SAMPLE_DATA ? (
+                  <InfoTip>
+                    캠페인 지표를 계정 평균과 비교하는 규칙 기반 자동 알림이며, 광고 성과를 보장하지 않습니다.
+                    플랫폼 공식 데이터가 아닌 핀치 자체 추정치입니다.
+                  </InfoTip>
+                ) : (
+                  <Badge tone="neutral">준비 중</Badge>
+                )}
               </span>
             }
-            description="지표 이상 감지 시 자동으로 제안합니다"
+            /* ⚠️ 실 모드에서 «자동으로 제안합니다» 라고 하면 안 된다 — 규칙 엔진이 아직 없다.
+               「며칠 쌓이면 표시됩니다」도 시점을 약속하는 말이라 지킬 수 없다. */
+            description={
+              IS_SAMPLE_DATA ? "지표 이상 감지 시 자동으로 제안합니다" : "지표 이상 감지 알림을 준비하고 있어요"
+            }
           />
           <CardBody className="space-y-3">
             {/* 실 모드에서는 연동 캠페인이 생기기 전까지 예시 알림을 노출하지 않는다 (가짜 데이터 금지) */}
@@ -265,9 +326,7 @@ export default async function AdsPage() {
             ))}
             {!IS_SAMPLE_DATA ? (
               <p className="text-[14px] text-fg-sub">
-                {liveOk
-                  ? "캠페인 성과가 며칠 쌓이면 지표 이상 감지 알림이 여기에 표시됩니다."
-                  : "광고 계정을 연동하고 캠페인 데이터가 쌓이면 지표 이상 감지 알림이 여기에 표시됩니다."}
+                캠페인 지표를 계정 평균과 비교해 이상을 짚어 주는 기능을 만들고 있어요. 열리면 알려드릴게요.
               </p>
             ) : null}
           </CardBody>
@@ -277,7 +336,7 @@ export default async function AdsPage() {
         <Card>
           <CardHeader
             title="오가닉 vs 광고"
-            description="오가닉(이번 주)과 광고(최근 30일) 규모를 나란히 봅니다 — 집계 기간이 서로 달라요"
+            description={`오가닉(이번 주)과 광고(${periodLabel}) 규모를 나란히 봅니다 — 집계 기간이 서로 달라요`}
           />
           <CardBody>
             <div className="grid grid-cols-2 divide-x divide-line rounded-card border border-line">
@@ -293,9 +352,8 @@ export default async function AdsPage() {
               <div className="p-5">
                 <p className="text-[14px] text-fg-sub">광고 노출수</p>
                 <p className="tnum mt-1.5 text-2xl font-bold leading-none">{summary.impressions}</p>
-                <p className="mt-2 text-xs text-fg-faint">
-                  {IS_SAMPLE_DATA || liveOk ? "캠페인 전체 합산" : "광고 계정 연결 전"}
-                </p>
+                {/* 상태마다 다른 사실을 말한다 — 만료·권한없음·조회실패를 «연결 전»으로 뭉개지 않는다 */}
+                <p className="mt-2 text-xs text-fg-faint">{adsFootnote(live, periodLabel)}</p>
               </div>
             </div>
             <p className="mt-3 text-xs text-fg-faint">

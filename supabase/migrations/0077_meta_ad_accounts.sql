@@ -34,7 +34,12 @@ create table if not exists public.meta_ad_connections (
   connected           boolean not null default true,
   created_at          timestamptz not null default now(),
   updated_at          timestamptz not null default now(),
-  unique (user_id, fb_user_id)
+  -- ⚠️ 유니크는 **user_id 하나**다(=사용자당 광고 연결 1개).
+  --    처음엔 (user_id, fb_user_id) 로 뒀는데, 그러면 같은 사람이 다른 페이스북 계정으로
+  --    연동할 때 행이 2개가 된다. 그런데 읽기·해제 코드는 전부 limit(1) 로 «하나»를 전제한다 —
+  --    화면은 A 를 보여주고 해제는 B 를 지우며, 해제해도 다른 행의 토큰이 남는다.
+  --    앱 모델이 «채널당 1연동»이므로 스키마를 코드에 맞춘다(재연동은 같은 행을 갱신한다).
+  unique (user_id)
 );
 -- 해제·삭제 콜백은 사용자 전체에서 fb_user_id 로 찾는다 — 유니크가 (user_id, …)라 이 조회는 인덱스가 없다
 create index if not exists meta_ad_connections_fb_uid_idx
@@ -129,6 +134,19 @@ alter table public.data_deletion_requests
 alter table public.data_deletion_requests
   add constraint data_deletion_requests_channel_check
   check (channel in ('instagram', 'threads', 'tiktok', 'meta_ads'));
+
+-- ── 삭제 «실패» 를 기록할 자리 ────────────────────────────────────────
+-- 지금까지는 결과가 deleted_rows 숫자뿐이라, 삭제 쿼리가 **실패해도** 0 이 기록됐다.
+-- 그리고 0 의 뜻은 «지울 것이 없었다» 라서, 공개 상태 페이지가 심사관과 사용자에게
+-- 「저장된 정보가 없었습니다」 라고 **확언**한다 — 실제로는 토큰이 그대로 남아 있는데도.
+-- 실패는 «없음»이 아니다(저장소 불변식). 상태를 따로 들고, 화면이 세 번째 문구를 쓴다.
+alter table public.data_deletion_requests
+  add column if not exists status text not null default 'done';
+alter table public.data_deletion_requests
+  drop constraint if exists data_deletion_requests_status_check;
+alter table public.data_deletion_requests
+  add constraint data_deletion_requests_status_check
+  check (status in ('done', 'failed'));
 
 comment on table public.meta_ad_connections is
   '메타 광고 연동(사람 단위) — FB 사용자 토큰이 여기 산다. ⚠️ FB 장기토큰은 자동 갱신이 없어 약 60일마다 재연동이 필요하다.';

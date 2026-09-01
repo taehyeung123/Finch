@@ -1,6 +1,7 @@
-import { CheckCircle2, HelpCircle, SearchX } from "lucide-react";
+import { AlertTriangle, CheckCircle2, HelpCircle, SearchX } from "lucide-react";
 import { FinchLogo } from "@/components/logo";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isMissingColumnError } from "@/lib/publish-rules";
 
 /*
   데이터 삭제 요청 상태 확인 — 인스타그램·스레드가 같은 화면을 쓴다.
@@ -28,6 +29,8 @@ const REQUEST_PLACE: Record<Channel, string> = {
 
 type Status =
   | { kind: "done"; deletedRows: number; at: string }
+  /** 삭제 쿼리가 실패했다 — «지울 것이 없었다»(deleted_rows=0)와 절대 같은 화면을 쓰면 안 된다 */
+  | { kind: "failed"; at: string }
   | { kind: "not_found" }
   | { kind: "no_code" }
   /** 0076 미적용이거나 DB 조회 실패 — «없음» 으로 단정하지 않는다 */
@@ -38,22 +41,34 @@ async function lookup(code: string | undefined, channel: Channel): Promise<Statu
   const admin = createAdminClient();
   if (!admin) return { kind: "unknown" };
 
-  const { data, error } = await admin
+  let { data, error } = await admin
     .from("data_deletion_requests")
-    .select("deleted_rows, created_at")
+    .select("deleted_rows, created_at, status")
     .eq("confirmation_code", code)
     .eq("channel", channel)
     .maybeSingle();
+
+  /* 0077 미적용 DB 에는 status 컬럼이 없다 — 조회를 통째로 실패시키지 않고 예전 모양으로 재시도한다 */
+  if (error && isMissingColumnError(error, /status/i)) {
+    ({ data, error } = await admin
+      .from("data_deletion_requests")
+      .select("deleted_rows, created_at")
+      .eq("confirmation_code", code)
+      .eq("channel", channel)
+      .maybeSingle());
+  }
 
   if (error) {
     console.error("[deletion-status] 조회 실패:", error.message);
     return { kind: "unknown" };
   }
   if (!data) return { kind: "not_found" };
+  const row = data as { deleted_rows?: number; created_at: string; status?: string };
+  if (row.status === "failed") return { kind: "failed", at: row.created_at };
   return {
     kind: "done",
-    deletedRows: (data as { deleted_rows: number }).deleted_rows ?? 0,
-    at: (data as { created_at: string }).created_at,
+    deletedRows: row.deleted_rows ?? 0,
+    at: row.created_at,
   };
 }
 
@@ -83,6 +98,16 @@ export async function DeletionStatus({ channel, code }: { channel: Channel; code
               : `요청을 접수했을 때 핀치에 남아 있던 ${label} 계정 정보가 없었습니다. 지금도 저장된 정보는 없습니다.`}
           </p>
           <p className="text-[12px] text-fg-sub">처리 시각: {formatKst(status.at)}</p>
+        </>
+      ) : status.kind === "failed" ? (
+        <>
+          <AlertTriangle className="size-10 text-warning" aria-hidden />
+          <h1 className="text-xl font-bold">삭제를 마치지 못했어요</h1>
+          <p className="text-[14px] leading-relaxed text-fg-sub">
+            요청은 접수됐지만 처리 중 문제가 생겨 {label} 관련 정보가 아직 삭제되지 않았을 수 있습니다. 확인 후
+            처리하겠습니다. 아래 확인 코드와 함께 고객센터로 알려 주시면 더 빠르게 확인해 드릴게요.
+          </p>
+          <p className="text-[12px] text-fg-sub">접수 시각: {formatKst(status.at)}</p>
         </>
       ) : status.kind === "not_found" ? (
         <>

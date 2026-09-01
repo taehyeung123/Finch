@@ -457,36 +457,45 @@ export default async function SettingsPage({
                     </span>
                     Meta 광고
                   </Badge>
-                  {/* 상태 배지는 카드당 1개. 조회 실패(null)를 «미연동»으로 단정하지 않는다. */}
+                  {/* 상태 배지는 카드당 1개 — 그래서 **가장 중요한 사실**을 골라야 한다.
+                      ⚠️ connected 컬럼만 보면 만료된 연결·계정 0개 연결에도 초록 «연동됨»이 붙는다.
+                      사용자가 먼저 읽는 신호가 그 배지라, 바로 아래 문장과 서로 다른 말을 하게 된다. */}
                   {adsCard === null ? (
                     <Badge tone="warning">상태 확인 실패</Badge>
-                  ) : adsCard.connected ? (
-                    <Badge tone="positive">연동됨</Badge>
-                  ) : metaAdsReady ? (
-                    <Badge tone="neutral">미연동</Badge>
+                  ) : !adsCard.connected ? (
+                    metaAdsReady ? <Badge tone="neutral">미연동</Badge> : <Badge tone="neutral">연동 준비중</Badge>
+                  ) : adsCard.expiresInDays !== null && adsCard.expiresInDays <= 0 ? (
+                    <Badge tone="negative">연결 만료</Badge>
+                  ) : adsCard.accountCount === 0 ? (
+                    <Badge tone="warning">광고 계정 없음</Badge>
                   ) : (
-                    <Badge tone="neutral">연동 준비중</Badge>
+                    <Badge tone="positive">연동됨</Badge>
                   )}
                 </div>
                 <p className="mt-2 text-[15px] text-fg-sub">
                   {adsCard === null
                     ? "연동 상태를 확인하지 못했어요. 잠시 후 새로고침해 주세요."
                     : adsCard.connected
-                      ? `${adsCard.primaryName ?? "광고 계정"}${
-                          adsCard.accountCount > 1 ? ` 외 ${adsCard.accountCount - 1}개` : ""
-                        }`
+                      ? /* 계정이 0개면 «광고 계정» 이라는 이름 없는 계정 하나가 붙은 것처럼 읽힌다 —
+                           실제로는 권한을 못 받은 상태이므로 무엇을 해야 하는지 말한다. */
+                        adsCard.accountCount === 0
+                        ? "연결은 됐지만 접근할 수 있는 광고 계정이 없어요. 메타 비즈니스 설정에서 광고 계정 권한을 준 뒤 다시 연결해 주세요."
+                        : `${adsCard.primaryName ?? "이름 없는 광고 계정"}${
+                            adsCard.accountCount > 1 ? ` 외 ${adsCard.accountCount - 1}개` : ""
+                          }`
                       : metaAdsReady
                         ? "광고 계정을 연결하면 캠페인 집행 금액·노출·CTR·ROAS를 핀치에서 볼 수 있어요."
                         : "곧 열릴 예정이니 조금만 기다려 주세요."}
                 </p>
                 {/* ⚠️ 만료일을 **숨기지 않는다.** 이 연결은 자동 갱신이 안 되므로,
-                    조용히 끊기면 어느 날 광고 성과가 통째로 사라진다. */}
+                    조용히 끊기면 어느 날 광고 성과가 통째로 사라진다.
+                    fg-faint 는 대비 4.0:1 이라 본문 금지(CLAUDE.md) — 읽으라고 쓴 문장이므로 fg-sub 다. */}
                 {adsCard?.connected && adsCard.expiresInDays !== null ? (
                   <p
                     className={
                       adsCard.expiresInDays <= 14
                         ? "mt-1 text-[14px] text-warning-strong"
-                        : "mt-1 text-[14px] text-fg-faint"
+                        : "mt-1 text-[14px] text-fg-sub"
                     }
                   >
                     {adsCard.expiresInDays <= 0
