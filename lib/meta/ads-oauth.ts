@@ -44,10 +44,16 @@ export interface MetaAdsOAuthConfig {
  * Instagram 제품 화면의 «Instagram 앱 ID/시크릿»과는 **다른 값**이다.
  * 2026-08-06 에 이 둘을 «통일»한다며 합쳤다가 인스타 토큰 교환이 6주간 조용히 깨져 있었다
  * (2026-08-31 적발). 제품마다 자격증명 쌍이 따로 있다는 것이 이 저장소가 비싸게 배운 사실이다.
+ *
+ * ⚠️ **광고 전용 변수를 먼저 본다.** 메타는 «이용 사례»끼리 호환되지 않으면 같은 앱에 못 붙인다
+ * (공식 문서: 호환 안 되는 이용 사례는 회색으로 비활성화된다). 광고 이용 사례가 기존
+ * 인스타·스레드 앱에 안 붙으면 **광고용 앱을 따로 만들어야 하는데**, 그때 META_APP_SECRET 을
+ * 새 앱 값으로 덮으면 **인스타 웹훅 서명 검증이 조용히 깨진다**(같은 변수를 쓴다).
+ * 그래서 광고는 자기 변수를 갖고, 없을 때만 공용 값으로 떨어진다 — 같은 앱이면 META_APP_ID 만 넣으면 된다.
  */
 export function getMetaAdsOAuthConfig(): MetaAdsOAuthConfig | null {
-  const appId = process.env.META_APP_ID;
-  const appSecret = process.env.META_APP_SECRET;
+  const appId = process.env.META_ADS_APP_ID || process.env.META_APP_ID;
+  const appSecret = process.env.META_ADS_APP_SECRET || process.env.META_APP_SECRET;
   if (!appId || !appSecret) return null;
   return { appId, appSecret };
 }
