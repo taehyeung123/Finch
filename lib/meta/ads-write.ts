@@ -163,11 +163,16 @@ export async function updateCampaign(p: UpdateCampaignParams): Promise<AdsWriteR
   return fbPost<{ success?: boolean }>(`/${p.campaignId}`, params, p.accessToken);
 }
 
-/** 사람이 읽는 실패 문구 — Meta 원문은 내부용이라 화면에 그대로 뿌리지 않는다 */
-export function writeErrorMessage(e: AdsWriteError): string {
-  if (e.rateLimited) return "요청이 잠시 몰렸어요. 몇 분 뒤 다시 시도해 주세요.";
-  if (e.code === 190) return "광고 계정 연결이 만료됐어요. 설정에서 다시 연결해 주세요.";
-  if (e.code === 200 || e.code === 10) return "이 광고 계정에 쓰기 권한이 없어요. 다시 연결해 주세요.";
-  if (e.code === 100) return "입력값을 광고 계정이 받지 않았어요. 예산과 이름을 확인해 주세요.";
-  return "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.";
+/**
+ * 실패 → 사유 코드 — 문구는 campaign-rules 의 ADS_WRITE_MESSAGES 가 정본이다.
+ * (Meta 원문은 내부용이라 화면에 그대로 뿌리지 않고, URL 로 나를 때도 코드만 나른다.)
+ */
+export function writeErrorCode(
+  e: AdsWriteError,
+): "rate_limited" | "token_expired" | "write_denied" | "bad_input" | "failed" {
+  if (e.rateLimited) return "rate_limited";
+  if (e.code === 190) return "token_expired";
+  if (e.code === 200 || e.code === 10) return "write_denied";
+  if (e.code === 100) return "bad_input";
+  return "failed";
 }

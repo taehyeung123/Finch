@@ -206,6 +206,26 @@ export async function fetchCampaigns(
   }
 }
 
+/**
+ * 캠페인이 속한 광고 계정 id (act_ 접두 없음). 실패는 null(«모름»).
+ *
+ * 쓰기 전에 **캠페인이 선택된 계정 것인지** 대조하는 용도다 — 소유자 FB 토큰은
+ * 그 사람이 관리하는 **모든** 광고 계정을 커버하므로, 클라이언트가 보낸 campaignId 를
+ * 그대로 믿으면 워크스페이스가 고르지도 않은 계정의 캠페인을 켤 수 있다(감사 적발).
+ */
+export async function fetchCampaignAccountId(
+  campaignId: string,
+  accessToken: string,
+): Promise<string | null> {
+  try {
+    const json = await fbGet<{ account_id?: string }>(`/${campaignId}?fields=account_id`, accessToken);
+    return typeof json.account_id === "string" && json.account_id.length > 0 ? json.account_id : null;
+  } catch (e) {
+    console.error("[meta-ads] 캠페인 계정 확인 실패:", e instanceof Error ? e.message : String(e));
+    return null;
+  }
+}
+
 /* ── 인사이트 ────────────────────────────────────────────────────── */
 
 export interface FbCampaignInsight {

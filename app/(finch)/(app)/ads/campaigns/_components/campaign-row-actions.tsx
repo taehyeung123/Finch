@@ -45,14 +45,14 @@ export function CampaignRowActions({
   if (status === "PAUSED") {
     const budgetLine =
       dailyBudget !== null && currency
-        ? ` 일 예산 ${formatMoney(dailyBudget, currency)}이 소진될 때까지 광고가 게재돼요.`
+        ? ` 하루 최대 ${formatMoney(dailyBudget, currency)}까지 매일 지출될 수 있어요.`
         : "";
     return (
       <ConfirmSubmit
         action={setCampaignStatusAction}
         hiddenFields={{ campaignId, status: "ACTIVE" }}
         title="게재 시작 — 비용이 발생해요"
-        description={`«${name}» 캠페인을 켜요. 이 캠페인에 광고 세트·소재가 붙어 있다면 즉시 게재가 시작되고 비용이 발생합니다.${budgetLine}`}
+        description={`«${name}» 캠페인을 켜요. 이 캠페인에 광고 세트·소재가 붙어 있다면 즉시 게재가 시작되고 비용이 발생해요.${budgetLine}`}
         confirmLabel="게재 시작"
         pendingLabel="시작 중…"
         trigger="게재 시작"

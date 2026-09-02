@@ -58,6 +58,46 @@ export const SPECIAL_AD_CATEGORY_LABELS: Record<SpecialAdCategory, string> = {
  */
 export const CAMPAIGN_NAME_MAX = 200;
 
+/**
+ * 쓰기 차단·실패 사유 코드와 문구 — **단일 출처**.
+ * getAdsWriteContext(서버)·서버 액션·상태 배너(페이지)가 전부 이 표를 본다.
+ *
+ * 왜 코드로 나르나: 상태 전환 실패를 URL 로 알리는데, 문구를 URL 에 실으면
+ * 누구나 링크로 임의 문구를 신뢰된 배너에 주입할 수 있다(피싱 카피 — 감사 적발).
+ * 코드만 나르고 문구는 이 표에서 찾는다 — 모르는 코드는 generic 으로 떨어진다.
+ */
+export const ADS_WRITE_MESSAGES = {
+  demo_mode: "지금은 예시 데이터를 보고 계셔서 캠페인을 만들 수 없어요.",
+  unconfigured: "광고 연동이 아직 열리지 않았어요.",
+  login_required: "로그인이 필요해요.",
+  consent_required: "서비스 이용 동의가 필요해요. 화면을 새로고침해 주세요.",
+  role_denied: "캠페인을 변경할 권한이 없어요. 워크스페이스 소유자에게 요청해 주세요.",
+  connection_missing: "광고 계정이 연결돼 있지 않아요. 설정에서 연결해 주세요.",
+  connection_expired: "광고 계정 연결이 만료됐어요. 설정에서 다시 연결해 주세요.",
+  connection_unreadable: "연결 정보를 읽지 못했어요. 설정에서 다시 연결해 주세요.",
+  no_ad_account: "이 계정으로 볼 수 있는 광고 계정이 없어요.",
+  no_currency: "광고 계정 통화를 확인하지 못했어요. 설정에서 다시 연결해 주세요.",
+  scope_missing: "이 연결에는 캠페인 관리 권한이 없어요. 설정에서 다시 연결해 주세요.",
+  account_issue: "광고 계정 상태 때문에 지금은 변경할 수 없어요. 메타 광고 관리자에서 계정을 확인해 주세요.",
+  invalid_request: "요청이 올바르지 않아요.",
+  campaign_not_yours: "이 캠페인은 현재 선택된 광고 계정의 것이 아니에요.",
+  campaign_unverified: "캠페인 정보를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.",
+  busy: "이미 처리 중인 요청이 있어요. 잠시 후 다시 시도해 주세요.",
+  cooldown: "요청이 너무 빨라요. 잠시 후 다시 시도해 주세요.",
+  not_ready: "게재 시작은 아직 준비 중이에요.",
+  rate_limited: "요청이 잠시 몰렸어요. 몇 분 뒤 다시 시도해 주세요.",
+  token_expired: "광고 계정 연결이 만료됐어요. 설정에서 다시 연결해 주세요.",
+  write_denied: "이 광고 계정에 쓰기 권한이 없어요. 다시 연결해 주세요.",
+  bad_input: "입력값을 광고 계정이 받지 않았어요. 예산과 이름을 확인해 주세요.",
+  failed: "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.",
+} as const;
+export type AdsWriteFailCode = keyof typeof ADS_WRITE_MESSAGES;
+
+export function adsWriteMessage(code: string | undefined | null): string {
+  if (code && code in ADS_WRITE_MESSAGES) return ADS_WRITE_MESSAGES[code as AdsWriteFailCode];
+  return ADS_WRITE_MESSAGES.failed;
+}
+
 export interface CampaignInput {
   name: string;
   objective: CreatableObjective;

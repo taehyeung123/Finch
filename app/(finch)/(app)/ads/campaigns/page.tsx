@@ -7,6 +7,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { IS_SAMPLE_DATA } from "@/lib/data";
 import { datePresetLabel, getLiveAds } from "@/lib/data/ads";
 import { objectiveLabel, statusLabel } from "@/lib/ads/meta-labels";
+import { adsWriteMessage } from "@/lib/ads/campaign-rules";
 import { formatMoney } from "@/lib/format";
 import { DemoWizard } from "./_components/demo-wizard";
 import { CampaignForm } from "./_components/campaign-form";
@@ -23,13 +24,13 @@ import { CampaignRowActions } from "./_components/campaign-row-actions";
 const WRITE_BANNERS: Record<string, { tone: "positive" | "negative"; text: string }> = {
   activated: { tone: "positive", text: "게재를 시작했어요. 노출까지 몇 분 걸릴 수 있어요." },
   paused: { tone: "positive", text: "캠페인을 일시중지했어요." },
-  error: { tone: "negative", text: "요청을 처리하지 못했어요." },
+  error: { tone: "negative", text: "" }, // 문구는 code → ADS_WRITE_MESSAGES 에서 찾는다
 };
 
 export default async function CampaignsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ write?: string; detail?: string }>;
+  searchParams: Promise<{ write?: string; code?: string }>;
 }) {
   if (IS_SAMPLE_DATA) {
     return <DemoWizard />;
@@ -37,9 +38,9 @@ export default async function CampaignsPage({
 
   const sp = await searchParams;
   const banner = sp.write ? WRITE_BANNERS[sp.write] : undefined;
-  /* detail 은 우리 서버 액션이 넣은 한국어 문구다 — URL 조작으로 임의 문구가 들어올 수 있으니
-     길이를 자르고 텍스트로만 그린다(React 이스케이프). 실패 배너에서만 보여준다. */
-  const detail = sp.write === "error" && typeof sp.detail === "string" ? sp.detail.slice(0, 160) : null;
+  /* 실패 사유는 **코드**로만 받는다 — 문구를 URL 로 나르면 링크 하나로 신뢰된 배너에
+     임의 카피를 주입할 수 있다(감사 적발). 모르는 코드는 generic 으로 떨어진다. */
+  const errorText = sp.write === "error" ? adsWriteMessage(sp.code) : null;
 
   const live = await getLiveAds();
   const liveOk = live.state === "ok" ? live : null;
@@ -74,10 +75,7 @@ export default async function CampaignsPage({
           ) : (
             <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
           )}
-          <p>
-            {banner.text}
-            {detail ? ` ${detail}` : null}
-          </p>
+          <p>{errorText ?? banner.text}</p>
         </div>
       ) : null}
 
@@ -87,27 +85,34 @@ export default async function CampaignsPage({
             <EmptyState
               icon={Megaphone}
               title={
-                live.state === "expired"
-                  ? "광고 계정 연결이 만료됐어요"
-                  : live.state === "no_accounts"
-                    ? "이 계정으로 볼 수 있는 광고 계정이 없어요"
-                    : live.state === "error"
-                      ? "지금은 캠페인을 불러오지 못했어요"
-                      : "아직 연결한 광고 계정이 없어요"
+                live.state === "unconfigured"
+                  ? "광고 연동을 준비하고 있어요"
+                  : live.state === "expired"
+                    ? "광고 계정 연결이 만료됐어요"
+                    : live.state === "no_accounts"
+                      ? "이 계정으로 볼 수 있는 광고 계정이 없어요"
+                      : live.state === "error"
+                        ? "지금은 캠페인을 불러오지 못했어요"
+                        : "아직 연결한 광고 계정이 없어요"
               }
               description={
-                live.state === "expired"
-                  ? "설정에서 다시 연결하면 캠페인 관리가 이어져요."
-                  : live.state === "no_accounts"
-                    ? "메타 비즈니스 설정에서 광고 계정 권한을 받은 뒤 다시 연결해 주세요."
-                    : live.state === "error"
-                      ? "일시적인 문제일 수 있어요. 잠시 후 새로고침해 주세요."
-                      : "메타 광고 계정을 연결하면 여기서 캠페인을 만들고 관리할 수 있어요."
+                live.state === "unconfigured"
+                  ? "곧 메타 광고 계정을 연결해 캠페인을 만들 수 있게 됩니다."
+                  : live.state === "expired"
+                    ? "설정에서 다시 연결하면 캠페인 관리가 이어져요."
+                    : live.state === "no_accounts"
+                      ? "메타 비즈니스 설정에서 광고 계정 권한을 받은 뒤 다시 연결해 주세요."
+                      : live.state === "error"
+                        ? "일시적인 문제일 수 있어요. 잠시 후 새로고침해 주세요."
+                        : "메타 광고 계정을 연결하면 여기서 캠페인을 만들고 관리할 수 있어요."
               }
               action={
-                <ButtonLink href="/settings" size="sm" variant="secondary">
-                  연결 상태 확인
-                </ButtonLink>
+                /* 준비 전(unconfigured)에는 설정에도 버튼이 없다 — 막다른 링크를 주지 않는다 */
+                live.state === "unconfigured" ? undefined : (
+                  <ButtonLink href="/settings" size="sm" variant="secondary">
+                    연결 상태 확인
+                  </ButtonLink>
+                )
               }
             />
           </CardBody>
@@ -128,6 +133,9 @@ export default async function CampaignsPage({
                   description="아래에서 첫 캠페인을 만들어 보세요 — 일시중지 상태로 만들어져 비용 걱정 없이 준비할 수 있어요."
                 />
               ) : (
+                <>
+                {/* 좁은 화면에서 동작 열이 화면 밖이다 — 밀 수 있다는 걸 말해 준다(캠페인 표 공통 관행) */}
+                <p className="mb-2 text-[12px] text-fg-faint sm:hidden">← 옆으로 밀면 예산·집행액과 게재 버튼을 볼 수 있어요</p>
                 <table className="w-full min-w-[720px] text-[15px]">
                   <thead>
                     <tr className="border-b border-line text-left text-xs text-fg-faint">
@@ -178,6 +186,7 @@ export default async function CampaignsPage({
                     })}
                   </tbody>
                 </table>
+                </>
               )}
             </CardBody>
           </Card>

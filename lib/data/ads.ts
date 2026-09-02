@@ -23,6 +23,8 @@ import { isDemoMode } from "@/lib/supabase/config";
 import { getWorkspaceMembership, getWorkspaceOwnerId } from "@/lib/team";
 import { decryptToken, isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
 import { isMissingTableError } from "@/lib/supabase/errors";
+import { getConsentStatus } from "@/lib/legal/consent";
+import type { AdsWriteFailCode } from "@/lib/ads/campaign-rules";
 import { isMetaAdsOAuthConfigured } from "@/lib/meta/ads-oauth";
 import { fetchCampaignInsights, fetchCampaigns, type FbCampaign } from "@/lib/meta/ads";
 
@@ -256,18 +258,24 @@ export type AdsWriteContext =
       /** 쓰기를 요청한 사람의 워크스페이스 역할 */
       role: "owner" | "editor" | "viewer" | "unknown";
     }
-  | { state: "blocked"; reason: string };
+  | { state: "blocked"; code: AdsWriteFailCode };
 
 /**
  * 쓰기용 연동 컨텍스트 — getLiveAds 와 달리 **토큰을 밖으로 준다**(서버 액션 전용, 캐시 없음).
  * 조회 함수에 토큰을 실어 두면 언젠가 직렬화 경계를 넘는다 — 쓰기 경로만 따로 판다.
  */
 export async function getAdsWriteContext(adAccountId?: string): Promise<AdsWriteContext> {
-  if (isDemoMode()) return { state: "blocked", reason: "지금은 예시 데이터를 보고 계셔서 캠페인을 만들 수 없어요." };
-  if (!isAdsConnectable()) return { state: "blocked", reason: "광고 연동이 아직 열리지 않았어요." };
+  if (isDemoMode()) return { state: "blocked", code: "demo_mode" };
+  if (!isAdsConnectable()) return { state: "blocked", code: "unconfigured" };
 
   const user = await getAuthUser();
-  if (!user) return { state: "blocked", reason: "로그인이 필요해요." };
+  if (!user) return { state: "blocked", code: "login_required" };
+
+  /* 동의 게이트(0079) — 페이지 게이트는 서버 액션 POST 를 못 막는다(감사 적발).
+     돈이 걸린 쓰기는 미동의 상태로 열지 않는다. unknown 은 다른 게이트와 같은 이유로 통과. */
+  if ((await getConsentStatus(user.id)) === "missing") {
+    return { state: "blocked", code: "consent_required" };
+  }
 
   const supabase = await createClient();
   const membership = await getWorkspaceMembership(supabase, user.id);
@@ -275,7 +283,7 @@ export async function getAdsWriteContext(adAccountId?: string): Promise<AdsWrite
      모르는 채로 소유자 돈을 쓰게 두는 쪽이 더 나쁘다. 0077 RLS 는 읽기를 의도적으로
      열어 주므로 DB 가 못 막고, 여기가 유일한 관문이다. */
   if (membership.role !== "owner" && membership.role !== "editor") {
-    return { state: "blocked", reason: "캠페인을 만들 권한이 없어요. 워크스페이스 소유자에게 요청해 주세요." };
+    return { state: "blocked", code: "role_denied" };
   }
 
   const { data: connRaw, error: connErr } = await supabase
@@ -286,19 +294,19 @@ export async function getAdsWriteContext(adAccountId?: string): Promise<AdsWrite
     .limit(1)
     .maybeSingle();
   if (connErr || !connRaw) {
-    return { state: "blocked", reason: "광고 계정 연결을 확인하지 못했어요. 설정에서 연결 상태를 봐 주세요." };
+    return { state: "blocked", code: "connection_missing" };
   }
   const conn = connRaw as ConnectionRow & { granted_scopes?: string[] | null };
   if (!conn.access_token_cipher) {
-    return { state: "blocked", reason: "광고 계정이 연결돼 있지 않아요." };
+    return { state: "blocked", code: "connection_missing" };
   }
   const expiresInDays = daysUntil(conn.token_expires_at);
   if (expiresInDays !== null && expiresInDays <= 0) {
-    return { state: "blocked", reason: "광고 계정 연결이 만료됐어요. 설정에서 다시 연결해 주세요." };
+    return { state: "blocked", code: "connection_expired" };
   }
   const token = decryptToken(conn.access_token_cipher);
   if (!token) {
-    return { state: "blocked", reason: "연결 정보를 읽지 못했어요. 설정에서 다시 연결해 주세요." };
+    return { state: "blocked", code: "connection_unreadable" };
   }
 
   const { data: acctRaw } = await supabase
@@ -309,11 +317,11 @@ export async function getAdsWriteContext(adAccountId?: string): Promise<AdsWrite
   const rows = (acctRaw ?? []) as AdAccountRow[];
   const selected = (adAccountId ? rows.find((r) => r.ad_account_id === adAccountId) : null) ?? rows[0];
   if (!selected) {
-    return { state: "blocked", reason: "이 계정으로 볼 수 있는 광고 계정이 없어요." };
+    return { state: "blocked", code: "no_ad_account" };
   }
   if (!selected.currency) {
     // 통화를 모르면 쓰기 금지 — 조회의 «모르면 원문 그대로»와 반대다
-    return { state: "blocked", reason: "광고 계정 통화를 확인하지 못했어요. 설정에서 다시 연결해 주세요." };
+    return { state: "blocked", code: "no_currency" };
   }
 
   return {

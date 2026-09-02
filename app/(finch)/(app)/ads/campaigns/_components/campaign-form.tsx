@@ -22,14 +22,33 @@ import { createCampaignAction, type CampaignActionState } from "../actions";
   카테고리 없이 집행하면 계정 제재 사유라, 사용자가 «해당 없음»을 명시적으로 확인한다.
 */
 
-const INITIAL: CampaignActionState = { error: null, createdId: null };
+const INITIAL: CampaignActionState = { error: null, createdId: null, values: null };
 
 export function CampaignForm({ currency, minDailyBudget }: { currency: string; minDailyBudget: number | null }) {
   const [state, formAction, pending] = useActionState(createCampaignAction, INITIAL);
   const [objective, setObjective] = useState<string>("OUTCOME_SALES");
   const [hasSpecial, setHasSpecial] = useState<null | boolean>(null);
+  /* 이름·예산은 제어 입력이다 — React 19 는 액션 제출 순간 비제어 폼을 리셋해서,
+     서버 오류 한 번에 쓰던 값이 통째로 날아갔다(감사 지적). 서버가 돌려준 values 로 되살린다. */
+  const [name, setName] = useState("");
+  const [budget, setBudget] = useState("");
+  /* 렌더 중 상태 조정 패턴(공식 권장) — effect 로 하면 한 프레임 늦게 값이 돌아온다 */
+  const [lastState, setLastState] = useState(state);
+  if (state !== lastState) {
+    setLastState(state);
+    if (state.values) {
+      setName(state.values.name);
+      setBudget(state.values.dailyBudget);
+    }
+    if (state.createdId) {
+      setName("");
+      setBudget("");
+    }
+  }
 
   const currencyLabel = currency === "KRW" ? "원" : ` ${currency}`;
+  /* 자릿수 예시는 통화마다 다르다 — «10000» 을 박으면 KRW 스케일 가정이다(감사 지적) */
+  const budgetPlaceholder = currency === "KRW" ? "10000" : currency === "JPY" ? "1000" : "10";
 
   return (
     <form action={formAction} className="space-y-5">
@@ -54,6 +73,8 @@ export function CampaignForm({ currency, minDailyBudget }: { currency: string; m
           name="name"
           required
           maxLength={CAMPAIGN_NAME_MAX}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
           placeholder="예: 9월 신제품 판매"
           className="mt-1.5 h-11 w-full rounded-card border border-line bg-body px-3 text-[16px] outline-none trans-state focus:border-primary"
         />
@@ -98,7 +119,9 @@ export function CampaignForm({ currency, minDailyBudget }: { currency: string; m
             required
             min={minDailyBudget ?? 1}
             step="any"
-            placeholder={minDailyBudget !== null ? String(minDailyBudget) : "10000"}
+            value={budget}
+            onChange={(e) => setBudget(e.target.value)}
+            placeholder={minDailyBudget !== null ? String(minDailyBudget) : budgetPlaceholder}
             className="tnum h-11 w-40 rounded-card border border-line bg-body px-3 text-[16px] outline-none trans-state focus:border-primary"
           />
           {/* 통화는 계정에서 읽은 값 그대로 — «원» 가정 금지 */}
