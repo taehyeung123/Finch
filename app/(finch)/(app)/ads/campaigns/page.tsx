@@ -1,1125 +1,210 @@
-"use client";
-
-import { useRef, useState } from "react";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Bird,
-  Check,
-  ChevronRight,
-  Heart,
-  Image as ImageIcon,
-  ImagePlus,
-  Images,
-  Layers,
-  Lock,
-  Megaphone,
-  MousePointerClick,
-  Pause,
-  Play,
-  Plus,
-  Radio,
-  ShoppingCart,
-  Upload,
-  Users,
-  X,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { cn } from "@/lib/cn";
+import { AlertTriangle, ArrowLeft, CheckCircle2, Megaphone } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button, ButtonLink } from "@/components/ui/button";
-import { ChipFilter } from "@/components/ui/chip-filter";
-import { InfoTip } from "@/components/ui/info-tip";
 import { EmptyState } from "@/components/ui/empty-state";
-import { formatCompact, formatDate, formatKRW } from "@/lib/format";
-import { campaigns } from "@/lib/data";
-import type { AdCampaign } from "@/lib/types";
-import { NATIONWIDE, regionWeight, summarizeRegionPicks, type RegionPick } from "@/lib/geo/kr-regions";
-import {
-  defaultPlacement,
-  placementFactor,
-  selectedCount,
-  summarizePlacement,
-  type PlacementState,
-} from "@/lib/ads/meta-placements";
-import { RegionPicker } from "./_components/region-picker";
-import { InterestPicker } from "./_components/interest-picker";
-import { PlacementSelector } from "./_components/placement-selector";
-
-/* ---------------------------------- 상수 ---------------------------------- */
-
-const STEPS = ["캠페인 목표", "타겟팅", "예산·일정", "소재", "검토·게재"];
-
-const OBJECTIVES: { value: string; label: string; description: string; icon: LucideIcon }[] = [
-  { value: "sales", label: "판매(전환)", description: "구매·장바구니 등 전환 행동을 유도합니다", icon: ShoppingCart },
-  { value: "traffic", label: "트래픽", description: "웹사이트·프로필 방문을 늘립니다", icon: MousePointerClick },
-  { value: "awareness", label: "도달·인지도", description: "더 많은 사람에게 브랜드를 노출합니다", icon: Radio },
-  { value: "engagement", label: "참여", description: "좋아요·댓글·공유를 확대합니다", icon: Heart },
-];
+import { ButtonLink } from "@/components/ui/button";
+import { IS_SAMPLE_DATA } from "@/lib/data";
+import { datePresetLabel, getLiveAds } from "@/lib/data/ads";
+import { objectiveLabel, statusLabel } from "@/lib/ads/meta-labels";
+import { formatMoney } from "@/lib/format";
+import { DemoWizard } from "./_components/demo-wizard";
+import { CampaignForm } from "./_components/campaign-form";
+import { CampaignRowActions } from "./_components/campaign-row-actions";
 
 /*
-  연령 — Meta와 동일한 연속 범위(최소~최대) 방식.
-  Meta API의 targeting은 age_min/age_max 범위 하나만 받으므로 비연속 다중 선택은 표현 불가.
-  65는 "65세 이상"을 의미한다 (Meta age_max=65 동일).
+  캠페인 관리 — 실 모드는 **진짜 캠페인**이다: 생성(항상 일시중지로) · 게재 시작/일시중지.
+  데모 모드는 기존 5단계 마법사(_components/demo-wizard.tsx)를 그대로 보여준다.
+
+  ⚠️ 예전엔 이 라우트가 실 모드에서도 목 마법사를 그렸다 — 광고 계정을 이미 연동한
+  사람이 들어오면 «Meta 광고 계정을 연동하면…»(연동한 사람에게 연동하라는) 빈 화면이 나왔다.
 */
-const AGE_MIN_FLOOR = 13;
-const AGE_MAX_CEIL = 65;
-const AGE_OPTIONS = Array.from({ length: AGE_MAX_CEIL - AGE_MIN_FLOOR + 1 }, (_, i) => AGE_MIN_FLOOR + i);
 
-const GENDER_OPTIONS = [
-  { value: "전체", label: "전체" },
-  { value: "남성", label: "남성" },
-  { value: "여성", label: "여성" },
-] as const;
-
-/* 지역 데이터·가중치는 lib/geo/kr-regions.ts — 시·도 → 시·군·구 2단계 (Meta 지역 타겟팅과 동일 체계) */
-
-const CTA_OPTIONS = ["더 알아보기", "구매하기", "가입하기", "문의하기", "다운로드", "예약하기", "메시지 보내기"];
-
-/* Meta 최소 예산 정책 근사치 (KRW) — 실연동 시 계정 통화·과금 방식 기준 값으로 교체 */
-const MIN_DAILY_BUDGET = 5000;
-const MIN_TOTAL_BUDGET = 50000;
-
-/** 예상 도달 목 계산의 기준 모수 — 국내 SNS 이용자 규모 가정치 */
-const BASE_AUDIENCE = 27_000_000;
-
-const STATUS_BADGE: Record<AdCampaign["status"], { tone: "positive" | "warning" | "neutral"; label: string }> = {
-  active: { tone: "positive", label: "진행 중" },
-  paused: { tone: "warning", label: "일시정지" },
-  ended: { tone: "neutral", label: "종료" },
+const WRITE_BANNERS: Record<string, { tone: "positive" | "negative"; text: string }> = {
+  activated: { tone: "positive", text: "게재를 시작했어요. 노출까지 몇 분 걸릴 수 있어요." },
+  paused: { tone: "positive", text: "캠페인을 일시중지했어요." },
+  error: { tone: "negative", text: "요청을 처리하지 못했어요." },
 };
 
-const fieldLabel = "block text-[14px] font-medium text-fg-sub";
-const fieldInput =
-  "mt-1.5 h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:opacity-40";
-
-/* ------------------------------ 로컬 UI 조각 ------------------------------ */
-
-/** 라디오 알약 — 예산 유형·게재 시간대 선택용 */
-function RadioPill({
-  name,
-  checked,
-  disabled,
-  onChange,
-  children,
+export default async function CampaignsPage({
+  searchParams,
 }: {
-  name: string;
-  checked: boolean;
-  disabled?: boolean;
-  onChange: () => void;
-  children: React.ReactNode;
+  searchParams: Promise<{ write?: string; detail?: string }>;
 }) {
-  return (
-    <label
-      className={cn(
-        "flex items-center gap-2 rounded-card border px-4 py-2.5 text-[15px] trans-state",
-        checked ? "border-primary bg-primary-weak font-semibold text-primary" : "border-line bg-overlay text-fg-sub",
-        disabled ? "pointer-events-none opacity-40" : "cursor-pointer hover:border-line-strong",
-      )}
-    >
-      <input
-        type="radio"
-        name={name}
-        checked={checked}
-        disabled={disabled}
-        onChange={onChange}
-        className="sr-only"
-      />
-      <span
-        className={cn(
-          "size-2 rounded-chip",
-          checked ? "bg-primary" : "border border-line-strong bg-overlay",
-        )}
-        aria-hidden
-      />
-      {children}
-    </label>
-  );
-}
+  if (IS_SAMPLE_DATA) {
+    return <DemoWizard />;
+  }
 
-/** 미리보기 스켈레톤 바 — 미입력 필드 자리 표시 */
-function SkeletonBar({ className }: { className?: string }) {
-  return <span className={cn("block rounded-chip bg-plate", className)} aria-hidden />;
-}
+  const sp = await searchParams;
+  const banner = sp.write ? WRITE_BANNERS[sp.write] : undefined;
+  /* detail 은 우리 서버 액션이 넣은 한국어 문구다 — URL 조작으로 임의 문구가 들어올 수 있으니
+     길이를 자르고 텍스트로만 그린다(React 이스케이프). 실패 배너에서만 보여준다. */
+  const detail = sp.write === "error" && typeof sp.detail === "string" ? sp.detail.slice(0, 160) : null;
 
-/** 소재 형식 선택 카드 (단일·슬라이드·컬렉션) */
-function FormatOption({
-  active,
-  onClick,
-  disabled,
-  icon: Icon,
-  title,
-  desc,
-}: {
-  active: boolean;
-  onClick?: () => void;
-  disabled?: boolean;
-  icon: LucideIcon;
-  title: string;
-  desc: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-pressed={active}
-      className={cn(
-        "flex flex-col items-start gap-1 rounded-card border p-3 text-left trans-state",
-        active ? "border-primary bg-primary-weak" : "border-line bg-overlay hover:border-line-strong",
-        disabled && "cursor-not-allowed opacity-50 hover:border-line",
-      )}
-    >
-      <Icon className={cn("size-5", active ? "text-primary" : "text-fg-sub")} aria-hidden />
-      <span className="text-[15px] font-semibold">{title}</span>
-      <span className="text-xs text-fg-faint">{desc}</span>
-    </button>
-  );
-}
-
-/* --------------------------------- 페이지 --------------------------------- */
-
-export default function CampaignsPage() {
-  /* 마법사 이동 */
-  const [step, setStep] = useState(0);
-  const [maxStep, setMaxStep] = useState(0);
-
-  /* 1단계 — 목표 */
-  const [objective, setObjective] = useState("sales");
-
-  /* 2단계 — 타겟팅 */
-  const [ageMin, setAgeMin] = useState(18);
-  const [ageMax, setAgeMax] = useState(AGE_MAX_CEIL);
-  const [gender, setGender] = useState<(typeof GENDER_OPTIONS)[number]["value"]>("전체");
-  const [regions, setRegions] = useState<RegionPick[]>([NATIONWIDE]);
-  const [interests, setInterests] = useState<string[]>([]);
-  const [placement, setPlacement] = useState<PlacementState>(defaultPlacement());
-
-  /* 3단계 — 예산·일정 */
-  const [budgetType, setBudgetType] = useState<"daily" | "total">("daily");
-  const [amount, setAmount] = useState("50000"); // 숫자만 저장
-  const [startDate, setStartDate] = useState("2026-07-15");
-  const [endDate, setEndDate] = useState("2026-08-14");
-  const [noEndDate, setNoEndDate] = useState(false);
-  const [scheduleType, setScheduleType] = useState<"always" | "specific">("always");
-  const [scheduleStart, setScheduleStart] = useState(9);
-  const [scheduleEnd, setScheduleEnd] = useState(21);
-
-  /* 4단계 — 소재 */
-  const [creativeFormat, setCreativeFormat] = useState<"single" | "carousel">("single");
-  const [carouselCards, setCarouselCards] = useState<{ id: string; headline: string }[]>([
-    { id: "card-1", headline: "" },
-    { id: "card-2", headline: "" },
-  ]);
-  const cardSeq = useRef(2);
-  const [headline, setHeadline] = useState("");
-  const [description, setDescription] = useState("");
-  const [cta, setCta] = useState(CTA_OPTIONS[0]);
-  const [landingUrl, setLandingUrl] = useState("");
-
-  const addCard = () => {
-    if (carouselCards.length >= 10) return; // Meta 캐러셀 최대 10장
-    cardSeq.current += 1;
-    setCarouselCards((prev) => [...prev, { id: `card-${cardSeq.current}`, headline: "" }]);
-  };
-  const removeCard = (id: string) =>
-    setCarouselCards((prev) => (prev.length > 2 ? prev.filter((c) => c.id !== id) : prev)); // 최소 2장
-  const updateCard = (id: string, value: string) =>
-    setCarouselCards((prev) => prev.map((c) => (c.id === id ? { ...c, headline: value } : c)));
-
-  /* 기존 캠페인 목록 상태 토글 (목) */
-  const [statuses, setStatuses] = useState<Record<string, AdCampaign["status"]>>(() =>
-    Object.fromEntries(campaigns.map((c) => [c.id, c.status])),
-  );
-
-  const goToStep = (i: number) => {
-    setStep(i);
-    setMaxStep((m) => Math.max(m, i));
-  };
-
-  const toggleStatus = (id: string) =>
-    setStatuses((prev) => ({ ...prev, [id]: prev[id] === "active" ? "paused" : "active" }));
-
-  /*
-    18세 미만 포함 시 Meta 정책 제한 — 성별·관심사 타겟팅 불가 (나이+위치만 허용).
-    UI 잠금과 별개로 파생 값으로도 강제해 요약·도달 계산이 항상 정책을 따르게 한다.
-  */
-  const includesMinors = ageMin < 18;
-  const effectiveGender = includesMinors ? "전체" : gender;
-  const effectiveInterests = includesMinors ? [] : interests;
-
-  /* 예상 도달 목 추정치 — 연령 범위 폭 x 지역 인구 비중(시·군·구 반영) 기반 간단 계산 */
-  const ageSpan = (ageMax === AGE_MAX_CEIL ? 70 : ageMax) - ageMin + 1; // 65는 "65세 이상"으로 취급
-  const ageFraction = Math.min(ageSpan / (70 - AGE_MIN_FLOOR + 1), 1);
-  const selectedRegionWeight = regionWeight(regions);
-  const placementFactorValue = placementFactor(placement);
-  const estimatedReach = Math.round(
-    BASE_AUDIENCE * ageFraction * selectedRegionWeight * (effectiveGender === "전체" ? 1 : 0.5) * placementFactorValue,
-  );
-
-  const selectedObjective = OBJECTIVES.find((o) => o.value === objective) ?? OBJECTIVES[0];
-  const amountNumber = Number(amount) || 0;
-
-  /* 총 예산은 종료일 필수 (Meta: 무기한 게재는 일 예산에서만 가능) — 파생 값으로 강제 */
-  const effectiveNoEndDate = budgetType === "daily" && noEndDate;
-  const minBudget = budgetType === "daily" ? MIN_DAILY_BUDGET : MIN_TOTAL_BUDGET;
-
-  /* 단계별 필수값 검증 — 부족하면 다음 버튼을 잠그고 인라인으로 안내 (감사 1차 반영) */
-  const stepIssues: string[] = (() => {
-    if (step === 1) {
-      const issues: string[] = [];
-      if (regions.length === 0) issues.push("지역을 선택하세요");
-      if (placement.mode === "manual" && selectedCount(placement) === 0)
-        issues.push("노출 위치를 선택하거나 어드밴티지+ 노출 위치를 사용하세요");
-      return issues;
-    }
-    if (step === 2) {
-      const issues: string[] = [];
-      if (amountNumber < minBudget)
-        issues.push(`${budgetType === "daily" ? "일" : "총"} 예산은 최소 ${formatKRW(minBudget)} 이상이어야 해요`);
-      if (!startDate) issues.push("시작일을 선택하세요");
-      if (!effectiveNoEndDate) {
-        if (!endDate) issues.push("종료일을 선택하세요");
-        else if (startDate && endDate < startDate) issues.push("종료일이 시작일보다 빠를 수 없어요");
-      }
-      if (budgetType === "total" && scheduleType === "specific" && scheduleEnd <= scheduleStart)
-        issues.push("게재 종료 시각은 시작 시각보다 늦어야 해요");
-      return issues;
-    }
-    if (step === 3) {
-      const issues: string[] = [];
-      if (creativeFormat === "single" && headline.trim() === "") issues.push("광고 제목을 입력하세요");
-      if (landingUrl.trim() !== "" && !/^https?:\/\/.+\..+/.test(landingUrl.trim()))
-        issues.push("랜딩 URL 형식이 올바르지 않아요 (https://로 시작)");
-      if (landingUrl.trim() === "") issues.push("랜딩 URL을 입력하세요");
-      return issues;
-    }
-    return [];
-  })();
-  const canProceed = stepIssues.length === 0;
-  const agesLabel = `${ageMin}세 ~ ${ageMax === AGE_MAX_CEIL ? "65세 이상" : `${ageMax}세`}`;
-  const regionsLabel = summarizeRegionPicks(regions);
-  const placementsLabel = summarizePlacement(placement);
-  const scheduleLabel =
-    budgetType === "daily" || scheduleType === "always"
-      ? "항상 게재"
-      : `${scheduleStart}시 ~ ${scheduleEnd}시`;
-
-  /* 5단계 요약 — 각 항목의 수정 버튼이 해당 단계로 이동 */
-  const summarySections: { title: string; step: number; lines: string[] }[] = [
-    { title: "캠페인 목표", step: 0, lines: [selectedObjective.label] },
-    {
-      title: "타겟",
-      step: 1,
-      lines: [
-        `연령 ${agesLabel}`,
-        `성별 ${effectiveGender}${includesMinors ? " (18세 미만 포함 — 고정)" : ""}`,
-        `지역 ${regionsLabel}`,
-        `관심사 ${includesMinors ? "사용 불가 (18세 미만 포함)" : effectiveInterests.length > 0 ? effectiveInterests.join(" · ") : "없음"}`,
-        `노출 위치 ${placementsLabel}`,
-      ],
-    },
-    {
-      title: "예산·일정",
-      step: 2,
-      lines: [
-        `${budgetType === "daily" ? "일" : "총"} 예산 ${formatKRW(amountNumber)}`,
-        `${startDate ? formatDate(startDate) : "시작일 미정"} ~ ${
-          effectiveNoEndDate ? "종료일 없이 계속 게재" : endDate ? formatDate(endDate) : "종료일 미정"
-        }`,
-        `게재 시간 ${scheduleLabel}`,
-      ],
-    },
-    {
-      title: "소재",
-      step: 3,
-      lines: [
-        `형식 ${creativeFormat === "single" ? "단일 이미지·동영상" : `슬라이드 ${carouselCards.length}장`}`,
-        creativeFormat === "single" ? `제목 ${headline || "미입력"}` : `카드 ${carouselCards.length}장`,
-        `본문 ${description ? (description.length > 40 ? `${description.slice(0, 40)}…` : description) : "미입력"}`,
-        `CTA ${cta}`,
-        `랜딩 ${landingUrl || "미입력"}`,
-      ],
-    },
-  ];
-
-  const previewBody = description.length > 125 ? description.slice(0, 125) : description;
-  const previewHeadline = creativeFormat === "single" ? headline : (carouselCards[0]?.headline ?? "");
+  const live = await getLiveAds();
+  const liveOk = live.state === "ok" ? live : null;
+  const currency = liveOk?.selected.currency ?? null;
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="캠페인 관리"
-        description="새 캠페인을 만들고 기존 캠페인을 관리하세요."
+        description={
+          liveOk ? `${liveOk.selected.name ?? "광고 계정"} · 캠페인 생성과 게재 관리` : "캠페인 생성과 게재 관리"
+        }
         action={
-          <ButtonLink href="/ads" size="sm" variant="ghost">
+          <ButtonLink href="/ads" size="sm" variant="secondary">
             <ArrowLeft className="size-4" aria-hidden />
-            광고 관리로
+            성과 보기
           </ButtonLink>
         }
       />
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        {/* ---------------- 구성 1 — 캠페인 생성 마법사 ---------------- */}
-        <Card>
-          <CardHeader title="새 캠페인 만들기" description="5단계로 캠페인을 구성합니다" />
-          <CardBody className="space-y-6">
-            {/* 스텝퍼 — 완료(방문)한 단계는 클릭으로 되돌아가기 */}
-            <ol className="flex flex-wrap items-center gap-2" aria-label="캠페인 생성 단계">
-              {STEPS.map((label, i) => {
-                const visited = i <= maxStep;
-                return (
-                  <li key={label} className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={!visited}
-                      onClick={() => visited && setStep(i)}
-                      aria-current={i === step ? "step" : undefined}
-                      className={cn(
-                        "inline-flex items-center gap-1.5 rounded-chip px-3 py-1.5 text-[14px] font-semibold trans-state",
-                        i === step
-                          ? "bg-primary text-on-primary"
-                          : visited
-                            ? "bg-primary-weak text-primary hover:bg-primary-weak"
-                            : "border border-line bg-body text-fg-faint",
-                      )}
-                    >
-                      {visited && i < step ? (
-                        <Check className="size-3.5" aria-hidden />
-                      ) : (
-                        <span className="tnum">{i + 1}</span>
-                      )}
-                      {label}
-                    </button>
-                    {i < STEPS.length - 1 ? <span className="h-px w-3 bg-line" aria-hidden /> : null}
-                  </li>
-                );
-              })}
-            </ol>
-
-            {/* ---------- 1단계 캠페인 목표 ---------- */}
-            {step === 0 ? (
-              <fieldset>
-                <legend className={fieldLabel}>캠페인 목표를 선택하세요</legend>
-                <div role="radiogroup" aria-label="캠페인 목표" className="mt-2 grid gap-3 sm:grid-cols-2">
-                  {OBJECTIVES.map((o) => {
-                    const active = o.value === objective;
-                    const Icon = o.icon;
-                    return (
-                      <button
-                        key={o.value}
-                        type="button"
-                        role="radio"
-                        aria-checked={active}
-                        onClick={() => setObjective(o.value)}
-                        className={cn(
-                          "rounded-card border p-4 text-left trans-state",
-                          active ? "border-primary bg-primary-weak" : "border-line bg-overlay hover:border-line-strong",
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "flex size-9 items-center justify-center rounded-card",
-                            active ? "bg-primary text-on-primary" : "bg-body text-fg-sub",
-                          )}
-                        >
-                          <Icon className="size-4.5" aria-hidden />
-                        </span>
-                        <p className={cn("mt-3 text-[15px] font-semibold", active ? "text-primary" : "text-fg")}>
-                          {o.label}
-                        </p>
-                        <p className="mt-1 text-[14px] text-fg-sub">{o.description}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </fieldset>
-            ) : null}
-
-            {/* ---------- 2단계 타겟팅 ---------- */}
-            {step === 1 ? (
-              <div className="space-y-5">
-                <div>
-                  <p className={fieldLabel}>연령</p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <select
-                      aria-label="최소 연령"
-                      value={ageMin}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        setAgeMin(v);
-                        if (v > ageMax) setAgeMax(v);
-                      }}
-                      className="tnum h-10 rounded-card border border-line bg-body px-3 text-[15px] font-medium text-fg outline-none trans-state hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
-                    >
-                      {AGE_OPTIONS.map((a) => (
-                        <option key={a} value={a}>
-                          {a}세
-                        </option>
-                      ))}
-                    </select>
-                    <span className="text-fg-faint">~</span>
-                    <select
-                      aria-label="최대 연령"
-                      value={ageMax}
-                      onChange={(e) => setAgeMax(Number(e.target.value))}
-                      className="tnum h-10 rounded-card border border-line bg-body px-3 text-[15px] font-medium text-fg outline-none trans-state hover:border-line-strong focus-visible:outline-2 focus-visible:outline-primary"
-                    >
-                      {AGE_OPTIONS.filter((a) => a >= ageMin).map((a) => (
-                        <option key={a} value={a}>
-                          {a === AGE_MAX_CEIL ? "65세 이상" : `${a}세`}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <p className="mt-1.5 text-xs text-fg-faint">
-                    Meta와 동일한 연속 범위 방식이에요 — 입력한 그대로 광고세트에 적용됩니다.
-                  </p>
-                  {includesMinors ? (
-                    <p className="mt-2 rounded-card bg-warning-weak p-3 text-[14px] leading-relaxed text-warning">
-                      18세 미만이 포함되면 Meta 정책에 따라 성별·관심사 타겟팅이 잠기고 나이와
-                      위치로만 타겟팅됩니다.
-                    </p>
-                  ) : null}
-                </div>
-
-                <div>
-                  <p className={fieldLabel}>성별</p>
-                  {includesMinors ? (
-                    <p className="mt-2 inline-flex items-center gap-2 rounded-card border border-line bg-body px-3.5 py-2 text-[15px] text-fg-sub">
-                      <Lock className="size-3.5" aria-hidden />
-                      전체 — 18세 미만 포함 시 고정 (Meta 정책)
-                    </p>
-                  ) : (
-                    <ChipFilter
-                      className="mt-2"
-                      options={GENDER_OPTIONS.map((g) => ({ value: g.value, label: g.label }))}
-                      value={gender}
-                      onChange={setGender}
-                    />
-                  )}
-                </div>
-
-                <div>
-                  <p className={fieldLabel}>지역 (시·군·구까지 다중 선택)</p>
-                  <div className="mt-2">
-                    <RegionPicker value={regions} onChange={setRegions} />
-                  </div>
-                </div>
-
-                <div>
-                  <p className={fieldLabel}>상세 타겟팅 (관심사)</p>
-                  {includesMinors ? (
-                    <p className="mt-2 inline-flex items-center gap-2 rounded-card border border-line bg-body px-3.5 py-2 text-[15px] text-fg-sub">
-                      <Lock className="size-3.5" aria-hidden />
-                      18세 미만 포함 시 사용할 수 없어요 (Meta 정책 — 나이·위치만 허용)
-                    </p>
-                  ) : (
-                    <div className="mt-2">
-                      <InterestPicker value={interests} onChange={setInterests} />
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <p className={fieldLabel}>노출 위치</p>
-                  <div className="mt-2">
-                    <PlacementSelector value={placement} onChange={setPlacement} />
-                  </div>
-                </div>
-
-                {/* 예상 도달 — 목 추정치 */}
-                <div className="flex items-start gap-3 rounded-card border border-line bg-body p-4">
-                  <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-card bg-primary-weak text-primary">
-                    <Users className="size-4.5" aria-hidden />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="flex items-center gap-1.5 text-[14px] font-medium text-fg-sub">
-                      예상 도달 규모
-                      <InfoTip>
-                        선택한 타겟 조건 기반 핀치 자체 추정치이며 실제 도달과 다를 수 있습니다.
-                      </InfoTip>
-                    </p>
-                    {estimatedReach > 0 ? (
-                      <p className="tnum mt-0.5 text-lg font-bold">
-                        약 {formatCompact(Math.round(estimatedReach * 0.75))}~
-                        {formatCompact(Math.round(estimatedReach * 1.25))}명
-                      </p>
-                    ) : (
-                      <p className="mt-0.5 text-[15px] text-fg-sub">
-                        연령대·지역·노출 위치를 선택하면 예상 도달이 표시됩니다.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            {/* ---------- 3단계 예산·일정 ---------- */}
-            {step === 2 ? (
-              <div className="space-y-5">
-                <fieldset>
-                  <legend className={fieldLabel}>예산 유형</legend>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <RadioPill name="budget-type" checked={budgetType === "daily"} onChange={() => setBudgetType("daily")}>
-                      일 예산
-                    </RadioPill>
-                    <RadioPill name="budget-type" checked={budgetType === "total"} onChange={() => setBudgetType("total")}>
-                      총 예산
-                    </RadioPill>
-                  </div>
-                </fieldset>
-
-                <div className="max-w-sm">
-                  <label htmlFor="budget-amount" className={fieldLabel}>
-                    {budgetType === "daily" ? "일 예산 금액" : "총 예산 금액"}
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="budget-amount"
-                      type="text"
-                      inputMode="numeric"
-                      value={amountNumber > 0 ? amountNumber.toLocaleString("ko-KR") : ""}
-                      onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ""))}
-                      placeholder="50,000"
-                      className={cn(fieldInput, "tnum pr-10")}
-                    />
-                    <span className="absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[14px] text-fg-sub">
-                      원
-                    </span>
-                  </div>
-                  <p className="mt-1.5 text-xs text-fg-faint">
-                    실제 집행액은 게재 상황에 따라 달라질 수 있습니다.
-                  </p>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor="start-date" className={fieldLabel}>
-                      시작일
-                    </label>
-                    <input
-                      id="start-date"
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className={cn(fieldInput, "tnum")}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="end-date" className={fieldLabel}>
-                      종료일
-                    </label>
-                    <input
-                      id="end-date"
-                      type="date"
-                      value={endDate}
-                      min={startDate || undefined}
-                      disabled={effectiveNoEndDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className={cn(fieldInput, "tnum")}
-                    />
-                    <label
-                      className={cn(
-                        "mt-2 flex items-center gap-2 text-[14px]",
-                        budgetType === "total" ? "cursor-not-allowed text-fg-faint" : "cursor-pointer text-fg-sub",
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={effectiveNoEndDate}
-                        disabled={budgetType === "total"}
-                        onChange={(e) => setNoEndDate(e.target.checked)}
-                        className="size-4 accent-primary"
-                      />
-                      종료일 없이 계속 게재
-                    </label>
-                    {budgetType === "total" ? (
-                      <p className="mt-1 text-xs text-fg-faint">총 예산 캠페인은 종료일이 필수예요 (Meta 정책)</p>
-                    ) : null}
-                  </div>
-                </div>
-
-                <fieldset>
-                  <legend className={fieldLabel}>게재 시간대</legend>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <RadioPill
-                      name="schedule-type"
-                      checked={budgetType === "daily" || scheduleType === "always"}
-                      disabled={budgetType === "daily"}
-                      onChange={() => setScheduleType("always")}
-                    >
-                      항상 게재
-                    </RadioPill>
-                    <RadioPill
-                      name="schedule-type"
-                      checked={budgetType === "total" && scheduleType === "specific"}
-                      disabled={budgetType === "daily"}
-                      onChange={() => setScheduleType("specific")}
-                    >
-                      특정 시간대만
-                    </RadioPill>
-                  </div>
-                  {budgetType === "daily" ? (
-                    <p className="mt-1.5 text-xs text-fg-faint">
-                      시간대 지정 게재는 총 예산 캠페인에서만 지원됩니다 (Meta 정책).
-                    </p>
-                  ) : null}
-                  {budgetType === "total" && scheduleType === "specific" ? (
-                    <div className="mt-3 flex max-w-sm items-center gap-2">
-                      <label htmlFor="schedule-start" className="sr-only">
-                        시작 시간
-                      </label>
-                      <select
-                        id="schedule-start"
-                        value={scheduleStart}
-                        onChange={(e) => setScheduleStart(Number(e.target.value))}
-                        className={cn(fieldInput, "tnum mt-0")}
-                      >
-                        {Array.from({ length: 24 }, (_, h) => (
-                          <option key={h} value={h}>
-                            {h}시
-                          </option>
-                        ))}
-                      </select>
-                      <span className="shrink-0 text-[14px] text-fg-sub">부터</span>
-                      <label htmlFor="schedule-end" className="sr-only">
-                        종료 시간
-                      </label>
-                      <select
-                        id="schedule-end"
-                        value={scheduleEnd}
-                        onChange={(e) => setScheduleEnd(Number(e.target.value))}
-                        className={cn(fieldInput, "tnum mt-0")}
-                      >
-                        {Array.from({ length: 24 }, (_, h) => (
-                          <option key={h} value={h}>
-                            {h}시
-                          </option>
-                        ))}
-                      </select>
-                      <span className="shrink-0 text-[14px] text-fg-sub">까지</span>
-                    </div>
-                  ) : null}
-                </fieldset>
-              </div>
-            ) : null}
-
-            {/* ---------- 4단계 소재 ---------- */}
-            {step === 3 ? (
-              <div className="space-y-5">
-                {/* 소재 형식 (Meta: 단일 이미지/동영상 · 슬라이드 · 컬렉션) */}
-                <fieldset>
-                  <legend className={fieldLabel}>소재 형식</legend>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                    <FormatOption
-                      active={creativeFormat === "single"}
-                      onClick={() => setCreativeFormat("single")}
-                      icon={ImageIcon}
-                      title="단일 이미지·동영상"
-                      desc="이미지나 영상 1개"
-                    />
-                    <FormatOption
-                      active={creativeFormat === "carousel"}
-                      onClick={() => setCreativeFormat("carousel")}
-                      icon={Images}
-                      title="슬라이드"
-                      desc="이미지·영상 2~10장"
-                    />
-                    <FormatOption
-                      active={false}
-                      disabled
-                      icon={Layers}
-                      title="컬렉션"
-                      desc="준비 중"
-                    />
-                  </div>
-                </fieldset>
-
-                {creativeFormat === "single" ? (
-                  <>
-                    <div>
-                      {/* ⚠️ 업로드는 아직 배선이 없다(파일 입력도 onDrop 도 없음). 예전엔 그 사실을
-                          화면이 감춰서, 「파일 선택」을 눌러도 **아무 일도 안 일어났다** — 오류도 없고
-                          변화도 없으니 사용자는 자기 브라우저가 고장 난 줄 안다.
-                          같은 화면의 「게재」가 이미 쓰는 방식(«준비 중» 뱃지)으로 통일한다.
-                          살아 있는 것처럼 보이는 죽은 컨트롤보다, 아직 없다고 말하는 편이 낫다. */}
-                      <div className="flex flex-col items-center justify-center gap-2 rounded-card border border-dashed border-line bg-plate px-6 py-10 text-center">
-                        <Upload className="size-8 text-fg-faint" aria-hidden />
-                        <Badge tone="primary">준비 중</Badge>
-                        <p className="text-[15px] font-semibold text-fg-sub">소재 업로드는 아직 준비 중이에요</p>
-                        <p className="text-[14px] text-fg-sub">
-                          1:1 또는 4:5 비율 · JPG · PNG · MP4 · 최대 30MB 로 열릴 예정이에요. 지금은 문구·타깃만 저장돼요.
-                        </p>
-                        <Button variant="secondary" size="sm" className="mt-2" disabled title="소재 업로드는 아직 준비 중이에요">
-                          파일 선택
-                        </Button>
-                      </div>
-                      <div className="mt-3 flex items-center gap-3 rounded-card border border-dashed border-line px-4 py-3 opacity-60">
-                        <ImagePlus className="size-5 shrink-0 text-fg-faint" aria-hidden />
-                        <div className="min-w-0">
-                          <p className="text-[14px] font-semibold text-fg-sub">영상 썸네일 업로드 (준비 중)</p>
-                          <p className="text-xs text-fg-faint">영상 소재는 썸네일을 함께 올려주세요 (JPG · PNG)</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex items-baseline justify-between">
-                        <label htmlFor="ad-headline" className={fieldLabel}>
-                          광고 제목
-                        </label>
-                        <span className="tnum text-xs text-fg-faint">{headline.length}/40</span>
-                      </div>
-                      <input
-                        id="ad-headline"
-                        type="text"
-                        maxLength={40}
-                        value={headline}
-                        onChange={(e) => setHeadline(e.target.value)}
-                        placeholder="예: 여름 한정 세럼 — 첫 구매 30%"
-                        className={fieldInput}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  /* 슬라이드(캐러셀) — 카드별 소재·제목 */
-                  <div>
-                    <p className={fieldLabel}>슬라이드 카드 (최소 2장 · 최대 10장)</p>
-                    <div className="mt-2 space-y-2">
-                      {carouselCards.map((card, i) => (
-                        <div key={card.id} className="flex items-center gap-3 rounded-card border border-line p-3">
-                          <span className="tnum flex size-6 shrink-0 items-center justify-center rounded-chip bg-plate text-xs font-bold text-fg-sub">
-                            {i + 1}
-                          </span>
-                          <span className="flex size-12 shrink-0 items-center justify-center rounded-card border border-dashed border-line text-fg-faint">
-                            <ImagePlus className="size-5" aria-hidden />
-                          </span>
-                          <input
-                            type="text"
-                            maxLength={40}
-                            value={card.headline}
-                            onChange={(e) => updateCard(card.id, e.target.value)}
-                            placeholder={`${i + 1}번째 카드 제목`}
-                            className="h-9 min-w-0 flex-1 rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
-                          />
-                          {carouselCards.length > 2 ? (
-                            <button
-                              type="button"
-                              aria-label={`${i + 1}번째 카드 삭제`}
-                              onClick={() => removeCard(card.id)}
-                              className="shrink-0 relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-faint trans-state hover:bg-tint-hover hover:text-fg"
-                            >
-                              <X className="size-4" aria-hidden />
-                            </button>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={addCard}
-                      disabled={carouselCards.length >= 10}
-                      className="mt-2"
-                    >
-                      <Plus className="size-4" aria-hidden />
-                      카드 추가
-                    </Button>
-                  </div>
-                )}
-
-                <div>
-                  <div className="flex items-baseline justify-between">
-                    <label htmlFor="ad-description" className={fieldLabel}>
-                      본문 설명
-                    </label>
-                    <span className={cn("tnum text-xs", description.length > 125 ? "text-warning" : "text-fg-faint")}>
-                      {description.length}/300
-                    </span>
-                  </div>
-                  <textarea
-                    id="ad-description"
-                    rows={3}
-                    maxLength={300}
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="제품·혜택을 소개하는 본문을 입력하세요"
-                    className={cn(fieldInput, "h-auto py-2.5 leading-relaxed")}
-                  />
-                  <p className="mt-1 text-xs text-fg-faint">125자 이내 권장 — 이후는 더보기로 접힘</p>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor="ad-cta" className={fieldLabel}>
-                      CTA 버튼
-                    </label>
-                    <select id="ad-cta" value={cta} onChange={(e) => setCta(e.target.value)} className={fieldInput}>
-                      {CTA_OPTIONS.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="ad-landing" className={fieldLabel}>
-                      랜딩 URL
-                    </label>
-                    <input
-                      id="ad-landing"
-                      type="url"
-                      value={landingUrl}
-                      onChange={(e) => setLandingUrl(e.target.value)}
-                      placeholder="https://"
-                      className={fieldInput}
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            {/* ---------- 5단계 검토·게재 ---------- */}
-            {step === 4 ? (
-              <div className="space-y-4">
-                <div className="divide-y divide-line rounded-card border border-line">
-                  {summarySections.map((section) => (
-                    <div key={section.title} className="flex items-start justify-between gap-3 p-4">
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium text-fg-faint">{section.title}</p>
-                        {section.lines.map((line) => (
-                          <p key={line} className="mt-1 break-words text-[15px] text-fg">
-                            {line}
-                          </p>
-                        ))}
-                      </div>
-                      <Button variant="ghost" size="sm" onClick={() => setStep(section.step)}>
-                        수정
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex flex-wrap items-start gap-3 rounded-card border border-line bg-body p-4">
-                  <Lock className="mt-0.5 size-4 shrink-0 text-fg-faint" aria-hidden />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone="primary">준비 중</Badge>
-                      <p className="text-[15px] font-semibold">게재는 아직 준비 중입니다</p>
-                    </div>
-                    <p className="mt-1 text-[14px] leading-relaxed text-fg-sub">
-                      캠페인 생성·수정은 준비 중이에요. 지금은 성과 확인만 할 수 있습니다.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    aria-disabled="true"
-                    className="inline-flex h-10 cursor-not-allowed items-center justify-center rounded-card bg-primary px-4 text-[15px] font-semibold text-on-primary opacity-40"
-                  >
-                    게재 시작
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
-            {/* 필수값 인라인 안내 — 다음 버튼이 잠긴 이유를 그 자리에서 보여준다 */}
-            {stepIssues.length > 0 ? (
-              <ul className="space-y-1 rounded-card bg-warning-weak p-3 text-[14px] text-warning" role="alert">
-                {stepIssues.map((issue) => (
-                  <li key={issue}>· {issue}</li>
-                ))}
-              </ul>
-            ) : null}
-
-            {/* 이전/다음 */}
-            <div className="flex items-center justify-between border-t border-line pt-4">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={step === 0}
-                onClick={() => setStep((s) => Math.max(0, s - 1))}
-              >
-                <ArrowLeft className="size-4" aria-hidden />
-                이전
-              </Button>
-              {step < STEPS.length - 1 ? (
-                <Button
-                  size="sm"
-                  disabled={!canProceed}
-                  onClick={() => canProceed && goToStep(Math.min(STEPS.length - 1, step + 1))}
-                >
-                  다음
-                  <ArrowRight className="size-4" aria-hidden />
-                </Button>
-              ) : null}
-            </div>
-          </CardBody>
-        </Card>
-
-        {/* ---------------- 구성 2 — 라이브 광고 미리보기 ---------------- */}
-        <div className="lg:sticky lg:top-6">
-          <Card>
-            <CardHeader title="광고 미리보기" description="Instagram 피드 기준" />
-            <CardBody>
-              {/* 폰 목업 — 제네릭 스마트폰 실루엣(특정 기기 브랜드 아님). 프레임 라운드는
-                  chip 토큰(32px), 스크린 24px은 프레임 곡률 추종용 예외. 베젤은 bg-fg라
-                  라이트에선 다크 베젤, 다크 테마에선 라이트 베젤로 자동 반전된다. */}
-              <div className="mx-auto w-full max-w-[300px]">
-                <div className="rounded-chip bg-fg p-2 shadow-pop">
-                  <div className="overflow-hidden rounded-[24px] bg-body">
-                    {/* 상태바 — 시계·펀치홀 카메라·수신/배터리 */}
-                    <div className="flex items-center justify-between px-4 pb-1 pt-2.5" aria-hidden>
-                      <span className="tnum text-[11px] font-semibold">12:30</span>
-                      <span className="size-2 rounded-chip bg-fg" />
-                      <span className="flex items-center gap-1">
-                        <span className="size-1.5 rounded-chip bg-fg/60" />
-                        <span className="size-1.5 rounded-chip bg-fg/40" />
-                        <span className="h-2.5 w-5 rounded-[3px] border border-fg/40 bg-positive/70" />
-                      </span>
-                    </div>
-                {/* 상단 — 프로필 */}
-                <div className="flex items-center gap-2.5 p-3">
-                  <span className="flex size-8 shrink-0 items-center justify-center rounded-chip bg-primary-weak text-primary">
-                    <Bird className="size-4" aria-hidden />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate text-[14px] font-semibold">핀치 공식</p>
-                    <p className="text-xs text-fg-faint">광고</p>
-                  </div>
-                </div>
-
-                {/* 소재 영역 — 캐러셀이면 슬라이드 도트 표시 */}
-                <div className="relative flex aspect-square items-center justify-center bg-plate">
-                  <div className="flex flex-col items-center gap-1.5 text-fg-faint">
-                    {creativeFormat === "carousel" ? (
-                      <>
-                        <Images className="size-8" aria-hidden />
-                        <p className="text-xs">슬라이드 {carouselCards.length}장</p>
-                      </>
-                    ) : (
-                      <>
-                        <ImageIcon className="size-8" aria-hidden />
-                        <p className="text-xs">소재를 업로드하면 여기에 표시됩니다</p>
-                      </>
-                    )}
-                  </div>
-                  {creativeFormat === "carousel" ? (
-                    <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1" aria-hidden>
-                      {carouselCards.map((c, i) => (
-                        <span
-                          key={c.id}
-                          className={cn("size-1.5 rounded-chip", i === 0 ? "bg-primary" : "bg-fg-faint/40")}
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-
-                {/* CTA 버튼 — 4단계 선택값 실시간 반영 */}
-                <div className="flex items-center justify-between border-y border-line px-3 py-2.5">
-                  <span className="text-[14px] font-semibold text-primary">{cta}</span>
-                  <ChevronRight className="size-4 text-primary" aria-hidden />
-                </div>
-
-                {/* 하단 — 제목·본문 실시간 반영, 미입력 시 스켈레톤 */}
-                <div className="space-y-1.5 p-3">
-                  {previewHeadline ? (
-                    <p className="break-words text-[15px] font-semibold">{previewHeadline}</p>
-                  ) : (
-                    <SkeletonBar className="h-3.5 w-2/3" />
-                  )}
-                  {description ? (
-                    <p className="break-words text-[14px] leading-relaxed text-fg-sub">
-                      {previewBody}
-                      {description.length > 125 ? <span className="text-fg-faint">… 더보기</span> : null}
-                    </p>
-                  ) : (
-                    <>
-                      <SkeletonBar className="h-3 w-full" />
-                      <SkeletonBar className="h-3 w-4/5" />
-                    </>
-                  )}
-                </div>
-
-                    {/* 홈 인디케이터 */}
-                    <div className="flex justify-center pb-2 pt-1" aria-hidden>
-                      <span className="h-1 w-20 rounded-chip bg-fg/30" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <p className="mt-3 text-center text-xs text-fg-faint">
-                실제 휴대폰 화면 기준 미리보기 — 4단계 입력값이 실시간으로 반영됩니다.
-              </p>
-            </CardBody>
-          </Card>
-        </div>
-      </div>
-
-      {/* ---------------- 구성 3 — 기존 캠페인 목록 ---------------- */}
-      <Card>
-        <CardHeader title="기존 캠페인" description="지금은 목록만 보여드려요 — 상태 변경은 아직 저장되지 않아요" />
-        <CardBody className="space-y-3">
-          {campaigns.length > 0 ? (
-            campaigns.map((c) => {
-              const current = statuses[c.id] ?? c.status;
-              const status = STATUS_BADGE[current];
-              return (
-                <div
-                  key={c.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line p-4"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    {/* eslint-disable-next-line @next/next/no-img-element -- 목 소재 썸네일(로컬 SVG) */}
-                    <img
-                      src={c.creative.imageUrl}
-                      alt={c.creative.headline}
-                      width={40}
-                      height={40}
-                      className="size-10 shrink-0 rounded-card border border-line object-cover"
-                    />
-                    <div className="min-w-0">
-                      <p className="truncate text-[15px] font-semibold">{c.name}</p>
-                      <p className="mt-0.5 truncate text-xs text-fg-faint">{c.creative.headline}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="tnum text-[14px] text-fg-sub">일 예산 {formatKRW(c.dailyBudget)}</span>
-                    <Badge tone={status.tone}>
-                      <span className="size-1.5 rounded-full bg-current" aria-hidden />
-                      {status.label}
-                    </Badge>
-                    {current !== "ended" ? (
-                      <Button variant="secondary" size="sm" onClick={() => toggleStatus(c.id)}>
-                        {current === "active" ? (
-                          <>
-                            <Pause className="size-4" aria-hidden />
-                            일시정지
-                          </>
-                        ) : (
-                          <>
-                            <Play className="size-4" aria-hidden />
-                            재개
-                          </>
-                        )}
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })
+      {banner ? (
+        <div
+          role={banner.tone === "negative" ? "alert" : "status"}
+          className={
+            banner.tone === "negative"
+              ? "flex items-start gap-2.5 rounded-card border border-line bg-negative-weak p-3 text-[14px] text-negative-strong"
+              : "flex items-start gap-2.5 rounded-card border border-line bg-positive-weak p-3 text-[14px] text-positive-strong"
+          }
+        >
+          {banner.tone === "negative" ? (
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
           ) : (
+            <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
+          )}
+          <p>
+            {banner.text}
+            {detail ? ` ${detail}` : null}
+          </p>
+        </div>
+      ) : null}
+
+      {!liveOk ? (
+        <Card>
+          <CardBody>
             <EmptyState
               icon={Megaphone}
-              title="캠페인이 없습니다"
-              description="Meta 광고 계정을 연동하면 캠페인이 여기에 표시됩니다."
+              title={
+                live.state === "expired"
+                  ? "광고 계정 연결이 만료됐어요"
+                  : live.state === "no_accounts"
+                    ? "이 계정으로 볼 수 있는 광고 계정이 없어요"
+                    : live.state === "error"
+                      ? "지금은 캠페인을 불러오지 못했어요"
+                      : "아직 연결한 광고 계정이 없어요"
+              }
+              description={
+                live.state === "expired"
+                  ? "설정에서 다시 연결하면 캠페인 관리가 이어져요."
+                  : live.state === "no_accounts"
+                    ? "메타 비즈니스 설정에서 광고 계정 권한을 받은 뒤 다시 연결해 주세요."
+                    : live.state === "error"
+                      ? "일시적인 문제일 수 있어요. 잠시 후 새로고침해 주세요."
+                      : "메타 광고 계정을 연결하면 여기서 캠페인을 만들고 관리할 수 있어요."
+              }
+              action={
+                <ButtonLink href="/settings" size="sm" variant="secondary">
+                  연결 상태 확인
+                </ButtonLink>
+              }
             />
-          )}
-        </CardBody>
-      </Card>
+          </CardBody>
+        </Card>
+      ) : (
+        <>
+          {/* 캠페인 목록 + 게재 제어 */}
+          <Card>
+            <CardHeader
+              title="캠페인"
+              description={`게재 시작·일시중지 (성과 수치는 ${datePresetLabel(liveOk.datePreset)})`}
+            />
+            <CardBody className="overflow-x-auto">
+              {liveOk.campaigns.length === 0 ? (
+                <EmptyState
+                  icon={Megaphone}
+                  title="아직 캠페인이 없어요"
+                  description="아래에서 첫 캠페인을 만들어 보세요 — 일시중지 상태로 만들어져 비용 걱정 없이 준비할 수 있어요."
+                />
+              ) : (
+                <table className="w-full min-w-[720px] text-[15px]">
+                  <thead>
+                    <tr className="border-b border-line text-left text-xs text-fg-faint">
+                      <th className="pb-2 font-medium">캠페인</th>
+                      <th className="pb-2 font-medium">목표</th>
+                      <th className="pb-2 font-medium">상태</th>
+                      <th className="pb-2 text-right font-medium">일 예산</th>
+                      <th className="pb-2 text-right font-medium">집행액</th>
+                      <th className="pb-2 text-right font-medium">동작</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {liveOk.campaigns.map((c) => {
+                      const status = statusLabel(c.effectiveStatus, c.status);
+                      return (
+                        <tr key={c.id} className="border-b border-line last:border-0">
+                          <td className="min-w-[180px] max-w-[280px] py-3 pr-3">
+                            <p className="truncate font-medium">{c.name}</p>
+                          </td>
+                          <td className="py-3 pr-3 text-fg-sub">{objectiveLabel(c.objective)}</td>
+                          <td className="py-3 pr-3">
+                            <Badge tone={status.tone}>
+                              <span className="size-1.5 rounded-full bg-current" aria-hidden />
+                              {status.label}
+                            </Badge>
+                          </td>
+                          <td className="tnum py-3 text-right">
+                            {c.dailyBudget === null ? (
+                              <span className="text-fg-faint">세트별</span>
+                            ) : (
+                              formatMoney(c.dailyBudget, currency)
+                            )}
+                          </td>
+                          <td className="tnum py-3 text-right">
+                            {c.spend === null ? "—" : formatMoney(c.spend, currency)}
+                          </td>
+                          <td className="py-3 pl-3 text-right">
+                            <CampaignRowActions
+                              campaignId={c.id}
+                              name={c.name}
+                              status={c.status}
+                              dailyBudget={c.dailyBudget}
+                              currency={currency}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </CardBody>
+          </Card>
+
+          {/* 새 캠페인 */}
+          <Card>
+            <CardHeader
+              title="새 캠페인"
+              description="일시중지 상태로 만들어져요 — 광고 세트·소재를 붙인 뒤 게재를 시작하세요"
+            />
+            <CardBody>
+              {/* 통화를 모르면 폼을 열지 않는다 — «원»으로 가정해 보여주는 순간 금액 표기가 거짓이 된다 */}
+              {currency ? (
+                <CampaignForm currency={currency} minDailyBudget={null} />
+              ) : (
+                <p className="text-[14px] text-fg-sub">
+                  광고 계정 통화를 확인하지 못해 캠페인을 만들 수 없어요. 설정에서 다시 연결해 주세요.
+                </p>
+              )}
+            </CardBody>
+          </Card>
+
+          <p className="text-[12px] text-fg-sub">
+            타겟팅·소재 설정은 준비 중이에요 — 지금은 메타 광고 관리자에서 이어서 설정할 수 있어요.
+          </p>
+        </>
+      )}
     </div>
   );
 }

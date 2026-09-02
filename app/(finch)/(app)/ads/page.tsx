@@ -184,14 +184,11 @@ export default async function AdsPage() {
           liveOk ? `${liveOk.selected.name ?? "광고 계정"} · ${periodLabel}` : "Meta 광고 계정 성과 리포트"
         }
         action={
-          /* ⚠️ 실 모드에서 캠페인 관리 화면은 아직 목이다 — 연동한 사람을 «연동하면 표시됩니다»
-             화면으로 보내면 방금 한 연동이 안 된 줄 안다. 데모에서만 연다. */
-          IS_SAMPLE_DATA ? (
-            <ButtonLink href="/ads/campaigns" size="sm" variant="secondary">
-              <SlidersHorizontal className="size-4" aria-hidden />
-              캠페인 관리
-            </ButtonLink>
-          ) : null
+          /* 실 모드도 연다 — 캠페인 생성·게재 제어가 실제로 붙었다(2026-09-02) */
+          <ButtonLink href="/ads/campaigns" size="sm" variant="secondary">
+            <SlidersHorizontal className="size-4" aria-hidden />
+            캠페인 관리
+          </ButtonLink>
         }
       />
 

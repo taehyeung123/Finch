@@ -20,7 +20,7 @@
 import { cache } from "react";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
-import { getWorkspaceOwnerId } from "@/lib/team";
+import { getWorkspaceMembership, getWorkspaceOwnerId } from "@/lib/team";
 import { decryptToken, isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
 import { isMissingTableError } from "@/lib/supabase/errors";
 import { isMetaAdsOAuthConfigured } from "@/lib/meta/ads-oauth";
@@ -237,6 +237,95 @@ export function getLiveAds(options?: {
   datePreset?: string;
 }): Promise<LiveAdsState> {
   return loadLiveAdsCached(options?.datePreset ?? "last_30d", options?.adAccountId);
+}
+
+/* ── 쓰기 컨텍스트 (캠페인 생성·수정 전용) ───────────────────────── */
+
+export type AdsWriteContext =
+  | {
+      state: "ok";
+      /** 복호화된 FB 토큰 — **클라이언트로 절대 내보내지 않는다**(서버 액션 안에서만) */
+      accessToken: string;
+      adAccountId: string;
+      /** 쓰기에서 통화를 모르면 거절한다 — 모르는 통화로 금액을 보내면 100배 오차 직행로다 */
+      currency: string;
+      accountStatus: number | null;
+      grantedScopes: string[] | null;
+      /** 소유자 id — 감사 로그(user_id)와 권한 판정에 쓴다 */
+      ownerId: string;
+      /** 쓰기를 요청한 사람의 워크스페이스 역할 */
+      role: "owner" | "editor" | "viewer" | "unknown";
+    }
+  | { state: "blocked"; reason: string };
+
+/**
+ * 쓰기용 연동 컨텍스트 — getLiveAds 와 달리 **토큰을 밖으로 준다**(서버 액션 전용, 캐시 없음).
+ * 조회 함수에 토큰을 실어 두면 언젠가 직렬화 경계를 넘는다 — 쓰기 경로만 따로 판다.
+ */
+export async function getAdsWriteContext(adAccountId?: string): Promise<AdsWriteContext> {
+  if (isDemoMode()) return { state: "blocked", reason: "지금은 예시 데이터를 보고 계셔서 캠페인을 만들 수 없어요." };
+  if (!isAdsConnectable()) return { state: "blocked", reason: "광고 연동이 아직 열리지 않았어요." };
+
+  const user = await getAuthUser();
+  if (!user) return { state: "blocked", reason: "로그인이 필요해요." };
+
+  const supabase = await createClient();
+  const membership = await getWorkspaceMembership(supabase, user.id);
+  /* 돈이 걸린 쓰기 — viewer·unknown 은 거절한다. 읽기의 fail-open 과 반대 방향이 맞다:
+     모르는 채로 소유자 돈을 쓰게 두는 쪽이 더 나쁘다. 0077 RLS 는 읽기를 의도적으로
+     열어 주므로 DB 가 못 막고, 여기가 유일한 관문이다. */
+  if (membership.role !== "owner" && membership.role !== "editor") {
+    return { state: "blocked", reason: "캠페인을 만들 권한이 없어요. 워크스페이스 소유자에게 요청해 주세요." };
+  }
+
+  const { data: connRaw, error: connErr } = await supabase
+    .from("meta_ad_connections")
+    .select("id, access_token_cipher, token_expires_at, connected, granted_scopes")
+    .eq("user_id", membership.ownerId)
+    .eq("connected", true)
+    .limit(1)
+    .maybeSingle();
+  if (connErr || !connRaw) {
+    return { state: "blocked", reason: "광고 계정 연결을 확인하지 못했어요. 설정에서 연결 상태를 봐 주세요." };
+  }
+  const conn = connRaw as ConnectionRow & { granted_scopes?: string[] | null };
+  if (!conn.access_token_cipher) {
+    return { state: "blocked", reason: "광고 계정이 연결돼 있지 않아요." };
+  }
+  const expiresInDays = daysUntil(conn.token_expires_at);
+  if (expiresInDays !== null && expiresInDays <= 0) {
+    return { state: "blocked", reason: "광고 계정 연결이 만료됐어요. 설정에서 다시 연결해 주세요." };
+  }
+  const token = decryptToken(conn.access_token_cipher);
+  if (!token) {
+    return { state: "blocked", reason: "연결 정보를 읽지 못했어요. 설정에서 다시 연결해 주세요." };
+  }
+
+  const { data: acctRaw } = await supabase
+    .from("meta_ad_accounts")
+    .select("ad_account_id, currency, account_status, is_default")
+    .eq("connection_id", conn.id)
+    .order("is_default", { ascending: false });
+  const rows = (acctRaw ?? []) as AdAccountRow[];
+  const selected = (adAccountId ? rows.find((r) => r.ad_account_id === adAccountId) : null) ?? rows[0];
+  if (!selected) {
+    return { state: "blocked", reason: "이 계정으로 볼 수 있는 광고 계정이 없어요." };
+  }
+  if (!selected.currency) {
+    // 통화를 모르면 쓰기 금지 — 조회의 «모르면 원문 그대로»와 반대다
+    return { state: "blocked", reason: "광고 계정 통화를 확인하지 못했어요. 설정에서 다시 연결해 주세요." };
+  }
+
+  return {
+    state: "ok",
+    accessToken: token,
+    adAccountId: selected.ad_account_id,
+    currency: selected.currency,
+    accountStatus: selected.account_status,
+    grantedScopes: conn.granted_scopes ?? null,
+    ownerId: membership.ownerId,
+    role: membership.role,
+  };
 }
 
 /** 조회 기간 라벨 — 화면이 «누적»이라고 말하지 않게 한 곳에서 정한다 */

@@ -23,6 +23,8 @@ export const REQUIRED_SCOPE = {
   instagramComments: "instagram_business_manage_comments",
   instagramMessages: "instagram_business_manage_messages",
   threadsPublish: "threads_content_publish",
+  /** 캠페인 생성·수정 — 광고 연동(meta_ad_connections.granted_scopes)과 대조한다 */
+  adsManagement: "ads_management",
 } as const;
 
 export type ScopeCheck =

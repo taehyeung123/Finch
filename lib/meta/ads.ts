@@ -25,7 +25,7 @@ function num(v: unknown): number {
  * insights.spend 는 **주 단위 문자열**이다. 같은 화면에 나란히 놓이는 두 금액의 단위가 다르다.
  * 이걸 안 맞추면 USD 계정에서 일 예산만 100배로 찍힌다(원화는 지수가 0이라 우연히 맞는다).
  */
-function minorUnitDigits(currency: string | null): number {
+export function minorUnitDigits(currency: string | null): number {
   if (!currency) return 0; // 모르면 손대지 않는다 — 잘못 나누느니 원문을 둔다
   try {
     return (
@@ -41,6 +41,17 @@ function minorUnitDigits(currency: string | null): number {
 function fromMinor(v: number, currency: string | null): number {
   const digits = minorUnitDigits(currency);
   return digits === 0 ? v : v / 10 ** digits;
+}
+
+/**
+ * 주 단위 → 최소 단위 (쓰기 방향 — 캠페인 예산을 API 로 보낼 때).
+ * ⚠️ fromMinor 와 **같은 표**(minorUnitDigits)를 역방향으로 쓴다.
+ * 두 번째 통화 표를 만들면 그 순간 USD 계정에서 100배가 어긋난다.
+ * KRW 는 지수 0이라 원 그대로다 — 우연히 맞는 것이지 규칙이 아니다.
+ */
+export function toMinor(v: number, currency: string | null): number {
+  const digits = minorUnitDigits(currency);
+  return digits === 0 ? Math.round(v) : Math.round(v * 10 ** digits);
 }
 
 /**

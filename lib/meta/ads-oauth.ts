@@ -37,9 +37,6 @@ const FB_DIALOG_BASE = `https://www.facebook.com/${GRAPH_FB_VERSION}/dialog/oaut
  * 본인 광고 계정 범위에서는 둘 다 Standard Access 로 자동 승인이라 앱 검수가 필요 없다 —
  * "If your app is only managing your ad account, standard access to the ads_read and
  *  ads_management permissions are sufficient." (developers.facebook.com/docs/marketing-api/overview/authorization)
- *
- * ⚠️ **쓰기 코드는 아직 없다.** 권한만 먼저 받아 둔 상태이므로, 관리 기능을 붙이기 전까지
- * 이 토큰으로 나가는 호출은 전부 GET 이다. 쓰기를 구현할 때 이 주석을 지운다.
  */
 export const META_ADS_SCOPES = ["ads_read", "ads_management"] as const;
 
