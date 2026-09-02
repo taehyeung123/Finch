@@ -4,14 +4,14 @@
  * ⚠️ 인스타·스레드와 **완전히 다른 네 번째 연동**이다. 기존 토큰으로는 광고를 한 줄도 못 부른다:
  *  · 호스트가 다르다 — graph.facebook.com (인스타는 graph.instagram.com)
  *  · 자격증명이 다르다 — Facebook 앱 ID/시크릿 (인스타는 Instagram 제품의 ID/시크릿)
- *  · 스코프가 다르다 — ads_read (인스타 스코프엔 광고 권한이 아예 없다)
+ *  · 스코프가 다르다 — ads_read·ads_management (인스타 스코프엔 광고 권한이 아예 없다)
  *
  * ⚠️⚠️ **장기 토큰이 자동 갱신되지 않는다.** (developers.facebook.com 확인, 2026-09-01)
  * 약 60일 뒤 만료되면 **사용자가 다시 로그인하는 것 말고는 방법이 없다.**
  * 인스타(ig_refresh_token)·스레드(th_refresh_token)·틱톡(refresh_token)은 전부 갱신이 되는데
  * 광고만 안 된다 — 그래서 설정 화면이 만료일을 **숨기지 않고 보여줘야** 한다.
  *
- * 1단계는 **읽기 전용**이다. 캠페인 생성·수정(ads_management)은 Advanced Access 가 필요해 뒤로 미룬다.
+ * 지금 구현된 것은 조회뿐이지만 **동의는 관리까지 함께 받는다**(아래 META_ADS_SCOPES 주석).
  * 서버 전용: client_secret·토큰을 클라이언트로 절대 노출하지 않는다.
  */
 
@@ -21,15 +21,32 @@ export const GRAPH_FB_BASE = `https://graph.facebook.com/${GRAPH_FB_VERSION}`;
 const FB_DIALOG_BASE = `https://www.facebook.com/${GRAPH_FB_VERSION}/dialog/oauth`;
 
 /**
- * 1단계는 읽기 전용이라 ads_read 하나만 받는다.
- * ads_management(생성·수정)를 넣으면 동의 화면이 무거워지고 심사도 별건이 된다 —
- * 실제로 쓸 수 있게 된 뒤에 추가한다(스코프는 동의 시점에 고정되므로 그때 재연동이 필요하다).
+ * 조회(ads_read) + 관리(ads_management) 를 **함께** 받는다.
+ *
+ * ⚠️ 처음엔 «구현된 것만 받는다»며 ads_read 하나만 요청했다. 그건 틀린 판단이었다 —
+ * **스코프는 동의 시점에 고정된다.** 지금 조회 권한만 받아 두면, 캠페인 관리 기능을 붙이는 날
+ * 배열만 고쳐서는 아무것도 안 되고 **이미 연동한 사용자 전원이 다시 연동해야 한다.**
+ * 이 저장소는 정확히 그 함정을 이미 한 번 밟았다: 인스타 토큰이 2026-07-18 발급인데
+ * instagram_business_content_publish 는 2026-08-30 에야 배열에 들어가, 예약 발행이
+ * «권한 오류»로 죽는 것을 재연동 전까지 아무도 몰랐다(2026-08-31 적발).
+ *
+ * 핀치는 «광고 관리» 제품이고, 메타 앱의 이용 사례도 «마케팅 API로 광고 만들기 및 관리» 다
+ * (그 이용 사례가 ads_management·ads_read 를 **둘 다 필수**로 요구한다 — 공식 문서 확인 2026-09-02).
+ * 즉 동의 화면이 말하는 것과 제품이 하는 일이 일치한다. 한 번 동의로 조회·관리가 모두 열린다.
+ *
+ * 본인 광고 계정 범위에서는 둘 다 Standard Access 로 자동 승인이라 앱 검수가 필요 없다 —
+ * "If your app is only managing your ad account, standard access to the ads_read and
+ *  ads_management permissions are sufficient." (developers.facebook.com/docs/marketing-api/overview/authorization)
+ *
+ * ⚠️ **쓰기 코드는 아직 없다.** 권한만 먼저 받아 둔 상태이므로, 관리 기능을 붙이기 전까지
+ * 이 토큰으로 나가는 호출은 전부 GET 이다. 쓰기를 구현할 때 이 주석을 지운다.
  */
-export const META_ADS_SCOPES = ["ads_read"] as const;
+export const META_ADS_SCOPES = ["ads_read", "ads_management"] as const;
 
 /** 사람이 읽는 권한 설명 — 스코프를 키로 묶어 누락이 컴파일에서 걸리게 한다(instagram-oauth.ts 와 같은 규칙) */
 export const META_ADS_SCOPE_LABELS: Record<(typeof META_ADS_SCOPES)[number], string> = {
   ads_read: "광고 계정·캠페인 성과 조회",
+  ads_management: "캠페인 생성·수정·집행 상태 변경",
 };
 
 export interface MetaAdsOAuthConfig {

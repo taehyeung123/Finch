@@ -341,7 +341,7 @@ Client Key(=App ID), Client Secret이 표시된다.
 
 ```
 1. 인가   GET https://www.facebook.com/v25.0/dialog/oauth
-          ?client_id=&redirect_uri=&state=&response_type=code&scope=ads_read
+          ?client_id=&redirect_uri=&state=&response_type=code&scope=ads_read,ads_management
 2. 교환   GET https://graph.facebook.com/v25.0/oauth/access_token
           ?client_id=&client_secret=&redirect_uri=&code=          → 단기 토큰
 3. 장기   GET https://graph.facebook.com/v25.0/oauth/access_token
@@ -380,8 +380,27 @@ Client Key(=App ID), Client Secret이 표시된다.
 
 ### 접근 수준
 
-**본인 광고 계정 조회는 Standard Access 로 된다**(심사 불요, 앱에 역할이 있는 사람 기준).
-`ads_management`(생성·수정)와 **고객 광고 계정 대행**은 Advanced Access — 사업자등록증 + 비즈니스 인증이 필요하다.
+**본인 광고 계정은 조회도 관리도 Standard Access 로 된다**(심사 불요, 앱에 역할이 있는 사람 기준) —
+"If your app is only managing your ad account, standard access to the `ads_read` and `ads_management`
+permissions are sufficient." Advanced Access 가 필요한 것은 **고객 광고 계정 대행**뿐이다
+(사업자등록증 + 비즈니스 인증). 2026-09-01 에 이 자리에 «ads_management 는 Advanced Access» 라고
+잘못 적어 뒀다 — 그 오해 때문에 스코프를 ads_read 하나로 좁혔었다.
+
+### 메타 앱 이용 사례 (2026-09-02 실측)
+
+대시보드의 마케팅 API 이용 사례는 3개이고, **필수 권한은 셋 다 같다**
+(`ads_management`·`ads_read`·`business_management`·`pages_read_engagement`·`pages_show_list`·
+`public_profile` + Marketing API 액세스 등급). 차이는 선택 권한뿐이다:
+
+| 이용 사례 | 선택 권한 | 사용 불가 |
+|---|---|---|
+| 광고 만들기 및 관리 | `catalog_management`·`page_manage_ads`·`threads_business_basic` | `leads_retrieval`·`page_manage_metadata` |
+| 광고 성과 데이터 측정 | 없음 | + `page_manage_ads` 까지 차단 |
+| 광고 잠재 고객 확보 | `page_manage_metadata` | `catalog_management`·`threads_business_basic` |
+
+→ **«광고 만들기 및 관리»가 «성과 측정»의 상위 집합이다.** 성과만 골랐다가는 `page_manage_ads` 가
+막히고 얻는 것은 없다. 핀치는 광고 관리 제품이므로 «만들기 및 관리» 하나를 고른다.
+⚠️ 이용 사례는 **한 번 추가하면 삭제할 수 없다**("Use cases cannot be removed after you create your app").
 
 ### 앱 대시보드에 등록할 것
 
