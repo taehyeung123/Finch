@@ -8,6 +8,7 @@ import { MobileTabbar } from "@/components/layout/mobile-tabbar";
 import { OpeningNotice } from "@/components/layout/opening-notice";
 import { isDemoMode } from "@/lib/supabase/config";
 import { getAuthUser } from "@/lib/supabase/server";
+import { getConsentStatus } from "@/lib/legal/consent";
 import { IS_SAMPLE_DATA } from "@/lib/data";
 import { getNotifications } from "@/lib/data/internal";
 
@@ -26,6 +27,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       // getAuthUser는 요청당 1회 메모이즈 — 이 가드가 왕복을 내고 페이지 조회 함수들은 재사용
       const user = await getAuthUser();
       if (!user) redirect("/login");
+      /* 가입 필수 동의 게이트 — OAuth 는 가입=로그인이라 가입 «전»에 받을 자리가 없다.
+         첫 로그인 후 동의(만 14세·약관·개인정보) 기록이 없으면 서비스를 쓰기 전에 받는다(0079).
+         unknown(0079 미적용·조회 실패)은 통과 — «모름»으로 사람을 가두지 않는다(위 fail-open 과 같은 원칙).
+         React cache 라 이 조회는 요청당 1회다. */
+      if ((await getConsentStatus(user.id)) === "missing") redirect("/onboarding/consent");
     } catch (error) {
       // Next 내부 제어 신호는 그대로 흘려보낸다:
       // - NEXT_REDIRECT: redirect()의 정상 동작

@@ -79,16 +79,18 @@ export function SignupForm({ nextPath = "/onboarding" }: { nextPath?: string }) 
         </>
       ) : null}
 
-      <p className="mt-4 text-center text-xs text-fg-faint">
-        가입 시{" "}
-        <Link href="/terms" className="-my-2 inline-block py-2.5 underline underline-offset-2 hover:text-fg-sub">
+      {/* 실제 동의는 첫 로그인 직후 동의 화면에서 항목별로 받는다(/onboarding/consent, 0079).
+          예전의 «가입 시 동의하게 됩니다» 한 줄은 구분 동의가 아니라서(개인정보보호법 §22) 안내로 바꿨다. */}
+      <p className="mt-4 text-center text-xs text-fg-sub">
+        가입을 진행하면 다음 단계에서{" "}
+        <Link href="/terms" className="-my-2 inline-block py-2.5 underline underline-offset-2 hover:text-fg">
           이용약관
         </Link>
-        과{" "}
-        <Link href="/privacy" className="-my-2 inline-block py-2.5 underline underline-offset-2 hover:text-fg-sub">
-          개인정보처리방침
-        </Link>
-        에 동의하게 됩니다
+        ·{" "}
+        <Link href="/privacy" className="-my-2 inline-block py-2.5 underline underline-offset-2 hover:text-fg">
+          개인정보 수집·이용
+        </Link>{" "}
+        동의를 받아요
       </p>
 
       <p className="mt-6 text-center text-[14px] text-fg-sub">
