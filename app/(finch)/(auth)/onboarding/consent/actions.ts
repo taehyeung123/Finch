@@ -2,8 +2,10 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
 import { isMissingTableError } from "@/lib/supabase/errors";
+import { purgeAndDeleteUser } from "@/lib/account/delete";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/consent";
 
 export interface ConsentFormState {
@@ -78,4 +80,41 @@ export async function saveConsent(
   }
 
   redirect("/onboarding");
+}
+
+/**
+ * 동의하지 않고 나가기 — 계정을 지운다.
+ *
+ * 이게 없으면 **순환에 갇힌다**: 첫 로그인 순간 auth 트리거가 이메일을 이미 저장했는데,
+ * 그걸 지우는 탈퇴 화면은 동의 게이트 «뒤»에 있다 — 동의를 거부한 사람이 자기 데이터를
+ * 지우려면 먼저 동의해야 하는 모순이다(2026-09-02 감사 적발). 동의 화면에서 바로 지운다.
+ * 삭제 루틴은 설정의 탈퇴와 **같은 코어**(lib/account/delete.ts)다.
+ */
+export async function declineConsent(): Promise<void> {
+  if (isDemoMode()) {
+    redirect("/");
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  const admin = createAdminClient();
+  if (!admin) {
+    console.error("[consent] 미동의 삭제 실패: service role 키 미설정");
+    redirect("/onboarding/consent?error=decline_failed");
+  }
+
+  const ok = await purgeAndDeleteUser(admin, user.id);
+  if (!ok) {
+    redirect("/onboarding/consent?error=decline_failed");
+  }
+
+  // 사용자는 지워졌는데 쿠키가 남으면 다음 요청이 «존재하지 않는 사용자»로 들어간다
+  await supabase.auth.signOut();
+  redirect("/goodbye");
 }

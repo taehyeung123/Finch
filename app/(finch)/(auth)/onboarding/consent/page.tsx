@@ -16,7 +16,11 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function ConsentPage() {
+export default async function ConsentPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   // 데모에는 기록할 사용자가 없다 — 게이트도 안 세우므로 직접 온 경우만 돌려보낸다
   if (isDemoMode()) redirect("/onboarding");
 
@@ -26,5 +30,6 @@ export default async function ConsentPage() {
   // 이미 현행 버전으로 동의했으면 다시 물을 이유가 없다
   if ((await getConsentStatus(user.id)) === "ok") redirect("/onboarding");
 
-  return <ConsentForm />;
+  const { error } = await searchParams;
+  return <ConsentForm declineFailed={error === "decline_failed"} />;
 }

@@ -5,38 +5,12 @@ import { revalidatePath } from "next/cache";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
+import { purgeAndDeleteUser } from "@/lib/account/delete";
 import { DELETE_PHRASE } from "./constants";
 
-/*
-  탈퇴 시 비우는 버킷 — **경로가 `<user.id>/...` 로 시작하는 것 전부**.
-
-  reference-thumbs 를 빠뜨리고 있었다(2026-08-17 발견). 레퍼런스 수집 썸네일이
-  `${userId}/${channel}-${externalId}.jpg` 로 저장되는데(lib/reference/engine.ts),
-  이 버킷은 public 이라 계정을 지운 뒤에도 공개 URL 이 계속 살아 있었다 —
-  화면은 "업로드한 이미지가 모두 삭제됩니다"라고 약속하고 있었다.
-  프로덕션 실측: 살아있는 계정 1명의 파일 52개가 그대로 존재.
-
-  ⚠️ 새 버킷에 사용자별 프리픽스로 파일을 쓰기 시작하면 **여기 추가할 것.**
-     (reference-thumbs 의 `pool/` 프리픽스는 공용 풀이라 대상이 아니다)
-*/
-const USER_BUCKETS = ["cardnews", "brand-logos", "reference-thumbs", "link-assets"] as const;
-
-/** Storage list 는 한 번에 최대 1000개다 — 넘으면 조용히 잘려 파일이 남는다. 끝까지 판다. */
-async function listAll(
-  admin: NonNullable<ReturnType<typeof createAdminClient>>,
-  bucket: string,
-  prefix: string,
-): Promise<string[]> {
-  const names: string[] = [];
-  const PAGE = 1000;
-  for (let offset = 0; ; offset += PAGE) {
-    const { data, error } = await admin.storage.from(bucket).list(prefix, { limit: PAGE, offset });
-    if (error || !data || data.length === 0) break;
-    names.push(...data.map((d) => d.name));
-    if (data.length < PAGE) break;
-  }
-  return names;
-}
+/* 삭제 코어(버킷 정리·주소 무덤·auth 삭제)는 lib/account/delete.ts 로 옮겼다 —
+   동의 화면의 «동의하지 않고 탈퇴»(consent/actions.ts)와 같은 루틴을 써야 하기 때문이다.
+   두 벌로 두면 한쪽만 고쳐진다(2026-08-17 reference-thumbs 누락이 그런 사고였다). */
 
 /*
   프로필 — 이름 변경 · 회원탈퇴.
@@ -92,50 +66,8 @@ export async function deleteAccount(formData: FormData): Promise<void> {
     redirect("/settings/profile?err=unconfigured");
   }
 
-  /* Storage 는 auth.users 에 FK 가 없어 계정을 지워도 **파일이 그대로 남는다.**
-     카드뉴스 원본·브랜드 로고는 이용자가 올린 개인 자료라 파기 대상이다.
-     사용자 삭제 **앞에** 지운다 — 뒤로 미루면 계정이 사라진 뒤 실패했을 때
-     그 파일들을 다시 찾아갈 주인이 없다(경로가 user.id 프리픽스다).
-     실패해도 탈퇴 자체는 진행한다 — 파일이 남는 것보다 탈퇴가 막히는 게 더 나쁘다. */
-  for (const bucket of USER_BUCKETS) {
-    try {
-      const paths: string[] = [];
-      for (const entry of await listAll(admin, bucket, user.id)) {
-        /* list 는 한 단계만 본다. cardnews 는 user/batch/01.png 구조라 하위를 한 번 더 판다.
-           reference-thumbs·brand-logos 는 한 단계라 그대로 경로가 된다. */
-        const inner = await listAll(admin, bucket, `${user.id}/${entry}`);
-        if (inner.length > 0) paths.push(...inner.map((c) => `${user.id}/${entry}/${c}`));
-        else paths.push(`${user.id}/${entry}`);
-      }
-      /* remove 는 한 번에 받는 개수에 상한이 있다 — 100개씩 끊어 보낸다. */
-      for (let i = 0; i < paths.length; i += 100) {
-        await admin.storage.from(bucket).remove(paths.slice(i, i + 100));
-      }
-    } catch (e) {
-      console.error(`[settings] 탈퇴 시 ${bucket} 정리 실패:`, e);
-    }
-  }
-
-  /* 주소 무덤 기록 — auth.users 삭제가 link_pages 를 cascade 로 지우면서 slug 가 즉시 풀린다(감사3 C3).
-     0050 의 owner_id on delete set null 이 탈퇴 뒤에도 90일 보류를 유지하도록 설계됐지만 행이 먼저 있어야 한다. 실패해도 탈퇴는 진행. */
-  try {
-    /* 멀티 페이지(0060) — 한 장만 묻으면 나머지 주소가 즉시 풀린다. 전부 묻는다(감사4 조사 #12) */
-    const { data: lps } = await admin.from("link_pages").select("slug").eq("user_id", user.id);
-    const slugs = ((lps ?? []) as Array<{ slug: string }>).map((r) => r.slug).filter(Boolean);
-    if (slugs.length) {
-      const now = new Date().toISOString();
-      const { error: holdErr } = await admin
-        .from("link_slug_history")
-        .upsert(slugs.map((slug) => ({ slug, page_id: null, owner_id: user.id, released_at: now })), { onConflict: "slug" });
-      if (holdErr) console.error("[settings] 탈퇴 시 옛 주소 기록 실패:", holdErr.message);
-    }
-  } catch (e) {
-    console.error("[settings] 탈퇴 시 옛 주소 기록 실패:", e);
-  }
-
-  const { error } = await admin.auth.admin.deleteUser(user.id);
-  if (error) {
-    console.error("[settings] 회원탈퇴 실패:", error.message);
+  const ok = await purgeAndDeleteUser(admin, user.id);
+  if (!ok) {
     redirect("/settings/profile?err=delete");
   }
 

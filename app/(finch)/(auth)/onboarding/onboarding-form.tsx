@@ -1,16 +1,23 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { Briefcase, Info, Megaphone, User } from "lucide-react";
+import { useState, useTransition } from "react";
+import { Briefcase, Megaphone, User } from "lucide-react";
 import { cn } from "@/lib/cn";
-import type { Channel } from "@/lib/types";
 import { FinchMark } from "@/components/logo";
-import { Button, ButtonLink, buttonClasses } from "@/components/ui/button";
-import { Badge, ChannelBadge } from "@/components/ui/badge";
-import { AppIconTile } from "@/components/icons/brand";
+import { Button } from "@/components/ui/button";
+import { completeOnboarding } from "./actions";
 
-/** 온보딩 3단계 마법사 — 사용 목적 → 채널 연동 → 완료 (PRD PART 5, 2.2) */
+/**
+ * 온보딩 2단계 마법사 — 사용 목적 → 완료 (PRD PART 5, 2.2).
+ *
+ * ⚠️ 채널 연동 단계는 여기서 뺐다(2026-09-02 사장님 지시).
+ * 가입 마법사 안에서 외부 OAuth 로 나갔다 돌아오면 마법사 상태가 날아가고,
+ * 연동은 «가입 절차»가 아니라 로그인 뒤 언제든 할 수 있는 일이다 —
+ * 대시보드의 연동 가이드 모달(components/dashboard/connect-channels-modal.tsx)이 맡는다.
+ *
+ * 목적 선택은 이제 **저장된다**(0080 users_profile.purpose) — 예전엔 고르게 해 놓고 버렸다.
+ * «건너뛰기»도 완료로 기록한다 — 안 찍으면 건너뛴 사람에게 마법사가 영영 다시 뜬다.
+ */
 
 type Purpose = "creator" | "advertiser" | "agency";
 
@@ -35,18 +42,24 @@ const PURPOSES: { value: Purpose; label: string; description: string; icon: type
   },
 ];
 
-const CHANNELS: Channel[] = ["instagram", "tiktok", "threads"];
-
 export function OnboardingForm() {
   const [step, setStep] = useState(1);
   const [purpose, setPurpose] = useState<Purpose | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function finish(withPurpose: boolean) {
+    const fd = new FormData();
+    if (withPurpose && purpose) fd.set("purpose", purpose);
+    // 서버 액션이 기록 후 /dashboard 로 보낸다 — 실패해도 사용자는 막지 않는다(actions.ts)
+    startTransition(() => void completeOnboarding(fd));
+  }
 
   return (
     <div className="w-full">
       {/* 진행 표시 + 건너뛰기 */}
       <div className="flex items-center justify-between">
-        <ol className="flex items-center gap-2" aria-label={`온보딩 진행 단계: 3단계 중 ${step}단계`}>
-          {[1, 2, 3].map((n) => (
+        <ol className="flex items-center gap-2" aria-label={`온보딩 진행 단계: 2단계 중 ${step}단계`}>
+          {[1, 2].map((n) => (
             <li
               key={n}
               aria-current={n === step ? "step" : undefined}
@@ -63,12 +76,15 @@ export function OnboardingForm() {
             </li>
           ))}
         </ol>
-        <Link
-          href="/dashboard"
-          className="-mx-2 -my-1.5 inline-block px-2 py-2.5 text-[14px] text-fg-sub trans-state hover:text-fg-sub"
+        {/* 링크가 아니라 액션이다 — 건너뛰어도 완료 도장을 찍어야 다시 안 뜬다 */}
+        <button
+          type="button"
+          onClick={() => finish(false)}
+          disabled={pending}
+          className="-mx-2 -my-1.5 inline-block cursor-pointer px-2 py-2.5 text-[14px] text-fg-sub trans-state hover:text-fg"
         >
           건너뛰기
-        </Link>
+        </button>
       </div>
 
       <div className="mt-6 rounded-card border border-line bg-body p-8">
@@ -115,68 +131,21 @@ export function OnboardingForm() {
         ) : null}
 
         {step === 2 ? (
-          <section aria-label="채널 연동">
-            <h1 className="text-2xl font-bold leading-tight">채널을 연동해주세요</h1>
-            <p className="mt-1 text-[15px] text-fg-sub">
-              연동한 채널의 지표를 한 화면에서 모아 볼 수 있어요.
-            </p>
-            <div className="mt-6 space-y-2">
-              {CHANNELS.map((channel) => (
-                <div
-                  key={channel}
-                  className="flex items-center justify-between gap-3 rounded-card border border-line bg-overlay p-4"
-                >
-                  <div className="flex items-center gap-3">
-                    <AppIconTile app={channel} size={38} />
-                    <ChannelBadge channel={channel} />
-                  </div>
-                  {channel === "instagram" ? (
-                    /* 페이지가 아니라 **API 라우트**다 — 서버가 메타 OAuth 로 302 를 쏜다.
-                       next/link 는 클라이언트 라우팅을 시도해 리다이렉트를 삼키므로 여기선 쓰면 안 된다
-                       (린트 규칙은 내부 «페이지» 링크를 겨냥한 것이라 이 경우를 구분하지 못한다). */
-                    // eslint-disable-next-line @next/next/no-html-link-for-pages
-                    <a href="/api/auth/instagram/start" className={buttonClasses("secondary", "sm")}>
-                      연동하기
-                    </a>
-                  ) : (
-                    <div className="flex items-center gap-3">
-                      <Badge tone="neutral">연동 준비중</Badge>
-                      <Button type="button" variant="secondary" size="sm" disabled>
-                        연동하기
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-            {/* 인스타그램 비즈니스/크리에이터 계정 필수 안내 (PRD 2.2) */}
-            <div className="mt-3 flex items-start gap-2.5 rounded-card bg-warning-weak p-3.5">
-              <Info className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
-              <p className="text-[14px] leading-relaxed text-fg-sub">
-                인스타그램은 비즈니스/크리에이터 계정만 연동할 수 있어요. 개인 계정이라면 앱에서 전환 후
-                진행해주세요
-              </p>
-            </div>
-            <div className="mt-6 flex justify-between">
-              <Button variant="secondary" onClick={() => setStep(1)}>
-                이전
-              </Button>
-              <Button onClick={() => setStep(3)}>다음</Button>
-            </div>
-          </section>
-        ) : null}
-
-        {step === 3 ? (
           <section aria-label="온보딩 완료" className="flex flex-col items-center py-8 text-center">
             <FinchMark className="size-16 text-primary" />
             <h1 className="mt-5 text-2xl font-bold leading-tight">준비 완료!</h1>
             <p className="mt-2 max-w-sm text-[15px] text-fg-sub">
-              인스타그램을 연동하셨다면 실제 데이터로 바로 시작할 수 있어요. 아직 연동 전이라면
-              설정에서 언제든 연동할 수 있습니다.
+              대시보드에서 인스타그램·틱톡·스레드 계정을 연동하면 실제 데이터로 바로 시작할 수 있어요.
+              연동 방법은 화면에서 차근차근 안내해 드릴게요.
             </p>
-            <ButtonLink href="/dashboard" size="lg" className="mt-8">
-              대시보드로 가기
-            </ButtonLink>
+            <div className="mt-8 flex items-center gap-3">
+              <Button variant="secondary" onClick={() => setStep(1)} disabled={pending}>
+                이전
+              </Button>
+              <Button size="lg" onClick={() => finish(true)} disabled={pending}>
+                {pending ? "이동 중…" : "대시보드로 가기"}
+              </Button>
+            </div>
           </section>
         ) : null}
       </div>

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
+import { getConsentStatus } from "@/lib/legal/consent";
 import {
   buildAuthorizeUrl,
   getInstagramOAuthConfig,
@@ -36,6 +37,13 @@ export async function GET(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.redirect(`${origin}/login?next=/settings`);
+  }
+
+  /* 동의 게이트 — 채널 연동은 이 제품에서 개인정보 수집의 본체다. 페이지 게이트만으로는
+     이 라우트를 직접 열면(주소 입력·/login?next=/api/... 트릭) 동의 없이 수집이 시작된다
+     (2026-09-02 감사 적발). unknown(0079 미적용·장애)은 페이지 게이트와 같은 이유로 통과. */
+  if ((await getConsentStatus(user.id)) === "missing") {
+    return NextResponse.redirect(`${origin}/onboarding/consent`);
   }
 
   const config = getInstagramOAuthConfig();

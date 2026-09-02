@@ -30,6 +30,9 @@ export default async function DashboardPage() {
     IS_SAMPLE_DATA ? Promise.resolve(null) : getLiveAds(),
   ]);
   const adsSummary: DashboardAdsSummary | null = liveAds ? summarizeActiveAds(liveAds) : null;
+  /* 연동 가이드 모달 — 실 모드에서 채널이 하나도 안 붙어 있을 때만.
+     온보딩 마법사에서 연동 단계를 뺀 자리다(닫기 기억은 모달이 localStorage 로 처리). */
+  const showConnectGuide = !IS_SAMPLE_DATA && !(live?.accounts.some((a) => a.connected) ?? false);
   const data: DashboardData = live ?? {
     accounts,
     summaries: dashboardSummaries,
@@ -45,6 +48,7 @@ export default async function DashboardPage() {
       adsSummary={adsSummary}
       poolStats={poolStats}
       isLive={Boolean(live)}
+      showConnectGuide={showConnectGuide}
     />
   );
 }

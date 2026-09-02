@@ -101,6 +101,20 @@ function LoginCard() {
         </>
       ) : null}
 
+      {/* OAuth 는 이 페이지로도 «가입»된다(처음 로그인 = 계정 생성) — 동의 예고를 signup 과 같게 둔다.
+          한쪽에만 있으면 로그인 버튼으로 가입한 신규가 동의 화면을 예고 없이 만난다. */}
+      <p className="mt-4 text-center text-xs text-fg-sub">
+        처음 로그인하시면 다음 단계에서{" "}
+        <Link href="/terms" className="-my-2 inline-block py-2.5 underline underline-offset-2 hover:text-fg">
+          이용약관
+        </Link>
+        ·{" "}
+        <Link href="/privacy" className="-my-2 inline-block py-2.5 underline underline-offset-2 hover:text-fg">
+          개인정보 수집·이용
+        </Link>{" "}
+        동의를 받아요
+      </p>
+
       <p className="mt-6 text-center text-[14px] text-fg-sub">
         아직 계정이 없나요?{" "}
         <Link href="/signup" className="-my-1.5 inline-block px-1 py-2 font-semibold text-primary hover:text-primary-hover">

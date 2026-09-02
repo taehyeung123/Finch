@@ -18,6 +18,7 @@ import { CHANNEL_LABEL } from "@/lib/channels";
 import { ChannelProfilePanel } from "@/components/dashboard/channel-profile-panel";
 import { PerformanceTrend } from "@/components/dashboard/performance-trend";
 import { ArchiveStatus, DailyBriefHero, HomeSearch, NextActions } from "@/components/dashboard/daily-brief";
+import { ConnectChannelsModal } from "@/components/dashboard/connect-channels-modal";
 import type { PoolHomeStats } from "@/lib/pool/home-stats";
 import type { DashboardAdsSummary } from "@/lib/data/ads";
 import type {
@@ -62,6 +63,7 @@ export function DashboardClient({
   adsSummary,
   poolStats,
   isLive,
+  showConnectGuide = false,
 }: {
   data: DashboardData;
   campaigns: AdCampaign[];
@@ -71,6 +73,8 @@ export function DashboardClient({
   poolStats: PoolHomeStats;
   /** true면 연동 계정의 Instagram 공식 API 실데이터 */
   isLive: boolean;
+  /** 실 모드 + 채널 연동 0개 — 연동 가이드 모달을 띄운다(닫기 기억은 모달 몫) */
+  showConnectGuide?: boolean;
 }) {
   const { channel } = useChannel();
   const { accounts, summaries, posts: allPosts, profileGrid, trends } = data;
@@ -143,6 +147,7 @@ export function DashboardClient({
 
   return (
     <div className="space-y-6">
+      {showConnectGuide ? <ConnectChannelsModal /> : null}
       <PageHeader
         title="홈"
         description="오늘의 브리핑과 채널 현황을 한눈에 확인하세요."
