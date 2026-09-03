@@ -18,7 +18,7 @@
 | Threads (지표·발행) | ✅ 완료 (2026-08-31 발행 추가) | ✅ **프로덕션 설정 완료** | 심사 |
 | TikTok (프로필 지표) | ✅ 완료 | ✅ **Sandbox 키 설정·연동 확인 완료** | 정식 공개는 앱 심사(데모 영상) |
 | Toss Payments | ✅ 완료 (위젯·빌링·웹훅) | ❌ 키 미설정 | 계약 → 키 |
-| Meta 광고 관리 (Marketing API) | ✅ 읽기(2026-09-01) + 캠페인 생성·게재 제어(2026-09-02) · ❌ 광고 세트·소재 생성 | ❌ `META_APP_ID` 미설정 | 앱에 광고 이용사례 추가 → 환경변수 → 0077·0078·0081 |
+| Meta 광고 관리 (Marketing API) | ✅ 읽기(2026-09-01) + 캠페인(2026-09-02) + **광고 세트·소재·광고 생성·미리보기·게재 제어(2026-09-03)** | ❌ `META_APP_ID` 미설정 | 앱에 광고 이용사례 추가 → 환경변수 → 0077·0078·0081·0082 → 실 호출로 §11 미확정 지우기 |
 
 ---
 
@@ -110,17 +110,21 @@ Pro 결제·프로젝트 생성 완료. Google/Kakao 로그인 동작 중(구글
 - 법률: 정보통신망법(광고성 정보 동의·(광고) 표기·수신거부·야간), 개인정보보호법(수탁자 DPA)
 - 비용·운영 체크리스트: [docs/AUTO_DM_COST_RISK.md](AUTO_DM_COST_RISK.md)
 
-## 4. Meta 광고 관리 (Marketing API) — 읽기 + 캠페인 계층 쓰기 완료 · 광고 세트·소재는 다음 · 자격증명 대기
+## 4. Meta 광고 관리 (Marketing API) — 읽기 + 캠페인 + 광고 세트·소재·광고 + 미리보기 + 게재 제어, 코드 완료 · 자격증명 대기
 
-**2026-09-01 에 1단계(읽기)**, **2026-09-02 에 캠페인 계층 쓰기**(생성·게재 시작/일시중지, 커밋 1f47b40·b51f023)를 지었다.
-쓰기 어댑터 `lib/meta/ads-write.ts`, 규칙 `lib/ads/campaign-rules.ts`, 관문 `app/(finch)/(app)/ads/campaigns/actions.ts`,
-감사 로그 `0081_meta_ad_write_log.sql`. 범위를 캠페인 계층으로 끊은 이유: 광고 세트·소재가 없는 캠페인은 게재될 것이 없어
-ACTIVE 로 둬도 집행이 0 — 실수로 돈을 쓸 수 없는 유일한 범위였다.
-**광고 세트(타겟팅·예산·일정)·소재(크리에이티브)·광고 생성은 아직 없다.** 옛 마법사가 모으던 관심사·지역·노출위치 값은
-한국어 이름/자체 키라 API 가 못 받는다 — 실 ID 검색(targeting search)부터 새로 필요하다.
+**2026-09-01 1단계(읽기)**, **2026-09-02 캠페인 계층 쓰기**(커밋 1f47b40·b51f023), **2026-09-03 2단계 전부**(슬라이스 0~8,
+커밋 ec105cd·daa2ca9·1688d6e·c7afdf6·07a362b). 설계 정본은 `docs/ADS_STAGE2_SPEC.md`(§13 검토 반영 결정이 본문보다 우선).
+
+2단계가 붙인 것: 게시 주체(페이지·IG) 조회·저장 · 캠페인 상세(광고 세트·광고·심사 배지) · 타겟 검색(adgeolocation·adinterest)·
+도달 추정(reachestimate) · 이미지 업로드(adimages 멀티파트) · 생성 체인(adsets → adcreatives → ads, **전부 PAUSED**, 예약 1건 `create_ad`) ·
+generatepreviews iframe(CSP frame-src 경로 한정) · 광고 세트/광고 켜기·끄기 · 게재 시작 체인(광고 세트 → 광고 → 캠페인, `activate_tree`).
+돈이 나가는 길은 여전히 «게재 시작»뿐이고, 그 모달이 하위 상태·심사를 읽어 «함께 켜기»를 고르게 한다(목록의 버튼은 상세로 보내는 링크다).
+
+⚠️ **실 호출로 확인된 것이 아직 없다.** `META_APP_ID` 를 넣고 사장님 계정으로 스펙 §11 미확정(adgeolocation `locale`·regions-only
+국가 필수·targetingvalidation 응답 필드·미리보기 iframe 안폭·`instagram_basic` 필요 여부 등)을 지워야 한다.
 본인 광고 계정 범위에서는 `ads_management` 도 Standard Access 로 자동 승인된다(2026-09-02 문서 확인).
-⚠️ 그래서 **동의는 처음부터 `ads_read`+`ads_management` 를 함께 받는다** — 스코프는 동의 시점에
-고정되므로, 나중에 배열만 고치면 이미 연동한 사용자가 전원 재연동해야 한다(인스타 발행 권한에서 겪은 함정).
+⚠️ 동의 스코프는 `ads_read`+`ads_management`+`pages_show_list`+`pages_read_engagement`(2026-09-03 두 개 추가) — 스코프는 동의 시점에
+고정되므로 그 전에 연동한 토큰은 설정 > 채널에서 «재연동 필요»로 안내한다(인스타 발행 권한에서 겪은 함정).
 
 **있는 것:**
 
@@ -132,6 +136,12 @@ ACTIVE 로 둬도 집행이 0 — 실수로 돈을 쓸 수 없는 유일한 범�
 | `lib/ads/meta-labels.ts` | 목표·게재상태·계정상태 코드 → 한국어 |
 | `app/api/auth/meta-ads/{start,callback,deauthorize,data-deletion}` | 연동 4종 라우트 |
 | `supabase/migrations/0077_meta_ad_accounts.sql` | `meta_ad_connections` + `meta_ad_accounts` |
+| `lib/meta/ads-write.ts` · `lib/ads/write-gates.ts` | 쓰기 어댑터(캠페인·광고 세트·소재·광고·상태, usage 파싱) · 관문·예약·감사 로그 |
+| `lib/meta/ads-tree.ts` · `ads-pages.ts` · `ads-targeting.ts` · `ads-preview.ts` | 캠페인 하위 읽기 · 페이지/IG · 타겟 검색/검증/도달 추정 · generatepreviews |
+| `lib/ads/{campaign,adset,creative}-rules.ts` · `image-spec.ts` | 화면=서버 규칙(목표표·타겟 잠금·글자 수·CTA·이미지 규격) |
+| `app/(finch)/(app)/ads/*-actions.ts` | 서버 액션: 캠페인·게시 주체·타겟 검색·이미지 업로드·생성 체인·게재 제어 |
+| `app/(finch)/(app)/ads/campaigns/[campaignId]/…` | 캠페인 상세(행 켜기/끄기·게재 시작 모달) · `ads/new` 3단계 마법사 |
+| `supabase/migrations/0081`·`0082` | 감사 로그 `meta_ad_write_log` · 2단계 확장(action·adset_id/ad_id·unverified·게시 주체 컬럼) |
 
 **⚠️ 이 연동만 다른 점 셋:**
 
@@ -147,10 +157,11 @@ ACTIVE 로 둬도 집행이 0 — 실수로 돈을 쓸 수 없는 유일한 범�
 1. 메타 앱에 **「마케팅 API로 광고 만들기 및 관리」 이용 사례** 추가 + 콜백 URL 3종 등록 (`.env.example` 참고)
    — «광고 성과 데이터 측정»이 아니다. 필수 권한은 같은데 그쪽은 `page_manage_ads` 가 막힌다.
 2. `META_APP_ID` 환경변수 설정 → 재배포 (`META_APP_SECRET` 은 이미 있다)
-3. 마이그레이션 `0077`·`0078`·`0081` 적용
-4. ~~캠페인 생성·수정~~ — **2026-09-02 완료**(캠페인 계층). 남은 건 **광고 세트 → 소재 → 광고** 생성 코드다:
-   타겟팅 실 ID 검색, 목표별 optimization_goal/billing_event 조합, 소재 업로드(이미지/영상) + Facebook 페이지·IG 계정 연결,
-   게재 전 미리보기(폰 목업 — 벤치마크 로드맵 5번). 실 모드 `/ads/campaigns` 는 진짜 캠페인을 그리고, 5단계 마법사는 데모 전용으로 남아 있다.
+3. 마이그레이션 `0077`·`0078`·`0081`·`0082` 적용(SQL Editor)
+4. ~~캠페인 생성·수정~~ **2026-09-02 완료** · ~~광고 세트 → 소재 → 광고 생성 + 미리보기 + 게재 제어~~ **2026-09-03 완료**.
+   남은 것은 코드가 아니라 **실 호출 확인**이다: 첫 자격증명 뒤 사장님 계정으로 마법사를 끝까지 한 번 돌려
+   `docs/ADS_STAGE2_SPEC.md` §11 미확정 항목을 지우고, 미리보기 iframe 안폭(320·360·375)을 실측해 scale 계수를 정한다.
+   영상·캐러셀·기존 게시물 소재, 광고 계정 스위처, 소재 수정은 2차(§9).
 5. 접근 수준: **본인 광고 계정**은 Standard Access(지금 상태로 동작). **고객 광고 계정 대행**은
    Advanced Access(사업자등록증 + 비즈니스 인증) — 사업자등록증은 2026-08-31 발급됐다(주식회사 딥레드), 이제 신청 가능
 

@@ -94,6 +94,9 @@
 - **API 연동은 대부분 끝났다**(2026-08-31 대조). OAuth 3종·발행(인스타·스레드)·결제(토스 위젯/빌링/웹훅)·
   광고 라이브러리 수집이 전부 실 호출로 구현돼 있다. 남은 것은 **자격증명과 승인**이지 코드가 아니다.
   현재 상태와 남은 일은 [docs/API_ROADMAP.md](docs/API_ROADMAP.md) 가 정본이다.
-  - 유일하게 코드가 없는 것: **Meta 광고 관리(Marketing API)** — 화면만 있고 호출부가 0건이다.
-  - 새 기능을 «목으로 두라»는 옛 방침을 이 줄이 오래 들고 있었다. 지금 목인 것은 위 한 가지뿐이니,
-    다른 기능을 목으로 만들 이유는 없다.
+  - **Meta 광고 관리(Marketing API)도 2026-09-03 에 코드가 다 붙었다** — 읽기·캠페인·광고 세트·소재·광고 생성·
+    미리보기·게재 제어까지(`docs/ADS_STAGE2_SPEC.md` 가 설계 정본, §13 이 우선). 남은 것은 `META_APP_ID` 와 실 호출 확인뿐이다.
+    광고 스코프는 `ads_read`+`ads_management`+`pages_show_list`+`pages_read_engagement`(`lib/meta/ads-oauth.ts`) —
+    그 전에 연동한 토큰은 설정 > 채널에서 «재연동 필요»로 안내한다. 미리보기 iframe 때문에 `proxy.ts` CSP `frame-src` 에
+    `https://www.facebook.com/ads/api/preview_iframe.php` 가 **앱 화면에만** 열려 있다(공개 프로필엔 없다).
+  - 새 기능을 «목으로 두라»는 옛 방침은 폐기됐다. 지금 목인 화면은 데모 모드의 예시뿐이다.

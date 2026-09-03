@@ -651,3 +651,22 @@ alter table public.meta_ad_accounts
 23. 시·도 선택 시 `reachestimate` 는 `countries` 필수라 실패할 수 있다 → `countries:["KR"]` 로 «전국 기준» 라벨을 붙여 상한만 보여주거나 칸을 숨긴다(0·«너무 좁음» 금지 유지). regions-only 광고 세트가 «countries 필수» 에 걸리는지는 §11-15.
 
 **반영하지 않은 것(이유)**: 슬라이스 0 에서 스코프 확정을 빼자는 제안 — 두 스코프는 의존 권한이라 지금 넣고, 미확정은 `instagram_basic` 뿐이다(9번). Full Access 전환 전 «제품 한계» 문구를 로드맵에 — 슬라이스 9 문서 항목으로 이관.
+
+---
+
+## 14. 구현 기록 (2026-09-03 — 슬라이스 0~9 완료)
+
+| 슬라이스 | 커밋 | 구현이 스펙과 다른 점(의도) |
+|---|---|---|
+| 0 파서·스코프·마이그레이션 | ec105cd | — |
+| 1 캠페인 상세 읽기 | daa2ca9 | React cache 인자 개수 고정(`loadReadContextCached(undefined)`), 표에 «옆으로 밀면» 안내 |
+| 2 게시 주체 | 1688d6e | IG 조회는 **페이지 스코프(②③)가 정본**, 계정 전체(①)는 페이지 스코프가 비고 ①이 정확히 1건일 때만 채택. 190 → `expired`. 0082 미적용 저장은 `publisher_not_ready`(게재 시작의 `not_ready` 와 분리). 피커는 ModalShell |
+| 3 규칙 | c7afdf6 | `IMAGE_HASH_RE` 는 16~128자 영숫자(32자 hex 로 좁히는 건 실측 뒤). `parseTargetingInput` 이 클라이언트 JSON 모양 검사를 맡는다 |
+| 4 타겟 검색·도달 | c7afdf6 | 검색 실패 코드 `search_unverified`/`search_paused`(권한은 `scope_missing`), 도달 추정은 `estimate_unavailable` 로 칸을 숨긴다. 시·도만 실패하면 전국 기준 상한(§13-23). 실 연동 피커는 데모 피커와 **별개 컴포넌트** |
+| 5 이미지 | c7afdf6 | `upload_image` 로그가 쿨다운을 만들지 않게 `passGates` 쿨다운 조회에서 제외. 직전 점수는 로그 `request.util_pct` 로 본다 |
+| 6 생성 체인 | 07a362b | 게재 중(ACTIVE) 캠페인은 서버도 `campaign_active_create` 로 막는다. 전송 실패는 `create_unverified`. 캠페인 이름 기반 자동 이름은 클라이언트가 채우고 서버는 비었을 때만 대체 |
+| 7 미리보기 | 07a362b | `AD_PREVIEW_FORMATS` 는 `lib/ads/preview-formats.ts`(순수) — 서버 전용 모듈을 클라이언트가 물지 않게. 자동 재시도 없음(«다시 시도» 버튼) |
+| 8 게재 제어 | 07a362b | **목록의 «게재 시작»은 상세로 보내는 링크** — 데이터 기반 모달은 상세 화면에만 있다(캠페인마다 하위를 읽지 않는다). 하위 켜기는 캠페인이 ACTIVE 면 danger 확인. `activate_partial` 신설 |
+| 9 문서 | (이 커밋) | API_ROADMAP §4 · PRD 4.7 · CLAUDE.md 워크플로 절 · 메모리 |
+
+**실 호출 전 상태**: 위 전부 tsc·eslint·`npm run build` 통과, 소넷 리뷰(슬라이스 0·1·2 각각, 3~8 묶음) 반영. Graph 응답 형식에 기댄 파서는 전부 «필드가 없으면 null» 로 썼다 — §11 이 지워지면 좁힌다.
