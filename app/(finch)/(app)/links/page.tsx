@@ -419,6 +419,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
           「이 화면이 무엇인가」로 읽어 주지 않는다 — 앱 전 화면에서 h1 이 0개였던 것을 고치면서
           여기만 남았다. 보이는 모습은 1px 도 바뀌지 않는다. */}
       <h1 className="sr-only">프로필 링크</h1>
+      {/* 이 div 는 화면 전환 모션(globals.css .page-enter > * > *)의 «블록» 자리다 — 페이지 진입에 한 번만 뜬다.
+          아래 LinksClient 는 ?page= 가 바뀔 때 key 로 통째로 다시 마운트되는데, 그것이 이 자리에 직접 놓이면
+          편집기 안에서 페이지를 갈아탈 때마다 화면 전체가 다시 페이드인한다(2026-09-03 소넷 점검).
+          한 겹 감싸 리마운트를 모션 선택자 밖(3단계)으로 내린다. 보이는 모습은 그대로다. */}
+      <div>
       <LinksClient
         /* 페이지를 갈아타면 **통째로 다시 마운트** — 실행취소 스택·설정 저장 체인이
            페이지 단위 상태라, 남긴 채 갈아타면 다른 페이지에 되돌리기가 꽂힌다(감사4 조사 #10) */
@@ -440,6 +445,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
         isDemo={isDemoMode()}
         loadFailed={!!loadFailed}
       />
+      </div>
     </div>
   );
 }

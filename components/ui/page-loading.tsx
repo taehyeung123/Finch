@@ -20,12 +20,17 @@ import { FinchMark } from "@/components/logo";
 
   링은 수집 오버레이와 같은 .collect-orbit(108px)을 쓴다 — 앱 안에서 "기다리는 중"의
   생김새가 하나로 유지된다.
+
+  data-page-loading: 화면 전환 모션(globals.css .page-enter)의 **제외 표식**이다. 템플릿은 loading 경계를
+  감싸므로 이 폴백도 «페이지 블록»으로 잡혀 링이 떠오르고, 곧이어 실제 콘텐츠가 또 떠오른다 —
+  느린 이동에서 진입 모션이 두 번 도는 셈이다(2026-09-03 소넷 점검). 폴백은 가만히 있고 콘텐츠만 뜬다.
 */
 export function PageLoading({ label = "불러오는 중" }: { label?: string }) {
   return (
     <div
       role="status"
       aria-live="polite"
+      data-page-loading
       className="flex h-full min-h-[26rem] w-full flex-col items-center justify-center gap-5"
     >
       <div className="collect-orbit" aria-hidden>

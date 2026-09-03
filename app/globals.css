@@ -449,7 +449,83 @@ body {
 /* ---------------------------------------------------------------
    랜딩 모션 유틸 — 마케팅 페이지 전용. 대시보드 데이터 화면에는
    장식 애니메이션을 쓰지 않는다 (PART 7.7).
+   예외 하나: 아래 «화면 전환 모션»(page-enter) — 장식이 아니라 내비게이션 피드백이고,
+   2026-09-03 사장님 지시로 앱 전체에 적용한다.
 --------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------
+   화면 전환 모션 — 페이지가 바뀔 때 블록들이 위에서부터 차례로
+   살짝 떠오르며 나타난다 (2026-09-03 실측 재현: 스태거 ~45ms,
+   블록당 ~400ms, 12px 상승 + 페이드).
+
+   적용: app/(finch)/(app)/template.tsx 가 페이지를 .page-enter 로 감싼다.
+   템플릿은 라우트가 바뀔 때마다 새로 마운트되므로 애니메이션이 매 이동마다 돈다
+   (같은 경로의 쿼리 변경에는 템플릿이 안 바뀐다 — 배너만 바뀌는 화면이 다시 출렁이지 않는다).
+   ⚠️ 단, 이건 CSS 선택자다 — **새로 삽입되는 DOM 이면 언제든** 걸린다. 쿼리 값을 key 로 쓰는
+   컴포넌트(links/page.tsx 의 LinksClient)가 이 깊이에 직접 놓이면 쿼리 변경마다 다시 페이드된다.
+   그런 컴포넌트는 한 겹 감싸 3단계로 내린다(links/page.tsx 주석).
+
+   선택자가 > * > * 인 이유: 템플릿의 자식은 페이지 루트 하나이고,
+   그 안의 **최상위 섹션들**이 링크팜의 «블록» 단위다. 더 깊이 내려가면
+   카드 내부까지 전부 출렁여 소음이 된다.
+
+   ⚠️ transform 은 애니메이션 동안만 산다(both + to:none) — 하지만 그 0.4초 동안
+   transform 이 걸린 블록은 fixed/sticky 자손의 컨테이닝 블록이 된다. «진입은 항상 스크롤
+   최상단»이라는 가정은 틀렸다(2026-09-03 소넷 점검): Next Link 는 대상이 뷰포트에 남아 있으면
+   스크롤을 유지하고, 뒤로가기는 이전 오프셋을 그대로 복원한다. 깊이 스크롤한 /links 편집기에서
+   나갔다 돌아오면 폰 칸·발행 바가 0.4초간 제자리(문서 위쪽)로 튀었다가 돌아온다.
+   그래서 sticky/fixed 자손을 품은 블록은 **페이드만** 한다(아래 :has 규칙) — 상승은 포기하고
+   컨테이닝 블록을 만들지 않는다. 나머지 블록은 그대로 떠오른다.
+--------------------------------------------------------------- */
+
+@keyframes page-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes page-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.page-enter > * > * {
+  animation: page-rise 400ms var(--ease-arrive) both;
+}
+/* sticky·fixed 자손이 있는 블록 — transform 없이 페이드만(위 주석). Tailwind 의 xl:sticky·lg:sticky 도
+   class 속성에 «sticky» 를 담으므로 부분 일치로 잡힌다. */
+.page-enter > * > *:has([class*="sticky"], [class*="fixed"]) {
+  animation-name: page-fade;
+}
+/* 로딩 폴백(components/ui/page-loading.tsx)은 제외 — 템플릿이 loading 경계를 감싸므로 폴백도
+   «페이지 루트»로 잡힌다. 링이 떠오른 뒤 실제 콘텐츠가 또 떠오르면 모션이 두 번 돈다. */
+.page-enter > [data-page-loading] > * {
+  animation: none;
+}
+.page-enter > * > *:nth-child(2) { animation-delay: 45ms; }
+.page-enter > * > *:nth-child(3) { animation-delay: 90ms; }
+.page-enter > * > *:nth-child(4) { animation-delay: 135ms; }
+.page-enter > * > *:nth-child(5) { animation-delay: 180ms; }
+.page-enter > * > *:nth-child(6) { animation-delay: 225ms; }
+.page-enter > * > *:nth-child(7) { animation-delay: 270ms; }
+.page-enter > * > *:nth-child(8) { animation-delay: 315ms; }
+/* 9번째부터는 한 박자로 묶는다 — 스크롤 밖 블록까지 하염없이 늦추면 느려 «보인다» */
+.page-enter > * > *:nth-child(n + 9) { animation-delay: 360ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter > * > *,
+  .page-enter > * > *:has([class*="sticky"], [class*="fixed"]) {
+    animation: none;
+  }
+}
 
 @keyframes fade-up {
   from {
