@@ -104,8 +104,11 @@ Authentication > **URL Configuration**:
 이 기능은 대시보드에서 **수동 연결(manual linking)** 이 켜져 있어야 동작한다 — 꺼져 있으면 서버가
 `manual_linking_disabled` 로 거절하고 화면은 「지금은 계정 연결을 할 수 없어요」만 보여준다(고객에게 설정 이름을 말하지 않는다).
 
-1. Supabase 대시보드 > **Authentication > Settings**(또는 Sign In / Providers 상단의 일반 설정)
-2. **Allow manual linking** → ON → Save
+> ✅ **핀치는 켜 두었다(2026-09-03, 사장님 확인).** 아래는 다시 볼 일이 있을 때를 위한 위치 기록이다.
+
+1. Supabase 대시보드 > **Authentication > Sign In / Providers** (왼쪽 CONFIGURATION 메뉴 — 별도 «Settings» 항목은 없다)
+2. 페이지 맨 위 **User Signups** 카드 > **Allow manual linking** → ON → Save
+   (같은 카드의 «Allow new users to sign up» 은 그대로 ON)
 3. 확인: 구글로 로그인한 계정에서 `/settings/logins` → 카카오 「연결하기」 → 카카오 동의 → `/settings/logins?linked=kakao` 로 복귀,
    두 행이 모두 「연결됨」. **연결 해제**는 identity 가 둘 이상일 때만 버튼이 보인다(마지막 하나는 서버도 거절한다 — `single_identity_not_deletable`).
 
