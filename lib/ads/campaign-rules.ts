@@ -117,6 +117,8 @@ export const ADS_WRITE_MESSAGES = {
   page_owner_only: "광고 페이지 선택은 워크스페이스 소유자만 할 수 있어요. 소유자에게 요청해 주세요.",
   page_role_required: "이 페이지에는 편집자 이상 역할이 필요해요. 페이지 설정에서 역할을 확인해 주세요.",
   pages_unverified: "페이지 목록을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.",
+  /** 0082 미적용 — 게시 주체 저장 컬럼이 없다. «게재 시작 준비 중»(not_ready)과 다른 일이다(슬라이스 2 소넷 점검) */
+  publisher_not_ready: "광고 페이지 선택은 아직 준비 중이에요. 잠시 후 다시 시도해 주세요.",
   instagram_required:
     "선택한 페이지에 연결된 Instagram 계정이 없어요. Meta Business Suite 에서 연결한 뒤 다시 시도해 주세요.",
   instagram_unverified: "Instagram 계정을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.",
@@ -135,6 +137,19 @@ export const ADS_WRITE_MESSAGES = {
   partial_created: "광고 세트는 만들어졌지만 광고는 만들지 못했어요. 캠페인 화면에서 확인한 뒤 다시 만들어 주세요.",
   children_disapproved: "거부된 광고만 있어 게재를 시작할 수 없어요. 소재를 고친 뒤 다시 시도해 주세요.",
   bad_input_ad: "입력값을 광고 계정이 받지 않았어요. 문구·링크·이미지를 확인해 주세요.",
+  /* ── 슬라이스 6: 생성 체인 ── */
+  /** 생성 요청의 전송 실패 — 재확인할 id 가 없다. 만들어졌을 수도 있다(«실패»라고 말하지 않는다) */
+  create_unverified: "만들어졌는지 확인하지 못했어요. 캠페인 화면에서 광고 세트·광고가 생겼는지 확인한 뒤 다시 시도해 주세요.",
+  campaign_active_create: "게재 중인 캠페인에는 아직 핀치에서 광고를 추가할 수 없어요. 캠페인을 일시중지한 뒤 만들어 주세요.",
+  targeting_unverified: "관심사 정보를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.",
+  /* ── 슬라이스 8: 게재 제어(하위 포함) ── */
+  /** 하위 일부는 켜졌지만 체인이 멈췄다 — 캠페인은 일시중지로 남아 비용은 안 나간다 */
+  activate_partial: "일부만 켜졌어요. 캠페인은 일시중지 상태로 남아 비용은 발생하지 않아요. 상태를 확인한 뒤 다시 시도해 주세요.",
+  nothing_selected: "켤 광고 세트·광고를 하나 이상 골라 주세요.",
+  /* ── 슬라이스 4: 타겟 검색·도달 추정(읽기) — 실패는 «없음»이 아니다 ── */
+  search_unverified: "검색 결과를 가져오지 못했어요. 잠시 후 다시 시도해 주세요.",
+  search_paused: "요청이 잠시 몰려 검색을 쉬고 있어요. 잠시 후 다시 시도해 주세요.",
+  estimate_unavailable: "지금은 예상 도달을 가져오지 못했어요. 광고 만들기에는 영향이 없어요.",
 } as const;
 export type AdsWriteFailCode = keyof typeof ADS_WRITE_MESSAGES;
 

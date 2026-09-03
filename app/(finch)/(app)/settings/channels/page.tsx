@@ -23,6 +23,7 @@ import {
   isMetaAdsOAuthConfigured,
 } from "@/lib/meta/ads-oauth";
 import { SettingsShell } from "../_components/settings-shell";
+import { AdPublisherPicker } from "@/app/(finch)/(app)/ads/_components/ad-publisher-picker";
 import { disconnectAccount, disconnectMetaAds } from "./actions";
 
 /*
@@ -134,6 +135,8 @@ interface AdsCard {
   expiresInDays: number | null;
   /** 동의 때 못 받은(나중에 늘어난) 스코프 — 비어 있지 않으면 «재연동 필요». 확인 불가(null)면 빈 배열 */
   missingScopes: string[];
+  /** 광고 게시 주체(기본 계정의 페이지·IG, 0082) — null 이면 아직 안 골랐다 */
+  publisher: { pageName: string | null; igUsername: string | null } | null;
 }
 
 const ADS_CARD_EMPTY: AdsCard = {
@@ -143,6 +146,7 @@ const ADS_CARD_EMPTY: AdsCard = {
   primaryName: null,
   expiresInDays: null,
   missingScopes: [],
+  publisher: null,
 };
 
 /** null 이면 조회 실패 — «연동 없음»과 다르다 */
@@ -155,6 +159,7 @@ async function loadAdsCard(): Promise<AdsCard | null> {
       primaryName: "핀치 마케팅",
       expiresInDays: 52,
       missingScopes: [],
+      publisher: { pageName: "핀치 공식", igUsername: "finch.official" },
     };
   }
 
@@ -162,20 +167,15 @@ async function loadAdsCard(): Promise<AdsCard | null> {
   const user = await getAuthUser();
   if (!user) return ADS_CARD_EMPTY;
 
-  /* granted_scopes 는 0075 이후 컬럼 — 없으면 빼고 다시 읽는다(«확인 불가»로 다룬다) */
-  let res = await supabase
-    .from("meta_ad_connections")
-    .select("id, connected, token_expires_at, granted_scopes, meta_ad_accounts(account_name, is_default)")
-    .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle();
-  if (res.error && isMissingColumnError(res.error, /granted_scopes/i)) {
-    res = await supabase
-      .from("meta_ad_connections")
-      .select("id, connected, token_expires_at, meta_ad_accounts(account_name, is_default)")
-      .eq("user_id", user.id)
-      .limit(1)
-      .maybeSingle();
+  /* 컬럼이 시기별로 다르다 — granted_scopes(0075), 게시 주체(0082). 없는 컬럼은 빼고 다시 읽는다(«확인 불가»·«아직 안 고름»). */
+  const selects = [
+    "id, connected, token_expires_at, granted_scopes, meta_ad_accounts(account_name, is_default, ad_page_name, ad_ig_username)",
+    "id, connected, token_expires_at, granted_scopes, meta_ad_accounts(account_name, is_default)",
+    "id, connected, token_expires_at, meta_ad_accounts(account_name, is_default)",
+  ];
+  let res = await supabase.from("meta_ad_connections").select(selects[0]).eq("user_id", user.id).limit(1).maybeSingle();
+  for (let i = 1; i < selects.length && res.error && isMissingColumnError(res.error, /granted_scopes|ad_page_name|ad_ig_username/i); i++) {
+    res = await supabase.from("meta_ad_connections").select(selects[i]).eq("user_id", user.id).limit(1).maybeSingle();
   }
   const { data: conn, error } = res;
 
@@ -188,12 +188,15 @@ async function loadAdsCard(): Promise<AdsCard | null> {
   }
   if (!conn) return ADS_CARD_EMPTY;
 
-  const row = conn as {
+  /* select 문자열이 배열에서 오므로 PostgREST 타입 추론이 안 된다 — 모양은 우리가 안다 */
+  const row = conn as unknown as {
     id: string;
     connected: boolean;
     token_expires_at: string | null;
     granted_scopes?: string[] | null;
-    meta_ad_accounts?: { account_name: string | null; is_default: boolean }[] | null;
+    meta_ad_accounts?:
+      | { account_name: string | null; is_default: boolean; ad_page_name?: string | null; ad_ig_username?: string | null }[]
+      | null;
   };
   const list = row.meta_ad_accounts ?? [];
   const primary = list.find((a) => a.is_default) ?? list[0] ?? null;
@@ -205,6 +208,10 @@ async function loadAdsCard(): Promise<AdsCard | null> {
     expiresInDays: daysUntil(row.token_expires_at),
     /* 2026-09-03 페이지 스코프 2종 추가 — 그 전에 연동한 토큰은 소재 단계에서 막힌다. 이유를 여기서 먼저 말한다 */
     missingScopes: missingScopes("meta_ads", row.granted_scopes ?? null),
+    publisher:
+      primary && (primary.ad_page_name || primary.ad_ig_username)
+        ? { pageName: primary.ad_page_name ?? null, igUsername: primary.ad_ig_username ?? null }
+        : null,
   };
 }
 
@@ -562,6 +569,25 @@ export default async function SettingsPage({
               </a>
             ) : null}
           </div>
+
+          {/* 광고 게시 주체 — 소재(광고 만들기)에 필요한 페이지·Instagram 계정. 광고 계정이 있을 때만 고른다.
+              카드 안의 중첩 면이라 bg-plate 다. 목록은 열 때마다 새로 조회한다(피커 주석). */}
+          {adsCard?.connected && adsCard.accountCount > 0 ? (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-card bg-plate px-3.5 py-2.5">
+              <p className="text-[14px] text-fg-sub">
+                {adsCard.publisher ? (
+                  <>
+                    광고 게시 주체{" "}
+                    <span className="font-semibold text-fg">{adsCard.publisher.pageName ?? "페이지"}</span>
+                    {adsCard.publisher.igUsername ? <> · @{adsCard.publisher.igUsername}</> : null}
+                  </>
+                ) : (
+                  "광고를 게시할 Facebook 페이지·Instagram 계정을 아직 고르지 않았어요"
+                )}
+              </p>
+              {!isDemoMode() ? <AdPublisherPicker current={adsCard.publisher} /> : null}
+            </div>
+          ) : null}
         </Card>
       </section>
       )}
