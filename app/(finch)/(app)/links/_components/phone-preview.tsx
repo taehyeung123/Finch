@@ -274,8 +274,12 @@ export function PhonePreview({
           type="button"
           onClick={() => startInline(f)}
           aria-label={label}
-          /* after 확장으로 표적 36px — 보이는 크기는 16px 그대로다(저장소 공통 수법) */
-          className="trans-state absolute left-1 top-0 inline-flex -translate-y-1/2 rounded-full p-0.5 text-[var(--lp-muted)] after:absolute after:-inset-2.5 after:content-[''] hover:text-[var(--lp-fg)]"
+          /* after 확장으로 표적 36×36 — 보이는 크기는 16px 그대로다(저장소 공통 수법).
+             ⚠️ 오른쪽으로는 넓히지 않는다(after:right-0). 오른쪽 정렬 페이지에서 연필 오른쪽 끝이 폰 스크롤러의
+             클립 경계와 정확히 겹쳐, 오른쪽 확장분은 통째로 잘려 클릭이 안 먹었다(소넷 점검 실측). 대신 왼쪽으로
+             20px(글 끝을 덮는다 — 글자는 눌러도 되는 자리다) + 위아래 10px 로 36px 을 채운다.
+             포커스 링도 같은 이유로 안쪽(-outline-offset)에 그린다 — 바깥 링은 오른쪽이 잘린다. */
+          className="trans-state absolute left-1 top-0 inline-flex -translate-y-1/2 rounded-full p-0.5 text-[var(--lp-muted)] after:absolute after:-inset-y-2.5 after:-left-5 after:right-0 after:content-[''] hover:text-[var(--lp-fg)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--lp-accent)]"
         >
           <Pencil className="size-3" aria-hidden />
         </button>
