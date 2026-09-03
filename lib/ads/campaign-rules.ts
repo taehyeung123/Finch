@@ -46,11 +46,21 @@ export type SpecialAdCategory = (typeof SPECIAL_AD_CATEGORIES)[number];
 export const SPECIAL_AD_CATEGORY_LABELS: Record<SpecialAdCategory, string> = {
   EMPLOYMENT: "고용 (채용·구인)",
   HOUSING: "주택 (부동산·임대)",
+  /* 옛 분류 — 조회 표시용으로만 남는다(아래 FORM 목록에서 뺐다) */
   CREDIT: "신용 (대출·카드)",
   ISSUES_ELECTIONS_POLITICS: "사회 이슈·선거·정치",
   ONLINE_GAMBLING_AND_GAMING: "온라인 도박·게이밍",
-  FINANCIAL_PRODUCTS_SERVICES: "금융 상품·서비스",
+  FINANCIAL_PRODUCTS_SERVICES: "금융 상품·서비스 (대출·카드·보험 포함)",
 };
+
+/**
+ * 생성 폼에 노출하는 카테고리 — `CREDIT` 은 뺀다. 2025-01-14 부로 `FINANCIAL_PRODUCTS_SERVICES` 가
+ * 대체했다(특별 광고 카테고리 문서). 같은 뜻의 선택지가 둘이면 사용자가 무엇을 골라야 할지 모르고,
+ * CREDIT 전송이 거절되거나 조용히 매핑될 수 있다(2026-09-03 설계 검토). enum 은 기존 캠페인 조회용으로 유지.
+ */
+export const FORM_SPECIAL_AD_CATEGORIES: readonly SpecialAdCategory[] = SPECIAL_AD_CATEGORIES.filter(
+  (c) => c !== "CREDIT",
+);
 
 /**
  * 캠페인 이름 상한 — Meta 문서에서 캠페인 것을 확정하지 못했다(광고 세트는 400자).
@@ -90,8 +100,65 @@ export const ADS_WRITE_MESSAGES = {
   write_denied: "이 광고 계정에 쓰기 권한이 없어요. 다시 연결해 주세요.",
   bad_input: "입력값을 광고 계정이 받지 않았어요. 예산과 이름을 확인해 주세요.",
   failed: "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.",
+  /* ── 2026-09-03 설계 검토 · 2단계(광고 세트·소재·광고)에서 쓰는 코드 — 스펙 §8.2·§13 ── */
+  /** 전송 실패 뒤 GET 재확인도 실패 — 적용 여부를 모른다. «실패»라고 말하지 않는다 */
+  status_unverified: "게재 상태를 확인하지 못했어요. 목록에서 상태를 확인해 주세요.",
+  budget_too_low: "캠페인 일 예산이 광고 세트 수에 비해 적어요. 캠페인 예산을 올린 뒤 다시 시도해 주세요.",
+  bid_mismatch: "입찰 설정이 캠페인과 맞지 않아요. 메타 광고 관리자에서 캠페인 입찰 전략을 확인해 주세요.",
+  end_time_past: "종료 시각이 이미 지났어요. 종료일을 다시 골라 주세요.",
+  link_required: "이 캠페인 목표에는 웹사이트 주소가 필요해요.",
+  special_category_targeting: "특별 광고 카테고리 캠페인은 연령·성별·관심사 타겟을 제한해요. 타겟을 넓혀 주세요.",
+  verification_required: "이 광고에는 메타 광고주 인증이 필요해요. 메타 광고 관리자에서 인증을 완료해 주세요.",
+  targeting_deprecated: "선택한 관심사 중 더 이상 쓸 수 없는 항목이 있어요. 다시 골라 주세요.",
+  account_blocked: "광고 계정이 잠시 차단된 상태예요. 메타 광고 관리자에서 확인해 주세요.",
+  creative_not_ready: "광고 소재 만들기는 아직 준비 중이에요.",
+  scope_missing_pages: "이 연결에는 페이지 조회 권한이 없어요. 설정에서 다시 연결해 주세요.",
+  page_required: "광고를 게시할 Facebook 페이지를 먼저 선택해 주세요.",
+  page_owner_only: "광고 페이지 선택은 워크스페이스 소유자만 할 수 있어요. 소유자에게 요청해 주세요.",
+  page_role_required: "이 페이지에는 편집자 이상 역할이 필요해요. 페이지 설정에서 역할을 확인해 주세요.",
+  pages_unverified: "페이지 목록을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.",
+  instagram_required:
+    "선택한 페이지에 연결된 Instagram 계정이 없어요. Meta Business Suite 에서 연결한 뒤 다시 시도해 주세요.",
+  instagram_unverified: "Instagram 계정을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.",
+  campaign_objective_unsupported: "이 캠페인 목표는 아직 핀치에서 광고를 만들 수 없어요.",
+  campaign_bid_cap:
+    "이 캠페인은 입찰가 상한이 설정돼 있어 핀치에서 광고 세트를 만들 수 없어요. 메타 광고 관리자에서 만들어 주세요.",
+  campaign_mixed_goals: "이 캠페인의 기존 광고 세트와 최적화 방식이 달라 추가할 수 없어요.",
+  adset_limit: "이 캠페인에는 더 이상 광고 세트를 만들 수 없어요.",
+  sales_pixel_required:
+    "이 판매 캠페인은 픽셀이 필요해요. 픽셀 없이 진행하려면 트래픽 목표 캠페인에서 광고를 만들어 주세요.",
+  media_invalid: "이미지 형식이나 크기가 맞지 않아요. JPG·PNG, 짧은 변 600px 이상, 1:1 또는 4:5 비율이 좋아요.",
+  media_upload_failed: "이미지를 광고 계정에 올리지 못했어요. 잠시 후 다시 시도해 주세요.",
+  preview_failed: "미리보기를 불러오지 못했어요. 광고는 그대로 만들 수 있어요.",
+  object_not_yours: "이 광고는 현재 선택된 광고 계정의 것이 아니에요.",
+  object_unverified: "광고 정보를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.",
+  partial_created: "광고 세트는 만들어졌지만 광고는 만들지 못했어요. 캠페인 화면에서 확인한 뒤 다시 만들어 주세요.",
+  children_disapproved: "거부된 광고만 있어 게재를 시작할 수 없어요. 소재를 고친 뒤 다시 시도해 주세요.",
+  bad_input_ad: "입력값을 광고 계정이 받지 않았어요. 문구·링크·이미지를 확인해 주세요.",
 } as const;
 export type AdsWriteFailCode = keyof typeof ADS_WRITE_MESSAGES;
+
+/**
+ * Meta 7자리 검증 오류 → 사유 코드. 문서 오류 레퍼런스에서 확인한 것만(스펙 §8.2).
+ * ⚠️ 코드로만 판별한다 — 메시지 문자열은 바뀐다(«Description string is subject to change»).
+ * 판별 위치는 code/error_subcode 둘 다 볼 것(ads-write.ts writeErrorCode).
+ */
+export const AD_ERROR_CODE_MAP: Record<number, AdsWriteFailCode> = {
+  1885272: "budget_too_low",
+  2238055: "budget_too_low",
+  1885650: "budget_too_low",
+  1885204: "bid_mismatch",
+  1487033: "end_time_past",
+  2446383: "link_required",
+  2909035: "special_category_targeting",
+  2859024: "verification_required",
+  2708008: "verification_required",
+  1487694: "targeting_deprecated",
+  2446394: "targeting_deprecated",
+  1404078: "account_blocked",
+  /* 개발 모드 앱이 만든 object_story_spec 소재로는 광고를 못 만든다 — 앱 Live 전환 전 */
+  1885183: "creative_not_ready",
+};
 
 export function adsWriteMessage(code: string | undefined | null): string {
   if (code && code in ADS_WRITE_MESSAGES) return ADS_WRITE_MESSAGES[code as AdsWriteFailCode];

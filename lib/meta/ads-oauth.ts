@@ -37,13 +37,23 @@ const FB_DIALOG_BASE = `https://www.facebook.com/${GRAPH_FB_VERSION}/dialog/oaut
  * 본인 광고 계정 범위에서는 둘 다 Standard Access 로 자동 승인이라 앱 검수가 필요 없다 —
  * "If your app is only managing your ad account, standard access to the ads_read and
  *  ads_management permissions are sufficient." (developers.facebook.com/docs/marketing-api/overview/authorization)
+ *
+ * 2026-09-03 — 2단계(광고 세트·소재·광고)를 앞두고 **페이지 두 스코프를 더한다**:
+ *  · pages_show_list      — /me/accounts 로 «광고를 게시할 페이지» 목록·과업(tasks)을 읽는다
+ *  · pages_read_engagement — 권한 레퍼런스가 ads_management 의 **의존 권한**으로 적은 값(둘 다)
+ * 소재(object_story_spec)는 page_id 가 사실상 필수라 페이지 없이는 광고를 못 만든다.
+ * 지금이 재동의 비용이 0 인 유일한 시점이다 — META_APP_ID 미설정이라 이 흐름으로 발급된 토큰이 없다
+ * (콜백이 unconfigured 로 즉시 반환). 소재 기능을 연 뒤 늘리면 전원 재연동이다(위 인스타 사례).
+ * instagram_basic 은 **미확정**이다 — IG 계정 조회 세 경로를 첫 자격증명으로 실측한 뒤 결정한다(스펙 §13-9).
  */
-export const META_ADS_SCOPES = ["ads_read", "ads_management"] as const;
+export const META_ADS_SCOPES = ["ads_read", "ads_management", "pages_show_list", "pages_read_engagement"] as const;
 
 /** 사람이 읽는 권한 설명 — 스코프를 키로 묶어 누락이 컴파일에서 걸리게 한다(instagram-oauth.ts 와 같은 규칙) */
 export const META_ADS_SCOPE_LABELS: Record<(typeof META_ADS_SCOPES)[number], string> = {
   ads_read: "광고 계정·캠페인 성과 조회",
-  ads_management: "캠페인 생성·수정·집행 상태 변경",
+  ads_management: "캠페인·광고 생성·수정·집행 상태 변경",
+  pages_show_list: "광고를 게시할 Facebook 페이지 목록 확인",
+  pages_read_engagement: "광고에 사용할 페이지 정보 읽기",
 };
 
 export interface MetaAdsOAuthConfig {

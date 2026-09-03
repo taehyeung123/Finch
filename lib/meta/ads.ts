@@ -38,7 +38,7 @@ export function minorUnitDigits(currency: string | null): number {
 }
 
 /** 최소 단위 → 주 단위 */
-function fromMinor(v: number, currency: string | null): number {
+export function fromMinor(v: number, currency: string | null): number {
   const digits = minorUnitDigits(currency);
   return digits === 0 ? v : v / 10 ** digits;
 }
@@ -64,10 +64,14 @@ export function toMinor(v: number, currency: string | null): number {
  * Graph API 는 Authorization 헤더를 공식 문서로 보장하지 않아 헤더 이동도 못 한다.
  * 대신 한 렌더 안의 중복 호출은 React cache() 로 막는다(lib/data/ads.ts).
  */
-async function fbGet<T>(path: string, accessToken: string): Promise<T> {
+/** 읽기 왕복 상한 — 60초 함수 예산 안에서 렌더가 끝나야 한다(쓰기 쪽 상수와 같은 이유) */
+const READ_TIMEOUT_MS = 15_000;
+
+export async function fbGet<T>(path: string, accessToken: string): Promise<T> {
   const sep = path.includes("?") ? "&" : "?";
   const res = await fetch(`${GRAPH_FB_BASE}${path}${sep}access_token=${encodeURIComponent(accessToken)}`, {
     cache: "no-store",
+    signal: AbortSignal.timeout(READ_TIMEOUT_MS),
   });
   const json = (await res.json().catch(() => ({}))) as T & {
     error?: { message?: string; type?: string; code?: number };
@@ -90,7 +94,7 @@ interface Paged<T> {
  * 캠페인이 120개인 계정에서 「누적 집행 금액」이 100개분만 나오는데 화면 어디에도 잘렸다는 표시가 없다 —
  * 광고주는 그 숫자를 사실로 읽는다. 폭주 방지로 장수는 제한하고, 잘렸으면 로그를 남긴다.
  */
-async function fbGetAll<T>(path: string, accessToken: string, what: string): Promise<T[]> {
+export async function fbGetAll<T>(path: string, accessToken: string, what: string): Promise<T[]> {
   const MAX_PAGES = 20;
   const out: T[] = [];
   let page = await fbGet<Paged<T>>(path, accessToken);
@@ -222,6 +226,30 @@ export async function fetchCampaignAccountId(
     return typeof json.account_id === "string" && json.account_id.length > 0 ? json.account_id : null;
   } catch (e) {
     console.error("[meta-ads] 캠페인 계정 확인 실패:", e instanceof Error ? e.message : String(e));
+    return null;
+  }
+}
+
+/**
+ * 캠페인·광고 세트·광고의 현재 상태 — **전송 실패 뒤 재확인용**(ads-write.ts 헤더).
+ * ACTIVE 쓰기의 응답을 못 받았을 때 «실패»로 단정하면 돈은 나가는데 화면은 꺼졌다고 말한다.
+ * 실패는 null(«모름») — 호출측은 그때 status_unverified 로 사용자에게 «목록에서 확인»을 안내한다.
+ */
+export async function fetchObjectStatus(
+  objectId: string,
+  accessToken: string,
+): Promise<{ status: string | null; effectiveStatus: string | null } | null> {
+  try {
+    const json = await fbGet<{ status?: string; effective_status?: string }>(
+      `/${objectId}?fields=status,effective_status`,
+      accessToken,
+    );
+    return {
+      status: typeof json.status === "string" ? json.status : null,
+      effectiveStatus: typeof json.effective_status === "string" ? json.effective_status : null,
+    };
+  } catch (e) {
+    console.error("[meta-ads] 상태 재확인 실패:", e instanceof Error ? e.message : String(e));
     return null;
   }
 }

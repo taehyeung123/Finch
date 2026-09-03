@@ -11,6 +11,8 @@ import { isDemoMode } from "@/lib/supabase/config";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isMissingTableError } from "@/lib/supabase/errors";
+import { isMissingColumnError } from "@/lib/publish-rules";
+import { missingScopes } from "@/lib/meta/granted-scopes";
 import { INSTAGRAM_SCOPES, INSTAGRAM_SCOPE_LABELS, isInstagramOAuthConfigured } from "@/lib/meta/instagram-oauth";
 import { isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
 import { THREADS_SCOPES, THREADS_SCOPE_LABELS, isThreadsOAuthConfigured } from "@/lib/meta/threads-oauth";
@@ -130,7 +132,18 @@ interface AdsCard {
   primaryName: string | null;
   /** ⚠️ 갱신이 불가능한 토큰이라 이 값을 **숨기지 않는다**(틱톡과 반대) */
   expiresInDays: number | null;
+  /** 동의 때 못 받은(나중에 늘어난) 스코프 — 비어 있지 않으면 «재연동 필요». 확인 불가(null)면 빈 배열 */
+  missingScopes: string[];
 }
+
+const ADS_CARD_EMPTY: AdsCard = {
+  connectionId: null,
+  connected: false,
+  accountCount: 0,
+  primaryName: null,
+  expiresInDays: null,
+  missingScopes: [],
+};
 
 /** null 이면 조회 실패 — «연동 없음»과 다르다 */
 async function loadAdsCard(): Promise<AdsCard | null> {
@@ -141,37 +154,45 @@ async function loadAdsCard(): Promise<AdsCard | null> {
       accountCount: 1,
       primaryName: "핀치 마케팅",
       expiresInDays: 52,
+      missingScopes: [],
     };
   }
 
   const supabase = await createClient();
   const user = await getAuthUser();
-  if (!user) return { connectionId: null, connected: false, accountCount: 0, primaryName: null, expiresInDays: null };
+  if (!user) return ADS_CARD_EMPTY;
 
-  const { data: conn, error } = await supabase
+  /* granted_scopes 는 0075 이후 컬럼 — 없으면 빼고 다시 읽는다(«확인 불가»로 다룬다) */
+  let res = await supabase
     .from("meta_ad_connections")
-    .select("id, connected, token_expires_at, meta_ad_accounts(account_name, is_default)")
+    .select("id, connected, token_expires_at, granted_scopes, meta_ad_accounts(account_name, is_default)")
     .eq("user_id", user.id)
     .limit(1)
     .maybeSingle();
+  if (res.error && isMissingColumnError(res.error, /granted_scopes/i)) {
+    res = await supabase
+      .from("meta_ad_connections")
+      .select("id, connected, token_expires_at, meta_ad_accounts(account_name, is_default)")
+      .eq("user_id", user.id)
+      .limit(1)
+      .maybeSingle();
+  }
+  const { data: conn, error } = res;
 
   if (error) {
     /* 0077 미적용이면 표가 없다 — 그건 «조회 실패»가 아니라 아직 열리지 않은 기능이다.
        실패로 다루면 마이그레이션 전까지 모든 사용자에게 «상태 확인 실패» 배지가 뜬다. */
-    if (isMissingTableError(error)) {
-      return { connectionId: null, connected: false, accountCount: 0, primaryName: null, expiresInDays: null };
-    }
+    if (isMissingTableError(error)) return ADS_CARD_EMPTY;
     console.error("[settings] 광고 연동 조회 실패:", error.message);
     return null;
   }
-  if (!conn) {
-    return { connectionId: null, connected: false, accountCount: 0, primaryName: null, expiresInDays: null };
-  }
+  if (!conn) return ADS_CARD_EMPTY;
 
   const row = conn as {
     id: string;
     connected: boolean;
     token_expires_at: string | null;
+    granted_scopes?: string[] | null;
     meta_ad_accounts?: { account_name: string | null; is_default: boolean }[] | null;
   };
   const list = row.meta_ad_accounts ?? [];
@@ -182,6 +203,8 @@ async function loadAdsCard(): Promise<AdsCard | null> {
     accountCount: list.length,
     primaryName: primary?.account_name ?? null,
     expiresInDays: daysUntil(row.token_expires_at),
+    /* 2026-09-03 페이지 스코프 2종 추가 — 그 전에 연동한 토큰은 소재 단계에서 막힌다. 이유를 여기서 먼저 말한다 */
+    missingScopes: missingScopes("meta_ads", row.granted_scopes ?? null),
   };
 }
 
@@ -470,6 +493,9 @@ export default async function SettingsPage({
                     <Badge tone="negative">연결 만료</Badge>
                   ) : adsCard.accountCount === 0 ? (
                     <Badge tone="warning">광고 계정 없음</Badge>
+                  ) : adsCard.missingScopes.length > 0 ? (
+                    /* 동의 뒤에 권한이 늘었다 — 연결은 살아 있지만 새 기능(광고 만들기)이 막힌다 */
+                    <Badge tone="warning">재연동 필요</Badge>
                   ) : (
                     <Badge tone="positive">연동됨</Badge>
                   )}
@@ -503,6 +529,11 @@ export default async function SettingsPage({
                     {adsCard.expiresInDays <= 0
                       ? "연결이 만료됐어요 — 다시 연결해 주세요."
                       : `${adsCard.expiresInDays}일 뒤 다시 연결이 필요해요 (메타 정책)`}
+                  </p>
+                ) : null}
+                {adsCard?.connected && adsCard.accountCount > 0 && adsCard.missingScopes.length > 0 ? (
+                  <p className="mt-1 text-[14px] text-warning-strong">
+                    광고 만들기에 필요한 권한이 새로 추가됐어요 — 「재연동」을 눌러 다시 연결해 주세요.
                   </p>
                 ) : null}
               </div>

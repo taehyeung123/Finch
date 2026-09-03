@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   CAMPAIGN_NAME_MAX,
   FORM_OBJECTIVES,
-  SPECIAL_AD_CATEGORIES,
+  FORM_SPECIAL_AD_CATEGORIES,
   SPECIAL_AD_CATEGORY_LABELS,
 } from "@/lib/ads/campaign-rules";
 import { createCampaignAction, type CampaignActionState } from "../actions";
@@ -152,7 +152,8 @@ export function CampaignForm({ currency, minDailyBudget }: { currency: string; m
           <span className="text-[14px]">해당 없음 — 아래 카테고리와 관련 없는 광고예요</span>
         </label>
         <div className={cn("mt-2 space-y-1", hasSpecial === false && "opacity-50")}>
-          {SPECIAL_AD_CATEGORIES.map((c) => (
+          {/* CREDIT 은 목록에 없다 — 금융 상품·서비스가 대체했다(campaign-rules FORM_SPECIAL_AD_CATEGORIES) */}
+          {FORM_SPECIAL_AD_CATEGORIES.map((c) => (
             <label key={c} className="flex cursor-pointer items-center gap-2.5 rounded-card px-3.5 py-2 trans-state hover:bg-tint-hover">
               <input
                 type="checkbox"

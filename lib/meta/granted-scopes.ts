@@ -2,6 +2,7 @@ import "server-only";
 
 import { INSTAGRAM_SCOPES } from "@/lib/meta/instagram-oauth";
 import { THREADS_SCOPES } from "@/lib/meta/threads-oauth";
+import { META_ADS_SCOPES } from "@/lib/meta/ads-oauth";
 
 /**
  * 연동 토큰이 실제로 받은 권한과, 지금 코드가 요구하는 권한을 대조한다.
@@ -23,8 +24,10 @@ export const REQUIRED_SCOPE = {
   instagramComments: "instagram_business_manage_comments",
   instagramMessages: "instagram_business_manage_messages",
   threadsPublish: "threads_content_publish",
-  /** 캠페인 생성·수정 — 광고 연동(meta_ad_connections.granted_scopes)과 대조한다 */
+  /** 캠페인·광고 생성·수정 — 광고 연동(meta_ad_connections.granted_scopes)과 대조한다 */
   adsManagement: "ads_management",
+  /** 광고를 게시할 페이지 목록(/me/accounts) — 소재 단계에서 필요(2026-09-03 추가) */
+  pagesList: "pages_show_list",
 } as const;
 
 export type ScopeCheck =
@@ -44,12 +47,16 @@ export function checkScope(granted: string[] | null | undefined, scope: string):
   return granted.includes(scope) ? { state: "ok" } : { state: "missing", scope };
 }
 
-/** 이 연동이 지금 코드가 요구하는 스코프를 전부 갖고 있는가 — 설정 화면의 «재연동 필요» 배지용 */
-export function missingScopes(
-  channel: "instagram" | "threads",
-  granted: string[] | null | undefined,
-): string[] {
+export type ScopedChannel = "instagram" | "threads" | "meta_ads";
+
+/**
+ * 이 연동이 지금 코드가 요구하는 스코프를 전부 갖고 있는가 — 설정 화면의 «재연동 필요» 배지용.
+ * meta_ads 는 2026-09-03 추가 — 페이지 스코프를 늘리면서 초기 토큰(ads_read·ads_management 만)이
+ * 소재 단계에서 막히는데 화면에 이유가 없던 것을 메운다.
+ */
+export function missingScopes(channel: ScopedChannel, granted: string[] | null | undefined): string[] {
   if (!granted || granted.length === 0) return []; // 확인 불가 — 없다고 단정하지 않는다
-  const wanted: readonly string[] = channel === "instagram" ? INSTAGRAM_SCOPES : THREADS_SCOPES;
+  const wanted: readonly string[] =
+    channel === "instagram" ? INSTAGRAM_SCOPES : channel === "threads" ? THREADS_SCOPES : META_ADS_SCOPES;
   return wanted.filter((s) => !granted.includes(s));
 }
