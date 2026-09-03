@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { XCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
 import { SettingsShell } from "../../../_components/settings-shell";
+
+export const metadata: Metadata = {
+  title: "구독 등록",
+  robots: { index: false, follow: false },
+};
 
 /* 빌링 인증 실패/취소 콜백 */
 export default async function SubscribeFailPage({
@@ -14,7 +20,7 @@ export default async function SubscribeFailPage({
 
   return (
     <SettingsShell title="구독 등록">
-      <Card className="mx-auto flex w-full max-w-lg flex-col items-center gap-4 p-8 text-center">
+      <Card className="mx-auto flex w-full max-w-lg flex-col items-center gap-4 p-4 text-center">
         <XCircle className="size-12 text-negative" aria-hidden />
         <div>
           <p className="text-[17px] font-semibold">카드 등록이 완료되지 않았어요</p>

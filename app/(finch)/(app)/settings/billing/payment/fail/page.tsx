@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { XCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
 import { SettingsShell } from "../../../_components/settings-shell";
+
+export const metadata: Metadata = {
+  title: "결제 카드 변경",
+  robots: { index: false, follow: false },
+};
 
 /* 카드 변경 — 빌링 인증 실패/취소 콜백. 이전 카드는 그대로다 */
 export default async function CardChangeFailPage({
@@ -14,7 +20,7 @@ export default async function CardChangeFailPage({
 
   return (
     <SettingsShell title="결제 카드 변경">
-      <Card className="mx-auto flex w-full max-w-lg flex-col items-center gap-4 p-8 text-center">
+      <Card className="mx-auto flex w-full max-w-lg flex-col items-center gap-4 p-4 text-center">
         <XCircle className="size-12 text-negative" aria-hidden />
         <div>
           <p className="text-[17px] font-semibold">카드를 바꾸지 못했어요</p>

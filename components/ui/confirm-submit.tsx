@@ -96,7 +96,15 @@ export function ConfirmSubmit({
               </button>
             </div>
             <p className="mt-2 text-[15px] leading-relaxed text-fg-sub">{description}</p>
-            <form action={action} className="mt-5 flex justify-end gap-2">
+            {/* 액션이 끝나면 모달을 닫는다 — 리다이렉트하는 서버 액션은 어차피 화면이 바뀌지만, 결과를 화면의 NoticeBar 로
+                알리는 클라이언트 핸들러(팀 멤버 제거 등)는 모달이 남아 오류가 스크림 뒤에 숨었다(소넷 점검 2026-09-03) */}
+            <form
+              action={async (formData) => {
+                await action(formData);
+                setOpen(false);
+              }}
+              className="mt-5 flex justify-end gap-2"
+            >
               {Object.entries(hiddenFields ?? {}).map(([k, v]) => (
                 <input key={k} type="hidden" name={k} value={v} />
               ))}

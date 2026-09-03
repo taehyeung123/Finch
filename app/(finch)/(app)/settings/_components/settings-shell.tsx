@@ -21,7 +21,7 @@ export function SettingsBack() {
   return (
     <Link
       href="/settings"
-      className="trans-state -ml-1.5 inline-flex items-center gap-0.5 rounded-card py-1 pl-1 pr-2 text-[14px] font-medium text-fg-sub hover:bg-tint-hover hover:text-fg"
+      className="trans-state relative -ml-1.5 inline-flex items-center gap-0.5 rounded-card py-1 pl-1 pr-2 text-[14px] font-medium text-fg-sub after:absolute after:-inset-1.5 after:content-[''] hover:bg-tint-hover hover:text-fg"
     >
       <ChevronLeft className="size-4" aria-hidden />
       계정 및 설정

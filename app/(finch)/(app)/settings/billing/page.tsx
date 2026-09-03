@@ -38,24 +38,34 @@ export const metadata: Metadata = {
 
 const PLAN_ORDER: PlanKey[] = ["free", "creator", "pro", "agency", "enterprise"];
 
-/** 플랜별 CTA — 로직은 재설계 전 PlanAction 그대로, 표현만 카드 맨 아래 꽉 찬 버튼 */
+/*
+  플랜별 CTA — 업그레이드/다운그레이드/구독 분기는 재설계 전 PlanAction 과 같고, «지금 이용 중» 슬랩은
+  현재 플랜을 그리드에 포함시킨 2026-09-03 재설계에서 새로 생겼다.
+  ⚠️ 확정 문구 두 개(«지금 이용 중»·«유료 해지 후 자동 전환»)는 planFailed 면 내지 않는다 — 조회 실패 시
+  currentPlanKey 가 fail-closed «free» 라서, 가드가 없으면 Free 카드가 «지금 이용 중»이라고 거짓 확정한다
+  (소넷 점검 2026-09-03). locked 로 가드하지 않는 이유: 예시 화면은 currentPlan 이 진짜 값이라 슬랩이 맞다.
+*/
 function PlanAction({
   planKey,
   hasActiveSub,
   currentPlanKey,
   locked,
+  planFailed,
 }: {
   planKey: PlanKey;
   hasActiveSub: boolean;
   currentPlanKey: PlanKey;
   /** 플랜 확인 실패·예시 화면 — 버튼을 잠근다(누르면 막히는 버튼을 살려 두지 않는다) */
   locked: boolean;
+  /** 플랜 조회 실패 — 현재 플랜이 무엇인지 모르므로 확정 슬랩을 내지 않는다 */
+  planFailed: boolean;
 }) {
   const slab = (text: string) => (
     <div className="flex h-10 items-center justify-center rounded-card bg-plate text-[14px] font-medium text-fg-sub">{text}</div>
   );
-  if (planKey === currentPlanKey) return slab("지금 이용 중");
-  if (planKey === "free") return slab("유료 해지 후 자동 전환");
+  if (!planFailed && planKey === currentPlanKey) return slab("지금 이용 중");
+  /* Free 카드는 버튼이 없다 — 조회 실패면 «확인 못 함»(요약 카드·칩과 같은 말), 아니면 전환 안내 */
+  if (planKey === "free") return slab(planFailed ? "확인 못 함" : "유료 해지 후 자동 전환");
   if (locked) {
     return (
       <Button type="button" className="w-full" size="md" variant="secondary" disabled>
@@ -325,7 +335,7 @@ export default async function BillingSettingsPage({
               <PlanChoiceCard
                 plan={plan}
                 current={plan.key === currentPlan && !planFailed}
-                action={<PlanAction planKey={plan.key} hasActiveSub={hasActiveSub} currentPlanKey={currentPlan} locked={locked} />}
+                action={<PlanAction planKey={plan.key} hasActiveSub={hasActiveSub} currentPlanKey={currentPlan} locked={locked} planFailed={planFailed} />}
               />
             </div>
           ))}
@@ -343,11 +353,13 @@ export default async function BillingSettingsPage({
             subFailed ? <StateChip tone="unknown" /> : subscription?.cardSummary ? <StateChip tone="ok">등록됨</StateChip> : <StateChip tone="off">미등록</StateChip>
           }
           hint={
-            subscription?.status === "past_due"
-              ? "결제 실패 — 카드를 확인해 주세요"
-              : (subscription?.cardSummary ?? "등록된 카드 없음")
+            subFailed
+              ? "구독 정보를 확인하지 못했어요 · 새로고침해 주세요"
+              : subscription?.status === "past_due"
+                ? "결제 실패 — 카드를 확인해 주세요"
+                : (subscription?.cardSummary ?? "등록된 카드 없음")
           }
-          hintTone={subscription?.status === "past_due" ? "warning" : "sub"}
+          hintTone={subFailed || subscription?.status === "past_due" ? "warning" : "sub"}
         />
         <SettingsRow href="/pricing" icon={Rows3} label="전체 요금제 비교" hint="기능별 비교표와 크레딧 소모량" />
       </SettingsGroup>

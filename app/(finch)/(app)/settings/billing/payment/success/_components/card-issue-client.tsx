@@ -42,7 +42,7 @@ export function CardIssueClient({ authKey, customerKey }: { authKey: string; cus
   }, [authKey, customerKey, router]);
 
   return (
-    <Card role="status" aria-live="polite" className="flex flex-col items-center gap-4 p-8 text-center">
+    <Card role="status" aria-live="polite" className="flex flex-col items-center gap-4 p-4 text-center">
       {state.phase === "working" ? (
         <>
           <span className="size-10 animate-pulse rounded-chip bg-primary-weak" aria-hidden />

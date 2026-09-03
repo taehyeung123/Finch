@@ -37,7 +37,7 @@ export function DangerZone({ email }: { email: string }) {
         <form action={deleteAccount} className="rounded-card border border-negative/40 bg-negative-weak p-4">
           <p className="text-[15px] font-semibold text-negative-strong">정말 탈퇴하시겠어요?</p>
           <p className="mt-1.5 break-keep text-[14px] leading-[1.6] text-fg">
-            연동한 SNS 계정, 예약·초안, 스크랩, 남은 크레딧, 팀 정보, 업로드한 이미지가 모두 삭제되고
+            연결한 SNS 계정, 예약·초안, 스크랩, 남은 크레딧, 팀 정보, 업로드한 이미지가 모두 삭제되고
             <strong className="font-semibold"> 되돌릴 수 없어요.</strong>
           </p>
           <p className="mt-1 text-[12px] text-fg-sub">결제 내역은 법령에 따라 개인 식별 정보를 지운 상태로 보관됩니다.</p>

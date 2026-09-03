@@ -120,7 +120,8 @@ export default async function ProfileSettingsPage({
       />
 
       <FieldList id="facts" label="기본 정보">
-        <NameRow displayName={displayName} failed={profileFailed} demo={demo} />
+        {/* key=이름 — 저장에 성공해 이름이 바뀌면 행이 새로 마운트돼 편집 폼이 닫힌다(실패·같은 이름이면 열린 채 남아 다시 시도) */}
+        <NameRow key={displayName} displayName={displayName} failed={profileFailed} demo={demo} />
         <FieldRow
           label="이메일"
           value={email || undefined}

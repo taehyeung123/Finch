@@ -66,7 +66,8 @@ export function SubscribeClient({
         </div>
       ) : null}
 
-      <label className="flex items-start gap-2.5 rounded-card border border-line bg-body p-4 text-[14px] leading-relaxed text-fg-sub">
+      {/* 카드 안의 중첩 면이라 plate — body 는 카드와 같은 흰색이라 상자가 사라진다(면 역할표) */}
+      <label className="flex items-start gap-2.5 rounded-card border border-line bg-plate p-4 text-[14px] leading-relaxed text-fg-sub">
         <input
           type="checkbox"
           checked={agreed}

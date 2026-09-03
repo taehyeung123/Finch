@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { Card } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
 import { SettingsShell } from "../../../_components/settings-shell";
 import { IssueClient } from "./_components/issue-client";
+
+export const metadata: Metadata = {
+  title: "구독 등록",
+  robots: { index: false, follow: false },
+};
 
 /* 빌링 인증 성공 콜백 — successUrl?authKey=&customerKey= → 서버 활성화는 클라이언트가 1회 호출 */
 export default async function SubscribeSuccessPage({
@@ -19,7 +25,7 @@ export default async function SubscribeSuccessPage({
         {authKey && customerKey ? (
           <IssueClient authKey={authKey} customerKey={customerKey} />
         ) : (
-          <Card className="flex flex-col items-center gap-4 p-8 text-center">
+          <Card className="flex flex-col items-center gap-4 p-4 text-center">
             <p className="text-[15px] text-fg-sub">등록 정보가 올바르지 않아요. 처음부터 다시 시도해 주세요.</p>
             <ButtonLink href="/settings/billing" variant="primary" size="md">
               플랜 관리로 돌아가기
