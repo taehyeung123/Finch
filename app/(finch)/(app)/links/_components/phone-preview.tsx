@@ -261,17 +261,25 @@ export function PhonePreview({
       </div>
     ) : null;
 
-  /* 인라인 연필 — 테마색을 따라가고, 정렬이 왼/오른쪽이어도 텍스트 옆에 붙는다 */
+  /* 인라인 연필 — **글자 흐름 밖**에 있다.
+     흐름 안(ml-1 inline-flex)에 두면 가운데 정렬이 «글자 + 연필»을 한 덩어리로 가운데에 놓아
+     대표문구·상세문구가 연필 폭의 절반만큼 왼쪽으로 밀렸다(2026-09-03 사장님 지적).
+     폭 0 짜리 앵커를 글 끝에 두고 연필만 그 오른쪽에 띄운다 — 글자는 공개 페이지와 **같은 자리**에
+     남고, 연필은 정렬(왼/가운데/오른쪽)과 무관하게 글 끝을 따라다닌다.
+     ⚠️ 흐름으로 되돌리지 말 것: 그 순간 미리보기와 발행본의 문구 위치가 다시 어긋난다. */
   const pencilBtn = (f: "title" | "bio", label: string) =>
     editable ? (
-      <button
-        type="button"
-        onClick={() => startInline(f)}
-        aria-label={label}
-        className="trans-state ml-1 inline-flex rounded-full p-0.5 align-middle text-[var(--lp-muted)] hover:text-[var(--lp-fg)]"
-      >
-        <Pencil className="size-3" aria-hidden />
-      </button>
+      <span className="relative inline-block h-0 w-0 align-middle">
+        <button
+          type="button"
+          onClick={() => startInline(f)}
+          aria-label={label}
+          /* after 확장으로 표적 36px — 보이는 크기는 16px 그대로다(저장소 공통 수법) */
+          className="trans-state absolute left-1 top-0 inline-flex -translate-y-1/2 rounded-full p-0.5 text-[var(--lp-muted)] after:absolute after:-inset-2.5 after:content-[''] hover:text-[var(--lp-fg)]"
+        >
+          <Pencil className="size-3" aria-hidden />
+        </button>
+      </span>
     ) : null;
 
   const avatar =
@@ -368,7 +376,12 @@ export function PhonePreview({
             <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 opacity-[0.04] mix-blend-overlay" style={{ backgroundImage: `url("${WASH_NOISE}")`, backgroundSize: "512px 512px" }} />
           ) : null}
         <div
-          className={cn("relative overflow-y-auto px-5 pb-10 pt-8", frame === "device" ? "min-h-0 flex-1" : "max-h-[680px]")}
+          /* overflow-x-clip — 폰 화면은 **세로 페이지**다(공개 페이지도 가로로 안 밀린다).
+             overflow-y-auto 만 주면 가로축이 auto 로 계산돼, 오른쪽 정렬 페이지에서 연필의
+             확장 표적(after)이 패딩을 넘는 순간 미리보기가 옆으로 밀렸다(실측 10px, 2026-09-03).
+             ⚠️ 한쪽만 clip 이면 브라우저가 hidden 으로 계산한다(계산값 확인 시 «clip» 이 아니다 — 정상).
+             연필 자체는 패딩 안에 온전히 들어오고, 잘리는 것은 보이지 않는 확장 표적뿐이다. */
+          className={cn("relative overflow-y-auto overflow-x-clip px-5 pb-10 pt-8", frame === "device" ? "min-h-0 flex-1" : "max-h-[680px]")}
         >
           {/* 상단 메뉴 줄 / 모서리 공유·구독 버튼 — 공개 페이지와 같은 자리(모양만, 동작 없음) */}
           {page.themeCustom?.topbar === "bar" ? (
@@ -490,8 +503,9 @@ export function PhonePreview({
                 )}
               />
             ) : (
-              /* w-full + break-words — 띄어쓰기 없는 긴 이름이 폰 폭을 뚫던 것(공개 페이지와 같은 처리) */
-              <p className={cn("w-full break-words font-bold leading-[1.3]", titlePx)}>
+              /* w-full + break-words — 띄어쓰기 없는 긴 이름이 폰 폭을 뚫던 것(공개 페이지와 같은 처리).
+                 자간도 공개 h1 과 같은 -0.01em — 없으면 같은 글자가 미리보기에서만 조금 넓게 앉는다 */
+              <p className={cn("w-full break-words font-bold leading-[1.3] tracking-[-0.01em]", titlePx)}>
                 {page.title || page.slug}
                 {pencilBtn("title", "이름 바로 고치기")}
               </p>
@@ -511,7 +525,10 @@ export function PhonePreview({
                 className="mt-1.5 w-full resize-none rounded-[8px] border border-[var(--lp-accent)] bg-[var(--lp-card)] px-2 py-1 text-[13px] leading-[1.6] outline-none"
               />
             ) : page.bio ? (
-              <p className={cn("mt-1.5 whitespace-pre-wrap leading-[1.6] text-[var(--lp-muted)]", bioPx)}>
+              /* max-w-[42ch]·break-words — 공개 페이지와 **같은 글자 수**에서 줄이 바뀐다.
+                 없으면 폰 폭 끝까지 흘러서 발행본보다 줄 수가 적게 보였다(렌더러 두 벌 규칙) */
+              /* 줄 간격도 공개와 같은 1.7 — 글자 크기만 프레임 비율로 줄이고 **비율 값은 그대로** 둔다 */
+              <p className={cn("mt-1.5 w-full max-w-[42ch] whitespace-pre-wrap break-words leading-[1.7] text-[var(--lp-muted)]", bioPx)}>
                 {page.bio}
                 {pencilBtn("bio", "소개 바로 고치기")}
               </p>
