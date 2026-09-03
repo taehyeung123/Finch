@@ -105,7 +105,7 @@ export default async function LegalSettingsPage() {
             <Row label="상호" value={`${BUSINESS.company} (${BUSINESS.serviceName})`} />
             <Row label="대표자" value={BUSINESS.ceo} pending={BUSINESS_PENDING} />
             <Row label="사업자등록번호" value={BUSINESS.registrationNo} pending={BUSINESS_PENDING} />
-            <Row label="법인등록번호" value={BUSINESS.corporateNo} />
+            {/* 법인등록번호는 싣지 않는다 — 전자상거래법 §10 표시 의무 항목이 아니다(2026-09-03 사장님 지시로 제거) */}
             <Row label="통신판매업 신고번호" value={BUSINESS.ecommerceNo} pending={PENDING_ECOMMERCE} />
             <Row label="사업장 주소" value={BUSINESS.address} pending={BUSINESS_PENDING} />
             <Row label="대표 이메일" value={BUSINESS.contactEmail} pending={BUSINESS_PENDING} />

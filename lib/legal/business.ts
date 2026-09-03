@@ -21,8 +21,8 @@ export interface BusinessInfo {
   ceo: string | null;
   /** 사업자등록번호 (000-00-00000) */
   registrationNo: string | null;
-  /** 법인등록번호 — 푸터엔 안 싣고 사업자 정보 화면에만 */
-  corporateNo: string | null;
+  /* 법인등록번호는 싣지 않는다 — 전자상거래법 §10 표시 의무 항목이 아니다(상호·대표자·주소·전화·이메일·사업자등록번호·
+     통신판매업 신고번호만). 2026-09-03 사장님 지시로 화면에서 뺐다. 값이 필요하면 등기부(150111-0040623)에 있다. */
   /** 통신판매업 신고번호 (예: 2026-충북청주-00000) */
   ecommerceNo: string | null;
   /** 사업장 주소 */
@@ -44,7 +44,6 @@ export const BUSINESS: BusinessInfo = {
   serviceName: "핀치(Finch)",
   ceo: "권태형",
   registrationNo: "349-86-04259",
-  corporateNo: "150111-0040623",
   /* 통신판매업신고증 «제 2026-충북청주-2193 호»(청주시, 2026-09-03) — 표기는 «호» 없이 번호만 */
   ecommerceNo: "2026-충북청주-2193",
   address: "충청북도 청주시 흥덕구 봉명로 218, 3층 에이13호(봉명동)",
