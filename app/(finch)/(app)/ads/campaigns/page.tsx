@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Megaphone } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -5,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ButtonLink } from "@/components/ui/button";
 import { IS_SAMPLE_DATA } from "@/lib/data";
-import { datePresetLabel, getLiveAds } from "@/lib/data/ads";
+import { datePresetLabel, getAccountAdReview, getLiveAds } from "@/lib/data/ads";
 import { objectiveLabel, statusLabel } from "@/lib/ads/meta-labels";
 import { adsWriteMessage } from "@/lib/ads/campaign-rules";
 import { formatMoney } from "@/lib/format";
@@ -45,6 +46,8 @@ export default async function CampaignsPage({
   const live = await getLiveAds();
   const liveOk = live.state === "ok" ? live : null;
   const currency = liveOk?.selected.currency ?? null;
+  /* 심사 요약 — 계정 광고를 한 번에 읽어 캠페인별로 묶는다. null 이면 배지를 숨긴다(0 을 그리지 않는다) */
+  const review = liveOk && liveOk.campaigns.length > 0 ? await getAccountAdReview() : null;
 
   return (
     <div className="space-y-6">
@@ -150,10 +153,24 @@ export default async function CampaignsPage({
                   <tbody>
                     {liveOk.campaigns.map((c) => {
                       const status = statusLabel(c.effectiveStatus, c.status);
+                      const r = review?.[c.id] ?? null;
                       return (
                         <tr key={c.id} className="border-b border-line last:border-0">
                           <td className="min-w-[180px] max-w-[280px] py-3 pr-3">
-                            <p className="truncate font-medium">{c.name}</p>
+                            {/* 이름이 상세로 가는 문이다 — 광고 세트·광고·심사 상태는 거기서 본다 */}
+                            <Link
+                              href={`/ads/campaigns/${c.id}`}
+                              className="block truncate font-medium text-fg underline-offset-2 hover:underline"
+                            >
+                              {c.name}
+                            </Link>
+                            {r && (r.pendingReview > 0 || r.disapproved > 0 || r.withIssues > 0) ? (
+                              <p className="mt-1 flex flex-wrap gap-1">
+                                {r.pendingReview > 0 ? <Badge tone="warning">심사 중 {r.pendingReview}</Badge> : null}
+                                {r.disapproved > 0 ? <Badge tone="negative">거부 {r.disapproved}</Badge> : null}
+                                {r.withIssues > 0 ? <Badge tone="warning">문제 {r.withIssues}</Badge> : null}
+                              </p>
+                            ) : null}
                           </td>
                           <td className="py-3 pr-3 text-fg-sub">{objectiveLabel(c.objective)}</td>
                           <td className="py-3 pr-3">

@@ -23,10 +23,21 @@ import { isDemoMode } from "@/lib/supabase/config";
 import { getWorkspaceMembership, getWorkspaceOwnerId } from "@/lib/team";
 import { decryptToken, isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
 import { isMissingTableError } from "@/lib/supabase/errors";
+import { isMissingColumnError } from "@/lib/publish-rules";
 import { getConsentStatus } from "@/lib/legal/consent";
 import type { AdsWriteFailCode } from "@/lib/ads/campaign-rules";
 import { isMetaAdsOAuthConfigured } from "@/lib/meta/ads-oauth";
 import { fetchCampaignInsights, fetchCampaigns, type FbCampaign } from "@/lib/meta/ads";
+import {
+  fetchAccountAdReview,
+  fetchAds,
+  fetchAdSets,
+  fetchCampaignDetail,
+  type AdReviewSummary,
+  type FbAd,
+  type FbAdSet,
+  type FbCampaignDetail,
+} from "@/lib/meta/ads-tree";
 
 export interface LiveAdAccount {
   adAccountId: string;
@@ -110,7 +121,30 @@ function isAdsConnectable(): boolean {
   return isMetaAdsOAuthConfigured() && isTokenEncryptionConfigured();
 }
 
-async function loadLiveAds(datePreset: string, adAccountId?: string): Promise<LiveAdsState> {
+/**
+ * 읽기 컨텍스트 — 연동 행 → 토큰 복호화 → 계정 선택까지. 캠페인 목록(loadLiveAds)과
+ * 캠페인 상세 트리(getCampaignTree)가 **같은 단계·같은 상태 구분**을 쓰기 위해 뽑아 둔 공통부.
+ * ⚠️ token 을 들고 있다 — 이 타입은 이 파일 밖으로 나가지 않는다(직렬화 경계를 넘기지 않는다).
+ */
+type ReadContext =
+  | { state: "unconfigured" }
+  | { state: "disconnected" }
+  | { state: "expired"; expiredAt: string | null }
+  | { state: "no_accounts" }
+  | { state: "error" }
+  | {
+      state: "ok";
+      token: string;
+      accounts: LiveAdAccount[];
+      selected: LiveAdAccount;
+      expiresInDays: number | null;
+    };
+
+/**
+ * ⚠️ 인자는 **항상 1개**로 부른다(`loadReadContextCached(undefined)` 포함). React cache() 는 arguments.length 를
+ * 캐시 키의 일부로 쓴다 — `fn()` 과 `fn(undefined)` 가 서로 다른 슬롯이라 공유가 조용히 깨진다(슬라이스 1 소넷 점검).
+ */
+async function loadReadContext(adAccountId: string | undefined): Promise<ReadContext> {
   if (isDemoMode()) return { state: "disconnected" };
   if (!isAdsConnectable()) return { state: "unconfigured" };
 
@@ -179,6 +213,17 @@ async function loadLiveAds(datePreset: string, adAccountId?: string): Promise<Li
     accounts.find((a) => a.isDefault) ??
     accounts[0];
 
+  return { state: "ok", token, accounts, selected, expiresInDays };
+}
+
+/* 한 렌더 안에서 목록·상세·심사 요약이 같은 컨텍스트를 나눠 쓴다(연동 행 조회·복호화 1회) */
+const loadReadContextCached = cache(loadReadContext);
+
+async function loadLiveAds(datePreset: string, adAccountId?: string): Promise<LiveAdsState> {
+  const rc = await loadReadContextCached(adAccountId);
+  if (rc.state !== "ok") return rc;
+  const { token, accounts, selected, expiresInDays } = rc;
+
   /* 캠페인과 인사이트를 나란히 부른다 — 둘은 서로를 기다릴 이유가 없다.
      인사이트만 실패해도 캠페인 목록은 보여줄 수 있다(그 반대는 의미가 없다). */
   const [campaigns, insights] = await Promise.all([
@@ -241,7 +286,66 @@ export function getLiveAds(options?: {
   return loadLiveAdsCached(options?.datePreset ?? "last_30d", options?.adAccountId);
 }
 
+/* ── 캠페인 상세 트리 (2단계 슬라이스 1 — 읽기 전용) ─────────────── */
+
+export type CampaignTreeState =
+  | { state: "unconfigured" }
+  | { state: "disconnected" }
+  | { state: "expired"; expiredAt: string | null }
+  | { state: "no_accounts" }
+  | { state: "error" }
+  /** 캠페인이 없거나 **선택된 광고 계정의 것이 아니다** — 화면은 404 */
+  | { state: "not_found" }
+  | {
+      state: "ok";
+      selected: LiveAdAccount;
+      campaign: FbCampaignDetail;
+      /** null = 못 읽음(«없음»이 아니다). 화면이 «불러오지 못했어요»를 따로 그린다 */
+      adsets: FbAdSet[] | null;
+      ads: FbAd[] | null;
+      expiresInDays: number | null;
+    };
+
+/**
+ * 캠페인 하나의 하위 계층. **읽기에도 소유 대조**를 한다 — 소유자 토큰은 그 사람의 모든 광고 계정을
+ * 커버하므로, URL 의 campaignId 만 믿으면 팀원이 id 를 바꿔 다른 고객사 캠페인 내부를 읽는다(설계 검토 major).
+ * 대조 실패(null)는 error(«확인 못 함»), 계정 불일치는 not_found 다.
+ */
+export const getCampaignTree = cache(async (campaignId: string): Promise<CampaignTreeState> => {
+  const rc = await loadReadContextCached(undefined);
+  if (rc.state !== "ok") return rc;
+  const { token, selected, expiresInDays } = rc;
+
+  const campaign = await fetchCampaignDetail(campaignId, token, selected.currency);
+  if (campaign === null) return { state: "error" };
+  if (campaign.accountId === null || campaign.accountId !== selected.adAccountId) return { state: "not_found" };
+
+  const [adsets, ads] = await Promise.all([
+    fetchAdSets(campaignId, token, selected.currency),
+    fetchAds(campaignId, token),
+  ]);
+  return { state: "ok", selected, campaign, adsets, ads, expiresInDays };
+});
+
+/**
+ * 목록 배지용 심사 요약 — 계정 광고를 한 번에 읽어 캠페인별로 묶는다.
+ * null = 못 읽음 → 배지를 **숨긴다**(0 을 그리지 않는다). 연동이 ok 가 아니어도 null.
+ */
+export const getAccountAdReview = cache(async (): Promise<Record<string, AdReviewSummary> | null> => {
+  const rc = await loadReadContextCached(undefined);
+  if (rc.state !== "ok") return null;
+  return fetchAccountAdReview(rc.selected.adAccountId, rc.token);
+});
+
 /* ── 쓰기 컨텍스트 (캠페인 생성·수정 전용) ───────────────────────── */
+
+/** 광고 게시 주체 — 0082 컬럼(meta_ad_accounts.ad_page_id …). 없으면 소재를 만들 수 없다 */
+export interface AdPublisher {
+  pageId: string;
+  pageName: string | null;
+  igUserId: string | null;
+  igUsername: string | null;
+}
 
 export type AdsWriteContext =
   | {
@@ -257,6 +361,8 @@ export type AdsWriteContext =
       ownerId: string;
       /** 쓰기를 요청한 사람의 워크스페이스 역할 */
       role: "owner" | "editor" | "viewer" | "unknown";
+      /** 저장된 게시 주체. null = 아직 고르지 않았다(또는 0082 미적용) */
+      publisher: AdPublisher | null;
     }
   | { state: "blocked"; code: AdsWriteFailCode };
 
@@ -309,12 +415,27 @@ export async function getAdsWriteContext(adAccountId?: string): Promise<AdsWrite
     return { state: "blocked", code: "connection_unreadable" };
   }
 
-  const { data: acctRaw } = await supabase
+  /* 게시 주체 컬럼(0082)은 없을 수 있다 — 빠지면 컬럼 없이 다시 읽는다(«아직 안 고름»과 같게 다룬다) */
+  const primary = await supabase
     .from("meta_ad_accounts")
-    .select("ad_account_id, currency, account_status, is_default")
+    .select("ad_account_id, currency, account_status, is_default, ad_page_id, ad_page_name, ad_ig_user_id, ad_ig_username")
     .eq("connection_id", conn.id)
     .order("is_default", { ascending: false });
-  const rows = (acctRaw ?? []) as AdAccountRow[];
+  let acctRows: unknown[] | null = primary.data;
+  if (primary.error && isMissingColumnError(primary.error, /ad_page_id|ad_ig_user_id|ad_page_name|ad_ig_username/i)) {
+    const fallback = await supabase
+      .from("meta_ad_accounts")
+      .select("ad_account_id, currency, account_status, is_default")
+      .eq("connection_id", conn.id)
+      .order("is_default", { ascending: false });
+    acctRows = fallback.data;
+  }
+  const rows = (acctRows ?? []) as (AdAccountRow & {
+    ad_page_id?: string | null;
+    ad_page_name?: string | null;
+    ad_ig_user_id?: string | null;
+    ad_ig_username?: string | null;
+  })[];
   const selected = (adAccountId ? rows.find((r) => r.ad_account_id === adAccountId) : null) ?? rows[0];
   if (!selected) {
     return { state: "blocked", code: "no_ad_account" };
@@ -333,6 +454,14 @@ export async function getAdsWriteContext(adAccountId?: string): Promise<AdsWrite
     grantedScopes: conn.granted_scopes ?? null,
     ownerId: membership.ownerId,
     role: membership.role,
+    publisher: selected.ad_page_id
+      ? {
+          pageId: selected.ad_page_id,
+          pageName: selected.ad_page_name ?? null,
+          igUserId: selected.ad_ig_user_id ?? null,
+          igUsername: selected.ad_ig_username ?? null,
+        }
+      : null,
   };
 }
 

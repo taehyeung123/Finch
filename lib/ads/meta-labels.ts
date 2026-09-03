@@ -70,6 +70,81 @@ export function statusLabel(
   return STATUS[code] ?? { label: humanize(code), tone: "neutral" };
 }
 
+/* ── 광고 세트 필드 라벨(2단계 슬라이스 1) — 모르는 코드는 humanize 로 ── */
+
+const OPTIMIZATION_GOAL: Record<string, string> = {
+  LINK_CLICKS: "링크 클릭",
+  LANDING_PAGE_VIEWS: "랜딩 페이지 조회",
+  IMPRESSIONS: "노출",
+  REACH: "도달",
+  POST_ENGAGEMENT: "게시물 참여",
+  PAGE_LIKES: "페이지 좋아요",
+  OFFSITE_CONVERSIONS: "전환",
+  VALUE: "전환 가치",
+  THRUPLAY: "동영상 재생",
+  TWO_SECOND_CONTINUOUS_VIDEO_VIEWS: "2초 이상 조회",
+  CONVERSATIONS: "대화",
+  LEAD_GENERATION: "잠재 고객",
+  QUALITY_LEAD: "양질의 잠재 고객",
+  APP_INSTALLS: "앱 설치",
+  AD_RECALL_LIFT: "광고 상기도",
+  VISIT_INSTAGRAM_PROFILE: "프로필 방문",
+};
+
+const BILLING_EVENT: Record<string, string> = {
+  IMPRESSIONS: "노출당 청구",
+  LINK_CLICKS: "링크 클릭당 청구",
+  THRUPLAY: "재생당 청구",
+  TWO_SECOND_CONTINUOUS_VIDEO_VIEWS: "2초 조회당 청구",
+  POST_ENGAGEMENT: "참여당 청구",
+  PAGE_LIKES: "좋아요당 청구",
+  APP_INSTALLS: "설치당 청구",
+};
+
+const DESTINATION_TYPE: Record<string, string> = {
+  WEBSITE: "웹사이트",
+  ON_AD: "광고 안에서",
+  ON_POST: "게시물",
+  ON_PAGE: "페이지",
+  MESSENGER: "Messenger",
+  INSTAGRAM_DIRECT: "Instagram DM",
+  INSTAGRAM_PROFILE: "Instagram 프로필",
+  WHATSAPP: "WhatsApp",
+  APP: "앱",
+  SHOP_AUTOMATIC: "샵",
+  PHONE_CALL: "전화",
+  UNDEFINED: "—",
+};
+
+export function optimizationGoalLabel(code: string | null): string {
+  if (!code) return "—";
+  return OPTIMIZATION_GOAL[code] ?? humanize(code);
+}
+export function billingEventLabel(code: string | null): string {
+  if (!code) return "—";
+  return BILLING_EVENT[code] ?? humanize(code);
+}
+export function destinationTypeLabel(code: string | null): string {
+  if (!code) return "—";
+  return DESTINATION_TYPE[code] ?? humanize(code);
+}
+const BID_STRATEGY: Record<string, string> = {
+  LOWEST_COST_WITHOUT_CAP: "자동 입찰 (최저 비용)",
+  LOWEST_COST_WITH_BID_CAP: "입찰가 상한",
+  COST_CAP: "비용 상한",
+  LOWEST_COST_WITH_MIN_ROAS: "최소 ROAS",
+};
+export function bidStrategyLabel(code: string | null): string {
+  if (!code) return "—";
+  return BID_STRATEGY[code] ?? humanize(code);
+}
+
+/** 1=남성 · 2=여성 · 비어 있음=전체 */
+export function genderLabel(genders: number[]): string {
+  if (genders.length === 0 || genders.length === 2) return "전체";
+  return genders[0] === 1 ? "남성" : genders[0] === 2 ? "여성" : "전체";
+}
+
 /**
  * 광고 계정 상태 — 결제가 막혀 있으면 «게재 중»인 캠페인도 실제로는 안 나간다.
  * 문제가 있을 때만 문구를 돌려준다(정상이면 null — 아무 말도 안 하는 게 맞다).
