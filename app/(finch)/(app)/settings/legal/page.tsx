@@ -162,7 +162,7 @@ export default async function LegalSettingsPage() {
         />
         <CardBody className="pt-1">
           {consent.kind === "demo" ? (
-            <p className="py-2 text-[14px] text-fg-sub">예시 화면이에요 — 로그인하면 내 동의 기록이 표시됩니다.</p>
+            <p className="py-2 text-[14px] text-fg-sub">지금은 예시 화면이라 동의 기록이 표시되지 않아요.</p>
           ) : consent.kind === "failed" ? (
             <p role="alert" className="py-2 text-[14px] text-warning-strong">
               동의 기록을 불러오지 못했어요. 기록이 없는 게 아니라 잠시 못 읽은 것입니다 — 새로고침해 주세요.

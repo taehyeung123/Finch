@@ -74,7 +74,7 @@ export function SignupForm({ nextPath = "/onboarding" }: { nextPath?: string }) 
             <span className="h-px flex-1 bg-line" />
           </div>
           <ButtonLink href={nextPath} variant="secondary" className="w-full">
-            데모 모드로 둘러보기
+            로그인 없이 둘러보기
           </ButtonLink>
         </>
       ) : null}

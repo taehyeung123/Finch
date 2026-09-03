@@ -35,7 +35,7 @@ export function FileField({
       return;
     }
     if (!isSupabaseConfigured()) {
-      setError("데모 모드에서는 올릴 수 없어요.");
+      setError("지금은 예시 화면이라 올릴 수 없어요.");
       return;
     }
     setBusy(true);

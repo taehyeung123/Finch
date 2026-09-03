@@ -37,7 +37,7 @@ export default async function SubscribePage({
               <span className="text-[17px] font-bold">핀치 {planName}</span>
               <Badge tone="primary">월 자동결제</Badge>
             </div>
-            <p className="mt-1 text-[14px] text-fg-sub">가격은 정식 출시 전 잠정값입니다. (테스트 결제)</p>
+            <p className="mt-1 text-[14px] text-fg-sub">가격은 정식 출시 전 잠정값이에요.</p>
           </div>
           <span className="shrink-0 text-[20px] font-bold tnum">{formatKRW(amount)}<span className="text-[14px] font-normal text-fg-sub">/월</span></span>
         </div>
@@ -47,8 +47,8 @@ export default async function SubscribePage({
         <Card className="p-5">
           <p className="text-[15px] text-fg-sub">
             {isDemoMode()
-              ? "데모 모드에서는 구독할 수 없어요."
-              : "정기결제 설정이 아직 완료되지 않았습니다. (NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY 미설정)"}
+              ? "지금은 예시 화면이라 구독할 수 없어요."
+              : "지금은 정기결제를 시작할 수 없어요. 준비가 끝나는 대로 안내드릴게요."}
           </p>
           <Link
             href="/settings/billing"
@@ -59,7 +59,14 @@ export default async function SubscribePage({
         </Card>
       ) : (
         <Card className="p-5">
-          <SubscribeClient plan={plan} planName={planName} amount={amount} clientKey={clientKey} />
+          {/* 테스트 키(test_ck_)로 도는 동안만 «실제 청구 없음»을 말한다 — 라이브 키로 바뀌면 문장이 사라진다 */}
+          <SubscribeClient
+            plan={plan}
+            planName={planName}
+            amount={amount}
+            clientKey={clientKey}
+            testMode={clientKey.startsWith("test_")}
+          />
         </Card>
       )}
     </div>

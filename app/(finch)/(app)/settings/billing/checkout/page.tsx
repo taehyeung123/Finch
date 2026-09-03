@@ -44,9 +44,7 @@ export default async function CheckoutPage({
               <span className="text-[17px] font-bold">핀치 {planName}</span>
               <Badge tone="primary">월 구독</Badge>
             </div>
-            <p className="mt-1 text-[14px] text-fg-sub">
-              가격은 정식 출시 전 잠정값입니다. (테스트 결제)
-            </p>
+            <p className="mt-1 text-[14px] text-fg-sub">가격은 정식 출시 전 잠정값이에요.</p>
           </div>
           <span className="shrink-0 text-[20px] font-bold tnum">{formatKRW(amount)}</span>
         </div>
@@ -54,16 +52,12 @@ export default async function CheckoutPage({
 
       {isDemoMode() || !clientKey ? (
         <Card className="p-5">
+          {/* 환경변수 이름·«데모 모드»는 운영 정보다 — 고객에게는 지금 할 수 없다는 사실만 말한다(원인은 서버 로그) */}
           <p className="text-[15px] text-fg-sub">
             {isDemoMode()
-              ? "데모 모드에서는 결제할 수 없어요."
-              : "결제 연동이 아직 설정되지 않았습니다. (NEXT_PUBLIC_TOSS_CLIENT_KEY 미설정)"}
+              ? "지금은 예시 화면이라 결제할 수 없어요."
+              : "지금은 결제를 진행할 수 없어요. 준비가 끝나는 대로 안내드릴게요."}
           </p>
-          {!isDemoMode() ? (
-            <p className="mt-1 text-[14px] text-fg-sub">
-              테스트 클라이언트 키를 환경변수에 추가하면 결제 위젯이 활성화됩니다.
-            </p>
-          ) : null}
           <Link
             href="/settings/billing"
             className="mt-3 inline-block text-[15px] font-semibold text-primary underline underline-offset-2"
@@ -73,7 +67,13 @@ export default async function CheckoutPage({
         </Card>
       ) : (
         <Card className="p-5">
-          <TossCheckout plan={plan} clientKey={clientKey} customerKey={customerKey} amount={amount} />
+          <TossCheckout
+            plan={plan}
+            clientKey={clientKey}
+            customerKey={customerKey}
+            amount={amount}
+            testMode={clientKey.startsWith("test_")}
+          />
         </Card>
       )}
     </div>

@@ -6204,7 +6204,7 @@ function CreateForm({
         {/* 데모 모드는 **누르기 전에** 알린다 — 저장은 서버 액션이 막는다 */}
         {isDemo ? (
           <p className="mx-auto mt-6 max-w-md rounded-card border border-line bg-plate px-4 py-3 text-[14px] leading-[1.6] text-fg-sub">
-            지금은 <strong className="font-semibold text-fg">데모 모드</strong>예요. 화면은 둘러볼 수 있지만
+            지금은 <strong className="font-semibold text-fg">예시 화면</strong>이에요. 둘러볼 수 있지만
             저장은 되지 않아요. 로그인하면 실제 프로필 링크를 만들 수 있습니다.
           </p>
         ) : null}

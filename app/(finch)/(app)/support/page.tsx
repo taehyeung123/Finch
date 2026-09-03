@@ -46,7 +46,8 @@ function fmtDate(iso: string): string {
 
 async function loadInquiries(): Promise<{ rows: InquiryRow[]; notice: string | null }> {
   if (isDemoMode()) {
-    return { rows: [], notice: "데모 모드에서는 문의 내역이 표시되지 않습니다." };
+    /* «로그인하면 보인다»고 약속하지 않는다 — 예시 화면 여부는 배포 설정이라 로그인과 무관하다 */
+    return { rows: [], notice: "지금은 예시 화면이라 문의 내역이 표시되지 않아요." };
   }
   const supabase = await createClient();
   const user = await getAuthUser();

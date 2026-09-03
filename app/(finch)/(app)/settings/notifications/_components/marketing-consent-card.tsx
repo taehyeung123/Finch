@@ -52,7 +52,7 @@ export function MarketingConsentCard({ initial }: { initial: MarketingConsentSta
         tone: "negative",
         text:
           res.reason === "no_record"
-            ? "동의 기록을 찾지 못했어요. 다음 방문에서 동의 화면이 다시 표시됩니다."
+            ? "동의 기록을 찾지 못했어요. 잠시 후 다시 시도해 주세요."
             : "저장하지 못했어요. 잠시 후 다시 시도해 주세요.",
       });
     }

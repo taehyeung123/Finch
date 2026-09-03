@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CalendarDays, KeyRound, Mail } from "lucide-react";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { AvatarImage } from "@/components/ui/avatar-image";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { formatDate } from "@/lib/format";
+import { getUserAvatarUrl } from "@/lib/account/avatar";
 import { SettingsShell } from "../_components/settings-shell";
 import { DangerZone } from "./_components/danger-zone";
 import { updateDisplayName } from "./actions";
@@ -25,7 +27,7 @@ export const metadata: Metadata = {
   회원탈퇴는 설정 **항목이 아니라** 이 화면 맨 아래 작은 링크다(사장님 지시).
 */
 const ERRORS: Record<string, string> = {
-  demo: "데모 모드에서는 변경할 수 없어요.",
+  demo: "지금은 예시 화면이라 변경할 수 없어요.",
   save: "저장하지 못했어요. 잠시 후 다시 시도해 주세요.",
   confirm: "확인 문구가 일치하지 않아 탈퇴를 진행하지 않았어요.",
   unconfigured: "탈퇴 처리를 위한 서버 설정이 준비되지 않았어요. 고객센터로 문의해 주세요.",
@@ -44,6 +46,7 @@ export default async function ProfileSettingsPage({
   let email = "";
   let displayName = "";
   let joinedAt: string | null = null;
+  let avatarUrl: string | null = null;
   let profileFailed = false;
 
   if (!isDemoMode()) {
@@ -54,6 +57,7 @@ export default async function ProfileSettingsPage({
     if (user) {
       const supabase = await createClient();
       email = user.email ?? "";
+      avatarUrl = getUserAvatarUrl(user);
       /* 이 조회의 error 는 예전에 버려졌다 — 실패하면 이름 칸이 **빈칸**으로 뜨고,
          사용자가 다른 항목만 바꿔 저장하는 순간 표시 이름이 지워진다(조용한 손실). */
       const { data: profile, error: profileErr } = await supabase
@@ -88,6 +92,25 @@ export default async function ProfileSettingsPage({
       <Card>
         <CardHeader title="내 정보" description="화면과 리포트에 표시되는 이름이에요" />
         <CardBody className="space-y-5">
+          {/* 프로필 사진 — 업로드 기능은 없다. 로그인 계정(Google·카카오)의 사진을 그대로 쓰고,
+              바꾸는 길이 어디인지만 말한다(«바꾸기» 버튼을 그려 놓고 아무 일도 안 일어나게 두지 않는다). */}
+          <div className="flex items-center gap-3">
+            <AvatarImage
+              src={avatarUrl}
+              initial={(displayName || email || "핀").trim().charAt(0).toUpperCase()}
+              sizeClass="size-14"
+              textClass="text-[20px]"
+            />
+            <div className="min-w-0">
+              <p className="text-[12px] font-medium text-fg-sub">프로필 사진</p>
+              <p className="mt-0.5 text-[14px] text-fg-sub">
+                {avatarUrl
+                  ? "로그인한 Google·카카오 계정의 사진이에요. 그쪽에서 바꾸면 다음 로그인 때 반영돼요."
+                  : "로그인 계정에 사진이 없어 이름 첫 글자로 표시해요."}
+              </p>
+            </div>
+          </div>
+
           {/* flex-1 을 빼서 저장 버튼이 입력창 바로 옆에 붙는다 — 래퍼가 남은 폭을 전부 먹으면
               넓은 화면에서 입력창과 버튼이 한 벌로 안 읽힌다. */}
           <form action={updateDisplayName} className="flex flex-wrap items-end gap-3">

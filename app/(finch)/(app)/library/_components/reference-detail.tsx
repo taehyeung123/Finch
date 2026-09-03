@@ -207,7 +207,7 @@ export function ReferenceDetailModal({
   async function handleDelete() {
     if (deleting) return;
     if (isDemo) {
-      setNoteMsg("데모 모드에서는 삭제할 수 없어요.");
+      setNoteMsg("지금은 예시 화면이라 삭제할 수 없어요.");
       setConfirmDelete(false);
       return;
     }

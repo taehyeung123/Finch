@@ -17,11 +17,14 @@ export function TossCheckout({
   clientKey,
   customerKey,
   amount,
+  testMode = false,
 }: {
   plan: string;
   clientKey: string;
   customerKey: string | null;
   amount: number;
+  /** 토스 테스트 키로 도는 중 — 실제 청구가 없다는 사실만 말한다(«테스트 모드»라는 운영 용어는 쓰지 않는다) */
+  testMode?: boolean;
 }) {
   const widgetsRef = useRef<TossPaymentsWidgets | null>(null);
   const initializedRef = useRef(false);
@@ -107,9 +110,9 @@ export function TossCheckout({
       <Button variant="primary" size="lg" className="w-full" onClick={handlePay} disabled={!ready || paying}>
         {paying ? "결제 진행 중…" : `${formatKRW(amount)} 결제하기`}
       </Button>
-      <p className="text-center text-[12px] text-fg-sub">
-        테스트 모드입니다. 실제 카드 청구가 발생하지 않는 Toss 테스트 결제로 동작합니다.
-      </p>
+      {testMode ? (
+        <p className="text-center text-[12px] text-fg-sub">지금은 테스트 결제로 동작해 실제로 청구되지 않아요.</p>
+      ) : null}
     </div>
   );
 }

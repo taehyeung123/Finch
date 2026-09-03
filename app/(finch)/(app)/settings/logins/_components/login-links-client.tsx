@@ -60,7 +60,7 @@ export function LoginLinksClient({ identities, demo }: { identities: LoginIdenti
 
   async function link(provider: Provider) {
     if (demo) {
-      setNotice({ tone: "warning", text: "지금은 예시 화면이라 계정을 연결할 수 없어요. 로그인 후 이용해 주세요." });
+      setNotice({ tone: "warning", text: "지금은 예시 화면이라 계정을 연결할 수 없어요." });
       return;
     }
     setBusy(provider);
@@ -125,7 +125,7 @@ export function LoginLinksClient({ identities, demo }: { identities: LoginIdenti
           title="로그인 방식"
           description={
             demo
-              ? "예시 화면이에요 — 로그인하면 내 계정의 연결 상태가 표시됩니다"
+              ? "지금은 예시 화면이라 실제 연결 상태가 표시되지 않아요"
               : linkedCount >= 2
                 ? "두 계정이 모두 연결돼 있어요"
                 : "계정을 하나 더 연결해 두면 한쪽이 막혀도 로그인할 수 있어요"

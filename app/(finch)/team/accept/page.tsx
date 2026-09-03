@@ -59,8 +59,8 @@ export default async function TeamAcceptPage({
   if (isDemoMode()) {
     return (
       <Shell>
-        <h1 className="text-xl font-bold">데모 모드예요</h1>
-        <p className="mt-2 text-[15px] text-fg-sub">팀 초대 수락은 실 서비스 환경에서만 동작합니다.</p>
+        <h1 className="text-xl font-bold">지금은 예시 화면이에요</h1>
+        <p className="mt-2 text-[15px] text-fg-sub">지금은 예시 화면이라 팀 초대를 수락할 수 없어요.</p>
       </Shell>
     );
   }

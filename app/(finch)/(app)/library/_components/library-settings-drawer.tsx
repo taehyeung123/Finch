@@ -194,7 +194,7 @@ export function LibrarySettingsDrawer({
     }
     setMsg(
       isDemo && result.error?.startsWith("데모")
-        ? { tone: "notice", text: "데모 모드에서는 등록할 수 없어요 — 실제 계정으로 로그인하면 저장됩니다" }
+        ? { tone: "notice", text: "지금은 예시 화면이라 등록할 수 없어요" }
         : { tone: "error", text: result.error ?? "등록에 실패했습니다." },
     );
   }
@@ -212,7 +212,7 @@ export function LibrarySettingsDrawer({
     }
     setAdMsg(
       isDemo && result.error?.startsWith("데모")
-        ? { tone: "notice", text: "데모 모드에서는 등록할 수 없어요 — 실제 계정으로 로그인하면 저장됩니다" }
+        ? { tone: "notice", text: "지금은 예시 화면이라 등록할 수 없어요" }
         : { tone: "error", text: result.error ?? "등록에 실패했습니다." },
     );
   }
@@ -541,7 +541,7 @@ export function LibrarySettingsDrawer({
               ) : null}
               {isDemo ? (
                 <p className="text-[12px] text-fg-faint">
-                  데모 모드에서는 설정이 저장되지 않아요 — 실제 계정에서는 자동 저장됩니다.
+                  지금은 예시 화면이라 설정이 저장되지 않아요.
                 </p>
               ) : null}
             </div>

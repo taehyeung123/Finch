@@ -182,7 +182,8 @@ export function Topbar({ unread = 0 }: { unread?: number }) {
             ) : (
               <>
                 <div className="px-2.5 py-2">
-                  <Badge>데모 모드</Badge>
+                  {/* «데모 모드»는 운영 용어다 — 고객에게는 지금 보는 것이 예시 화면이라는 사실만 말한다 */}
+                  <Badge>예시 화면</Badge>
                 </div>
                 <div className="mx-2.5 my-1 h-px bg-line" aria-hidden />
                 <Link href="/login" role="menuitem" className={menuItem} onClick={() => setMenuOpen(false)}>

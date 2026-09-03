@@ -69,8 +69,9 @@ export async function submitInquiry(formData: FormData): Promise<SubmitResult> {
     console.error("[support] 문의 접수 실패:", error.message);
     return {
       ok: false,
+      /* 표가 없는 원인(0017 미적용)은 위 console.error 로 운영자에게 — 고객 문구에 마이그레이션 번호를 싣지 않는다 */
       error: missing
-        ? "문의 기능이 아직 준비되지 않았습니다(마이그레이션 0017 미적용). 잠시 후 다시 시도해주세요."
+        ? "문의 기능이 아직 준비되지 않았어요. 잠시 후 다시 시도해 주세요."
         : "문의 접수에 실패했습니다. 잠시 후 다시 시도해주세요.",
     };
   }

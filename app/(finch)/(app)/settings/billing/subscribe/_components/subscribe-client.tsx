@@ -15,11 +15,14 @@ export function SubscribeClient({
   planName,
   amount,
   clientKey,
+  testMode = false,
 }: {
   plan: string;
   planName: string;
   amount: number;
   clientKey: string;
+  /** 토스 테스트 키로 도는 중 — 실제 청구가 없다는 사실만 고객에게 말한다(«테스트 모드»라는 운영 용어는 쓰지 않는다) */
+  testMode?: boolean;
 }) {
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -80,9 +83,9 @@ export function SubscribeClient({
       <Button variant="primary" size="lg" className="w-full" onClick={start} disabled={!agreed || busy}>
         {busy ? "결제창 여는 중…" : "카드 등록하고 구독 시작"}
       </Button>
-      <p className="text-center text-[12px] text-fg-sub">
-        테스트 모드입니다. 실제 청구가 발생하지 않는 Toss 테스트 결제로 동작해요.
-      </p>
+      {testMode ? (
+        <p className="text-center text-[12px] text-fg-sub">지금은 테스트 결제로 동작해 실제로 청구되지 않아요.</p>
+      ) : null}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { LogOut } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { AvatarImage } from "@/components/ui/avatar-image";
 import type { Channel } from "@/lib/types";
 import { CHANNEL_LABEL } from "@/lib/channels";
 import { accounts as mockAccounts } from "@/lib/data";
@@ -13,6 +14,7 @@ import { PLAN_NAMES, isPaidPlan } from "@/lib/toss/config";
 import { isDemoMode } from "@/lib/supabase/config";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isMissingTableError } from "@/lib/supabase/errors";
+import { getUserAvatarUrl } from "@/lib/account/avatar";
 import { SETTINGS_GROUPS } from "@/lib/settings/sections";
 import { HubGroup, HubRow, HubRowBody, hubRowClass } from "./_components/hub-row";
 
@@ -38,6 +40,8 @@ const PROVIDER_LABEL: Record<string, string> = { google: "Google", kakao: "카�
 interface HubState {
   displayName: string;
   email: string | null;
+  /** 로그인 계정(Google·카카오)의 프로필 사진 — 없으면 이니셜 */
+  avatarUrl: string | null;
   /** null = 조회 실패(«무료»와 다르다) */
   plan: PlanKey | null;
   /** null = 조회 실패 */
@@ -57,6 +61,7 @@ async function loadHub(): Promise<HubState> {
     return {
       displayName: "핀치 데모",
       email: null,
+      avatarUrl: null,
       plan: "creator",
       connectedChannels: mockAccounts.filter((a) => a.connected).map((a) => a.channel),
       adsConnected: true,
@@ -73,6 +78,7 @@ async function loadHub(): Promise<HubState> {
     return {
       displayName: "",
       email: null,
+      avatarUrl: null,
       plan: "free",
       connectedChannels: [],
       adsConnected: false,
@@ -108,6 +114,7 @@ async function loadHub(): Promise<HubState> {
   return {
     displayName,
     email: user.email ?? null,
+    avatarUrl: getUserAvatarUrl(user),
     plan,
     connectedChannels: channelsRes.error
       ? null
@@ -181,19 +188,15 @@ export default async function SettingsHubPage({
 
       {/* 계정 요약 — 누구로 로그인했고 어떤 플랜인지. 링크팜 계정 화면 맨 위의 그 카드다 */}
       <Card className="flex flex-wrap items-center gap-4 p-4">
-        <span
-          className="flex size-12 shrink-0 items-center justify-center rounded-chip bg-primary-weak text-[17px] font-bold text-primary"
-          aria-hidden
-        >
-          {initial}
-        </span>
+        {/* 로그인 계정의 프로필 사진 — 안 열리면 이니셜로 물러난다(components/ui/avatar-image.tsx) */}
+        <AvatarImage src={s.avatarUrl} initial={initial} sizeClass="size-12" textClass="text-[17px]" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[17px] font-semibold leading-snug">
             {s.displayName || (s.signedIn ? "이름을 설정해 주세요" : "핀치")}
           </p>
+          {/* «로그인하면 된다»고 약속하지 않는다 — 예시 화면 여부는 배포 설정이라 로그인과 무관하다 */}
           <p className="truncate text-[14px] text-fg-sub">
-            {s.email ??
-              (s.signedIn ? "이메일 없음" : "지금은 예시 화면이에요 — 로그인하면 내 계정이 표시됩니다")}
+            {s.email ?? (s.signedIn ? "이메일 없음" : "지금은 예시 화면이에요")}
           </p>
         </div>
         {planName ? (
@@ -235,7 +238,7 @@ export default async function SettingsHubPage({
         <p className="px-1 text-[14px] text-fg-sub">
           예시 화면에서는 설정을 저장할 수 없어요.{" "}
           <Link href="/login" className="font-semibold text-primary underline underline-offset-2">
-            로그인
+            로그인 화면
           </Link>
         </p>
       )}

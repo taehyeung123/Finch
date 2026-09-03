@@ -310,6 +310,10 @@ PART 3 각주와 PART 4.5 가 «제휴 데이터 공급사 배지를 붙이라»
 
 ### 4.2 계정 연동 관리 (설정)
 
+> **재구성 기록 (2026-09-03)** — 설정을 링크팜 계정 화면 문법의 **허브**(`/settings`)로 바꿨다: 항목 하나가 페이지 하나다
+> (개인정보 · 연결된 로그인 계정 · 화면 테마 · SNS 계정 연결 · 알림 설정 · 팀 · 플랜 관리 · 결제수단 관리 · 약관/방침 · 사업자 정보).
+> 아래 «계정 연동 관리»는 그중 **SNS 계정 연결**(`/settings/channels`) 한 항목이 됐다. 목록의 정본은 `lib/settings/sections.ts`, 사이트맵은 PART 5.
+
 - **목적**: 내 SNS 계정·광고 계정을 연동/해제하는 설정 화면.
 - **핵심 UI 요소**
   - 채널별 연동 카드(Instagram/TikTok/Threads/Meta 광고 계정) — 연동 상태, 재연동(토큰 만료 시), 해제 버튼
@@ -486,11 +490,17 @@ PART 3 각주와 PART 4.5 가 «제휴 데이터 공급사 배지를 붙이라»
 │    └── 아이디어 추천
 ├── 리포트                     /reports
 ├── 알림                      /notifications
-└── 설정                      /settings
-     ├── 계정 연동 관리
-     ├── 팀 워크스페이스
-     ├── 요금제 · 결제
-     └── 알림 설정
+└── 계정 및 설정 (허브)         /settings            ← 2026-09-03 재구성: 항목 하나 = 페이지 하나 (lib/settings/sections.ts 가 정본)
+     ├── 개인정보                /settings/profile
+     ├── 연결된 로그인 계정      /settings/logins
+     ├── 화면 테마               /settings/appearance
+     ├── SNS 계정 연결           /settings/channels   (구 /settings — 채널·Meta 광고 연동)
+     ├── 알림 설정               /settings/notifications (+ 마케팅 수신 동의)
+     ├── 팀                      /settings/team
+     ├── 플랜 관리               /settings/billing
+     ├── 결제수단 관리           /settings/billing/payment
+     ├── 이용약관 · 개인정보처리방침  /settings/legal/terms · /settings/legal/privacy (본문은 /terms·/privacy 와 공유)
+     └── 사업자 정보 · 내 동의 기록  /settings/legal
 
 (전 페이지 공통 · 플로팅) AI 에이전트 챗 패널
 ```
