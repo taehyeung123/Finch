@@ -167,7 +167,9 @@ function applySecurityHeaders(response: NextResponse, publicLink = false) {
     `img-src 'self' data: blob: https: ${toss} ${igCdn} ${tiktokCdn}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
     `connect-src 'self' https://dapi.kakao.com ${toss}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}${gaConnect}${trackerConnect}`,
     /* 우편번호 임베드는 실측상 postcode.map.kakao.com 을 프레이밍한다(구 daum.net 도 함께 허용) */
-    `frame-src ${toss} ${youtube} ${musicEmbeds} https://postcode.map.daum.net https://postcode.map.kakao.com`,
+    /* 메타 광고 미리보기 iframe(generatepreviews) — **경로까지** 좁혀 앱 화면에만 연다(공개 프로필엔 열 이유가 없다, 스펙 §13-18).
+       리다이렉트로 web./m.facebook.com 이 나오면 그때 넓힌다(실측 항목 §11-12). */
+    `frame-src ${toss} ${youtube} ${musicEmbeds} https://postcode.map.daum.net https://postcode.map.kakao.com${publicLink ? "" : " https://www.facebook.com/ads/api/preview_iframe.php"}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",

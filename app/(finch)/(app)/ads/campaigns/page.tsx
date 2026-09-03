@@ -190,13 +190,7 @@ export default async function CampaignsPage({
                             {c.spend === null ? "—" : formatMoney(c.spend, currency)}
                           </td>
                           <td className="py-3 pl-3 text-right">
-                            <CampaignRowActions
-                              campaignId={c.id}
-                              name={c.name}
-                              status={c.status}
-                              dailyBudget={c.dailyBudget}
-                              currency={currency}
-                            />
+                            <CampaignRowActions campaignId={c.id} name={c.name} status={c.status} />
                           </td>
                         </tr>
                       );

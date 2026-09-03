@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { AlertTriangle, ArrowLeft, Layers, Megaphone, ShieldAlert } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, Layers, Megaphone, Plus, ShieldAlert } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,12 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { ButtonLink } from "@/components/ui/button";
 import { IS_SAMPLE_DATA } from "@/lib/data";
-import { getCampaignTree, type CampaignTreeState } from "@/lib/data/ads";
+import { getAdsWriteContext, getCampaignTree, type CampaignTreeState } from "@/lib/data/ads";
+import { getFinchCreatedChildren } from "@/lib/ads/finch-children";
+import { ConfirmSubmit } from "@/components/ui/confirm-submit";
+import { pauseCampaignFromDetailAction } from "@/app/(finch)/(app)/ads/tree-status-actions";
+import { ActivateTreeModal } from "./_components/activate-tree-modal";
+import { ChildStatusButton } from "./_components/child-status-button";
 import type { FbAd, FbAdSet, FbAdSetTargetingSummary } from "@/lib/meta/ads-tree";
 import {
   bidStrategyLabel,
@@ -20,7 +25,8 @@ import {
   optimizationGoalLabel,
   statusLabel,
 } from "@/lib/ads/meta-labels";
-import { SPECIAL_AD_CATEGORY_LABELS } from "@/lib/ads/campaign-rules";
+import { adsWriteMessage, SPECIAL_AD_CATEGORY_LABELS } from "@/lib/ads/campaign-rules";
+import { adsetSpecFor } from "@/lib/ads/adset-rules";
 import { formatDate, formatMoney } from "@/lib/format";
 
 /*
@@ -117,7 +123,13 @@ function NotOk({ tree }: { tree: Exclude<CampaignTreeState, { state: "ok" | "not
   return <EmptyState icon={Megaphone} title="아직 연결한 광고 계정이 없어요" description="메타 광고 계정을 연결하면 캠페인 내용을 볼 수 있어요." action={back} />;
 }
 
-function AdSetsCard({ adsets, currency }: { adsets: FbAdSet[] | null; currency: string | null }) {
+/** 행의 켜기/끄기에 필요한 것 — 쓰기 권한이 없으면(viewer·데모) 열이 아예 안 나온다 */
+interface RowControl {
+  campaignId: string;
+  campaignActive: boolean;
+}
+
+function AdSetsCard({ adsets, currency, control }: { adsets: FbAdSet[] | null; currency: string | null; control: RowControl | null }) {
   return (
     <Card>
       <CardHeader
@@ -176,6 +188,11 @@ function AdSetsCard({ adsets, currency }: { adsets: FbAdSet[] | null; currency: 
                           ? `총 ${formatMoney(a.lifetimeBudget, currency)}`
                           : <span className="text-fg-sub">캠페인 예산</span>}
                     </td>
+                    {control ? (
+                      <td className="whitespace-nowrap py-3 pl-3 text-right">
+                        <ChildStatusButton kind="adset" objectId={a.id} campaignId={control.campaignId} name={a.name} status={a.status} campaignActive={control.campaignActive} />
+                      </td>
+                    ) : null}
                   </tr>
                 );
               })}
@@ -188,7 +205,7 @@ function AdSetsCard({ adsets, currency }: { adsets: FbAdSet[] | null; currency: 
   );
 }
 
-function AdsCard({ ads, adsets }: { ads: FbAd[] | null; adsets: FbAdSet[] | null }) {
+function AdsCard({ ads, adsets, control }: { ads: FbAd[] | null; adsets: FbAdSet[] | null; control: RowControl | null }) {
   const adsetName = new Map((adsets ?? []).map((a) => [a.id, a.name]));
   const pending = (ads ?? []).filter((a) => a.effectiveStatus === "PENDING_REVIEW").length;
   const disapproved = (ads ?? []).filter((a) => a.effectiveStatus === "DISAPPROVED").length;
@@ -269,6 +286,14 @@ function AdsCard({ ads, adsets }: { ads: FbAd[] | null; adsets: FbAdSet[] | null
                     <td className="tnum whitespace-nowrap py-3 text-[14px] text-fg-sub">
                       {ad.createdTime ? formatDate(ad.createdTime) : "—"}
                     </td>
+                    {control ? (
+                      <td className="whitespace-nowrap py-3 pl-3 text-right">
+                        {/* 거부된 광고는 켜도 노출되지 않는다 — 버튼을 주지 않는다(사유는 광고 관리자에서) */}
+                        {ad.effectiveStatus === "DISAPPROVED" ? null : (
+                          <ChildStatusButton kind="ad" objectId={ad.id} campaignId={control.campaignId} name={ad.name} status={ad.status} campaignActive={control.campaignActive} />
+                        )}
+                      </td>
+                    ) : null}
                   </tr>
                 );
               })}
@@ -281,11 +306,62 @@ function AdsCard({ ads, adsets }: { ads: FbAd[] | null; adsets: FbAdSet[] | null
   );
 }
 
-export default async function CampaignDetailPage({ params }: { params: Promise<{ campaignId: string }> }) {
+/** 마법사가 돌아올 때 붙이는 결과 배너 — 코드만 URL 로 나른다(문구는 ADS_WRITE_MESSAGES 단일 출처) */
+function ResultBanner({ created, write, code }: { created?: string; write?: string; code?: string }) {
+  if (created === "ad") {
+    return (
+      <p role="status" className="flex items-start gap-2 rounded-card bg-positive-weak p-3 text-[14px] text-positive-strong">
+        <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
+        <span>
+          광고 세트와 광고가 일시중지 상태로 만들어졌어요. 심사는 바로 시작돼요(보통 24시간 안). 노출을 시작하려면 캠페인 목록에서 «게재 시작»을 눌러 주세요.
+        </span>
+      </p>
+    );
+  }
+  if (created === "partial_created" || created === "create_unverified") {
+    return (
+      <p role="alert" className="flex items-start gap-2 rounded-card bg-warning-weak p-3 text-[14px] text-warning-strong">
+        <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+        <span>{adsWriteMessage(created)}</span>
+      </p>
+    );
+  }
+  if (write === "error") {
+    return (
+      <p role="alert" className="rounded-card bg-negative-weak p-3 text-[14px] text-negative-strong">
+        {adsWriteMessage(code)}
+      </p>
+    );
+  }
+  const done: Record<string, string> = {
+    activated: "캠페인 게재를 시작했어요. 승인된 광고부터 노출이 시작되고 비용이 발생해요.",
+    paused: "캠페인을 일시중지했어요. 하위 광고 세트·광고도 함께 멈춰요.",
+    child_activated: "켰어요. 캠페인이 게재 중이면 바로 노출돼요.",
+    child_paused: "일시중지했어요.",
+  };
+  if (write && done[write]) {
+    return (
+      <p role="status" className="flex items-start gap-2 rounded-card bg-positive-weak p-3 text-[14px] text-positive-strong">
+        <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
+        <span>{done[write]}</span>
+      </p>
+    );
+  }
+  return null;
+}
+
+export default async function CampaignDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ campaignId: string }>;
+  searchParams: Promise<{ created?: string; write?: string; code?: string }>;
+}) {
   /* 데모에는 «진짜 캠페인»이 없다 — 목록(마법사)로 돌려보낸다 */
   if (IS_SAMPLE_DATA) redirect("/ads/campaigns");
 
   const { campaignId } = await params;
+  const sp = await searchParams;
   /* URL 조각을 그대로 Graph 경로에 보간하지 않는다 — 숫자만(캠페인 상태 액션과 같은 규칙) */
   if (!/^\d{1,30}$/.test(campaignId)) notFound();
 
@@ -308,9 +384,21 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   const { campaign, adsets, ads, selected } = tree;
   const currency = selected.currency;
   const st = statusLabel(campaign.effectiveStatus, campaign.status);
+
+  /* 쓰기 권한 — viewer·미동의·만료면 제어 버튼을 그리지 않는다(예의). 관문은 서버 액션이다(§1.1) */
+  const wctx = await getAdsWriteContext();
+  const canWrite = wctx.state === "ok";
+  const control: RowControl | null = canWrite ? { campaignId: campaign.id, campaignActive: campaign.status === "ACTIVE" } : null;
+  /* 게재 시작 모달 — 하위를 못 읽었으면(null) 그리지 않는다: 돈 경로는 fail-closed(§1.5) */
+  const finch = canWrite && adsets !== null && ads !== null ? await getFinchCreatedChildren(wctx.ownerId, wctx.adAccountId, campaign.id) : null;
+  const adCountByAdset = new Map<string, number>();
+  for (const a of ads ?? []) if (a.adsetId) adCountByAdset.set(a.adsetId, (adCountByAdset.get(a.adsetId) ?? 0) + 1);
   const categories = campaign.specialAdCategories.map(
     (c) => (SPECIAL_AD_CATEGORY_LABELS as Record<string, string>)[c] ?? c,
   );
+  /* «광고 만들기» — 일시중지 캠페인 + 핀치가 만들 수 있는 목표일 때만(§1.1). 게재 중 캠페인에 덧붙이기는 2차.
+     viewer 도 버튼은 본다 — 서버 액션이 유일한 관문이고, 마법사 입구가 역할을 문구로 말한다 */
+  const canCreateAd = campaign.status !== "ACTIVE" && adsetSpecFor(campaign.objective) !== null;
 
   return (
     <div className="space-y-6">
@@ -326,13 +414,54 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
           title={campaign.name}
           description={`${objectiveLabel(campaign.objective)} · ${selected.name ?? "광고 계정"}`}
           action={
-            <Badge tone={st.tone}>
-              <span className="size-1.5 rounded-full bg-current" aria-hidden />
-              {st.label}
-            </Badge>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={st.tone}>
+                <span className="size-1.5 rounded-full bg-current" aria-hidden />
+                {st.label}
+              </Badge>
+              {canCreateAd ? (
+                <ButtonLink href={`/ads/campaigns/${campaign.id}/ads/new`} size="sm" variant="secondary">
+                  <Plus className="size-4" aria-hidden />
+                  광고 만들기
+                </ButtonLink>
+              ) : adsetSpecFor(campaign.objective) === null ? (
+                <span className="text-[12px] text-fg-sub">{adsWriteMessage("campaign_objective_unsupported")}</span>
+              ) : null}
+              {control && campaign.status === "ACTIVE" ? (
+                <ConfirmSubmit
+                  action={pauseCampaignFromDetailAction}
+                  hiddenFields={{ campaignId: campaign.id }}
+                  title="캠페인 일시중지"
+                  description={`«${campaign.name}» 캠페인의 게재를 멈춰요. 하위 광고 세트·광고도 함께 멈추고, 언제든 다시 시작할 수 있어요.`}
+                  confirmLabel="일시중지"
+                  confirmVariant="primary"
+                  pendingLabel="중지 중…"
+                  trigger="일시중지"
+                  triggerVariant="secondary"
+                />
+              ) : null}
+              {control && campaign.status === "PAUSED" && finch && adsets !== null && ads !== null ? (
+                <ActivateTreeModal
+                  campaignId={campaign.id}
+                  campaignName={campaign.name}
+                  dailyBudget={campaign.dailyBudget}
+                  currency={currency}
+                  adsets={adsets
+                    .filter((a) => (adCountByAdset.get(a.id) ?? 0) > 0)
+                    .map((a) => ({ id: a.id, name: a.name, status: a.status, effectiveStatus: a.effectiveStatus }))}
+                  ads={ads.map((a) => ({ id: a.id, name: a.name, status: a.status, effectiveStatus: a.effectiveStatus, adsetId: a.adsetId }))}
+                  finchAdsetIds={[...finch.adsetIds]}
+                  finchAdIds={[...finch.adIds]}
+                />
+              ) : control && campaign.status === "PAUSED" ? (
+                <span className="text-[12px] text-fg-sub">{adsWriteMessage("campaign_unverified")}</span>
+              ) : null}
+            </div>
           }
         />
       </div>
+
+      <ResultBanner created={sp.created} write={sp.write} code={sp.code} />
 
       {/* 요약 — 예산·입찰·카테고리·만든 날. 상태 전환은 목록의 행 버튼이 맡는다(다음 슬라이스에서 여기로 온다) */}
       <Card>
@@ -364,8 +493,8 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
         </CardBody>
       </Card>
 
-      <AdSetsCard adsets={adsets} currency={currency} />
-      <AdsCard ads={ads} adsets={adsets} />
+      <AdSetsCard adsets={adsets} currency={currency} control={control} />
+      <AdsCard ads={ads} adsets={adsets} control={control} />
     </div>
   );
 }

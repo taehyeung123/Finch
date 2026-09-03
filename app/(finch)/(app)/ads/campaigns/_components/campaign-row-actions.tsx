@@ -1,15 +1,15 @@
 "use client";
 
 import { ConfirmSubmit } from "@/components/ui/confirm-submit";
-import { formatMoney } from "@/lib/format";
+import { ButtonLink } from "@/components/ui/button";
 import { setCampaignStatusAction } from "../actions";
 
 /*
-  캠페인 행 동작 — 게재 시작(ACTIVE)·일시중지(PAUSED).
+  캠페인 행 동작 — 일시중지(PAUSED)는 여기서, 게재 시작은 **상세 화면**에서.
 
-  ⚠️ ACTIVE 전환은 이 MVP 에서 돈이 나갈 수 있는 유일한 경로다(소재가 붙은 기존 캠페인).
-  그래서 확인 모달 설명에 **캠페인 이름 + 일 예산 + 통화**를 그대로 박는다 —
-  ConfirmSubmit 주석의 «무엇이 일어나는지»가 여기서는 «비용이 발생하기 시작한다»이다.
+  ⚠️ ACTIVE 전환은 돈이 나가는 경로다. 2단계부터 «게재 시작»은 하위(광고 세트·광고)의 실제 상태·심사를
+  읽은 뒤 «함께 켜기»를 고르는 데이터 기반 모달이 맡는다(스펙 §1.5) — 그 데이터는 상세 화면이 이미 갖고 있고,
+  목록에서 캠페인마다 하위를 읽으면 레이트리밋을 태운다. 그래서 목록의 버튼은 상세로 보내는 링크다.
   일시중지는 반대로 가볍게 — 끄는 걸 어렵게 만드는 쪽이 더 위험하다.
 */
 
@@ -17,15 +17,11 @@ export function CampaignRowActions({
   campaignId,
   name,
   status,
-  dailyBudget,
-  currency,
 }: {
   campaignId: string;
   name: string;
   /** Meta 원문 status (ACTIVE·PAUSED·ARCHIVED…) — 전환 버튼은 두 상태에서만 나온다 */
   status: string | null;
-  dailyBudget: number | null;
-  currency: string | null;
 }) {
   if (status === "ACTIVE") {
     return (
@@ -43,21 +39,10 @@ export function CampaignRowActions({
     );
   }
   if (status === "PAUSED") {
-    const budgetLine =
-      dailyBudget !== null && currency
-        ? ` 하루 최대 ${formatMoney(dailyBudget, currency)}까지 매일 지출될 수 있어요.`
-        : "";
     return (
-      <ConfirmSubmit
-        action={setCampaignStatusAction}
-        hiddenFields={{ campaignId, status: "ACTIVE" }}
-        title="게재 시작 — 비용이 발생해요"
-        description={`«${name}» 캠페인을 켜요. 이 캠페인에 광고 세트·소재가 붙어 있다면 즉시 게재가 시작되고 비용이 발생해요.${budgetLine}`}
-        confirmLabel="게재 시작"
-        pendingLabel="시작 중…"
-        trigger="게재 시작"
-        triggerVariant="primary"
-      />
+      <ButtonLink href={`/ads/campaigns/${campaignId}?focus=activate`} size="sm" variant="primary">
+        게재 시작
+      </ButtonLink>
     );
   }
   return null;

@@ -259,6 +259,29 @@ export async function fetchAds(campaignId: string, accessToken: string): Promise
 
 /* ── 계정 단위 심사 요약(목록 배지용) ─────────────────────────────── */
 
+export interface FbObjectOwner {
+  /** act_ 접두 없는 숫자 — 선택 계정과 대조한다 */
+  accountId: string | null;
+  campaignId: string | null;
+  /** 광고에만 있다 */
+  adsetId: string | null;
+}
+
+/**
+ * 광고 세트·광고의 소속 — 상태를 바꾸기 전 **소유 대조**용(스펙 §7.1 표). 실패는 null(fail-closed 는 호출측).
+ * 종류별로 필드를 달리 묻는다 — 광고 세트에 adset_id 를 물으면 Graph 가 «없는 필드»로 통째 거절한다.
+ */
+export async function fetchObjectOwner(kind: "adset" | "ad", objectId: string, accessToken: string): Promise<FbObjectOwner | null> {
+  try {
+    const fields = kind === "ad" ? "account_id,campaign_id,adset_id" : "account_id,campaign_id";
+    const j = await fbGet<{ account_id?: string; campaign_id?: string; adset_id?: string }>(`/${objectId}?fields=${fields}`, accessToken);
+    return { accountId: str(j.account_id), campaignId: str(j.campaign_id), adsetId: str(j.adset_id) };
+  } catch (e) {
+    console.error("[meta-ads] 객체 소속 확인 실패:", e instanceof Error ? e.message : String(e));
+    return null;
+  }
+}
+
 export interface AdReviewSummary {
   total: number;
   pendingReview: number;
