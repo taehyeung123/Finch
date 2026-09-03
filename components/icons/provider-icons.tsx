@@ -27,6 +27,32 @@ export function GoogleIcon({ className }: { className?: string }) {
   );
 }
 
+/**
+ * 로그인 제공자 타일 — 설정 화면의 행·요약 카드가 같은 모양을 쓴다(2026-09-03).
+ * 구글은 흰 판(plate) 위 4색 G, 카카오는 노란 판 위 말풍선. 겹침 미니 타일(≤20px)은 border-2 border-body 로 분리한다.
+ */
+export function ProviderTile({
+  provider,
+  size = 40,
+  className,
+}: {
+  provider: "google" | "kakao";
+  size?: number;
+  className?: string;
+}) {
+  const round = size <= 20 ? "rounded-[35%]" : "rounded-card";
+  const face = provider === "google" ? "bg-plate" : "bg-kakao text-on-kakao";
+  return (
+    <span
+      className={["flex shrink-0 items-center justify-center", round, face, className ?? ""].join(" ")}
+      style={{ width: size, height: size }}
+      aria-hidden
+    >
+      {provider === "google" ? <GoogleIcon className="size-[50%]" /> : <KakaoIcon className="size-[55%]" />}
+    </span>
+  );
+}
+
 /** 카카오 말풍선 심볼 — 버튼의 text-on-kakao 색을 currentColor로 상속 */
 export function KakaoIcon({ className }: { className?: string }) {
   return (

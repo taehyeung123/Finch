@@ -19,9 +19,12 @@ import { Button } from "./button";
 export function LoadFailed({
   title,
   description = "서버와 잠시 연결이 끊겼어요. 자료는 그대로 있으니 다시 시도해 주세요.",
+  dense = false,
 }: {
   title: string;
   description?: string;
+  /** 카드 안 목록의 실패 — 여백을 줄인다 */
+  dense?: boolean;
 }) {
   const router = useRouter();
   return (
@@ -29,8 +32,11 @@ export function LoadFailed({
       icon={AlertTriangle}
       title={title}
       description={description}
+      dense={dense}
+      /* 실선 — 점선 상자는 «아직 없음»의 모양이라 실패에 쓰면 뜻이 뒤집힌다 */
+      className="border-solid"
       action={
-        <Button variant="secondary" onClick={() => router.refresh()}>
+        <Button variant="secondary" size={dense ? "sm" : "md"} onClick={() => router.refresh()}>
           다시 시도
         </Button>
       }

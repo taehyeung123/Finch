@@ -28,10 +28,13 @@ const radioBase = "flex w-full items-center gap-3 rounded-card border px-3.5 py-
 export function AdPublisherPicker({
   current,
   triggerLabel = "광고 페이지 선택",
+  changeLabel = "게시 주체 변경",
   onSaved,
 }: {
   current: { pageName: string | null; igUsername: string | null } | null;
   triggerLabel?: string;
+  /** 이미 골라 둔 상태의 버튼 문구 — 설정 행처럼 좁은 자리는 «변경» */
+  changeLabel?: string;
   /** 마법사 ② 가 저장 결과를 바로 반영할 때 */
   onSaved?: (v: { pageName: string; igUsername: string | null }) => void;
 }) {
@@ -108,7 +111,7 @@ export function AdPublisherPicker({
   return (
     <>
       <Button type="button" variant="secondary" size="sm" onClick={openPicker}>
-        {current ? "게시 주체 변경" : triggerLabel}
+        {current ? changeLabel : triggerLabel}
       </Button>
 
       {open ? (

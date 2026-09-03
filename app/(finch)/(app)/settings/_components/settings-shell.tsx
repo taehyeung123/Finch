@@ -29,22 +29,23 @@ export function SettingsBack() {
   );
 }
 
+/** 설정 한 기둥 폭 — 허브와 하위 페이지가 같은 값을 써서 오갈 때 기둥이 1px 도 안 움직인다 */
+export const SETTINGS_COLUMN = "mx-auto w-full max-w-4xl space-y-6";
+
 export function SettingsShell({
   title,
   description,
   action,
-  width = "md",
   children,
 }: {
   title: string;
   description?: React.ReactNode;
   action?: React.ReactNode;
-  /** md = 폼·카드 한 기둥(56rem) · lg = 2단 카드 화면(64rem) */
-  width?: "md" | "lg";
   children: React.ReactNode;
 }) {
+  /* 폭 옵션(lg)은 2026-09-03 재설계에서 뺐다 — 2단 카드 화면이던 채널 연결도 한 기둥 행 목록이 됐다 */
   return (
-    <div className={cn("mx-auto w-full space-y-6", width === "lg" ? "max-w-5xl" : "max-w-4xl")}>
+    <div className={cn(SETTINGS_COLUMN)}>
       <div className="space-y-2">
         <SettingsBack />
         <PageHeader title={title} description={description} action={action} />

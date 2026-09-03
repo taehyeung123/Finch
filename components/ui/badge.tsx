@@ -9,12 +9,14 @@ const badgeBase =
 
 type Tone = "neutral" | "primary" | "positive" | "negative" | "warning";
 
+/* 색면 위 12px 글자는 **-ink / -strong** 계열이다. 원색(text-primary 등)은 약한 색면 위에서 4.3~4.4:1 로
+   AA 를 못 넘겼다(globals.css 의 --primary-ink 주석 실측). 2026-09-03 설정 재설계에서 한 번에 고쳤다. */
 const tones: Record<Tone, string> = {
   neutral: "bg-overlay text-fg-sub border border-line",
-  primary: "bg-primary-weak text-primary",
-  positive: "bg-positive-weak text-positive",
-  negative: "bg-negative-weak text-negative",
-  warning: "bg-warning-weak text-warning",
+  primary: "bg-primary-weak text-primary-ink",
+  positive: "bg-positive-weak text-positive-strong",
+  negative: "bg-negative-weak text-negative-strong",
+  warning: "bg-warning-weak text-warning-strong",
 };
 
 export function Badge({

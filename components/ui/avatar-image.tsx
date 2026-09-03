@@ -44,7 +44,8 @@ export function AvatarImage({
   return (
     <span
       className={cn(
-        "flex shrink-0 items-center justify-center rounded-chip bg-primary-weak font-bold text-primary",
+        /* 이니셜은 primary-ink — 약한 코랄 면 위 원색 코랄은 AA 미달(Badge 와 같은 수리, 2026-09-03) */
+        "flex shrink-0 items-center justify-center rounded-chip bg-primary-weak font-bold text-primary-ink",
         sizeClass,
         textClass,
       )}

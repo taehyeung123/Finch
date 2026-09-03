@@ -8,7 +8,16 @@ import { cn } from "@/lib/cn";
  * "?" 아이콘 팝오버 — 자체 산출 지표의 계산 근거 설명용 (PRD 4.4 스코어링 등).
  * 자체 추정치를 표시하는 지표 옆에 반드시 함께 배치한다.
  */
-export function InfoTip({ children, className }: { children: React.ReactNode; className?: string }) {
+export function InfoTip({
+  children,
+  className,
+  label = "지표 설명 보기",
+}: {
+  children: React.ReactNode;
+  className?: string;
+  /** 스크린리더 이름 — 지표가 아닌 자리(«프로필 사진 설명 보기» 등)에서 바꾼다 */
+  label?: string;
+}) {
   const [open, setOpen] = useState(false);
   const tip = useRef<HTMLSpanElement>(null);
   const id = useId();
@@ -41,7 +50,7 @@ export function InfoTip({ children, className }: { children: React.ReactNode; cl
         type="button"
         aria-expanded={open}
         aria-controls={id}
-        aria-label="지표 설명 보기"
+        aria-label={label}
         /* 보이는 크기는 14px 그대로 두고 **클릭 판정만** 넓힌다 — 14×14 는 WCAG 2.2 최소(24×24) 미달이라
            모바일에서 조준 자체가 어려웠다(실측). 저장소의 버튼이 쓰는 after 확장과 같은 수법이다. */
         className="trans-state relative text-fg-faint after:absolute after:-inset-[5px] after:content-[''] hover:text-fg-sub"
