@@ -25,7 +25,7 @@ const STATE_COOKIE = "th_oauth_state";
 
 function settingsRedirect(origin: string, params: Record<string, string>): NextResponse {
   const q = new URLSearchParams(params).toString();
-  return NextResponse.redirect(`${origin}/settings?${q}`);
+  return NextResponse.redirect(`${origin}/settings/channels?${q}`);
 }
 
 export async function GET(request: Request) {
@@ -65,7 +65,7 @@ export async function GET(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.redirect(`${origin}/login?next=/settings`);
+    return NextResponse.redirect(`${origin}/login?next=/settings/channels`);
   }
 
   const config = getThreadsOAuthConfig();

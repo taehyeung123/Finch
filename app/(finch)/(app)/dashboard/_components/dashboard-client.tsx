@@ -168,7 +168,7 @@ export function DashboardClient({
             {disconnected.map((a) => CHANNEL_LABEL[a.channel]).join(", ")} 계정이 아직 연동되지
             않았어요. 연동하면 3채널을 함께 볼 수 있습니다.
           </p>
-          <ButtonLink href="/settings" size="sm" variant="secondary">
+          <ButtonLink href="/settings/channels" size="sm" variant="secondary">
             계정 연동 관리
           </ButtonLink>
         </Card>
@@ -315,7 +315,7 @@ export function DashboardClient({
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-[17px] font-semibold leading-snug">내 계정</h2>
           <Link
-            href="/settings"
+            href="/settings/channels"
             className="inline-flex items-center gap-1 text-[14px] font-semibold text-primary hover:text-primary-hover"
           >
             설정에서 관리 <ArrowRight className="size-3.5" aria-hidden />
@@ -408,7 +408,7 @@ export function DashboardClient({
                 ) : null}
                 {!a.connected ? (
                   <div className="mt-auto pt-4">
-                    <ButtonLink href="/settings" size="sm" variant="secondary" className="w-full">
+                    <ButtonLink href="/settings/channels" size="sm" variant="secondary" className="w-full">
                       연동하기
                     </ButtonLink>
                   </div>
@@ -422,7 +422,7 @@ export function DashboardClient({
             title="연동된 계정이 없습니다"
             description="Instagram, TikTok, Threads 계정을 연동하면 채널별 지표를 한눈에 볼 수 있어요."
             action={
-              <ButtonLink href="/settings" size="sm">
+              <ButtonLink href="/settings/channels" size="sm">
                 계정 연동하기
               </ButtonLink>
             }

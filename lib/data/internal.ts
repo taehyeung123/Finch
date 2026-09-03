@@ -199,6 +199,8 @@ export interface PaymentOrderView {
   status: "paid" | "failed" | "canceled";
   approvedAt: string | null;
   createdAt: string;
+  /** 토스 영수증 URL — 승인 원본(raw.receipt.url)에서 꺼낸다. 없으면 null */
+  receiptUrl: string | null;
 }
 
 /**
@@ -209,9 +211,10 @@ export async function getPaymentOrders(): Promise<PaymentOrderView[] | null> {
   if (isDemoMode()) return [];
   const { supabase, user } = await getUser();
   if (!user) return [];
+  /* receipt_url — jsonb 경로 선택(raw->receipt->>url). raw 는 0005 부터 있던 컬럼이라 별도 폴백은 없다 */
   const { data, error } = await supabase
     .from("payment_orders")
-    .select("id, plan, order_name, amount, status, approved_at, created_at")
+    .select("id, plan, order_name, amount, status, approved_at, created_at, receipt_url:raw->receipt->>url")
     .neq("status", "ready")
     .order("created_at", { ascending: false })
     .limit(20);
@@ -219,15 +222,29 @@ export async function getPaymentOrders(): Promise<PaymentOrderView[] | null> {
     console.error("[internal] 결제 내역 조회 실패:", error.message);
     return null;
   }
-  return (data ?? []).map((r) => ({
-    id: r.id,
-    plan: r.plan,
-    orderName: r.order_name,
-    amount: r.amount,
-    status: r.status as PaymentOrderView["status"],
-    approvedAt: r.approved_at,
-    createdAt: r.created_at,
-  }));
+  return (data ?? []).map((r) => {
+    const row = r as {
+      id: string;
+      plan: string;
+      order_name: string;
+      amount: number;
+      status: string;
+      approved_at: string | null;
+      created_at: string;
+      receipt_url?: unknown;
+    };
+    return {
+      id: row.id,
+      plan: row.plan,
+      orderName: row.order_name,
+      amount: row.amount,
+      status: row.status as PaymentOrderView["status"],
+      approvedAt: row.approved_at,
+      createdAt: row.created_at,
+      receiptUrl:
+        typeof row.receipt_url === "string" && /^https:\/\//.test(row.receipt_url) ? row.receipt_url : null,
+    };
+  });
 }
 
 /* ── 리포트 ───────────────────────────────────────────────── */

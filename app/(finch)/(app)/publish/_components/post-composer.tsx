@@ -231,7 +231,7 @@ export function PostComposer({
             <Button variant="ghost" onClick={onClose}>
               닫기
             </Button>
-            <ButtonLink href="/settings">연동하러 가기</ButtonLink>
+            <ButtonLink href="/settings/channels">연동하러 가기</ButtonLink>
           </div>
         </div>
       </div>

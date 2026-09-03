@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Check, ExternalLink, ShieldCheck } from "lucide-react";
-import { PageHeader } from "@/components/ui/section-header";
 import { Card } from "@/components/ui/card";
 import { Badge, ChannelBadge } from "@/components/ui/badge";
 import { AppIconTile, MetaGlyph } from "@/components/icons/brand";
@@ -21,11 +20,13 @@ import {
   META_ADS_SCOPE_LABELS,
   isMetaAdsOAuthConfigured,
 } from "@/lib/meta/ads-oauth";
-import { SettingsNav } from "./_components/settings-nav";
+import { SettingsShell } from "../_components/settings-shell";
 import { disconnectAccount, disconnectMetaAds } from "./actions";
 
 /*
-  계정 연동 관리 (PRD PART 4.2)
+  SNS 계정 연결 (PRD PART 4.2) — 2026-09-03 /settings 에서 /settings/channels 로 옮겼다.
+  설정 첫 화면이 목록 허브가 되면서(lib/settings/sections.ts) 채널 연동은 항목 하나가 됐다.
+  OAuth 콜백·해제 액션의 되돌아오는 주소도 전부 여기로 바뀌었다(connect 쿼리 배너는 그대로).
   - 실 모드: Supabase connected_accounts에서 연동 상태를 읽고, 인스타그램·Threads·TikTok은 실제 OAuth로 연동/해제
   - 데모 모드: 목데이터로 화면 미리보기
   - TikTok은 심사 없이 확인된 범위가 기본 프로필(팔로워·좋아요·영상 수)뿐이라 카드에 별도 고지한다
@@ -340,10 +341,11 @@ export default async function SettingsPage({
   };
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="설정" description="채널 계정과 Meta 광고 계정의 연동 상태를 관리하세요." />
-      <SettingsNav />
-
+    <SettingsShell
+      title="SNS 계정 연결"
+      description="채널 계정과 Meta 광고 계정의 연동 상태를 관리하세요."
+      width="lg"
+    >
       {banner ? (
         <div
           className={
@@ -619,6 +621,6 @@ export default async function SettingsPage({
           </Link>
         </Card>
       ) : null}
-    </div>
+    </SettingsShell>
   );
 }

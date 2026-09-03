@@ -42,6 +42,7 @@ const ROUTES = [
   "/studio/brand",
   "/studio/works",
   "/settings",
+  "/settings/channels",
   "/settings/billing",
 ] as const;
 
@@ -51,7 +52,7 @@ async function buildAccountContext(): Promise<string> {
   try {
     const account = await getConnectedInstagramAccount();
     if (!account) {
-      return "사용자는 아직 인스타그램 계정을 연동하지 않았다. 연동(/settings)을 권하되 강요하지 말 것.";
+      return "사용자는 아직 인스타그램 계정을 연동하지 않았다. 연동(/settings/channels)을 권하되 강요하지 말 것.";
     }
     let insightsLine = "";
     const ctx = await getInstagramAccessContext();

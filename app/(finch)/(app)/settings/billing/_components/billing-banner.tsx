@@ -9,7 +9,16 @@ import { useRouter } from "next/navigation";
   새로고침마다 배너가 재표시되지 않도록 표시 직후 쿼리를 URL에서 제거한다.
   URL 정리로 props가 비어도 배너는 로컬 상태로 유지한다.
 */
-export function BillingBanner({ error, notice }: { error?: string | null; notice?: string | null }) {
+export function BillingBanner({
+  error,
+  notice,
+  path = "/settings/billing",
+}: {
+  error?: string | null;
+  notice?: string | null;
+  /** 쿼리를 지운 뒤 남길 주소 — 결제수단 화면(/settings/billing/payment)도 같은 배너를 쓴다 */
+  path?: string;
+}) {
   const router = useRouter();
   const [current, setCurrent] = useState<{ error?: string | null; notice?: string | null }>({ error, notice });
 
@@ -20,9 +29,9 @@ export function BillingBanner({ error, notice }: { error?: string | null; notice
 
   useEffect(() => {
     if (error || notice) {
-      router.replace("/settings/billing", { scroll: false });
+      router.replace(path, { scroll: false });
     }
-  }, [error, notice, router]);
+  }, [error, notice, path, router]);
 
   if (!current.error && !current.notice) return null;
   return (

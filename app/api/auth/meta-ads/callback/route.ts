@@ -28,7 +28,7 @@ const TAG = "meta-ads-oauth";
 const STATE_COOKIE = "meta_ads_oauth_state";
 
 function settingsRedirect(origin: string, params: Record<string, string>): NextResponse {
-  return NextResponse.redirect(`${origin}/settings?${new URLSearchParams(params).toString()}`);
+  return NextResponse.redirect(`${origin}/settings/channels?${new URLSearchParams(params).toString()}`);
 }
 
 export async function GET(request: Request) {
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.redirect(`${origin}/login?next=/settings`);
+    return NextResponse.redirect(`${origin}/login?next=/settings/channels`);
   }
 
   const config = getMetaAdsOAuthConfig();

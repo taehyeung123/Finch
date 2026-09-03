@@ -4,6 +4,7 @@ import { PromoBanner } from "@/components/landing/promo-banner";
 import { ButtonLink } from "@/components/ui/button";
 import { InstagramGlyph, MetaGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { businessFooterLines } from "@/lib/legal/business";
 
 /* 공개 마케팅 영역 — SEO/GEO 최우선 적용 (PART 13.1) */
 /*
@@ -180,8 +181,16 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             </ul>
           </div>
         </div>
-        <div className="border-t border-line py-5 text-center text-xs text-fg-sub">
-          © 2026 Finch. All rights reserved.
+        {/* 사업자 표시 — 전자상거래법 §10. 값은 lib/legal/business.ts 한 곳에서 읽고,
+            아직 없는 항목(등록 전)은 줄에서 빠진다. 공개 화면에 «예정» 을 늘어놓지 않는다. */}
+        {/* 패딩은 max-w 컨테이너 **안**에 — 위 칼럼 그리드와 왼쪽 정렬선을 맞춘다(바깥에 두면 넓은 화면에서 24px 어긋난다) */}
+        <div className="border-t border-line py-5 text-xs leading-relaxed text-fg-sub">
+          <div className="mx-auto max-w-6xl space-y-1 px-4 text-center md:px-6 md:text-left">
+            {businessFooterLines().map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+            <p>© 2026 Finch. All rights reserved.</p>
+          </div>
         </div>
       </footer>
     </div>

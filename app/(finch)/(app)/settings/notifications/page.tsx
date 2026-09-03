@@ -1,12 +1,47 @@
+import type { Metadata } from "next";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { LoadFailed } from "@/components/ui/load-failed";
+import { isMissingTableError } from "@/lib/supabase/errors";
+import { SettingsShell } from "../_components/settings-shell";
 import {
   DEFAULT_STATE,
   NotificationSettingsClient,
   type NotificationSettingsState,
   type RowKey,
 } from "./_components/notification-settings-client";
+import { MarketingConsentCard, type MarketingConsentState } from "./_components/marketing-consent-card";
+
+/** 마케팅 수신 동의 상태(0079 user_consents) — 조회 실패는 «없음»과 가른다 */
+async function loadMarketingConsent(): Promise<MarketingConsentState> {
+  if (isDemoMode()) return { kind: "demo" };
+  try {
+    const supabase = await createClient();
+    const user = await getAuthUser();
+    if (!user) return { kind: "none" };
+    const { data, error } = await supabase
+      .from("user_consents")
+      .select("marketing_email_at")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (error) {
+      if (isMissingTableError(error)) return { kind: "none" };
+      console.error("[notification-settings] 마케팅 동의 조회 실패:", error.message);
+      return { kind: "failed" };
+    }
+    if (!data) return { kind: "none" };
+    const at = (data as { marketing_email_at: string | null }).marketing_email_at;
+    return { kind: "ok", at: at ?? null };
+  } catch (e) {
+    console.error("[notification-settings] 마케팅 동의 조회 실패:", e);
+    return { kind: "failed" };
+  }
+}
+
+export const metadata: Metadata = {
+  title: "알림 설정",
+  robots: { index: false, follow: false },
+};
 
 /*
   알림 설정 — 서버에서 저장된 설정을 읽어 클라이언트에 전달.
@@ -20,6 +55,7 @@ import {
 export default async function NotificationSettingsPage() {
   let initial: NotificationSettingsState = DEFAULT_STATE;
   let loadFailed = false;
+  const marketingPromise = loadMarketingConsent();
 
   if (!isDemoMode()) {
     try {
@@ -59,14 +95,20 @@ export default async function NotificationSettingsPage() {
     }
   }
 
-  if (loadFailed) {
-    return (
-      <LoadFailed
-        title="알림 설정을 불러오지 못했어요"
-        description="지금 저장하면 기존 설정이 덮어써질 수 있어 화면을 잠시 막았어요. 다시 시도해 주세요."
-      />
-    );
-  }
+  const marketing = await marketingPromise;
 
-  return <NotificationSettingsClient initial={initial} />;
+  return (
+    <SettingsShell title="알림 설정" description="알림 유형별로 수신 경로를 선택하세요.">
+      {loadFailed ? (
+        <LoadFailed
+          title="알림 설정을 불러오지 못했어요"
+          description="지금 저장하면 기존 설정이 덮어써질 수 있어 화면을 잠시 막았어요. 다시 시도해 주세요."
+        />
+      ) : (
+        <NotificationSettingsClient initial={initial} />
+      )}
+      {/* 광고성 정보 수신 동의는 위 표와 **다른 동의**다 — 카드를 따로 둔다(marketing-consent-card.tsx 주석) */}
+      <MarketingConsentCard initial={marketing} />
+    </SettingsShell>
+  );
 }

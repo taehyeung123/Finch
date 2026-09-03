@@ -98,4 +98,18 @@ Authentication > **URL Configuration**:
 - 첫 로그인 후 Supabase 대시보드 > Table Editor > `users_profile`에 행이 자동 생성됐는지 확인 (0001 트리거)
 - 상단바 아바타 → 이메일 표시·로그아웃 / 로그아웃 상태에서 `/dashboard` 접근 시 `/login` 리다이렉트
 
+## E. 계정 연결(구글 + 카카오를 한 계정에) — 수동 연결 켜기
+
+설정 > **연결된 로그인 계정**(`/settings/logins`)의 「연결하기」는 Supabase `linkIdentity` 를 쓴다.
+이 기능은 대시보드에서 **수동 연결(manual linking)** 이 켜져 있어야 동작한다 — 꺼져 있으면 서버가
+`manual_linking_disabled` 로 거절하고 화면은 「지금은 계정 연결을 할 수 없어요」만 보여준다(고객에게 설정 이름을 말하지 않는다).
+
+1. Supabase 대시보드 > **Authentication > Settings**(또는 Sign In / Providers 상단의 일반 설정)
+2. **Allow manual linking** → ON → Save
+3. 확인: 구글로 로그인한 계정에서 `/settings/logins` → 카카오 「연결하기」 → 카카오 동의 → `/settings/logins?linked=kakao` 로 복귀,
+   두 행이 모두 「연결됨」. **연결 해제**는 identity 가 둘 이상일 때만 버튼이 보인다(마지막 하나는 서버도 거절한다 — `single_identity_not_deletable`).
+
+참고: 같은 이메일의 구글·카카오 계정은 Supabase 가 **자동으로** 한 사용자로 합친다(automatic linking, 이메일이 인증된 경우).
+수동 연결은 이메일이 다르거나 카카오가 이메일을 안 준 경우를 위한 것이다.
+
 배포(Vercel + 가비아 DNS)는 [`DEPLOY.md`](DEPLOY.md) 참고.

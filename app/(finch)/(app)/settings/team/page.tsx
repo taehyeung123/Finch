@@ -1,11 +1,10 @@
 import { FolderKanban, Link2 } from "lucide-react";
-import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { isDemoMode } from "@/lib/supabase/config";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { getWorkspaceOwnerId } from "@/lib/team";
-import { SettingsNav } from "../_components/settings-nav";
+import { SettingsShell } from "../_components/settings-shell";
 import { TeamClient, type TeamRowVM } from "./_components/team-client";
 
 /*
@@ -63,13 +62,7 @@ export default async function TeamSettingsPage() {
   const { isOwner, rows } = await loadTeamData();
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="설정"
-        description="팀 멤버와 역할을 관리하고 클라이언트와 협업하세요."
-      />
-      <SettingsNav />
-
+    <SettingsShell title="팀" description="팀 멤버와 역할을 관리하고 클라이언트와 협업하세요.">
       <Card>
         <CardHeader
           title="팀 멤버"
@@ -119,6 +112,6 @@ export default async function TeamSettingsPage() {
           </p>
         </Card>
       </section>
-    </div>
+    </SettingsShell>
   );
 }

@@ -7,7 +7,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { FinchLogo } from "@/components/logo";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/client";
-import { GoogleIcon, KakaoIcon } from "../_components/provider-icons";
+import { GoogleIcon, KakaoIcon } from "@/components/icons/provider-icons";
 
 /* 소셜 버튼 공통 — 브랜드 배경색 위 텍스트는 text-on-kakao(다크) 토큰 사용 */
 const socialButton =

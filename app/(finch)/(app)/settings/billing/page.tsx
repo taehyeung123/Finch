@@ -1,12 +1,9 @@
-import { AlertTriangle, CreditCard, FileClock } from "lucide-react";
-import { PageHeader } from "@/components/ui/section-header";
-import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import type { Metadata } from "next";
+import { AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { ConfirmSubmit } from "@/components/ui/confirm-submit";
-import { EmptyState } from "@/components/ui/empty-state";
-import { LoadFailed } from "@/components/ui/load-failed";
 import { formatDate, formatKRW } from "@/lib/format";
 import Link from "next/link";
 import { PLAN_CARDS, type PlanCardData } from "@/components/pricing/plan-cards";
@@ -15,21 +12,27 @@ import {
   getCurrentPlan,
   getPaymentOrders,
   getSubscription,
-  type PaymentOrderView,
   type PlanKey,
 } from "@/lib/data/internal";
-import { SettingsNav } from "../_components/settings-nav";
+import { SettingsShell } from "../_components/settings-shell";
 import { BillingBanner } from "./_components/billing-banner";
 import { CreditPanel } from "./_components/credit-panel";
 import { getCreditSummary } from "@/lib/data/credits";
 import { cancelPlanChange, cancelSubscription, changePlan, resumeSubscription } from "./actions";
 
+export const metadata: Metadata = {
+  title: "플랜 관리",
+  robots: { index: false, follow: false },
+};
+
 /*
-  요금제·사용량 (PRD PART 4.13 + PART 9 요금제 설계)
-  - 현재 플랜(users_profile.plan 실조회)·사용량 게이지·플랜 비교표·결제 내역(payment_orders)
-  - 결제는 Toss 단건 결제로 동작. 정기결제(자동 갱신)는 자동결제 별도 계약 후 제공 예정
+  플랜 관리 (PRD PART 4.13 + PART 9 요금제 설계)
+  - 현재 플랜(users_profile.plan 실조회)·크레딧·플랜 변경
+  - 2026-09-03 허브 재구성: 결제 내역·결제 수단은 「결제수단 관리」(./payment)로 갈라 나갔다.
+    이 화면에 온 사람의 질문은 «내 플랜이 뭐고 얼마 남았고 올릴까 내릴까»이고,
+    «카드가 뭐였지·영수증 어디 있지»는 다른 질문이라 다른 페이지다(링크팜 문법).
   - 2026-08-14 감사 반영: 금전·파괴적 액션은 ConfirmSubmit(금액·결과 명시) + 제출 중 pending 표시,
-    비교표에 월 요금 행 추가, 안내문은 hover title이 아닌 항상 보이는 텍스트로.
+    안내문은 hover title이 아닌 항상 보이는 텍스트로.
 */
 
 const PLAN_DEFS = [
@@ -41,12 +44,6 @@ const PLAN_DEFS = [
 ] as const;
 
 const PLAN_ORDER = PLAN_DEFS.map((p) => p.key);
-
-const ORDER_STATUS: Record<PaymentOrderView["status"], { label: string; tone: "positive" | "negative" | "neutral" }> = {
-  paid: { label: "결제 완료", tone: "positive" },
-  failed: { label: "실패", tone: "negative" },
-  canceled: { label: "취소됨", tone: "neutral" },
-};
 
 /** 현재 플랜은 목록에 아예 안 나온다(위/아래로만 가른다) — 그래서 "사용 중" 분기가 없다 */
 function PlanAction({
@@ -198,13 +195,7 @@ export default async function BillingSettingsPage({
   const downgrades = PLAN_CARDS.filter((p) => PLAN_ORDER.indexOf(p.key) < currentIndex);
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="설정"
-        description="현재 플랜과 결제 정보를 확인하고 요금제를 관리하세요."
-      />
-      <SettingsNav />
-
+    <SettingsShell title="플랜 관리" description="현재 플랜과 크레딧을 확인하고 요금제를 바꾸세요.">
       <BillingBanner error={planError} notice={notice} />
 
       {/* 아래 숫자를 믿지 말라고 **먼저** 말해 준다. «없음»과 «모름»을 같은 화면으로
@@ -221,9 +212,7 @@ export default async function BillingSettingsPage({
         </div>
       ) : null}
 
-      {/* 현재 플랜 — 카드 한 장을 통째로 쓰던 자리를 한 줄 상태 바로 압축했다(2026-08-15).
-          "결제 내역이 없습니다" 한 문장을 위해 화면 첫 스크롤을 다 잡아먹고 있었고,
-          정작 알아야 할 플랜·다음 결제일·해지 버튼은 아래 플랜 카드에 밀려 있었다. */}
+      {/* 현재 플랜 — 한 줄 상태 바(2026-08-15). 플랜·다음 결제일·해지 버튼이 첫 화면에 있어야 한다. */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-card border border-line bg-body px-5 py-4">
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -242,10 +231,18 @@ export default async function BillingSettingsPage({
                   <span className="tnum font-semibold text-fg">{subscription.nextBillingAt.slice(0, 10)}</span>
                 </span>
               ) : null}
-              {subscription.cardSummary ? <span>카드 {subscription.cardSummary}</span> : null}
+              {subscription.cardSummary ? (
+                <Link href="/settings/billing/payment" className="underline underline-offset-2 hover:text-fg">
+                  카드 {subscription.cardSummary}
+                </Link>
+              ) : null}
               {subscription.status === "past_due" ? (
                 <span className="font-medium text-warning">
-                  최근 정기결제가 실패했어요 — 카드 상태를 확인해 주세요(자동 재시도 중)
+                  최근 정기결제가 실패했어요 —{" "}
+                  <Link href="/settings/billing/payment" className="underline underline-offset-2">
+                    결제수단을 확인해 주세요
+                  </Link>
+                  (자동 재시도 중)
                 </span>
               ) : null}
               {subscription.status === "canceled" ? (
@@ -272,141 +269,63 @@ export default async function BillingSettingsPage({
 
         <div className="flex flex-wrap gap-2">
           {subscription && subscription.status !== "canceled" ? (
-                <ConfirmSubmit
-                  action={cancelSubscription}
-                  title="구독을 해지할까요?"
-                  description={`자동갱신이 꺼집니다. ${
-                    subEndDate ? `이용 종료일(${subEndDate})까지는` : "이미 결제한 기간이 끝날 때까지는"
-                  } 지금처럼 이용할 수 있고, 이후 추가 결제 없이 무료 플랜으로 전환됩니다.`}
-                  confirmLabel="해지하기"
-                  confirmVariant="danger"
-                  pendingLabel="해지 처리 중…"
-                  trigger="구독 해지"
-                  triggerVariant="danger"
-                  triggerSize="md"
-                />
-              ) : null}
-              {subscription?.status === "canceled" ? (
-                <ConfirmSubmit
-                  action={resumeSubscription}
-                  title="해지를 취소할까요?"
-                  description={`자동갱신을 다시 켭니다. ${
-                    subEndDate ? `다음 결제일(${subEndDate})부터` : "다음 결제일부터"
-                  } ${
-                    subPlanAmount != null ? `매월 ${formatKRW(subPlanAmount)}이` : "플랜 요금이"
-                  } 등록된 카드로 다시 자동 결제됩니다.`}
-                  confirmLabel="자동갱신 다시 켜기"
-                  confirmVariant="primary"
-                  pendingLabel="처리 중…"
-                  trigger="해지 취소 (자동갱신 다시 켜기)"
-                  triggerVariant="secondary"
-                  triggerSize="md"
-                />
-              ) : null}
-              {pendingPlanName ? (
-                <ConfirmSubmit
-                  action={cancelPlanChange}
-                  title="플랜 변경 예약을 취소할까요?"
-                  description={`${pendingPlanName} 플랜으로의 변경 예약을 취소합니다. 지금의 ${currentName} 플랜이 그대로 유지되고, 다음 결제일에는 ${
-                    subPlanAmount != null ? `${currentName} 요금 ${formatKRW(subPlanAmount)}` : "현재 플랜 요금"
-                  }이 청구됩니다.`}
-                  confirmLabel="예약 취소"
-                  confirmVariant="primary"
-                  pendingLabel="취소 처리 중…"
-                  trigger="예약 취소"
-                  triggerVariant="secondary"
-                  triggerSize="md"
-                />
-              ) : null}
+            <ConfirmSubmit
+              action={cancelSubscription}
+              title="구독을 해지할까요?"
+              description={`자동갱신이 꺼집니다. ${
+                subEndDate ? `이용 종료일(${subEndDate})까지는` : "이미 결제한 기간이 끝날 때까지는"
+              } 지금처럼 이용할 수 있고, 이후 추가 결제 없이 무료 플랜으로 전환됩니다.`}
+              confirmLabel="해지하기"
+              confirmVariant="danger"
+              pendingLabel="해지 처리 중…"
+              trigger="구독 해지"
+              triggerVariant="danger"
+              triggerSize="md"
+            />
+          ) : null}
+          {subscription?.status === "canceled" ? (
+            <ConfirmSubmit
+              action={resumeSubscription}
+              title="해지를 취소할까요?"
+              description={`자동갱신을 다시 켭니다. ${
+                subEndDate ? `다음 결제일(${subEndDate})부터` : "다음 결제일부터"
+              } ${
+                subPlanAmount != null ? `매월 ${formatKRW(subPlanAmount)}이` : "플랜 요금이"
+              } 등록된 카드로 다시 자동 결제됩니다.`}
+              confirmLabel="자동갱신 다시 켜기"
+              confirmVariant="primary"
+              pendingLabel="처리 중…"
+              trigger="해지 취소 (자동갱신 다시 켜기)"
+              triggerVariant="secondary"
+              triggerSize="md"
+            />
+          ) : null}
+          {pendingPlanName ? (
+            <ConfirmSubmit
+              action={cancelPlanChange}
+              title="플랜 변경 예약을 취소할까요?"
+              description={`${pendingPlanName} 플랜으로의 변경 예약을 취소합니다. 지금의 ${currentName} 플랜이 그대로 유지되고, 다음 결제일에는 ${
+                subPlanAmount != null ? `${currentName} 요금 ${formatKRW(subPlanAmount)}` : "현재 플랜 요금"
+              }이 청구됩니다.`}
+              confirmLabel="예약 취소"
+              confirmVariant="primary"
+              pendingLabel="취소 처리 중…"
+              trigger="예약 취소"
+              triggerVariant="secondary"
+              triggerSize="md"
+            />
+          ) : null}
         </div>
       </div>
 
-      {/* 내 상태 2단 — 크레딧(주)과 결제 내역·수단(레일)을 나란히.
-          앞서는 전폭 5블록 세로 1열이라 "내 플랜/크레딧/얼마 낼 건가"를 알려면
-          5화면을 스크롤해야 했다(사장님 지적: 가로 한 줄 밑에 또 한 줄). */}
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-start">
-      {/* 크레딧 — 백엔드(0016·0037·0039)는 처음부터 있었는데 화면이 없어서
-          "깎이는 건 보이는데 얼마 남았는지는 모르는" 상태였다.
-          플랜 목록보다 위다: 이 화면에 들어온 사람의 첫 질문은 "얼마 남았지"지
-          "뭘 살까"가 아니다. */}
+      {/* 크레딧 — 이 화면에 들어온 사람의 첫 질문은 "얼마 남았지"지 "뭘 살까"가 아니다 */}
       <CreditPanel summary={credits} />
-        <div className="space-y-6">
-      {/* 결제 내역 — payment_orders 실조회 (ready 상태 제외). 이력이 없어도 카드는 항상 보인다 */}
-      <Card>
-        <CardHeader
-          title="결제 내역"
-          description={
-            ordersFailed
-              ? "불러오지 못했어요"
-              : orders.length > 0
-                ? `최근 ${orders.length}건`
-                : "결제가 완료되면 여기에 표시됩니다"
-          }
-        />
-        <CardBody>
-          {ordersFailed ? (
-            /* 진짜 없는 것과 못 읽은 것을 같은 카드로 그리면 안 된다 — 이 화면은 돈 얘기다 */
-            <LoadFailed title="결제 내역을 불러오지 못했어요" />
-          ) : orders.length === 0 ? (
-            <EmptyState
-              icon={FileClock}
-              title="결제 내역이 없습니다"
-              description="플랜을 구독하면 결제 내역이 여기에 쌓입니다."
-            />
-          ) : (
-            <div className="divide-y divide-line">
-              {orders.map((o) => {
-                const status = ORDER_STATUS[o.status];
-                return (
-                  <div key={o.id} className="flex flex-wrap items-center gap-3 py-3.5 first:pt-0 last:pb-0">
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-card border border-line bg-plate text-fg-sub">
-                      <FileClock className="size-4" aria-hidden />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[15px] font-semibold">{o.orderName}</p>
-                      <p className="tnum mt-0.5 text-[14px] text-fg-sub">
-                        {formatDate(o.approvedAt ?? o.createdAt)}
-                      </p>
-                    </div>
-                    <span className="tnum text-[15px] font-semibold">{formatKRW(o.amount)}</span>
-                    <Badge tone={status.tone}>{status.label}</Badge>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardBody>
-      </Card>
-      {/* 결제 수단 — 정기결제(빌링) 카드 */}
-      <Card>
-        <CardHeader
-          title="결제 수단"
-          action={hasActiveSub ? <Badge tone="positive">자동결제 등록됨</Badge> : <Badge tone="neutral">미등록</Badge>}
-        />
-        <CardBody className="space-y-1.5">
-          <p className="flex items-center gap-2 text-[15px] text-fg-sub">
-            <CreditCard className="size-4 text-fg-faint" aria-hidden />
-            {subscription?.cardSummary
-              ? `등록된 카드 ${subscription.cardSummary}`
-              : "구독 시작 시 카드를 한 번 등록하면 매월 자동으로 결제됩니다"}
-          </p>
-          <p className="text-[14px] text-fg-sub">
-            매월 결제 예정일 3일 전에 알림으로 미리 알려드리며, 언제든 이 화면에서 해지할 수 있어요.
-            {" "}(현재 테스트 모드 — 실제 청구 없음)
-          </p>
-        </CardBody>
-      </Card>
-        </div>
-      </div>
 
       {/* 플랜 변경 — **마케팅 카드를 쓰지 않는다**(2026-08-15 사장님 지적).
           숫자(PLAN_CARDS)는 /pricing 과 계속 공유한다. 그 공유를 깨는 순간
           랜딩이 "카드뉴스 무제한"을 광고하던 사고가 재발한다.
           하지만 **화면은 다른 일을 한다**: /pricing 은 처음 온 사람을 설득하고,
-          여긴 이미 결제 중인 사람이 올릴지 내릴지 고른다. 그래서 5장 카드를 걷어내고
-          "지금보다 위" 목록만 남겼다 — Creator 쓰는 사람에게 "신용카드 없이 바로
-          써봅니다"(Free 영업 문구)와 "오픈 베타 3개월 무료"(신규 유치용)를 보여주고
-          있었다. */}
+          여긴 이미 결제 중인 사람이 올릴지 내릴지 고른다. */}
       <div>
         <h2 className="text-[17px] font-semibold">플랜 변경</h2>
         <p className="mt-1 text-[15px] text-fg-sub">
@@ -448,12 +367,15 @@ export default async function BillingSettingsPage({
           </details>
         ) : null}
 
-        <p className="mt-3 text-[14px]">
+        <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[14px]">
           <Link href="/pricing" className="font-medium text-primary-ink hover:underline">
             전체 요금제·기능 비교 보기 →
           </Link>
+          <Link href="/settings/billing/payment" className="font-medium text-primary-ink hover:underline">
+            결제수단·결제 내역 →
+          </Link>
         </p>
       </div>
-    </div>
+    </SettingsShell>
   );
 }

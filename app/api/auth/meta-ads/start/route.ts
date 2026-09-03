@@ -24,14 +24,14 @@ export async function GET(request: Request) {
   /* 데모 모드에서도 막는다 — 켜져 있으면 화면이 목데이터를 그리므로
      연동에 성공해도 그 계정이 영영 안 나온다(인스타에서 실제로 겪은 함정). */
   if (!isSupabaseConfigured() || isDemoMode()) {
-    return NextResponse.redirect(`${origin}/settings?connect=error&reason=demo_mode`);
+    return NextResponse.redirect(`${origin}/settings/channels?connect=error&reason=demo_mode`);
   }
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.redirect(`${origin}/login?next=/settings`);
+    return NextResponse.redirect(`${origin}/login?next=/settings/channels`);
   }
 
   /* 동의 게이트 — 채널 연동은 이 제품에서 개인정보 수집의 본체다. 페이지 게이트만으로는
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
 
   const config = getMetaAdsOAuthConfig();
   if (!config) {
-    return NextResponse.redirect(`${origin}/settings?connect=unconfigured`);
+    return NextResponse.redirect(`${origin}/settings/channels?connect=unconfigured`);
   }
 
   const state = randomUUID();

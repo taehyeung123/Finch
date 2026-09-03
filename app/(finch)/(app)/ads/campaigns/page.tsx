@@ -109,7 +109,7 @@ export default async function CampaignsPage({
               action={
                 /* 준비 전(unconfigured)에는 설정에도 버튼이 없다 — 막다른 링크를 주지 않는다 */
                 live.state === "unconfigured" ? undefined : (
-                  <ButtonLink href="/settings" size="sm" variant="secondary">
+                  <ButtonLink href="/settings/channels" size="sm" variant="secondary">
                     연결 상태 확인
                   </ButtonLink>
                 )

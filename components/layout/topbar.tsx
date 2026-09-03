@@ -13,6 +13,7 @@ import { cn } from "@/lib/cn";
 import { useChannel } from "./channel-context";
 import { ChannelIndicator, ChannelSwitcher, getChannelScope } from "./channel-switcher";
 import { NAV_FOOTER_ITEMS, NAV_GROUPS, NAV_HOME } from "./sidebar";
+import { SETTINGS_TITLES } from "@/lib/settings/sections";
 
 /*
   현재 화면 이름 — 채널 표시가 없는 페이지에서 상단바 왼쪽이 **통째로 비어 있었다**
@@ -27,6 +28,9 @@ const NAV_TITLES: ReadonlyArray<{ href: string; label: string }> = [
   /* 사이드바에 없는 화면 — 알림은 메뉴에서 빼고 이 벨이 유일한 진입점이라 목록에 없다.
      그래도 이름은 있어야 상단바가 비지 않는다. */
   { href: "/notifications", label: "알림" },
+  /* 설정 하위 화면 — 허브(/settings)는 위 footer 항목이 «계정 및 설정» 으로 맡고,
+     항목 페이지는 그 항목 이름을 쓴다. 목록은 lib/settings/sections.ts 가 정본이다. */
+  ...SETTINGS_TITLES,
 ];
 
 function screenTitle(pathname: string): string | null {

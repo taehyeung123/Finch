@@ -58,7 +58,7 @@ function AdsNotice({ live }: { live: LiveAdsState }) {
         title="광고 계정 연결이 만료됐어요"
         description="메타 정책상 광고 연결은 약 60일마다 다시 확인이 필요해요. 다시 연결하면 성과가 그대로 이어집니다."
         action={
-          <ButtonLink href="/settings" size="sm" variant="secondary">
+          <ButtonLink href="/settings/channels" size="sm" variant="secondary">
             다시 연결하기
           </ButtonLink>
         }
@@ -74,7 +74,7 @@ function AdsNotice({ live }: { live: LiveAdsState }) {
         title="이 계정으로 볼 수 있는 광고 계정이 없어요"
         description="연결은 됐지만 광고 계정 접근 권한이 없습니다. 메타 비즈니스 설정에서 이 계정에 광고 계정 권한을 준 뒤 다시 연결해 주세요."
         action={
-          <ButtonLink href="/settings" size="sm" variant="secondary">
+          <ButtonLink href="/settings/channels" size="sm" variant="secondary">
             다시 연결하기
           </ButtonLink>
         }
@@ -88,7 +88,7 @@ function AdsNotice({ live }: { live: LiveAdsState }) {
         title="지금은 광고 성과를 불러오지 못했어요"
         description="일시적인 문제일 수 있어요. 잠시 후 새로고침해 주세요. 계속되면 설정에서 광고 계정 연결 상태를 확인해 주세요."
         action={
-          <ButtonLink href="/settings" size="sm" variant="secondary">
+          <ButtonLink href="/settings/channels" size="sm" variant="secondary">
             연결 상태 확인
           </ButtonLink>
         }
@@ -99,7 +99,7 @@ function AdsNotice({ live }: { live: LiveAdsState }) {
         title="아직 연결한 광고 계정이 없어요"
         description="메타 광고 계정을 연결하면 캠페인별 집행 금액·노출·CTR·ROAS 가 여기에 쌓여요."
         action={
-          <ButtonLink href="/settings" size="sm" variant="secondary">
+          <ButtonLink href="/settings/channels" size="sm" variant="secondary">
             광고 계정 연결하기
           </ButtonLink>
         }
@@ -253,7 +253,7 @@ export default async function AdsPage() {
                 title="아직 연결한 광고 계정이 없어요"
                 description="Meta 광고 계정을 연결하면 캠페인별 집행 금액·노출·CTR·ROAS 가 여기에 쌓여요."
                 action={
-                  <ButtonLink href="/settings" size="sm" variant="secondary">
+                  <ButtonLink href="/settings/channels" size="sm" variant="secondary">
                     광고 계정 연결하기
                   </ButtonLink>
                 }

@@ -1,11 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/cn";
-import { SettingsNav } from "../../_components/settings-nav";
 import { saveNotificationSettings } from "../actions";
 
 /*
@@ -92,97 +90,90 @@ export function NotificationSettingsClient({ initial }: { initial: NotificationS
     saveTimer.current = setTimeout(() => void flush(), 500);
   };
 
+  /* 페이지 틀(제목·되돌아가기)은 서버 page.tsx 의 SettingsShell 이 그린다 — 여기는 카드만 */
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="설정"
-        description="알림 유형별로 수신 경로를 선택하세요."
-      />
-      <SettingsNav />
-
-      <Card>
-        <CardHeader
-          title="알림 수신 설정"
-          description="인앱·이메일 경로별로 켜고 끌 수 있어요"
-          action={
-            <div className="flex shrink-0 items-center gap-2">
-              {/* 상시 마운트 live region — 조건부 마운트는 스크린리더가 낭독을 놓친다 */}
-              <span
-                role="status"
-                aria-live={saveState === "error" ? "assertive" : "polite"}
-                className={cn(
-                  "text-xs",
-                  saveState === "saving" && "text-fg-sub",
-                  saveState === "saved" && "text-positive",
-                  saveState === "error" && "text-negative",
-                  saveState === "demo" && "text-warning",
-                )}
+    <Card>
+      <CardHeader
+        title="알림 수신 설정"
+        description="인앱·이메일 경로별로 켜고 끌 수 있어요"
+        action={
+          <div className="flex shrink-0 items-center gap-2">
+            {/* 상시 마운트 live region — 조건부 마운트는 스크린리더가 낭독을 놓친다 */}
+            <span
+              role="status"
+              aria-live={saveState === "error" ? "assertive" : "polite"}
+              className={cn(
+                "text-xs",
+                saveState === "saving" && "text-fg-sub",
+                saveState === "saved" && "text-positive",
+                saveState === "error" && "text-negative",
+                saveState === "demo" && "text-warning",
+              )}
+            >
+              {saveState === "saving"
+                ? "저장 중…"
+                : saveState === "saved"
+                  ? "저장됨"
+                  : saveState === "error"
+                    ? "저장 실패 — 변경이 저장 전 상태로 되돌아갔어요"
+                    : saveState === "demo"
+                      ? "예시 화면이라 설정은 저장되지 않아요"
+                      : null}
+            </span>
+            {saveState === "error" ? (
+              <button
+                type="button"
+                onClick={retry}
+                className="relative cursor-pointer rounded-card text-xs font-semibold text-negative underline underline-offset-2 after:absolute after:-inset-1.5 after:content-[''] focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
               >
-                {saveState === "saving"
-                  ? "저장 중…"
-                  : saveState === "saved"
-                    ? "저장됨"
-                    : saveState === "error"
-                      ? "저장 실패 — 변경이 저장 전 상태로 되돌아갔어요"
-                      : saveState === "demo"
-                        ? "예시 화면이라 설정은 저장되지 않아요"
-                        : null}
-              </span>
-              {saveState === "error" ? (
-                <button
-                  type="button"
-                  onClick={retry}
-                  className="relative cursor-pointer rounded-card text-xs font-semibold text-negative underline underline-offset-2 after:absolute after:-inset-1.5 after:content-[''] focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
-                >
-                  다시 시도
-                </button>
-              ) : null}
-            </div>
-          }
-        />
-        <CardBody>
-          <div>
-            {/* 헤더 행 */}
-            {/* 라벨 열을 minmax(0,32rem) 으로 묶는다. 1fr 이면 1600px 화면에서
-                라벨이 1400px 까지 늘어나 토글 2개만 오른쪽 끝에 고립되고, 행마다
-                시선이 화면 전체를 가로질러야 어느 알림의 토글인지 확인된다. */}
-            <div className="grid grid-cols-[minmax(0,32rem)_56px_56px] gap-x-6 pb-3 text-xs font-medium text-fg-sub">
-              <span>알림 유형</span>
-              <span className="text-center">인앱</span>
-              <span className="text-center">이메일</span>
-            </div>
-
-            {NOTIFICATION_ROWS.map((row) => (
-              <div
-                key={row.key}
-                className="grid grid-cols-[minmax(0,32rem)_56px_56px] items-center gap-x-6 border-t border-line py-3.5"
-              >
-                <div className="min-w-0 pr-3">
-                  <p className="text-[15px] font-semibold">{row.label}</p>
-                  <p className="mt-0.5 text-[14px] text-fg-sub">{row.description}</p>
-                </div>
-                <div className="flex justify-center">
-                  <Switch
-                    checked={settings[row.key].inapp}
-                    onChange={() => toggle(row.key, "inapp")}
-                    label={`${row.label} 인앱 알림`}
-                  />
-                </div>
-                <div className="flex justify-center">
-                  <Switch
-                    checked={settings[row.key].email}
-                    onChange={() => toggle(row.key, "email")}
-                    label={`${row.label} 이메일 알림`}
-                  />
-                </div>
-              </div>
-            ))}
+                다시 시도
+              </button>
+            ) : null}
           </div>
-          <p className="mt-4 text-[14px] text-fg-sub">
-            이메일 발송은 알림 발송 인프라 오픈과 함께 순차 적용됩니다. 설정은 지금 저장돼요.
-          </p>
-        </CardBody>
-      </Card>
-    </div>
+        }
+      />
+      <CardBody>
+        <div>
+          {/* 헤더 행 */}
+          {/* 라벨 열을 minmax(0,32rem) 으로 묶는다. 1fr 이면 1600px 화면에서
+              라벨이 1400px 까지 늘어나 토글 2개만 오른쪽 끝에 고립되고, 행마다
+              시선이 화면 전체를 가로질러야 어느 알림의 토글인지 확인된다. */}
+          <div className="grid grid-cols-[minmax(0,32rem)_56px_56px] gap-x-6 pb-3 text-xs font-medium text-fg-sub">
+            <span>알림 유형</span>
+            <span className="text-center">인앱</span>
+            <span className="text-center">이메일</span>
+          </div>
+
+          {NOTIFICATION_ROWS.map((row) => (
+            <div
+              key={row.key}
+              className="grid grid-cols-[minmax(0,32rem)_56px_56px] items-center gap-x-6 border-t border-line py-3.5"
+            >
+              <div className="min-w-0 pr-3">
+                <p className="text-[15px] font-semibold">{row.label}</p>
+                <p className="mt-0.5 text-[14px] text-fg-sub">{row.description}</p>
+              </div>
+              <div className="flex justify-center">
+                <Switch
+                  checked={settings[row.key].inapp}
+                  onChange={() => toggle(row.key, "inapp")}
+                  label={`${row.label} 인앱 알림`}
+                />
+              </div>
+              <div className="flex justify-center">
+                <Switch
+                  checked={settings[row.key].email}
+                  onChange={() => toggle(row.key, "email")}
+                  label={`${row.label} 이메일 알림`}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 text-[14px] text-fg-sub">
+          이메일 발송은 알림 발송 인프라 오픈과 함께 순차 적용됩니다. 설정은 지금 저장돼요.
+        </p>
+      </CardBody>
+    </Card>
   );
 }

@@ -29,14 +29,14 @@ export async function GET(request: Request) {
      토큰까지 저장한 뒤 «연동 완료» 배너를 보는데 카드는 계속 목 계정인 상황이 만들어졌다.
      NEXT_PUBLIC_ 변수는 빌드 시점에 박히므로 «껐는데 왜 그대로냐»는 재배포 문제이기도 하다. */
   if (!isSupabaseConfigured() || isDemoMode()) {
-    return NextResponse.redirect(`${origin}/settings?connect=error&reason=demo_mode`);
+    return NextResponse.redirect(`${origin}/settings/channels?connect=error&reason=demo_mode`);
   }
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.redirect(`${origin}/login?next=/settings`);
+    return NextResponse.redirect(`${origin}/login?next=/settings/channels`);
   }
 
   /* 동의 게이트 — 채널 연동은 이 제품에서 개인정보 수집의 본체다. 페이지 게이트만으로는
@@ -49,7 +49,7 @@ export async function GET(request: Request) {
   const config = getThreadsOAuthConfig();
   if (!config) {
     // 앱 자격증명 미설정 — 심사/키 발급 전 단계
-    return NextResponse.redirect(`${origin}/settings?connect=unconfigured`);
+    return NextResponse.redirect(`${origin}/settings/channels?connect=unconfigured`);
   }
 
   const state = randomUUID();

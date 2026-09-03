@@ -156,7 +156,7 @@ export function ChannelProfilePanel({
               : `${CHANNEL_LABEL[account.channel]} 계정을 연동하면 프로필과 게시물을 볼 수 있어요.`}
           </p>
           {!connected ? (
-            <ButtonLink href="/settings" size="sm" variant="secondary" className="gap-1.5">
+            <ButtonLink href="/settings/channels" size="sm" variant="secondary" className="gap-1.5">
               <Link2 className="size-4" aria-hidden />
               연동하기
             </ButtonLink>

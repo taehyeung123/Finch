@@ -237,7 +237,7 @@ export function PublishList({
             </span>
           ) : (
             /* size="sm"(h-8=32px)은 안의 아바타(36px)보다 낮아 위아래로 삐져나온다 — md(40px) */
-            <ButtonLink key={ch} href="/settings" variant="ghost" size="md" className="flex items-center gap-2 !px-1.5">
+            <ButtonLink key={ch} href="/settings/channels" variant="ghost" size="md" className="flex items-center gap-2 !px-1.5">
               {inner}
             </ButtonLink>
           );

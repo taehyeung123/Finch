@@ -14,10 +14,10 @@ import { isDemoMode } from "@/lib/supabase/config";
 export async function disconnectAccount(formData: FormData): Promise<void> {
   const accountId = formData.get("accountId");
   if (typeof accountId !== "string" || !accountId) {
-    redirect("/settings?connect=error&reason=disconnect_failed");
+    redirect("/settings/channels?connect=error&reason=disconnect_failed");
   }
   if (isDemoMode()) {
-    redirect("/settings?connect=disconnected");
+    redirect("/settings/channels?connect=disconnected");
   }
 
   const supabase = await createClient();
@@ -25,7 +25,7 @@ export async function disconnectAccount(formData: FormData): Promise<void> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/settings?connect=error&reason=disconnect_failed");
+    redirect("/settings/channels?connect=error&reason=disconnect_failed");
   }
 
   // .select("id")로 삭제 행 수를 확인한다 — RLS 등으로 0행이 지워졌는데
@@ -38,10 +38,10 @@ export async function disconnectAccount(formData: FormData): Promise<void> {
     .select("id");
   if (error || !deleted || deleted.length === 0) {
     console.error("[settings] 연동 해제 실패:", error?.message ?? "0행 삭제(권한 또는 이미 삭제됨)");
-    redirect("/settings?connect=error&reason=disconnect_failed");
+    redirect("/settings/channels?connect=error&reason=disconnect_failed");
   }
-  revalidatePath("/settings");
-  redirect("/settings?connect=disconnected");
+  revalidatePath("/settings/channels");
+  redirect("/settings/channels?connect=disconnected");
 }
 
 /**
@@ -54,10 +54,10 @@ export async function disconnectAccount(formData: FormData): Promise<void> {
 export async function disconnectMetaAds(formData: FormData): Promise<void> {
   const connectionId = formData.get("connectionId");
   if (typeof connectionId !== "string" || !connectionId) {
-    redirect("/settings?connect=error&reason=disconnect_failed");
+    redirect("/settings/channels?connect=error&reason=disconnect_failed");
   }
   if (isDemoMode()) {
-    redirect("/settings?connect=disconnected");
+    redirect("/settings/channels?connect=disconnected");
   }
 
   const supabase = await createClient();
@@ -65,7 +65,7 @@ export async function disconnectMetaAds(formData: FormData): Promise<void> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/settings?connect=error&reason=disconnect_failed");
+    redirect("/settings/channels?connect=error&reason=disconnect_failed");
   }
 
   // 0행 삭제를 성공으로 덮지 않는다 — «해제했는데 그대로예요»가 된다(위와 같은 규칙)
@@ -80,9 +80,9 @@ export async function disconnectMetaAds(formData: FormData): Promise<void> {
       "[settings] 광고 연동 해제 실패:",
       error?.message ?? "0행 삭제(권한 또는 이미 삭제됨)",
     );
-    redirect("/settings?connect=error&reason=disconnect_failed");
+    redirect("/settings/channels?connect=error&reason=disconnect_failed");
   }
-  revalidatePath("/settings");
+  revalidatePath("/settings/channels");
   revalidatePath("/ads");
-  redirect("/settings?connect=disconnected");
+  redirect("/settings/channels?connect=disconnected");
 }
