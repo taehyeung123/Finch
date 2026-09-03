@@ -39,6 +39,7 @@ export function CampaignRowActions({
     );
   }
   if (status === "PAUSED") {
+    /* focus=activate — 상세 화면이 읽어 게재 시작 모달을 열린 채로 그린다(page.tsx searchParams) */
     return (
       <ButtonLink href={`/ads/campaigns/${campaignId}?focus=activate`} size="sm" variant="primary">
         게재 시작

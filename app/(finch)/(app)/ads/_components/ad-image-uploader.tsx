@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { ImagePlus, RefreshCw, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
@@ -94,27 +94,25 @@ async function normalize(img: HTMLImageElement): Promise<Blob> {
 
 export function AdImageUploader({
   value,
+  preview,
   onChange,
   onPreview,
   disabled = false,
 }: {
   value: UploadedAdImage | null;
+  /**
+   * 축소본의 로컬 미리보기 URL — **부모가 소유한다**(마법사 단계를 오가며 이 컴포넌트가 언마운트돼도 살아 있어야 한다.
+   * 여기서 들고 있다가 언마운트 때 revoke 하면 부모 목업이 죽은 URL 을 가리킨다 — 소넷 점검). 해제도 부모가 한다.
+   */
+  preview: string | null;
   onChange: (next: UploadedAdImage | null) => void;
-  /** 축소본의 로컬 미리보기 URL — 부모(목업)가 같은 그림을 그릴 때. 제거 시 null */
-  onPreview?: (url: string | null) => void;
+  /** 새 축소본이 생기면 그 URL, 제거하면 null */
+  onPreview: (url: string | null) => void;
   disabled?: boolean;
 }) {
   const [phase, setPhase] = useState<Phase>({ step: "idle" });
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  /* 로컬 미리보기 URL 은 바뀌거나 사라질 때 해제한다 */
-  useEffect(() => {
-    return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-    };
-  }, [previewUrl]);
 
   const busy = phase.step === "preparing" || phase.step === "uploading";
 
@@ -153,9 +151,7 @@ export function AdImageUploader({
       setPhase({ step: "error", message: "이미지를 처리하지 못했어요. 다른 이미지를 골라 주세요." });
       return;
     }
-    const nextPreview = URL.createObjectURL(blob);
-    setPreviewUrl(nextPreview);
-    onPreview?.(nextPreview);
+    onPreview(URL.createObjectURL(blob));
 
     const key = fileKey(file);
     const memo = uploaded.get(key);
@@ -194,7 +190,7 @@ export function AdImageUploader({
     if (file) void handleFile(file);
   }
 
-  const shown = previewUrl ?? value?.url ?? null;
+  const shown = preview ?? value?.url ?? null;
 
   return (
     <div>
@@ -234,8 +230,7 @@ export function AdImageUploader({
                 size="sm"
                 disabled={disabled || busy}
                 onClick={() => {
-                  setPreviewUrl(null);
-                  onPreview?.(null);
+                  onPreview(null);
                   setPhase({ step: "idle" });
                   onChange(null);
                 }}

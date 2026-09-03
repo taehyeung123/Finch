@@ -221,7 +221,7 @@ export default async function CampaignsPage({
           </Card>
 
           <p className="text-[12px] text-fg-sub">
-            타겟팅·소재 설정은 준비 중이에요 — 지금은 메타 광고 관리자에서 이어서 설정할 수 있어요.
+            만든 캠페인의 이름을 누르면 상세 화면에서 타겟·소재를 정해 광고를 만들고 게재를 시작할 수 있어요.
           </p>
         </>
       )}

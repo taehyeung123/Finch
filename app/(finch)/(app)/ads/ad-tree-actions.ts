@@ -1,7 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
 import { getAdsWriteContext } from "@/lib/data/ads";
+import { fetchObjectStatus } from "@/lib/meta/ads";
+import { fetchObjectOwner, fetchAds } from "@/lib/meta/ads-tree";
 import { passGates, reserveWrite, settleWrite, updateWriteSteps, type WriteIds } from "@/lib/ads/write-gates";
 import {
   ADSET_NAME_MAX,
@@ -141,6 +144,62 @@ function adsetErrorCode(e: AdsWriteError): AdsWriteFailCode {
   return writeErrorCode(e);
 }
 
+/**
+ * 부분 실패 뒤 재시도(§13-20): 같은 캠페인의 마지막 `create_ad` failed 로그가 남긴 광고 세트를 **재사용**한다 —
+ * 소유(계정·캠페인 일치)·PAUSED·광고 0개·**같은 타겟·일정**일 때만. 타겟이나 일정을 바꿔 다시 왔다면 그건 새 광고 세트다.
+ * 확인이 하나라도 안 되면(null) 재사용하지 않는다 — 새로 만드는 쪽이 안전하다(빈 세트 하나가 더 생길 뿐 돈은 안 나간다).
+ */
+async function findReusableAdset(p: {
+  ownerId: string;
+  adAccountId: string;
+  campaignId: string;
+  token: string;
+  targetingJson: string;
+  startTime: number;
+  endTime: number | null;
+}): Promise<string | null> {
+  try {
+    const supabase = await createClient();
+    /* adset_id 컬럼은 0082 — 없으면 request.steps.adset_id 만으로 찾는다 */
+    const query = (cols: string) =>
+      supabase
+        .from("meta_ad_write_log")
+        .select(cols)
+        .eq("user_id", p.ownerId)
+        .eq("ad_account_id", p.adAccountId)
+        .eq("campaign_id", p.campaignId)
+        .eq("action", "create_ad")
+        .eq("result", "failed")
+        .order("created_at", { ascending: false })
+        .limit(1);
+    let res = await query("adset_id, request");
+    if (res.error && /adset_id/i.test(res.error.message)) res = await query("request");
+    if (res.error || !res.data || res.data.length === 0) return null;
+    const row = res.data[0] as unknown as { adset_id?: string | null; request?: Record<string, unknown> | null };
+    const steps = (row.request?.steps ?? {}) as Record<string, unknown>;
+    const candidate = row.adset_id ?? (typeof steps.adset_id === "string" ? steps.adset_id : null);
+    if (!candidate || !ID_RE.test(candidate)) return null;
+
+    /* 같은 타겟·일정인가 — 로그의 request.adset 과 지금 입력을 비교한다 */
+    const logged = (row.request?.adset ?? {}) as { targeting?: unknown; start_time?: unknown; end_time?: unknown };
+    if (JSON.stringify(logged.targeting ?? null) !== p.targetingJson) return null;
+    if (logged.start_time !== p.startTime || (logged.end_time ?? null) !== p.endTime) return null;
+
+    const [owner, status, ads] = await Promise.all([
+      fetchObjectOwner("adset", candidate, p.token),
+      fetchObjectStatus(candidate, p.token),
+      fetchAds(p.campaignId, p.token),
+    ]);
+    if (!owner || owner.accountId !== p.adAccountId || owner.campaignId !== p.campaignId) return null;
+    if (!status || status.status !== "PAUSED") return null;
+    if (ads === null || ads.some((a) => a.adsetId === candidate)) return null;
+    return candidate;
+  } catch (e) {
+    console.error("[ads-tree] 광고 세트 재사용 판정 실패:", e);
+    return null;
+  }
+}
+
 /** 소재 오류 → 코드. 권한(200/10/294)은 «페이지 역할»이다(§13-21) — 광고 계정 쓰기 권한이 아니다 */
 function creativeErrorCode(e: AdsWriteError): AdsWriteFailCode {
   if (e.code === 200 || e.code === 10 || e.code === 294) return "page_role_required";
@@ -262,11 +321,24 @@ export async function createAdTreeAction(raw: unknown): Promise<CreateAdTreeResu
   const adsetCtx = { campaignId, spec, pageId: publisher.pageId };
   const creativeCtx = { pageId: publisher.pageId, igUserId: publisher.igUserId, campaignName: campaign.name };
 
-  /* 1 — 광고 세트 검증(만들지 않는다) */
-  const v1 = await createAdSet(acct, buildAdSetParams(adsetInput, { ...adsetCtx, validateOnly: true }), token);
-  if (!v1.ok) return failLog(adsetErrorCode(v1.error), 1, v1.error);
-  await updateWriteSteps(logId, { adset_validate: "ok" });
-  if (usageTooHigh(v1)) return failLog("rate_limited", 3);
+  /* 부분 실패 재시도 — 직전에 만들어 두고 소재에서 막힌 빈 광고 세트가 있으면 그것을 쓴다(§13-20) */
+  const reusable = await findReusableAdset({
+    ownerId: ctx.ownerId,
+    adAccountId: acct,
+    campaignId,
+    token,
+    targetingJson: JSON.stringify(buildTargeting(adsetInput)),
+    startTime: adsetInput.startTime,
+    endTime: adsetInput.endTime,
+  });
+
+  /* 1 — 광고 세트 검증(만들지 않는다). 재사용이면 이미 메타가 받아 준 세트라 건너뛴다 */
+  if (!reusable) {
+    const v1 = await createAdSet(acct, buildAdSetParams(adsetInput, { ...adsetCtx, validateOnly: true }), token);
+    if (!v1.ok) return failLog(adsetErrorCode(v1.error), 1, v1.error);
+    await updateWriteSteps(logId, { adset_validate: "ok" });
+    if (usageTooHigh(v1)) return failLog("rate_limited", 3);
+  }
 
   /* 2 — 소재 검증(페이지·IG 권한이 여기서 걸린다) */
   const v2 = await createAdCreative(acct, buildCreativeParams(creativeInput, { ...creativeCtx, validateOnly: true }), token);
@@ -274,14 +346,21 @@ export async function createAdTreeAction(raw: unknown): Promise<CreateAdTreeResu
   await updateWriteSteps(logId, { creative_validate: "ok" });
   if (usageTooHigh(v2)) return failLog("rate_limited", 3);
 
-  /* 3 — 광고 세트 생성(PAUSED) */
-  const c3 = await createAdSet(acct, buildAdSetParams(adsetInput, adsetCtx), token);
-  if (!c3.ok) return failLog(c3.error.transport ? "create_unverified" : adsetErrorCode(c3.error), 1, c3.error);
-  const adsetId = c3.data.id;
-  if (!adsetId || !ID_RE.test(adsetId)) return failLog("create_unverified", 3);
-  await updateWriteSteps(logId, { adset_id: adsetId });
+  /* 3 — 광고 세트 생성(PAUSED) 또는 재사용 */
+  let adsetId: string;
+  if (reusable) {
+    adsetId = reusable;
+    await updateWriteSteps(logId, { adset_id: adsetId, adset_reused: true });
+  } else {
+    const c3 = await createAdSet(acct, buildAdSetParams(adsetInput, adsetCtx), token);
+    if (!c3.ok) return failLog(c3.error.transport ? "create_unverified" : adsetErrorCode(c3.error), 1, c3.error);
+    const created = c3.data.id;
+    if (!created || !ID_RE.test(created)) return failLog("create_unverified", 3);
+    adsetId = created;
+    await updateWriteSteps(logId, { adset_id: adsetId });
+    if (usageTooHigh(c3)) return failLog("partial_created", 3, undefined, { campaignId, adsetId });
+  }
   const partialIds: WriteIds = { campaignId, adsetId };
-  if (usageTooHigh(c3)) return failLog("partial_created", 3, undefined, partialIds);
 
   /* 4 — 소재 생성 */
   const c4 = await createAdCreative(acct, buildCreativeParams(creativeInput, creativeCtx), token);

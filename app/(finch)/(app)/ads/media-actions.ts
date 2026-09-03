@@ -34,25 +34,27 @@ type UploadLogRequest = { bytes: number; mime: string; width: number; height: nu
 async function uploadThrottle(ownerId: string, adAccountId: string, actorId: string): Promise<AdsWriteFailCode | null> {
   const supabase = await createClient();
   const since = new Date(Date.now() - UPLOAD_WINDOW_MINUTES * 60 * 1000).toISOString();
-  const { data, error } = await supabase
-    .from("meta_ad_write_log")
-    .select("actor_user_id, request, created_at")
-    .eq("user_id", ownerId)
-    .eq("ad_account_id", adAccountId)
-    .eq("action", "upload_image")
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(UPLOAD_WINDOW_MAX + 1);
-  if (error) {
-    if (!isMissingTableError(error)) console.error("[ads-media] 업로드 기록 조회 실패:", error.message);
+  const base = () =>
+    supabase
+      .from("meta_ad_write_log")
+      .select("actor_user_id, request, created_at")
+      .eq("user_id", ownerId)
+      .eq("ad_account_id", adAccountId)
+      .eq("action", "upload_image")
+      .gte("created_at", since)
+      .order("created_at", { ascending: false });
+  /* 두 판정은 범위가 다르다 — 점수(계정 전체 최신 1건) · 횟수(**이 사람** 8건). 한 쿼리로 합치면 팀원이 번갈아 올릴 때
+     내 옛 행이 잘려 나가 횟수가 적게 잡힌다(슬라이스 3~8 소넷 점검) */
+  const [latestRes, mineRes] = await Promise.all([base().limit(1), base().eq("actor_user_id", actorId).limit(UPLOAD_WINDOW_MAX)]);
+  const err = latestRes.error ?? mineRes.error;
+  if (err) {
+    if (!isMissingTableError(err)) console.error("[ads-media] 업로드 기록 조회 실패:", err.message);
     return null;
   }
-  const rows = (data ?? []) as { actor_user_id: string | null; request: unknown }[];
-  const latest = rows[0];
+  const latest = (latestRes.data ?? [])[0] as { request: unknown } | undefined;
   const latestPct = (latest?.request as { util_pct?: unknown } | null)?.util_pct;
   if (typeof latestPct === "number" && latestPct >= RATE_LIMIT_UTIL_PCT) return "rate_limited";
-  const mine = rows.filter((r) => r.actor_user_id === actorId).length;
-  if (mine >= UPLOAD_WINDOW_MAX) return "cooldown";
+  if ((mineRes.data ?? []).length >= UPLOAD_WINDOW_MAX) return "cooldown";
   return null;
 }
 

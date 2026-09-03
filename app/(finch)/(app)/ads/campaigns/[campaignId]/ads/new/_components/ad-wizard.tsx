@@ -155,7 +155,13 @@ export function AdWizard({ campaign, publisher: initialPublisher, defaultLink, a
   /* ── ② 소재 ── */
   const [publisher, setPublisher] = useState(initialPublisher);
   const [image, setImage] = useState<UploadedAdImage | null>(null);
+  /* 로컬 미리보기 URL 의 소유자는 마법사다 — ② 를 벗어나 업로더가 언마운트돼도 살아 있어야 ③에서 돌아와도 그림이 남는다.
+     교체·제거 때 이전 URL 을 여기서 해제한다(탭을 닫으면 어차피 사라진다). */
   const [localPreview, setLocalPreview] = useState<string | null>(null);
+  function replacePreview(next: string | null) {
+    if (localPreview && localPreview !== next) URL.revokeObjectURL(localPreview);
+    setLocalPreview(next);
+  }
   const [message, setMessage] = useState("");
   const [headline, setHeadline] = useState("");
   const [description, setDescription] = useState("");
@@ -481,14 +487,7 @@ export function AdWizard({ campaign, publisher: initialPublisher, defaultLink, a
               <div>
                 <p className={fieldLabel}>이미지</p>
                 <div className="mt-2">
-                  <AdImageUploader
-                    value={image}
-                    onChange={(next) => {
-                      setImage(next);
-                      if (!next) setLocalPreview(null);
-                    }}
-                    onPreview={setLocalPreview}
-                  />
+                  <AdImageUploader value={image} preview={localPreview} onChange={setImage} onPreview={replacePreview} />
                 </div>
               </div>
 

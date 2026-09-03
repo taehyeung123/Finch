@@ -129,7 +129,20 @@ interface RowControl {
   campaignActive: boolean;
 }
 
-function AdSetsCard({ adsets, currency, control }: { adsets: FbAdSet[] | null; currency: string | null; control: RowControl | null }) {
+function AdSetsCard({
+  adsets,
+  currency,
+  control,
+  canCreateAd,
+  campaignActive,
+}: {
+  adsets: FbAdSet[] | null;
+  currency: string | null;
+  control: RowControl | null;
+  /** 위 «광고 만들기» 버튼이 실제로 있는가 — 빈 상태 문구가 그 버튼과 같은 말을 해야 한다 */
+  canCreateAd: boolean;
+  campaignActive: boolean;
+}) {
   return (
     <Card>
       <CardHeader
@@ -143,7 +156,13 @@ function AdSetsCard({ adsets, currency, control }: { adsets: FbAdSet[] | null; c
           <EmptyState
             icon={Layers}
             title="아직 광고 세트가 없어요"
-            description="광고 세트·소재 만들기는 준비 중이에요 — 지금은 메타 광고 관리자에서 만들 수 있어요."
+            description={
+              canCreateAd
+                ? "위의 «광고 만들기»를 누르면 타겟·일정과 소재를 정해 첫 광고를 만들 수 있어요."
+                : campaignActive
+                  ? "게재 중인 캠페인에는 아직 핀치에서 광고를 추가할 수 없어요. 일시중지한 뒤 만들거나 메타 광고 관리자에서 만들 수 있어요."
+                  : "이 캠페인 목표는 아직 핀치에서 광고를 만들 수 없어요 — 메타 광고 관리자에서 만들 수 있어요."
+            }
           />
         ) : (
           <>
@@ -158,6 +177,11 @@ function AdSetsCard({ adsets, currency, control }: { adsets: FbAdSet[] | null; c
                 <th className="pb-2 font-medium">타겟</th>
                 <th className="pb-2 font-medium">일정</th>
                 <th className="pb-2 text-right font-medium">예산</th>
+                {control ? (
+                  <th className="pb-2 pl-3 text-right font-medium">
+                    <span className="sr-only">동작</span>
+                  </th>
+                ) : null}
               </tr>
             </thead>
             <tbody>
@@ -240,6 +264,11 @@ function AdsCard({ ads, adsets, control }: { ads: FbAd[] | null; adsets: FbAdSet
                 <th className="pb-2 font-medium">상태</th>
                 <th className="pb-2 font-medium">광고 세트</th>
                 <th className="pb-2 font-medium">만든 날</th>
+                {control ? (
+                  <th className="pb-2 pl-3 text-right font-medium">
+                    <span className="sr-only">동작</span>
+                  </th>
+                ) : null}
               </tr>
             </thead>
             <tbody>
@@ -355,7 +384,7 @@ export default async function CampaignDetailPage({
   searchParams,
 }: {
   params: Promise<{ campaignId: string }>;
-  searchParams: Promise<{ created?: string; write?: string; code?: string }>;
+  searchParams: Promise<{ created?: string; write?: string; code?: string; focus?: string }>;
 }) {
   /* 데모에는 «진짜 캠페인»이 없다 — 목록(마법사)로 돌려보낸다 */
   if (IS_SAMPLE_DATA) redirect("/ads/campaigns");
@@ -452,6 +481,7 @@ export default async function CampaignDetailPage({
                   ads={ads.map((a) => ({ id: a.id, name: a.name, status: a.status, effectiveStatus: a.effectiveStatus, adsetId: a.adsetId }))}
                   finchAdsetIds={[...finch.adsetIds]}
                   finchAdIds={[...finch.adIds]}
+                  defaultOpen={sp.focus === "activate"}
                 />
               ) : control && campaign.status === "PAUSED" ? (
                 <span className="text-[12px] text-fg-sub">{adsWriteMessage("campaign_unverified")}</span>
@@ -493,7 +523,7 @@ export default async function CampaignDetailPage({
         </CardBody>
       </Card>
 
-      <AdSetsCard adsets={adsets} currency={currency} control={control} />
+      <AdSetsCard adsets={adsets} currency={currency} control={control} canCreateAd={canCreateAd} campaignActive={campaign.status === "ACTIVE"} />
       <AdsCard ads={ads} adsets={adsets} control={control} />
     </div>
   );

@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ModalShell } from "@/components/ui/modal-shell";
-import { SubmitButton } from "@/components/ui/submit-button";
 import { formatMoney } from "@/lib/format";
 import { adsWriteMessage } from "@/lib/ads/campaign-rules";
 import { activateCampaignTreeAction } from "@/app/(finch)/(app)/ads/tree-status-actions";
@@ -13,7 +12,8 @@ import { activateCampaignTreeAction } from "@/app/(finch)/(app)/ads/tree-status-
   서버가 먼저 읽은 하위 상태를 받아 «함께 켜기» 체크박스를 그린다. 기본 체크는 핀치가 만든 것만(§13-3).
   광고 0개 → 허용(비용 없음) · 전부 거부 → 차단 · 심사 중 → 경고 · 조회 실패는 부모가 이 컴포넌트를 그리지 않는다(fail-closed).
   실제로 켜는 것은 서버 액션이고, 서버는 여기서 보낸 id 를 **다시 읽은 목록과 교집합**으로만 쓴다.
-  껍데기는 ModalShell(포커스 트랩·Escape·복원).
+  껍데기는 ModalShell(포커스 트랩·Escape·복원). 제출은 useTransition 으로 — 진행 중엔 busy 로 잠가 «취소»가 거짓말이 되지 않게(소넷 점검).
+  목록의 «게재 시작» 링크(?focus=activate)로 들어오면 열린 채로 시작한다.
 */
 
 export interface ActivateChild {
@@ -32,6 +32,7 @@ export function ActivateTreeModal({
   ads,
   finchAdsetIds,
   finchAdIds,
+  defaultOpen = false,
 }: {
   campaignId: string;
   campaignName: string;
@@ -42,15 +43,18 @@ export function ActivateTreeModal({
   ads: (ActivateChild & { adsetId: string | null })[];
   finchAdsetIds: string[];
   finchAdIds: string[];
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const pausedAdsets = adsets.filter((a) => a.status === "PAUSED");
   const pausedAds = ads.filter((a) => a.status === "PAUSED" && a.effectiveStatus !== "DISAPPROVED");
   const [checkedAdsets, setCheckedAdsets] = useState<Set<string>>(() => new Set(pausedAdsets.filter((a) => finchAdsetIds.includes(a.id)).map((a) => a.id)));
   const [checkedAds, setCheckedAds] = useState<Set<string>>(() => new Set(pausedAds.filter((a) => finchAdIds.includes(a.id)).map((a) => a.id)));
 
   const total = ads.length;
-  const pending = ads.filter((a) => a.effectiveStatus === "PENDING_REVIEW").length;
+  const pendingReview = ads.filter((a) => a.effectiveStatus === "PENDING_REVIEW").length;
   const disapproved = ads.filter((a) => a.effectiveStatus === "DISAPPROVED").length;
   const allDisapproved = total > 0 && disapproved === total;
 
@@ -63,6 +67,29 @@ export function ActivateTreeModal({
     save(next);
   }
 
+  function close() {
+    if (pending) return;
+    setOpen(false);
+  }
+
+  function submit() {
+    const form = new FormData();
+    form.set("campaignId", campaignId);
+    for (const id of checkedAdsets) form.append("adset", id);
+    for (const id of checkedAds) form.append("ad", id);
+    setError(null);
+    startTransition(async () => {
+      try {
+        /* 성공·실패 모두 서버가 redirect 로 상세 화면에 결과를 붙인다 — 여기까지 돌아오면 전송 자체가 안 된 것 */
+        await activateCampaignTreeAction(form);
+      } catch (e) {
+        /* Next 의 redirect 는 예외로 전달된다 — 그건 실패가 아니다 */
+        if (e && typeof e === "object" && "digest" in e && String((e as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT")) throw e;
+        setError(adsWriteMessage("failed"));
+      }
+    });
+  }
+
   return (
     <>
       <Button type="button" size="sm" onClick={() => setOpen(true)}>
@@ -70,7 +97,25 @@ export function ActivateTreeModal({
       </Button>
 
       {open ? (
-        <ModalShell label="게재 시작 — 비용이 발생해요" title="게재 시작 — 비용이 발생해요" onClose={() => setOpen(false)} size="md">
+        <ModalShell
+          label="게재 시작 — 비용이 발생해요"
+          title="게재 시작 — 비용이 발생해요"
+          onClose={close}
+          busy={pending}
+          size="md"
+          footer={
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="secondary" size="sm" onClick={close} disabled={pending}>
+                {allDisapproved ? "닫기" : "취소"}
+              </Button>
+              {!allDisapproved ? (
+                <Button type="button" variant="danger" size="sm" onClick={submit} disabled={pending}>
+                  {pending ? "시작 중…" : "게재 시작"}
+                </Button>
+              ) : null}
+            </div>
+          }
+        >
           <p className="text-[15px] leading-relaxed text-fg-sub">
             «{campaignName}» 캠페인을 켜요.
             {total === 0
@@ -79,22 +124,13 @@ export function ActivateTreeModal({
           </p>
 
           {allDisapproved ? (
-            <>
-              <p role="alert" className="mt-3 rounded-card bg-negative-weak p-3 text-[14px] text-negative-strong">
-                {adsWriteMessage("children_disapproved")}
-              </p>
-              <div className="mt-5 flex justify-end">
-                <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(false)}>
-                  닫기
-                </Button>
-              </div>
-            </>
+            <p role="alert" className="mt-3 rounded-card bg-negative-weak p-3 text-[14px] text-negative-strong">
+              {adsWriteMessage("children_disapproved")}
+            </p>
           ) : (
-            <form action={activateCampaignTreeAction} className="mt-4">
-              <input type="hidden" name="campaignId" value={campaignId} />
-
+            <div className="mt-4">
               {pausedAdsets.length + pausedAds.length > 0 ? (
-                <fieldset className="space-y-2">
+                <fieldset className="space-y-2" disabled={pending}>
                   <legend className="text-[14px] font-semibold">
                     일시중지된 광고 세트 {pausedAdsets.length}개 · 광고 {pausedAds.length}개도 함께 켜기
                   </legend>
@@ -102,7 +138,7 @@ export function ActivateTreeModal({
                   <div className="max-h-56 space-y-1 overflow-y-auto rounded-card border border-line bg-body p-2">
                     {pausedAdsets.map((a) => (
                       <label key={a.id} className="flex cursor-pointer items-center gap-2.5 rounded-card px-2 py-1.5 trans-state hover:bg-tint-hover">
-                        <input type="checkbox" name="adset" value={a.id} checked={checkedAdsets.has(a.id)} onChange={(e) => toggle(checkedAdsets, a.id, e.target.checked, setCheckedAdsets)} className="size-5 shrink-0 accent-primary" />
+                        <input type="checkbox" checked={checkedAdsets.has(a.id)} onChange={(e) => toggle(checkedAdsets, a.id, e.target.checked, setCheckedAdsets)} className="size-5 shrink-0 accent-primary" />
                         <span className="min-w-0 truncate text-[14px]">
                           <span className="text-fg-sub">광고 세트 · </span>
                           {a.name}
@@ -111,7 +147,7 @@ export function ActivateTreeModal({
                     ))}
                     {pausedAds.map((a) => (
                       <label key={a.id} className="flex cursor-pointer items-center gap-2.5 rounded-card px-2 py-1.5 trans-state hover:bg-tint-hover">
-                        <input type="checkbox" name="ad" value={a.id} checked={checkedAds.has(a.id)} onChange={(e) => toggle(checkedAds, a.id, e.target.checked, setCheckedAds)} className="size-5 shrink-0 accent-primary" />
+                        <input type="checkbox" checked={checkedAds.has(a.id)} onChange={(e) => toggle(checkedAds, a.id, e.target.checked, setCheckedAds)} className="size-5 shrink-0 accent-primary" />
                         <span className="min-w-0 truncate text-[14px]">
                           <span className="text-fg-sub">광고 · </span>
                           {a.name}
@@ -123,20 +159,16 @@ export function ActivateTreeModal({
                 </fieldset>
               ) : null}
 
-              {pending > 0 ? <p className="mt-3 rounded-card bg-warning-weak p-3 text-[14px] text-warning-strong">심사 중인 광고 {pending}개는 승인 전까지 노출되지 않아요.</p> : null}
-              {disapproved > 0 && !allDisapproved ? (
+              {pendingReview > 0 ? <p className="mt-3 rounded-card bg-warning-weak p-3 text-[14px] text-warning-strong">심사 중인 광고 {pendingReview}개는 승인 전까지 노출되지 않아요.</p> : null}
+              {disapproved > 0 ? (
                 <p className="mt-3 rounded-card bg-warning-weak p-3 text-[14px] text-warning-strong">거부된 광고 {disapproved}개는 켜지지 않아요 — 사유는 메타 광고 관리자에서 확인할 수 있어요.</p>
               ) : null}
-
-              <div className="mt-5 flex justify-end gap-2">
-                <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(false)}>
-                  취소
-                </Button>
-                <SubmitButton variant="danger" size="sm" pendingLabel="시작 중…">
-                  게재 시작
-                </SubmitButton>
-              </div>
-            </form>
+              {error ? (
+                <p role="alert" className="mt-3 rounded-card bg-negative-weak p-3 text-[14px] text-negative-strong">
+                  {error}
+                </p>
+              ) : null}
+            </div>
           )}
         </ModalShell>
       ) : null}
