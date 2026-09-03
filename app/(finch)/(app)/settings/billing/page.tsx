@@ -150,8 +150,11 @@ export default async function BillingSettingsPage({
   const hasActiveSub = subscription != null && subscription.status !== "canceled";
   const pendingPlan = subscription?.pendingPlan;
   const pendingPlanName = isPaidPlan(pendingPlan ?? "") ? PLAN_NAMES[pendingPlan as keyof typeof PLAN_NAMES] : null;
-  /* 확인 모달 문구용 — 금액은 항상 서버 상수 PLAN_PRICES 에서 조립한다 */
+  /* 확인 모달 문구용 — 금액은 항상 서버 상수 PLAN_PRICES 에서 조립한다.
+     이름도 구독 레코드(subscription.plan)에서 — currentPlan 은 조회 실패 시 fail-closed «free» 라
+     «Free 요금 29,000원» 같은 모순 문장이 나온다(소넷 점검 2026-09-03) */
   const subPlanAmount = subscription && isPaidPlan(subscription.plan) ? PLAN_PRICES[subscription.plan] : null;
+  const subPlanName = subscription && isPaidPlan(subscription.plan) ? PLAN_NAMES[subscription.plan] : null;
   const subEndDate = subscription?.nextBillingAt ? formatDate(subscription.nextBillingAt) : null;
   const locked = planFailed || demo;
 
@@ -208,8 +211,8 @@ export default async function BillingSettingsPage({
     <ConfirmSubmit
       action={cancelPlanChange}
       title="플랜 변경 예약을 취소할까요?"
-      description={`${pendingPlanName} 플랜으로의 변경 예약을 취소합니다. 지금의 ${currentName} 플랜이 그대로 유지되고, 다음 결제일에는 ${
-        subPlanAmount != null ? `${currentName} 요금 ${formatKRW(subPlanAmount)}` : "현재 플랜 요금"
+      description={`${pendingPlanName} 플랜으로의 변경 예약을 취소합니다. 지금의 ${subPlanName ?? "현재"} 플랜이 그대로 유지되고, 다음 결제일에는 ${
+        subPlanName && subPlanAmount != null ? `${subPlanName} 요금 ${formatKRW(subPlanAmount)}` : "현재 플랜 요금"
       }이 청구됩니다.`}
       confirmLabel="예약 취소"
       confirmVariant="primary"

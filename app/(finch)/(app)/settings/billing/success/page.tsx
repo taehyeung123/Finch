@@ -1,18 +1,25 @@
-import Link from "next/link";
+import type { Metadata } from "next";
 import { CheckCircle2, XCircle } from "lucide-react";
-import { PageHeader } from "@/components/ui/section-header";
 import { Card } from "@/components/ui/card";
-import { buttonClasses } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { confirmPayment } from "@/lib/toss/server";
 import { PLAN_NAMES, isPaidPlan } from "@/lib/toss/config";
 import { formatKRW } from "@/lib/format";
+import { SettingsShell } from "../../_components/settings-shell";
+
+export const metadata: Metadata = {
+  title: "결제 결과",
+  robots: { index: false, follow: false },
+};
 
 /*
   결제 성공 콜백 — successUrl?paymentKey&orderId&amount.
   승인은 서버에서만 수행하고 금액은 DB(payment_orders)의 예정 금액으로 검증한다
   (리다이렉트 amount를 신뢰하지 않음 — docs/REAL_API_SPEC.md 4절).
+  2026-09-03: 1회성 결제(checkout) 경로는 정기결제(subscribe)로 대체돼 링크가 없지만 콜백 URL 로는 살아 있어
+  결과 페이지 틀만 다른 결과 화면(SettingsShell·p-4)과 맞췄다.
 */
 
 type Outcome = { ok: true; amount: number; planName: string } | { ok: false; message: string };
@@ -94,9 +101,8 @@ export default async function BillingSuccessPage({
   const outcome = await processConfirmation(sp);
 
   return (
-    <div className="max-w-lg space-y-6">
-      <PageHeader title="결제 결과" description="요금제 결제 처리 결과입니다." />
-      <Card className="flex flex-col items-center gap-4 p-8 text-center">
+    <SettingsShell title="결제 결과">
+      <Card className="mx-auto flex w-full max-w-lg flex-col items-center gap-4 p-4 text-center">
         {outcome.ok ? (
           <>
             <CheckCircle2 className="size-12 text-positive" aria-hidden />
@@ -116,10 +122,10 @@ export default async function BillingSuccessPage({
             </div>
           </>
         )}
-        <Link href="/settings/billing" className={buttonClasses("primary", "md")}>
-          요금제로 돌아가기
-        </Link>
+        <ButtonLink href="/settings/billing" variant="primary" size="md">
+          플랜 관리로 돌아가기
+        </ButtonLink>
       </Card>
-    </div>
+    </SettingsShell>
   );
 }

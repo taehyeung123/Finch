@@ -69,7 +69,7 @@ export function MarketingConsentRow({ initial }: { initial: MarketingConsentStat
       : state.kind === "none"
         ? "아직 동의 기록이 없어요. 다음 방문에서 동의 화면이 뜨면 그때 고를 수 있어요"
         : state.kind === "ok" && state.at
-          ? `${formatDate(state.at)}에 동의했어요. 끄면 철회 시각이 기록되고 광고성 이메일 대상에서 빠져요`
+          ? `${formatDate(state.at)}에 동의했어요. 끄면 동의 기록이 지워지고 광고성 이메일 대상에서 바로 빠져요`
           : "지금은 받지 않고 있어요. 켜면 동의 시각이 기록돼요";
 
   return (
