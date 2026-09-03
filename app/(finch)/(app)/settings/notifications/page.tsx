@@ -10,7 +10,7 @@ import {
   type NotificationSettingsState,
   type RowKey,
 } from "./_components/notification-settings-client";
-import { MarketingConsentCard, type MarketingConsentState } from "./_components/marketing-consent-card";
+import { MarketingConsentRow, type MarketingConsentState } from "./_components/marketing-consent-card";
 
 /** 마케팅 수신 동의 상태(0079 user_consents) — 조회 실패는 «없음»과 가른다 */
 async function loadMarketingConsent(): Promise<MarketingConsentState> {
@@ -98,17 +98,17 @@ export default async function NotificationSettingsPage() {
   const marketing = await marketingPromise;
 
   return (
-    <SettingsShell title="알림 설정" description="알림 유형별로 수신 경로를 선택하세요.">
+    <SettingsShell title="알림 설정" description="어떤 소식을 인앱과 이메일로 받을지 정해요.">
       {loadFailed ? (
         <LoadFailed
           title="알림 설정을 불러오지 못했어요"
           description="지금 저장하면 기존 설정이 덮어써질 수 있어 화면을 잠시 막았어요. 다시 시도해 주세요."
         />
       ) : (
-        <NotificationSettingsClient initial={initial} />
+        <NotificationSettingsClient initial={initial} demoMode={isDemoMode()} />
       )}
-      {/* 광고성 정보 수신 동의는 위 표와 **다른 동의**다 — 카드를 따로 둔다(marketing-consent-card.tsx 주석) */}
-      <MarketingConsentCard initial={marketing} />
+      {/* 광고성 정보 수신 동의는 위 표와 **다른 동의**다 — 그룹을 따로 둔다(marketing-consent-card.tsx 주석) */}
+      <MarketingConsentRow initial={marketing} />
     </SettingsShell>
   );
 }

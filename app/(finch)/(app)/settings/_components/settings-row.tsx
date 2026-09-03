@@ -46,6 +46,8 @@ export interface SettingsRowProps {
   tip?: React.ReactNode;
   hint?: React.ReactNode | null;
   hintTone?: Tone;
+  /** 힌트를 두 줄까지 허용 — 설명이 곧 내용인 행(알림 유형). 기본은 한 줄 truncate */
+  hintWrap?: boolean;
   /** 힌트 앞 글리프 스택(연결된 채널 아이콘 등) */
   hintLeading?: React.ReactNode;
   /** 12px tnum 줄 — 날짜·만료 등 */
@@ -53,6 +55,8 @@ export interface SettingsRowProps {
   metaTone?: Tone;
   /** 오른쪽 슬롯. undefined 면 링크·버튼 행에 꺾쇠, null 이면 없음 */
   trailing?: React.ReactNode | null;
+  /** 좁은 화면에서도 슬롯을 오른쪽에 고정 — 열 머리가 있는 토글 매트릭스(알림)처럼 열이 맞아야 할 때 */
+  trailingFixed?: boolean;
   busy?: boolean;
   className?: string;
   /** 행 아래 펼침 영역(인라인 편집 폼 등) */
@@ -72,17 +76,20 @@ export function SettingsRow({
   tip,
   hint,
   hintTone = "sub",
+  hintWrap,
   hintLeading,
   meta,
   metaTone = "sub",
   trailing,
+  trailingFixed,
   busy,
   className,
   children,
 }: SettingsRowProps) {
   const interactive = Boolean(href || asButton);
   const hasLeading = Boolean(leading || Icon);
-  const chevronOnly = trailing === undefined && interactive;
+  /* 꺾쇠뿐이거나 고정을 요청한 행은 모든 폭에서 3열 — 슬롯이 본문 아래로 내려오지 않는다 */
+  const chevronOnly = (trailing === undefined && interactive) || Boolean(trailingFixed && trailing);
   const slot = trailing === undefined ? (interactive ? <ChevronRight className="size-4 shrink-0 text-fg-faint trans-state group-hover:text-fg-sub" aria-hidden /> : null) : trailing;
 
   const rootClass = cn(
@@ -119,7 +126,7 @@ export function SettingsRow({
         {hint ? (
           <span className={cn("mt-0.5 flex items-center gap-1.5 text-[14px] leading-snug", HINT_TONE[hintTone])}>
             {hintLeading}
-            <span className="min-w-0 truncate">{hint}</span>
+            <span className={cn("min-w-0", hintWrap ? "line-clamp-2 break-keep" : "truncate")}>{hint}</span>
           </span>
         ) : null}
         {meta ? <span className={cn("tnum mt-0.5 block text-[12px] leading-snug", HINT_TONE[metaTone])}>{meta}</span> : null}
@@ -202,46 +209,5 @@ export function SettingsGroup({
         {footer}
       </Card>
     </section>
-  );
-}
-
-/* ── 옛 이름(hub-row.tsx) 호환 — 허브 재작성 뒤 지운다 ── */
-export const hubRowClass =
-  "group flex w-full items-center gap-3 px-4 py-3.5 text-left trans-state hover:bg-tint-hover focus-visible:bg-tint-hover focus-visible:outline-none";
-
-export function HubRowBody({
-  icon: Icon,
-  label,
-  hint,
-  hintTone = "sub",
-}: {
-  icon: LucideIcon;
-  label: string;
-  hint?: string | null;
-  hintTone?: "sub" | "warning";
-}) {
-  return (
-    <>
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-card bg-plate text-fg-sub" aria-hidden>
-        <Icon className="size-4" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-[15px] font-semibold text-fg">{label}</span>
-        {hint ? <span className={cn("mt-0.5 block truncate text-[14px]", hintTone === "warning" ? "text-warning-strong" : "text-fg-sub")}>{hint}</span> : null}
-      </span>
-      <ChevronRight className="size-4 shrink-0 text-fg-faint trans-state group-hover:text-fg-sub" aria-hidden />
-    </>
-  );
-}
-
-export function HubRow(props: { href: string; icon: LucideIcon; label: string; hint?: string | null; hintTone?: "sub" | "warning" }) {
-  return <SettingsRow href={props.href} icon={props.icon} label={props.label} hint={props.hint} hintTone={props.hintTone} />;
-}
-
-export function HubGroup({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
-  return (
-    <SettingsGroup id={id} label={label}>
-      {children}
-    </SettingsGroup>
   );
 }

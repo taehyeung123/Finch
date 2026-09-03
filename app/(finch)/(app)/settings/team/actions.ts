@@ -35,7 +35,7 @@ function inviterDisplayName(user: {
 
 /** 팀 멤버 초대 — 소유자만(owner_user_id = auth.uid()). 이미 초대/참여 중인 이메일이면 에러. */
 export async function inviteMember(formData: FormData): Promise<InviteMemberResult> {
-  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 팀 초대를 사용할 수 없어요." };
+  if (isDemoMode()) return { ok: false, error: "지금은 예시 화면이라 팀 초대를 할 수 없어요." };
 
   const emailRaw = formData.get("email");
   const roleRaw = formData.get("role");
@@ -107,7 +107,7 @@ export async function inviteMember(formData: FormData): Promise<InviteMemberResu
 
 /** 멤버 제거 — 소유자 소유 행만 revoked로 전환한다(RLS로도 동일하게 이중 방어). */
 export async function revokeMember(memberId: string): Promise<TeamActionResult> {
-  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 멤버를 제거할 수 없어요." };
+  if (isDemoMode()) return { ok: false, error: "지금은 예시 화면이라 멤버를 제거할 수 없어요." };
   if (!memberId) return { ok: false, error: "잘못된 요청이에요. 화면을 새로고침해 주세요." };
   const supabase = await createClient();
   const {
@@ -133,7 +133,7 @@ export async function updateMemberRole(
   memberId: string,
   role: "editor" | "viewer",
 ): Promise<TeamActionResult> {
-  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 역할을 변경할 수 없어요." };
+  if (isDemoMode()) return { ok: false, error: "지금은 예시 화면이라 역할을 변경할 수 없어요." };
   if (!memberId) return { ok: false, error: "잘못된 요청이에요. 화면을 새로고침해 주세요." };
   const supabase = await createClient();
   const {

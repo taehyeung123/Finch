@@ -1,13 +1,24 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useFormStatus } from "react-dom";
+import { useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, UserPlus } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { SubmitButton } from "@/components/ui/submit-button";
-import { ConfirmSubmit } from "@/components/ui/confirm-submit";
+import { FolderKanban, Link2, UserPlus, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { AvatarImage } from "@/components/ui/avatar-image";
+import { ChoiceTile } from "@/components/ui/choice-tile";
+import { ConfirmSubmit } from "@/components/ui/confirm-submit";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FieldLabel, inputClass } from "@/components/ui/field";
+import { InfoTip } from "@/components/ui/info-tip";
+import { LoadFailed } from "@/components/ui/load-failed";
+import { ModalShell } from "@/components/ui/modal-shell";
+import { NoticeBar } from "@/components/ui/notice-bar";
+import { StateChip } from "@/components/ui/state-chip";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { formatDate } from "@/lib/format";
+import { SettingsGroup, SettingsRow } from "../../_components/settings-row";
+import { SummaryCard } from "../../_components/summary-card";
 import { inviteMember, revokeMember, updateMemberRole } from "../actions";
 
 export type TeamRole = "owner" | "editor" | "viewer";
@@ -19,226 +30,278 @@ export interface TeamRowVM {
   role: TeamRole;
   status: TeamStatus;
   isSelf: boolean;
+  /** 초대 행이 만들어진 시각 — «{날짜} 초대» 메타 */
+  invitedAt: string | null;
 }
 
-const ROLE_LABEL: Record<TeamRole, string> = { owner: "소유자", editor: "에디터", viewer: "뷰어" };
-const STATUS_TONE: Record<TeamStatus, "positive" | "warning"> = { active: "positive", invited: "warning" };
-const STATUS_LABEL: Record<TeamStatus, string> = { active: "참여중", invited: "초대중" };
+const ROLE_LABEL: Record<TeamRole | "unknown", string> = { owner: "소유자", editor: "에디터", viewer: "뷰어", unknown: "확인 못 함" };
 
-/* 인풋·셀렉트 공통 스타일 — 포커스는 공용 Button과 동일한 outline 링으로 통일
-   (2026-08 감사: focus:outline-none + 1px 보더 색 변경만 남기던 약한 포커스 표시 수리). */
-const fieldClass =
-  "h-10 rounded-card border border-line bg-body px-3 text-[15px] focus:border-primary focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:opacity-60";
-
-/* 초대 폼 필드 — <form action> 컨텍스트의 useFormStatus로 제출 중에만 비활성.
-   행 액션과 pending 상태를 분리해, 초대 전송이 멤버 행 조작을 막지 않는다. */
-function InviteFields({
-  demoMode,
-  email,
-  onEmailChange,
-  role,
-  onRoleChange,
-}: {
-  demoMode: boolean;
-  email: string;
-  onEmailChange: (value: string) => void;
-  role: Exclude<TeamRole, "owner">;
-  onRoleChange: (value: Exclude<TeamRole, "owner">) => void;
-}) {
-  const { pending } = useFormStatus();
-  return (
-    <>
-      <div className="flex-1">
-        <input
-          type="email"
-          name="email"
-          required
-          disabled={demoMode || pending}
-          value={email}
-          onChange={(e) => onEmailChange(e.target.value)}
-          placeholder="초대할 이메일 주소"
-          aria-label="초대할 이메일 주소"
-          className={`w-full placeholder:text-fg-faint ${fieldClass}`}
-        />
-      </div>
-      <select
-        name="role"
-        disabled={demoMode || pending}
-        value={role}
-        onChange={(e) => onRoleChange(e.target.value === "editor" ? "editor" : "viewer")}
-        aria-label="초대할 역할"
-        className={fieldClass}
-      >
-        <option value="viewer">뷰어</option>
-        <option value="editor">에디터</option>
-      </select>
-      <SubmitButton type="submit" size="md" disabled={demoMode} pendingLabel="보내는 중…">
-        <UserPlus className="size-4" aria-hidden />
-        초대 보내기
-      </SubmitButton>
-    </>
-  );
-}
-
+/*
+  팀 화면(클라이언트) — 요약 카드 → 멤버 그룹 → 준비 중인 기능. 초대는 첫 화면의 폼이 아니라 모달(«초대하기» 버튼 하나).
+  로컬 사본을 따로 들지 않는다 — 서버 액션 후 router.refresh() 가 새 initialRows 로 다시 그린다.
+  진행 중인 행만 잠근다(pendingId) — 전역 pending 이 모든 행을 비활성하던 문제(감사)의 수리 유지.
+  액션 3종·ConfirmSubmit 문구는 재설계 전과 같다(초대 폼의 필드명 email/role 도 그대로).
+*/
 export function TeamClient({
   initialRows,
-  isOwner,
+  role,
   demoMode,
 }: {
-  initialRows: TeamRowVM[];
-  isOwner: boolean;
+  /** null = 조회 실패 */
+  initialRows: TeamRowVM[] | null;
+  role: TeamRole | "unknown";
   demoMode: boolean;
 }) {
   const router = useRouter();
-  // 로컬 사본을 따로 들지 않는다 — 서버 액션 후 router.refresh()가 이 컴포넌트를 새 initialRows로
-  // 다시 렌더링해 주므로, prop을 그대로 원천 데이터로 쓴다(별도 상태 동기화 useEffect가 필요 없다).
   const rows = initialRows;
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<Exclude<TeamRole, "owner">>("viewer");
-  const [error, setError] = useState<string | null>(null);
-  // 진행 중인 행 id — 전역 isPending이 모든 행을 일괄 비활성하던 문제(감사) 대신,
-  // 해당 행만 비활성하고 나머지 행은 계속 조작할 수 있게 한다.
+  const isOwner = role === "owner";
+  const [notice, setNotice] = useState<{ tone: "positive" | "negative" | "warning"; text: string } | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [, startRowTransition] = useTransition();
-
-  async function submitInvite(formData: FormData) {
-    if (demoMode) return;
-    setError(null);
-    const res = await inviteMember(formData);
-    if (!res.ok) {
-      setError(res.error);
-      return;
-    }
-    setEmail("");
-    setRole("viewer");
-    router.refresh();
-  }
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   async function handleRevoke(memberId: string) {
     if (demoMode) return;
-    setError(null);
+    setNotice(null);
     setPendingId(memberId);
     const res = await revokeMember(memberId);
-    if (!res.ok) setError(res.error);
+    if (!res.ok) setNotice({ tone: "negative", text: res.error });
     else router.refresh();
     setPendingId(null);
   }
 
   function handleRoleChange(memberId: string, nextRole: Exclude<TeamRole, "owner">) {
     if (demoMode) return;
-    setError(null);
+    setNotice(null);
     setPendingId(memberId);
     startRowTransition(async () => {
       const res = await updateMemberRole(memberId, nextRole);
-      if (!res.ok) setError(res.error);
-      // 실패 시에도 refresh로 서버 상태(원래 역할)를 다시 그려 화면과 DB를 일치시킨다.
+      if (!res.ok) setNotice({ tone: "negative", text: res.error });
+      /* 실패 시에도 refresh 로 서버 상태(원래 역할)를 다시 그려 화면과 DB 를 일치시킨다 */
       router.refresh();
       setPendingId(null);
     });
   }
 
+  const active = (rows ?? []).filter((r) => r.status === "active").length;
+  const invited = (rows ?? []).filter((r) => r.status === "invited").length;
+  const alone = rows !== null && rows.length <= 1 && isOwner;
+
+  const sub: { text: React.ReactNode; tone: "sub" | "warning" } = demoMode
+    ? { text: "지금은 예시 화면이라 팀 초대·관리를 할 수 없어요", tone: "sub" }
+    : role === "unknown"
+      ? { text: "역할을 불러오지 못했어요 — 새로고침해 주세요", tone: "warning" }
+      : isOwner
+        ? alone
+          ? { text: "아직 혼자예요 — 이메일로 초대할 수 있어요", tone: "sub" }
+          : {
+              text: (
+                <>
+                  <span className="tnum">멤버 {active}명</span> · <span className="tnum">초대 대기 {invited}명</span>
+                </>
+              ),
+              tone: "sub",
+            }
+        : { text: "초대와 역할 변경은 소유자만 할 수 있어요", tone: "sub" };
+
   return (
-    <div className="space-y-5">
-      {isOwner ? (
-        <div className="space-y-2">
-          <form action={submitInvite} className="flex flex-col gap-2 sm:flex-row sm:items-start">
-            <InviteFields
-              demoMode={demoMode}
-              email={email}
-              onEmailChange={setEmail}
-              role={role}
-              onRoleChange={setRole}
-            />
-          </form>
-          {demoMode ? (
-            <p className="text-[14px] text-fg-sub">
-              {/* «로그인하면 된다»고 약속하지 않는다 — 예시 화면 여부는 배포 설정이라 로그인과 무관하다(소넷 점검) */}
-              지금은 예시 화면이라 팀 초대·관리를 할 수 없어요.
-            </p>
-          ) : null}
-        </div>
+    <>
+      {notice ? (
+        <NoticeBar tone={notice.tone}>
+          {notice.text}
+        </NoticeBar>
       ) : null}
 
-      {error ? (
-        <p role="alert" className="rounded-card bg-negative-weak p-3 text-[14px] text-negative-strong">
-          {error}
-        </p>
-      ) : null}
+      <SummaryCard
+        leading={
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-card bg-plate text-fg-sub" aria-hidden>
+            <Users className="size-5" />
+          </span>
+        }
+        eyebrow="내 역할"
+        title={ROLE_LABEL[role]}
+        chips={
+          <>
+            {role === "unknown" ? <StateChip tone="unknown" /> : null}
+            <InfoTip label="역할 설명">소유자는 초대·역할 변경·제거를, 에디터는 분석 보기에 더해 광고 게재 켜고 끄기를, 뷰어는 분석 보기만 할 수 있어요.</InfoTip>
+          </>
+        }
+        sub={sub.text}
+        subTone={sub.tone}
+        aside={
+          demoMode ? (
+            <Badge tone="neutral">예시 화면</Badge>
+          ) : isOwner && rows !== null ? (
+            <Button size="sm" onClick={() => setInviteOpen(true)}>
+              <UserPlus className="size-4" aria-hidden />
+              초대하기
+            </Button>
+          ) : undefined
+        }
+      />
 
-      <ul className="divide-y divide-line">
-        {rows.map((member) => (
-          <li key={member.id} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-            <div className="flex min-w-0 items-center gap-3">
-              <span
-                className="flex size-9 shrink-0 items-center justify-center rounded-chip bg-primary-weak text-[14px] font-bold text-primary"
-                aria-hidden
-              >
-                {member.email.slice(0, 1).toUpperCase()}
-              </span>
-              <div className="min-w-0">
-                <p className="truncate text-[15px] font-semibold">
-                  {member.email}
-                  {member.isSelf ? <span className="ml-1.5 font-normal text-fg-sub">(나)</span> : null}
-                </p>
-                <div className="mt-0.5 flex items-center gap-1.5">
-                  <Badge tone={STATUS_TONE[member.status]}>{STATUS_LABEL[member.status]}</Badge>
-                </div>
-              </div>
+      <SettingsGroup
+        id="members"
+        label="멤버"
+        footer={
+          rows === null ? (
+            <div className="p-4">
+              <LoadFailed dense title="멤버 목록을 불러오지 못했어요" description="목록이 빈 게 아니라 잠시 못 읽은 거예요. 다시 시도해 주세요." />
             </div>
-
-            <div className="flex shrink-0 items-center gap-2">
-              {isOwner && member.role !== "owner" ? (
-                <select
-                  aria-label={`${member.email} 역할`}
-                  value={member.role}
-                  disabled={demoMode || pendingId === member.id}
-                  onChange={(e) =>
-                    handleRoleChange(member.id, e.target.value === "editor" ? "editor" : "viewer")
-                  }
-                  className={fieldClass}
-                >
-                  <option value="viewer">뷰어</option>
-                  <option value="editor">에디터</option>
-                </select>
-              ) : (
-                <Badge tone={member.role === "owner" ? "primary" : "neutral"}>{ROLE_LABEL[member.role]}</Badge>
-              )}
-
-              {isOwner && member.role !== "owner" ? (
-                demoMode ? (
-                  <Button
-                    type="button"
-                    variant="danger"
-                    size="sm"
-                    disabled
-                    aria-label={`${member.email} 제거`}
-                    className="h-10 w-10 shrink-0 px-0"
-                  >
-                    <Trash2 className="size-4" aria-hidden />
+          ) : alone && !demoMode ? (
+            <div className="p-4">
+              <EmptyState
+                dense
+                icon={UserPlus}
+                title="아직 초대한 멤버가 없어요"
+                description="이메일로 초대하면 내 채널 분석을 함께 볼 수 있어요."
+                action={
+                  <Button size="sm" variant="secondary" onClick={() => setInviteOpen(true)}>
+                    초대하기
                   </Button>
-                ) : (
-                  <ConfirmSubmit
-                    action={() => handleRevoke(member.id)}
-                    title="멤버를 제거할까요?"
-                    description={`${member.email}님의 워크스페이스 접근 권한이 바로 해제돼요. 다시 참여하려면 초대를 새로 보내 상대가 수락해야 해요.`}
-                    confirmLabel="정말 제거"
-                    pendingLabel="제거 중…"
-                    trigger={
-                      <>
-                        <Trash2 className="size-4" aria-hidden />
-                        <span className="sr-only">{member.email} 제거</span>
-                      </>
-                    }
-                    triggerVariant="danger"
-                    triggerSize="sm"
-                    triggerClassName="h-10 w-10 shrink-0 px-0"
-                  />
-                )
-              ) : null}
+                }
+              />
             </div>
-          </li>
-        ))}
-      </ul>
-    </div>
+          ) : undefined
+        }
+      >
+        {(rows ?? []).map((member) => {
+          const busy = pendingId === member.id;
+          const canManage = isOwner && member.role !== "owner";
+          return (
+            <SettingsRow
+              key={member.id}
+              leading={<AvatarImage src={null} initial={(member.email.charAt(0) || "?").toUpperCase()} sizeClass="size-9" textClass="text-[14px]" />}
+              label={member.email || "이메일 없음"}
+              chip={
+                <>
+                  {member.isSelf ? <Badge tone="neutral">나</Badge> : null}
+                  {member.status === "active" ? <StateChip tone="ok">참여 중</StateChip> : <StateChip tone="pending">초대 대기</StateChip>}
+                </>
+              }
+              hint={member.status === "invited" && member.invitedAt ? <span className="tnum">{formatDate(member.invitedAt)} 초대</span> : ROLE_LABEL[member.role]}
+              busy={busy}
+              trailing={
+                canManage ? (
+                  <>
+                    <select
+                      aria-label={`${member.email} 역할`}
+                      value={member.role}
+                      disabled={demoMode || busy}
+                      onChange={(e) => handleRoleChange(member.id, e.target.value === "editor" ? "editor" : "viewer")}
+                      className={inputClass("sm", "max-w-[7.5rem]")}
+                    >
+                      <option value="viewer">뷰어</option>
+                      <option value="editor">에디터</option>
+                    </select>
+                    {demoMode ? (
+                      <Button type="button" variant="ghost" size="sm" disabled>
+                        {member.status === "invited" ? "초대 취소" : "제거"}
+                      </Button>
+                    ) : member.status === "invited" ? (
+                      <ConfirmSubmit
+                        action={() => handleRevoke(member.id)}
+                        title="초대를 취소할까요?"
+                        description={`${member.email} 님에게 보낸 초대 링크가 더 이상 열리지 않아요. 나중에 다시 초대할 수 있어요.`}
+                        confirmLabel="초대 취소"
+                        pendingLabel="취소 중…"
+                        trigger="초대 취소"
+                        triggerVariant="ghost"
+                        triggerSize="sm"
+                      />
+                    ) : (
+                      <ConfirmSubmit
+                        action={() => handleRevoke(member.id)}
+                        title="멤버를 제거할까요?"
+                        description={`${member.email}님의 워크스페이스 접근 권한이 바로 해제돼요. 다시 참여하려면 초대를 새로 보내 상대가 수락해야 해요.`}
+                        confirmLabel="제거하기"
+                        pendingLabel="제거 중…"
+                        trigger="제거"
+                        triggerVariant="ghost"
+                        triggerSize="sm"
+                        triggerClassName="text-negative-strong hover:text-negative-strong"
+                      />
+                    )}
+                  </>
+                ) : (
+                  <Badge tone={member.role === "owner" ? "primary" : "neutral"}>{ROLE_LABEL[member.role]}</Badge>
+                )
+              }
+            />
+          );
+        })}
+      </SettingsGroup>
+
+      {/* 예정 기능(PART 4.10) — 정적 행 두 개, 꺾쇠 없음 */}
+      <SettingsGroup id="upcoming" label="준비 중인 기능">
+        <SettingsRow icon={FolderKanban} label="클라이언트별 프로젝트 분리" hint="클라이언트마다 채널·리포트를 따로 관리해요" trailing={<Badge tone="neutral">준비 중</Badge>} />
+        <SettingsRow icon={Link2} label="클라이언트용 열람 링크" hint="로그인 없이 리포트만 볼 수 있는 만료되는 링크" trailing={<Badge tone="neutral">준비 중</Badge>} />
+      </SettingsGroup>
+
+      {inviteOpen ? (
+        <InviteModal
+          onClose={() => setInviteOpen(false)}
+          onDone={(email) => {
+            setInviteOpen(false);
+            setNotice({ tone: "positive", text: `${email} 님에게 초대 메일을 보냈어요.` });
+            router.refresh();
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function InviteModal({ onClose, onDone }: { onClose: () => void; onDone: (email: string) => void }) {
+  const [role, setRole] = useState<Exclude<TeamRole, "owner">>("viewer");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const emailId = useId();
+
+  async function submit(formData: FormData) {
+    setError(null);
+    setSubmitting(true);
+    try {
+      const res = await inviteMember(formData);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      onDone(String(formData.get("email") ?? "").trim());
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <ModalShell label="멤버 초대" title="멤버 초대" description="초대 메일의 링크로 수락하면 참여가 시작돼요" size="sm" busy={submitting} onClose={onClose}>
+      <form action={submit} className="space-y-4">
+        <div>
+          <FieldLabel htmlFor={emailId}>이메일</FieldLabel>
+          <input id={emailId} type="email" name="email" required autoFocus placeholder="초대할 이메일 주소" className={inputClass("md", "mt-1.5")} />
+        </div>
+        <fieldset>
+          <legend className="text-[12px] font-medium text-fg-sub">역할</legend>
+          <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
+            <ChoiceTile name="role" value="viewer" checked={role === "viewer"} onChange={() => setRole("viewer")} title="뷰어" hint="분석 화면을 보기만 해요" />
+            <ChoiceTile name="role" value="editor" checked={role === "editor"} onChange={() => setRole("editor")} title="에디터" hint="보기에 더해 광고 게재를 켜고 끌 수 있어요" />
+          </div>
+        </fieldset>
+        {error ? (
+          <p role="alert" className="text-[14px] text-negative-strong">
+            {error}
+          </p>
+        ) : null}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" size="sm" onClick={onClose} disabled={submitting}>
+            취소
+          </Button>
+          <SubmitButton size="sm" pendingLabel="보내는 중…">
+            <UserPlus className="size-4" aria-hidden />
+            초대 메일 보내기
+          </SubmitButton>
+        </div>
+      </form>
+    </ModalShell>
   );
 }
