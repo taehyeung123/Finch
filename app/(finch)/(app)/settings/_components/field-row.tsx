@@ -53,6 +53,7 @@ export function FieldList({
   id,
   label,
   description,
+  aside,
   footer,
   children,
 }: {
@@ -60,6 +61,8 @@ export function FieldList({
   label?: string;
   /** 라벨 아래 한 줄(14px) — 근거·범위 설명 */
   description?: React.ReactNode;
+  /** 라벨 줄 오른쪽 — 상태 칩 하나 */
+  aside?: React.ReactNode;
   footer?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -68,9 +71,12 @@ export function FieldList({
     <section aria-labelledby={label ? headingId : undefined}>
       {label ? (
         <div className="mb-2 px-1">
-          <h2 id={headingId} className="text-[12px] font-semibold text-fg-sub">
-            {label}
-          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 id={headingId} className="text-[12px] font-semibold text-fg-sub">
+              {label}
+            </h2>
+            {aside}
+          </div>
           {description ? <p className="mt-0.5 text-[14px] text-fg-sub">{description}</p> : null}
         </div>
       ) : null}

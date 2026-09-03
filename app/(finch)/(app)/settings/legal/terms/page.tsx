@@ -22,13 +22,13 @@ export default function TermsInAppPage() {
           href="/terms"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-[14px] font-medium text-fg-sub underline underline-offset-2 hover:text-fg"
+          className="trans-state relative inline-flex items-center gap-1 py-2 text-[14px] font-medium text-fg-sub underline underline-offset-2 after:absolute after:-inset-x-2 after:inset-y-0 after:content-[''] hover:text-fg"
         >
           새 창에서 열기 <ExternalLink className="size-3.5" aria-hidden />
         </a>
       }
     >
-      <Card className="p-5">
+      <Card className="p-4">
         <LegalDocument sections={TERMS_SECTIONS} variant="app" />
       </Card>
     </SettingsShell>
