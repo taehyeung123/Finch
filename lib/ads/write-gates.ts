@@ -71,11 +71,13 @@ export async function passGates(options?: {
     /* 쿨다운 — 확정된 직전 쓰기와의 간격. (동시 제출은 pending 예약이 DB 유니크로 막는다 —
        이 조회만으로는 Meta 왕복 동안의 경쟁을 못 막는다는 것이 감사 지적이었다.) */
     const since = new Date(Date.now() - WRITE_COOLDOWN_SECONDS * 1000).toISOString();
+    /* 이미지 업로드 기록은 쿨다운을 만들지 않는다(§13-4) — 올리자마자 다음 단계로 가는 흐름을 막지 않는다 */
     const { data: recent, error: logErr } = await supabase
       .from("meta_ad_write_log")
       .select("id")
       .eq("user_id", ctx.ownerId)
       .eq("ad_account_id", ctx.adAccountId)
+      .neq("action", "upload_image")
       .gte("created_at", since)
       .limit(1);
     if (!logErr && recent && recent.length > 0) {
@@ -207,6 +209,30 @@ export async function settleWrite(
     else if (!res.data || res.data.length === 0) console.error("[ads-write] 감사 로그 확정 0행:", logId);
   } catch (e) {
     console.error("[ads-write] 감사 로그 확정 실패:", e);
+  }
+}
+
+/**
+ * 체인 진행 중 pending 행의 `request.steps` 갱신 — 함수가 중간에 죽어도 생긴 id 가 남는다(스펙 §6.3).
+ * 실패해도 흐름은 막지 않는다(기록 부재로 이미 만든 것을 되돌릴 수는 없다).
+ */
+export async function updateWriteSteps(logId: string, steps: Record<string, unknown>): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const { data, error: readErr } = await supabase.from("meta_ad_write_log").select("request").eq("id", logId).maybeSingle();
+    if (readErr) {
+      console.error("[ads-write] 단계 기록 조회 실패:", readErr.message);
+      return;
+    }
+    const request = ((data as { request?: unknown } | null)?.request ?? {}) as Record<string, unknown>;
+    const prev = (request.steps && typeof request.steps === "object" ? request.steps : {}) as Record<string, unknown>;
+    const { error } = await supabase
+      .from("meta_ad_write_log")
+      .update({ request: { ...request, steps: { ...prev, ...steps } } })
+      .eq("id", logId);
+    if (error) console.error("[ads-write] 단계 기록 실패:", error.message);
+  } catch (e) {
+    console.error("[ads-write] 단계 기록 실패:", e);
   }
 }
 

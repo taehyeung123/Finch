@@ -181,6 +181,23 @@ export async function fbPost<T>(
 }
 
 /**
+ * Graph GET — 쓰기 흐름 안의 읽기(타겟 검색·도달 추정·검증). ads.ts 의 fbGet 과 달리 **던지지 않고**
+ * usage 를 함께 돌려준다(§13-17 «읽기도 점수를 쓴다»). 토큰은 URL 쿼리 — no-store 필수(ads.ts 주석).
+ */
+export async function fbGetResult<T>(path: string, params: Record<string, string>, accessToken: string): Promise<AdsWriteResult<T>> {
+  const q = new URLSearchParams({ ...params, access_token: accessToken });
+  try {
+    const res = await fetch(`${GRAPH_FB_BASE}${path}?${q.toString()}`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(WRITE_TIMEOUT_MS),
+    });
+    return await readResult<T>(res);
+  } catch (e) {
+    return { ok: false, error: transportError(e) };
+  }
+}
+
+/**
  * Graph POST(멀티파트) — 이미지 바이트처럼 쿼리스트링에 못 싣는 것. 토큰은 본문 필드로 간다.
  * ⚠️ 호출측이 FormData 에 access_token 을 미리 넣지 않는다 — 여기서 한 번만 붙인다(로그·직렬화에 새는 것을 막는다).
  */
@@ -300,6 +317,28 @@ export async function updateCampaign(p: UpdateCampaignParams): Promise<AdsWriteR
     };
   }
   return fbPost<{ success?: boolean }>(`/${p.campaignId}`, params, p.accessToken);
+}
+
+/* ── 2단계: 광고 세트 · 소재 · 광고 — 파라미터는 lib/ads/adset-rules · creative-rules 가 만든다(status 는 그쪽 상수 PAUSED) ── */
+
+export async function createAdSet(adAccountId: string, params: Record<string, string>, accessToken: string): Promise<AdsWriteResult<{ id?: string }>> {
+  return fbPost<{ id?: string }>(`/act_${adAccountId}/adsets`, params, accessToken);
+}
+
+export async function createAdCreative(adAccountId: string, params: Record<string, string>, accessToken: string): Promise<AdsWriteResult<{ id?: string }>> {
+  return fbPost<{ id?: string }>(`/act_${adAccountId}/adcreatives`, params, accessToken);
+}
+
+export async function createAd(adAccountId: string, params: Record<string, string>, accessToken: string): Promise<AdsWriteResult<{ id?: string }>> {
+  return fbPost<{ id?: string }>(`/act_${adAccountId}/ads`, params, accessToken);
+}
+
+/**
+ * 광고 세트·광고 상태 — 캠페인과 같은 `POST /{id}`. ACTIVE 는 돈이 나갈 수 있다(호출측이 소유 대조·ConfirmSubmit 을 거친다).
+ * ⚠️ objectId 는 호출측이 ^\d{1,30}$ 로 걸러야 한다 — 여기서는 경로에 그대로 보간한다.
+ */
+export async function updateObjectStatus(objectId: string, status: "ACTIVE" | "PAUSED", accessToken: string): Promise<AdsWriteResult<{ success?: boolean }>> {
+  return fbPost<{ success?: boolean }>(`/${objectId}`, { status }, accessToken);
 }
 
 /**
