@@ -186,6 +186,11 @@ export function Sidebar() {
       <li key={href}>
         <Link
           href={href}
+          /* prefetch={false} — 사이드바는 앱 화면마다 항상 뜨고 항목이 14개라, 기본 프리페치(뷰포트
+             진입 시 자동)면 로그인 직후 첫 페인트마다 그 14개가 동시에 RSC 를 당겨온다(요금 방어
+             기획서 «사이드바 프리페치 다이어트»). 클릭 시엔 그대로 이동하고, 지금처럼 눈에 항상
+             보이는 메뉴라 호버 프리페치가 없어도 체감 지연이 크지 않다. */
+          prefetch={false}
           aria-current={active ? "page" : undefined}
           title={collapsed ? (groupLabel ? `${groupLabel} · ${label}` : label) : undefined}
           className={cn(
