@@ -15,6 +15,9 @@
 //
 //   node scripts/check-vercel-json.mjs            (Hobby 기준 검사)
 //   node scripts/check-vercel-json.mjs --pro      (Pro 로 올린 뒤)
+//
+// 2026-09-06 Vercel Pro 전환 — package.json 의 build 가 --pro 로 부른다. 분 단위 크론
+// (/api/cron/flush-views) 이 Hobby 규칙엔 걸리므로, Hobby 로 되돌리면 플래그를 떼고 크론도 줄여야 한다.
 
 import { readFileSync } from "node:fs";
 

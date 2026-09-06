@@ -4,18 +4,20 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/check-vercel-json.mjs && next build",
+    "build": "node scripts/check-vercel-json.mjs --pro && next build",
     "start": "next start",
     "lint": "eslint",
-    "check:vercel": "node scripts/check-vercel-json.mjs"
+    "check:vercel": "node scripts/check-vercel-json.mjs --pro"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
     "@next/third-parties": "^16.2.11",
     "@pdf-lib/fontkit": "^1.1.1",
+    "@sentry/nextjs": "^10.73.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.110.2",
     "@tosspayments/tosspayments-sdk": "^2.7.1",
+    "@upstash/redis": "^1.38.4",
     "konva": "^10.3.0",
     "lucide-react": "^1.24.0",
     "next": "16.3.1",
