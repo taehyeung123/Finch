@@ -20,10 +20,14 @@ export interface TiktokAccountInfo {
   displayName: string | null;
   username: string | null;
   avatarUrl: string | null;
-  followerCount: number;
-  followingCount: number;
-  likesCount: number;
-  videoCount: number;
+  /* ⚠️ 숫자 넷은 **null 이 될 수 있다 = «확인 불가»**. 사용자가 동의 화면에서 user.info.stats 만 빼고 허용하면
+     응답에 이 필드들이 아예 안 온다(스코프 승인 ≠ 사용자 동의 — 틱톡 문서가 못 박는다).
+     예전엔 그때 0 을 넣었는데, 그건 «팔로워 0명»이라는 거짓말이고 갱신 크론이 진짜 값을 0 으로 덮어쓴 뒤
+     「하루 사이 수천 명 감소」 알림까지 보냈다. 모르면 null 로 두고 호출측이 컬럼을 안 건드린다(저장소 0075 규칙). */
+  followerCount: number | null;
+  followingCount: number | null;
+  likesCount: number | null;
+  videoCount: number | null;
 }
 
 interface TiktokUserInfoResponse {
@@ -60,9 +64,9 @@ export async function fetchTiktokUserInfo(accessToken: string): Promise<TiktokAc
     displayName: user.display_name ?? null,
     username: user.username ?? null,
     avatarUrl: user.avatar_url ?? null,
-    followerCount: typeof user.follower_count === "number" ? user.follower_count : 0,
-    followingCount: typeof user.following_count === "number" ? user.following_count : 0,
-    likesCount: typeof user.likes_count === "number" ? user.likes_count : 0,
-    videoCount: typeof user.video_count === "number" ? user.video_count : 0,
+    followerCount: typeof user.follower_count === "number" ? user.follower_count : null,
+    followingCount: typeof user.following_count === "number" ? user.following_count : null,
+    likesCount: typeof user.likes_count === "number" ? user.likes_count : null,
+    videoCount: typeof user.video_count === "number" ? user.video_count : null,
   };
 }

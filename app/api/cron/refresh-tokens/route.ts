@@ -349,9 +349,12 @@ export async function GET(request: Request) {
       // 일일 계정 스냅샷 — 팔로워 급변 감지 + followers·posts(video_count) 최신화
       try {
         const info = await fetchTiktokUserInfo(token);
+        /* ⚠️ 통계 넷은 null 일 수 있다 = «확인 불가»(사용자가 user.info.stats 만 거부한 경우).
+           그때 0 으로 치면 진짜 값을 0 으로 덮어쓰고 「하루 사이 수천 명 감소」 알림까지 나간다.
+           모르면 아무것도 하지 않는다 — 알림도, 갱신도. */
         const prev = acc.followers ?? 0;
-        const delta = info.followerCount - prev;
-        if (prev > 0 && Math.abs(delta) >= Math.max(SPIKE_MIN_ABS, Math.round(prev * SPIKE_MIN_PCT))) {
+        const delta = info.followerCount === null ? null : info.followerCount - prev;
+        if (delta !== null && prev > 0 && Math.abs(delta) >= Math.max(SPIKE_MIN_ABS, Math.round(prev * SPIKE_MIN_PCT))) {
           const up = delta > 0;
           const sent = await notifyUser(admin, {
             userId: acc.user_id,
@@ -359,14 +362,18 @@ export async function GET(request: Request) {
             settingKey: "account",
             dedupeMs: 86_400_000,
             title: up ? "팔로워가 크게 늘고 있어요" : "팔로워가 크게 줄었어요",
-            body: `${acc.handle} 팔로워가 하루 사이 ${up ? "+" : ""}${delta.toLocaleString("ko-KR")}명 변동했어요 (현재 ${info.followerCount.toLocaleString("ko-KR")}명).`,
+            body: `${acc.handle} 팔로워가 하루 사이 ${up ? "+" : ""}${delta.toLocaleString("ko-KR")}명 변동했어요 (현재 ${(prev + delta).toLocaleString("ko-KR")}명).`,
           });
           if (sent) spikes++;
         }
-        await admin
-          .from("connected_accounts")
-          .update({ followers: info.followerCount, posts: info.videoCount })
-          .eq("id", acc.id);
+        /* null 인 컬럼은 아예 안 건드린다 — 마지막으로 알던 값이 남는 게 0 보다 정직하다 */
+        const snapshot = {
+          ...(info.followerCount !== null ? { followers: info.followerCount } : {}),
+          ...(info.videoCount !== null ? { posts: info.videoCount } : {}),
+        };
+        if (Object.keys(snapshot).length > 0) {
+          await admin.from("connected_accounts").update(snapshot).eq("id", acc.id);
+        }
       } catch (e) {
         // 스냅샷 실패는 치명적이지 않다 — 다음 실행에서 재시도
         console.warn("[cron:refresh] TikTok 계정 스냅샷 실패:", acc.id, e instanceof Error ? e.message : String(e));

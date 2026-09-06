@@ -103,8 +103,10 @@ export async function GET(request: Request) {
       display_name: info.displayName ?? info.username ?? null,
       bio: null as string | null, // user.info.profile의 bio_description은 최소 스코프 원칙상 미요청
       connected: true,
-      followers: info.followerCount,
-      posts: info.videoCount,
+      /* 통계 권한을 안 준 연동이면 null 이 온다 = «확인 불가». 그때 0 을 박으면 「팔로워 0명」이라는
+         거짓말이 되고, 재연동 때 예전 값까지 지운다. 모르면 컬럼을 안 보낸다(신규 저장이면 DB 기본값). */
+      ...(info.followerCount !== null ? { followers: info.followerCount } : {}),
+      ...(info.videoCount !== null ? { posts: info.videoCount } : {}),
       access_token_cipher: accessCipher,
       refresh_token_cipher: refreshCipher,
       token_expires_at: expiresAt,
