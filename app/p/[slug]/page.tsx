@@ -469,6 +469,9 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
               <Link
                 href="/?utm_source=profile_link&utm_medium=corner_logo"
                 target="_blank"
+                /* 프리페치 끔 — 방문자 페이지는 트래픽이 가장 큰 지면이다. 미리 받아 봐야 새 창으로 열리는 홍보 링크다
+                   (2026-09-06 실측: 알약과 합쳐 방문 1건당 마케팅 홈 요청 5개). */
+                prefetch={false}
                 aria-label="핀치 — 나만의 페이지 만들기"
                 className="lp-btn absolute! left-3.5 top-3.5 sm:left-7 sm:top-7 z-20 flex size-10 items-center justify-center rounded-[16px] border border-[var(--lp-border)] bg-[color-mix(in_srgb,var(--lp-card)_55%,transparent)] text-[var(--lp-fg)] shadow-[var(--lp-shadow)] backdrop-blur-lg"
               >

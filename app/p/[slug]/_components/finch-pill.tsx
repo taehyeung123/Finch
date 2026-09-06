@@ -31,6 +31,9 @@ export function FinchPill({ label }: { label: string }) {
         <Link
           href="/?utm_source=profile_link&utm_medium=pill"
           target="_blank"
+          /* 프리페치 끔 — 방문자가 이 페이지를 열기만 해도 마케팅 홈 RSC 를 미리 받아 온다(2026-09-06 실측:
+             모서리 로고와 합쳐 방문 1건당 요청 5개). 새 창으로 열리는 홍보 링크라 미리 받을 값어치가 없다. */
+          prefetch={false}
           className="flex min-h-9 items-center gap-2 pr-1 text-[13px] font-bold"
         >
           <FinchMark className="size-4 text-primary" aria-hidden />
