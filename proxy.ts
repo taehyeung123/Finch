@@ -126,6 +126,15 @@ function applySecurityHeaders(response: NextResponse, publicLink = false) {
   // 로그로 확인해 필요시 이 목록을 좁히거나 보정할 것 (docs/REAL_API_SPEC.md 6절).
   const tiktokCdn = "https://*.tiktokcdn.com https://*.tiktokcdn-us.com";
 
+  /* Cloudflare Web Analytics 비콘 — **우리가 넣는 게 아니라 Cloudflare 가 응답 HTML 에 끼워 넣는다**(프록시 켠 뒤부터).
+     막아도 태그는 그대로 실려 오고 브라우저만 실행을 거부해, 방문자마다 콘솔 오류 한 줄이 남을 뿐 지켜지는 게 없었다
+     (2026-09-06 실측: data-cf-beacon 토큰이 박힌 script 태그가 모든 HTML 에 들어온다).
+     쿠키를 심지 않고 개인을 추적하지 않으며, Cloudflare 는 이미 프록시로 모든 요청을 본다 — 비콘이 여는 새 노출이 없다.
+     그래서 GA 와 달리 방문자 페이지에서도 허용한다. 끄고 싶으면 Cloudflare 대시보드 Web Analytics 에서 끄면
+     태그 자체가 안 온다(그때 이 항목은 남아 있어도 무해하다). 전송 대상은 script 와 다른 호스트다(cloudflareinsights.com). */
+  const cfInsightsScript = " https://static.cloudflareinsights.com";
+  const cfInsightsConnect = " https://cloudflareinsights.com";
+
   // GA4 트래픽 계측 — 측정 ID 설정 시에만 구글 태그매니저/애널리틱스 오리진 허용
   const gaConfigured = Boolean(process.env.NEXT_PUBLIC_GA_ID);
   const gaScript = gaConfigured ? " https://www.googletagmanager.com" : "";
@@ -159,7 +168,7 @@ function applySecurityHeaders(response: NextResponse, publicLink = false) {
     /* t1.daumcdn.net = 다음 우편번호 SDK **그리고 카카오맵 엔진(mapjsapi — dapi 로더가 2차로 주입)** —
        우편번호를 없애더라도 이 항목을 지우면 지도가 조용히 깨진다(쏘넷 점검, 실측). */
     /* dapi.kakao.com = 카카오맵 JS SDK 로더(지도 블록). 타일 이미지는 img-src https: 가 이미 연다 */
-    `script-src 'self' 'unsafe-inline' https://t1.daumcdn.net https://dapi.kakao.com ${toss}${gaScript}${trackerScript}${isDev ? " 'unsafe-eval'" : ""}`,
+    `script-src 'self' 'unsafe-inline' https://t1.daumcdn.net https://dapi.kakao.com ${toss}${cfInsightsScript}${gaScript}${trackerScript}${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
     "font-src 'self' https://cdn.jsdelivr.net",
     // https: 를 통째로 여는 유일한 지시어다. 프로필 링크는 사용자가 **자기 이미지 주소를
@@ -168,7 +177,7 @@ function applySecurityHeaders(response: NextResponse, publicLink = false) {
     `img-src 'self' data: blob: https: ${toss} ${igCdn} ${tiktokCdn}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
     /* Sentry 인제스트 — 브라우저 SDK 가 오류 이벤트를 DSN 의 오리진으로 직접 보낸다(터널 라우트를 쓰지 않는다 —
        이벤트마다 Vercel 함수 호출이 붙는 비용을 피한다). DSN 이 없으면 항목도 없다. */
-    `connect-src 'self' https://dapi.kakao.com ${toss}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}${sentryOrigin ? ` ${sentryOrigin}` : ""}${gaConnect}${trackerConnect}`,
+    `connect-src 'self' https://dapi.kakao.com ${toss}${cfInsightsConnect}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}${sentryOrigin ? ` ${sentryOrigin}` : ""}${gaConnect}${trackerConnect}`,
     /* 우편번호 임베드는 실측상 postcode.map.kakao.com 을 프레이밍한다(구 daum.net 도 함께 허용) */
     /* 메타 광고 미리보기 iframe(generatepreviews) — **경로까지** 좁혀 앱 화면에만 연다(공개 프로필엔 열 이유가 없다, 스펙 §13-18).
        리다이렉트로 web./m.facebook.com 이 나오면 그때 넓힌다(실측 항목 §11-12). */

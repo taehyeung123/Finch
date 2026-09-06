@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# 템플릿은 추적한다 — 값이 하나도 없는 «어떤 키가 필요한지» 목록이고, 문서 여러 곳이 이걸 정본이라 부른다.
+# .env* 패턴에 걸려 저장소에 없었다(2026-09-06 적발) — 새로 받으면 문서가 가리키는 파일이 없었다.
+!.env.example
 
 # vercel
 .vercel
@@ -43,8 +46,8 @@ next-env.d.ts
 # 사업계획서 등 비공개 문서 — 저장소가 public이라 추적하지 않는다
 BUSINESS_PLAN.md
 
-.vercel
-.env*
+# (여기 있던 .vercel·.env* 중복은 삭제 — 위쪽 규칙과 같은 내용인데 순서상 뒤에 있어
+#  위의 `!.env.example` 예외를 도로 덮어 템플릿이 계속 추적되지 않았다, 2026-09-06)
 
 # Playwright MCP 브라우저 검증 산출물
 .playwright-mcp/
