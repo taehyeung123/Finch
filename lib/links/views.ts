@@ -176,6 +176,20 @@ function tripBreaker() {
   kvDownUntil = Date.now() + BREAKER_MS;
 }
 
+/**
+ * KV 예외 — 원인을 남긴다. 장애·한도 소진뿐 아니라 **Lua 스크립트 오류**가 여기로 온다.
+ * 그때 조용하면 «버퍼가 도는 줄 알고» 계속 DB 경로인 채로 남는다 — 밖에서는 구분이 안 된다.
+ * 10분에 한 번만 — 방문마다 찍으면 장애 하나가 Sentry 무료 한도를 태운다.
+ */
+function noteKvError(where: "view" | "dwell", e: unknown) {
+  consoleErrorThrottled(
+    `links.kv.error.${where}`,
+    10 * 60 * 1000,
+    `[links] 방문 버퍼 오류(${where}) — 60초간 DB 직접 기록:`,
+    e instanceof Error ? e.message : String(e),
+  );
+}
+
 /* 우회 로그는 인스턴스당 10분에 한 번 — 방문마다 찍으면 Sentry 무료 한도(월 5천)를 우회 로그가 먹는다 */
 function noteBypass(code: string) {
   consoleErrorThrottled(
@@ -220,9 +234,11 @@ export async function enqueueView(row: ViewRow, slug: string): Promise<"queued" 
     if (code === "dup" || code === "page_cap" || code === "anon_cap") return "skipped";
     noteBypass(code || "unknown");
     return "fallback";
-  } catch {
-    /* Upstash 장애·한도 소진 — 방문자는 통계를 남기러 온 게 아니다. 60초 차단 후 DB 경로로 */
+  } catch (e) {
+    /* Upstash 장애·한도 소진·스크립트 오류 — 방문자는 통계를 남기러 온 게 아니다. 60초 차단 후 DB 경로로.
+       **조용히 넘어가지 않는다**: 여기서 안 남기면 스크립트가 깨져도 «버퍼가 도는 줄 알고» 영원히 DB 경로다(배포 점검). */
     tripBreaker();
+    noteKvError("view", e);
     return "fallback";
   }
 }
@@ -245,8 +261,9 @@ export async function enqueueDwell(slug: string, visitorHash: string, ms: number
     if (code === "throttled") return "skipped";
     if (code === "stale" || code === "backlog") noteBypass(code);
     return "fallback";
-  } catch {
+  } catch (e) {
     tripBreaker();
+    noteKvError("dwell", e);
     return "fallback";
   }
 }
