@@ -8,6 +8,17 @@ import { unlockCookieName, unlockToken, verifyPagePassword } from "@/lib/links/p
 import { loadPublicPage } from "./public-page";
 import { isScheduledHidden } from "@/lib/links/blocks";
 import type { LpErrorCode } from "@/lib/links/i18n";
+import {
+  DWELL_MAX_MS,
+  VIEW_ANON_PER_MIN,
+  VIEW_PAGE_PER_MIN,
+  VIEW_WINDOW_MS,
+  enqueueDwell,
+  enqueueView,
+  insertViewRows,
+  type ViewRow,
+} from "@/lib/links/views";
+import { consoleErrorThrottled } from "@/lib/monitoring/log-throttle";
 
 /** 방문자 액션 결과 — error 는 한국어 기본 문구, code 는 페이지 언어로 번역할 키(감사 C8) */
 export type VisitorResult = { ok: true } | { ok: false; error: string; code: LpErrorCode };
@@ -18,6 +29,9 @@ const fail = (code: LpErrorCode, error: string): VisitorResult => ({ ok: false, 
 
   둘 다 **service_role 로 쓴다.** link_views·link_leads 에 익명 INSERT 정책을 주면
   아무나 통계를 부풀리고 스팸을 넣을 수 있다(0048 에 INSERT 정책이 없는 이유).
+
+  방문·체류는 2026-09-06 부터 **Upstash 버퍼**를 먼저 탄다(lib/links/views.ts) — Redis 한 왕복으로 판정하고
+  1분 크론(/api/cron/flush-views)이 묶어 넣는다. KV 가 없거나 크론이 멈추면 이 파일의 DB 직접 경로가 그대로 돈다.
 
   개인 식별 정보를 저장하지 않는다:
    · IP·UA 원문·리퍼러 전체 URL 미저장 — 0058 부터 **기기 3분류**(UA 에서 판정만)와
@@ -63,32 +77,16 @@ async function publicPageId(slug: string): Promise<string | null> {
    익명 INSERT 정책을 안 준 건 "스팸 창구가 된다"는 이유였는데, 서버 액션이 그
    자리를 그대로 대신하고 있었다 — 정책만 없고 창구는 열려 있었다.
 
-   카운터는 반드시 **DB 로** 센다. Vercel 서버리스는 인스턴스가 여러 개라
+   카운터는 반드시 **공유 저장소**(Redis, 없으면 DB)로 센다. Vercel 서버리스는 인스턴스가 여러 개라
    메모리 카운터는 공유되지 않는다(있으나 마나다).
 
    한계를 분명히 해 둔다: 방문자 해시는 쿠키에서 오므로 쿠키를 지우면 새 해시다.
    그래서 리드에는 **페이지 단위 상한**을 함께 건다 — 이쪽이 진짜 방어선이고,
-   해시 단위는 실수·연타를 거르는 용도다. IP 는 저장하지 않는 방침이라 안 쓴다. */
+   해시 단위는 실수·연타를 거르는 용도다. IP 는 저장하지 않는 방침이라 안 쓴다.
 
-/** 같은 방문자의 방문을 이 간격 안에서는 1건으로 본다 */
-const VIEW_WINDOW_MS = 30 * 60 * 1000;
-/**
- * 해시를 못 만든(쿠키를 안 보낸) 방문의 페이지 단위 천장 — 분당.
- *
- * 해시 기반 30분 병합은 **쿠키를 보내는 브라우저에만** 걸린다. curl 로 반복하면
- * 매번 새 해시가 나와 한 번도 발동하지 않았다. 진짜 방문자는 거의 다 쿠키를
- * 받으므로 이 천장에 닿지 않고, 스크립트만 걸린다.
- * 실제 방문을 깎지 않도록 넉넉하게 잡았다 — 목적은 정밀 차단이 아니라 폭주 차단이다.
- */
-const VIEW_ANON_PER_MIN = 60;
-/**
- * 해시 유무와 **무관한** 페이지 단위 천장 — 분당.
- *
- * 쿠키 토큰은 서버가 발급하지만 검증하지 않는다(값을 그대로 해시). 요청마다 다른 쿠키를
- * 보내면 매번 새 해시가 나와 30분 병합도, 위의 익명 천장도 안 걸렸다(감사 #15).
- * 진짜 트래픽이 분당 600 방문을 넘는 페이지는 없다시피 하고, 넘어도 "깎이는" 것이지 깨지지 않는다.
- */
-const VIEW_PAGE_PER_MIN = 600;
+   방문·체류의 창·천장 상수(VIEW_WINDOW_MS·VIEW_ANON_PER_MIN·VIEW_PAGE_PER_MIN·DWELL_MAX_MS)는
+   lib/links/views.ts 에 있다 — 버퍼 경로(Redis Lua)와 아래 DB 직접 경로가 **같은 값**을 써야 해서 한 곳에 둔다.
+   각 값의 근거(curl 반복·쿠키 회전 감사)도 거기 주석에 있다. */
 /** 리드: 같은 방문자 10분 5건 / 한 페이지 1시간 30건 */
 const LEAD_VISITOR_WINDOW_MS = 10 * 60 * 1000;
 const LEAD_VISITOR_MAX = 5;
@@ -106,14 +104,35 @@ export async function recordView(slug: string, src?: string, ref?: string): Prom
   /* 강제 데모 모드(NEXT_PUBLIC_DEMO_MODE=true + 키 존재)에서 mock id 로 실 DB 에
      uuid 캐스트 오류를 쏘던 유일한 방문자 액션 — 다른 액션들과 같은 가드(감사4) */
   if (isDemoMode() || !isSupabaseConfigured()) return;
-  if (BOT_UA.test((await headers()).get("user-agent") ?? "")) return;
+  const h = await headers();
+  if (BOT_UA.test(h.get("user-agent") ?? "")) return;
   const pageId = await publicPageId(slug);
   if (!pageId) return;
 
+  const hash = await visitorHash();
+  const cleanSrc = src && VIEW_SRC.has(src) ? src : null;
+  /* 행을 먼저 만든다 — 버퍼 경로와 DB 직접 경로가 같은 행을 쓴다.
+     Vercel 이 주는 국가/도시 코드만 — 좌표·상세주소는 받지 않는다. 도시명은 URL 인코딩돼 온다(S%C3%A3o%20Paulo, 감사 L17).
+     0058 — 기기 3분류·리퍼러 호스트. 원문은 판정에만 쓰고 버린다. 리퍼러는 **클라이언트가 보낸 document.referrer** 다 —
+     서버 액션 요청의 Referer 헤더는 늘 이 페이지 자신이라 호스트가 100% null 이었다(감사 C10). 길이만 자르고 호스트명만.
+     created_at 은 요청 시각 — 버퍼에 있다가 다음 분에 들어가도 날짜(KST)가 밀리지 않는다. */
+  const row: ViewRow = {
+    page_id: pageId,
+    visitor_hash: hash,
+    country: h.get("x-vercel-ip-country") ?? null,
+    region: safeDecode(h.get("x-vercel-ip-city")),
+    src: cleanSrc,
+    device: deviceOf(h.get("user-agent")),
+    referrer_host: referrerHostOf(typeof ref === "string" ? ref.slice(0, 2048) : null, h.get("host")),
+    created_at: new Date().toISOString(),
+  };
+
+  /* 버퍼 경로(lib/links/views.ts) — 30분 중복·분당 천장 판정까지 Redis 한 왕복으로 끝나고, 행은 1분 크론이
+     묶어 넣는다. fallback(KV 없음·장애·크론 정지·큐 밀림)일 때만 아래 DB 직접 경로를 탄다 */
+  if ((await enqueueView(row, slug)) !== "fallback") return;
+
   const admin = createAdminClient();
   if (!admin) return;
-
-  const hash = await visitorHash();
 
   /* 같은 방문자가 30분 안에 다시 왔으면 안 센다. 새로고침 한 번에 방문 1건씩
      쌓이면 조회수 분모가 부풀어 지표가 통째로 거짓말이 된다. */
@@ -148,34 +167,10 @@ export async function recordView(slug: string, src?: string, ref?: string): Prom
     if ((count ?? 0) >= VIEW_PAGE_PER_MIN) return;
   }
 
-  const h = await headers();
-  const row = {
-    page_id: pageId,
-    visitor_hash: hash,
-    /* Vercel 이 주는 국가/도시 코드만 — 좌표·상세주소는 받지 않는다 */
-    country: h.get("x-vercel-ip-country") ?? null,
-    /* Vercel 은 도시명을 URL 인코딩해 보낸다(S%C3%A3o%20Paulo) — 풀어서 저장(감사 L17) */
-    region: safeDecode(h.get("x-vercel-ip-city")),
-  };
-  const cleanSrc = src && VIEW_SRC.has(src) ? src : null;
-  /* 0058 — 기기 3분류·리퍼러 호스트. 원문은 판정에만 쓰고 버린다.
-     리퍼러는 **클라이언트가 보낸 document.referrer** 다 — 서버 액션 요청의 Referer 헤더는 늘 이 페이지 자신이라
-     호스트가 100% null 이었다(감사 C10). 길이만 자르고 호스트명만 남긴다. */
-  const extra = {
-    device: deviceOf(h.get("user-agent")),
-    referrer_host: referrerHostOf(typeof ref === "string" ? ref.slice(0, 2048) : null, h.get("host")),
-  };
-  const isColErr = (e: { code?: string; message: string }, col: RegExp) =>
-    e.code === "42703" || (col.test(e.message) && /column|schema/i.test(e.message));
-  /* 미적용 DB 폴백 — 계단식: 0058 컬럼 → 0055 컬럼 → 0048 원형. 의미 유실은 그 단계의 지표뿐이다 */
-  let { error } = await admin.from("link_views").insert({ ...row, src: cleanSrc, ...extra });
-  if (error && isColErr(error, /device|referrer_host|dwell_ms/i)) {
-    ({ error } = await admin.from("link_views").insert({ ...row, src: cleanSrc }));
-  }
-  if (error && isColErr(error, /src/i)) {
-    ({ error } = await admin.from("link_views").insert(row));
-  }
-  if (error) console.error("[links] 방문 기록 실패:", error.message);
+  /* 미적용 DB 폴백 계단(0058 → 0055 → 0048)은 insertViewRows 안에 있다 — 크론의 배열 INSERT 와 같은 계단 */
+  const r = await insertViewRows(admin, [row]);
+  /* 방문마다 도는 자리 — DB 장애 한 번이 요청 수만큼의 Sentry 이벤트가 되지 않게 10분에 한 번만 */
+  if (!r.ok) consoleErrorThrottled("links.view.insert", 10 * 60 * 1000, "[links] 방문 기록 실패:", r.error);
 }
 
 /** UA → mobile | tablet | desktop | null. 원문은 저장하지 않는다 */
@@ -216,15 +211,18 @@ function safeDecode(v: string | null): string | null {
 }
 
 /* ── 체류시간(0058) — 페이지를 떠날 때 비콘이 닿으면 같은 방문자의 최근 방문 행에 적는다 ── */
-const DWELL_MAX_MS = 30 * 60 * 1000;
-
 export async function recordDwell(slug: string, ms: number): Promise<void> {
   if (!isSupabaseConfigured() || isDemoMode()) return;
   if (!Number.isFinite(ms) || ms < 1000) return;
-  const pageId = await publicPageId(slug);
-  if (!pageId) return;
   const hash = await visitorHash();
   if (!hash) return; // 해시 없는 방문은 어느 행인지 알 수 없다
+  const next = Math.min(DWELL_MAX_MS, Math.round(ms));
+  /* 버퍼 경로 — page id 를 조회하지 않고 slug 로 큐에 넣는다(DB 왕복 0). 크론이 RPC(0083)로 «최근 65분 안
+     같은 방문자의 최신 행, 더 클 때만» 규칙을 그대로 적용한다. 행을 새로 만들지 않으므로 비공개·잠금 페이지의
+     체류는 자연히 버려진다 — 아래 옛 경로의 publicPageId 가드와 같은 결과다 */
+  if ((await enqueueDwell(slug, hash, next)) !== "fallback") return;
+  const pageId = await publicPageId(slug);
+  if (!pageId) return;
   const admin = createAdminClient();
   if (!admin) return;
   const { data: last } = await admin
@@ -238,7 +236,6 @@ export async function recordDwell(slug: string, ms: number): Promise<void> {
     .limit(1)
     .maybeSingle();
   if (!last) return;
-  const next = Math.min(DWELL_MAX_MS, Math.round(ms));
   if (typeof last.dwell_ms === "number" && last.dwell_ms >= next) return;
   const { error } = await admin.from("link_views").update({ dwell_ms: next }).eq("id", last.id);
   /* 0058 미적용이면 dwell_ms 컬럼이 없다 — 조용히 포기(통계 화면도 그 섹션을 안 그린다) */

@@ -8,11 +8,12 @@
 ## 1. Vercel 프로젝트 생성
 
 1. https://vercel.com → **Continue with GitHub**로 가입/로그인
-   - ⚠️ **Hobby(무료)로는 지금의 `vercel.json` 이 배포되지 않는다.** 크론이 13개이고
+   - ⚠️ **Hobby(무료)로는 지금의 `vercel.json` 이 배포되지 않는다.** 크론이 14개(하나는 매분)이고
      Hobby 는 크론 개수·빈도에 제한이 있다. 게다가 토스 정기결제가 붙은 서비스는
      Vercel 이 상업적 이용으로 보므로 Hobby 는 약관 위반이다.
-   - `npm run build` 가 `scripts/check-vercel-json.mjs` 를 **Hobby 기준**으로 돌린다.
-     Pro 로 올렸으면 `package.json` 의 build 스크립트에 `--pro` 를 붙여 검사도 함께 풀 것.
+   - `npm run build` 가 `scripts/check-vercel-json.mjs` 를 돌린다. **2026-09-06 Pro 전환 완료** —
+     build 스크립트에 `--pro` 가 붙어 있어 분 단위 크론(방문 집계 flush)이 통과한다. Hobby 로
+     내리면 이 플래그를 떼야 배포 거부를 미리 잡는다.
 2. 대시보드 우측 상단 **Add New… > Project**
 3. **Import Git Repository**에서 `taehyeung123/Finch` 선택 (처음이면 GitHub 앱 권한 승인 — 해당 저장소만 허용해도 됨)
 4. 설정 화면: Framework Preset = **Next.js 자동 감지**(그대로), Root Directory = `./`(그대로)
@@ -33,14 +34,29 @@ NEXT_PUBLIC_ 값은 빌드 시점에 JS 번들에 박제되므로, 빼먹고 배
 
 | Key | 없으면 어떻게 되나 |
 |---|---|
-| `CRON_SECRET` | `isAuthorizedCron` 이 **무조건 false** → 크론 13개가 전부 401. 토큰 자동갱신·예약 발행·DM 재처리가 조용히 멈춘다 |
+| `CRON_SECRET` | `isAuthorizedCron` 이 **무조건 false** → 크론 14개가 전부 401. 토큰 자동갱신·예약 발행·DM 재처리가 조용히 멈춘다. 방문 집계 flush 도 멈추지만 그쪽은 5분 뒤 방문자 요청이 스스로 DB 직접 경로로 내려간다 |
 | `TOKEN_ENCRYPTION_KEY` | IG·Threads·TikTok **연동 콜백이 중단**된다. 사용자에겐 «연동 실패»로만 보인다. 빌링키 저장도 불가 |
 | `ANTHROPIC_API_KEY` | AI 기능 전부(카드뉴스·진단·챗·AI 디자인)가 폴백으로 떨어진다 |
 | `SCRAPECREATORS_API_KEY` | 공용 풀 수집이 통째로 죽는다 |
 | `LINK_COOKIE_SECRET` | 서비스 롤 키로 대체 서명 → **롤 키를 교체하는 순간 모든 프로필 링크 잠금해제 쿠키가 무효** |
 | `RESEND_API_KEY` | 메일이 조용히 no-op — `OWNER_EMAIL` 을 넣어도 운영 경보가 한 통도 안 간다 |
+| `NEXT_PUBLIC_SENTRY_DSN` | 오류 수집이 꺼진다 — 서버 오류·`console.error` 가 Vercel 로그에만 남고 아무도 못 본다. 소스맵까지 보려면 `SENTRY_ORG`·`SENTRY_PROJECT`·`SENTRY_AUTH_TOKEN` 도 |
+| `UPSTASH_REDIS_REST_URL` / `_TOKEN` | 프로필 링크 방문이 DB 에 **바로** 기록된다(기능 손실 없음). 방문당 DB 쿼리 8~10회라 트래픽이 붙으면 Supabase 부하가 먼저 온다 — 둘 다 넣으면 1분 크론 `flush-views` 가 묶어 넣는다. 무료 티어 실질 용량 ≈ 월 6~8만 방문(넘으면 그 달은 자동으로 DB 직접 기록). 체류시간 일괄 반영은 마이그레이션 **0083** 이 있어야 한 왕복이다 — 없으면 행 단위 폴백(회당 100건) |
 
 전체 목록과 설명은 `.env.example` 이 정본이다.
+
+### 방문 집계 버퍼(Upstash) 운영 — 2026-09-06
+
+프로필 링크 방문·체류는 Upstash 큐(`lv:q`)에 쌓였다가 매분 크론 `/api/cron/flush-views` 가 DB 에 묶어 넣는다(`lib/links/views.ts`).
+크론이 5분 넘게 안 돌거나 큐가 2만 건을 넘으면 방문자 요청이 **스스로 DB 직접 경로로 내려간다** — 통계가 멈추는 일은 없고 부하 완충만 꺼진다.
+
+- **건강 확인**: Vercel → 프로젝트 → Settings → Cron Jobs → `flush-views` → View Logs. 응답 `{ok, inserted, dwellApplied, dropped, remaining}` —
+  `remaining` 이 분마다 늘면 크론이 유입을 못 따라가는 것, `ok:false` 가 이어지면 DB 쪽 장애. Upstash 콘솔 CLI 에서 `LLEN lv:q` 로도 본다.
+- **Sentry 에서 볼 제목**: «flush 중단», «방문 큐 밀림», «방문 버퍼 우회». 전부 10분에 한 번만 찍힌다(한도 보호).
+- **막힘 복구**: `queue_unreadable`(읽을 수 없는 항목이 절반 이상)이면 크론이 일부러 큐를 자르지 않는다. Upstash 콘솔 CLI 에서
+  `LRANGE lv:q 0 4` 로 머리를 보고, 불량이면 `LTRIM lv:q <불량 개수> -1`, 전부 버려도 되면 `DEL lv:q`. 그동안 방문자 경로는 DB 직접이라 기능 손실 없음.
+- **비용**: 무료 티어 월 50만 명령. 빈 큐 크론은 분당 2명령(월 ≈8.6만). 넘으면 명령이 거부되고 코드가 60초 회로 차단 후 DB 직접 기록으로 돌아간다.
+  카드를 등록한 종량제라면 콘솔에서 월 예산 상한(Max Monthly Budget)을 걸어 둘 것.
 
 나중 단계(연동 시작 시): `IG_WEBHOOK_VERIFY_TOKEN`, `META_APP_SECRET`, `INSTAGRAM_APP_ID`,
 `THREADS_APP_ID/SECRET`, `TIKTOK_CLIENT_KEY/SECRET`, 토스 키 4종,
@@ -97,7 +113,7 @@ NEXT_PUBLIC_ 값은 빌드 시점에 JS 번들에 박제되므로, 빼먹고 배
       매번 실패하고 예약 발행 크론이 매일 새벽 실패 알림을 보낸다.
       `https://finch.ai.kr/api/auth/instagram/deauthorize`
       `https://finch.ai.kr/api/auth/threads/deauthorize`
-- [ ] Vercel 플랜 확인 → Pro 면 `package.json` build 에 `--pro` 추가
+- [x] Vercel 플랜 확인 → Pro 면 `package.json` build 에 `--pro` 추가 (2026-09-06 Pro 전환 — build·check:vercel 둘 다 `--pro`)
 
 ## 이후 자동 배포
 
