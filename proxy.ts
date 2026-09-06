@@ -111,6 +111,7 @@ function applySecurityHeaders(response: NextResponse, publicLink = false) {
 
   // Supabase 설정 시 클라이언트 SDK의 auth 요청(fetch)을 위해 해당 오리진만 connect-src에 추가
   const supabaseOrigin = getSupabaseOrigin();
+  const sentryOrigin = getSentryIngestOrigin();
 
   // Toss 결제위젯 — SDK 스크립트·위젯 iframe·API 호출이 tosspayments.com 서브도메인에서 이뤄진다
   const toss = "https://*.tosspayments.com";
@@ -165,7 +166,9 @@ function applySecurityHeaders(response: NextResponse, publicLink = false) {
     // 붙여넣는** 제품이고(노션·드롭박스·기존 홈페이지에 이미 올려둔 것), 호스트를
     // 열거할 방법이 없다. 이미지는 실행되지 않으므로 여는 대가가 가장 작다.
     `img-src 'self' data: blob: https: ${toss} ${igCdn} ${tiktokCdn}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
-    `connect-src 'self' https://dapi.kakao.com ${toss}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}${gaConnect}${trackerConnect}`,
+    /* Sentry 인제스트 — 브라우저 SDK 가 오류 이벤트를 DSN 의 오리진으로 직접 보낸다(터널 라우트를 쓰지 않는다 —
+       이벤트마다 Vercel 함수 호출이 붙는 비용을 피한다). DSN 이 없으면 항목도 없다. */
+    `connect-src 'self' https://dapi.kakao.com ${toss}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}${sentryOrigin ? ` ${sentryOrigin}` : ""}${gaConnect}${trackerConnect}`,
     /* 우편번호 임베드는 실측상 postcode.map.kakao.com 을 프레이밍한다(구 daum.net 도 함께 허용) */
     /* 메타 광고 미리보기 iframe(generatepreviews) — **경로까지** 좁혀 앱 화면에만 연다(공개 프로필엔 열 이유가 없다, 스펙 §13-18).
        리다이렉트로 web./m.facebook.com 이 나오면 그때 넓힌다(실측 항목 §11-12). */
@@ -189,6 +192,17 @@ function getSupabaseOrigin(): string {
   if (!url) return "";
   try {
     return new URL(url).origin;
+  } catch {
+    return "";
+  }
+}
+
+/** Sentry DSN(https://key@oNNN.ingest.us.sentry.io/PID) 의 오리진 — 이벤트 envelope 이 같은 호스트로 간다 */
+function getSentryIngestOrigin(): string {
+  const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+  if (!dsn) return "";
+  try {
+    return new URL(dsn).origin;
   } catch {
     return "";
   }

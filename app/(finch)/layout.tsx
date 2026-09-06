@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { GoogleAnalytics } from "@next/third-parties/google";
+import { SentryClient } from "@/components/monitoring/sentry-client";
 import "../globals.css";
 import "../_fonts/pretendard/pretendardvariable-dynamic-subset.css";
 
@@ -64,7 +65,11 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        {/* 브라우저 오류 수집 — 앱 지면에서만, 하이드레이션 뒤 지연 로드(components/monitoring/sentry-client.tsx) */}
+        <SentryClient />
+      </body>
       {gaId && <GoogleAnalytics gaId={gaId} />}
     </html>
   );

@@ -4,6 +4,7 @@ import { isScheduledHidden } from "@/lib/links/blocks";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
 import { linkWorkspace } from "@/lib/data";
+import { consoleErrorThrottled } from "@/lib/monitoring/log-throttle";
 
 /*
   프로필 링크 클릭 — 집계 후 목적지로 302.
@@ -198,11 +199,12 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
         };
         let { error } = await admin.from("link_clicks").insert({ ...row, item_idx: idx });
         if (error && /item_idx/i.test(error.message)) ({ error } = await admin.from("link_clicks").insert(row));
-        if (error) console.error("[links] 클릭 기록 실패:", error.message);
+        /* 클릭마다 도는 자리 — DB 장애 한 번이 요청 수만큼의 Sentry 이벤트가 되지 않게 10분에 한 번만 */
+        if (error) consoleErrorThrottled("links.click.insert", 10 * 60 * 1000, "[links] 클릭 기록 실패:", error.message);
       }
     } catch (e) {
       /* 집계 부속 실패는 이동을 막지 않는다 */
-      console.error("[links] 클릭 집계 예외:", e instanceof Error ? e.message : e);
+      consoleErrorThrottled("links.click.exception", 10 * 60 * 1000, "[links] 클릭 집계 예외:", e instanceof Error ? e.message : e);
     }
   }
 
