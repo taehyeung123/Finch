@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { isOwnerEmail } from "@/lib/channel-availability";
 import { encryptToken, isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
 import {
   exchangeAdsCodeForToken,
@@ -213,8 +214,7 @@ export async function GET(request: Request) {
       stage === "me" ? "ads_profile" : stage === "longlived" ? "exchange_longlived" : "exchange_code";
     /* ⚠️ detail 은 **운영자 요청일 때만**. 예전엔 모든 고객의 주소창·방문 기록에 인가 서버 원문이 실려 나갔고,
        화면에서 가리는 것만으로는 그게 안 지워졌다(2026-09-06 적발). 원문은 위 로그와 Sentry 에 남는다. */
-    const ownerEmail = process.env.OWNER_EMAIL?.trim().toLowerCase();
-    const forOwner = !!ownerEmail && user.email?.trim().toLowerCase() === ownerEmail;
+    const forOwner = isOwnerEmail(user.email);
     return settingsRedirect(origin, {
       connect: "error",
       reason,

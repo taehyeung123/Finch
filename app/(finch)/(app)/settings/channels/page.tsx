@@ -23,7 +23,15 @@ import { isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
 import { THREADS_SCOPES, THREADS_SCOPE_LABELS, isThreadsOAuthConfigured } from "@/lib/meta/threads-oauth";
 import { TIKTOK_SCOPES, TIKTOK_SCOPE_LABELS, isTiktokOAuthConfigured } from "@/lib/tiktok/oauth";
 import { META_ADS_SCOPES, META_ADS_SCOPE_LABELS, isMetaAdsOAuthConfigured } from "@/lib/meta/ads-oauth";
-import { isChannelClosed, isChannelOpen } from "@/lib/channel-availability";
+import { closedForCustomers, isChannelClosed, isChannelOpen, type AvailabilityKey } from "@/lib/channel-availability";
+
+/** 운영자 전용 안내에 쓰는 이름 — 고객 화면에는 안 나간다 */
+const CLOSED_LABEL: Record<AvailabilityKey, string> = {
+  instagram: "인스타그램",
+  threads: "스레드",
+  tiktok: "틱톡",
+  ads: "메타 광고",
+};
 import { SettingsShell } from "../_components/settings-shell";
 import { SettingsGroup, SettingsRow } from "../_components/settings-row";
 import { SummaryCard } from "../_components/summary-card";
@@ -310,6 +318,8 @@ export default async function ChannelsSettingsPage({
     threads: isChannelOpen("threads", threadsOAuthConfigured && tokenEncryptionReady, viewer?.email),
   };
   const demo = isDemoMode();
+  /* 운영자 전용 — 고객에게 아직 닫혀 있는 채널. 데모 화면에서는 의미가 없어 비운다 */
+  const closedChannelKeys = demo ? [] : closedForCustomers();
 
   /* ── 상태 판정(한 곳) ── */
   const channelRows = (cards ?? []).map((card) => ({ card, d: deriveChannelState(card.channel, card, OAUTH_READY[card.channel]) }));
@@ -362,6 +372,18 @@ export default async function ChannelsSettingsPage({
           detail={isOwner ? detailParam : null}
           path="/settings/channels"
         />
+      ) : null}
+
+      {/* 운영자 전용 알림 — 이 화면은 운영자에게 «열림»으로 보이므로, 고객에게는 아직 닫혀 있다는 사실을
+          여기서 말해 주지 않으면 승인이 난 뒤에도 아무도 그걸 눈치채지 못한다(lib/channel-availability.ts).
+          고객에게는 절대 안 보인다 — 내부 운영 정보다. */}
+      {isOwner && closedChannelKeys.length > 0 ? (
+        <div className="rounded-card border border-line bg-plate px-4 py-3 text-[14px] text-fg-sub">
+          <span className="font-semibold text-fg">운영자에게만 보이는 안내</span> · 고객 화면에서는{" "}
+          <span className="font-semibold text-fg">{closedChannelKeys.map((k) => CLOSED_LABEL[k]).join(" · ")}</span> 이(가) 아직 「준비 중」으로
+          닫혀 있어요. 사장님 계정만 지금 연결할 수 있어요. 열려면 배포 환경변수 <code className="font-mono text-[13px]">CHANNELS_OPEN</code> 에
+          그 이름을 더하고 다시 배포하세요.
+        </div>
       ) : null}
 
       <SummaryCard

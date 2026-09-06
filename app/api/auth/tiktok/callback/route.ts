@@ -49,10 +49,13 @@ export async function GET(request: Request) {
     const errReason = url.searchParams.get("error_reason") ?? "";
     const errDesc = url.searchParams.get("error_description") ?? "";
     console.error("[" + TAG + "] 인가 실패:", oauthError, errReason, errDesc);
-    /* «취소했다»고 말하려면 **사용자가 취소했다는 신호**가 있어야 한다. access_denied 는 인가 서버가 계정을
-       거절할 때도 같이 온다 — 그것까지 취소로 뭉개면 아무것도 안 누른 사람에게 「연결을 취소했어요」라고
-       거짓말을 한다(2026-09-06 적발). 신호가 없으면 「아직 연결 권한이 없어요」쪽으로 보낸다. */
-    const userCancelled = /user_denied|user_cancel/i.test(errReason) || /user_denied|user_cancel/i.test(errDesc);
+    /* ⚠️ 틱톡만 판정이 다르다. 메타 계열(인스타·스레드·광고)은 사용자가 취소하면 error_reason=user_denied 를
+       함께 보내지만, **틱톡은 error_reason 자체가 없고** access_denied 의 설명 문구가 «사용자가 거부»와
+       «서버가 거부» 양쪽에 똑같이 쓰인다(공식 문서 확인, 2026-09-06 점검). 둘을 가를 방법이 없다.
+       그래서 여기서는 access_denied 를 취소로 본다 — 실제로 훨씬 흔한 쪽이고, 반대로 두면 취소한 사람에게
+       「권한이 없어요」라고 말하게 된다. 메타 쪽 수정을 그대로 복사하면 안 되는 자리다. */
+    const userCancelled =
+      /access_denied/i.test(oauthError) || /user_denied|user_cancel/i.test(errReason) || /user_denied|user_cancel/i.test(errDesc);
     return settingsRedirect(origin, {
       connect: "error",
       reason: userCancelled ? "denied" : "not_allowed",
