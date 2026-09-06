@@ -46,7 +46,10 @@ export async function GET(request: Request) {
     const errReason = url.searchParams.get("error_reason") ?? "";
     const errDesc = url.searchParams.get("error_description") ?? "";
     console.error(`[${TAG}] 인가 실패:`, oauthError, errReason, errDesc);
-    const userCancelled = /access_denied/i.test(oauthError) || /user_denied|user_cancel/i.test(errReason);
+    /* «취소했다»고 말하려면 **사용자가 취소했다는 신호**가 있어야 한다. access_denied 는 인가 서버가 계정을
+       거절할 때도 같이 온다 — 그것까지 취소로 뭉개면 아무것도 안 누른 사람에게 「연결을 취소했어요」라고
+       거짓말을 한다(2026-09-06 적발). 신호가 없으면 「아직 연결 권한이 없어요」쪽으로 보낸다. */
+    const userCancelled = /user_denied|user_cancel/i.test(errReason) || /user_denied|user_cancel/i.test(errDesc);
     return settingsRedirect(origin, {
       connect: "error",
       reason: userCancelled ? "denied" : "not_allowed",
@@ -208,10 +211,14 @@ export async function GET(request: Request) {
        광고 연동에서는 엉뚱한 곳을 보게 만든다. 화면 문구가 다르면 이유 코드도 달라야 한다. */
     const reason =
       stage === "me" ? "ads_profile" : stage === "longlived" ? "exchange_longlived" : "exchange_code";
+    /* ⚠️ detail 은 **운영자 요청일 때만**. 예전엔 모든 고객의 주소창·방문 기록에 인가 서버 원문이 실려 나갔고,
+       화면에서 가리는 것만으로는 그게 안 지워졌다(2026-09-06 적발). 원문은 위 로그와 Sentry 에 남는다. */
+    const ownerEmail = process.env.OWNER_EMAIL?.trim().toLowerCase();
+    const forOwner = !!ownerEmail && user.email?.trim().toLowerCase() === ownerEmail;
     return settingsRedirect(origin, {
       connect: "error",
       reason,
-      detail: `${msg} | redirect_uri=${redirectUri}`.slice(0, 400),
+      ...(forOwner ? { detail: `${msg} | redirect_uri=${redirectUri}`.slice(0, 400) } : {}),
     });
   }
 }

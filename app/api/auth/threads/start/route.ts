@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
 import { getConsentStatus } from "@/lib/legal/consent";
+import { isChannelClosed } from "@/lib/channel-availability";
 import {
   buildThreadsAuthorizeUrl,
   getThreadsOAuthConfig,
@@ -49,6 +50,11 @@ export async function GET(request: Request) {
   const config = getThreadsOAuthConfig();
   if (!config) {
     // 앱 자격증명 미설정 — 심사/키 발급 전 단계
+    return NextResponse.redirect(`${origin}/settings/channels?connect=unconfigured`);
+  }
+  /* 자격증명은 있는데 아직 열지 않은 기간(lib/channel-availability.ts) — 버튼을 숨겨도 이 주소는 직접 열 수 있다.
+     여기서 막지 않으면 고객이 플랫폼 화면까지 갔다가 막히고 돌아오지도 못한다. 운영자는 통과한다. */
+  if (isChannelClosed("threads", user.email)) {
     return NextResponse.redirect(`${origin}/settings/channels?connect=unconfigured`);
   }
 

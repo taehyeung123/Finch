@@ -65,10 +65,17 @@ const GUIDES: { channel: Channel; startHref: string; note: string }[] = [
   },
 ];
 
-export function ConnectChannelsModal() {
+/**
+ * openChannels — 지금 실제로 연결을 받을 수 있는 채널(서버가 판정해 내려준다, lib/channel-availability.ts).
+ * 이 목록에 없는 채널은 여기서도 권하지 않는다 — 설정 화면은 「준비 중」인데 이 모달만 「연동하기」를 권하면
+ * 고객이 플랫폼 화면까지 갔다가 막힌다(2026-09-06 적발: 이 모달만 준비 상태를 안 보고 있었다).
+ */
+export function ConnectChannelsModal({ openChannels }: { openChannels: Channel[] }) {
   const notDismissed = useSyncExternalStore(subscribe, getSnapshot, () => false);
   const [closedThisSession, setClosedThisSession] = useState(false);
-  const open = notDismissed && !closedThisSession;
+  const guides = GUIDES.filter((g) => openChannels.includes(g.channel));
+  /* 권할 채널이 하나도 없으면 모달 자체를 띄우지 않는다 — 아무것도 못 하는 창을 닫게 만들 이유가 없다 */
+  const open = notDismissed && !closedThisSession && guides.length > 0;
   const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -121,7 +128,7 @@ export function ConnectChannelsModal() {
         </div>
 
         <div className="space-y-2 px-5 py-4">
-          {GUIDES.map(({ channel, startHref, note }) => (
+          {guides.map(({ channel, startHref, note }) => (
             <div key={channel} className="rounded-card border border-line p-3.5">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2.5">

@@ -27,6 +27,7 @@ import { isMissingColumnError } from "@/lib/publish-rules";
 import { getConsentStatus } from "@/lib/legal/consent";
 import type { AdsWriteFailCode } from "@/lib/ads/campaign-rules";
 import { isMetaAdsOAuthConfigured } from "@/lib/meta/ads-oauth";
+import { isChannelClosed } from "@/lib/channel-availability";
 import { fetchCampaignInsights, fetchCampaigns, type FbCampaign } from "@/lib/meta/ads";
 import {
   fetchAccountAdReview,
@@ -118,7 +119,10 @@ function daysUntil(iso: string | null): number | null {
  * 설정 화면엔 버튼이 없는 막다른 길이 생겼다.
  */
 function isAdsConnectable(): boolean {
-  return isMetaAdsOAuthConfigured() && isTokenEncryptionConfigured();
+  /* «아직 열지 않은 기간»도 여기 포함한다 — 안 그러면 /ads 는 「연결하기」로 보내는데 설정 화면엔 버튼이 없는
+     막다른 길이 다시 생긴다(2026-09-06, lib/channel-availability.ts). 운영자 예외는 세션이 없어 적용하지 않는다 —
+     운영자도 이 화면에선 «준비 중»으로 보이고, 연결은 설정 > SNS 계정 연결에서 한다. */
+  return isMetaAdsOAuthConfigured() && isTokenEncryptionConfigured() && !isChannelClosed("ads");
 }
 
 /**

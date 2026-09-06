@@ -8,6 +8,8 @@ import {
   profileGrid,
   recentPosts,
 } from "@/lib/data";
+import type { Channel } from "@/lib/types";
+import { isChannelClosed } from "@/lib/channel-availability";
 import { getLiveDashboard } from "@/lib/data/live";
 import { getLiveAds, summarizeActiveAds, type DashboardAdsSummary } from "@/lib/data/ads";
 import { getPoolHomeStats } from "@/lib/pool/home-stats";
@@ -33,6 +35,10 @@ export default async function DashboardPage() {
   /* 연동 가이드 모달 — 실 모드에서 채널이 하나도 안 붙어 있을 때만.
      온보딩 마법사에서 연동 단계를 뺀 자리다(닫기 기억은 모달이 localStorage 로 처리). */
   const showConnectGuide = !IS_SAMPLE_DATA && !(live?.accounts.some((a) => a.connected) ?? false);
+  /* 지금 실제로 연결을 받을 수 있는 채널만 권한다 — 설정 화면과 같은 기준(lib/channel-availability.ts).
+     여기서 판정에 이메일을 넘기지 않는 건 운영자 예외를 위해 세션을 한 번 더 읽을 값어치가 없어서다.
+     운영자는 설정 > SNS 계정 연결에서 연결하면 된다. */
+  const openChannels: Channel[] = (["instagram", "threads", "tiktok"] as const).filter((c) => !isChannelClosed(c));
   const data: DashboardData = live ?? {
     accounts,
     summaries: dashboardSummaries,
@@ -49,6 +55,7 @@ export default async function DashboardPage() {
       poolStats={poolStats}
       isLive={Boolean(live)}
       showConnectGuide={showConnectGuide}
+      openChannels={openChannels}
     />
   );
 }

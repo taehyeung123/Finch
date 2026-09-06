@@ -64,6 +64,7 @@ export function DashboardClient({
   poolStats,
   isLive,
   showConnectGuide = false,
+  openChannels = [],
 }: {
   data: DashboardData;
   campaigns: AdCampaign[];
@@ -75,6 +76,8 @@ export function DashboardClient({
   isLive: boolean;
   /** 실 모드 + 채널 연동 0개 — 연동 가이드 모달을 띄운다(닫기 기억은 모달 몫) */
   showConnectGuide?: boolean;
+  /** 지금 실제로 연결을 받을 수 있는 채널 — 서버 판정(lib/channel-availability.ts). 비면 가이드 모달을 안 띄운다 */
+  openChannels?: Channel[];
 }) {
   const { channel } = useChannel();
   const { accounts, summaries, posts: allPosts, profileGrid, trends } = data;
@@ -147,7 +150,7 @@ export function DashboardClient({
 
   return (
     <div className="space-y-6">
-      {showConnectGuide ? <ConnectChannelsModal /> : null}
+      {showConnectGuide ? <ConnectChannelsModal openChannels={openChannels} /> : null}
       <PageHeader
         title="홈"
         description="오늘의 브리핑과 채널 현황을 한눈에 확인하세요."

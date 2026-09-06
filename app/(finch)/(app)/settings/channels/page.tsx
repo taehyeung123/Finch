@@ -23,6 +23,7 @@ import { isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
 import { THREADS_SCOPES, THREADS_SCOPE_LABELS, isThreadsOAuthConfigured } from "@/lib/meta/threads-oauth";
 import { TIKTOK_SCOPES, TIKTOK_SCOPE_LABELS, isTiktokOAuthConfigured } from "@/lib/tiktok/oauth";
 import { META_ADS_SCOPES, META_ADS_SCOPE_LABELS, isMetaAdsOAuthConfigured } from "@/lib/meta/ads-oauth";
+import { isChannelClosed, isChannelOpen } from "@/lib/channel-availability";
 import { SettingsShell } from "../_components/settings-shell";
 import { SettingsGroup, SettingsRow } from "../_components/settings-row";
 import { SummaryCard } from "../_components/summary-card";
@@ -299,11 +300,14 @@ export default async function ChannelsSettingsPage({
   /* ⚠️ 암호화 키도 **버튼 조건에 포함**한다 — 콜백에서만 확인하면 인스타 로그인·동의를 전부 마친 뒤에야 튕긴다 */
   const tokenEncryptionReady = isTokenEncryptionConfigured();
   /* 광고는 **Facebook 앱** 자격증명이 따로 필요하다(META_APP_ID) — 데모에서는 흐름을 체험하게 켜 두되 start 라우트가 막는다 */
-  const metaAdsReady = (isMetaAdsOAuthConfigured() && tokenEncryptionReady) || isDemoMode();
+  const metaAdsReady = ((isMetaAdsOAuthConfigured() && tokenEncryptionReady) || isDemoMode()) && !isChannelClosed("ads", viewer?.email);
+  /* 자격증명이 다 있어도 플랫폼이 아직 일반 사용자에게 안 열어 준 기간에는 닫아 둔다(lib/channel-availability.ts).
+     안 그러면 눌러 봐야 플랫폼 화면에서 막히고 돌아오지도 못해, 같은 실패를 무한히 반복하게 된다.
+     운영자는 열려 있다 — 고객에게 열기 전에 직접 확인해야 한다. 고객 화면 문구는 자격증명 미설정과 같다. */
   const OAUTH_READY: Record<Channel, boolean> = {
-    instagram: instagramOAuthConfigured && tokenEncryptionReady,
-    tiktok: tiktokOAuthConfigured && tokenEncryptionReady,
-    threads: threadsOAuthConfigured && tokenEncryptionReady,
+    instagram: isChannelOpen("instagram", instagramOAuthConfigured && tokenEncryptionReady, viewer?.email),
+    tiktok: isChannelOpen("tiktok", tiktokOAuthConfigured && tokenEncryptionReady, viewer?.email),
+    threads: isChannelOpen("threads", threadsOAuthConfigured && tokenEncryptionReady, viewer?.email),
   };
   const demo = isDemoMode();
 

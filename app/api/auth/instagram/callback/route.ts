@@ -49,7 +49,10 @@ export async function GET(request: Request) {
     const errReason = url.searchParams.get("error_reason") ?? "";
     const errDesc = url.searchParams.get("error_description") ?? "";
     console.error("[" + TAG + "] 인가 실패:", oauthError, errReason, errDesc);
-    const userCancelled = /access_denied/i.test(oauthError) || /user_denied|user_cancel/i.test(errReason);
+    /* «취소했다»고 말하려면 **사용자가 취소했다는 신호**가 있어야 한다. access_denied 는 인가 서버가 계정을
+       거절할 때도 같이 온다 — 그것까지 취소로 뭉개면 아무것도 안 누른 사람에게 「연결을 취소했어요」라고
+       거짓말을 한다(2026-09-06 적발). 신호가 없으면 「아직 연결 권한이 없어요」쪽으로 보낸다. */
+    const userCancelled = /user_denied|user_cancel/i.test(errReason) || /user_denied|user_cancel/i.test(errDesc);
     return settingsRedirect(origin, {
       connect: "error",
       reason: userCancelled ? "denied" : "not_allowed",
@@ -196,10 +199,14 @@ export async function GET(request: Request) {
        고객에게는 여전히 안 보인다 — CLAUDE.md 내부 운영 정보 비노출 규칙을 지킨다. */
     /* 우리가 실제로 보낸 redirect_uri 를 함께 보여준다.
        메타 앱에 등록된 값과 **글자 단위로** 다른 곳을 눈으로 찾을 수 있어야 한다. */
+    /* ⚠️ detail 은 **운영자 요청일 때만** 붙인다. 예전엔 모든 고객의 주소창·방문 기록에 인가 서버 원문이
+       실려 나갔고, 화면에서 가리는 것만으로는 그게 안 지워졌다(2026-09-06 적발). 원문은 여기 로그와 Sentry 에 남는다. */
+    const ownerEmail = process.env.OWNER_EMAIL?.trim().toLowerCase();
+    const forOwner = !!ownerEmail && user.email?.trim().toLowerCase() === ownerEmail;
     return settingsRedirect(origin, {
       connect: "error",
       reason,
-      detail: (msg + " | redirect_uri=" + redirectUri).slice(0, 400),
+      ...(forOwner ? { detail: (msg + " | redirect_uri=" + redirectUri).slice(0, 400) } : {}),
     });
   }
 }

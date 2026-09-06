@@ -49,7 +49,10 @@ export async function GET(request: Request) {
     const errReason = url.searchParams.get("error_reason") ?? "";
     const errDesc = url.searchParams.get("error_description") ?? "";
     console.error("[" + TAG + "] 인가 실패:", oauthError, errReason, errDesc);
-    const userCancelled = /access_denied/i.test(oauthError) || /user_denied|user_cancel/i.test(errReason);
+    /* «취소했다»고 말하려면 **사용자가 취소했다는 신호**가 있어야 한다. access_denied 는 인가 서버가 계정을
+       거절할 때도 같이 온다 — 그것까지 취소로 뭉개면 아무것도 안 누른 사람에게 「연결을 취소했어요」라고
+       거짓말을 한다(2026-09-06 적발). 신호가 없으면 「아직 연결 권한이 없어요」쪽으로 보낸다. */
+    const userCancelled = /user_denied|user_cancel/i.test(errReason) || /user_denied|user_cancel/i.test(errDesc);
     return settingsRedirect(origin, {
       connect: "error",
       reason: userCancelled ? "denied" : "not_allowed",
