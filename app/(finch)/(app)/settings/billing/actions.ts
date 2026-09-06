@@ -41,7 +41,19 @@ export async function createCheckout(plan: string): Promise<CreateCheckoutResult
   // orderId: 영숫자-_ 6~64자. finch_<plan>_<uuid(32)> = 최대 ~42자
   const orderId = `finch_${plan}_${randomUUID().replace(/-/g, "")}`;
 
-  const { error } = await supabase.from("payment_orders").insert({
+  // 주문은 admin(service role)으로 넣는다.
+  // 사용자 세션으로 넣을 수 있으면 PostgREST 직접 호출로도 같은 일을 할 수 있는데,
+  // 0046 정책은 status/payment_key/approved_at만 검사하고 amount는 검사하지 않는다.
+  // 그러면 {plan:"agency", amount:100}인 주문을 만들어 100원만 결제해도 승인 단계가
+  // 이 행의 amount를 신뢰해(success/page.tsx "예정 금액/플랜의 신뢰 원천") 통과시키고
+  // agency 플랜을 부여한다. amount는 서버가 PLAN_PRICES로 계산한 값만 들어가야 한다.
+  // user.id는 위 getUser()로 검증된 값이라 admin을 써도 남의 주문은 만들 수 없다.
+  // (마이그레이션 0074에서 authenticated의 payment_orders 쓰기 권한을 회수했다)
+  const admin = createAdminClient();
+  // 이 함수는 리다이렉트가 아니라 결과 객체를 돌려주므로 다른 액션들과 달리 ok:false로 알린다.
+  if (!admin) return { ok: false, error: "결제 설정이 완료되지 않았어요." };
+
+  const { error } = await admin.from("payment_orders").insert({
     user_id: user.id,
     order_id: orderId,
     plan,
