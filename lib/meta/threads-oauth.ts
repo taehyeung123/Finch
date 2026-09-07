@@ -1,3 +1,6 @@
+/* 시크릿(THREADS_APP_SECRET)을 읽는 모듈이다 — 이 한 줄이 있으면 클라이언트 그래프에 닿는 순간 **빌드가 실패한다.**
+   경계를 사람의 주의력이 아니라 빌드가 지키게 한다(2026-09-07 감사: 같은 저장소의 다른 6개 모듈에는 이미 있었다). */
+import "server-only";
 /**
  * Threads OAuth 어댑터 — lib/meta/instagram-oauth.ts와 동일 구조.
  * 근거·전체 스펙: docs/REAL_API_SPEC.md 5절.

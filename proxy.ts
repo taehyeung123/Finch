@@ -194,8 +194,34 @@ function applySecurityHeaders(response: NextResponse, publicLink = false) {
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  /* 공개 프로필 지면에는 **페이지 주인이 고른 제3자 스크립트·임베드**가 산다(마케팅 픽셀·유튜브·지도).
+     그래서 «우리가 안 쓰는 강력한 기능»은 명시적으로 닫아 둔다 — 목록이 짧으면 나머지는 전부 열린 것이다
+     (2026-09-07 감사). 우리가 실제로 쓰는 것(클립보드 쓰기 등)은 여기 넣지 않는다. */
+  response.headers.set(
+    "Permissions-Policy",
+    [
+      "camera=()",
+      "microphone=()",
+      "geolocation=()",
+      "payment=()",
+      "usb=()",
+      "serial=()",
+      "bluetooth=()",
+      "midi=()",
+      "magnetometer=()",
+      "gyroscope=()",
+      "accelerometer=()",
+      "display-capture=()",
+      "idle-detection=()",
+      "local-fonts=()",
+      "screen-wake-lock=()",
+      "xr-spatial-tracking=()",
+      "interest-cohort=()",
+    ].join(", "),
+  );
   // HSTS — HTTPS 전면 강제 (PART 13.4). localhost HTTP에서는 브라우저가 무시한다
+  // ⚠️ 같은 값을 vercel.json 의 headers 로도 내보낸다 — proxy 는 matcher 에서 제외한 정적 자산
+  //    응답을 못 보기 때문이다(그 경로에는 이 함수가 아예 안 돈다, 2026-09-07 감사).
   response.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains");
 }
 

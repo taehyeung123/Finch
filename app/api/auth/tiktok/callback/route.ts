@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { consoleErrorThrottled, flatten } from "@/lib/monitoring/log-throttle";
 import { encryptToken, isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
 import {
   exchangeTiktokCodeForToken,
@@ -49,7 +50,17 @@ export async function GET(request: Request) {
   if (oauthError) {
     const errReason = url.searchParams.get("error_reason") ?? "";
     const errDesc = url.searchParams.get("error_description") ?? "";
-    console.error("[" + TAG + "] 인가 실패:", oauthError, errReason, errDesc);
+    /* ⚠️ 인증 «전» 경로다 — 공격자가 이 세 값을 마음대로 정한다. 스로틀 없이 흘리면 외부인이
+       Sentry 무료 한도를 태워 **우리의 유일한 오류 관측 수단을 끌 수 있다**(2026-09-07 감사).
+       개행 제거·길이 절단은 로그 위조를 막고, 동시에 메시지 다양성을 죽여 dedupe 가 실제로 일하게 한다. */
+    consoleErrorThrottled(
+      "oauth.denied." + TAG,
+      10 * 60 * 1000,
+      `[${TAG}] 인가 실패:`,
+      flatten(oauthError, 40),
+      flatten(errReason, 40),
+      flatten(errDesc, 120),
+    );
     /* ⚠️ 틱톡만 판정이 다르다. 메타 계열(인스타·스레드·광고)은 사용자가 취소하면 error_reason=user_denied 를
        함께 보내지만, **틱톡은 error_reason 자체가 없고** access_denied 의 설명 문구가 «사용자가 거부»와
        «서버가 거부» 양쪽에 똑같이 쓰인다(공식 문서 확인, 2026-09-06 점검). 둘을 가를 방법이 없다.

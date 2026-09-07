@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { consoleErrorThrottled, flatten } from "@/lib/monitoring/log-throttle";
 import { isOwnerEmail } from "@/lib/channel-availability";
 import { encryptToken, isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
 import {
@@ -50,7 +51,17 @@ export async function GET(request: Request) {
   if (oauthError) {
     const errReason = url.searchParams.get("error_reason") ?? "";
     const errDesc = url.searchParams.get("error_description") ?? "";
-    console.error("[" + TAG + "] 인가 실패:", oauthError, errReason, errDesc);
+    /* ⚠️ 인증 «전» 경로다 — 공격자가 이 세 값을 마음대로 정한다. 스로틀 없이 흘리면 외부인이
+       Sentry 무료 한도를 태워 **우리의 유일한 오류 관측 수단을 끌 수 있다**(2026-09-07 감사).
+       개행 제거·길이 절단은 로그 위조를 막고, 동시에 메시지 다양성을 죽여 dedupe 가 실제로 일하게 한다. */
+    consoleErrorThrottled(
+      "oauth.denied." + TAG,
+      10 * 60 * 1000,
+      `[${TAG}] 인가 실패:`,
+      flatten(oauthError, 40),
+      flatten(errReason, 40),
+      flatten(errDesc, 120),
+    );
     /* «취소했다»고 말하려면 **사용자가 취소했다는 신호**가 있어야 한다. access_denied 는 인가 서버가 계정을
        거절할 때도 같이 온다 — 그것까지 취소로 뭉개면 아무것도 안 누른 사람에게 「연결을 취소했어요」라고
        거짓말을 한다(2026-09-06 적발). 신호가 없으면 「아직 연결 권한이 없어요」쪽으로 보낸다. */

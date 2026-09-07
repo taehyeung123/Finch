@@ -7,6 +7,19 @@
 */
 const lastAt = new Map<string, number>();
 
+/**
+ * 공격자가 통제하는 문자열을 로그에 넣기 전에 **한 줄로 눌러 자른다.**
+ *
+ * 왜(2026-09-07 감사): 인증 «전» 경로(OAuth 콜백 4개)가 쿼리스트링 값을 그대로 console.error 로 흘렸다.
+ * 두 가지가 문제였다. ① 개행·탭을 그대로 실으면 로그를 위조할 수 있다(가짜 줄을 만들어 낸다).
+ * ② 매번 내용이 다르면 Sentry 의 dedupe 가 «직전과 같은 것»만 버리므로 통과한다 —
+ * 무료 한도(월 5천)를 외부인이 마음대로 태워 **감지 능력 자체를 끌 수 있었다.**
+ * 길이를 자르고 개행을 없애면 위조가 막히고 메시지 다양성도 죽어 dedupe 가 실제로 일한다.
+ */
+export function flatten(v: string | null | undefined, max = 120): string {
+  return (v ?? "").replace(/[\r\n\t]+/g, " ").slice(0, max);
+}
+
 export function consoleErrorThrottled(key: string, everyMs: number, ...args: unknown[]): void {
   const now = Date.now();
   if (now - (lastAt.get(key) ?? 0) < everyMs) return;
