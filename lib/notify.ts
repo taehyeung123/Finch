@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendNotificationEmail } from "@/lib/email/resend";
+import { defaultPrefFor, type NotifyChannelPref } from "@/lib/notify-defaults";
 import type { NotificationType } from "@/lib/types";
 
 /**
@@ -26,8 +27,17 @@ export async function notifyUser(admin: SupabaseClient, params: NotifyParams): P
     .select("settings")
     .eq("user_id", params.userId)
     .maybeSingle();
-  const pref = (setting?.settings as Record<string, { inapp?: boolean; email?: boolean }> | null)?.[settingKey];
-  if (pref && pref.inapp === false) return false;
+  /* ⚠️ 저장된 설정이 **없으면 기본값을 쓴다.** 예전엔 행이 있을 때만 메일을 보냈는데, 가입 시 그 행을
+     만드는 코드가 없어서(handle_new_user 는 users_profile 만 만든다) 설정 화면을 한 번도 안 건드린
+     사용자에게는 결제 실패·구독 해지·토큰 만료 메일이 한 통도 안 나갔다. 화면은 「켜짐」으로 보였다.
+     기본값 정본은 lib/notify-defaults.ts — 설정 화면도 같은 표를 읽는다(2026-09-07 감사). */
+  const saved = (setting?.settings as Record<string, Partial<NotifyChannelPref>> | null)?.[settingKey];
+  const fallback = defaultPrefFor(settingKey);
+  const pref: NotifyChannelPref = {
+    inapp: saved?.inapp ?? fallback.inapp,
+    email: saved?.email ?? fallback.email,
+  };
+  if (!pref.inapp) return false;
 
   if (params.dedupeMs) {
     const { data: recent } = await admin
@@ -51,7 +61,7 @@ export async function notifyUser(admin: SupabaseClient, params: NotifyParams): P
     return false;
   }
 
-  if (pref?.email) {
+  if (pref.email) {
     const { data: userData } = await admin.auth.admin.getUserById(params.userId);
     const email = userData?.user?.email;
     if (email) {

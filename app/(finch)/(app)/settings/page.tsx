@@ -365,7 +365,9 @@ export default async function SettingsHubPage({
         <Card className="overflow-hidden">
           <form action="/auth/signout" method="post">
             <ul>
-              <SettingsRow asButton type="submit" icon={LogOut} label="로그아웃" hint="이 기기에서 로그아웃해요" trailing={null} />
+              {/* 실제 동작은 전역 로그아웃이다(auth.signOut 기본 scope=global) — 「이 기기에서」는 거짓이었다.
+                  동작을 그대로 두고 문구를 맞춘다: 계정 도용이 의심될 때 한 번에 끊을 수 있는 쪽이 안전하다(2026-09-07 감사). */}
+              <SettingsRow asButton type="submit" icon={LogOut} label="로그아웃" hint="로그인한 모든 기기에서 로그아웃돼요" trailing={null} />
             </ul>
           </form>
         </Card>

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
+import { sendNotificationEmail } from "@/lib/email/resend";
 import { INQUIRY_TYPES } from "./inquiry-types";
 
 /**
@@ -74,6 +75,21 @@ export async function submitInquiry(formData: FormData): Promise<SubmitResult> {
         ? "문의 기능이 아직 준비되지 않았어요. 잠시 후 다시 시도해 주세요."
         : "문의 접수에 실패했습니다. 잠시 후 다시 시도해주세요.",
     };
+  }
+
+  /* 접수됐다는 사실을 운영자에게 알린다. 예전엔 표에 넣고 끝이라, 운영자가 HQ 를 직접 열어 보기 전까지
+     아무도 몰랐다. 미답변이 5건 쌓이면 접수 자체가 막히므로(MAX_PENDING) 답변이 늦을수록 그 고객의
+     문의 통로가 좁아지다 닫힌다 — 사용자가 늘기 시작하는 첫 주에 정확히 이 조합이 문제가 된다(2026-09-07 감사).
+     발송 실패는 접수를 되돌리지 않는다 — 고객 쪽 결과는 이미 성공이다. */
+  const ownerEmail = process.env.OWNER_EMAIL;
+  if (ownerEmail) {
+    void sendNotificationEmail(
+      ownerEmail,
+      `[핀치 문의] ${type} · ${subject}`,
+      `${user.email ?? "이메일 미상"} 님이 문의를 남겼어요.\n\n${message.slice(0, 500)}`,
+    ).catch((e) => console.error("[support] 운영자 알림 메일 실패:", e instanceof Error ? e.message : e));
+  } else {
+    console.warn("[support] 문의가 접수됐지만 OWNER_EMAIL 미설정 — 운영자에게 알리지 못했습니다");
   }
 
   revalidatePath("/support");

@@ -5,6 +5,7 @@ import { Bell, CalendarClock, CreditCard, KeyRound, Megaphone, TrendingUp, Walle
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/cn";
+import { NOTIFY_DEFAULTS } from "@/lib/notify-defaults";
 import { SettingsGroup, SettingsRow } from "../../_components/settings-row";
 import { SummaryCard } from "../../_components/summary-card";
 import { saveNotificationSettings } from "../actions";
@@ -43,15 +44,9 @@ export type RowKey = (typeof NOTIFICATION_ROWS)[number]["key"];
 type ChannelKey = "inapp" | "email";
 export type NotificationSettingsState = Record<RowKey, Record<ChannelKey, boolean>>;
 
-export const DEFAULT_STATE: NotificationSettingsState = {
-  competitor_ad: { inapp: true, email: true },
-  trend: { inapp: true, email: false },
-  account: { inapp: true, email: false },
-  token_expiry: { inapp: true, email: true },
-  budget: { inapp: true, email: false },
-  billing: { inapp: true, email: true },
-  studio: { inapp: true, email: false },
-};
+/* 정본은 lib/notify-defaults.ts — 발송 경로(notifyUser)가 저장된 설정이 없을 때 **같은 표**를 쓴다.
+   여기에 따로 적어 두면 화면은 「켜짐」인데 메일은 안 나가는 상태가 다시 생긴다(2026-09-07 감사). */
+export const DEFAULT_STATE = NOTIFY_DEFAULTS as NotificationSettingsState;
 
 const GROUPS: Array<{ id: Group; label: string }> = [
   { id: "mine", label: "내 계정과 채널" },
