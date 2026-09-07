@@ -74,7 +74,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { InfoTip } from "@/components/ui/info-tip";
 import { Switch } from "@/components/ui/switch";
 import { FinchLoader } from "@/components/ui/finch-loader";
-import { displayLinkUrl, normalizeSnsUrl, publicLinkUrl, SLUG_MESSAGES, stableJson, validateSlug } from "@/lib/links";
+import { displayLinkUrl, MIN_PAGE_PASSWORD, normalizeSnsUrl, publicLinkUrl, SLUG_MESSAGES, stableJson, validateSlug } from "@/lib/links";
 import { SNS_CATALOG, snsHref } from "@/lib/links/sns-catalog";
 import {
   BLOCK_CATALOG,
@@ -145,6 +145,7 @@ import {
   replyGuestbook,
   setGuestbookHidden,
   deleteGuestbook,
+  deleteLead,
   updateLinkSettings,
   setLinkPassword,
   exportLeads,
@@ -1945,6 +1946,15 @@ export function LinksClient({
                     description: "공개 페이지에서도 함께 사라져요. 이건 되돌릴 수 없어요 — 잠시 감추려면 「숨기기」를 쓰세요.",
                     confirmLabel: "삭제",
                     onConfirm: () => run(() => deleteGuestbook(id), () => toast("방명록 글을 지웠어요.")),
+                  })
+                }
+                onLeadDelete={(id) =>
+                  setConfirming({
+                    title: "받은 내용을 지울까요?",
+                    description:
+                      "이 기록은 방문자가 남긴 개인정보(이름·연락처·문의 내용)예요. 지우면 되돌릴 수 없고 CSV 에서도 빠져요.",
+                    confirmLabel: "삭제",
+                    onConfirm: () => run(() => deleteLead(id), () => toast("받은 내용을 지웠어요.")),
                   })
                 }
                 onExportLeads={() =>
@@ -5397,6 +5407,7 @@ function SettingsPanel({
 function ManagePanel({
   leads,
   leadCounts,
+  onLeadDelete,
   leadsFailed = false,
   guestbookFailed = false,
   guestbook,
@@ -5407,6 +5418,7 @@ function ManagePanel({
   onExportLeads,
 }: {
   leads: LinkLead[];
+  onLeadDelete?: (id: number) => void;
   leadCounts?: { contact: number; subscribe: number; guestbook: number };
   leadsFailed?: boolean;
   guestbookFailed?: boolean;
@@ -5583,6 +5595,17 @@ function ManagePanel({
                         <a href={`tel:${l.phone}`} className="trans-state rounded-chip border border-line px-2.5 py-1 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-fg">
                           전화
                         </a>
+                      ) : null}
+                      {/* 방문자가 남긴 개인정보다 — 「지워 달라」는 요청에 응할 수단이 화면에 있어야 한다
+                          (개인정보처리방침 9. 2026-09-07 감사 전에는 지우는 길이 아예 없었다) */}
+                      {onLeadDelete ? (
+                        <button
+                          type="button"
+                          onClick={() => onLeadDelete(l.id)}
+                          className="trans-state rounded-chip border border-line px-2.5 py-1 text-[12px] font-semibold text-fg-sub hover:bg-tint-hover hover:text-negative"
+                        >
+                          삭제
+                        </button>
                       ) : null}
                       <p className="tnum w-full px-2 text-[11px] text-fg-sub">접수 {timeOf(l.createdAt)}</p>
                     </div>
@@ -5892,7 +5915,7 @@ function PageSettingsForm({
             className="mt-3 space-y-2"
             onSubmit={(e) => {
               e.preventDefault();
-              if (pw.trim().length < 4) return;
+              if (pw.trim().length < MIN_PAGE_PASSWORD) return;
               /* Enter 로 제출하면 안내 문구 칸의 blur 가 안 나온다 — 먼저 확정하고 비밀번호를 보낸다(감사3) */
               commit("lockMessage", lockMessage);
               onPassword(pw, () => {
@@ -5905,10 +5928,10 @@ function PageSettingsForm({
               type="password"
               value={pw}
               onChange={(e) => setPw(e.target.value)}
-              placeholder="새 비밀번호 (4~32자)"
+              placeholder={`새 비밀번호 (${MIN_PAGE_PASSWORD}~32자)`}
               aria-label="새 비밀번호"
               autoComplete="new-password"
-              minLength={4}
+              minLength={MIN_PAGE_PASSWORD}
               maxLength={32}
               className={input}
             />
@@ -5925,7 +5948,7 @@ function PageSettingsForm({
               className={input}
             />
             <div className="flex gap-1.5">
-              <Button size="sm" type="submit" disabled={busy || pw.trim().length < 4}>
+              <Button size="sm" type="submit" disabled={busy || pw.trim().length < MIN_PAGE_PASSWORD}>
                 저장
               </Button>
               <Button variant="ghost" size="sm" type="button" onClick={() => { setPwOpen(false); setPw(""); }}>

@@ -218,12 +218,19 @@ async function processEntry(entry: WebhookEntry) {
     };
 
     // 감사·디버깅용 최소 필드 로그 (원문 페이로드는 저장하지 않는다 — 비용·개인정보)
-    const { error: logErr } = await admin.from("webhook_events").insert({
+    /* user_id 를 반드시 넣는다(0087) — 이 고리가 없으면 탈퇴 cascade 가 닿지 않아
+       개인정보처리방침이 확언한 «탈퇴와 동시에 파기»가 성립하지 않는다.
+       0087 미적용 DB 면 컬럼이 없어 실패하므로 컬럼을 빼고 한 번 더 시도한다(계단식 폴백). */
+    const logRow = {
       ig_comment_id: event.commentId,
       media_id: event.mediaId,
       from_id: hashRecipient(event.fromId),
       verb: "comment",
-    });
+    };
+    let logErr = (await admin.from("webhook_events").insert({ ...logRow, user_id: ownerId })).error;
+    if (logErr && /user_id/i.test(logErr.message)) {
+      logErr = (await admin.from("webhook_events").insert(logRow)).error;
+    }
     if (logErr) console.error("[auto-dm] 이벤트 로그 실패:", logErr.message);
 
     // 이 게시물의 활성 규칙 조회 → 댓글당 1개만 실행.

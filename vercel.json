@@ -19,6 +19,8 @@
     { "path": "/api/cron/pool-work", "schedule": "30 14 * * *" },
     { "path": "/api/cron/pool-work", "schedule": "30 17 * * *" },
 
-    { "path": "/api/cron/pool-finalize", "schedule": "30 18 * * *" }
+    { "path": "/api/cron/pool-finalize", "schedule": "30 18 * * *" },
+
+    { "path": "/api/cron/retention", "schedule": "20 19 * * *" }
   ]
 }

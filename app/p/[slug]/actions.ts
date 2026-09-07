@@ -1,5 +1,6 @@
 "use server";
 
+import { createHmac } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -64,6 +65,34 @@ async function visitorHash(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * 비밀번호 시도의 **출처 키** — 방문자 쿠키가 있으면 그것, 없으면 접속 IP 의 해시.
+ *
+ * 왜 IP 까지 보나(2026-09-07 감사): 방문자 단위 상한이 쿠키가 있을 때만 걸렸다. 쿠키를 아예 안 보내면
+ * 그 상한을 통째로 건너뛰고 페이지 천장만 남았는데, 그 천장은 **정상 방문자까지 잠그는** 값이었다.
+ * 즉 쿠키를 지운 공격자에게는 무제한, 정상 방문자에게는 잠금이라는 정반대 결과였다.
+ *
+ * ⚠️ IP **원문은 저장하지 않는다** — 방문자 해시와 똑같이 페퍼를 섞어 해시만 남긴다(개인정보 방침 유지).
+ * 접두 `c:`/`i:` 로 두 출처가 섞이지 않게 한다.
+ */
+async function unlockSourceKey(): Promise<string | null> {
+  const cookieHash = await visitorHash();
+  if (cookieHash) return `c:${cookieHash}`;
+  try {
+    const h = await headers();
+    const raw = (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || h.get("x-real-ip") || "";
+    if (!raw) return null;
+    return `i:${createHmac("sha256", unlockPepper()).update(raw).digest("hex").slice(0, 32)}`;
+  } catch {
+    return null;
+  }
+}
+
+/** 열림 쿠키와 같은 비밀(lib/links/password.ts pepper) — 여기서만 쓰려고 다시 파생한다 */
+function unlockPepper(): string {
+  return process.env.LINK_COOKIE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "finch-dev-pepper";
 }
 
 /** 슬러그 → 이 요청이 볼 수 있는 공개 페이지 id. 비공개·잠긴(열지 못한) 페이지는 null — loadPublicPage 와 같은 규칙 */
@@ -247,7 +276,12 @@ export async function recordDwell(slug: string, ms: number): Promise<void> {
    매번 새 키였고 인스턴스마다 따로였다(감사 C1). 페이지 단위 천장이 진짜 방어, 해시 단위는 오타 방지. */
 const UNLOCK_WINDOW_MS = 10 * 60 * 1000;
 const UNLOCK_VISITOR_MAX = 8;
-const UNLOCK_PAGE_MAX = 30;
+/* 페이지 천장은 «분산 공격 방지» 전용이다 — 2026-09-07 감사 전에는 10분에 30이었는데,
+   그 값은 **잠금 버튼**이었다: 아무나 30번 틀리면 그 페이지가 10분 동안 주인에게도 방문자에게도
+   안 열렸고(주인은 RLS 로 늘 열리니 주인 화면만 멀쩡했다), 원인을 알 방법이 화면 어디에도 없었다.
+   비용도 비대칭이었다 — 공격자는 분당 3회면 되고 우리는 그때마다 DB 왕복 2회를 태웠다.
+   진짜 방어선은 아래 «출처 단위» 상한이고, 이 천장은 그 뒤의 넉넉한 마지막 선이다. */
+const UNLOCK_PAGE_MAX = 300;
 /* 0059 미적용 구간 전용 — 페이지 id 키(방문자가 바꿀 수 없다) */
 const UNLOCK_FALLBACK = new Map<string, { n: number; until: number }>();
 
@@ -269,7 +303,8 @@ export async function unlockLinkPage(slug: string, password: string, urlBase?: s
   const pageId = (pageRow?.id as string | undefined) ?? null;
   if (!pageId) return fail("notFound", "페이지를 찾을 수 없어요.");
 
-  const hash = await visitorHash();
+  /* 쿠키가 없으면 IP 해시로 — 쿠키를 안 보내는 것만으로 방문자 상한을 건너뛰던 구멍을 막는다(2026-09-07 감사) */
+  const hash = await unlockSourceKey();
   const since = new Date(Date.now() - UNLOCK_WINDOW_MS).toISOString();
   /* PBKDF2(100k) 를 태우기 **전에** 천장을 본다 — 안 그러면 제한 자체가 CPU 소진 통로다 */
   const { count: pageFails, error: cntErr } = await admin0

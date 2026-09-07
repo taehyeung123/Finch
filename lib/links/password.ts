@@ -1,4 +1,5 @@
 import { createHmac, pbkdf2, randomBytes, timingSafeEqual } from "node:crypto";
+import { MIN_PAGE_PASSWORD } from "./index";
 
 /*
   비밀번호 페이지(리틀리 「공개/비공개: 비밀번호」 카피, 5단계) — 서버 전용.
@@ -54,8 +55,15 @@ export function unlockTokenMatches(pageId: string, storedHash: string, cookieVal
   return want.length === got.length && timingSafeEqual(want, got);
 }
 
-/** 비밀번호 규칙 — 4~32자. 공백만은 안 된다 */
+/**
+ * 비밀번호 규칙 — 6~32자. 공백만은 안 된다.
+ *
+ * 왜 4에서 6으로 올렸나(2026-09-07 감사): 4자리 숫자는 경우의 수가 1만이다. 시도 상한이
+ * 10분에 8회여도 이틀이면 전수 시도가 끝나고, 그 뒤에는 잠긴 콘텐츠와 스냅샷 전체가 열린다.
+ * ⚠️ **이미 저장된 4~5자 비밀번호는 그대로 동작한다** — 이 함수는 «새로 정할 때»만 부른다.
+ * 여기를 해제 경로에서 부르면 기존 고객의 페이지가 어느 날 갑자기 안 열린다.
+ */
 export function validPagePassword(pw: string): boolean {
   const t = pw.trim();
-  return t.length >= 4 && t.length <= 32;
+  return t.length >= MIN_PAGE_PASSWORD && t.length <= 32;
 }

@@ -12,6 +12,7 @@ import { SafeFetchError, fetchPublicHtml } from "@/lib/links/safe-fetch";
 import { DEFAULT_THEME_KEY, sanitizeThemeCustom, themeByKey } from "@/lib/links/themes";
 import { LINK_LANGS, TRACKER_FORMATS, VERIFY_FORMAT, isSingleEmoji, type LinkPageSettings } from "@/lib/links/settings";
 import { hashPagePassword, validPagePassword } from "@/lib/links/password";
+import { MIN_PAGE_PASSWORD } from "@/lib/links";
 import { LINK_TEMPLATES } from "@/lib/links/templates";
 import { parseLittlyHtml } from "@/lib/links/littly";
 import { parseInpockHtml } from "@/lib/links/inpock";
@@ -658,7 +659,8 @@ export async function setLinkPassword(password: string | null, pageId?: string):
     return { ok: true };
   }
 
-  if (!validPagePassword(password)) return { ok: false, error: "비밀번호는 4~32자로 정해 주세요." };
+  if (!validPagePassword(password))
+    return { ok: false, error: `비밀번호는 ${MIN_PAGE_PASSWORD}~32자로 정해 주세요.` };
   const password_hash = await hashPagePassword(password.trim());
   /* 해시를 먼저 쓰고 locked 를 켠다 — 반대 순서면 잠겼는데 대조할 해시가 없는 찰나가 생긴다(그땐 아무도 못 연다) */
   const { error: upErr } = await supabase
@@ -996,6 +998,30 @@ export async function setGuestbookHidden(id: number, hidden: boolean): Promise<R
   revalidatePath("/links");
   return { ok: true };
 }
+/**
+ * 방문자 리드 1건 삭제.
+ *
+ * 왜 생겼나(2026-09-07 감사): 0048 은 link_leads 에 SELECT 정책 하나만 만들었고 DELETE 가 빠졌다.
+ * 그래서 방문자(우리와 아무 계약이 없는 **제3자**)의 이름·이메일·전화·문의 내용을 주인도, 우리도,
+ * 본인도 개별로 지울 수 없었다 — 개인정보처리방침 9 가 «삭제를 요청할 수 있으며 지체 없이 조치합니다»
+ * 라고 약속하는데 그 경로가 코드에 없었다. DELETE 정책은 0087 이 준다.
+ * 삭제 권한은 방명록과 같은 판정이다 — RLS 가 «내 페이지의 리드인가»를 본다(.select() 로 0행을 잡는다).
+ */
+export async function deleteLead(id: number): Promise<Result> {
+  if (isDemoMode()) return DEMO;
+  const user = await getAuthUser();
+  if (!user) return AUTH;
+  const supabase = await createClient();
+  const { data: hit, error } = await supabase.from("link_leads").delete().eq("id", id).select("id");
+  if (error) {
+    console.error("[links] 리드 삭제 실패:", error.message);
+    return { ok: false, error: "지우지 못했어요." };
+  }
+  if (!hit || hit.length === 0) return { ok: false, error: "기록을 찾지 못했어요." };
+  revalidatePath("/links");
+  return { ok: true };
+}
+
 export async function deleteGuestbook(id: number): Promise<Result> {
   if (isDemoMode()) return DEMO;
   const user = await getAuthUser();
