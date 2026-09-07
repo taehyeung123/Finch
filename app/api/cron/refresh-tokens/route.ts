@@ -30,6 +30,9 @@ import { grantPlanCredits } from "@/lib/actions/credits";
  * 알림은 전부 lib/notify.notifyUser로 생성해 인앱 설정·이메일 발송을 일관되게 처리한다.
  */
 export const runtime = "nodejs";
+/* 연동 계정 수만큼 외부 API 를 순차로 부르고 그다음 정기결제를 돌린다 — 선언이 없으면 플랫폼 기본값에
+   걸려 함수가 도중에 강제 종료된다(publish-scheduled 가 같은 이유로 못 박아 둔 값). Pro 상한은 300. */
+export const maxDuration = 300;
 
 const REFRESH_WINDOW_DAYS = 15;
 const NOTIFY_WINDOW_DAYS = 7;
@@ -285,6 +288,8 @@ export async function GET(request: Request) {
   // 컬럼이 없으면 통째로 실패하므로, 0011 미적용 DB에서도 인스타/Threads 갱신은 계속 동작하도록
   // 별도로 폴백 조회한다.
   let accounts: TokenRow[] | null = null;
+  /* 계정 조회가 실패했는가 — 응답에 남겨 «토큰은 못 돌았지만 청구는 돌았다»를 운영자가 구분할 수 있게 한다 */
+  let accountsFailed: string | null = null;
   {
     const { data, error } = await admin
       .from("connected_accounts")
@@ -300,13 +305,19 @@ export async function GET(request: Request) {
         .eq("connected", true)
         .not("access_token_cipher", "is", null);
       if (fallback.error) {
-        console.error("[cron:refresh] 계정 조회 실패:", fallback.error.message);
-        return NextResponse.json({ ok: false, error: fallback.error.message }, { status: 500 });
+        /* ⚠️ 여기서 500 으로 조기 반환하면 **그날 정기결제가 통째로 안 돈다** — 청구는 이 함수 맨 끝에 있다.
+           부수적인 스냅샷 작업 하나가 매출 경로를 인질로 잡던 자리다(2026-09-07 감사).
+           토큰 루프만 건너뛰고 청구·해지만료·사전고지는 그대로 진행한다. */
+        console.error("[cron:refresh] 계정 조회 실패 — 토큰 갱신만 건너뛴다:", fallback.error.message);
+        accountsFailed = fallback.error.message;
+        accounts = [];
+      } else {
+        accounts = (fallback.data ?? []).map((r) => ({ ...r, refresh_token_cipher: null }));
       }
-      accounts = (fallback.data ?? []).map((r) => ({ ...r, refresh_token_cipher: null }));
     } else if (error) {
-      console.error("[cron:refresh] 계정 조회 실패:", error.message);
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      console.error("[cron:refresh] 계정 조회 실패 — 토큰 갱신만 건너뛴다:", error.message);
+      accountsFailed = error.message;
+      accounts = [];
     } else {
       accounts = data;
     }
@@ -500,5 +511,14 @@ export async function GET(request: Request) {
   // 정기결제 청구·만료·사전고지 (같은 일일 크론에 통합 — 크론 개수는 별도 제한 없지만 관련 로직 응집)
   const billing = await processSubscriptions(admin);
 
-  return NextResponse.json({ ok: true, total: accounts?.length ?? 0, refreshed, failed, notified, spikes, billing });
+  return NextResponse.json({
+    ok: accountsFailed === null,
+    ...(accountsFailed ? { accountsError: accountsFailed } : {}),
+    total: accounts?.length ?? 0,
+    refreshed,
+    failed,
+    notified,
+    spikes,
+    billing,
+  });
 }

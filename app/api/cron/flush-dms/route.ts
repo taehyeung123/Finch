@@ -17,6 +17,9 @@ import { isAuthorizedCron } from "@/lib/cron";
  * 규칙이 비활성화됐으면 발송하지 않고 종결한다.
  */
 export const runtime = "nodejs";
+/* 한 번에 최대 100건을 외부 API 로 순차 발송한다 — 선언이 없으면 플랫폼 기본값에 걸려 도중에 강제 종료되고,
+   그때 이미 보낸 건의 결과 확정(finalize)이 안 돼 같은 댓글에 다시 시도할 수 있다(Private Reply 는 1회뿐이다). */
+export const maxDuration = 300;
 
 const BATCH = 100;
 const WINDOW_MS = 6.5 * 86_400_000;

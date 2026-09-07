@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { sendTeamInviteEmail } from "@/lib/email/resend";
+import { getCurrentPlan } from "@/lib/data/internal";
+import { teamSeatsFor } from "@/lib/pricing/team-seats";
 
 /** 한 워크스페이스가 1시간에 보낼 수 있는 초대 수 — 진짜 팀 구성에는 넉넉하고, 메일 발사대로는 못 쓰는 값 */
 const INVITE_PER_HOUR = 20;
@@ -56,6 +58,29 @@ export async function inviteMember(formData: FormData): Promise<InviteMemberResu
 
   if (email === (user.email ?? "").toLowerCase()) {
     return { ok: false, error: "본인은 초대할 수 없어요." };
+  }
+
+  /* 플랜별 좌석 상한 — 요금제 표가 「Pro 최대 3인 / Agency 최대 10인」을 차별점으로 파는데 이 액션에는
+     plan 검사가 아예 없었다. Free 도 무제한으로 썼고, 산 것과 준 것이 달랐다(2026-09-07 감사).
+     조회 실패(null)면 막지 않는다 — 유료 고객을 무료 상한으로 잠그는 쪽이 더 나쁘다(teamSeatsFor). */
+  const seats = teamSeatsFor(await getCurrentPlan());
+  if (seats <= 0) {
+    return { ok: false, error: "팀 초대는 Pro 플랜부터 쓸 수 있어요. 요금제에서 플랜을 올리면 팀원을 초대할 수 있습니다." };
+  }
+  const { count: usedSeats, error: seatErr } = await supabase
+    .from("team_members")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_user_id", user.id)
+    .in("status", ["invited", "active"]);
+  if (seatErr) {
+    console.error("[team] 좌석 수 확인 실패:", seatErr.message);
+    return { ok: false, error: "초대 처리 중 오류가 발생했어요. 다시 시도해 주세요." };
+  }
+  if ((usedSeats ?? 0) >= seats) {
+    return {
+      ok: false,
+      error: `팀원 자리를 모두 썼어요(${usedSeats}/${seats}명). 플랜을 올리거나 기존 팀원을 제거한 뒤 다시 초대해 주세요.`,
+    };
   }
 
   /* 초대는 **우리 도메인으로 메일을 쏘는 버튼**이다. 횟수 제한이 없으면 가입 30초짜리 계정 하나로
