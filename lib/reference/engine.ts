@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClaudeClient, FAST_MODEL } from "@/lib/ai/claude";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchSupplierImage } from "@/lib/media/safe-image";
+import { consoleErrorThrottled } from "@/lib/monitoring/log-throttle";
 import { collectForSource } from "@/lib/reference/collect";
 import { CollectError, type CollectedPost } from "@/lib/reference/scrapecreators";
 import type { Channel, CollectSettings, HookType, ReferenceSource } from "@/lib/types";
@@ -271,9 +272,13 @@ export function extractHashtags(caption: string): string[] {
   폴더는 `${userId}/` 그대로 둔다 — 탈퇴 정리(lib/account/delete.ts)가 이 프리픽스로 파일을 찾는다.
   키가 바뀌면 옛 파일은 고아가 된다(다시 받아 저장하고, 옛 것은 야간 스윕이 걷어 가야 한다).
 */
-function thumbObjectName(userId: string, channel: string, externalId: string, ext: string): string {
+function thumbObjectName(userId: string, channel: string, externalId: string, ext: string): string | null {
+  /* ⚠️ 소스에 박힌 문자열로 폴백하지 않는다(소넷 점검). 폴백 키는 저장소에 공개돼 있어 누구나
+     경로를 그대로 다시 계산할 수 있고, 그러면 이 함수가 있으나 마나가 된다 — 게다가 «막고 있다»고
+     믿게 만들어서 아무 것도 안 하는 것보다 나쁘다. 비밀이 없으면 캐시를 포기한다(수집은 계속된다). */
   const secret = process.env.THUMB_PATH_SECRET || process.env.TOKEN_ENCRYPTION_KEY || "";
-  const digest = createHmac("sha256", secret || "finch-thumb")
+  if (!secret) return null;
+  const digest = createHmac("sha256", secret)
     .update(`${userId} ${channel} ${externalId}`)
     .digest("hex")
     .slice(0, 32);
@@ -291,6 +296,14 @@ async function cacheThumbnail(userId: string, post: CollectedPost): Promise<stri
   if (!img) return null;
   try {
     const path = thumbObjectName(userId, post.channel, post.externalId, img.ext);
+    if (!path) {
+      consoleErrorThrottled(
+        "reference.thumb.no-secret",
+        60 * 60 * 1000,
+        "[reference] 썸네일 캐시 건너뜀 — THUMB_PATH_SECRET·TOKEN_ENCRYPTION_KEY 미설정",
+      );
+      return null;
+    }
     const { error } = await admin.storage
       .from("reference-thumbs")
       /* contentType 은 **우리가 고른 값**이다 — 원격이 준 문자열을 그대로 굳히면

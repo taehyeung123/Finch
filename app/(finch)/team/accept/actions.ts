@@ -51,6 +51,9 @@ export async function acceptInvite(formData: FormData): Promise<void> {
   }
   if (!invite || invite.status === "revoked") back(token, "invalid");
   if (!sameInvitee(invite.email as string | null, user.email)) back(token, "mismatch");
+  /* 이미 참여 중이면 만료를 보지 않는다 — invited_at 은 수락해도 안 바뀌므로 오래된 팀원이 전부
+     «만료»로 튕긴다(소넷 점검). 화면 쪽 판정과 같은 순서여야 두 곳이 같은 말을 한다. */
+  if (invite.status === "active") redirect("/dashboard");
   if (isInviteExpired(invite.invited_at as string | null)) back(token, "expired");
 
   if (invite.status === "invited") {

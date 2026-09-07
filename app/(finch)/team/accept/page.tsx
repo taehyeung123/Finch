@@ -136,6 +136,11 @@ export default async function TeamAcceptPage({
     );
   }
 
+  /* ⚠️ «이미 참여 중»을 만료보다 **먼저** 본다(소넷 점검). 순서가 반대면, 이 배포 전에 수락해 둔
+     기존 팀원이 옛 링크를 다시 열었을 때 「만료됐어요」를 본다 — invited_at 은 수락해도 안 바뀌므로
+     14일이 지난 거의 모든 실제 팀원이 그렇다. 참여 중인 사람에게 할 말은 만료가 아니라 «들어오세요»다. */
+  if (invite.status === "active") redirect("/dashboard");
+
   if (isInviteExpired(invite.invited_at as string | null)) {
     return (
       <Shell>
@@ -146,9 +151,6 @@ export default async function TeamAcceptPage({
       </Shell>
     );
   }
-
-  /* 이미 참여 중이면 볼 것이 없다 — 바로 들여보낸다 */
-  if (invite.status === "active") redirect("/dashboard");
 
   /* ⚠️ **여기서 쓰지 않는다.** 예전엔 이 렌더 안에서 service_role 이 편입을 확정해서,
      주소를 여는 것만으로 동의 없이 워크스페이스에 편입됐다(2026-09-07 감사).
