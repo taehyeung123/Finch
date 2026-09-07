@@ -1,8 +1,10 @@
 import "server-only";
 
+import { createHmac } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClaudeClient, FAST_MODEL } from "@/lib/ai/claude";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchSupplierImage } from "@/lib/media/safe-image";
 import { collectForSource } from "@/lib/reference/collect";
 import { CollectError, type CollectedPost } from "@/lib/reference/scrapecreators";
 import type { Channel, CollectSettings, HookType, ReferenceSource } from "@/lib/types";
@@ -256,22 +258,44 @@ export function extractHashtags(caption: string): string[] {
  * 썸네일 캐시 — 공급사 CDN 이미지를 받아 Storage에 저장하고 공개 URL을 돌려준다.
  * 실패는 null (카드가 글리프 자리표시로 대체) — 수집 자체를 막지 않는다.
  */
+/*
+  파일명은 **비밀 키로 HMAC** 을 떠서 쓴다(2026-09-07 감사).
+
+  예전 이름은 `${userId}/${channel}-${externalId}.${ext}` 로 완전히 결정적이었다. 그런데
+  · userId 는 공개 프로필 HTML 에 그대로 실려 나가고,
+  · externalId 는 공급사 정규화상 인스타 pk 또는 shortcode 라 게시물 주소에서 그대로 얻어진다.
+  버킷이 public 이므로 그 둘만 조합하면 **«저 사람이 이 게시물을 수집했는지»** 를 인증 없이 판정할 수 있었다 —
+  경쟁사 리서치 내역은 영업 기밀이다. HMAC 이면 같은 게시물은 같은 경로(upsert 중복 방지 유지)이면서
+  밖에서는 만들 수 없다. 덤으로 externalId 의 `../` 가 Storage 키에 섞이는 경로 조립 문제도 함께 사라진다.
+
+  폴더는 `${userId}/` 그대로 둔다 — 탈퇴 정리(lib/account/delete.ts)가 이 프리픽스로 파일을 찾는다.
+  키가 바뀌면 옛 파일은 고아가 된다(다시 받아 저장하고, 옛 것은 야간 스윕이 걷어 가야 한다).
+*/
+function thumbObjectName(userId: string, channel: string, externalId: string, ext: string): string {
+  const secret = process.env.THUMB_PATH_SECRET || process.env.TOKEN_ENCRYPTION_KEY || "";
+  const digest = createHmac("sha256", secret || "finch-thumb")
+    .update(`${userId} ${channel} ${externalId}`)
+    .digest("hex")
+    .slice(0, 32);
+  return `${userId}/${digest}.${ext}`;
+}
+
 async function cacheThumbnail(userId: string, post: CollectedPost): Promise<string | null> {
   if (!post.thumbnailUrl) return null;
   const admin = createAdminClient();
   if (!admin) return null;
+  /* ⚠️ 맨 fetch 로 돌아가지 말 것 — thumbnailUrl 은 **공급사가 준 값**이다.
+     스킴·사설 IP·리다이렉트 검사가 없던 시절 이 한 줄이 임의 아웃바운드 요청 창구였고,
+     받아 온 바이트는 공개 버킷으로 나갔다(2026-09-07 감사). 울타리는 lib/media/safe-image.ts. */
+  const img = await fetchSupplierImage(post.thumbnailUrl, { timeoutMs: 10_000, maxBytes: 2_000_000 });
+  if (!img) return null;
   try {
-    const res = await fetch(post.thumbnailUrl, { signal: AbortSignal.timeout(10_000), cache: "no-store" });
-    if (!res.ok) return null;
-    const type = res.headers.get("content-type") ?? "";
-    if (!type.startsWith("image/")) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.byteLength > 2_000_000) return null; // 2MB 초과는 캐시하지 않는다 (커버 이미지 기준 과대)
-    const ext = type.includes("png") ? "png" : type.includes("webp") ? "webp" : "jpg";
-    const path = `${userId}/${post.channel}-${post.externalId}.${ext}`;
+    const path = thumbObjectName(userId, post.channel, post.externalId, img.ext);
     const { error } = await admin.storage
       .from("reference-thumbs")
-      .upload(path, buf, { contentType: type, upsert: true });
+      /* contentType 은 **우리가 고른 값**이다 — 원격이 준 문자열을 그대로 굳히면
+         공개 버킷이 원격 서버가 정한 타입으로 파일을 서빙하게 된다(safe-image 가 4종으로 좁힌다). */
+      .upload(path, img.buf, { contentType: img.contentType, upsert: true });
     if (error) {
       console.error("[reference] 썸네일 업로드 실패:", error.message);
       return null;

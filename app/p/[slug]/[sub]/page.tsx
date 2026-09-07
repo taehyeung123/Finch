@@ -35,7 +35,12 @@ export default async function PublicSubPage({ params }: { params: Promise<{ slug
     /* 부모 주소가 이사했으면 서브 경로도 따라간다 — 서브 페이지 QR·링크도 인쇄돼 나가 있다.
        302 인 이유는 [slug]/page.tsx 의 같은 자리 주석 참조. */
     const moved = await movedTo(slug);
-    if (moved) redirect(`/${moved}/${sub}`);
+    /* sub 는 라우트 파라미터라 **디코드된 값**이다 — 형식을 확인하고서야 주소로 되돌린다.
+       여기서 `moved` 가 앞에 오므로 `//evil.com` 같은 오리진 탈출은 안 되지만, 검증 없는 경로 조각을
+       Location 에 그대로 싣는 습관 자체가 /go 에서 사고가 됐다(2026-09-07 감사).
+       형식은 DB 의 sub_slug check(0060)와 같게 본다. */
+    if (moved && /^[a-z0-9][a-z0-9-]{0,39}$/.test(sub)) redirect(`/${moved}/${sub}`);
+    if (moved) redirect(`/${moved}`);
     notFound();
   }
   /* 데이터는 자식 slug 로, 주소는 방문자가 들어온 표준 주소로 —

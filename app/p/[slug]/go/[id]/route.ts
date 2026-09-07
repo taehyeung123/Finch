@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadPublicPage } from "../../public-page";
 import { isScheduledHidden } from "@/lib/links/blocks";
+import { SLUG_RE } from "@/lib/links";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
 import { linkWorkspace } from "@/lib/data";
@@ -78,7 +79,20 @@ function destinationOf(block: SnapBlock, idx: number | null): string | null {
 
 export async function GET(request: Request, ctx: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = await ctx.params;
-  const back = () => NextResponse.redirect(new URL(`/${slug}`, request.url));
+  /* «되돌아가기» — 우리 도메인 안으로만 간다.
+     ⚠️ 예전엔 `new URL(`/${slug}`, request.url)` 이었다. slug 는 라우트 파라미터라 **디코드된 값**이고
+     형식 검증이 없었다. `/%5cevil.com/go/abc` 로 부르면 slug 가 `\evil.com` 이 되는데,
+     WHATWG URL 은 `/\` 를 `//` 와 같게 읽어 결과가 `http://evil.com/` 이 된다 —
+     계정 없이 우리 도메인을 임의 오리진으로 튕기는 문이 하나 열려 있었다(2026-09-07 감사, 실측 재현).
+     `%5c2130706433` 같은 십진 IP 표기까지 되므로 호스트 문자열 필터로는 못 막는다.
+     그래서 ① slug 형식(SLUG_RE)을 먼저 통과시키고 ② 만든 URL 의 오리진을 요청 오리진과 대조한다.
+     같은 결함을 로그인 `next` 파라미터에서 한 번 고쳤다(lib/auth/safe-next.ts) — 여기가 남아 있었다. */
+  const back = () => {
+    const origin = new URL(request.url).origin;
+    if (!SLUG_RE.test(slug)) return NextResponse.redirect(new URL("/", origin));
+    const dest = new URL(`/${slug}`, origin);
+    return NextResponse.redirect(dest.origin === origin ? dest : new URL("/", origin));
+  };
 
   /* 데모 모드는 샘플 블록에서 목적지를 찾는다 — 안 하면 데모 페이지의 모든 버튼이
      제자리로 되던져져서, 고치고 있는 바로 그 증상("누르면 아무 일도 안 남")이 된다.

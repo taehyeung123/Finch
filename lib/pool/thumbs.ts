@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchSupplierImage } from "@/lib/media/safe-image";
 
 /*
   썸네일 캐시 — 공급사 CDN 이미지를 Storage 로 복사한다.
@@ -34,18 +35,14 @@ export function thumbPublicUrl(path: string | null): string | null {
   return `${base}/storage/v1/object/public/${BUCKET}/${path}`;
 }
 
-async function download(url: string): Promise<{ buf: Buffer; type: string } | null> {
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT), cache: "no-store" });
-    if (!res.ok) return null;
-    const type = res.headers.get("content-type") ?? "";
-    if (!type.startsWith("image/")) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.byteLength === 0 || buf.byteLength > MAX_BYTES) return null;
-    return { buf, type };
-  } catch {
-    return null;
-  }
+/* ⚠️ 맨 fetch 로 돌아가지 말 것 — 여기 들어오는 url 은 **공급사가 준 값**이다(creatives.thumb_src).
+   예전엔 스킴·호스트·사설 IP 검사 없이 열었고 리다이렉트도 기본값(follow)이었다. Vercel 에는
+   아웃바운드 방화벽이 없어서 그건 «공급사 응답 한 줄 = 우리 함수의 임의 아웃바운드 요청» 이었고,
+   받아 온 바이트가 공개 버킷으로 그대로 나갔다(2026-09-07 감사). 울타리는 lib/media/safe-image.ts 에 있다. */
+async function download(url: string): Promise<{ buf: Buffer; type: string; ext: string } | null> {
+  const img = await fetchSupplierImage(url, { timeoutMs: FETCH_TIMEOUT, maxBytes: MAX_BYTES });
+  if (!img) return null;
+  return { buf: img.buf, type: img.contentType, ext: img.ext };
 }
 
 /**
@@ -77,8 +74,7 @@ export async function fillThumbs(perRun = 80): Promise<ThumbResult> {
       chunk.map(async (item) => {
         const got = await download(item.url);
         if (!got) return { id: item.id, path: null as string | null };
-        const ext = got.type.includes("png") ? "png" : got.type.includes("webp") ? "webp" : "jpg";
-        const path = `pool/${item.id}.${ext}`;
+        const path = `pool/${item.id}.${got.ext}`;
         const { error } = await db.storage
           .from(BUCKET)
           .upload(path, got.buf, { contentType: got.type, upsert: true });
