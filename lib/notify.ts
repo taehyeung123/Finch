@@ -16,6 +16,13 @@ export interface NotifyParams {
   settingKey?: string;
   /** 설정되면 이 기간(ms) 내 같은 type 알림이 있으면 건너뛴다 */
   dedupeMs?: number;
+  /**
+   * **법정 고지** — 수신 설정을 따르지 않고 항상 보낸다.
+   * 정기결제 갱신 3일 전 고지·결제 실패·구독 종료가 여기 해당한다. 구독 시작 화면의 필수 동의문이
+   * 「결제 예정일 3일 전에 미리 알려드린다」고 약속하는데, 그 고지가 설정 화면의 토글 하나로 꺼지면
+   * 예고 없이 카드가 긁힌다 — 동의 화면에서 받은 약속이 스위치로 무효가 되는 구조였다(2026-09-07 감사).
+   */
+  mandatory?: boolean;
   title: string;
   body: string;
 }
@@ -34,8 +41,9 @@ export async function notifyUser(admin: SupabaseClient, params: NotifyParams): P
   const saved = (setting?.settings as Record<string, Partial<NotifyChannelPref>> | null)?.[settingKey];
   const fallback = defaultPrefFor(settingKey);
   const pref: NotifyChannelPref = {
-    inapp: saved?.inapp ?? fallback.inapp,
-    email: saved?.email ?? fallback.email,
+    /* 법정 고지는 수신거부 분기를 타지 않는다 — 끌 수 있는 것과 끌 수 없는 것을 여기서 가른다 */
+    inapp: params.mandatory ? true : (saved?.inapp ?? fallback.inapp),
+    email: params.mandatory ? true : (saved?.email ?? fallback.email),
   };
   if (!pref.inapp) return false;
 

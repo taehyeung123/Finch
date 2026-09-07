@@ -135,6 +135,7 @@ async function processSubscriptions(admin: Admin) {
         await notifyUser(admin, {
           userId: sub.user_id,
           type: "billing",
+          mandatory: true, // 법정 고지 — 수신 설정으로 끌 수 없다(전자상거래법 갱신 고지·결제 실패·구독 종료)
           title: "정기결제 실패로 구독이 해지되었어요",
           body: `${planName} 플랜 결제가 3회 실패해 구독이 해지되고 무료 플랜으로 전환되었어요. 요금제에서 다시 구독할 수 있습니다.`,
         });
@@ -143,6 +144,7 @@ async function processSubscriptions(admin: Admin) {
         await notifyUser(admin, {
           userId: sub.user_id,
           type: "billing",
+          mandatory: true, // 법정 고지 — 수신 설정으로 끌 수 없다(전자상거래법 갱신 고지·결제 실패·구독 종료)
           title: "정기결제에 실패했어요",
           body: `${planName} 플랜 결제가 실패했어요(${reason}). 내일 다시 시도합니다. 카드 한도·유효기간을 확인해 주세요.`,
         });
@@ -238,6 +240,7 @@ async function processSubscriptions(admin: Admin) {
     await notifyUser(admin, {
       userId: sub.user_id,
       type: "billing",
+      mandatory: true, // 법정 고지 — 수신 설정으로 끌 수 없다(전자상거래법 갱신 고지·결제 실패·구독 종료)
       title: "구독 기간이 끝났어요",
       body: "해지한 구독의 이용 기간이 종료되어 무료 플랜으로 전환되었어요.",
     });
@@ -259,6 +262,7 @@ async function processSubscriptions(admin: Admin) {
     await notifyUser(admin, {
       userId: sub.user_id,
       type: "billing",
+      mandatory: true, // 법정 고지 — 수신 설정으로 끌 수 없다(전자상거래법 갱신 고지·결제 실패·구독 종료)
       dedupeMs: 5 * 86_400_000,
       title: "곧 정기결제가 예정되어 있어요",
       body: `${PLAN_NAMES[sub.plan]} 플랜이 ${String(sub.next_billing_at).slice(0, 10)}에 ${PLAN_PRICES[sub.plan].toLocaleString("ko-KR")}원 자동 결제될 예정이에요. 해지는 설정 > 요금제에서 가능합니다.`,
