@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { isDemoMode } from "@/lib/supabase/config";
+import { SESSION_COOKIE_OPTIONS } from "@/lib/supabase/cookie-options";
 import { isReservedSlug } from "@/lib/links/reserved";
 
 /**
@@ -32,6 +33,8 @@ export async function proxy(request: NextRequest) {
               );
             },
           },
+          /* 서버·브라우저와 같은 속성 — 여기서 빠지면 세션 갱신이 secure 없는 쿠키로 덮어쓴다(2026-09-07 감사) */
+          cookieOptions: SESSION_COOKIE_OPTIONS,
         },
       );
       // 인증 판단이 아니라 토큰 갱신 목적 — 판단은 각 레이아웃/라우트에서 getUser()로 수행

@@ -26,6 +26,13 @@ export function SentryClient() {
           environment: process.env.NEXT_PUBLIC_VERCEL_ENV ?? process.env.NODE_ENV,
           tracesSampleRate: 0,
           sendDefaultPii: false,
+          /* 쿠키·헤더 수집은 sendDefaultPii 가 아니라 이 옵션이 관장하고 기본이 켜짐이다(SDK v10).
+             브라우저 쪽 세션 쿠키는 httpOnly 라 JS 가 못 읽지만, 서버와 같은 규칙을 두어 설정이 갈리지 않게 한다. */
+          dataCollection: {
+            cookies: false,
+            httpHeaders: { request: false, response: false },
+            httpBodies: [],
+          },
           beforeSend: (event) => scrubEvent(event),
         });
       })

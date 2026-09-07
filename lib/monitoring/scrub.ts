@@ -45,7 +45,14 @@ interface ScrubbableEvent {
   exception?: { values?: Array<{ value?: string }> };
   extra?: Record<string, unknown>;
   breadcrumbs?: Array<{ message?: string; data?: Record<string, unknown> }>;
-  request?: { url?: string; query_string?: unknown; data?: unknown };
+  request?: {
+    url?: string;
+    query_string?: unknown;
+    data?: unknown;
+    /** ⚠️ 여기에 **세션 쿠키 원문**이 들어온다 — 아래에서 통째로 지운다 */
+    cookies?: unknown;
+    headers?: Record<string, unknown>;
+  };
   tags?: Record<string, unknown>;
 }
 
@@ -69,6 +76,13 @@ export function scrubEvent<E extends ScrubbableEvent>(event: E): E {
     if (b.data) b.data = scrubDeep(b.data);
   }
   if (event.request) {
+    /* ⚠️ 쿠키·헤더는 **가리는 게 아니라 지운다.** 여기 sb-<project>-auth-token(로그인 세션 전체)이 들어오고,
+       그걸 본 사람은 그 사용자로 로그인할 수 있다. sendDefaultPii:false 는 이걸 막지 않는다 —
+       SDK v10 에서 쿠키·헤더 수집은 dataCollection 이 따로 관장하고 기본값이 켜짐이다
+       (node_modules/@sentry/core/build/types/types/datacollection.d.ts:27-38). init 에서도 끄지만,
+       옵션 이름이 바뀌거나 다른 경로로 실려도 여기서 한 번 더 잘린다(2026-09-07 감사). */
+    delete event.request.cookies;
+    delete event.request.headers;
     if (typeof event.request.url === "string") event.request.url = scrubText(event.request.url);
     if (event.request.query_string !== undefined) event.request.query_string = scrubDeep(event.request.query_string);
     if (event.request.data !== undefined) event.request.data = scrubDeep(event.request.data);

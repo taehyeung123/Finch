@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { safeNext } from "@/lib/auth/safe-next";
 
 /**
  * OAuth 콜백 — Supabase가 발급한 code를 세션으로 교환한다.
@@ -14,18 +15,9 @@ export async function GET(request: Request) {
   }
 
   const code = url.searchParams.get("code");
-  const nextParam = url.searchParams.get("next") ?? "/dashboard";
-  /* /api 는 목적지로 받지 않는다 — 로그인이 화면 없이 API 라우트로 직행하면
-     동의 게이트(페이지 렌더)가 한 번도 안 걸린 채 연동·수집이 시작될 수 있다
-     (/login?next=/api/auth/instagram/start 트릭, 2026-09-02 감사 적발).
-     정상 흐름에서 로그인 목적지가 API 라우트인 경우는 없다. */
-  const next =
-    nextParam.startsWith("/") &&
-    !nextParam.startsWith("//") &&
-    !nextParam.includes("\\") &&
-    !nextParam.startsWith("/api")
-      ? nextParam
-      : "/dashboard";
+  /* 판정은 lib/auth/safe-next.ts 한 곳에서 — 접두 문자열 검사는 탭·개행으로 뚫렸다(2026-09-07 감사).
+     로그인 폼(login-form.tsx)도 같은 함수를 쓴다. 두 벌로 두면 한쪽만 고쳐 다시 벌어진다. */
+  const next = safeNext(url.searchParams.get("next"), url.origin);
 
   if (!code) {
     return NextResponse.redirect(new URL("/login?error=auth", url.origin));

@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { SESSION_COOKIE_OPTIONS } from "./cookie-options";
 
 /**
  * 서버(RSC·라우트 핸들러)용 Supabase 클라이언트.
@@ -30,6 +31,9 @@ export async function createClient() {
           }
         },
       },
+      /* @supabase/ssr 기본값에 secure 가 없다 — 세 곳(여기·proxy.ts·client.ts)이 같은 값을 써야
+         한쪽 갱신이 다른 쪽 속성을 덮어쓰지 않는다(2026-09-07 감사) */
+      cookieOptions: SESSION_COOKIE_OPTIONS,
     },
   );
 }

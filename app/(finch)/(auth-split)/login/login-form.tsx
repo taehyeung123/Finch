@@ -7,6 +7,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { FinchLogo } from "@/components/logo";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/client";
+import { safeNext } from "@/lib/auth/safe-next";
 import { GoogleIcon, KakaoIcon } from "@/components/icons/provider-icons";
 
 /* 소셜 버튼 공통 — 브랜드 배경색 위 텍스트는 text-on-kakao(다크) 토큰 사용 */
@@ -28,19 +29,17 @@ function LoginCard() {
   const authError = searchParams.get("error") === "auth";
   const [configNotice, setConfigNotice] = useState(false);
 
-  // next 파라미터(예: 팀 초대 수락 후 복귀용 /team/accept?token=...)는 same-origin 검증
-  // ("/"로 시작 + "//" 금지 + "\" 금지) 통과 시에만 사용 — app/auth/callback/route.ts와 동일 규칙.
+  /* next 파라미터(예: 팀 초대 수락 후 복귀용 /team/accept?token=...) — 판정은 콜백과 **같은 함수**로 한다
+     (lib/auth/safe-next.ts). 접두 문자열 검사는 탭·개행으로 뚫렸다(2026-09-07 감사).
+     오리진은 브라우저에서만 알 수 있으므로 클릭 시점에 판정한다 — 렌더 중 location 을 읽지 않는다. */
   const nextParam = searchParams.get("next");
-  const next =
-    nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") && !nextParam.includes("\\")
-      ? nextParam
-      : "/dashboard";
 
   function signIn(provider: "google" | "kakao") {
     if (!configured) {
       setConfigNotice(true);
       return;
     }
+    const next = safeNext(nextParam, location.origin);
     void createClient().auth.signInWithOAuth({
       provider,
       options: { redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}` },

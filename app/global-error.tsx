@@ -30,6 +30,12 @@ export default function GlobalError({ error, retry }: { error: Error & { digest?
             environment: process.env.NEXT_PUBLIC_VERCEL_ENV ?? process.env.NODE_ENV,
             tracesSampleRate: 0,
             sendDefaultPii: false,
+            /* 쿠키·헤더는 sendDefaultPii 가 아니라 이 옵션이 관장한다(SDK v10) — 다른 init 셋과 같은 규칙 */
+            dataCollection: {
+              cookies: false,
+              httpHeaders: { request: false, response: false },
+              httpBodies: [],
+            },
             beforeSend: (event) => scrubEvent(event),
           });
         }
