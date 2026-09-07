@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { PaidPlan } from "@/lib/toss/config";
@@ -120,15 +121,26 @@ export async function chargeGeneration(opts: {
     // 유료 플랜 — 기능별 한도 없이 통합 크레딧만 본다(월 지급량은 결제 성공 시 grant_plan_credits로 리셋)
     const result = await deductMyCredits(supabase, opts.creditCost, opts.reason);
     if (!result.ok) return { ok: false, error: result.error };
-    if (!result.paid) {
-      const balance = profile?.credits ?? 0;
+    if (result.paid) {
+      const remaining = Math.max(0, (profile?.credits ?? opts.creditCost) - opts.creditCost);
+      return { ok: true, via: "credits", userId: user.id, remainingCredits: remaining };
+    }
+    /* 잔액 부족. 여기서 바로 막으면 **지급이 실패한 유료 고객이 무료 고객보다 못 쓰게 된다** —
+       grantPlanCredits 는 3회 재시도 뒤 실패해도 조용히 끝나므로(같은 파일 아래), 결제는 됐는데
+       크레딧이 0인 상태가 실제로 만들어진다. 그때 무료 월 횟수조차 못 쓰는 건 돈 낸 사람에게 부당하다.
+       그래서 «지급이 한 번도 안 된 것으로 보이는» 경우에만 무료 횟수 게이트로 내려보낸다(2026-09-07 감사).
+       정상적으로 지급받고 다 쓴 사람은 아래 안내를 그대로 본다. */
+    const balance = profile?.credits ?? 0;
+    const granted = await hasPlanCreditGrant(supabase, user.id);
+    if (balance === 0 && granted === false) {
+      console.error(`[credits] 유료 플랜인데 지급 기록이 없다 — 무료 횟수로 폴백. user=${user.id} plan=${plan}`);
+      // 아래 무료 게이트로 내려간다(막지 않는다)
+    } else {
       return {
         ok: false,
         error: `이번 달 크레딧을 다 썼어요(필요 ${opts.creditCost} · 보유 ${balance}). 다음 결제일에 다시 채워지거나, 플랜을 업그레이드하면 더 많이 쓸 수 있어요.`,
       };
     }
-    const remaining = Math.max(0, (profile?.credits ?? opts.creditCost) - opts.creditCost);
-    return { ok: true, via: "credits", userId: user.id, remainingCredits: remaining };
   }
 
   // 무료 플랜 — 1단계: 기능별 월 한도
@@ -193,6 +205,27 @@ export async function refundGenerationCredits(
  * 오류에 대비해 3회 재시도하고, 최종 실패는 운영자가 수동 지급(add_credits)할 수
  * 있게 식별자를 전부 로그로 남긴다.
  */
+/**
+ * 이 사용자가 플랜 크레딧을 **한 번이라도 받은 적이 있는가**.
+ *  true  — 받았다(정상적으로 쓰고 소진한 것)
+ *  false — 받은 기록이 없다(지급이 실패했을 가능성 — 무료 횟수로 폴백해도 되는 상태)
+ *  null  — 조회 실패. 모르면 폴백하지 않는다(닫힌 쪽).
+ * credit_transactions 는 본인 행만 읽는 RLS 가 걸려 있어 사용자 세션으로 조회한다(0016·0064).
+ */
+async function hasPlanCreditGrant(supabase: SupabaseClient, userId: string): Promise<boolean | null> {
+  const { data, error } = await supabase
+    .from("credit_transactions")
+    .select("id")
+    .eq("user_id", userId)
+    .like("reason", "plan_credits:%")
+    .limit(1);
+  if (error) {
+    console.error("[credits] 플랜 지급 기록 조회 실패:", error.message);
+    return null;
+  }
+  return (data?.length ?? 0) > 0;
+}
+
 export async function grantPlanCredits(userId: string, plan: PaidPlan): Promise<void> {
   const admin = createAdminClient();
   if (!admin) {

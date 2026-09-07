@@ -139,6 +139,12 @@ export interface SubscriptionView {
   cardSummary: string | null;
   /** 다운그레이드 예약된 목표 플랜 — 다음 결제일부터 적용된다(0013_plan_change.sql). 예약 없으면 null. */
   pendingPlan: string | null;
+  /**
+   * 해지했지만 이용 종료일이 아직 안 왔다 — «이용 중»도 «없음»도 아닌 세 번째 상태.
+   * 이때 다시 구독하면 겹치는 기간에 전액이 또 청구되므로 화면이 «구독하기» 대신 «해지 취소»로 안내해야 한다.
+   * 시각 비교를 여기서 하는 이유: 화면(서버 컴포넌트)에서 Date.now() 를 부르면 렌더가 비순수해진다(lint 규칙).
+   */
+  inCanceledPeriod: boolean;
 }
 
 /**
@@ -187,6 +193,10 @@ export async function getSubscription(): Promise<{ sub: SubscriptionView | null 
       nextBillingAt: data.next_billing_at,
       cardSummary: data.card_summary,
       pendingPlan: data.pending_plan ?? null,
+      inCanceledPeriod:
+        data.status === "canceled" &&
+        typeof data.next_billing_at === "string" &&
+        new Date(data.next_billing_at).getTime() > Date.now(),
     },
   };
 }

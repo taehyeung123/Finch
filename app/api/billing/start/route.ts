@@ -42,16 +42,32 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "서버 설정 오류입니다." }, { status: 503 });
   }
 
-  // 활성/유예 구독이 있으면 중복 구독 방지 (플랜 변경은 해지 후 재구독 — v1 정책)
+  /* 중복 구독 방지 (플랜 변경은 해지 후 재구독 — v1 정책).
+     ⚠️ canceled 도 막는다. 해지는 «자동갱신만 끄기»라 이용 종료일까지는 **여전히 이용 중**이다.
+     예전엔 active·past_due 만 봐서, 종료일이 남은 상태로 다시 구독하면 그 자리에서 전액이 또 청구됐고
+     (겹치는 기간에 이중 청구), 옛 구독의 종료일이 오면 만료 루프가 새 유료 구독을 무료로 강등했다.
+     이 경우엔 «해지 취소»로 안내한다 — 새로 결제할 이유가 없다(2026-09-07 감사). */
   const { data: existing } = await admin
     .from("subscriptions")
-    .select("id, status")
+    .select("id, status, next_billing_at")
     .eq("user_id", user.id)
-    .in("status", ["active", "past_due"])
+    .in("status", ["active", "past_due", "canceled"])
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
-  if (existing) {
+  const stillInPeriod =
+    existing?.status === "canceled" &&
+    typeof existing.next_billing_at === "string" &&
+    new Date(existing.next_billing_at).getTime() > Date.now();
+  if (existing && existing.status !== "canceled") {
     return NextResponse.json(
       { error: "이미 이용 중인 구독이 있어요. 요금제 화면에서 해지 후 다시 시도해 주세요." },
+      { status: 409 },
+    );
+  }
+  if (stillInPeriod) {
+    return NextResponse.json(
+      { error: "아직 이용 기간이 남아 있어요. 요금제 화면에서 «해지 취소»를 누르면 그대로 이어서 쓸 수 있어요." },
       { status: 409 },
     );
   }

@@ -216,6 +216,24 @@ async function processSubscriptions(admin: Admin) {
     .limit(100);
   for (const sub of ended ?? []) {
     await admin.from("subscriptions").update({ status: "expired" }).eq("id", sub.id);
+    /* ⚠️ 강등은 «이 사람에게 살아 있는 다른 구독이 없을 때»만 한다. 예전엔 무조건 free 로 썼는데,
+       해지 뒤 새로 구독한 사람이 옛 구독의 종료일에 **방금 결제한 유료 플랜을 잃었다**(2026-09-07 감사).
+       조회가 실패하면(null) 강등하지 않는다 — 잘못 내리는 쪽이 잘못 두는 쪽보다 나쁘다. */
+    const { data: alive, error: aliveErr } = await admin
+      .from("subscriptions")
+      .select("id")
+      .eq("user_id", sub.user_id)
+      .in("status", ["active", "past_due"])
+      .limit(1);
+    if (aliveErr) {
+      console.error("[cron:subs] 잔여 구독 확인 실패 — 강등 보류:", sub.user_id, aliveErr.message);
+      expiredCount++;
+      continue;
+    }
+    if (alive && alive.length > 0) {
+      expiredCount++;
+      continue; // 새 구독이 살아 있다 — 플랜도 알림도 건드리지 않는다
+    }
     await admin.from("users_profile").update({ plan: "free" }).eq("id", sub.user_id);
     await notifyUser(admin, {
       userId: sub.user_id,

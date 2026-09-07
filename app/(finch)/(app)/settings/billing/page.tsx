@@ -48,12 +48,15 @@ const PLAN_ORDER: PlanKey[] = ["free", "creator", "pro", "agency", "enterprise"]
 function PlanAction({
   planKey,
   hasActiveSub,
+  inCanceledPeriod,
   currentPlanKey,
   locked,
   planFailed,
 }: {
   planKey: PlanKey;
   hasActiveSub: boolean;
+  /** 해지했지만 이용 기간이 아직 남았다 — 다시 구독하면 겹치는 기간에 이중 청구된다 */
+  inCanceledPeriod: boolean;
   currentPlanKey: PlanKey;
   /** 플랜 확인 실패·예시 화면 — 버튼을 잠근다(누르면 막히는 버튼을 살려 두지 않는다) */
   locked: boolean;
@@ -66,6 +69,9 @@ function PlanAction({
   if (!planFailed && planKey === currentPlanKey) return slab("지금 이용 중");
   /* Free 카드는 버튼이 없다 — 조회 실패면 «확인 못 함»(요약 카드·칩과 같은 말), 아니면 전환 안내 */
   if (planKey === "free") return slab(planFailed ? "확인 못 함" : "유료 해지 후 자동 전환");
+  /* 해지 뒤 이용 기간이 남은 동안은 다른 플랜에 «구독하기»를 내지 않는다. 눌러도 /api/billing/start 가
+     409 로 막고(겹치는 기간 이중 청구 방지), 되돌리는 길은 위의 «해지 취소»다. 누르면 막히는 버튼은 두지 않는다. */
+  if (inCanceledPeriod) return slab("이용 기간이 남아 있어요");
   if (locked) {
     return (
       <Button type="button" className="w-full" size="md" variant="secondary" disabled>
@@ -148,6 +154,10 @@ export default async function BillingSettingsPage({
   const currentName = currentCard?.name ?? "Free";
   const lastPaid = orders.find((o) => o.status === "paid");
   const hasActiveSub = subscription != null && subscription.status !== "canceled";
+  /* 해지했지만 이용 종료일이 아직 안 왔다 — «이용 중»도 «없음»도 아닌 세 번째 상태다.
+     이 동안 다시 구독하면 겹치는 기간에 전액이 또 청구되고, 옛 구독 종료일에 새 구독이 무료로 강등됐다(2026-09-07 감사).
+     판정은 데이터 층에서 한다(getSubscription) — 렌더 중 Date.now() 는 비순수라 금지다. */
+  const inCanceledPeriod = subscription?.inCanceledPeriod === true;
   const pendingPlan = subscription?.pendingPlan;
   const pendingPlanName = isPaidPlan(pendingPlan ?? "") ? PLAN_NAMES[pendingPlan as keyof typeof PLAN_NAMES] : null;
   /* 확인 모달 문구용 — 금액은 항상 서버 상수 PLAN_PRICES 에서 조립한다.
@@ -338,7 +348,7 @@ export default async function BillingSettingsPage({
               <PlanChoiceCard
                 plan={plan}
                 current={plan.key === currentPlan && !planFailed}
-                action={<PlanAction planKey={plan.key} hasActiveSub={hasActiveSub} currentPlanKey={currentPlan} locked={locked} planFailed={planFailed} />}
+                action={<PlanAction planKey={plan.key} hasActiveSub={hasActiveSub} inCanceledPeriod={inCanceledPeriod} currentPlanKey={currentPlan} locked={locked} planFailed={planFailed} />}
               />
             </div>
           ))}
