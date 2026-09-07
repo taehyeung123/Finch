@@ -20,6 +20,21 @@ function getClient(): Resend | null {
 
 const BRAND_CORAL = "#FF6B4A"; // app/globals.css --primary — 이메일은 인라인 스타일만 허용돼 CSS 토큰을 못 쓴다
 
+/**
+ * HTML 이스케이프 — 메일 본문에 **사용자가 정한 문자열**이 들어가는 자리에 반드시 건다.
+ * 팀 초대 메일은 초대자 표시 이름을 제목·본문에 그대로 박았다. 그 이름은 사용자가 설정에서
+ * 자유롭게 바꿀 수 있으므로, 태그를 넣으면 우리 도메인 발신 메일 안에 남의 링크·문구를 심을 수 있었다
+ * (2026-09-07 감사). 의도적으로 HTML 을 넣는 호출부가 없으므로 전면 적용해도 회귀가 없다.
+ */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function wrapHtml(
   title: string,
   body: string,
@@ -30,10 +45,10 @@ function wrapHtml(
   <div style="max-width:480px;margin:0 auto;padding:32px 24px;">
     <div style="font-size:20px;font-weight:800;color:${BRAND_CORAL};margin-bottom:24px;">핀치</div>
     <div style="background:#fff;border:1px solid #E5E1DB;border-radius:16px;padding:28px;">
-      <h1 style="font-size:17px;font-weight:700;margin:0 0 10px;color:#1A1A1A;">${title}</h1>
-      <p style="font-size:14px;line-height:1.6;color:#4A4640;margin:0;">${body}</p>
-      <a href="${cta.url}" style="display:inline-block;margin-top:20px;padding:10px 18px;background:${BRAND_CORAL};color:#1A1A1A;font-weight:700;font-size:13px;border-radius:10px;text-decoration:none;">
-        ${cta.label}
+      <h1 style="font-size:17px;font-weight:700;margin:0 0 10px;color:#1A1A1A;">${escapeHtml(title)}</h1>
+      <p style="font-size:14px;line-height:1.6;color:#4A4640;margin:0;">${escapeHtml(body)}</p>
+      <a href="${escapeHtml(cta.url)}" style="display:inline-block;margin-top:20px;padding:10px 18px;background:${BRAND_CORAL};color:#1A1A1A;font-weight:700;font-size:13px;border-radius:10px;text-decoration:none;">
+        ${escapeHtml(cta.label)}
       </a>
     </div>
     <p style="font-size:12px;color:#9A948A;margin-top:20px;">
@@ -76,13 +91,16 @@ export async function sendTeamInviteEmail(
   const resend = getClient();
   if (!resend) return false;
   const roleLabel = role === "editor" ? "에디터" : "뷰어";
-  const title = `${inviterName}님이 핀치 팀에 초대했어요`;
+  /* 표시 이름은 사용자가 정한다 — 길이를 자른다(제목이 무한히 길어지는 것 방지). HTML 이스케이프는 wrapHtml 이 한다 */
+  const inviter = inviterName.trim().slice(0, 40) || "팀 관리자";
+  const title = `${inviter}님이 핀치 팀에 초대했어요`;
   const body = `${roleLabel} 권한으로 워크스페이스에 참여해 채널 분석을 함께 볼 수 있어요. 아래 버튼을 눌러 초대를 수락하세요.`;
   try {
     const { error } = await resend.emails.send({
       from: process.env.RESEND_EMAIL_FROM || process.env.EMAIL_FROM || "핀치 <onboarding@resend.dev>",
       to,
-      subject: `[핀치] ${inviterName}님의 팀 초대`,
+      /* 제목은 평문이라 이스케이프 대상이 아니지만, 개행이 들어가면 헤더가 갈라진다 — 한 줄로 눌러 둔다 */
+      subject: `[핀치] ${inviter.replace(/[\r\n]+/g, " ")}님의 팀 초대`,
       html: wrapHtml(title, body, { label: "초대 수락하기", url: acceptUrl }),
     });
     if (error) {

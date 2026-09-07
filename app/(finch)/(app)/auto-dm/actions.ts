@@ -81,6 +81,27 @@ async function authorize(): Promise<{ ok: true; userId: string | null } | { ok: 
 }
 
 /**
+ * 인스타 연동이 있는가. true=있음 / false=없음 / null=확인 못 함.
+ * ⚠️ 조회 실패(null)에는 막지 않는다 — 잘 쓰던 사람이 «연결하세요»로 튕기는 쪽이 더 나쁘다.
+ * 그 경우 규칙은 저장되지만 발송 경로가 원래 하던 대로 판정한다(실패는 «없음»이 아니다).
+ */
+async function hasInstagramConnection(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<boolean | null> {
+  const { data, error } = await supabase
+    .from("connected_accounts")
+    .select("id")
+    .eq("channel", "instagram")
+    .eq("connected", true)
+    .limit(1);
+  if (error) {
+    console.error("[auto-dm] 인스타 연동 확인 실패 — 저장은 막지 않는다:", error.message);
+    return null;
+  }
+  return (data?.length ?? 0) > 0;
+}
+
+/**
  * 콘텐츠 개수 게이트 — 이 게시물이 "새 콘텐츠"이고 이미 플랜 한도만큼의 게시물에
  * 자동화가 걸려 있으면 차단. excludeRuleId는 편집 중인 규칙(자기 자신) 제외용.
  */
@@ -191,6 +212,14 @@ export async function createRule(rawInput: RuleInput): Promise<RuleActionResult>
   if (isDemoMode() || !auth.userId) return { ok: true };
 
   const supabase = await createClient();
+  /* 인스타 연동이 없으면 만들지 않는다. 댓글 웹훅은 connected_accounts 로 사용자를 찾으므로
+     연동이 없으면 **이벤트가 도착할 경로 자체가 없다** — 예전엔 그대로 저장하고 초록 「실행 중」 배지까지
+     붙여, 고객이 5단계를 다 채우고 댓글을 기다리는데 한 통도 안 나갔다(2026-09-07 감사).
+     화면 관문(auto-dm-client)만으로는 부족하다 — 서버 액션은 화면을 거치지 않고도 불릴 수 있다. */
+  const igLinked = await hasInstagramConnection(supabase);
+  if (igLinked === false) {
+    return { ok: false, error: "인스타그램 계정을 연결하면 자동 DM을 시작할 수 있어요." };
+  }
   // 앱 게이트(친절한 안내) + 0040 트리거 백스톱(원자적 강제)의 이중 구조
   const gate = await checkContentLimit(supabase, auth.userId, input.postId, null);
   if (!gate.ok) return { ok: false, error: gate.error, limitReached: true };

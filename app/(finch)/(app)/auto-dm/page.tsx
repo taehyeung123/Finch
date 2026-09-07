@@ -33,6 +33,11 @@ export default async function AutoDmPage() {
   let followRequestReady = true;
   /* 조회가 실패했는가 — «규칙 0건»과 구분해서 화면에 나른다 */
   let rulesFailed = false;
+  /* 인스타 연동 여부. true=연결됨 / false=없음 / null=확인 못 함.
+     연동이 없으면 댓글 웹훅이 도착할 경로 자체가 없어 규칙을 만들어도 **한 통도 안 나간다** —
+     예전엔 그대로 저장하고 초록 「실행 중」 배지까지 붙여, 고객이 5단계를 다 채우고 기다리기만 했다(2026-09-07 감사).
+     데모 화면은 연동 개념이 없으므로 true 로 둔다. */
+  let igConnected: boolean | null = true;
 
   /* 플랜 조회가 실패하면 null 이다 — 한도는 fail-closed 로 free 를 쓰되(dmContentLimitFor),
      화면이 그 한도를 «당신 플랜의 한도»라고 단정하면 안 된다. 유료 고객이 이유도 모른 채
@@ -74,6 +79,9 @@ export default async function AutoDmPage() {
       followRequestReady = followReady;
       accountHandle = (accountRes.data?.handle as string | undefined) ?? null;
       accountAvatar = avatarUrl;
+      /* 연동 여부는 **세 격**이다 — 연결됨 / 없음 / 확인 못 함(조회 실패).
+         조회 실패를 «없음»으로 단정하면 잘 쓰던 사람에게 «연결하세요» 관문이 뜬다(실패는 «없음»이 아니다). */
+      igConnected = accountRes.error ? null : accountRes.data != null;
       if (error) {
         /* 예전엔 로그만 남기고 rules=[] 로 넘어갔다 — 그러면 화면은 「아직 자동 DM 규칙이 없어요」와
            「실행 중 규칙 0 · 누적 발송 0 · 성공률 0.0%」를 그린다. 규칙이 돌고 있는 사람이 그 화면을
@@ -87,6 +95,7 @@ export default async function AutoDmPage() {
       posts = [];
       console.error("[auto-dm] 규칙 조회 실패:", e);
       rulesFailed = true;
+      igConnected = null; // 확인 못 함 — 관문을 띄우지 않는다
     }
   }
 
@@ -100,6 +109,7 @@ export default async function AutoDmPage() {
       accountHandle={accountHandle}
       accountAvatar={accountAvatar}
       followRequestReady={followRequestReady}
+      igConnected={igConnected}
     />
   );
 }

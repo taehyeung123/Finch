@@ -6,6 +6,9 @@ import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { sendTeamInviteEmail } from "@/lib/email/resend";
 
+/** 한 워크스페이스가 1시간에 보낼 수 있는 초대 수 — 진짜 팀 구성에는 넉넉하고, 메일 발사대로는 못 쓰는 값 */
+const INVITE_PER_HOUR = 20;
+
 /*
   팀 멤버 초대·역할·제거 (PART 4.10)
   - owner 판별은 별도 "owner 여부" 컬럼이 아니라 team_members.owner_user_id = auth.uid()로 한다 —
@@ -53,6 +56,23 @@ export async function inviteMember(formData: FormData): Promise<InviteMemberResu
 
   if (email === (user.email ?? "").toLowerCase()) {
     return { ok: false, error: "본인은 초대할 수 없어요." };
+  }
+
+  /* 초대는 **우리 도메인으로 메일을 쏘는 버튼**이다. 횟수 제한이 없으면 가입 30초짜리 계정 하나로
+     임의 주소에 핀치 발신 메일을 무제한 보낼 수 있다 — 발신 도메인 평판이 타고 복구에 수 주가 걸린다
+     (2026-09-07 감사). 카운터는 DB 로 센다 — 서버리스는 인스턴스가 여러 개라 메모리 카운터는 의미가 없다.
+     invited_at 은 신규 초대와 재초대 양쪽이 찍으므로 두 경로가 같은 창을 공유한다. */
+  const { count: recentInvites, error: rateErr } = await supabase
+    .from("team_members")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_user_id", user.id)
+    .gte("invited_at", new Date(Date.now() - 60 * 60 * 1000).toISOString());
+  if (rateErr) {
+    console.error("[team] 초대 횟수 확인 실패:", rateErr.message);
+    return { ok: false, error: "초대 처리 중 오류가 발생했어요. 다시 시도해 주세요." };
+  }
+  if ((recentInvites ?? 0) >= INVITE_PER_HOUR) {
+    return { ok: false, error: "초대를 너무 많이 보냈어요. 잠시 후 다시 시도해 주세요." };
   }
 
   const { data: existing, error: findError } = await supabase

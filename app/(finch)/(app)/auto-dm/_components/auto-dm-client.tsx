@@ -15,7 +15,7 @@ import type { AutoDmRule, AutoDmStatus, Post } from "@/lib/types";
 import { autoDmSummary } from "@/lib/data";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { InfoTip } from "@/components/ui/info-tip";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -49,6 +49,7 @@ export function AutoDmClient({
   accountHandle,
   accountAvatar,
   followRequestReady,
+  igConnected = true,
 }: {
   initialRules: AutoDmRule[];
   posts: Post[];
@@ -63,6 +64,8 @@ export function AutoDmClient({
   accountAvatar: string | null;
   /** 0052 컬럼 존재 여부 — false 면 위저드가 팔로우 요청 토글을 비활성화한다 */
   followRequestReady: boolean;
+  /** 인스타 연동 여부. true=연결됨 / false=없음 / null=확인 못 함(관문을 띄우지 않는다) */
+  igConnected?: boolean | null;
 }) {
   const [rules, setRules] = useState<AutoDmRule[]>(initialRules);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -161,9 +164,15 @@ export function AutoDmClient({
         title="자동 DM"
         description="인스타그램 게시물에 특정 댓글이 달리면 자동으로 다이렉트 메시지를 보냅니다."
         action={
-          <Button onClick={openNew}>
-            <Plus className="size-4" aria-hidden /> 자동화 만들기
-          </Button>
+          /* 인스타 연동이 없으면 만들 수 없다 — 댓글이 도착할 경로가 없어 한 통도 안 나간다.
+             누르면 막히는 버튼 대신 연결하러 가는 길을 준다(발행 화면의 관문과 같은 규칙). */
+          igConnected === false ? (
+            <ButtonLink href="/settings/channels">인스타그램 연결하기</ButtonLink>
+          ) : (
+            <Button onClick={openNew}>
+              <Plus className="size-4" aria-hidden /> 자동화 만들기
+            </Button>
+          )
         }
       />
 
@@ -214,6 +223,15 @@ export function AutoDmClient({
         <LoadFailed
           title="자동화 규칙을 불러오지 못했어요"
           description="규칙이 없는 게 아니라 목록을 못 읽은 것이에요. 지금 만들면 겹칠 수 있으니 새로고침 후 확인해 주세요."
+        />
+      ) : igConnected === false ? (
+        /* 연동이 없으면 규칙을 만들어 봐야 댓글이 도착할 경로가 없어 한 통도 안 나간다 —
+           만들게 두고 초록 「실행 중」을 보여 주는 것이 가장 나쁜 선택이다(2026-09-07 감사) */
+        <EmptyState
+          icon={MessageSquareReply}
+          title="인스타그램을 연결하면 시작할 수 있어요"
+          description="자동 DM은 인스타그램에 달린 댓글을 보고 움직여요. 계정을 연결해야 댓글이 도착하고, 그때부터 자동으로 메시지가 나갑니다."
+          action={<ButtonLink href="/settings/channels">인스타그램 연결하기</ButtonLink>}
         />
       ) : rules.length === 0 ? (
         <EmptyState
