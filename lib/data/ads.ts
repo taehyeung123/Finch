@@ -161,8 +161,14 @@ async function loadReadContext(adAccountId: string | undefined): Promise<ReadCon
 
   /* 토큰 암호문은 **service_role 로만** 읽는다(0085) — 세션 클라이언트로 읽던 시절엔 같은 조회를
      사용자가 PostgREST 로 직접 흉내 내 소유자의 광고 토큰 암호문을 가져갈 수 있었다(2026-09-07 감사).
-     접근 범위는 위에서 정한 ownerId 가 정한다 — admin 은 RLS 를 우회하므로 필터가 곧 권한이다. */
-  const store = createAdminClient() ?? supabase;
+     접근 범위는 위에서 정한 ownerId 가 정한다 — admin 은 RLS 를 우회하므로 필터가 곧 권한이다.
+     ⚠️ **세션 클라이언트로 폴백하지 않는다** — 폴백은 0085 미적용 DB 에서만 성공하는데 그 성공이
+     곧 이 수리가 막으려던 조회다(소넷 점검 #1). 닫는 쪽으로 실패한다. */
+  const store = createAdminClient();
+  if (!store) {
+    console.error("[live-ads] 광고 연동 조회 불가 — 서버 자격증명 미설정");
+    return { state: "error" };
+  }
 
   const { data: connRaw, error: connErr } = await store
     .from("meta_ad_connections")
@@ -403,8 +409,13 @@ export async function getAdsWriteContext(adAccountId?: string): Promise<AdsWrite
   }
 
   /* 토큰 암호문은 service_role 로만 — loadReadContext 와 같은 이유(0085).
-     쓰기 자격은 바로 위 membership 검사가 이미 정했다(viewer·unknown 은 여기 못 온다). */
-  const store = createAdminClient() ?? supabase;
+     쓰기 자격은 바로 위 membership 검사가 이미 정했다(viewer·unknown 은 여기 못 온다).
+     ⚠️ 세션 클라이언트 폴백 없음 — loadReadContext 와 같은 이유(소넷 점검 #1). */
+  const store = createAdminClient();
+  if (!store) {
+    console.error("[live-ads] 광고 쓰기 컨텍스트 조회 불가 — 서버 자격증명 미설정");
+    return { state: "blocked", code: "connection_unreadable" };
+  }
 
   const { data: connRaw, error: connErr } = await store
     .from("meta_ad_connections")

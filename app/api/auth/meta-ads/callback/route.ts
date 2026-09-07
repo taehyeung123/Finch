@@ -74,6 +74,9 @@ export async function GET(request: Request) {
      세션 클라이언트로는 이 저장이 더 이상 통하지 않는다.
      행 범위는 아래 `user_id: user.id` 와 `.eq("user_id", user.id)` 가 정한다. */
   const store = createAdminClient() ?? supabase;
+  /* 여기서만 세션 클라이언트 폴백을 남긴다 — 이 경로는 **본인이 자기 토큰을 쓰는** 자리라
+     폴백이 열어 주는 것이 없다(RLS 가 본인 행으로 묶는다). 읽기 경로(lib/data/live.ts·ads.ts)는
+     반대다: 거기서의 폴백은 «팀원이 소유자 암호문을 읽는» 바로 그 조회를 되살리므로 닫아 두었다. */
 
   const config = getMetaAdsOAuthConfig();
   if (!config) {

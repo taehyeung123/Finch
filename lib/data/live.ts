@@ -112,8 +112,15 @@ async function loadAccountRow(channel: "instagram" | "threads" | "tiktok"): Prom
      팀원(viewer)이 소유자의 인스타·스레드·틱톡 토큰 암호문을 그대로 받아 가고, 팀에서 빠진 뒤에도
      자기 연동 행에 붙여 넣어 소유자 계정을 계속 조종할 수 있었다. 0085 가 그 컬럼의 SELECT 를
      authenticated 에게서 회수하므로, 암호문은 서버 코드만 볼 수 있다.
-     ⚠️ 접근 범위는 위의 ownerId 가 정한다 — admin 클라이언트는 RLS 를 우회하므로 필터가 곧 권한이다. */
-  const store = createAdminClient() ?? supabase;
+     ⚠️ 접근 범위는 위의 ownerId 가 정한다 — admin 클라이언트는 RLS 를 우회하므로 필터가 곧 권한이다.
+     ⚠️ **세션 클라이언트로 폴백하지 않는다.** 폴백은 0085 가 아직 안 들어간 DB 에서만 «성공» 하는데,
+     그 성공이 곧 이 수리가 막으려던 그 조회다(팀원이 소유자 암호문을 읽는다). 얻는 것 없이
+     위험만 되살아나므로 닫는 쪽으로 실패한다 — 크론 라우트들이 이미 쓰는 규칙이다(소넷 점검 #1). */
+  const store = createAdminClient();
+  if (!store) {
+    console.error(`[live] ${channel} 계정 조회 불가 — 서버 자격증명 미설정`);
+    return null;
+  }
 
   const { data, error } = await store
     .from("connected_accounts")
@@ -441,8 +448,12 @@ async function computeInstagramPiece(row: AccountRow): Promise<DashboardPiece | 
      ⚠️ followers·posts 가 null 이면 **컬럼을 아예 빼고** 갱신한다. 100팔로워 미만 계정은
      인스타그램이 그 값을 안 주는데, 그걸 0 으로 덮으면 이미 아는 숫자까지 0 이 된다
      (그리고 다음 크론이 그 0 을 보고 «팔로워가 크게 줄었어요» 알림을 쏜다). */
-  if (info) {
-    const supabase = await createClient();
+  /* 갱신은 service_role 로 — 이 행은 **워크스페이스 소유자의 것**일 수 있다(팀원이 보는 화면).
+     세션 클라이언트로는 RLS 쓰기 정책이 본인 행만 허용해서 0행이 갱신되고 오류도 안 났다:
+     팀원 화면에서는 프로필·팔로워 수가 영영 옛날 값으로 남았다(소넷 점검 #3).
+     admin 이 없으면 갱신만 건너뛴다 — 지표 표시는 이미 끝났고 갱신은 부수 작업이다. */
+  const store = createAdminClient();
+  if (info && store) {
     const patch = {
       ...(info.followersCount !== null ? { followers: info.followersCount } : {}),
       ...(info.mediaCount !== null ? { posts: info.mediaCount } : {}),
@@ -450,12 +461,12 @@ async function computeInstagramPiece(row: AccountRow): Promise<DashboardPiece | 
       bio: info.biography,
     };
     // avatar_url은 0006 미적용 DB에 없을 수 있어 실패 시 컬럼 제외 재시도
-    const { error: patchErr } = await supabase
+    const { error: patchErr } = await store
       .from("connected_accounts")
       .update({ ...patch, avatar_url: info.profilePictureUrl })
       .eq("id", row.id);
     if (patchErr && /avatar_url/i.test(patchErr.message)) {
-      await supabase.from("connected_accounts").update(patch).eq("id", row.id);
+      await store.from("connected_accounts").update(patch).eq("id", row.id);
     } else if (patchErr) {
       console.error("[live] 계정 정보 갱신 실패:", patchErr.message);
     }
@@ -625,20 +636,24 @@ async function computeThreadsPiece(row: AccountRow): Promise<DashboardPiece | nu
   const followers = followersFetched ?? row.followers;
 
   // 계정 정보 최신화 — 실패는 무시 (다음 로드에서 재시도)
-  if (info) {
-    const supabase = await createClient();
+  /* 갱신은 service_role 로 — 이 행은 **워크스페이스 소유자의 것**일 수 있다(팀원이 보는 화면).
+     세션 클라이언트로는 RLS 쓰기 정책이 본인 행만 허용해서 0행이 갱신되고 오류도 안 났다:
+     팀원 화면에서는 프로필·팔로워 수가 영영 옛날 값으로 남았다(소넷 점검 #3).
+     admin 이 없으면 갱신만 건너뛴다 — 지표 표시는 이미 끝났고 갱신은 부수 작업이다. */
+  const store = createAdminClient();
+  if (info && store) {
     const patch = {
       ...(followersFetched !== null ? { followers: followersFetched } : {}),
       posts: postCount,
       display_name: info.name ?? info.username ?? null,
       bio: info.biography,
     };
-    const { error: patchErr } = await supabase
+    const { error: patchErr } = await store
       .from("connected_accounts")
       .update({ ...patch, avatar_url: info.profilePictureUrl })
       .eq("id", row.id);
     if (patchErr && /avatar_url/i.test(patchErr.message)) {
-      await supabase.from("connected_accounts").update(patch).eq("id", row.id);
+      await store.from("connected_accounts").update(patch).eq("id", row.id);
     } else if (patchErr) {
       console.error("[live] Threads 계정 정보 갱신 실패:", patchErr.message);
     }
@@ -778,19 +793,23 @@ async function computeTiktokPiece(row: AccountRow): Promise<DashboardPiece | nul
   const postCount = info?.videoCount ?? row.posts;
 
   // 프로필 최신화 — 실패는 무시 (다음 로드에서 재시도)
-  if (info) {
-    const supabase = await createClient();
+  /* 갱신은 service_role 로 — 이 행은 **워크스페이스 소유자의 것**일 수 있다(팀원이 보는 화면).
+     세션 클라이언트로는 RLS 쓰기 정책이 본인 행만 허용해서 0행이 갱신되고 오류도 안 났다:
+     팀원 화면에서는 프로필·팔로워 수가 영영 옛날 값으로 남았다(소넷 점검 #3).
+     admin 이 없으면 갱신만 건너뛴다 — 지표 표시는 이미 끝났고 갱신은 부수 작업이다. */
+  const store = createAdminClient();
+  if (info && store) {
     const patch = {
       followers,
       posts: postCount,
       display_name: info.displayName ?? info.username ?? null,
     };
-    const { error: patchErr } = await supabase
+    const { error: patchErr } = await store
       .from("connected_accounts")
       .update({ ...patch, avatar_url: info.avatarUrl })
       .eq("id", row.id);
     if (patchErr && /avatar_url/i.test(patchErr.message)) {
-      await supabase.from("connected_accounts").update(patch).eq("id", row.id);
+      await store.from("connected_accounts").update(patch).eq("id", row.id);
     } else if (patchErr) {
       console.error("[live] TikTok 계정 정보 갱신 실패:", patchErr.message);
     }

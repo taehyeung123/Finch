@@ -12,6 +12,16 @@ import { earliestPublishDate } from "@/lib/calendar";
 export const runtime = "nodejs";
 
 const MAX_IMAGES = 10;
+/* 상한 셋 — 없으면 로그인 30초짜리 계정 하나가 스토리지를 무한히 채운다(2026-09-07 감사).
+   스토리지는 사용량 과금이고 cardnews 는 public 버킷이라, 상한이 없으면 우리 도메인이
+   임의 파일 호스팅이 된다. 숫자는 컴포저가 실제로 만드는 크기 기준으로 넉넉하게 잡았다
+   (카드뉴스 한 장은 보통 200KB~1MB 의 PNG 다).
+   ⚠️ 크기 검사는 **파일을 읽기 전에** 한다 — 10장을 순차로 arrayBuffer() 하는 구조라
+   큰 파일 하나면 함수 메모리가 통째로 날아간다. */
+const MAX_BYTES_PER_IMAGE = 5 * 1024 * 1024;
+const MAX_BYTES_TOTAL = 20 * 1024 * 1024;
+/** 미발행(초안+예약) 보관 상한 — 예약 발행은 원래 드문 행동이라 이 정도면 정상 사용에 닿지 않는다 */
+const MAX_UNPUBLISHED = 60;
 
 export async function POST(request: Request) {
   if (isDemoMode()) {
@@ -43,6 +53,17 @@ export async function POST(request: Request) {
   }
   if (images.length === 0 || images.length > MAX_IMAGES) {
     return NextResponse.json({ error: "이미지가 없거나 너무 많아요 (최대 10장)." }, { status: 400 });
+  }
+  /* 크기 상한 — File.size 는 본문을 읽지 않고도 알 수 있다(메모리에 올리기 전에 거른다) */
+  let totalBytes = 0;
+  for (const file of images) {
+    if (file.size > MAX_BYTES_PER_IMAGE) {
+      return NextResponse.json({ error: "이미지 한 장이 너무 커요 (한 장당 5MB까지)." }, { status: 400 });
+    }
+    totalBytes += file.size;
+  }
+  if (totalBytes > MAX_BYTES_TOTAL) {
+    return NextResponse.json({ error: "이미지 전체 용량이 너무 커요 (합쳐서 20MB까지)." }, { status: 400 });
   }
   /* scheduled_at 은 not null 이다. 초안은 날짜가 "미정"이라는 뜻이므로 값이 필요하면
      지금 시각을 넣는다 — 화면은 status 로 판단해 "날짜 미정"으로 표시하고, 캘린더에도
@@ -93,6 +114,23 @@ export async function POST(request: Request) {
         .maybeSingle();
   if (!account) {
     return NextResponse.json({ error: "먼저 설정에서 인스타그램 계정을 연동해 주세요." }, { status: 400 });
+  }
+
+  /* 미발행 보관 상한 — 업로드 **전에** 본다. 없으면 계정 하나가 스토리지와 scheduled_posts 를
+     무한히 채운다(둘 다 사용량 과금이다). 조회가 실패하면 막지 않는다 — «확인 못 함»을
+     «초과»로 단정해 정상 사용자의 저장을 막는 쪽이 더 나쁘다(2026-09-07 감사). */
+  const { count: pendingCount, error: countErr } = await supabase
+    .from("scheduled_posts")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .in("status", ["draft", "scheduled"]);
+  if (countErr) {
+    console.error("[studio:schedule] 보관 수 확인 실패:", countErr.message);
+  } else if ((pendingCount ?? 0) >= MAX_UNPUBLISHED) {
+    return NextResponse.json(
+      { error: `저장해 둔 초안과 예약이 너무 많아요(최대 ${MAX_UNPUBLISHED}개). 발행했거나 필요 없는 것을 지운 뒤 다시 시도해 주세요.` },
+      { status: 400 },
+    );
   }
 
   const batchId = randomUUID();
