@@ -135,6 +135,11 @@ export async function analyzeUrl(url: string): Promise<AnalyzeActionResult> {
      아무것도 못 받았는데 횟수만 깎이는 건 그냥 뺏은 것이다.
      이 조회는 우리 Graph API 토큰이라 공급사 과금이 없다 — 먼저 해도 손해가 없다. */
   const media = await fetchRecentMedia(ctx.igUserId, ctx.token, 50);
+  /* null = 목록 자체를 못 불러왔다. «못 찾았다»로 말하면 자기 게시물을 남의 것으로 의심하게 된다.
+     여기서 끝내면 차감도 아직 안 됐다(차감은 아래) — 횟수를 잃지 않는다(2026-09-07 감사). */
+  if (media === null) {
+    return { ok: false, error: "게시물 목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요." };
+  }
   const target = media.find((m) => m.permalink?.includes(`/${shortcode}/`) || m.permalink?.includes(`/${shortcode}`));
   if (!target) {
     return {

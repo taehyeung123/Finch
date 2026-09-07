@@ -47,6 +47,7 @@ export function AutoDmClient({
   planFailed = false,
   rulesFailed = false,
   accountHandle,
+  postsFailed = false,
   accountAvatar,
   followRequestReady,
   igConnected = true,
@@ -60,6 +61,8 @@ export function AutoDmClient({
   /** 플랜을 못 읽어 한도가 무료 기준으로 잠긴 상태 — 숫자를 사실처럼 말하지 않는다 */
   planFailed?: boolean;
   accountHandle: string | null;
+  /** true = 게시물 목록을 못 불러왔다. «게시물 0개»와 다른 문구를 그린다 */
+  postsFailed?: boolean;
   /** 연동 인스타 프로필 사진 — 위저드 DM 미리보기 아바타 (미연동 시 이니셜 폴백) */
   accountAvatar: string | null;
   /** 0052 컬럼 존재 여부 — false 면 위저드가 팔로우 요청 토글을 비활성화한다 */
@@ -397,6 +400,7 @@ export function AutoDmClient({
           existingRules={rules}
           contentLimit={contentLimit}
           accountHandle={accountHandle}
+          postsFailed={postsFailed}
           accountAvatar={accountAvatar}
           followRequestReady={followRequestReady}
           onSave={saveRule}

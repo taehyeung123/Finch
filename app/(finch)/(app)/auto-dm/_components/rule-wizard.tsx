@@ -80,6 +80,7 @@ export function RuleWizard({
   existingRules,
   contentLimit,
   accountHandle,
+  postsFailed = false,
   accountAvatar,
   followRequestReady,
   onSave,
@@ -92,6 +93,8 @@ export function RuleWizard({
   contentLimit: number;
   /** 미리보기 아바타에 쓸 계정 핸들(연동 전이면 null) */
   accountHandle: string | null;
+  /** true = 조회 실패 — «게시물이 없다»고 말하면 멀줦한 계정을 갈아엎으라는 소리가 된다 */
+  postsFailed?: boolean;
   /** 연동 인스타 프로필 사진 — 있으면 미리보기 아바타에 실제 사진을 쓴다 */
   accountAvatar: string | null;
   /** 0052(follow_request) 컬럼 존재 여부 — false 면 토글 비활성(조용한 유실 방지) */
@@ -523,7 +526,13 @@ export function RuleWizard({
 
               {postMode === "next" ? null : effectivePosts.length === 0 ? (
                 <div className="mt-4">
-                  {accountHandle ? (
+                  {/* 조회 실패를 «게시물이 없다»로 말하면 멀쩡한 계정을 갈아엎으라는 안내가 된다(2026-09-07 감사) */}
+                  {postsFailed ? (
+                    <EmptyState
+                      title="게시물을 불러오지 못했어요"
+                      description="게시물이 없는 게 아니라 목록을 못 읽은 것이에요. 잠시 후 새로고침해 주세요."
+                    />
+                  ) : accountHandle ? (
                     <EmptyState
                       title={`${accountHandle} 계정에 게시물이 없어요`}
                       description="연동된 인스타그램 계정에 올라온 게시물이 여기에 표시됩니다. 게시물이 있는 계정으로 연동을 바꾸려면 설정 > 연동 관리에서 변경할 수 있어요."

@@ -247,8 +247,17 @@ export async function fetchMediaMeta(mediaId: string, accessToken: string): Prom
   }
 }
 
-/** 최근 미디어 목록 (기본 25개). 썸네일은 VIDEO/REELS만 → IMAGE는 media_url 폴백. */
-export async function fetchRecentMedia(igUserId: string, accessToken: string, limit = 25): Promise<MediaItem[]> {
+/**
+ * 최근 미디어 목록 (기본 25개). 썸네일은 VIDEO/REELS만 → IMAGE는 media_url 폴백.
+ *
+ * ⚠️ **실패는 null 이다. 빈 배열이 아니다.** 예전엔 catch 에서 [] 를 돌려줬는데, 호출부가 «못 가져옴»과
+ * «정말 0개»를 구분할 수 없어 세 화면이 거짓을 말했다(2026-09-07 감사):
+ *  · 성장 진단: 게시물 200개인 사람에게 「진단할 게시물이 아직 부족해요 — 꾸준히 올려보세요」
+ *  · 자동 DM 게시물 고르기: 「이 계정에 게시물이 없어요 — 게시물이 있는 계정으로 연동을 바꾸세요」
+ *  · 링크 분석: 자기 게시물을 「내 계정 게시물인지 확인해 주세요」로 의심하게 만든다
+ * 레이트리밋·토큰 일시 오류에서 그대로 재현된다. 같은 파일 fetchAccountInsightsRange 가 이미 이 규약이다.
+ */
+export async function fetchRecentMedia(igUserId: string, accessToken: string, limit = 25): Promise<MediaItem[] | null> {
   const fields = "id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,like_count,comments_count";
   try {
     const res = await graphGet<{ data?: RawMedia[] }>(`/${igUserId}/media?fields=${fields}&limit=${limit}`, accessToken);
@@ -266,7 +275,7 @@ export async function fetchRecentMedia(igUserId: string, accessToken: string, li
     }));
   } catch (e) {
     console.error("[ig-media] 목록 조회 실패:", e instanceof Error ? e.message : String(e));
-    return [];
+    return null;
   }
 }
 

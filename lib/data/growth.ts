@@ -107,6 +107,10 @@ export async function getPostPerformance(): Promise<GrowthPerformance | null> {
   if (!ctx) return null;
 
   const media = await fetchRecentMedia(ctx.igUserId, ctx.token, 24);
+  /* null = 목록을 못 불러왔다. 여기서 «게시물 0개»로 내려보내면 화면이 「진단할 게시물이 아직 부족해요 —
+     꾸준히 올려보세요」를 띄운다. 게시물 200개인 사람에게 더 올리라고 하는 말이다(2026-09-07 감사).
+     조회 실패는 위쪽 null 과 같은 격으로 올려 보내 화면이 「불러오지 못했어요」를 그리게 한다. */
+  if (media === null) return null;
   if (media.length === 0) {
     return { posts: [], avgSaveRate: 0, avgEngagementRate: 0, avgReach: 0, sampleSize: 0 };
   }

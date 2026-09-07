@@ -449,8 +449,11 @@ async function computeInstagramPiece(row: AccountRow): Promise<DashboardPiece | 
   const followers = info?.followersCount ?? row.followers;
   const postCount = info?.mediaCount ?? row.posts;
 
+  /* media === null 은 «목록을 못 불러왔다» — 계산은 빈 목록으로 진행하되, 그 사실을 insightsOk 에 접어
+     화면이 숫자를 «사실»로 확언하지 않게 한다(아래 insightsOk). 빈 목록과 실패를 섞지 않기 위한 최소 조치다. */
+  const mediaList = media ?? [];
   // 게시물별 인사이트(조회수·공유) — 최근 10개만 (호출량 절제, 300초 캐시)
-  const withInsights = media.slice(0, 10);
+  const withInsights = mediaList.slice(0, 10);
   const mediaInsights = await Promise.all(
     withInsights.map((m) => fetchMediaInsights(m.id, m.mediaProductType, token)),
   );
@@ -473,13 +476,13 @@ async function computeInstagramPiece(row: AccountRow): Promise<DashboardPiece | 
     weeklyViewsDelta:
       canCompare && p7.views > 0 ? Number((((c7.views - p7.views) / p7.views) * 100).toFixed(1)) : 0,
     postCount,
-    avgLikes: Math.round(avg(media.map((m) => m.likeCount))),
-    avgComments: Math.round(avg(media.map((m) => m.commentsCount))),
+    avgLikes: Math.round(avg(mediaList.map((m) => m.likeCount))),
+    avgComments: Math.round(avg(mediaList.map((m) => m.commentsCount))),
     engagementRate: Number(engagementRate.toFixed(2)),
     engagementDelta: canCompare ? Number((engagementRate - prevEngagementRate).toFixed(2)) : 0,
     /* 현재 창 조회가 실패했으면 위 숫자들은 자리채움이다 — 화면이 «—»로 그린다.
        직전 창만 실패한 경우는 값 자체는 진짜이므로 증감만 접는다(canCompare). */
-    insightsOk: cur7 !== null,
+    insightsOk: cur7 !== null && media !== null,
   };
 
   const posts: Post[] = withInsights.map((m, i) => ({
@@ -506,7 +509,7 @@ async function computeInstagramPiece(row: AccountRow): Promise<DashboardPiece | 
 
   // 콘텐츠 유형 비중 — 최근 미디어 기준
   const typeCounts: Partial<Record<PostType, number>> = {};
-  for (const m of media) {
+  for (const m of mediaList) {
     const t = toPostType(m);
     typeCounts[t] = (typeCounts[t] ?? 0) + 1;
   }
@@ -560,15 +563,15 @@ async function computeInstagramPiece(row: AccountRow): Promise<DashboardPiece | 
       views7: c7.views,
       viewsPrev7: p7.views,
       postCount,
-      likesSum: media.reduce((s, m) => s + m.likeCount, 0),
-      commentsSum: media.reduce((s, m) => s + m.commentsCount, 0),
-      sampleCount: media.length,
+      likesSum: mediaList.reduce((s, m) => s + m.likeCount, 0),
+      commentsSum: mediaList.reduce((s, m) => s + m.commentsCount, 0),
+      sampleCount: mediaList.length,
       interactions7: c7.totalInteractions,
       interactionsPrev7: p7.totalInteractions,
       denominator7: c7.reach,
       denominatorPrev7: p7.reach,
       typeCounts,
-      insightsOk: cur7 !== null,
+      insightsOk: cur7 !== null && media !== null,
     },
   };
 }
@@ -952,13 +955,15 @@ export async function getIgAvatarUrl(): Promise<string | null> {
   return fetchProfileAvatar(row.platform_user_id, token);
 }
 
-export async function getRecentPostsForPicker(): Promise<Post[]> {
+/** null = 목록을 못 불러왔다. «게시물이 없다»(빈 배열)와 다르게 다뤄야 한다 — 위저드가 「연동을 바꾸세요」라고 말했다 */
+export async function getRecentPostsForPicker(): Promise<Post[] | null> {
   const row = await loadInstagramRow();
   if (!row || !row.platform_user_id) return [];
   const token = await ensureFreshToken(row);
   if (!token) return [];
 
   const media = await fetchRecentMedia(row.platform_user_id, token, 25);
+  if (media === null) return null;
   return media.map((m) => ({
     id: m.id,
     channel: "instagram" as const,
@@ -994,6 +999,9 @@ export async function getLinkFeedItems(
   if (!token) return [];
 
   const media = await fetchRecentMedia(row.platform_user_id, token, Math.min(25, Math.max(1, limit)));
+  /* 발행 시점 스냅샷이라 실패하면 이번 발행에 피드가 안 실린다 — 고객이 화면에서 바로 알아채고 다시 발행할 수 있다.
+     여기서 옛 스냅샷을 유지하는 배관은 아직 없다(별도 작업). */
+  if (media === null) return [];
   return media.slice(0, limit).map((m) => ({
     thumbUrl: m.thumbnailUrl ?? m.mediaUrl ?? null,
     permalink: m.permalink ?? null,
@@ -1148,6 +1156,9 @@ export async function getLiveInstagramAnalytics(): Promise<LiveInstagramAnalytic
     fetchAccountInsights(igId, token),
     fetchRecentMedia(igId, token),
   ]);
+  /* 목록을 못 불러왔으면 이 함수의 규약대로 null 을 올린다 — 호출측이 폴백으로 다룬다.
+     빈 배열로 내려보내면 «게시물이 없는 계정»으로 읽힌다(2026-09-07 감사). */
+  if (media === null) return null;
 
   return {
     account: {

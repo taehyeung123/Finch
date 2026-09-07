@@ -33,6 +33,8 @@ export default async function AutoDmPage() {
   let followRequestReady = true;
   /* 조회가 실패했는가 — «규칙 0건»과 구분해서 화면에 나른다 */
   let rulesFailed = false;
+  /* 게시물 목록 조회가 실패했는가 — «게시물 0개»와 구분한다(위저드 피커 문구가 갈린다) */
+  let postsFailed = false;
   /* 인스타 연동 여부. true=연결됨 / false=없음 / null=확인 못 함.
      연동이 없으면 댓글 웹훅이 도착할 경로 자체가 없어 규칙을 만들어도 **한 통도 안 나간다** —
      예전엔 그대로 저장하고 초록 「실행 중」 배지까지 붙여, 고객이 5단계를 다 채우고 기다리기만 했다(2026-09-07 감사).
@@ -75,7 +77,10 @@ export default async function AutoDmPage() {
           .maybeSingle(),
         getIgAvatarUrl(),
       ]);
-      posts = livePosts;
+      /* null = 게시물 목록을 못 불러왔다. 예전엔 빈 배열이라 위저드 피커가 「이 계정에 게시물이 없어요 —
+         게시물이 있는 계정으로 연동을 바꾸세요」라고 말했다. 멀쩡한 계정을 갈아엎으라는 소리다(2026-09-07 감사). */
+      postsFailed = livePosts === null;
+      posts = livePosts ?? [];
       followRequestReady = followReady;
       accountHandle = (accountRes.data?.handle as string | undefined) ?? null;
       accountAvatar = avatarUrl;
@@ -110,6 +115,7 @@ export default async function AutoDmPage() {
       accountAvatar={accountAvatar}
       followRequestReady={followRequestReady}
       igConnected={igConnected}
+      postsFailed={postsFailed}
     />
   );
 }
