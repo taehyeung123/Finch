@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isOwnerEmail } from "@/lib/channel-availability";
 import { encryptToken, isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
 import {
@@ -82,6 +83,12 @@ export async function GET(request: Request) {
     return settingsRedirect(origin, { connect: "error", reason: "no_encryption_key" });
   }
 
+  /* 토큰 암호문을 쓰는 조회·저장은 **service_role 로** 한다(마이그레이션 0085, 2026-09-07 감사).
+     0085 가 access_token_cipher·refresh_token_cipher 를 authenticated 의 SELECT/INSERT/UPDATE
+     대상에서 빼기 때문에, 세션 클라이언트로는 이 저장이 더 이상 통하지 않는다.
+     행 범위는 아래 `user_id: user.id` 와 `.eq("user_id", user.id)` 가 정한다. */
+  const store = createAdminClient() ?? supabase;
+
   /* 어느 단계에서 실패했는지 추적한다.
      예전엔 세 호출을 try 하나로 묶고 전부 «토큰 교환 중 오류» 로 뭉갰는데,
      그러면 **원인을 좁힐 수가 없다** — 앱 시크릿 문제인지, redirect_uri 불일치인지,
@@ -129,7 +136,7 @@ export async function GET(request: Request) {
     const rowWithAvatar = { ...row, avatar_url: info.profilePictureUrl };
 
     // 이 사용자의 기존 인스타 연동이 있으면 갱신, 없으면 신규 (앱 모델상 사용자당 IG 1계정)
-    const { data: existing } = await supabase
+    const { data: existing } = await store
       .from("connected_accounts")
       .select("id")
       .eq("user_id", user.id)
@@ -138,20 +145,20 @@ export async function GET(request: Request) {
       .maybeSingle();
 
     let write = existing
-      ? await supabase.from("connected_accounts").update(rowWithAvatar).eq("id", existing.id).select("id")
-      : await supabase.from("connected_accounts").insert(rowWithAvatar).select("id");
+      ? await store.from("connected_accounts").update(rowWithAvatar).eq("id", existing.id).select("id")
+      : await store.from("connected_accounts").insert(rowWithAvatar).select("id");
     if (write.error && /granted_scopes/i.test(write.error.message)) {
       // 0075 미적용 DB — 스코프 기록은 포기하고 나머지는 저장한다(계단식 폴백)
       const { granted_scopes: _s, ...withoutScopes } = rowWithAvatar as Record<string, unknown>;
       void _s;
       write = existing
-        ? await supabase.from("connected_accounts").update(withoutScopes).eq("id", existing.id).select("id")
-        : await supabase.from("connected_accounts").insert(withoutScopes).select("id");
+        ? await store.from("connected_accounts").update(withoutScopes).eq("id", existing.id).select("id")
+        : await store.from("connected_accounts").insert(withoutScopes).select("id");
     }
     if (write.error && /avatar_url/i.test(write.error.message)) {
       write = existing
-        ? await supabase.from("connected_accounts").update(row).eq("id", existing.id).select("id")
-        : await supabase.from("connected_accounts").insert(row).select("id");
+        ? await store.from("connected_accounts").update(row).eq("id", existing.id).select("id")
+        : await store.from("connected_accounts").insert(row).select("id");
     }
 
     if (write.error) {

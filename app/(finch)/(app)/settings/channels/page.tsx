@@ -98,27 +98,48 @@ async function loadAccountCards(): Promise<AccountCard[] | null> {
 
   const supabase = await createClient();
   const user = await getAuthUser();
-  // select("*"): 마이그레이션 시점 차이로 특정 컬럼(avatar_url 등)이 없어도 조회가 깨지지 않게.
-  // user_id 명시 필터: 0012_team.sql 이 팀 멤버에게 소유자의 connected_accounts select 를 열어줬다 —
-  // 여기는 «내 연결» 관리 화면이라 본인 행으로 제한해 소유자의 버튼이 멤버에게 노출되지 않게 한다.
-  /* 이 조회의 error 는 예전에 버려졌다 — 실패하면 연결된 계정이 전부 «미연결»로 그려진다.
+  /* ⚠️ select("*") 를 쓰지 않는다(2026-09-07 감사, 마이그레이션 0085).
+     0085 가 토큰 암호문 컬럼을 authenticated 의 SELECT 대상에서 빼기 때문에, `*` 로 읽으면
+     **조회 전체가 권한 오류로 떨어진다** — 화면이 통째로 「불러오지 못했어요」가 된다.
+     화면이 실제로 쓰는 컬럼만 적고, 시기별로 없을 수 있는 avatar_url(0006)은 빠지면 빼고 다시 읽는다.
+     user_id 명시 필터: 0012_team.sql 이 팀 멤버에게 소유자 행 select 를 열어 줬다 —
+     여기는 «내 연결» 관리 화면이라 본인 행으로 제한해 소유자의 버튼이 멤버에게 노출되지 않게 한다.
+     이 조회의 error 는 예전에 버려졌다 — 실패하면 연결된 계정이 전부 «미연결»로 그려진다.
      «연결 안 함»과 «확인 못 함»은 다른 사실이다(lib/data/internal.ts 규칙). */
-  const { data: rows, error } = user
-    ? await supabase.from("connected_accounts").select("*").eq("user_id", user.id).order("created_at", { ascending: true })
-    : { data: [], error: null };
-  if (error) {
-    console.error("[settings] 연동 계정 조회 실패:", error.message);
-    return null;
+  interface ChannelAccountRow {
+    id: string;
+    channel: string;
+    handle: string | null;
+    display_name: string | null;
+    connected: boolean | null;
+    token_expires_at: string | null;
+    avatar_url?: string | null;
+  }
+  const BASE_COLS = "id, channel, handle, display_name, connected, token_expires_at";
+  const readAccounts = (userId: string, cols: string) =>
+    supabase.from("connected_accounts").select(cols).eq("user_id", userId).order("created_at", { ascending: true });
+
+  let rows: ChannelAccountRow[] = [];
+  if (user) {
+    let res = await readAccounts(user.id, `${BASE_COLS}, avatar_url`);
+    if (res.error && isMissingColumnError(res.error, /avatar_url/i)) {
+      res = await readAccounts(user.id, BASE_COLS);
+    }
+    if (res.error) {
+      console.error("[settings] 연동 계정 조회 실패:", res.error.message);
+      return null;
+    }
+    rows = (res.data ?? []) as unknown as ChannelAccountRow[];
   }
 
   return CHANNELS.map((channel) => {
-    const row = (rows ?? []).find((r) => r.channel === channel);
+    const row = rows.find((r) => r.channel === channel);
     return {
       id: row?.id ?? null,
       channel,
       handle: row?.handle ?? "",
       displayName: row?.display_name ?? null,
-      avatarUrl: (row?.avatar_url as string | null | undefined) ?? null,
+      avatarUrl: row?.avatar_url ?? null,
       connected: Boolean(row?.connected),
       // TikTok은 액세스 토큰이 24시간짜리라 매일 자동 갱신된다 — "N일 후 만료"를 그대로 보여주면
       // 정상 상태에서도 매번 "만료 임박"처럼 보여 오해를 유발하므로 숨긴다(lib/data/live.ts 주석과 동일 근거).

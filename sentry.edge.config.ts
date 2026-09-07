@@ -23,5 +23,9 @@ Sentry.init({
     httpHeaders: { request: false, response: false },
     httpBodies: [],
   },
+  /* 아웃고잉 fetch 브레드크럼(요청 URL 에 실린 토큰·시크릿)은 서버 설정에서 통합을 꺼서 막는데,
+     edge 의 동등물 winterCGFetchIntegration 은 @sentry/nextjs 타입에 안 실려 있어 여기서 못 부른다.
+     지금 edge 로 도는 코드가 없어 실제 노출은 없고, 방어는 scrubEvent 의 쿼리스트링 이름 기반 마스킹이 맡는다.
+     edge 라우트를 처음 만들 때 여기에 통합을 꼭 추가한다(2026-09-07 감사). */
   beforeSend: (event) => scrubEvent(event),
 });

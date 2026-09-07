@@ -14,6 +14,7 @@
  */
 
 import { createClient, getAuthUser } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
 import { getWorkspaceOwnerId } from "@/lib/team";
 import { decryptToken, encryptToken } from "@/lib/crypto/tokens";
@@ -103,9 +104,18 @@ async function loadAccountRow(channel: "instagram" | "threads" | "tiktok"): Prom
   const user = await getAuthUser(); // 요청당 1회 메모이즈 — 레이아웃 가드와 왕복 공유
   if (!user) return null;
 
+  /* 소유자 판정은 **세션 클라이언트**로 한다 — 여기가 «누구의 데이터를 볼 자격이 있는가»를 정하는 자리다. */
   const ownerId = await getWorkspaceOwnerId(supabase, user.id);
 
-  const { data, error } = await supabase
+  /* 토큰 암호문을 읽는 것은 **service_role 로** 한다(2026-09-07 감사, 마이그레이션 0085).
+     예전엔 세션 클라이언트로 읽었는데, 그러면 같은 조회를 사용자가 PostgREST 로 직접 흉내 낼 수 있었다 —
+     팀원(viewer)이 소유자의 인스타·스레드·틱톡 토큰 암호문을 그대로 받아 가고, 팀에서 빠진 뒤에도
+     자기 연동 행에 붙여 넣어 소유자 계정을 계속 조종할 수 있었다. 0085 가 그 컬럼의 SELECT 를
+     authenticated 에게서 회수하므로, 암호문은 서버 코드만 볼 수 있다.
+     ⚠️ 접근 범위는 위의 ownerId 가 정한다 — admin 클라이언트는 RLS 를 우회하므로 필터가 곧 권한이다. */
+  const store = createAdminClient() ?? supabase;
+
+  const { data, error } = await store
     .from("connected_accounts")
     .select("*")
     .eq("channel", channel)
@@ -206,7 +216,10 @@ async function ensureFreshToken(row: AccountRow, refresh: RefreshFn = refreshLon
       const refreshed = await refresh(token);
       const cipher = encryptToken(refreshed.accessToken);
       if (cipher) {
-        const supabase = await createClient();
+        /* 갱신된 암호문 저장도 service_role 로 한다(0085). 부수 효과로 **팀원이 볼 때도 갱신이 실제로 저장된다** —
+           예전 세션 클라이언트 경로는 RLS 쓰기 정책이 본인 행만 허용해서 팀원 화면에서는 조용히 실패했다. */
+        const supabase = createAdminClient();
+        if (!supabase) return refreshed.accessToken;
         await supabase
           .from("connected_accounts")
           .update({
@@ -257,7 +270,9 @@ async function ensureFreshTiktokToken(row: AccountRow): Promise<string | null> {
     const accessCipher = encryptToken(refreshed.accessToken);
     const refreshCipher = encryptToken(refreshed.refreshToken);
     if (accessCipher && refreshCipher) {
-      const supabase = await createClient();
+      /* 저장은 service_role 로 — ensureFreshToken 과 같은 이유(0085) */
+      const supabase = createAdminClient();
+      if (!supabase) return refreshed.accessToken;
       await supabase
         .from("connected_accounts")
         .update({

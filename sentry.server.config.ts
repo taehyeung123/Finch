@@ -32,6 +32,18 @@ Sentry.init({
     httpHeaders: { request: false, response: false },
     httpBodies: [],
   },
-  integrations: [Sentry.captureConsoleIntegration({ levels: ["error"] }), Sentry.dedupeIntegration()],
+  integrations: [
+    Sentry.captureConsoleIntegration({ levels: ["error"] }),
+    Sentry.dedupeIntegration(),
+    /* ⚠️ 아웃고잉 HTTP 브레드크럼을 끈다 — **여기에 앱 시크릿과 액세스 토큰이 실린다.**
+       Graph 호출은 토큰을 쿼리스트링에 담고(lib/meta/instagram.ts:18 등 `?access_token=…`),
+       OAuth 코드 교환은 client_secret 을 보낸다. 브레드크럼은 요청 URL 을 통째로 기록하므로
+       서버 오류 하나에 딸려 그 URL 이 외부 로그로 나간다. 앱 시크릿이 새면 연동한 **모든** 사용자의
+       인스타·스레드·광고 계정에 대한 마스터 자격증명이 새는 것이다(2026-09-07 감사).
+       트레이싱이 이미 0 이라 이걸 꺼서 잃는 관측값은 없다.
+       옵션 근거: @sentry/node-core .../node-fetch/types.d.ts `breadcrumbs?: boolean` (기본 true). */
+    Sentry.nativeNodeFetchIntegration({ breadcrumbs: false }),
+    Sentry.httpIntegration({ breadcrumbs: false }),
+  ],
   beforeSend: (event) => scrubEvent(event),
 });

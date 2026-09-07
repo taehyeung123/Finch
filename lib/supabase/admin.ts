@@ -1,3 +1,7 @@
+/* 이 저장소에서 가장 민감한 파일이다 — 아래 주석이 «클라이언트에서 import 금지» 라고 적어 두고
+   정작 그걸 강제하는 한 줄이 없었다(2026-09-07 감사). 이 import 가 있으면 이 모듈이 클라이언트
+   그래프에 닿는 순간 **빌드가 실패한다** — 규칙을 사람이 아니라 빌드가 지킨다. */
+import "server-only";
 import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 
 /**

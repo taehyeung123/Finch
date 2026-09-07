@@ -7,6 +7,14 @@
   서버·엣지·브라우저 init 이 전부 같은 함수를 쓴다. 의존 없음 — 클라이언트 번들에도 들어간다.
 */
 const PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+  /* 쿼리스트링에 실린 비밀 — **이름으로** 자른다. 값의 모양을 보고 자르는 아래 규칙들보다 먼저 돌아야
+     한다(짧은 인가 코드·서명처럼 «비밀처럼 안 생긴» 값도 이름만으로 걸린다).
+     Graph 호출은 토큰을 URL 에 담고(`?access_token=…`), OAuth 콜백 URL 에는 code 가 실린다.
+     init 에서 아웃고잉 브레드크럼 자체를 껐지만, 예외 메시지·request.url 로도 같은 문자열이 흘러올 수 있다. */
+  [
+    /([?&](?:access_token|refresh_token|client_secret|app_secret|appsecret_proof|code|id_token|token|secret|api_?key|signature|sig|password|pepper)=)[^&\s"'<>]+/gi,
+    "$1[redacted]",
+  ],
   [/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]"],
   [/\bBearer\s+[A-Za-z0-9\-._~+/]+=*/g, "Bearer [token]"],
   /* Meta 사용자·페이지 토큰 접두, JWT 3분절, 토스·Resend·Anthropic 키 접두 */

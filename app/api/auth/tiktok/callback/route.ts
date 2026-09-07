@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptToken, isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
 import {
   exchangeTiktokCodeForToken,
@@ -74,6 +75,12 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/login?next=/settings/channels`);
   }
 
+  /* 토큰 암호문을 쓰는 조회·저장은 **service_role 로** 한다(마이그레이션 0085, 2026-09-07 감사).
+     0085 가 토큰 암호문 컬럼을 authenticated 의 SELECT/INSERT/UPDATE 대상에서 빼기 때문에,
+     세션 클라이언트로는 이 저장이 더 이상 통하지 않는다.
+     행 범위는 아래 `user_id: user.id` 와 `.eq("user_id", user.id)` 가 정한다. */
+  const store = createAdminClient() ?? supabase;
+
   const config = getTiktokOAuthConfig();
   if (!config) {
     return settingsRedirect(origin, { connect: "error", reason: "unconfigured" });
@@ -123,7 +130,7 @@ export async function GET(request: Request) {
     const rowWithAvatar = { ...row, avatar_url: info.avatarUrl };
 
     // 이 사용자의 기존 TikTok 연동이 있으면 갱신, 없으면 신규 (앱 모델상 사용자당 TikTok 1계정)
-    const { data: existing } = await supabase
+    const { data: existing } = await store
       .from("connected_accounts")
       .select("id")
       .eq("user_id", user.id)
@@ -132,28 +139,28 @@ export async function GET(request: Request) {
       .maybeSingle();
 
     let write = existing
-      ? await supabase.from("connected_accounts").update(rowWithAvatar).eq("id", existing.id).select("id")
-      : await supabase.from("connected_accounts").insert(rowWithAvatar).select("id");
+      ? await store.from("connected_accounts").update(rowWithAvatar).eq("id", existing.id).select("id")
+      : await store.from("connected_accounts").insert(rowWithAvatar).select("id");
     if (write.error && /granted_scopes/i.test(write.error.message)) {
       // 0075 미적용 DB — 스코프 기록만 포기하고 나머지는 저장한다(계단식 폴백)
       const { granted_scopes: _s, ...withoutScopes } = rowWithAvatar as Record<string, unknown>;
       void _s;
       write = existing
-        ? await supabase.from("connected_accounts").update(withoutScopes).eq("id", existing.id).select("id")
-        : await supabase.from("connected_accounts").insert(withoutScopes).select("id");
+        ? await store.from("connected_accounts").update(withoutScopes).eq("id", existing.id).select("id")
+        : await store.from("connected_accounts").insert(withoutScopes).select("id");
     }
     if (write.error && /avatar_url/i.test(write.error.message)) {
       write = existing
-        ? await supabase.from("connected_accounts").update(row).eq("id", existing.id).select("id")
-        : await supabase.from("connected_accounts").insert(row).select("id");
+        ? await store.from("connected_accounts").update(row).eq("id", existing.id).select("id")
+        : await store.from("connected_accounts").insert(row).select("id");
     }
     if (write.error && /refresh_token_cipher/i.test(write.error.message)) {
       // 0011 미적용 DB — refresh_token 저장은 포기하고 access_token만 저장(다음 갱신 시 재연동 필요)
       const { refresh_token_cipher: _drop, ...withoutRefresh } = row;
       void _drop;
       write = existing
-        ? await supabase.from("connected_accounts").update(withoutRefresh).eq("id", existing.id).select("id")
-        : await supabase.from("connected_accounts").insert(withoutRefresh).select("id");
+        ? await store.from("connected_accounts").update(withoutRefresh).eq("id", existing.id).select("id")
+        : await store.from("connected_accounts").insert(withoutRefresh).select("id");
     }
 
     if (write.error) {

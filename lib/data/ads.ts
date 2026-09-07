@@ -19,6 +19,7 @@
 
 import { cache } from "react";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
 import { getWorkspaceMembership, getWorkspaceOwnerId } from "@/lib/team";
 import { decryptToken, isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
@@ -158,7 +159,12 @@ async function loadReadContext(adAccountId: string | undefined): Promise<ReadCon
   const supabase = await createClient();
   const ownerId = await getWorkspaceOwnerId(supabase, user.id);
 
-  const { data: connRaw, error: connErr } = await supabase
+  /* 토큰 암호문은 **service_role 로만** 읽는다(0085) — 세션 클라이언트로 읽던 시절엔 같은 조회를
+     사용자가 PostgREST 로 직접 흉내 내 소유자의 광고 토큰 암호문을 가져갈 수 있었다(2026-09-07 감사).
+     접근 범위는 위에서 정한 ownerId 가 정한다 — admin 은 RLS 를 우회하므로 필터가 곧 권한이다. */
+  const store = createAdminClient() ?? supabase;
+
+  const { data: connRaw, error: connErr } = await store
     .from("meta_ad_connections")
     .select("id, access_token_cipher, token_expires_at, connected")
     .eq("user_id", ownerId)
@@ -396,7 +402,11 @@ export async function getAdsWriteContext(adAccountId?: string): Promise<AdsWrite
     return { state: "blocked", code: "role_denied" };
   }
 
-  const { data: connRaw, error: connErr } = await supabase
+  /* 토큰 암호문은 service_role 로만 — loadReadContext 와 같은 이유(0085).
+     쓰기 자격은 바로 위 membership 검사가 이미 정했다(viewer·unknown 은 여기 못 온다). */
+  const store = createAdminClient() ?? supabase;
+
+  const { data: connRaw, error: connErr } = await store
     .from("meta_ad_connections")
     .select("id, access_token_cipher, token_expires_at, connected, granted_scopes")
     .eq("user_id", membership.ownerId)

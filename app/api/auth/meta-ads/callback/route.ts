@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isOwnerEmail } from "@/lib/channel-availability";
 import { encryptToken, isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
 import {
@@ -68,6 +69,12 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/login?next=/settings/channels`);
   }
 
+  /* 토큰 암호문을 쓰는 조회·저장은 **service_role 로** 한다(마이그레이션 0085, 2026-09-07 감사).
+     0085 가 토큰 암호문 컬럼을 authenticated 의 SELECT/INSERT/UPDATE 대상에서 빼기 때문에,
+     세션 클라이언트로는 이 저장이 더 이상 통하지 않는다.
+     행 범위는 아래 `user_id: user.id` 와 `.eq("user_id", user.id)` 가 정한다. */
+  const store = createAdminClient() ?? supabase;
+
   const config = getMetaAdsOAuthConfig();
   if (!config) {
     return settingsRedirect(origin, { connect: "error", reason: "unconfigured" });
@@ -120,14 +127,14 @@ export async function GET(request: Request) {
        다른 페이스북 계정으로 다시 연동하면 같은 행의 fb_user_id 가 바뀐다 —
        행이 둘로 늘면 화면과 해제가 서로 다른 행을 보게 된다.
        ⚠️ .select() 없이는 RLS 로 0행이 되어도 오류가 안 난다 — 반드시 결과 행을 확인한다. */
-    let conn = await supabase
+    let conn = await store
       .from("meta_ad_connections")
       .upsert(connRow, { onConflict: "user_id" })
       .select("id");
     if (conn.error && isMissingColumnError(conn.error, /granted_scopes/i)) {
       const { granted_scopes: _s, ...withoutScopes } = connRow;
       void _s;
-      conn = await supabase
+      conn = await store
         .from("meta_ad_connections")
         .upsert(withoutScopes, { onConflict: "user_id" })
         .select("id");
