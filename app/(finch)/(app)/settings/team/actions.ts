@@ -75,12 +75,15 @@ export async function inviteMember(formData: FormData): Promise<InviteMemberResu
   const { error } = existing
     ? await supabase
         .from("team_members")
+        /* member_user_id 는 보내지 않는다 — 0084 가 그 컬럼의 쓰기 권한을 사용자에게서 회수했다.
+           (그 권한이 열려 있으면 남을 자기 워크스페이스의 활성 팀원으로 끌어올 수 있었다.)
+           status 가 'invited' 로 돌아가면 활성 조회(getWorkspaceOwnerId)에 안 걸리므로 옛 값이 남아도 무해하고,
+           수락 경로(app/(finch)/team/accept, service_role)가 수락 시점에 올바른 사람으로 덮어쓴다. */
         .update({
           role,
           status: "invited",
           invite_token: inviteToken,
           invited_at: now,
-          member_user_id: null,
           joined_at: null,
         })
         .eq("id", existing.id)

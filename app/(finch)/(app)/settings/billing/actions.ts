@@ -41,7 +41,16 @@ export async function createCheckout(plan: string): Promise<CreateCheckoutResult
   // orderId: 영숫자-_ 6~64자. finch_<plan>_<uuid(32)> = 최대 ~42자
   const orderId = `finch_${plan}_${randomUUID().replace(/-/g, "")}`;
 
-  const { error } = await supabase.from("payment_orders").insert({
+  /* ⚠️ 주문은 **서버(service_role)만** 만든다(0084). 예전엔 사용자 세션으로 넣었는데, RLS 가 금액·플랜을
+     잠그지 않아 고객이 PostgREST 로 「에이전시 플랜 · 100원」 주문을 직접 만들 수 있었다. 결제 승인이
+     이 행의 amount 를 「서버 신뢰값」으로 쓰므로(success/page.tsx), 100원을 내고 최상위 플랜을 받는 길이었다.
+     이제 금액·플랜은 위의 서버 상수에서만 온다. */
+  const admin = createAdminClient();
+  if (!admin) {
+    console.error("[billing] 주문 생성 실패: service_role 미설정");
+    return { ok: false, error: "주문 생성 중 오류가 발생했어요. 다시 시도해 주세요." };
+  }
+  const { error } = await admin.from("payment_orders").insert({
     user_id: user.id,
     order_id: orderId,
     plan,
