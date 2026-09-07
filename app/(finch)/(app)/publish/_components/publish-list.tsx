@@ -50,7 +50,8 @@ export function PublishList({
 }: {
   initialItems: ScheduledPost[];
   /** 채널 연결 스트립 — 링크팜 포스팅 상단의 연결 상태 표시(실측 2026-08-19) */
-  channels: ComposerChannel[];
+  /** null = 연동 상태를 **확인하지 못했다**. «계정 없음»으로 그리지 않는다 */
+  channels: ComposerChannel[] | null;
   isDemo: boolean;
   /** 서버 조회가 한도에서 잘렸다 — 화면이 "이게 전부"라고 거짓말하지 않게 알린다 */
   truncated?: boolean;
@@ -202,8 +203,12 @@ export function PublishList({
       {/* 채널 연결 스트립 — 링크팜 포스팅 상단(실측). 연결 안 된 채널은 눌러서
           연동 관리로 간다. 발행이 어느 계정으로 나가는지 이 줄이 항상 말해준다. */}
       <div className="card-face flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3">
-        {(["instagram", "tiktok", "threads"] as const).map((ch) => {
-          const meta = channels.find((c) => c.channel === ch);
+        {/* 조회 실패면 연결 여부를 말하지 않는다 — «미연결» 칩을 그리면 멀쩡한 연결이 끊긴 것처럼 읽힌다 */}
+        {channels === null ? (
+          <p className="text-[14px] text-fg-sub">연결 상태를 불러오지 못했어요 · 새로고침해 주세요</p>
+        ) : null}
+        {(channels === null ? [] : (["instagram", "tiktok", "threads"] as const)).map((ch) => {
+          const meta = channels?.find((c) => c.channel === ch);
           const connected = !!meta?.connected;
           const label = ch === "instagram" ? "인스타그램" : ch === "tiktok" ? "틱톡" : "스레드";
           const inner = (

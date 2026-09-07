@@ -148,9 +148,12 @@ async function load(days: number, wantPageId?: string): Promise<Loaded> {
     parentId: (r.parent_id as string | null) ?? null,
     subSlug: (r.sub_slug as string | null) ?? null,
   }));
-  /* 상한 표시용 — 최종 관문은 DB 트리거(0060). 무료 1·유료 3 */
-  const { data: prof } = await supabase.from("users_profile").select("plan").eq("id", user.id).maybeSingle();
-  const pageLimit = { used: pages.length, max: (prof?.plan ?? "free") === "free" ? 1 : 3 };
+  /* 상한 표시용 — 최종 관문은 DB 트리거(0060). 무료 1·유료 3.
+     ⚠️ 조회 실패를 «무료»로 단정하지 않는다. 예전엔 error 를 버리고 `?? "free"` 로 떨어져서, 플랜 조회가
+     한 번 실패하면 유료 고객도 max=1 로 잠기고 「플랜을 올리면 3개까지」라는 업그레이드 권유가 떴다 —
+     돈을 낸 사람에게 이미 산 기능을 파는 화면이다. getCurrentPlan 은 실패를 null 로 준다(2026-09-07 감사). */
+  const linksPlan = await getCurrentPlan();
+  const pageLimit = { used: pages.length, max: linksPlan === "free" ? 1 : 3, planFailed: linksPlan === null };
 
   /* 활성 페이지 — ?page= 가 내 것이면 그 장, 아니면 첫 메인 장 */
   const active = (wantPageId && pages.find((p) => p.id === wantPageId)) || pages.find((p) => !p.parentId) || pages[0] || null;

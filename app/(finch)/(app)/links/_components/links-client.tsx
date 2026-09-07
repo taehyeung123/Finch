@@ -320,7 +320,8 @@ export function LinksClient({
   page: LinkPageView | null;
   /** 내 페이지 전부(멀티·서브, 0060) — 전환 드롭다운용 */
   pages?: LinkPageSummary[];
-  pageLimit?: { used: number; max: number };
+  /** planFailed=true 면 플랜을 못 읽은 것 — 상한을 사실처럼 말하지 않는다(업그레이드 권유 금지) */
+  pageLimit?: { used: number; max: number; planFailed?: boolean };
   /** 유료 플랜 여부 — 배지 숨김·내 로고 게이트(2026-08-26) */
   paid?: boolean;
   multiReady?: boolean;
@@ -2127,7 +2128,8 @@ function TopBar({
 }: {
   page: LinkPageView;
   pages?: LinkPageSummary[];
-  pageLimit?: { used: number; max: number };
+  /** planFailed=true 면 플랜을 못 읽은 것 — 상한을 사실처럼 말하지 않는다(업그레이드 권유 금지) */
+  pageLimit?: { used: number; max: number; planFailed?: boolean };
   multiReady?: boolean;
   onSwitchPage?: (id: string) => void;
   onNewPage?: () => void;
@@ -2912,7 +2914,8 @@ function PageSwitcher({
   onNewSubpage,
 }: {
   pages: LinkPageSummary[];
-  pageLimit: { used: number; max: number };
+  /** planFailed=true 면 플랜을 못 읽은 것 — 상한도 업그레이드 권유도 사실로 말하지 않는다 */
+  pageLimit: { used: number; max: number; planFailed?: boolean };
   multiReady: boolean;
   activeId: string;
   busy: boolean;
@@ -2937,7 +2940,9 @@ function PageSwitcher({
   }, [open]);
   const me = pages.find((p) => p.id === activeId) ?? null;
   const mains = pages.filter((p) => !p.parentId);
-  const full = pageLimit.used >= pageLimit.max;
+  /* 플랜을 못 읽었으면 «상한에 닿았다»고 단정하지 않는다 — 유료 고객을 무료 상한으로 잠그던 자리(2026-09-07 감사).
+     실제 차단은 DB 트리거(0060)가 하므로 화면이 낙관적이어도 초과 생성은 안 된다. */
+  const full = !pageLimit.planFailed && pageLimit.used >= pageLimit.max;
   const row = (p: LinkPageSummary, isSub: boolean) => (
     <button
       key={p.id}
@@ -3018,6 +3023,9 @@ function PageSwitcher({
               </button>
               {!multiReady ? (
                 <p className="px-2.5 pb-1 text-[11px] leading-[1.5] text-fg-faint">페이지 추가는 서버 업데이트(0060) 적용 후 쓸 수 있어요.</p>
+              ) : pageLimit.planFailed ? (
+                /* 플랜을 못 읽었다 — 상한도 업그레이드 권유도 사실로 말하지 않는다. 실제 차단은 DB 트리거(0060)가 한다 */
+                <p className="px-2.5 pb-1 text-[11px] leading-[1.5] text-fg-faint">플랜을 확인하지 못했어요 · 새로고침해 주세요.</p>
               ) : full ? (
                 <p className="px-2.5 pb-1 text-[11px] leading-[1.5] text-fg-faint">페이지 상한에 닿았어요 — 플랜을 올리면 {pageLimit.max === 1 ? "3개" : "더"}까지 늘어나요.</p>
               ) : null}

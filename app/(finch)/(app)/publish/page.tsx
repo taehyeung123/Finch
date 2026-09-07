@@ -79,18 +79,27 @@ async function loadScheduled(): Promise<{ items: ScheduledPost[]; truncated: boo
   };
 }
 
-/** 채널 연결 스트립 데이터 — 데모: 샘플 계정, 실제: connected_accounts */
-async function loadChannels(): Promise<ComposerChannel[]> {
+/**
+ * 채널 연결 스트립 데이터 — 데모: 샘플 계정, 실제: connected_accounts.
+ * ⚠️ **null 은 «조회 실패»다.** 예전엔 error 를 아예 안 받아서 실패가 빈 배열이 됐고, 작성기가 그걸
+ * «연동된 계정이 없어요»로 읽어 폼 대신 관문을 띄웠다 — 잘 쓰던 사람이 예약 발행을 못 하고 연결이 끊긴 줄 알고
+ * 재연동하러 갔다. 같은 파일의 예약 목록 조회는 이미 실패를 화면까지 나르고 있었다(2026-09-07 감사).
+ */
+async function loadChannels(): Promise<ComposerChannel[] | null> {
   if (isDemoMode()) {
     return sampleAccounts.map((a) => ({ channel: a.channel, handle: a.handle, connected: a.connected }));
   }
   const user = await getAuthUser();
   if (!user) return [];
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("connected_accounts")
     .select("channel, handle, connected")
     .eq("user_id", user.id);
+  if (error) {
+    console.error("[publish] 연동 채널 조회 실패:", error.message);
+    return null;
+  }
   return ((data ?? []) as Array<{ channel: string; handle: string | null; connected: boolean }>).map((r) => ({
     channel: r.channel,
     handle: r.handle,

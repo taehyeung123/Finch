@@ -43,14 +43,17 @@ export function PostComposer({
   onClose,
   onSaved,
 }: {
-  channels: ComposerChannel[];
+  /** null = 연동 상태를 **확인하지 못했다**. «계정 없음»과 다르게 다뤄야 한다(관문을 띄우지 않는다) */
+  channels: ComposerChannel[] | null;
   isDemo: boolean;
   /** 캘린더에서 날짜를 골라 들어온 경우 — 예약 모드로 그 날짜가 미리 채워진다 */
   defaultDate: string | null;
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
-  const anyConnected = isDemo || channels.some((c) => c.connected);
+  /* 조회 실패(null)면 관문을 띄우지 않는다 — «계정 없음»이 아니라 «모름»이다. 실제 발행은 서버가 다시 확인한다.
+     잘 쓰던 사람을 «연동하세요» 화면으로 튕기는 쪽이 더 나쁘다(2026-09-07 감사). */
+  const anyConnected = isDemo || channels === null || channels.some((c) => c.connected);
 
   const earliest = earliestPublishDate();
   const [channel, setChannel] = useState("instagram");
@@ -276,9 +279,10 @@ export function PostComposer({
                 단어 중간에 끊겼다(실측: 칩 높이 60.8px·2줄). 위 채널 스트립은 이미 wrap 이다 — 규칙을 맞춘다. */}
             <div className="mt-1.5 flex flex-wrap gap-2" role="radiogroup" aria-label="발행 채널">
               {COMPOSER_CHANNELS.map((ch) => {
-                const meta = channels.find((c) => c.channel === ch);
+                const meta = channels?.find((c) => c.channel === ch);
                 const publishable = isPublishableChannel(ch); // 발행 어댑터가 있는 채널만
-                const usable = publishable && (isDemo || !!meta?.connected);
+                /* channels === null 은 «확인 못 함» — 고르는 것까지 막지 않는다. 저장 시 서버가 다시 판정한다 */
+                const usable = publishable && (isDemo || channels === null || !!meta?.connected);
                 return (
                   <button
                     key={ch}
