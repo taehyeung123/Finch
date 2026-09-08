@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
 import { unlockCookieName, unlockToken, verifyPagePassword } from "@/lib/links/password";
+import { safeUrlBase } from "@/lib/links/url-base";
 import { loadPublicPage } from "./public-page";
 import { isScheduledHidden } from "@/lib/links/blocks";
 import type { LpErrorCode } from "@/lib/links/i18n";
@@ -371,6 +372,12 @@ export async function unlockLinkPage(slug: string, password: string, urlBase?: s
     return fail("wrongPassword", "비밀번호가 맞지 않아요.");
   }
 
+  /* ⚠️ path 에 넣기 **전에** 형식을 본다(2026-09-08 감사) — Next 는 Set-Cookie 의 Path 를 인코딩하지 않아
+     `mypage;Domain=…` 같은 값이 그대로 속성이 된다. 형식이 아니면 `/` 로 넓히지 **말고** 실패시킨다:
+     넓히면 잠금 해제 증표가 오리진 전체에 걸린다. urlBase 는 서브 페이지에서 `{부모}/{sub}` 로 오는데,
+     그 두 조각 형태를 그대로 허용해야 **해제한 페이지가 다시 잠기는** 회귀가 안 난다(소넷 확정). */
+  const cookiePath = safeUrlBase(urlBase) ?? safeUrlBase(slug);
+  if (!cookiePath) return fail("unavailable", "지금은 열 수 없어요.");
   try {
     const jar = await cookies();
     jar.set(unlockCookieName(pageId), unlockToken(pageId, stored), {
@@ -378,9 +385,7 @@ export async function unlockLinkPage(slug: string, password: string, urlBase?: s
       sameSite: "lax",
       secure: true,
       maxAge: 60 * 60 * 24, // 하루
-      /* 방문자가 실제로 보고 있는 주소 아래에 둔다 — 서브 페이지는 표준 주소가 `/{부모}/{sub}` 라
-         자식 전역 slug 로 발급하면 재방문 때 쿠키가 안 실려 **해제한 페이지가 다시 잠긴다**(소넷 확정) */
-      path: `/${urlBase ?? slug}`,
+      path: `/${cookiePath}`,
     });
   } catch {
     return fail("unavailable", "지금은 열 수 없어요.");

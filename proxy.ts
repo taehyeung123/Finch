@@ -3,6 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { isDemoMode } from "@/lib/supabase/config";
 import { SESSION_COOKIE_OPTIONS } from "@/lib/supabase/cookie-options";
 import { isReservedSlug } from "@/lib/links/reserved";
+import { safeUrlBase } from "@/lib/links/url-base";
 
 /**
  * 전 페이지 공통 보안 헤더 (PRD PART 13.4·13.5) + Supabase 세션 리프레시.
@@ -92,7 +93,13 @@ export async function proxy(request: NextRequest) {
   const publicLink = userPage || path.startsWith("/p/");
   /* 방문자 토큰 쿠키 — 공개 프로필 링크 첫 방문에 여기서 발급한다. 서버 액션(recordView)이 발급하면 Next 가
      액션 응답에 페이지를 통째로 다시 렌더해 첫 방문 비용이 두 배였다(감사3 C4). 값은 임의 토큰이고 DB 엔 해시만 남는다. */
-  if (publicLink && !request.cookies.get("finch_lv")) {
+  /* ⚠️ 쿠키 path 에 넣기 **전에** 형식을 본다(2026-09-08 감사). pathname 은 세미콜론을 인코딩하지 않고
+     Next 의 Set-Cookie 직렬화도 Path 를 그대로 이어 붙인다 — `/abc;Path=/` 링크 하나로 방문자 토큰이
+     오리진 전체에 걸리고, `;Domain=finch.ai.kr` 이면 서브도메인까지 실려 나갔다. 인증이 필요 없는 경로다.
+     옛 주소 `/p/{slug}` 로 들어온 방문자도 재방문 판정이 유지되도록 조각을 먼저 고른다 —
+     그러지 않으면 first 가 "p" 라 쿠키가 /p 아래에 걸려 새 주소 요청에 안 실린다. */
+  const cookieSlug = safeUrlBase(path.startsWith("/p/") ? (path.split("/")[2] ?? "") : first);
+  if (publicLink && cookieSlug && !request.cookies.get("finch_lv")) {
     response.cookies.set("finch_lv", crypto.randomUUID(), {
       httpOnly: true,
       sameSite: "lax",
@@ -102,7 +109,7 @@ export async function proxy(request: NextRequest) {
          path=/ 로 두면 앱·마케팅 요청에까지 고정 식별자가 실려 나간다(감사4 최소권한).
          페이지마다 토큰이 갈리는 것은 오히려 낫다 — 페이지 사이를 잇는 식별자가 아예 생기지 않고,
          한 페이지 안의 재방문·체류 판정은 그대로 된다(소비처가 전부 그 페이지 아래다: 액션·/go·/vcard·/dwell). */
-      path: `/${first}`,
+      path: `/${cookieSlug}`,
     });
   }
   applySecurityHeaders(response, publicLink);
