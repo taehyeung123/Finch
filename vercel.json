@@ -35,6 +35,8 @@
 
     { "path": "/api/cron/pool-finalize", "schedule": "30 18 * * *" },
 
-    { "path": "/api/cron/retention", "schedule": "20 19 * * *" }
+    { "path": "/api/cron/retention", "schedule": "20 19 * * *" },
+
+    { "path": "/api/cron/storage-sweep", "schedule": "40 20 * * *" }
   ]
 }

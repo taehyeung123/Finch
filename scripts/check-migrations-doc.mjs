@@ -76,8 +76,10 @@ function checkDoc(relPath, label, re, hint) {
 checkDoc(
   "supabase/README.md",
   "적용 현황",
-  /마이그레이션은\s*0001\s*~\s*(?<last>\d{4})\s*이 적용돼 있다/,
-  "«마이그레이션은 0001~NNNN 이 적용돼 있다»",
+  /* 조사는 앞 글자 받침에 따라 «이»·«가» 로 갈린다(0088 이 / 0089 가) — 둘 다 받는다.
+     처음엔 «이» 만 받았다가 0089 를 넣을 때 이 검사가 헛돌았다. */
+  /마이그레이션은\s*0001\s*~\s*(?<last>\d{4})\s*[이가] 적용돼 있다/,
+  "«마이그레이션은 0001~NNNN 이/가 적용돼 있다»",
 );
 checkDoc(
   "docs/API_ROADMAP.md",
