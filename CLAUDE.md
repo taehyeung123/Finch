@@ -86,6 +86,34 @@
 - **데모 모드 폴백 유지**: 모든 인증 경로는 `isSupabaseConfigured()`(`lib/supabase/config.ts`)를 먼저 확인하고, 환경변수 미설정 시 빌드·런타임이 깨지지 않고 데모 모드로 동작해야 한다. 설정 절차는 `docs/AUTH_SETUP.md`.
 - Supabase 클라이언트는 `lib/supabase/client.ts`(브라우저) / `lib/supabase/server.ts`(서버, `await cookies()`)만 사용한다. `@supabase/auth-helpers-nextjs`는 deprecated — 절대 쓰지 않는다.
 - 세션 리프레시는 `proxy.ts`가 담당한다 (@supabase/ssr 미들웨어 패턴). 기존 보안 헤더 로직을 제거하지 말 것.
+- 로그인은 **구글·카카오뿐이다** — 비밀번호 로그인 코드는 저장소에 한 줄도 없다. 새로 만들지 말 것
+  (만들면 무차별 대입·크리덴셜 스터핑·비밀번호 재설정 우회가 통째로 새 공격면이 된다).
+
+## 보안 규칙 (2026-09-07 종합 감사에서 확정)
+
+- **토큰 암호문은 서버만 만진다.** `connected_accounts`·`meta_ad_connections` 의 `*_token_cipher` 는
+  0085 가 `authenticated` 의 select/insert/update 대상에서 뺐다. 이 컬럼을 읽거나 쓰는 코드는 반드시
+  `createAdminClient()` 로 하고, 접근 범위는 `.eq("user_id", ownerId)` 가 정한다(admin 은 RLS 를 우회하므로 **필터가 곧 권한**이다).
+  두 표에 `select("*")` 를 쓰면 권한 오류로 조회 전체가 떨어진다 — 컬럼을 적어라.
+- **수리에 «없으면 원래대로» 폴백을 남기지 말 것.** 폴백이 성공하는 조건이 곧 취약한 조건인 경우가 많다
+  (2026-09-07 에 두 번 연속 그랬다: `createAdminClient() ?? supabase`, `secret || "finch-thumb"`).
+  닫는 쪽으로 실패하고 로그를 남긴다. 예외는 «본인이 자기 것을 쓰는» 경로뿐이다(OAuth 콜백).
+- **남의 URL 을 서버가 여는 것은 두 곳뿐이다** — `lib/links/safe-fetch.ts`(HTML), `lib/media/safe-image.ts`(이미지).
+  그 밖에서 맨 `fetch` 로 외부 URL 을 열지 않는다. Vercel 에는 아웃바운드 방화벽이 없다.
+- **검증 없는 경로 조각을 `new URL()`·`redirect()` 의 목적지로 쓰지 않는다.** 라우트 파라미터는 **디코드된 값**이라
+  `\`(`%5C`)가 들어오면 `//` 로 읽혀 크로스 오리진이 된다. 로그인 `next` 는 `lib/auth/safe-next.ts`,
+  프로필 slug 는 `SLUG_RE` 로 먼저 거른다.
+- **접속 IP 는 `cf-connecting-ip` → `x-real-ip` → `x-forwarded-for` 의 마지막 값** 순으로 본다
+  (`app/p/[slug]/actions.ts` 의 `clientIp`). xff **첫** 값은 요청자가 직접 넣는 값이라 위조된다.
+  IP 원문은 저장하지 않는다 — 페퍼를 섞어 해시만 남긴다.
+- **시크릿을 읽는 모듈 1행에 `import "server-only";`** 를 넣는다. 경계를 사람이 아니라 빌드가 지킨다.
+- **인증 «전» 경로의 `console.error` 는 반드시 `consoleErrorThrottled` + `flatten`** 으로 감싼다
+  (`lib/monitoring/log-throttle.ts`). Sentry 가 console.error 를 전부 이벤트로 올리므로, 안 감싸면
+  외부인이 무료 한도를 태워 **우리의 유일한 오류 관측 수단을 끌 수 있다.**
+- **상태를 바꾸는 동작을 GET 렌더 안에서 하지 않는다.** 서버 액션(POST)으로 옮긴다 — Next 가 Origin 을 검증해
+  CSRF 가 함께 닫힌다(팀 초대 수락이 그래서 옮겨졌다).
+- **INSERT 를 검사하는 트리거·정책은 UPDATE 도 함께 봐야 한다.** 0060 의 소유 대조가 INSERT 에만 걸려 있어
+  남의 페이지 밑에 내 페이지를 붙일 수 있었다(0086 이 수리). 새 가드를 만들 때 두 동작을 같이 생각한다.
 
 ## 개발 워크플로
 
