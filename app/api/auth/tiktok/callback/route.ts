@@ -110,8 +110,8 @@ export async function GET(request: Request) {
     const token = await exchangeTiktokCodeForToken({ code, redirectUri, config });
     const info = await fetchTiktokUserInfo(token.accessToken);
 
-    const accessCipher = encryptToken(token.accessToken);
-    const refreshCipher = encryptToken(token.refreshToken);
+    const accessCipher = encryptToken(token.accessToken, { userId: user.id, field: "connected_accounts.access_token_cipher" });
+    const refreshCipher = encryptToken(token.refreshToken, { userId: user.id, field: "connected_accounts.refresh_token_cipher" });
     if (!accessCipher || !refreshCipher) {
       return settingsRedirect(origin, { connect: "error", reason: "encrypt_failed" });
     }

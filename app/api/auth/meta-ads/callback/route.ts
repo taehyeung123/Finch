@@ -113,7 +113,7 @@ export async function GET(request: Request) {
     stage = "me";
     const me = await fetchFbMe(longLived.accessToken);
 
-    const cipher = encryptToken(longLived.accessToken);
+    const cipher = encryptToken(longLived.accessToken, { userId: user.id, field: "meta_ad_connections.access_token_cipher" });
     if (!cipher) {
       return settingsRedirect(origin, { connect: "error", reason: "encrypt_failed" });
     }

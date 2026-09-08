@@ -196,9 +196,13 @@ async function loadReadContext(adAccountId: string | undefined): Promise<ReadCon
     return { state: "expired", expiredAt: conn.token_expires_at };
   }
 
-  const token = decryptToken(conn.access_token_cipher);
+  const token = decryptToken(conn.access_token_cipher, {
+    userId: ownerId,
+    field: "meta_ad_connections.access_token_cipher",
+  });
   if (!token) {
-    console.error("[live-ads] 토큰 복호화 실패 — TOKEN_ENCRYPTION_KEY 가 바뀌었을 수 있다");
+    /* v2 는 소유자 결속(AAD)까지 본다 — 다른 행에서 옮겨 온 암호문도 여기로 떨어진다(2026-09-08) */
+    console.error("[live-ads] 토큰 복호화 실패 — 키가 바뀌었거나 소유자가 맞지 않는다");
     return { state: "error" };
   }
 
@@ -449,7 +453,10 @@ export async function getAdsWriteContext(adAccountId?: string): Promise<AdsWrite
   if (expiresInDays !== null && expiresInDays <= 0) {
     return { state: "blocked", code: "connection_expired" };
   }
-  const token = decryptToken(conn.access_token_cipher);
+  const token = decryptToken(conn.access_token_cipher, {
+    userId: membership.ownerId,
+    field: "meta_ad_connections.access_token_cipher",
+  });
   if (!token) {
     return { state: "blocked", code: "connection_unreadable" };
   }

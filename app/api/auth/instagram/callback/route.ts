@@ -120,7 +120,7 @@ export async function GET(request: Request) {
     stage = "account";
     const info = await fetchAccountInfo(longLived.accessToken);
 
-    const cipher = encryptToken(longLived.accessToken);
+    const cipher = encryptToken(longLived.accessToken, { userId: user.id, field: "connected_accounts.access_token_cipher" });
     if (!cipher) {
       return settingsRedirect(origin, { connect: "error", reason: "encrypt_failed" });
     }

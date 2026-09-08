@@ -55,7 +55,7 @@ export async function POST(request: Request) {
   if (!issued.ok) {
     return NextResponse.json({ error: `카드 등록에 실패했어요: ${issued.message}` }, { status: 402 });
   }
-  const cipher = encryptToken(issued.data.billingKey);
+  const cipher = encryptToken(issued.data.billingKey, { userId: user.id, field: "subscriptions.billing_key_cipher" });
   if (!cipher) {
     return NextResponse.json({ error: "서버 설정 오류입니다." }, { status: 503 });
   }

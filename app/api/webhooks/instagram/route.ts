@@ -182,7 +182,10 @@ async function processEntry(entry: WebhookEntry) {
   if (!account) return;
 
   const ownerId: string = account.user_id;
-  const accessToken = decryptToken(account.access_token_cipher) ?? process.env.IG_TEST_ACCESS_TOKEN ?? null;
+  const accessToken =
+    decryptToken(account.access_token_cipher, { userId: ownerId, field: "connected_accounts.access_token_cipher" }) ??
+    process.env.IG_TEST_ACCESS_TOKEN ??
+    null;
 
   /* ── 1) 수신 메시지: '수신거부' 답장 → 옵트아웃 등록 ── */
   for (const msg of entry.messaging ?? []) {

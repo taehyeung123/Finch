@@ -112,7 +112,7 @@ export async function GET(request: Request) {
        이후 갱신 경로(live.ts·크론)는 null 일 때 컬럼을 아예 건드리지 않는다. */
     const followersCount = (await fetchThreadsFollowersCount(info.id, longLived.accessToken)) ?? 0;
 
-    const cipher = encryptToken(longLived.accessToken);
+    const cipher = encryptToken(longLived.accessToken, { userId: user.id, field: "connected_accounts.access_token_cipher" });
     if (!cipher) {
       return settingsRedirect(origin, { connect: "error", reason: "encrypt_failed" });
     }

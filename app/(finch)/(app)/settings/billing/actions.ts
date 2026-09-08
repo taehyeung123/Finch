@@ -193,7 +193,7 @@ export async function changePlan(formData: FormData): Promise<void> {
 
   if (targetAmount > currentAmount) {
     // ── 업그레이드: 즉시 새 플랜 전체 금액 청구 ──
-    const billingKey = decryptToken(sub.billing_key_cipher);
+    const billingKey = decryptToken(sub.billing_key_cipher, { userId: user.id, field: "subscriptions.billing_key_cipher" });
     if (!billingKey) {
       planRedirect({ planError: "결제 수단을 확인할 수 없어요. 카드를 다시 등록해 주세요." });
     }

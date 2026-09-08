@@ -76,6 +76,8 @@ function daysUntil(iso: string | null): number | null {
 
 interface AccountRow {
   id: string;
+  /** 암호문 AAD 에 들어간다 — 이 행이 «누구 것인가»(2026-09-08, v2 토큰 포맷) */
+  user_id: string;
   platform_user_id: string | null;
   handle: string;
   display_name: string | null;
@@ -210,7 +212,7 @@ type RefreshFn = (token: string) => Promise<{ accessToken: string; expiresInSeco
  * refresh 함수는 채널별로 다르다(기본값 인스타그램) — Threads는 refreshThreadsLongLivedToken을 넘긴다.
  */
 async function ensureFreshToken(row: AccountRow, refresh: RefreshFn = refreshLongLivedToken): Promise<string | null> {
-  const token = decryptToken(row.access_token_cipher);
+  const token = decryptToken(row.access_token_cipher, { userId: row.user_id, field: "connected_accounts.access_token_cipher" });
   if (!token) return null;
 
   const remaining = daysUntil(row.token_expires_at);
@@ -221,7 +223,7 @@ async function ensureFreshToken(row: AccountRow, refresh: RefreshFn = refreshLon
   if (remaining !== null && remaining <= 10) {
     try {
       const refreshed = await refresh(token);
-      const cipher = encryptToken(refreshed.accessToken);
+      const cipher = encryptToken(refreshed.accessToken, { userId: row.user_id, field: "connected_accounts.access_token_cipher" });
       if (cipher) {
         /* 갱신된 암호문 저장도 service_role 로 한다(0085). 부수 효과로 **팀원이 볼 때도 갱신이 실제로 저장된다** —
            예전 세션 클라이언트 경로는 RLS 쓰기 정책이 본인 행만 허용해서 팀원 화면에서는 조용히 실패했다. */
@@ -256,7 +258,7 @@ function hoursUntil(iso: string | null): number | null {
  * 매 요청마다 불필요하게 갱신을 시도하게 된다. 그래서 시간 단위(hoursUntil)로 별도 판단한다.
  */
 async function ensureFreshTiktokToken(row: AccountRow): Promise<string | null> {
-  const currentToken = decryptToken(row.access_token_cipher);
+  const currentToken = decryptToken(row.access_token_cipher, { userId: row.user_id, field: "connected_accounts.access_token_cipher" });
   const remainingHours = hoursUntil(row.token_expires_at);
 
   // 1시간 넘게 남았으면 그대로 사용 (여유 버퍼 — 요청 처리 중 만료되는 것을 방지)
@@ -264,7 +266,7 @@ async function ensureFreshTiktokToken(row: AccountRow): Promise<string | null> {
     return currentToken;
   }
 
-  const refreshToken = decryptToken(row.refresh_token_cipher ?? null);
+  const refreshToken = decryptToken(row.refresh_token_cipher ?? null, { userId: row.user_id, field: "connected_accounts.refresh_token_cipher" });
   const config = getTiktokOAuthConfig();
   if (!refreshToken || !config) {
     // 리프레시 토큰(0011 미적용 DB 포함)·앱 자격증명 중 하나라도 없으면 갱신 불가 —
@@ -274,8 +276,8 @@ async function ensureFreshTiktokToken(row: AccountRow): Promise<string | null> {
 
   try {
     const refreshed = await refreshTiktokToken(refreshToken, config);
-    const accessCipher = encryptToken(refreshed.accessToken);
-    const refreshCipher = encryptToken(refreshed.refreshToken);
+    const accessCipher = encryptToken(refreshed.accessToken, { userId: row.user_id, field: "connected_accounts.access_token_cipher" });
+    const refreshCipher = encryptToken(refreshed.refreshToken, { userId: row.user_id, field: "connected_accounts.refresh_token_cipher" });
     if (accessCipher && refreshCipher) {
       /* 저장은 service_role 로 — ensureFreshToken 과 같은 이유(0085) */
       const supabase = createAdminClient();

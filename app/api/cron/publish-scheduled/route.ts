@@ -149,7 +149,7 @@ export async function GET(request: Request) {
       .eq("channel", channel)
       .eq("connected", true)
       .maybeSingle();
-    const token = decryptToken(account?.access_token_cipher ?? null);
+    const token = decryptToken(account?.access_token_cipher ?? null, { userId: post.user_id, field: "connected_accounts.access_token_cipher" });
     if (!account?.platform_user_id || !token) {
       await fail(`${label} 연동이 끊겼어요 — 설정에서 다시 연동해 주세요`);
       continue;

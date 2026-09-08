@@ -134,7 +134,10 @@ export async function GET(request: Request) {
     }
 
     const account = accountByUser.get(s.user_id);
-    const token = decryptToken(account?.access_token_cipher ?? null) ?? process.env.IG_TEST_ACCESS_TOKEN ?? null;
+    const token =
+      decryptToken(account?.access_token_cipher ?? null, { userId: s.user_id, field: "connected_accounts.access_token_cipher" }) ??
+      process.env.IG_TEST_ACCESS_TOKEN ??
+      null;
     if (!account?.platform_user_id || !token) {
       // 토큰 여전히 없음 — pending 유지 (7일 창 내 다음 실행에서 재시도)
       skipped++;

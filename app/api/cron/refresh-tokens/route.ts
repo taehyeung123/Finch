@@ -127,7 +127,7 @@ async function processSubscriptions(admin: Admin) {
     const billedPlan: PaidPlan = isPaidPlan(subPendingPlan) ? subPendingPlan : subPlan;
     const amount = PLAN_PRICES[billedPlan];
     const planName = PLAN_NAMES[billedPlan];
-    const billingKey = decryptToken(sub.billing_key_cipher);
+    const billingKey = decryptToken(sub.billing_key_cipher, { userId: sub.user_id, field: "subscriptions.billing_key_cipher" });
 
     const failCharge = async (reason: string) => {
       const nextRetry = (sub.billing_retry_count ?? 0) + 1;
@@ -336,7 +336,7 @@ export async function GET(request: Request) {
       // 판별할 수 없다(경계에서 0/음수가 흔하다) — "이미 만료" 조기 종료를 타지 않고 매번
       // refresh_token(365일)으로 갱신을 시도한다. 사실상 이 크론이 매일 하는 일이 된다.
       const config = getTiktokOAuthConfig();
-      const refreshToken = decryptToken(acc.refresh_token_cipher ?? null);
+      const refreshToken = decryptToken(acc.refresh_token_cipher ?? null, { userId: acc.user_id, field: "connected_accounts.refresh_token_cipher" });
       if (!config || !refreshToken) {
         await notifyTokenExpiry(
           admin,
@@ -351,8 +351,8 @@ export async function GET(request: Request) {
       let token: string;
       try {
         const next = await refreshTiktokToken(refreshToken, config);
-        const accessCipher = encryptToken(next.accessToken);
-        const refreshCipher = encryptToken(next.refreshToken);
+        const accessCipher = encryptToken(next.accessToken, { userId: acc.user_id, field: "connected_accounts.access_token_cipher" });
+        const refreshCipher = encryptToken(next.refreshToken, { userId: acc.user_id, field: "connected_accounts.refresh_token_cipher" });
         if (!accessCipher || !refreshCipher) throw new Error("encrypt_failed");
         const { error: upErr } = await admin
           .from("connected_accounts")
@@ -425,7 +425,7 @@ export async function GET(request: Request) {
       continue;
     }
 
-    let token = decryptToken(acc.access_token_cipher);
+    let token = decryptToken(acc.access_token_cipher, { userId: acc.user_id, field: "connected_accounts.access_token_cipher" });
     if (!token) {
       // 암호화 키 불일치 등 — 복호화 불가면 재연동 외 방법 없음
       await notifyTokenExpiry(admin, acc.user_id, channel, `${acc.handle} 연동 토큰을 확인할 수 없어요. 설정에서 다시 연동해 주세요.`);
@@ -437,7 +437,7 @@ export async function GET(request: Request) {
     if (remaining <= REFRESH_WINDOW_DAYS) {
       try {
         const next = await refreshTokenForChannel(channel, token);
-        const cipher = encryptToken(next.accessToken);
+        const cipher = encryptToken(next.accessToken, { userId: acc.user_id, field: "connected_accounts.access_token_cipher" });
         if (!cipher) throw new Error("encrypt_failed");
         const { error: upErr } = await admin
           .from("connected_accounts")
