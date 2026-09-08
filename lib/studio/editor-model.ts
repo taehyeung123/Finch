@@ -33,13 +33,30 @@ export const FONT_OPTIONS: { label: string; family: string }[] = [
   { label: "리디바탕", family: "RIDIBatang" },
 ];
 
-/** 편집기 마운트 시 <style>로 주입하는 @font-face 정의 (jsdelivr — CSP 허용 오리진) */
+/*
+  편집기 마운트 시 <style>로 주입하는 @font-face 정의 (jsdelivr — CSP 허용 오리진).
+
+  ⚠️ **커밋 SHA 로 고정한다. 태그(@1.1)로 되돌리지 말 것.**
+  예전엔 제3자 GitHub 계정의 **옮길 수 있는 태그**를 가리켰다(2026-09-08 보안 감사).
+  jsdelivr 는 gh 경로를 `immutable, max-age=31536000` 으로 주므로, 그 계정이 탈취돼 태그가 옮겨지면
+  새로 받는 클라이언트가 바뀐 글꼴을 그대로 먹고 우리는 알 방법이 없다.
+  그리고 `@font-face src` 에는 **SRI 를 걸 수 없다**(정의상 불가) — 내용주소(SHA)가 유일한 고정 수단이다.
+
+  왜 이게 그냥 «글꼴 문제»가 아닌가: 여기 받은 글꼴은 Konva 캔버스로 들어가 1080px PNG 로 내보내진다.
+  글리프가 바뀌면 **고객이 만든 카드가 조용히 다른 글자로 나간다.**
+
+  SHA 는 각 저장소의 그 태그가 가리키던 커밋이고, 바이트가 동일함을 실측으로 확인했다(2026-09-08):
+    noonfonts_2001  v1.1 → e43438c…  (GmarketSans Medium·Bold)
+    noonfonts_one   v1.0 → 40fb96c…  (BMDOHYEON·BMJUA)
+    noonfonts_twelve v1.0 → 918ab62… (RIDIBatang)
+  글꼴을 갱신할 때는 새 SHA 를 **받아서 바이트를 대조한 뒤** 바꾼다.
+*/
 export const FONT_FACE_CSS = `
-@font-face { font-family: 'GmarketSans'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansMedium.woff') format('woff'); font-weight: 400; font-display: swap; }
-@font-face { font-family: 'GmarketSans'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansBold.woff') format('woff'); font-weight: 700; font-display: swap; }
-@font-face { font-family: 'BMDOHYEON'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_one@1.0/BMDOHYEON.woff') format('woff'); font-display: swap; }
-@font-face { font-family: 'BMJUA'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_one@1.0/BMJUA.woff') format('woff'); font-display: swap; }
-@font-face { font-family: 'RIDIBatang'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_twelve@1.0/RIDIBatang.woff') format('woff'); font-display: swap; }
+@font-face { font-family: 'GmarketSans'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@e43438c75f69f3346041b50e4d01daa957c34f86/GmarketSansMedium.woff') format('woff'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'GmarketSans'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@e43438c75f69f3346041b50e4d01daa957c34f86/GmarketSansBold.woff') format('woff'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'BMDOHYEON'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_one@40fb96ceb772b1b734b9569ffbb91721309bdd2b/BMDOHYEON.woff') format('woff'); font-display: swap; }
+@font-face { font-family: 'BMJUA'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_one@40fb96ceb772b1b734b9569ffbb91721309bdd2b/BMJUA.woff') format('woff'); font-display: swap; }
+@font-face { font-family: 'RIDIBatang'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_twelve@918ab627023438babbc44544fe9102d54cf09cea/RIDIBatang.woff') format('woff'); font-display: swap; }
 `;
 
 /** 글씨 굵기 단계 — Konva fontStyle에 숫자 웨이트 문자열로 전달된다 */

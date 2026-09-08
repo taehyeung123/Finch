@@ -14,6 +14,7 @@
 */
 
 import { SNS_CATALOG } from "./sns-catalog";
+import { FONT_PKG_VERSIONS } from "./font-versions";
 
 export interface LinkTheme {
   key: string;
@@ -193,11 +194,21 @@ export const LINK_FONTS: ReadonlyArray<{ key: string; label: string; family: str
   { key: "caveat", label: "Caveat", family: '"Caveat", "Nanum Pen Script", var(--font-pretendard), "Pretendard Variable", "Noto Sans KR", "Apple SD Gothic Neo", cursive', pkg: "caveat", bold: true },
 ];
 
-/** 글꼴 스타일시트 주소 — 공개 페이지·편집 미리보기가 <link rel="stylesheet"> 로 싣는다 */
+/**
+ * 글꼴 스타일시트 주소 — 공개 페이지·편집 미리보기가 <link rel="stylesheet"> 로 싣는다.
+ *
+ * ⚠️ **버전을 정확히 고정한다. `@5` 같은 범위로 되돌리지 말 것**(2026-09-08 보안 감사).
+ * 범위를 쓰면 우리가 아무것도 배포하지 않아도 공개 프로필 전 방문자에게 실리는 CSS 가 바뀔 수 있다.
+ * 버전표는 lib/links/font-versions.ts — 표에 없는 패키지는 **아무것도 싣지 않는다**(범위로 폴백하지 않는다).
+ * 글꼴을 추가할 때 표를 같이 안 채우면 그 글꼴만 시스템 폰트로 떨어진다 —
+ * «편집기에서 본 것과 발행본이 다르다»가 되지 않게, 추가 시 두 파일을 반드시 함께 고친다.
+ */
 export function fontStylesheets(fontKey: string | undefined): string[] {
   const f = LINK_FONTS.find((x) => x.key === fontKey);
   if (!f || !f.pkg) return [];
-  const base = `https://cdn.jsdelivr.net/npm/@fontsource/${f.pkg}@5`;
+  const ver = FONT_PKG_VERSIONS[f.pkg];
+  if (!ver) return [];
+  const base = `https://cdn.jsdelivr.net/npm/@fontsource/${f.pkg}@${ver}`;
   return f.bold ? [`${base}/index.css`, `${base}/700.css`] : [`${base}/index.css`];
 }
 
