@@ -52,26 +52,30 @@ export default function CompetitorAdsPage() {
           <p className="text-[15px] font-semibold">한국 상업 광고는 Meta 광고 라이브러리 API로 자동 수집되지 않습니다</p>
           <p className="mt-1 text-[14px] leading-relaxed text-fg-sub">
             Meta는 2023년 DSA 이후 상업(비정치) 광고를 EU·영국 노출 광고에 한해서만 API로 제공합니다. 한국을 포함한
-            그 외 지역은 정치·사회 이슈 광고만 조회할 수 있어, 한국 브랜드의 광고는 자동 수집 대상이 아닙니다. 아래 피드는
-            기능 예시이며, 한국 경쟁사는{" "}
+            그 외 지역은 정치·사회 이슈 광고만 조회할 수 있어, 한국 브랜드의 광고는 자동 수집 대상이 아닙니다.
+            한국 브랜드의 광고는{" "}
             {/* text-primary 는 흰 지면에서 2.82:1 — 본문 링크에 못 쓴다. 같은 성격의 링크가
-                  /competitors 에서 쓰는 primary-ink 로 맞춘다. */}
-              <Link href="/competitors" className="font-semibold text-primary-ink underline underline-offset-2">
-              경쟁사 비교
+                  /competitors 에서 쓰는 primary-ink 로 맞춘다.
+                  ⚠️ /competitors 로 보내지 말 것 — 그 화면도 실 모드에서는 비어 있어 고리가 된다(2026-09-08). */}
+              <Link href="/library" className="font-semibold text-primary-ink underline underline-offset-2">
+              레퍼런스
             </Link>{" "}
-            탭의 공개 프로필·게시물 지표로 분석하는 것을 권장합니다.
+            에서 브랜드 이름이나 키워드로 직접 모으실 수 있어요.
           </p>
         </div>
       </Card>
 
       {/* 빈 데이터(실 모드)에서 "0개 추적", 빈 피드, "하루 4회 감지" 약속만 남아
-          화면이 거짓말을 하던 것을 막는다. 광고가 하나도 없으면 안내로 대체한다. */}
+          화면이 거짓말을 하던 것을 막는다.
+          ⚠️ 예전에는 여기서 /competitors 로 보냈는데, 그 화면의 빈 상태는 다시 여기로 보냈다 —
+          «경쟁사 등록»은 아직 만들어지지 않은 기능이라 두 화면을 오가기만 하는 고리였다(2026-09-08).
+          그래서 **지금 실제로 되는 곳**(레퍼런스의 광고 수집)으로 보낸다. */}
       {competitorAds.length === 0 ? (
         <EmptyState
           icon={Megaphone}
-          title="아직 감지된 경쟁사 광고가 없어요"
-          description="경쟁사를 등록하면 Meta 광고 라이브러리에서 새 광고를 하루 4회 확인해 여기에 모읍니다."
-          action={<ButtonLink href="/competitors">경쟁사 관리</ButtonLink>}
+          title="아직 모아 둔 경쟁사 광고가 없어요"
+          description="이 화면은 준비 중이에요. 지금은 레퍼런스에서 브랜드 이름이나 키워드로 집행 중인 광고를 직접 모을 수 있어요."
+          action={<ButtonLink href="/library">레퍼런스에서 광고 모으기</ButtonLink>}
         />
       ) : (
         <>

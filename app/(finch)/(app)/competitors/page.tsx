@@ -97,11 +97,13 @@ export default function CompetitorsPage() {
           </Button>
         </form>
         <p id="competitor-add-notice" className="mt-2 text-[14px] text-fg-sub">
-          경쟁사 직접 등록은 채널 연동 이후 제공됩니다. 지금은{" "}
-          <Link href="/competitors/ads" className="font-semibold text-primary-ink hover:underline">
-            경쟁사 광고 모니터링
+          {/* ⚠️ 여기서 /competitors/ads 로 보내지 말 것 — 그 화면도 실 모드에서는 비어 있어
+              두 화면을 오가기만 하는 고리가 된다(2026-09-08). 지금 실제로 되는 곳으로 보낸다. */}
+          경쟁사 직접 등록은 준비 중이에요. 지금은{" "}
+          <Link href="/library" className="font-semibold text-primary-ink hover:underline">
+            레퍼런스
           </Link>
-          에서 실제 집행 중인 광고를 확인할 수 있어요.
+          에서 계정 이름이나 키워드로 잘 되는 콘텐츠와 집행 중인 광고를 모을 수 있어요.
         </p>
         <p className="mt-2 text-xs text-fg-faint">
           유사 검색은 지원되지 않아 정확한 사용자명(핸들)이 필요합니다. Instagram은 공개 비즈니스·크리에이터
@@ -114,9 +116,9 @@ export default function CompetitorsPage() {
       {competitors.length === 0 ? (
         <EmptyState
           icon={Users}
-          title="아직 등록된 경쟁사가 없어요"
-          description="경쟁사 직접 등록은 채널 연동 이후 제공됩니다. 지금은 실제 집행 중인 광고를 확인할 수 있어요."
-          action={<ButtonLink href="/competitors/ads">경쟁사 광고 보기</ButtonLink>}
+          title="경쟁사 분석은 준비 중이에요"
+          description="지금은 레퍼런스에서 계정 이름이나 키워드로 잘 되는 콘텐츠와 집행 중인 광고를 모을 수 있어요."
+          action={<ButtonLink href="/library">레퍼런스 열기</ButtonLink>}
         />
       ) : (
         <>
