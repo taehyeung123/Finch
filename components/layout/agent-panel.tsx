@@ -27,6 +27,8 @@ const PRESETS = [
   "이 주제로 카드뉴스 만들어줘",
 ];
 
+/* **예시 화면 전용** 답변. 실제 모드에서는 절대 부르지 않는다 — 여기 숫자는 지어낸 값이라
+   고객이 자기 지표로 읽으면 그게 곧 거짓말이다(agentChat 의 state 가 "demo" 일 때만 쓴다). */
 function mockReply(q: string): AgentMessage {
   if (q.includes("인스타") || q.includes("어때") || q.includes("성과")) {
     return {
@@ -89,11 +91,24 @@ export function AgentPanel() {
     setThinking(true);
     scrollToEnd();
     try {
-      // 실호출 — 실패/데모/키 미설정이면 null → 목 응답 폴백
-      const reply = await agentChat(nextHistory.map((m) => ({ role: m.role, text: m.text })));
-      setMessages((prev) => [...prev, reply ? { role: "agent", ...reply } : mockReply(q)]);
+      /* 실호출. 결과는 셋이다 — 답 / 예시 화면 / 지금은 못 함.
+         ⚠️ 셋을 뭉개서 예시 답변으로 폴백하면 안 된다. 예시에는 팔로워·조회수 숫자가 들어 있어서,
+         실제 고객이 호출 실패 때 **자기 숫자인 줄 알고 읽는다**(2026-09-07 감사).
+         지어낸 지표를 실데이터처럼 보여 주는 것은 이 제품이 파는 것과 정반대다. */
+      const res = await agentChat(nextHistory.map((m) => ({ role: m.role, text: m.text })));
+      setMessages((prev) => [
+        ...prev,
+        res.state === "ok"
+          ? { role: "agent" as const, ...res.reply }
+          : res.state === "demo"
+            ? mockReply(q)
+            : { role: "agent" as const, text: res.text },
+      ]);
     } catch {
-      setMessages((prev) => [...prev, mockReply(q)]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "agent" as const, text: "지금은 답을 불러오지 못했어요. 잠시 후 다시 물어봐 주세요." },
+      ]);
     } finally {
       setThinking(false);
       scrollToEnd();

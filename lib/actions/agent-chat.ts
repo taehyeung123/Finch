@@ -9,7 +9,13 @@ import { fetchAccountInsightsRange } from "@/lib/meta/instagram";
 
 /**
  * AI 에이전트 챗 v1 — Claude 실호출 + 연동 계정 실지표 컨텍스트 주입.
- * 데모 모드·키 미설정·오류 시 null 반환 → 클라이언트가 기존 목 응답으로 폴백.
+ *
+ * ⚠️ **null 을 돌려주지 않는다.** 예전엔 데모·키 미설정·오류를 전부 null 하나로 뭉갰고,
+ * 화면은 그걸 받아 «예시 답변»을 대신 띄웠다. 그 예시에는 팔로워 4만 8,200명·조회 62만 회 같은
+ * 숫자가 들어 있어서, **실제 고객이 호출 실패 때 자기 숫자인 줄 알고 읽었다**(2026-09-07 감사).
+ * 지어낸 지표를 실데이터처럼 보여 주는 것은 이 제품이 파는 것과 정반대다.
+ * 그래서 결과를 «답 / 예시 / 지금은 못 함» 셋으로 갈라서 돌려준다 — 화면이 셋을 다르게 그린다.
+ *
  * v2(후속): function calling으로 트렌드 검색·카드뉴스 생성 직접 실행.
  */
 
@@ -22,6 +28,21 @@ export interface AgentChatReply {
   text: string;
   linkCard?: { href: string; label: string };
 }
+
+/**
+ * 챗 결과.
+ *  · ok      — 진짜 답변
+ *  · demo    — 예시 화면. 화면이 «예시 답변»임을 밝히고 샘플을 보여줘도 된다.
+ *  · failed  — 실제 모드인데 답을 못 받았다. **샘플을 보여주면 안 된다.**
+ */
+export type AgentChatResult =
+  | { state: "ok"; reply: AgentChatReply }
+  | { state: "demo" }
+  | { state: "failed"; text: string };
+
+/** 실패 시 화면에 그대로 나가는 문구 — 무엇이 안 됐고 무엇을 하면 되는지만 말한다 */
+const FAILED_TEXT = "지금은 답을 불러오지 못했어요. 잠시 후 다시 물어봐 주세요.";
+const LOGIN_TEXT = "로그인하면 연동한 계정 지표를 근거로 답해 드릴 수 있어요.";
 
 /** 링크 카드로 안내 가능한 화면 — 스키마 enum과 1:1 */
 const ROUTES = [
@@ -78,16 +99,18 @@ async function buildAccountContext(): Promise<string> {
   }
 }
 
-export async function agentChat(history: AgentChatMessage[]): Promise<AgentChatReply | null> {
-  if (isDemoMode()) return null;
+export async function agentChat(history: AgentChatMessage[]): Promise<AgentChatResult> {
+  if (isDemoMode()) return { state: "demo" };
   const claude = createClaudeClient();
-  if (!claude) return null;
+  /* 키가 없는 것은 **운영 설정 문제**다 — 고객에게는 «지금은 안 된다»로만 보이면 되고,
+     예시 숫자를 보여 주면 안 된다(그건 실제 모드다). */
+  if (!claude) return { state: "failed", text: FAILED_TEXT };
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return null;
+  if (!user) return { state: "failed", text: LOGIN_TEXT };
 
   /* 메시지 상한. 건당 비용은 작지만 상한이 없으면 누적이 무제한이다 —
      로그인만 하면 누구나 무한히 부를 수 있는 유료 호출이었다(2026-08-11 감사).
@@ -99,7 +122,10 @@ export async function agentChat(history: AgentChatMessage[]): Promise<AgentChatR
     reason: "agent_chat",
   });
   if (!charge.ok) {
-    return { text: charge.error, linkCard: { href: "/settings/billing", label: "요금제 보기" } };
+    return {
+      state: "ok",
+      reply: { text: charge.error, linkCard: { href: "/settings/billing", label: "요금제 보기" } },
+    };
   }
 
   const context = await buildAccountContext();
@@ -142,17 +168,20 @@ export async function agentChat(history: AgentChatMessage[]): Promise<AgentChatR
       })),
     });
 
-    if (response.stop_reason === "refusal") return null;
+    if (response.stop_reason === "refusal") return { state: "failed", text: FAILED_TEXT };
     const block = response.content.find((b) => b.type === "text");
-    if (!block || block.type !== "text") return null;
+    if (!block || block.type !== "text") return { state: "failed", text: FAILED_TEXT };
     const parsed = JSON.parse(block.text) as { text: string; linkHref: string; linkLabel: string };
-    if (!parsed.text) return null;
+    if (!parsed.text) return { state: "failed", text: FAILED_TEXT };
     return {
-      text: parsed.text,
-      linkCard:
-        parsed.linkHref && parsed.linkLabel && (ROUTES as readonly string[]).includes(parsed.linkHref)
-          ? { href: parsed.linkHref, label: parsed.linkLabel }
-          : undefined,
+      state: "ok",
+      reply: {
+        text: parsed.text,
+        linkCard:
+          parsed.linkHref && parsed.linkLabel && (ROUTES as readonly string[]).includes(parsed.linkHref)
+            ? { href: parsed.linkHref, label: parsed.linkLabel }
+            : undefined,
+      },
     };
   } catch (e) {
     // 답을 못 줬으면 차감분을 돌려준다 — 실패한 요청에 돈을 받으면 안 된다
@@ -160,6 +189,6 @@ export async function agentChat(history: AgentChatMessage[]): Promise<AgentChatR
       await refundGenerationCredits(charge.userId, CREDIT_COSTS.agentChat, "agent_chat_fail_refund");
     }
     console.error("[agent-chat] 호출 실패:", e instanceof Error ? e.message : String(e));
-    return null;
+    return { state: "failed", text: FAILED_TEXT };
   }
 }
