@@ -2,6 +2,7 @@ import { NextResponse, after } from "next/server";
 import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptToken } from "@/lib/crypto/tokens";
+import { recipientHash, recipientHashes } from "@/lib/auto-dm/recipient-hash";
 import { sendPrivateReply, replyToComment } from "@/lib/meta/graph";
 import { applyAdDisclosure } from "@/lib/ads/ad-disclosure";
 import { parseButtons, parseReplies, NEXT_POST_SENTINEL } from "@/lib/auto-dm/db";
@@ -65,9 +66,15 @@ function signatureValid(rawBody: string, header: string | null, appSecret: strin
   }
 }
 
-/** 수신자 식별은 원문 id가 아니라 해시로만 저장 (개인정보 최소수집) */
-function hashRecipient(igUserId: string): string {
-  return crypto.createHash("sha256").update(igUserId).digest("hex");
+/* 수신자 식별은 원문 id 가 아니라 해시로만 저장한다(개인정보 최소수집).
+   ⚠️ 해시 계산은 lib/auto-dm/recipient-hash.ts 한 곳이다 — 여기서 손으로 sha256 을 다시 쓰지 말 것.
+   키 없는 sha256 은 «어떤 게시물에 누가 댓글을 달았는지»가 공개 정보라 후보 대조로 되짚힌다(2026-09-08 감사).
+   조회는 새 해시와 옛 해시를 **함께** 본다 — 옛 방식으로 남은 수신거부를 놓치면
+   수신거부한 사람에게 DM 이 나간다(되돌릴 수 없다). */
+
+/** RPC 가 «함수를 못 찾음»인가 — 0090 적용 전 배포에서 옛 시그니처로 한 번 더 시도하기 위한 판정 */
+function isMissingFunction(msg: string | undefined): boolean {
+  return !!msg && /could not find the function|does not exist/i.test(msg);
 }
 
 /* 채널 토큰 복호화는 lib/crypto/tokens.decryptToken(AES-256-GCM, 서버 전용) 사용.
@@ -195,10 +202,18 @@ async function processEntry(entry: WebhookEntry) {
     // 가드 없이는 우리 자신을 옵트아웃 처리하게 된다
     if (msg.message?.is_echo || senderId === igAccountId) continue;
     if (senderId && text && isOptOutMessage(text)) {
-      const { error: optErr } = await admin.rpc("mark_optout", {
-        p_owner: ownerId,
-        p_user_hash: hashRecipient(senderId),
-      });
+      const h = recipientHashes(senderId);
+      let optErr = (
+        await admin.rpc("mark_optout", {
+          p_owner: ownerId,
+          p_user_hash: h.current,
+          p_user_hash_legacy: h.legacy,
+        })
+      ).error;
+      /* 0090 적용 전 배포 — 옛 시그니처로 한 번 더. 수신거부 등록은 절대 놓치면 안 되는 쓰기다. */
+      if (optErr && isMissingFunction(optErr.message)) {
+        optErr = (await admin.rpc("mark_optout", { p_owner: ownerId, p_user_hash: h.current })).error;
+      }
       if (optErr) console.error("[auto-dm] 옵트아웃 등록 실패:", optErr.message);
     }
   }
@@ -227,7 +242,7 @@ async function processEntry(entry: WebhookEntry) {
     const logRow = {
       ig_comment_id: event.commentId,
       media_id: event.mediaId,
-      from_id: hashRecipient(event.fromId),
+      from_id: recipientHash(event.fromId),
       verb: "comment",
     };
     let logErr = (await admin.from("webhook_events").insert({ ...logRow, user_id: ownerId })).error;
@@ -284,13 +299,26 @@ async function processEntry(entry: WebhookEntry) {
 
     // 멱등 예약 — 중복 웹훅·댓글당 1회·하루 상한·옵트아웃·24h 쿨다운을 DB가 원자적으로 판정.
     // 월 한도는 폐지(2026-08-14) — 실질 무제한 값으로 함수 시그니처만 유지한다.
-    const { data: sendId, error: reserveErr } = await admin.rpc("reserve_dm_send", {
+    const rh = recipientHashes(event.fromId);
+    let reserve = await admin.rpc("reserve_dm_send", {
       p_owner: ownerId,
       p_rule_id: rule.id,
       p_comment_id: event.commentId,
-      p_user_hash: hashRecipient(event.fromId),
+      p_user_hash: rh.current,
       p_monthly_limit: MONTHLY_LIMIT_UNLIMITED,
+      p_user_hash_legacy: rh.legacy,
     });
+    if (reserve.error && isMissingFunction(reserve.error.message)) {
+      /* 0090 적용 전 배포 — 옛 시그니처로 한 번 더. 여기서 멈추면 자동 DM 이 통째로 죽는다. */
+      reserve = await admin.rpc("reserve_dm_send", {
+        p_owner: ownerId,
+        p_rule_id: rule.id,
+        p_comment_id: event.commentId,
+        p_user_hash: rh.current,
+        p_monthly_limit: MONTHLY_LIMIT_UNLIMITED,
+      });
+    }
+    const { data: sendId, error: reserveErr } = reserve;
     if (reserveErr) {
       console.error("[auto-dm] 발송 예약 실패:", event.commentId, reserveErr.message);
       continue;
