@@ -102,6 +102,18 @@ export async function generateViewport({ params }: { params: Promise<{ slug: str
   이걸 안 넘기면 canonical·og:url 이 **아무도 쓰지 않는 내부 주소**를 가리켜,
   수집기가 정본을 그쪽으로 잡고 공유 카드 링크도 그 주소로 나간다(2026-08-29 쏘넷 점검).
 */
+
+/**
+ * 문서 제목에 «| 핀치» 를 붙인다 — 단, **이미 핀치인 제목에는 붙이지 않는다.**
+ * 핀치 공식 프로필(finch.ai.kr/profile)의 탭 제목이 «핀치 | 핀치» 로 나오고 있었다(2026-09-08 실측).
+ * 우리 자신에게 먼저 어색한 문구는 같은 이름을 쓰는 고객에게도 어색하다.
+ */
+function brandedTitle(title: string): string {
+  const t = title.trim();
+  if (t === "핀치" || t === "Finch" || /(\||·|-)\s*핀치$/.test(t)) return t;
+  return `${t} | 핀치`;
+}
+
 export async function generateMetadata({ params, urlBase }: { params: Promise<{ slug: string }>; urlBase?: string }): Promise<Metadata> {
   const { slug } = await params;
   const canonicalPath = `/${urlBase ?? slug}`;
@@ -130,7 +142,7 @@ export async function generateMetadata({ params, urlBase }: { params: Promise<{ 
        «| 핀치»를 짧게 붙인다(2026-08-29 검색 노출 지시) — 검색 결과·브라우저 탭에는
        브랜드가 실리고, 카카오톡·인스타 DM 공유 카드는 아래 openGraph.title(접미사 없음)을
        읽으므로 사용자 브랜드만 나간다. 두 경로가 다른 필드를 보는 걸 이용한 분리다. */
-    title: { absolute: `${title} | 핀치` },
+    title: { absolute: brandedTitle(title) },
     description,
     alternates: { canonical: canonicalPath },
     /* openGraph 를 정의하지 않으면 루트 레이아웃의 핀치 OG 이미지·siteName 을 그대로
