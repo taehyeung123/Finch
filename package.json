@@ -4,10 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/check-vercel-json.mjs --pro && next build",
+    "build": "node scripts/check-vercel-json.mjs --pro && node scripts/check-migrations-doc.mjs && next build",
     "start": "next start",
     "lint": "eslint",
-    "check:vercel": "node scripts/check-vercel-json.mjs --pro"
+    "check:vercel": "node scripts/check-vercel-json.mjs --pro",
+    "check:migrations": "node scripts/check-migrations-doc.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
