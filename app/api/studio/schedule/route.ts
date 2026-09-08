@@ -135,6 +135,14 @@ export async function POST(request: Request) {
 
   const batchId = randomUUID();
   const imageUrls: string[] = [];
+  /* 올린 객체 경로를 함께 모은다 — 아래 저장이 실패하면 **되돌려 지운다**.
+     예전에는 그냥 두어 고아가 됐다: 저장에 실패한 카드뉴스가 공개 주소로 영원히 남았다(2026-09-08 감사). */
+  const uploaded: string[] = [];
+  const rollbackUploads = async () => {
+    if (uploaded.length === 0) return;
+    const { error: rmErr } = await supabase.storage.from("cardnews").remove(uploaded);
+    if (rmErr) console.error("[studio:schedule] 업로드 롤백 실패:", rmErr.message);
+  };
   for (let i = 0; i < images.length; i++) {
     const file = images[i];
     const buf = Buffer.from(await file.arrayBuffer());
@@ -145,8 +153,10 @@ export async function POST(request: Request) {
     });
     if (upErr) {
       console.error("[studio:schedule] 이미지 업로드 실패:", upErr.message);
+      await rollbackUploads();
       return NextResponse.json({ error: "이미지 업로드에 실패했어요. 다시 시도해 주세요." }, { status: 500 });
     }
+    uploaded.push(objectPath);
     const { data: pub } = supabase.storage.from("cardnews").getPublicUrl(objectPath);
     imageUrls.push(pub.publicUrl);
   }
@@ -160,6 +170,7 @@ export async function POST(request: Request) {
   });
   if (insertErr) {
     console.error("[studio:schedule] 예약 등록 실패:", insertErr.message);
+    await rollbackUploads();
     return NextResponse.json({ error: "예약 등록에 실패했어요. 다시 시도해 주세요." }, { status: 500 });
   }
 

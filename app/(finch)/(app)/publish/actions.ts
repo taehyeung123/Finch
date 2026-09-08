@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
+import { storagePathsFromPublicUrls } from "@/lib/storage/public-url";
 import { isDemoMode } from "@/lib/supabase/config";
 import { earliestPublishDate } from "@/lib/calendar";
 import { eulReul } from "@/lib/josa";
@@ -178,15 +179,25 @@ export async function deleteDraft(id: string): Promise<{ ok: boolean; error?: st
     .delete()
     .eq("id", id)
     .in("status", ["draft", "failed"])
-    .select("id");
+    .select("id, image_urls");
   if (error) {
     console.error("[publish] 삭제 실패:", error.message);
     return { ok: false, error: "삭제하지 못했어요." };
   }
   if (!data || data.length === 0) return { ok: false, error: "이미 처리된 글이에요." };
-  /* Storage 의 이미지는 남는다 — cardnews 버킷은 본인 폴더 RLS 라 새는 건 아니지만
-     고아 객체가 된다. 버킷 정리는 별도 배치로 다룬다(여기서 지우면 삭제 실패 시
-     DB 는 지워졌는데 이미지만 남거나 그 반대가 되는 부분 실패가 생긴다). */
+  /* 이미지도 **실제로** 지운다(2026-09-08 감사).
+     예전에는 행만 지우고 객체를 남겼다 — 화면은 「되돌릴 수 없어요」라고 말하는데,
+     이미 퍼진 공개 주소로는 그 사진이 계속 받아졌다. 개인정보처리방침도 「복구 불가능한
+     방법으로 삭제」라고 확언한다. 여기 image_urls 는 **이 행 전용**이라(요청마다 새 uuid 로
+     올리고 «글 복제» 기능이 없다) 지워도 다른 행이 깨지지 않는다.
+     ⚠️ 나중에 «글 복제»를 만들면 URL 이 공유되므로 이 삭제를 다시 생각해야 한다.
+     순서: DB 먼저, Storage 는 best-effort — 반대로 하면 객체는 지웠는데 행이 남아
+     발행 때 404 가 된다. 되짚지 못한 URL 은 지우지 않는다(storagePathsFromPublicUrls). */
+  const paths = storagePathsFromPublicUrls((data[0] as { image_urls?: unknown }).image_urls, "cardnews", user.id);
+  if (paths.length > 0) {
+    const { error: rmErr } = await supabase.storage.from("cardnews").remove(paths);
+    if (rmErr) console.error("[publish] 초안 이미지 삭제 실패(행은 지워짐):", rmErr.message);
+  }
   return { ok: true };
 }
 
@@ -301,6 +312,9 @@ export async function createPost(input: {
      전부 올린 뒤에 insert 한다: insert 먼저 하면 업로드 실패 시 이미지 없는
      행이 남고, 그 행은 배치에서 반드시 실패한다. */
   const urls: string[] = [];
+  /* 올린 객체의 경로를 함께 모은다 — 아래 insert 가 실패하면 **되돌려 지운다**.
+     예전에는 그냥 두어 고아가 됐다: 저장에 실패한 글의 사진이 공개 주소로 영원히 남았다(2026-09-08 감사). */
+  const uploaded: string[] = [];
   for (const dataUrl of images) {
     const m = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(dataUrl);
     if (!m) return { ok: false, error: "PNG·JPG·WEBP 이미지만 올릴 수 있어요." };
@@ -316,8 +330,16 @@ export async function createPost(input: {
       console.error("[publish] 이미지 업로드 실패:", upErr.message);
       return { ok: false, error: "이미지를 올리지 못했어요. 잠시 후 다시 시도해 주세요." };
     }
+    uploaded.push(path);
     urls.push(supabase.storage.from("cardnews").getPublicUrl(path).data.publicUrl);
   }
+
+  /** 저장이 끝내 실패했을 때 방금 올린 객체를 되돌려 지운다 — 실패해도 흐름은 막지 않는다 */
+  const rollbackUploads = async () => {
+    if (uploaded.length === 0) return;
+    const { error: rmErr } = await supabase.storage.from("cardnews").remove(uploaded);
+    if (rmErr) console.error("[publish] 업로드 롤백 실패:", rmErr.message);
+  };
 
   /* channel 은 0053 컬럼 — 미적용 DB 폴백(계단식, auto-dm 0052 와 같은 패턴).
      ⚠️ 스레드는 컬럼이 없으면 **인스타로 저장돼 엉뚱한 계정에 발행**된다. 폴백은
@@ -333,6 +355,7 @@ export async function createPost(input: {
   if (isMissingColumnError(error, /channel/i)) {
     if (channel !== "instagram") {
       console.error("[publish] channel 컬럼 미적용 — 스레드 저장 거절:", error?.message);
+      await rollbackUploads();
       return { ok: false, error: "스레드 발행 준비가 아직 끝나지 않았어요. 잠시 후 다시 시도해 주세요." };
     }
     ({ error } = await supabase.from("scheduled_posts").insert(row));
@@ -344,6 +367,7 @@ export async function createPost(input: {
         0010 의 체크가 위반으로 보지 않는다. 0074 는 그 우연을 명시적 규칙으로 바꾼다.) */
     if (/image_urls/i.test(error.message)) {
       console.error("[publish] image_urls 체크 위반:", error.message);
+      await rollbackUploads();
       return {
         ok: false,
         error:
@@ -353,6 +377,7 @@ export async function createPost(input: {
       };
     }
     console.error("[publish] 게시물 생성 실패:", error.message);
+    await rollbackUploads();
     return { ok: false, error: "저장하지 못했어요. 잠시 후 다시 시도해 주세요." };
   }
 
