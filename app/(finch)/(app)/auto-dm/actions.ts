@@ -87,10 +87,18 @@ async function authorize(): Promise<{ ok: true; userId: string | null } | { ok: 
  */
 async function hasInstagramConnection(
   supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
 ): Promise<boolean | null> {
   const { data, error } = await supabase
     .from("connected_accounts")
     .select("id")
+    /* ⚠️ user_id 로 **반드시 좁힌다** — 0064 의 "accounts read" 정책이 활성 팀원에게
+       **소유자의** 연동 행을 읽혀 준다(2026-09-08 감사). 안 좁히면 자기 계정엔 연동이 없는
+       팀원이 이 관문을 통과하고, 규칙은 user_id=팀원 으로 저장된다. 그런데 댓글 웹훅은
+       IG 계정 → **소유자** user_id 로 규칙을 찾으므로 그 규칙은 **영원히 매칭되지 않는다** —
+       화면은 초록 「실행 중」인데 DM 은 한 통도 안 나간다.
+       app/api/studio/schedule/route.ts 가 이미 쓰는 패턴이다. */
+    .eq("user_id", userId)
     .eq("channel", "instagram")
     .eq("connected", true)
     .limit(1);
@@ -216,7 +224,7 @@ export async function createRule(rawInput: RuleInput): Promise<RuleActionResult>
      연동이 없으면 **이벤트가 도착할 경로 자체가 없다** — 예전엔 그대로 저장하고 초록 「실행 중」 배지까지
      붙여, 고객이 5단계를 다 채우고 댓글을 기다리는데 한 통도 안 나갔다(2026-09-07 감사).
      화면 관문(auto-dm-client)만으로는 부족하다 — 서버 액션은 화면을 거치지 않고도 불릴 수 있다. */
-  const igLinked = await hasInstagramConnection(supabase);
+  const igLinked = await hasInstagramConnection(supabase, auth.userId);
   if (igLinked === false) {
     return { ok: false, error: "인스타그램 계정을 연결하면 자동 DM을 시작할 수 있어요." };
   }

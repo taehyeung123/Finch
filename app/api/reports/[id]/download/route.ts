@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getLiveAudience, getLiveDashboard } from "@/lib/data/live";
 import { renderReportPdf } from "@/lib/reports/pdf";
+import { CSV_BOM, csvRows } from "@/lib/csv";
 
 /**
  * 리포트 다운로드 — 생성 시점이 아니라 다운로드 시점에 라이브 데이터로 파일을 만든다
@@ -10,14 +11,14 @@ import { renderReportPdf } from "@/lib/reports/pdf";
  */
 export const runtime = "nodejs";
 
-function csvCell(v: string | number): string {
-  const s = String(v);
-  return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
-}
-
-function rows(...lines: (string | number)[][]): string {
-  return lines.map((l) => l.map(csvCell).join(",")).join("\r\n");
-}
+/*
+  ⚠️ 지역 CSV 헬퍼를 다시 만들지 말 것 — 여기 있던 것에는 **수식 인젝션 방어가 없었다.**
+  이 파일은 인스타 캡션을 그대로 셀에 넣는데, 그 리포트는 광고주에게 건네는 문서다.
+  캡션이 =HYPERLINK(…) 로 시작하면 받는 사람의 엑셀에서 실행된다(2026-09-08 감사).
+  캐리지리턴이 인용 검사에서 빠져 있어 CRLF 캡션 하나가 표를 한 줄 어긋나게 만들기도 했다.
+  정본은 lib/csv.ts — 프로필 링크 CSV 와 같은 규칙을 쓴다.
+*/
+const rows = (...lines: (string | number)[][]): string => csvRows(lines);
 
 export async function GET(
   _request: Request,
@@ -155,7 +156,7 @@ export async function GET(
     );
   }
 
-  const csv = "﻿" + sections.join("\r\n\r\n") + "\r\n";
+  const csv = CSV_BOM + sections.join("\r\n\r\n") + "\r\n";
   const filename = `finch-report-${report.created_at?.slice(0, 10) ?? "export"}.csv`;
 
   return new NextResponse(csv, {

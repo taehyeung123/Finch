@@ -51,6 +51,11 @@ export default async function AutoDmPage() {
     rules = [];
     try {
       const supabase = await createClient();
+      /* 연동 조회를 «내 것»으로 좁히려면 사용자 id 가 필요하다 — 레이아웃 가드가 이미 비로그인을 막지만
+         여기서도 없으면 빈 문자열로 좁혀 0행이 나오게 한다(«확인 못 함»이 아니라 «없음»이 맞다). */
+      const {
+        data: { user: pageUser },
+      } = await supabase.auth.getUser();
       // buttons/post_thumb(0038) 미적용 DB 폴백 — 컬럼 오류 시 legacy 셋으로 재조회
       /* 컬럼 폴백은 한 단계씩 — 0052 만 없으면 0038·0042 컬럼은 그대로 읽는다.
          폴백 발동 여부는 반환값으로 알린다(클로저 밖 재할당은 린트가 막는다). */
@@ -69,11 +74,18 @@ export default async function AutoDmPage() {
       const [{ data, error, followReady }, livePosts, accountRes, avatarUrl] = await Promise.all([
         loadRules(),
         getRecentPostsForPicker(),
+        /* ⚠️ user_id 로 좁힌다 — 안 좁히면 팀원 화면에 **소유자의 핸들**이 자기 계정처럼 뜨고,
+           연결 관문이 잘못 열린다(2026-09-08 감사, actions.ts 의 같은 수리와 짝).
+           .limit(1)+order: 한 사용자가 IG 를 2행 갖는 상태(0004 유니크는 전역이라 가능하다)에서
+           maybeSingle() 이 다중행 오류로 떨어져 핸들이 사라지던 것도 함께 막는다. */
         supabase
           .from("connected_accounts")
           .select("handle")
+          .eq("user_id", pageUser?.id ?? "")
           .eq("channel", "instagram")
           .eq("connected", true)
+          .order("created_at", { ascending: true })
+          .limit(1)
           .maybeSingle(),
         getIgAvatarUrl(),
       ]);

@@ -150,6 +150,7 @@ import {
   setLinkPassword,
   exportLeads,
 } from "../actions";
+import { csvDocument } from "@/lib/csv";
 import { LINK_LANGS, LINK_TARGETS, type LinkPageSettings } from "@/lib/links/settings";
 import type { LinkGuestbookEntry, LinkLead, LinkPageSummary, LinkPageView, LinkSnapshotView, LinkStats } from "@/lib/links/types";
 import { BlockEditor, EDITOR_TITLE_ID } from "./block-editor";
@@ -252,16 +253,9 @@ function dwellLabel(ms: number): string {
  * 엑셀이 CP949 로 읽어 한글이 전부 깨진다.
  */
 function downloadCsv(filename: string, rows: Array<Array<string | number>>) {
-  const esc = (v: string | number) => {
-    let t = String(v);
-    /* 수식 인젝션 방어 — 받은 내용의 이름·연락처·내용은 **방문자가 쓴 값**이다.
-       "=HYPERLINK(...)" 로 시작하는 셀을 엑셀이 수식으로 실행하면 방문자(비신뢰)가
-       페이지 주인(신뢰)의 엑셀에서 코드를 돌리는 셈이 된다. 시작 문자가 수식
-       트리거(= + - @ 탭 CR)면 작은따옴표를 붙여 문자열로 강제한다(OWASP 완화책). */
-    if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`;
-    return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
-  };
-  const csv = "\uFEFF" + rows.map((r) => r.map(esc).join(",")).join("\r\n");
+  /* 이스케이프·수식 인젝션 방어는 lib/csv.ts 한 곳이다 — 성과 리포트 CSV 와 **같은 규칙**을 써야 한다.
+     예전에는 두 벌이었고 리포트 쪽에만 방어가 없었다(2026-09-08 감사). 여기서 다시 손으로 쓰지 말 것. */
+  const csv = csvDocument(rows);
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
