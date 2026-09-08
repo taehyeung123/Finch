@@ -20,6 +20,7 @@
 import { cache } from "react";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isValidAdAccountId } from "@/lib/meta/ad-account-id";
 import { isDemoMode } from "@/lib/supabase/config";
 import { getWorkspaceMembership, getWorkspaceOwnerId } from "@/lib/team";
 import { decryptToken, isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
@@ -201,9 +202,16 @@ async function loadReadContext(adAccountId: string | undefined): Promise<ReadCon
     return { state: "error" };
   }
 
-  const { data: acctRaw, error: acctErr } = await supabase
+  /* ⚠️ **소유자 것으로 두 번 좁힌다** — connection_id 만으로는 부족하다(2026-09-08 감사, High).
+     0077 RLS 는 meta_ad_accounts 에 «내 행인가»(user_id)만 보고 «내 연결인가»(connection_id)는 안 본다.
+     그래서 활성 팀원이 자기 소유의 계정 행을 **소유자의 connection_id 에 매달아** 심을 수 있었고,
+     그 행이 아래에서 selected 가 되면 Graph 호출이 **소유자 토큰**으로 나갔다.
+     세션 클라이언트로 읽으면 공격자 자신의 행도 RLS 상 정상으로 보이므로, 여기서 admin 으로
+     user_id = ownerId 를 함께 건다 — 소유자 워크스페이스의 계정만 고를 수 있게. */
+  const { data: acctRaw, error: acctErr } = await store
     .from("meta_ad_accounts")
     .select("ad_account_id, account_name, currency, account_status, is_default")
+    .eq("user_id", ownerId)
     .eq("connection_id", conn.id)
     .order("is_default", { ascending: false })
     .order("account_name", { ascending: true });
@@ -212,7 +220,13 @@ async function loadReadContext(adAccountId: string | undefined): Promise<ReadCon
     console.error("[live-ads] 광고 계정 조회 실패:", acctErr.message);
     return { state: "error" };
   }
-  const rows = (acctRaw ?? []) as AdAccountRow[];
+  /* ⚠️ 형식(숫자)이 아닌 ad_account_id 는 **고를 수 있는 계정에서 뺀다**(2026-09-08 감사, High).
+     0088 이전에는 이 컬럼을 로그인 사용자가 PostgREST 로 임의 문자열로 바꿀 수 있었고,
+     그 값이 Graph URL 경로에 인코딩 없이 조립돼 **소유자 토큰으로 임의 엔드포인트**를 부를 수 있었다.
+     actPath 가 던져서 막기는 하지만, 그러면 화면이 «지금은 불러오지 못했어요» 로만 보인다 —
+     여기서 미리 걸러야 사용자가 «연결된 계정이 없다» 는 정확한 상태를 본다.
+     형식 위반은 «일시적 실패»가 아니라 정상 데이터가 아닌 것이므로 no_accounts 쪽으로 보낸다. */
+  const rows = ((acctRaw ?? []) as AdAccountRow[]).filter((r) => isValidAdAccountId(r.ad_account_id));
   /* 연동은 됐는데 계정이 없다 — 메타에서 광고 계정 권한을 못 받은 것이다.
      이건 «일시적 실패»가 아니라 **새로고침으로는 절대 안 풀리는** 상태라 따로 돌려준다. */
   if (rows.length === 0) return { state: "no_accounts" };
@@ -440,27 +454,32 @@ export async function getAdsWriteContext(adAccountId?: string): Promise<AdsWrite
     return { state: "blocked", code: "connection_unreadable" };
   }
 
-  /* 게시 주체 컬럼(0082)은 없을 수 있다 — 빠지면 컬럼 없이 다시 읽는다(«아직 안 고름»과 같게 다룬다) */
-  const primary = await supabase
-    .from("meta_ad_accounts")
-    .select("ad_account_id, currency, account_status, is_default, ad_page_id, ad_page_name, ad_ig_user_id, ad_ig_username")
-    .eq("connection_id", conn.id)
-    .order("is_default", { ascending: false });
-  let acctRows: unknown[] | null = primary.data;
-  if (primary.error && isMissingColumnError(primary.error, /ad_page_id|ad_ig_user_id|ad_page_name|ad_ig_username/i)) {
-    const fallback = await supabase
+  /* 게시 주체 컬럼(0082)은 없을 수 있다 — 빠지면 컬럼 없이 다시 읽는다(«아직 안 고름»과 같게 다룬다)
+     ⚠️ 읽기 컨텍스트와 같은 이유로 **소유자 것으로 두 번 좁힌다**(user_id + connection_id, admin 으로).
+     여기는 돈이 나가는 쪽이라 더 중요하다 — 팀원이 심은 행이 selected 가 되면 소유자 토큰으로
+     소유자가 연결한 적 없는 광고 계정에 캠페인이 만들어진다(2026-09-08 감사, High). */
+  const acctSelect = (cols: string) =>
+    store
       .from("meta_ad_accounts")
-      .select("ad_account_id, currency, account_status, is_default")
+      .select(cols)
+      .eq("user_id", membership.ownerId)
       .eq("connection_id", conn.id)
       .order("is_default", { ascending: false });
+  const primary = await acctSelect(
+    "ad_account_id, currency, account_status, is_default, ad_page_id, ad_page_name, ad_ig_user_id, ad_ig_username",
+  );
+  let acctRows: unknown[] | null = primary.data;
+  if (primary.error && isMissingColumnError(primary.error, /ad_page_id|ad_ig_user_id|ad_page_name|ad_ig_username/i)) {
+    const fallback = await acctSelect("ad_account_id, currency, account_status, is_default");
     acctRows = fallback.data;
   }
-  const rows = (acctRows ?? []) as (AdAccountRow & {
+  /* 읽기와 같은 필터 — 돈이 나가는 쪽이라 더 중요하다(2026-09-08 감사, High) */
+  const rows = ((acctRows ?? []) as (AdAccountRow & {
     ad_page_id?: string | null;
     ad_page_name?: string | null;
     ad_ig_user_id?: string | null;
     ad_ig_username?: string | null;
-  })[];
+  })[]).filter((r) => isValidAdAccountId(r.ad_account_id));
   const selected = (adAccountId ? rows.find((r) => r.ad_account_id === adAccountId) : null) ?? rows[0];
   if (!selected) {
     return { state: "blocked", code: "no_ad_account" };

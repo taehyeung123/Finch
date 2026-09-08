@@ -181,7 +181,7 @@ export async function GET(request: Request) {
 
     /* 기존에 고른 기본 계정을 존중한다 — 재연동 때마다 첫 번째로 되돌리면
        계정이 여럿인 대행사에서 «내가 보던 계정이 바뀌었다»가 된다. */
-    const { data: prevDefault } = await supabase
+    const { data: prevDefault } = await store
       .from("meta_ad_accounts")
       .select("ad_account_id")
       .eq("user_id", user.id)
@@ -203,7 +203,11 @@ export async function GET(request: Request) {
       is_default: a.accountId === defaultId,
     }));
 
-    const acctWrite = await supabase
+    /* 계정 행도 store(service_role)로 쓴다 — 0088 이 meta_ad_accounts 의 INSERT/UPDATE 를
+       사용자에게서 회수하기 때문이다. 회수하는 이유: 사용자가 PostgREST 로 ad_account_id 를
+       임의 문자열로 바꾸거나, 자기 행을 **남의 connection_id** 에 매달 수 있었다(2026-09-08 감사, High).
+       행 범위는 위 user_id·connection_id 가 정한다. */
+    const acctWrite = await store
       .from("meta_ad_accounts")
       .upsert(acctRows, { onConflict: "user_id,ad_account_id" })
       .select("id");
@@ -215,9 +219,10 @@ export async function GET(request: Request) {
     /* 이번에 안 온 계정은 접근 권한이 사라진 것이다 — 남겨 두면 화면에서 계속 조회에 실패한다.
        다른 연결(다른 FB 계정)로 붙은 행은 건드리지 않기 위해 connection_id 로 한정한다. */
     const keep = accounts.map((a) => a.accountId);
-    const { error: pruneErr } = await supabase
+    const { error: pruneErr } = await store
       .from("meta_ad_accounts")
       .delete()
+      .eq("user_id", user.id)
       .eq("connection_id", connectionId)
       .not("ad_account_id", "in", `(${keep.map((id) => `"${id}"`).join(",")})`);
     if (pruneErr) console.error(`[${TAG}] 사라진 계정 정리 실패(연동은 유지):`, pruneErr.message);

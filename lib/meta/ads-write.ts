@@ -1,4 +1,5 @@
 import "server-only";
+import { actPath } from "@/lib/meta/ad-account-id";
 import { GRAPH_FB_BASE } from "./ads-oauth";
 import { toMinor } from "./ads";
 import {
@@ -262,7 +263,7 @@ function campaignParams(p: CreateCampaignParams): Record<string, string> {
 
 /** 캠페인 생성 — 성공 시 새 캠페인 id. validateOnly 면 id 없이 통과 여부만 의미가 있다. */
 export async function createCampaign(p: CreateCampaignParams): Promise<AdsWriteResult<{ id?: string }>> {
-  return fbPost<{ id?: string }>(`/act_${p.adAccountId}/campaigns`, campaignParams(p), p.accessToken);
+  return fbPost<{ id?: string }>(`${actPath(p.adAccountId)}/campaigns`, campaignParams(p), p.accessToken);
 }
 
 export interface UpdateCampaignParams {
@@ -322,15 +323,15 @@ export async function updateCampaign(p: UpdateCampaignParams): Promise<AdsWriteR
 /* ── 2단계: 광고 세트 · 소재 · 광고 — 파라미터는 lib/ads/adset-rules · creative-rules 가 만든다(status 는 그쪽 상수 PAUSED) ── */
 
 export async function createAdSet(adAccountId: string, params: Record<string, string>, accessToken: string): Promise<AdsWriteResult<{ id?: string }>> {
-  return fbPost<{ id?: string }>(`/act_${adAccountId}/adsets`, params, accessToken);
+  return fbPost<{ id?: string }>(`${actPath(adAccountId)}/adsets`, params, accessToken);
 }
 
 export async function createAdCreative(adAccountId: string, params: Record<string, string>, accessToken: string): Promise<AdsWriteResult<{ id?: string }>> {
-  return fbPost<{ id?: string }>(`/act_${adAccountId}/adcreatives`, params, accessToken);
+  return fbPost<{ id?: string }>(`${actPath(adAccountId)}/adcreatives`, params, accessToken);
 }
 
 export async function createAd(adAccountId: string, params: Record<string, string>, accessToken: string): Promise<AdsWriteResult<{ id?: string }>> {
-  return fbPost<{ id?: string }>(`/act_${adAccountId}/ads`, params, accessToken);
+  return fbPost<{ id?: string }>(`${actPath(adAccountId)}/ads`, params, accessToken);
 }
 
 /**

@@ -1,4 +1,5 @@
 import "server-only";
+import { actPath } from "@/lib/meta/ad-account-id";
 import { GRAPH_FB_BASE } from "./ads-oauth";
 
 /**
@@ -102,7 +103,7 @@ export async function fetchAccountInstagramAccounts(
   accessToken: string,
 ): Promise<PagesResult<FbIgAccount[]>> {
   const res = await getJson<{ data?: { id?: string; username?: string }[] }>(
-    `/act_${adAccountId}/instagram_accounts?fields=id,username&limit=50`,
+    `${actPath(adAccountId)}/instagram_accounts?fields=id,username&limit=50`,
     accessToken,
   );
   return res.ok ? { ok: true, data: toIg(res.data.data) } : res;

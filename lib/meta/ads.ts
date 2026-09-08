@@ -1,5 +1,6 @@
 import { GRAPH_FB_BASE } from "./ads-oauth";
 
+import { actPath } from "@/lib/meta/ad-account-id";
 /**
  * 메타 광고 조회 어댑터 — Marketing API (graph.facebook.com).
  * 1단계는 **읽기 전용**이다: 광고 계정 목록 · 캠페인 · 캠페인별 인사이트.
@@ -191,7 +192,7 @@ export async function fetchCampaigns(
       effective_status?: string;
       daily_budget?: string;
       lifetime_budget?: string;
-    }>(`/act_${adAccountId}/campaigns?fields=${fields}&limit=100`, accessToken, "campaigns");
+    }>(`${actPath(adAccountId)}/campaigns?fields=${fields}&limit=100`, accessToken, "campaigns");
     return rows
       .filter((c) => typeof c.id === "string")
       .map((c) => ({
@@ -322,7 +323,7 @@ export async function fetchCampaignInsights(
       actions?: { action_type?: string; value?: string }[];
       action_values?: { action_type?: string; value?: string }[];
     }>(
-      `/act_${adAccountId}/insights?level=campaign&date_preset=${datePreset}&fields=${fields}&limit=200`,
+      `${actPath(adAccountId)}/insights?level=campaign&date_preset=${datePreset}&fields=${fields}&limit=200`,
       accessToken,
       "insights",
     );

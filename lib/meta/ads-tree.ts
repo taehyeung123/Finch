@@ -1,4 +1,5 @@
 import "server-only";
+import { actPath } from "@/lib/meta/ad-account-id";
 import { fbGet, fbGetAll, fromMinor } from "./ads";
 
 /**
@@ -299,7 +300,7 @@ export async function fetchAccountAdReview(
 ): Promise<Record<string, AdReviewSummary> | null> {
   try {
     const rows = await fbGetAll<{ campaign_id?: string; effective_status?: string }>(
-      `/act_${adAccountId}/ads?fields=campaign_id,effective_status&limit=500`,
+      `${actPath(adAccountId)}/ads?fields=campaign_id,effective_status&limit=500`,
       accessToken,
       "account-ads-review",
     );

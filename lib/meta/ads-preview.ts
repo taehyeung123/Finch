@@ -1,4 +1,5 @@
 import { fbGetResult, type AdsWriteResult } from "./ads-write";
+import { actPath } from "@/lib/meta/ad-account-id";
 import type { AdPreviewFormat } from "@/lib/ads/preview-formats";
 
 export { AD_PREVIEW_FORMATS, AD_PREVIEW_FORMAT_KEYS, type AdPreviewFormat } from "@/lib/ads/preview-formats";
@@ -59,7 +60,7 @@ export async function generateAdPreview(
   accessToken: string,
 ): Promise<AdsWriteResult<AdPreviewFrame | null>> {
   const res = await fbGetResult<{ data?: { body?: unknown }[] }>(
-    `/act_${adAccountId}/generatepreviews`,
+    `${actPath(adAccountId)}/generatepreviews`,
     { creative: JSON.stringify(creativeSpec), ad_format: adFormat },
     accessToken,
   );

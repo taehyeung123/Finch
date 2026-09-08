@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { actPath } from "@/lib/meta/ad-account-id";
 import { isMissingTableError } from "@/lib/supabase/errors";
 import { passGates, recordWrite } from "@/lib/ads/write-gates";
 import { AD_IMAGE_MAX_BYTES, checkAdImage, type AdImageCheck } from "@/lib/ads/image-spec";
@@ -81,7 +82,7 @@ export async function uploadAdImageAction(formData: FormData): Promise<AdImageUp
   form.set(filename, new Blob([bytes], { type: check.mime }), filename);
 
   const res = await fbPostForm<{ images?: Record<string, { hash?: unknown; url?: unknown; url_128?: unknown; width?: unknown; height?: unknown }> }>(
-    `/act_${gate.ctx.adAccountId}/adimages`,
+    `${actPath(gate.ctx.adAccountId)}/adimages`,
     form,
     gate.ctx.accessToken,
   );

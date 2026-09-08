@@ -1,4 +1,5 @@
 import { fbGetResult, type AdAccountUsage, type AdsWriteError } from "./ads-write";
+import { actPath } from "@/lib/meta/ad-account-id";
 import type { AdSetTargetingJson } from "@/lib/ads/adset-rules";
 
 /**
@@ -133,7 +134,7 @@ export async function validateInterestIds(
 ): Promise<TargetingRead<TargetingValidation>> {
   if (ids.length === 0) return { ok: true, data: { valid: [], invalid: [], unknown: [] }, usage: null };
   const res = await fbGetResult<{ data?: unknown[] }>(
-    `/act_${adAccountId}/targetingvalidation`,
+    `${actPath(adAccountId)}/targetingvalidation`,
     { targeting_list: JSON.stringify(ids.map((id) => ({ type: "interests", id }))) },
     accessToken,
   );
@@ -171,7 +172,7 @@ export async function estimateReach(
   accessToken: string,
 ): Promise<TargetingRead<ReachEstimate>> {
   const res = await fbGetResult<{ data?: unknown }>(
-    `/act_${adAccountId}/reachestimate`,
+    `${actPath(adAccountId)}/reachestimate`,
     { targeting_spec: JSON.stringify(targeting) },
     accessToken,
   );
