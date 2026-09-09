@@ -88,12 +88,15 @@ export function DashboardClient({
      ⚠️ 광고 계정을 연결하지 않았으면 **숫자를 쓰지 않는다.** 「집행 금액 0원 · 캠페인 0개」는
      «모른다»가 아니라 «돈을 안 썼다»는 사실 주장이라, 연결 전인 사람에게는 거짓이다. */
   const sampleActive = aggregateActive(campaigns);
-  const ads = adsSummary ?? {
+  const ads: DashboardAdsSummary = adsSummary ?? {
     connected: true,
     spend: sampleActive.spend,
     activeCount: sampleActive.count,
     roas: sampleActive.count > 0 ? sampleActive.roas : null,
-    currency: "KRW" as string | null,
+    currency: "KRW",
+    /* 샘플은 30일치 집계다 — 실 모드와 같은 라벨을 붙여 «누적»으로 읽히지 않게 */
+    periodLabel: "최근 30일",
+    note: null,
   };
   // 개별 채널 선택 시 우측 프로필 미러링 패널에 쓸 계정
   const selectedAccount = channel === "all" ? null : accounts.find((a) => a.channel === channel);
@@ -282,8 +285,9 @@ export function DashboardClient({
             />
             <CardBody className="space-y-3">
               <div className="flex items-baseline justify-between">
-                <span className="text-[14px] text-fg-sub">집행 금액</span>
-                <span className="tnum text-lg font-bold">
+                {/* 기간을 붙인다 — 값은 최근 30일치인데 라벨이 «집행 금액»뿐이면 누적으로 읽힌다(/ads 와 같은 규칙) */}
+                <span className="text-[14px] text-fg-sub">집행 금액{ads.periodLabel ? ` (${ads.periodLabel})` : ""}</span>
+                <span className="tnum text-[20px] font-bold">
                   {ads.spend === null ? "—" : formatMoney(ads.spend, ads.currency)}
                 </span>
               </div>
@@ -295,15 +299,14 @@ export function DashboardClient({
               </div>
               <div className="flex items-baseline justify-between">
                 <span className="text-[14px] text-fg-sub">평균 ROAS</span>
-                <span className="tnum font-semibold text-positive">
+                {/* 색을 칠하지 않는다 — ROAS 는 증감이 아니라 수준값이라 0.3배(손해)도 초록으로 나갔다 */}
+                <span className="tnum font-semibold">
                   {ads.roas === null ? "—" : `${ads.roas.toFixed(1)}배`}
                 </span>
               </div>
-              {!ads.connected ? (
-                <p className="text-[12px] text-fg-faint">
-                  광고 계정을 연결하면 집행 현황이 여기에 표시돼요.
-                </p>
-              ) : null}
+              {/* 상태별 한 줄 — 연결 전·만료·권한 없음·조회 실패를 다르게 말한다(lib/data/ads.ts summarizeActiveAds).
+                  본문 문장이라 fg-faint 가 아니라 fg-sub(본문 금지 규칙). */}
+              {ads.note ? <p className="text-[12px] text-fg-sub">{ads.note}</p> : null}
             </CardBody>
           </Card>
 
@@ -341,7 +344,7 @@ export function DashboardClient({
                         className="size-14 rounded-chip object-cover"
                       />
                     ) : (
-                      <span className="flex size-14 items-center justify-center rounded-chip bg-primary-weak text-xl font-bold text-primary">
+                      <span className="flex size-14 items-center justify-center rounded-chip bg-primary-weak text-[20px] font-bold text-primary">
                         {(a.displayName || a.handle.replace(/^@/, "") || "?").charAt(0)}
                       </span>
                     )}
@@ -387,7 +390,8 @@ export function DashboardClient({
                   </div>
                   <div>
                     <p className="text-xs text-fg-faint">참여율</p>
-                    {a.connected ? (
+                    {/* 인사이트를 못 읽었으면 «—» — 바로 위 StatCard 는 같은 값을 가리는데 여기만 0.0% 로 확언했다 */}
+                    {a.connected && a.insightsOk !== false ? (
                       <p className="tnum mt-0.5 font-bold">{formatPercent(a.avgEngagementRate)}</p>
                     ) : (
                       <p className="mt-0.5 font-bold text-fg-faint">—</p>

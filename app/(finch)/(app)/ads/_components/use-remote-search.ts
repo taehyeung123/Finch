@@ -62,7 +62,15 @@ export function useRemoteSearch<T>(kind: string, search: (q: string) => Promise<
         setSettled({ q, status: "paused", items: [], errorCode: "search_paused" });
         return;
       }
-      const res = await search(q);
+      /* 서버 액션은 네트워크가 끊기면 {ok:false} 가 아니라 **던진다** — 타이머 콜백 안이라 아무도 못 잡아
+         상태가 loading 에 영영 고정됐다(2026-09-09 감사). «확인 못 함»으로 내려앉힌다(errorCode 없음 → 일반 문구). */
+      let res: RemoteSearchResponse<T>;
+      try {
+        res = await search(q);
+      } catch {
+        if (!cancelled) setSettled({ q, status: "error", items: [], errorCode: null });
+        return;
+      }
       if (cancelled) return;
       if (!res.ok) {
         if (res.code === "search_paused") pausedUntil.set(kind, Date.now() + RATE_LIMIT_PAUSE_MS);

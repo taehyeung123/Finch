@@ -549,14 +549,41 @@ export interface DashboardAdsSummary {
   activeCount: number | null;
   roas: number | null;
   currency: string | null;
+  /** 조회 기간 라벨(«최근 30일») — 없이 «집행 금액»만 적으면 누적으로 읽힌다(/ads 는 이미 붙인다) */
+  periodLabel: string | null;
+  /** 숫자 밑에 한 줄 — 왜 «—» 인지, 또는 연결 전이라는 안내. null 이면 안 그린다 */
+  note: string | null;
 }
 
-/** 게재 중인 캠페인만 추린 요약 — 홈 카드가 «진행 중 캠페인 기준»이라고 적고 있다 */
+/**
+ * 게재 중인 캠페인만 추린 요약 — 홈 카드가 «진행 중 캠페인 기준»이라고 적고 있다.
+ *
+ * ⚠️ 여섯 상태를 **다르게 말한다.** 예전엔 ok 가 아니면 전부 connected:false 로 접어, 연결이 **만료된** 사람에게
+ * 홈이 「광고 계정을 연결하면 표시돼요」라고 말했다 — 같은 사람이 /ads 에서는 「연결 만료 — 다시 연결 필요」를 본다.
+ * 조회 실패도 «연결 전»으로 보였다. 실패는 «없음»이 아니다(파일 머리 규약). 문구는 /ads 의 adsFootnote 와 같은 결.
+ */
 export function summarizeActiveAds(state: LiveAdsState): DashboardAdsSummary {
-  if (state.state !== "ok") {
-    /* 미연동·만료·실패·미설정·계정없음 전부 «모름»이다. 다섯을 여기서 구분하지 않는 이유는
-       홈 카드가 숫자 세 줄뿐이라 안내를 실을 자리가 없어서다 — 구분은 /ads 화면이 한다. */
-    return { connected: false, spend: null, activeCount: null, roas: null, currency: null };
+  const empty = (note: string): DashboardAdsSummary => ({
+    connected: false,
+    spend: null,
+    activeCount: null,
+    roas: null,
+    currency: null,
+    periodLabel: null,
+    note,
+  });
+  switch (state.state) {
+    case "expired":
+      return empty("광고 계정 연결이 만료됐어요 — 설정에서 다시 연결해 주세요.");
+    case "no_accounts":
+      return empty("접근할 수 있는 광고 계정이 없어요. 메타에서 이 계정에 광고 계정 권한이 있는지 확인해 주세요.");
+    case "error":
+      return empty("광고 현황을 지금은 불러오지 못했어요. 잠시 후 다시 확인해 주세요.");
+    case "unconfigured":
+    case "disconnected":
+      return empty("광고 계정을 연결하면 집행 현황이 여기에 표시돼요.");
+    case "ok":
+      break;
   }
   const active = state.campaigns.filter((c) => (c.effectiveStatus ?? c.status) === "ACTIVE");
   const totals = aggregateLiveCampaigns(active);
@@ -566,6 +593,9 @@ export function summarizeActiveAds(state: LiveAdsState): DashboardAdsSummary {
     activeCount: active.length,
     roas: totals.roas,
     currency: state.selected.currency,
+    periodLabel: datePresetLabel(state.datePreset),
+    /* 캠페인은 읽었는데 성과만 못 읽은 경우 — 숫자는 «—» 로 나가므로 이유를 한 줄 적는다 */
+    note: state.insightsOk ? null : "성과 지표를 지금은 불러오지 못했어요.",
   };
 }
 

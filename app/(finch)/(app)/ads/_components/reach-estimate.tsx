@@ -29,7 +29,13 @@ export function ReachEstimate({ targeting, className }: { targeting: TargetingIn
   async function run() {
     const k = key;
     setState({ key: k, status: "loading" });
-    const result = await estimateReachAction(targeting);
+    /* 서버 액션은 네트워크가 끊기면 던진다 — 안 잡으면 버튼이 「확인하는 중…」으로 disabled 고정된다(2026-09-09 감사) */
+    let result: ReachEstimateResult;
+    try {
+      result = await estimateReachAction(targeting);
+    } catch {
+      result = { ok: false, code: "failed" };
+    }
     setState({ key: k, status: "done", result });
   }
 

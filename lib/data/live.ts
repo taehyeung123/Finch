@@ -575,6 +575,8 @@ async function computeInstagramPiece(row: AccountRow): Promise<DashboardPiece | 
     followersDelta7d,
     posts: postCount,
     avgEngagementRate: summary.engagementRate,
+    /* 조회 실패면 참여율은 0 자리채움이다 — 계정 카드가 그걸 «0.0%» 로 확언하지 않게 함께 넘긴다(위 StatCard 와 같은 규칙) */
+    insightsOk: summary.insightsOk,
     tokenExpiresInDays: daysUntil(row.token_expires_at),
   };
 
@@ -750,6 +752,7 @@ async function computeThreadsPiece(row: AccountRow): Promise<DashboardPiece | nu
     followersDelta7d: 0,
     posts: postCount,
     avgEngagementRate: summary.engagementRate,
+    insightsOk: summary.insightsOk,
     tokenExpiresInDays: daysUntil(row.token_expires_at),
   };
 

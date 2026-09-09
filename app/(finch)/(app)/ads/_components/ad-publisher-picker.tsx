@@ -55,7 +55,15 @@ export function AdPublisherPicker({
     setSaveError(null);
     setSelectedIg(null);
     setPagesState({ loading: true, pages: [], error: null });
-    const res = await loadAdPagesAction();
+    /* 서버 액션은 네트워크가 끊기면 {ok:false} 가 아니라 **던진다** — 안 잡으면 모달이 로딩 상태로 영영 굳는다(2026-09-09 감사) */
+    let res: Awaited<ReturnType<typeof loadAdPagesAction>>;
+    try {
+      res = await loadAdPagesAction();
+    } catch {
+      if (seq.current !== id) return;
+      setPagesState({ loading: false, pages: [], error: "페이지 목록을 불러오지 못했어요. 연결을 확인하고 다시 열어 주세요." });
+      return;
+    }
     if (seq.current !== id) return;
     setPagesState(res.ok ? { loading: false, pages: res.pages, error: null } : { loading: false, pages: [], error: adsWriteMessage(res.code) });
   }
@@ -65,7 +73,14 @@ export function AdPublisherPicker({
     setSaveError(null);
     setSelectedIg(null);
     setIg({ page, loading: true, accounts: [], error: null });
-    const res = await loadPageInstagramAction(page.id);
+    let res: Awaited<ReturnType<typeof loadPageInstagramAction>>;
+    try {
+      res = await loadPageInstagramAction(page.id);
+    } catch {
+      if (seq.current !== id) return;
+      setIg({ page, loading: false, accounts: [], error: "Instagram 계정을 불러오지 못했어요. 연결을 확인하고 다시 시도해 주세요." });
+      return;
+    }
     if (seq.current !== id) return;
     if (!res.ok) {
       setIg({ page, loading: false, accounts: [], error: adsWriteMessage(res.code) });
@@ -98,6 +113,10 @@ export function AdPublisherPicker({
       setOpen(false);
       onSaved?.({ pageName: res.pageName, igUsername: res.igUsername });
       router.refresh();
+    } catch {
+      /* 호출 자체가 던진 경우(네트워크) — 예전엔 catch 가 없어 저장 실패가 아무 반응도 없었다.
+         서버는 저장했을 수도 있다 — 다시 열면 현재 값이 보인다. */
+      setSaveError("저장 결과를 확인하지 못했어요. 잠시 후 다시 열어 확인해 주세요.");
     } finally {
       setSaving(false);
     }

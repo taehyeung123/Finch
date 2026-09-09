@@ -23,6 +23,8 @@ export interface ChannelAccount {
   followersDelta7d: number; // 최근 7일 증감
   posts: number;
   avgEngagementRate: number; // %
+  /** 인사이트 조회가 성공했는가 — false 면 avgEngagementRate 는 자리채움(0)이라 «—» 로 그린다. 없으면(목데이터) true 로 본다 */
+  insightsOk?: boolean;
   tokenExpiresInDays: number | null;
 }
 
