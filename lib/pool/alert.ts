@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { primaryOwnerEmail } from "@/lib/channel-availability";
 
 import { sendNotificationEmail } from "@/lib/email/resend";
 import { readBudget } from "@/lib/pool/budget";
@@ -59,7 +60,8 @@ export async function alertPool(db: SupabaseClient, kind: PoolAlertKind): Promis
   // 공급사가 살아난 뒤에도 경보가 계속 쌓인다.
   await db.from("crawl_runs").insert({ run_kind: runKind, note: kind });
 
-  const to = process.env.OWNER_EMAIL;
+  /* OWNER_EMAIL 은 쉼표 목록이다(2026-09-09) — 메일은 첫 주소로만 */
+  const to = primaryOwnerEmail();
   if (!to) {
     console.warn(`[pool] 경보(${kind}) 발생했으나 OWNER_EMAIL 미설정 — 메일을 보내지 못했습니다`);
     return false;

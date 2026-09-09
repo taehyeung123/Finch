@@ -133,8 +133,11 @@ export async function GET(request: Request) {
       access_token_cipher: cipher,
       token_expires_at: expiresAt,
       connected: true,
-      /* null 은 «확인 불가»다 — «권한 없음»과 다르므로 컬럼을 아예 안 건드린다(0075 규칙) */
-      ...(granted && granted.length > 0 ? { granted_scopes: granted } : {}),
+      /* null 은 «확인 불가»다 — «권한 없음»과 다르므로 관문은 통과시킨다(0075 규칙).
+         ⚠️ 모를 때 컬럼을 «안 건드리면» 재연동(upsert=UPDATE)에서 **옛 토큰의 권한이 그대로 남는다** —
+         「다시 연결 필요」를 보고 페이지 권한까지 승인했는데 /me/permissions 가 한 번 실패하면 행이 여전히
+         «다시 연결 필요»로 남아 몇 번을 해도 같았다(2026-09-09 감사). 그래서 모르면 null 로 **지운다**. */
+      granted_scopes: granted && granted.length > 0 ? granted : null,
     };
 
     /* 재연동이면 갱신. 사용자당 연결은 하나라 unique(user_id) 로 upsert 한다(0077).

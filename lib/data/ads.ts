@@ -120,11 +120,13 @@ function daysUntil(iso: string | null): number | null {
  * 예전엔 여기서 암호화 키를 안 봐서, 키만 빠진 환경에서 /ads 는 «연결하기»로 보내는데
  * 설정 화면엔 버튼이 없는 막다른 길이 생겼다.
  */
-function isAdsConnectable(): boolean {
+function isAdsConnectable(viewerEmail: string | null | undefined): boolean {
   /* «아직 열지 않은 기간»도 여기 포함한다 — 안 그러면 /ads 는 「연결하기」로 보내는데 설정 화면엔 버튼이 없는
-     막다른 길이 다시 생긴다(2026-09-06, lib/channel-availability.ts). 운영자 예외는 세션이 없어 적용하지 않는다 —
-     운영자도 이 화면에선 «준비 중»으로 보이고, 연결은 설정 > SNS 계정 연결에서 한다. */
-  return isMetaAdsOAuthConfigured() && isTokenEncryptionConfigured() && !isChannelClosed("ads");
+     막다른 길이 다시 생긴다(2026-09-06, lib/channel-availability.ts).
+     ⚠️ 운영자 예외를 **여기서도** 본다(2026-09-09). 전에는 이메일 없이 불러 운영자에게도 닫혀 있었다 — 설정 화면과
+     연동 시작은 운영자를 통과시키는데 광고 화면만 막혀서, 연동을 끝내도 CHANNELS_OPEN 에 ads 를 넣기 전까지
+     광고 화면이 전부 「준비 중」이었고, 넣는 순간 고객에게도 동시에 열렸다. 승인 전에 운영자가 먼저 점검할 길이 없었다. */
+  return isMetaAdsOAuthConfigured() && isTokenEncryptionConfigured() && !isChannelClosed("ads", viewerEmail);
 }
 
 /**
@@ -152,9 +154,10 @@ type ReadContext =
  */
 async function loadReadContext(adAccountId: string | undefined): Promise<ReadContext> {
   if (isDemoMode()) return { state: "disconnected" };
-  if (!isAdsConnectable()) return { state: "unconfigured" };
 
+  /* 사용자를 먼저 읽는다 — 채널 개폐 판정에 운영자 예외가 필요하다(위 isAdsConnectable 주석) */
   const user = await getAuthUser();
+  if (!isAdsConnectable(user?.email)) return { state: "unconfigured" };
   if (!user) return { state: "disconnected" };
 
   const supabase = await createClient();
@@ -406,9 +409,9 @@ export type AdsWriteContext =
  */
 export async function getAdsWriteContext(adAccountId?: string): Promise<AdsWriteContext> {
   if (isDemoMode()) return { state: "blocked", code: "demo_mode" };
-  if (!isAdsConnectable()) return { state: "blocked", code: "unconfigured" };
 
   const user = await getAuthUser();
+  if (!isAdsConnectable(user?.email)) return { state: "blocked", code: "unconfigured" };
   if (!user) return { state: "blocked", code: "login_required" };
 
   /* 동의 게이트(0079) — 페이지 게이트는 서버 액션 POST 를 못 막는다(감사 적발).

@@ -2,9 +2,8 @@
   월 캘린더 격자 계산 — 순수 함수. React 와 무관하고 서버·클라이언트 양쪽에서 쓴다.
 
   **모든 날짜 판정은 KST 기준이다.** scheduled_at 은 timestamptz(UTC)로 저장되는데,
-  브라우저 로컬 타임존으로 칸을 나누면 해외에서 접속한 사용자에게 "6월 1일 아침
-  발행"이 5월 31일 칸에 들어간다. 발행 배치도 KST 06:00 에 도는 이상(vercel.json),
-  달력의 하루도 KST 하루여야 한다.
+  브라우저 로컬 타임존으로 칸을 나누면 해외에서 접속한 사용자에게 "6월 1일 09:00
+  발행"이 5월 31일 칸에 들어간다. 발행 시각을 KST 로 고르는 이상, 달력의 하루도 KST 하루여야 한다.
 
   Date 객체의 로컬 타임존에 의존하지 않으려고, UTC 게터만 쓰고 오프셋을 직접 더한다
   (서버는 UTC, 브라우저는 사용자 타임존이라 둘이 갈리면 SSR 불일치가 난다).
@@ -28,31 +27,55 @@ export function kstToday(): string {
 }
 
 /**
- * 발행 배치가 도는 시각(KST). vercel.json 의 "0 21 * * *"(UTC 21시) = KST 06시.
- * ⚠️ 크론 스케줄을 바꾸면 이 값도 같이 바꿔야 한다 — 안 그러면 화면이 거짓말을 한다.
+ * 발행 크론 주기(분). vercel.json 의 "*\/5 * * * *". 예약 시각이 지나면 이 안에 집힌다 —
+ * 화면 문구 「예약한 시각부터 5분 안에」의 근거다. ⚠️ 크론 스케줄을 바꾸면 이 값도 같이 바꾼다.
+ *
+ * (2026-09-09 이전에는 하루 한 번 06:00 KST 배치였다 — Vercel Hobby 시절의 제약이 Pro 로 옮긴 뒤에도
+ *  남아 있었고, 그래서 이 파일에 «배치 시각»·«오늘 배치가 지났는가» 같은 함수가 있었다. 전부 걷어냈다.)
  */
-export const PUBLISH_BATCH_HOUR_KST = 6;
+export const PUBLISH_CRON_MINUTES = 5;
 
-/**
- * **지금 예약해서 실제로 나갈 수 있는 가장 이른 날짜**(KST).
- *
- * 배치는 하루 한 번, KST 06:00 에만 돈다. 그 시각이 지난 뒤 "오늘"로 예약하면
- * 오늘은 아무 일도 안 일어나고 **내일 아침**에 나간다. 그런데 화면은 캘린더 오늘 칸에
- * 점을 찍고 "예약일 아침 배치에서 자동 발행됩니다"라고 안내했다 — 오늘 쓰려던
- * 콘텐츠가 하루 뒤에 조용히 발행되는 상태였다.
- *
- * 날짜 선택의 min 을 이 값으로 두면 고를 수 없는 날이 애초에 안 열린다.
- */
-export function earliestPublishDate(): string {
-  const kst = new Date(Date.now() + KST_OFFSET_MS);
-  const beforeBatch = kst.getUTCHours() < PUBLISH_BATCH_HOUR_KST;
-  if (beforeBatch) return kstDayKey(new Date());
-  return kstDayKey(new Date(Date.now() + 24 * 60 * 60 * 1000));
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
 }
 
-/** 오늘 아침 배치가 이미 지났는가 — 화면이 "내일 아침에 나갑니다"를 안내할 때 쓴다 */
-export function batchPassedToday(): boolean {
-  return earliestPublishDate() !== kstToday();
+/** ISO 문자열 → KST 기준 "HH:mm". 목록에서 날짜 옆에 붙인다. */
+export function kstTimeKey(iso: string | Date): string {
+  const t = typeof iso === "string" ? Date.parse(iso) : iso.getTime();
+  if (Number.isNaN(t)) return "";
+  const d = new Date(t + KST_OFFSET_MS);
+  return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+}
+
+/** ISO → <input type="datetime-local"> 값("YYYY-MM-DDTHH:mm", KST). */
+export function kstDateTimeLocal(iso: string | Date): string {
+  const day = kstDayKey(iso);
+  return day ? `${day}T${kstTimeKey(iso)}` : "";
+}
+
+/**
+ * <input type="datetime-local"> 값(KST) → ISO(UTC). 형식이 틀리면 null.
+ * ⚠️ `new Date("2026-08-20T09:00")` 처럼 오프셋 없이 파싱하면 서버(UTC)와 브라우저가 다른 시각을 만든다 —
+ *    반드시 +09:00 을 붙여 KST 로 못박는다(2026-08-17 실측: 자정이 09:00 으로 밀려 하루 늦게 나갔다).
+ */
+export function parseKstDateTimeLocal(value: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
+  const t = Date.parse(`${value}:00+09:00`);
+  return Number.isNaN(t) ? null : new Date(t).toISOString();
+}
+
+/**
+ * **지금 예약할 수 있는 가장 이른 시각**(KST, datetime-local 값) — 지금을 크론 주기 단위로 올린 값.
+ * 날짜·시각 입력의 min 으로 두면 고를 수 없는 시각이 애초에 안 열린다.
+ */
+export function earliestPublishAt(): string {
+  const step = PUBLISH_CRON_MINUTES * 60_000;
+  return kstDateTimeLocal(new Date(Math.ceil(Date.now() / step) * step));
+}
+
+/** 오늘(KST) — 캘린더의 «이 날짜로 포스팅» 버튼이 «지난 날인가»를 판정할 때 쓴다 */
+export function earliestPublishDate(): string {
+  return kstToday();
 }
 
 export interface CalendarCell {

@@ -35,14 +35,30 @@ function openSet(): Set<string> {
 }
 
 /**
- * 이 이메일이 운영자인가 — 같은 비교가 설정 화면·콜백 라우트에도 필요해 여기서 한 번만 정의한다.
+ * 운영자 이메일 목록 — `OWNER_EMAIL` 은 쉼표로 여럿을 받는다(2026-09-09).
+ * 메타 앱 심사자에게 줄 심사 전용 계정을 **고객에게는 채널을 닫아 둔 채** 통과시키려고 목록이 됐다.
+ * 첫 번째가 «주» 운영자다 — 운영 메일(문의 접수·풀 경보)은 그 주소 하나로만 간다.
+ */
+export function ownerEmails(): string[] {
+  return (process.env.OWNER_EMAIL ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/** 운영 메일을 받을 주소 — 목록의 첫 번째. 없으면 null(호출측이 «미설정»으로 다룬다) */
+export function primaryOwnerEmail(): string | null {
+  return ownerEmails()[0] ?? null;
+}
+
+/**
+ * 이 이메일이 운영자인가 — 같은 비교가 설정 화면·콜백 라우트·광고 화면에 필요해 여기서 한 번만 정의한다.
  * ⚠️ 양쪽 다 값이 있을 때만 비교한다. 둘 다 비어 있으면 «같다»가 되어 아무나 운영자가 된다.
  */
 export function isOwnerEmail(viewerEmail: string | null | undefined): boolean {
-  const owner = process.env.OWNER_EMAIL?.trim().toLowerCase();
   const viewer = viewerEmail?.trim().toLowerCase();
-  if (!owner || !viewer) return false;
-  return owner === viewer;
+  if (!viewer) return false;
+  return ownerEmails().includes(viewer);
 }
 
 /** 이 채널이 **고객에게** 닫혀 있는가 — 운영자 예외를 보지 않는 순수 판정 */

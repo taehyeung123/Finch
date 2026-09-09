@@ -25,7 +25,7 @@ import { isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
 import { THREADS_SCOPES, THREADS_SCOPE_LABELS, isThreadsOAuthConfigured } from "@/lib/meta/threads-oauth";
 import { TIKTOK_SCOPES, TIKTOK_SCOPE_LABELS, isTiktokOAuthConfigured } from "@/lib/tiktok/oauth";
 import { META_ADS_SCOPES, META_ADS_SCOPE_LABELS, isMetaAdsOAuthConfigured } from "@/lib/meta/ads-oauth";
-import { closedForCustomers, isChannelClosed, isChannelOpen, type AvailabilityKey } from "@/lib/channel-availability";
+import { closedForCustomers, isChannelClosed, isChannelOpen, isOwnerEmail, type AvailabilityKey } from "@/lib/channel-availability";
 
 /** 운영자 전용 안내에 쓰는 이름 — 고객 화면에는 안 나간다 */
 const CLOSED_LABEL: Record<AvailabilityKey, string> = {
@@ -196,11 +196,16 @@ async function loadAdsCard(): Promise<AdsCard | null> {
   const user = await getAuthUser();
   if (!user) return ADS_CARD_EMPTY;
 
-  /* 컬럼이 시기별로 다르다 — granted_scopes(0075), 게시 주체(0082). 없는 컬럼은 빼고 다시 읽는다(«확인 불가»·«아직 안 고름»). */
+  /* 컬럼이 시기별로 다르다 — granted_scopes(0075), 게시 주체(0082). 없는 컬럼은 빼고 다시 읽는다(«확인 불가»·«아직 안 고름»).
+     ⚠️ 임베드에 **FK 이름을 명시한다.** 0088 이 (connection_id, user_id) 복합 FK 를 하나 더 만들어 두 표 사이에 관계가
+     둘이 됐고, 이름 없는 `meta_ad_accounts(...)` 는 PostgREST 가 PGRST201(관계 모호)로 거절한다 — 그 오류는
+     컬럼 없음도 표 없음도 아니라 아래 폴백을 전부 지나쳐 null 로 떨어졌고, 광고 행이 영구히 「확인 못 함」이 되어
+     연결·해제 버튼이 통째로 사라졌다(2026-09-08 적용 → 09-09 전수 감사 적발, 프로덕션 재현). */
+  const ACCOUNTS = "meta_ad_accounts!meta_ad_accounts_connection_id_fkey";
   const selects = [
-    "id, connected, token_expires_at, granted_scopes, meta_ad_accounts(account_name, is_default, ad_page_name, ad_ig_username)",
-    "id, connected, token_expires_at, granted_scopes, meta_ad_accounts(account_name, is_default)",
-    "id, connected, token_expires_at, meta_ad_accounts(account_name, is_default)",
+    `id, connected, token_expires_at, granted_scopes, ${ACCOUNTS}(account_name, is_default, ad_page_name, ad_ig_username)`,
+    `id, connected, token_expires_at, granted_scopes, ${ACCOUNTS}(account_name, is_default)`,
+    `id, connected, token_expires_at, ${ACCOUNTS}(account_name, is_default)`,
   ];
   let res = await supabase.from("meta_ad_connections").select(selects[0]).eq("user_id", user.id).limit(1).maybeSingle();
   for (let i = 1; i < selects.length && res.error && isMissingColumnError(res.error, /granted_scopes|ad_page_name|ad_ig_username/i); i++) {
@@ -336,8 +341,8 @@ export default async function ChannelsSettingsPage({
   /* 연결 실패 원문 — **운영자에게만**. 고객에게는 내부 운영 정보라 노출하지 않는다 */
   const detailParam = typeof sp.detail === "string" ? sp.detail : null;
   const viewer = await getAuthUser();
-  const ownerEmail = process.env.OWNER_EMAIL?.trim().toLowerCase();
-  const isOwner = !!ownerEmail && viewer?.email?.trim().toLowerCase() === ownerEmail;
+  /* 정본은 isOwnerEmail — OWNER_EMAIL 이 쉼표 목록이 된 뒤(2026-09-09) 손으로 비교하면 첫 계정만 맞는다 */
+  const isOwner = isOwnerEmail(viewer?.email);
   /* connect=warn — 연결은 됐지만 부수 작업이 실패한 «절반 성공». 성공으로도 실패로도 덮지 않는다.
      ⚠️ 톤은 사전에서 먼저 찾고, **모르는 reason 이면 connect 값**으로 정한다. 예전에는 폴백이
      `CONNECT_MESSAGES.exchange`(negative) 하나여서, 모르는 reason 이 붙은 warn 이 통째로 빨간 실패로 뒤집혔다.

@@ -1,5 +1,6 @@
 "use server";
 
+import { primaryOwnerEmail } from "@/lib/channel-availability";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
@@ -81,7 +82,8 @@ export async function submitInquiry(formData: FormData): Promise<SubmitResult> {
      아무도 몰랐다. 미답변이 5건 쌓이면 접수 자체가 막히므로(MAX_PENDING) 답변이 늦을수록 그 고객의
      문의 통로가 좁아지다 닫힌다 — 사용자가 늘기 시작하는 첫 주에 정확히 이 조합이 문제가 된다(2026-09-07 감사).
      발송 실패는 접수를 되돌리지 않는다 — 고객 쪽 결과는 이미 성공이다. */
-  const ownerEmail = process.env.OWNER_EMAIL;
+  /* OWNER_EMAIL 은 쉼표 목록이다(2026-09-09) — 메일은 첫 주소로만. 목록 문자열을 그대로 넘기면 발송이 깨진다 */
+  const ownerEmail = primaryOwnerEmail();
   if (ownerEmail) {
     void sendNotificationEmail(
       ownerEmail,

@@ -87,8 +87,14 @@ export async function publishCardNews(params: {
   accessToken: string;
   caption: string;
   imageUrls: string[];
+  /**
+   * 컨테이너 처리를 기다릴 상한. **호출측이 자기 실행시간 예산에 맞춰 줘야 한다** —
+   * 기본 60초는 예전 크론의 maxDuration(60)과 같아서, 캐러셀 처리가 늦으면 플랫폼이 함수를 먼저 죽이고
+   * 예약 행이 'publishing' 인 채로 굳었다(스레드 어댑터는 이미 이 인자를 받고 있었다).
+   */
+  maxWaitMs?: number;
 }): Promise<PublishResult> {
-  const { igUserId, accessToken, caption, imageUrls } = params;
+  const { igUserId, accessToken, caption, imageUrls, maxWaitMs = 60_000 } = params;
   if (imageUrls.length === 0) return { ok: false, error: "이미지가 없습니다." };
 
   let containerId: string;
@@ -109,7 +115,7 @@ export async function publishCardNews(params: {
     containerId = carousel.data.id;
   }
 
-  const status = await pollContainerStatus(containerId, accessToken);
+  const status = await pollContainerStatus(containerId, accessToken, maxWaitMs);
   if (!status.ok) return { ok: false, error: `콘텐츠 처리 실패: ${status.error}` };
 
   const published = await publishContainer(igUserId, accessToken, containerId);

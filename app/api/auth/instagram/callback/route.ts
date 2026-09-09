@@ -133,18 +133,22 @@ export async function GET(request: Request) {
       display_name: info.name ?? info.username ?? null,
       bio: info.biography,
       connected: true,
-      /* 최초 저장이라 비교할 이전 값이 없다 — 모르면 0 으로 시작한다.
-         이후 갱신 경로(live.ts)는 null 일 때 컬럼을 아예 건드리지 않는다. */
-      followers: info.followersCount ?? 0,
-      posts: info.mediaCount ?? 0,
+      /* 모르면(null) 컬럼을 아예 안 보낸다 — 신규는 DB 기본값 0 으로 시작하고, **재연동(UPDATE)** 은 이전 값을 지키다.
+         예전엔 `?? 0` 이라 팔로워 수가 안 오는 계정(100명 미만)을 다시 연결하면 저장돼 있던 값이 0 으로 덮였다
+         (2026-09-09 감사). 갱신 경로(live.ts·refresh-tokens)와 같은 규칙이다. */
+      ...(info.followersCount !== null && info.followersCount !== undefined ? { followers: info.followersCount } : {}),
+      ...(info.mediaCount !== null && info.mediaCount !== undefined ? { posts: info.mediaCount } : {}),
       access_token_cipher: cipher,
       token_expires_at: expiresAt,
       platform_user_id: info.id,
       /* 동의 시점에 실제로 받은 권한 — 스코프는 여기서 고정되므로 나중에 배열을 늘려도
          이 토큰은 안 바뀐다. 기록해 두면 «예약 발행이 새벽에 권한 오류로 실패»하기 전에
          화면에서 재연동을 안내할 수 있다(0075). 응답에 permissions 가 없으면 빈 배열이 오는데,
-         그건 «권한 없음»이 아니라 «모름»이라 컬럼을 아예 비워 둔다. */
-      ...(shortLived.permissions.length > 0 ? { granted_scopes: shortLived.permissions } : {}),
+         그건 «권한 없음»이 아니라 «모름»이라 **null 을 쓴다**(null = 확인 불가, 관문은 통과시킨다).
+         ⚠️ 모를 때 컬럼을 «안 건드리면» 재연동(UPDATE)에서 **옛 토큰의 권한이 새 토큰의 것으로 남는다** —
+         발행 권한을 빼고 다시 승인했는데 관문이 통과시키고 발행 시각에야 실패하는 경로였다(2026-09-09 감사).
+         0075 미적용 DB 는 아래 폴백이 이 키를 떼고 다시 쓴다. */
+      granted_scopes: shortLived.permissions.length > 0 ? shortLived.permissions : null,
     };
     // 프로필 사진 — 0006 마이그레이션 미적용이면 컬럼이 없어 실패하므로 폴백으로 재시도
     const rowWithAvatar = { ...row, avatar_url: info.profilePictureUrl };

@@ -108,9 +108,9 @@ export async function GET(request: Request) {
     const longLived = await exchangeThreadsForLongLivedToken({ shortLivedToken: shortLived.accessToken, config });
     const info = await fetchThreadsAccountInfo(longLived.accessToken);
     /* 프로필 필드엔 팔로워 수가 없어(스펙 5절) insights 로 별도 조회.
-       실패해도 연동 자체는 진행한다 — 최초 저장이라 비교할 이전 값이 없으므로 0 으로 시작하고,
-       이후 갱신 경로(live.ts·크론)는 null 일 때 컬럼을 아예 건드리지 않는다. */
-    const followersCount = (await fetchThreadsFollowersCount(info.id, longLived.accessToken)) ?? 0;
+       실패해도 연동 자체는 진행한다 — null 은 «모름»이라 아래에서 컬럼을 아예 안 보낸다(재연동 때 이전 값을 0 으로
+       덮지 않게 — 2026-09-09 감사). 신규는 DB 기본값 0, 이후 갱신 경로(live.ts·크론)도 같은 규칙이다. */
+    const followersCount = await fetchThreadsFollowersCount(info.id, longLived.accessToken);
 
     const cipher = encryptToken(longLived.accessToken, { userId: user.id, field: "connected_accounts.access_token_cipher" });
     if (!cipher) {
@@ -125,16 +125,18 @@ export async function GET(request: Request) {
       display_name: info.name ?? info.username ?? null,
       bio: info.biography,
       connected: true,
-      followers: followersCount,
-      posts: 0, // Threads 프로필 필드엔 총 게시물 수가 없다 — getLiveDashboard 로드 시 최근 목록 길이로 근사 갱신
+      ...(followersCount !== null ? { followers: followersCount } : {}),
+      /* posts 는 넣지 않는다 — Threads 프로필엔 총 게시물 수가 없다. 예전의 `posts: 0` 은 재연동마다 근사값을 0 으로
+         되돌렸다. 신규는 DB 기본값 0, 이후 getLiveDashboard 가 최근 목록 길이로 근사 갱신한다. */
       access_token_cipher: cipher,
       token_expires_at: expiresAt,
       platform_user_id: info.id,
       /* 인스타와 같은 규칙 — 동의 시점 권한을 기록해 두면 «발행 권한 없는 토큰» 을
          새벽 크론이 아니라 예약하는 순간에 잡을 수 있다(0075).
          Threads 응답의 permissions 는 스펙에 명시돼 있지 않아 빈 배열로 올 수 있는데,
-         그건 «권한 없음» 이 아니라 «모름» 이라 컬럼을 아예 비워 둔다. */
-      ...(shortLived.permissions.length > 0 ? { granted_scopes: shortLived.permissions } : {}),
+         그건 «권한 없음» 이 아니라 «모름» 이라 **null 을 쓴다**. 모를 때 컬럼을 안 건드리면 재연동(UPDATE)에서
+         옛 토큰의 권한이 새 토큰의 것으로 남는다(2026-09-09 감사) — 인스타 콜백과 같은 규칙. */
+      granted_scopes: shortLived.permissions.length > 0 ? shortLived.permissions : null,
     };
     // 프로필 사진 — 0006 마이그레이션 미적용이면 컬럼이 없어 실패하므로 폴백으로 재시도
     const rowWithAvatar = { ...row, avatar_url: info.profilePictureUrl };

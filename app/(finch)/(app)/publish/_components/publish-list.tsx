@@ -2,24 +2,26 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, FileText, ImageIcon, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, FileText, ImageIcon, Plus, RotateCcw, Send, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { StatusPill, type PostStatus } from "@/components/ui/status-pill";
+import { ResultModal, type ResultModalContent } from "@/components/ui/result-modal";
 import {
   WEEKDAYS,
-  batchPassedToday,
+  earliestPublishAt,
   earliestPublishDate,
   kstDayKey,
+  kstTimeKey,
   kstToday,
   monthGrid,
   shiftMonth,
 } from "@/lib/calendar";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { cancelScheduledPost } from "@/app/(finch)/(app)/studio/actions";
-import { deleteDraft, scheduleDraft } from "../actions";
+import { deleteDraft, publishNow, scheduleDraft } from "../actions";
 import { PostComposer, type ComposerChannel } from "./post-composer";
 
 export interface ScheduledPost {
@@ -39,7 +41,7 @@ export interface ScheduledPost {
  * 확인하는 보기라 탭으로 남긴다.
  *
  * 날짜 판정은 전부 KST(lib/calendar) — scheduled_at 은 UTC 라 브라우저 타임존으로
- * 나누면 해외 접속 시 하루가 밀린다. 발행 배치도 KST 06:00 에 돈다.
+ * 나누면 해외 접속 시 하루가 밀린다. 예약 시각도 KST 로 고른다(5분마다 도는 크론이 집는다).
  */
 export function PublishList({
   initialItems,
@@ -80,12 +82,14 @@ export function PublishList({
   const [view, setView] = useState<"calendar" | "scheduled" | "done" | "drafts">("calendar");
   /* 새 게시물 컴포저 — null 아니면 열림, 문자열이면 캘린더에서 고른 날짜가 미리 담긴다 */
   const [composer, setComposer] = useState<{ date: string | null } | null>(null);
-  const [notice, setNotice] = useState("");
+  /* 저장·발행 결과 — 모달로 한 번 세운다(연동 결과와 같은 규칙, components/ui/result-modal.tsx).
+     예전엔 sr-only 문장 하나뿐이어서 눈으로는 아무 확인도 못 봤다. */
+  const [result, setResult] = useState<ResultModalContent | null>(null);
   const today = kstToday();
-  /* 초안에 날짜를 붙일 때 고를 수 있는 가장 이른 날. 배치가 KST 06:00 하루 1회라
-     그 시각이 지나면 오늘은 이미 늦었다 — 고를 수 없는 날을 열어두지 않는다. */
+  /* 초안·실패 글에 시각을 붙일 때 고를 수 있는 가장 이른 시각(지금, 5분 단위 올림).
+     earliest(오늘)는 달력의 «이 날짜로 포스팅» 이 지난 날인지 볼 때만 쓴다. */
   const earliest = earliestPublishDate();
-  const batchPassed = batchPassedToday();
+  const earliestAt = earliestPublishAt();
   const [cursor, setCursor] = useState(() => {
     const [y, m] = today.split("-");
     return { year: Number(y), month: Number(m) };
@@ -95,6 +99,8 @@ export function PublishList({
   const [draftDate, setDraftDate] = useState<Record<string, string>>({});
   const [draftBusy, setDraftBusy] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
+  /* 「지금 발행」 진행 중인 글 — 한 번에 하나만. 메타 처리 시간 때문에 1분 가까이 걸릴 수 있다 */
+  const [nowBusy, setNowBusy] = useState<string | null>(null);
   /* 예약 취소 실패 안내 — 낙관적 «취소됨»이 조용히 되돌아가던 자리(실측) */
   const [cancelError, setCancelError] = useState<string | null>(null);
 
@@ -148,6 +154,36 @@ export function PublishList({
         setCancelError("예약을 취소하지 못했어요. 잠시 후 다시 시도해 주세요.");
       }
       router.refresh();
+    });
+  }
+
+  /* 「지금 발행」 — 초안·예약·실패 글을 그 자리에서 내보낸다. 되돌릴 수 없는 외부 행동이라 확인을 받는다.
+     결과는 성공·실패 모두 모달로 보여 준다 — 실패한 글은 목록에 남아 다시 시도하거나 지울 수 있다. */
+  function runNow(id: string) {
+    if (nowBusy || draftBusy) return;
+    if (!window.confirm("지금 바로 올릴까요? 올라간 게시물은 여기서 되돌릴 수 없어요.")) return;
+    setNowBusy(id);
+    setDraftError(null);
+    startTransition(async () => {
+      try {
+        const res = await publishNow(id);
+        if (!res.ok) {
+          setResult({ tone: "negative", title: "발행하지 못했어요", description: res.error });
+          return;
+        }
+        setResult(
+          res.outcome.published
+            ? { tone: "positive", title: `${res.outcome.label}에 올라갔어요`, description: "「발행완료」 탭에서 확인할 수 있어요." }
+            : { tone: "negative", title: `${res.outcome.label}에 올리지 못했어요`, description: `${res.outcome.error} — 다시 시도하거나 지울 수 있어요.` },
+        );
+        router.refresh();
+      } catch {
+        /* 호출 자체가 던진 경우(네트워크·시간 초과) — 서버는 계속 진행 중일 수 있다. 상태는 새로고침이 말해 준다 */
+        setResult({ tone: "negative", title: "결과를 확인하지 못했어요", description: "연결이 끊겼거나 시간이 오래 걸렸어요. 잠시 후 목록을 새로고침해 주세요." });
+        router.refresh();
+      } finally {
+        setNowBusy(null);
+      }
     });
   }
 
@@ -291,9 +327,7 @@ export function PublishList({
         </div>
       </div>
 
-      <p aria-live="polite" className="sr-only">
-        {notice}
-      </p>
+      <ResultModal result={result} onClose={() => setResult(null)} />
 
       {view === "calendar" ? (
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -436,8 +470,7 @@ export function PublishList({
                 ))}
               </div>
               <p className="mt-2 text-[12px] text-fg-sub">
-                예약일 오전 6시 배치에서 자동 발행됩니다(정시 발행이 아니에요).
-                {batchPassed ? " 오늘 배치는 이미 지났어요 — 내일부터 예약할 수 있어요." : ""}
+                예약한 시각부터 5분 안에 자동으로 발행돼요.
                 {truncated ? " 최근 200건만 표시하고 있어요." : ""}
               </p>
             </CardBody>
@@ -497,6 +530,19 @@ export function PublishList({
                         </p>
                         <div className="mt-1 flex items-center gap-2">
                           <StatusPill status={post.status} />
+                          <span className="tnum text-[12px] text-fg-sub">{kstTimeKey(post.scheduled_at)}</span>
+                          {post.status === "scheduled" || post.status === "failed" ? (
+                            <button
+                              type="button"
+                              onClick={() => runNow(post.id)}
+                              disabled={nowBusy !== null}
+                              className="trans-state rounded-card p-1 text-fg-faint hover:bg-tint-hover hover:text-fg disabled:opacity-40"
+                              aria-label="지금 발행"
+                              title="지금 발행"
+                            >
+                              <Send className={cn("size-3.5", nowBusy === post.id && "anim-pulse")} />
+                            </button>
+                          ) : null}
                           {post.status === "scheduled" ? (
                             <button
                               type="button"
@@ -524,7 +570,7 @@ export function PublishList({
           <CardHeader
             title={view === "scheduled" ? "발행예약" : "발행완료"}
             description={
-              view === "scheduled" ? "예약일 아침 배치에서 자동 발행됩니다" : "발행이 끝났거나 취소된 게시물이에요"
+              view === "scheduled" ? "예약한 시각부터 5분 안에 자동 발행돼요" : "발행이 끝났거나 취소된 게시물이에요"
             }
           />
           <CardBody>
@@ -549,11 +595,18 @@ export function PublishList({
                       <p className="truncate text-[15px] font-medium">{post.caption.split("\n")[0] || "(캡션 없음)"}</p>
                       <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-fg-sub">
                         <CalendarClock className="size-3" aria-hidden />
-                        {kstDayKey(post.scheduled_at)}
+                        <span className="tnum">
+                          {kstDayKey(post.scheduled_at)} {kstTimeKey(post.scheduled_at)}
+                        </span>
                         {post.status === "failed" && post.error ? ` · ${post.error}` : ""}
                       </p>
                     </div>
                     <StatusPill status={post.status} />
+                    {post.status === "scheduled" || post.status === "failed" ? (
+                      <Button size="sm" variant="secondary" disabled={nowBusy !== null || draftBusy !== null} onClick={() => runNow(post.id)}>
+                        <Send className="size-3.5" aria-hidden /> {nowBusy === post.id ? "발행 중…" : "지금 발행"}
+                      </Button>
+                    ) : null}
                     {post.status === "scheduled" ? (
                       <button
                         type="button"
@@ -571,12 +624,13 @@ export function PublishList({
                     {post.status === "failed" ? (
                       <div className="flex shrink-0 items-center gap-2">
                         <input
-                          type="date"
-                          min={earliest}
+                          type="datetime-local"
+                          min={earliestAt}
+                          step={300}
                           value={draftDate[post.id] ?? ""}
                           onChange={(e) => setDraftDate((d) => ({ ...d, [post.id]: e.target.value }))}
-                          aria-label="다시 예약할 날짜"
-                          className="h-9 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg focus:border-primary focus:outline-none"
+                          aria-label="다시 예약할 시각"
+                          className="tnum h-9 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg focus:border-primary focus:outline-none"
                         />
                         <Button
                           size="sm"
@@ -634,18 +688,22 @@ export function PublishList({
                     {post.caption.split("\n")[0] || "(캡션 없음)"}
                   </p>
                   <StatusPill status="draft" />
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button size="sm" variant="secondary" disabled={nowBusy !== null || draftBusy !== null} onClick={() => runNow(post.id)}>
+                      <Send className="size-3.5" aria-hidden /> {nowBusy === post.id ? "발행 중…" : "지금 발행"}
+                    </Button>
                     <input
-                      type="date"
-                      min={earliest}
+                      type="datetime-local"
+                      min={earliestAt}
+                      step={300}
                       value={draftDate[post.id] ?? ""}
                       onChange={(e) => setDraftDate((d) => ({ ...d, [post.id]: e.target.value }))}
-                      aria-label="발행 예정일"
-                      className="h-9 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg focus:border-primary focus:outline-none"
+                      aria-label="발행 시각"
+                      className="tnum h-9 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg focus:border-primary focus:outline-none"
                     />
                     <Button
                       size="sm"
-                      disabled={!draftDate[post.id] || draftBusy !== null}
+                      disabled={!draftDate[post.id] || draftBusy !== null || nowBusy !== null}
                       onClick={() => runDraft(post.id, "schedule")}
                     >
                       {draftBusy === post.id ? "처리 중…" : "예약하기"}
@@ -674,9 +732,9 @@ export function PublishList({
           isDemo={isDemo}
           defaultDate={composer.date}
           onClose={() => setComposer(null)}
-          onSaved={(message) => {
+          onSaved={(r) => {
             setComposer(null);
-            setNotice(message);
+            setResult(r);
             /* createPost 의 revalidatePath 가 서버 목록을 새로 내려보낸다 —
                initialItems 동기화(위 prevInitial 패턴)가 화면에 반영한다 */
             router.refresh();

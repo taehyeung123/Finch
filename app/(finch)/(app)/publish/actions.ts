@@ -2,11 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { storagePathsFromPublicUrls } from "@/lib/storage/public-url";
 import { isDemoMode } from "@/lib/supabase/config";
-import { earliestPublishDate } from "@/lib/calendar";
+import { parseKstDateTimeLocal } from "@/lib/calendar";
 import { eulReul } from "@/lib/josa";
 import { REQUIRED_SCOPE, checkScope } from "@/lib/meta/granted-scopes";
+import { claimPost, runClaimedPost } from "@/lib/publish/run";
 import {
   PUBLISHABLE_CHANNELS,
   channelRules,
@@ -16,16 +18,33 @@ import {
 } from "@/lib/publish-rules";
 
 /*
-  초안 관리 — 2026-08-16 신설.
+  발행 액션 — 초안·예약·지금 발행 (2026-08-16 신설 → 2026-09-09 «예약 시각 + 지금 발행» 으로 개편).
 
-  초안을 만들어 놓고 **지울 수도, 예약으로 바꿀 수도 없었다.** 저장하는 순간
-  스토리지 이미지까지 포함한 결과물이 영구히 DB 에 갇혔고, 그 상태로 쌓이면
-  발행 화면 조회(최신 200건)를 밀어내 진짜 미래 예약이 화면에서 사라진다.
-  화면 문구는 "언제든 날짜를 정하세요"라고 하면서 그럴 수단이 없었다.
+  2026-09-09 까지 발행은 하루 한 번(06:00 KST) 배치였고 「즉시 발행」은 비활성이었다 — Vercel Hobby 시절의
+  크론 제약이 Pro 로 옮긴 뒤에도 남아 있었다. 그래서 예약은 «날짜»만 받았고, 낮에 예약한 글은 다음 날 아침에야
+  나갔다. 지금은 크론이 5분마다 돌고(lib/publish/run.ts), 여기서 «시각»을 받으며, 「지금 발행」은 그 자리에서
+  내보내고 결과를 돌려준다.
 
-  두 액션 다 RLS(auth.uid()=user_id) 위에서 돌고, 추가로 .eq("status","draft") 를
-  건다 — id 만 맞으면 이미 발행된 글까지 손댈 수 있으면 안 된다.
+  액션들은 RLS(auth.uid()=user_id) 위에서 돌고, 상태 전이마다 .in("status", …) 를 건다 —
+  id 만 맞으면 이미 발행된 글까지 손댈 수 있으면 안 된다. 토큰을 만지는 「지금 발행」만 admin 클라이언트를
+  쓰되(0085 — 암호문은 서버만 읽는다), 그 앞에서 RLS 로 본인 행임을 먼저 확인하고 admin 쿼리에도 user_id 를 건다.
 */
+
+/* 「지금 발행」이 메타 컨테이너 처리를 기다릴 상한. /publish 의 maxDuration(120s) 안에서
+   이미지 업로드·DB·알림 몫을 빼고 잡는다 — 넘기면 플랫폼이 액션을 죽여 실패 처리가 실행되지 않는다.
+   createPost 는 업로드에 쓴 시간만큼 더 줄인다(아래). */
+const NOW_WAIT_BUDGET_MS = 70_000;
+const NOW_TOTAL_BUDGET_MS = 100_000;
+
+/** 「지금 발행」의 결과 — 화면이 모달로 그린다 */
+export type PublishOutcome = { published: true; label: string } | { published: false; error: string; label: string };
+
+export type CreatePostResult =
+  /** 저장 자체가 안 됐다 — 컴포저는 열린 채로 이유를 보여 준다 */
+  | { ok: false; error: string }
+  | { ok: true; mode: "draft" | "schedule" }
+  /** 저장은 됐고 발행을 시도했다 — 성공이든 실패든 행은 목록에 남는다 */
+  | { ok: true; mode: "now"; outcome: PublishOutcome };
 
 /**
  * 연동 계정 + 부여된 스코프 조회. 0075 미적용 DB 폴백 포함.
@@ -75,33 +94,49 @@ async function loadConnectedAccount(
   return { ok: true, found: !!row, scopes: row?.granted_scopes ?? null };
 }
 
-/** 초안 → 예약. date 는 "YYYY-MM-DD"(KST). */
-export async function scheduleDraft(id: string, date: string): Promise<{ ok: boolean; error?: string }> {
-  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 저장할 수 없어요." };
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: "날짜 형식이 올바르지 않아요." };
-  /* 과거뿐 아니라 **오늘 아침 배치가 이미 지난 경우의 오늘**도 막는다.
-     배치는 KST 06:00 하루 1회라, 06시 이후에 오늘로 잡으면 오늘은 아무 일도
-     안 일어나고 내일 아침에 나간다 — 화면 안내와 어긋난다. */
-  const earliest = earliestPublishDate();
-  if (date < earliest) {
-    return {
-      ok: false,
-      error:
-        date < new Date().toISOString().slice(0, 10)
-          ? "지난 날짜로는 예약할 수 없어요."
-          : "오늘 아침 발행 배치가 이미 지났어요. 내일 이후로 골라 주세요.",
-    };
+/**
+ * 발행 관문 — 예약이든 지금 발행이든 «발행 약속»을 받기 전에 같은 것을 본다.
+ * ⚠️ user_id 로 반드시 좁힌다. connected_accounts 에는 "team members read" 정책이 있어 팀원이 **소유자의**
+ * 연동 행을 읽는다 — 안 좁히면 자기 계정엔 연동이 없는데 관문을 통과하고, 발행은 user_id 로 토큰을 찾으므로
+ * 반드시 실패한다.
+ */
+async function publishGate(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  channel: PublishChannel,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const acc = await loadConnectedAccount(supabase, userId, channel);
+  if (!acc.ok) return { ok: false, error: "잠시 후 다시 시도해 주세요." };
+  if (!acc.found) return { ok: false, error: `먼저 설정에서 ${channelLabel(channel)} 계정을 연동해 주세요.` };
+  /* 발행 권한이 **확실히 없으면** 여기서 막는다 — 받아 두면 크론이 돌 때 권한 오류로 실패하고, 그 사이 사용자는
+     발행될 거라고 믿는다. 확인 불가(0075 이전 연동)면 통과시킨다 — 모른다고 멀쩡한 예약을 막지 않는다. */
+  const scopeCheck = checkScope(
+    acc.scopes,
+    channel === "threads" ? REQUIRED_SCOPE.threadsPublish : REQUIRED_SCOPE.instagramPublish,
+  );
+  if (scopeCheck.state === "missing") {
+    return { ok: false, error: `${channelLabel(channel)} 발행 권한이 없어요. 설정에서 다시 연동하면 바로 쓸 수 있어요.` };
   }
+  return { ok: true };
+}
 
-  const user = await getAuthUser();
-  if (!user) return { ok: false, error: "로그인이 필요해요." };
-  const supabase = await createClient();
+/**
+ * 예약 시각 판정 — "YYYY-MM-DDTHH:mm"(KST) → ISO.
+ * 1분의 여유를 둔다: 화면이 «지금»을 골라 보내는 사이 서버 시계가 앞서 있으면 정상 요청이 «지난 시각»으로 튕긴다.
+ */
+function resolveScheduledAt(when: string): { ok: true; iso: string } | { ok: false; error: string } {
+  const iso = parseKstDateTimeLocal(when);
+  if (!iso) return { ok: false, error: "날짜와 시각을 확인해 주세요." };
+  if (Date.parse(iso) < Date.now() - 60_000) return { ok: false, error: "지난 시각으로는 예약할 수 없어요." };
+  return { ok: true, iso };
+}
 
-  /* 어느 채널로 예약하는 글인지 먼저 읽는다 — 예전엔 무조건 인스타그램 연동을 물어서,
-     스레드 초안을 예약하려면 쓰지도 않는 인스타를 연동해야 했다(2026-08-31 스레드 발행 추가).
-     channel 은 0053 컬럼이고, 미적용 DB 의 큐는 전부 인스타 시절 것이다.
-
-     ⚠️ 세 갈래를 뭉치면 안 된다 — «에러든 빈 결과든 인스타»로 두면 조회가 한 번 실패했을 때
+/** 이 글의 채널 — 0053 미적용 DB 에서는 컬럼이 없고, 그 시절 큐는 전부 인스타 카드뉴스였다 */
+async function loadPostChannel(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+): Promise<{ ok: true; channel: PublishChannel } | { ok: false; error: string }> {
+  /* ⚠️ 세 갈래를 뭉치면 안 된다 — «에러든 빈 결과든 인스타»로 두면 조회가 한 번 실패했을 때
      스레드 글을 예약하려던 사람에게 «인스타그램을 연동하세요»라고 말한다.
      instagram 으로 단정해도 되는 경우는 «컬럼 자체가 없다» 하나뿐이다. */
   let channel: PublishChannel = "instagram";
@@ -111,7 +146,6 @@ export async function scheduleDraft(id: string, date: string): Promise<{ ok: boo
       console.error("[publish] 채널 조회 실패:", withCh.error.message);
       return { ok: false, error: "잠시 후 다시 시도해 주세요." };
     }
-    // 0053 미적용 — 그 시절 큐는 전부 인스타 카드뉴스였다
   } else if (!withCh.data) {
     return { ok: false, error: "이미 처리된 글이에요." };
   } else if (withCh.data.channel) {
@@ -120,41 +154,28 @@ export async function scheduleDraft(id: string, date: string): Promise<{ ok: boo
   if (!PUBLISHABLE_CHANNELS.includes(channel)) {
     return { ok: false, error: `${channelLabel(channel)} 발행은 아직 지원하지 않아요.` };
   }
+  return { ok: true, channel };
+}
 
-  /* 연동이 없으면 예약해도 배치가 실패로 끝난다 — 여기서 막는다.
-     초안 저장 때는 연동을 요구하지 않지만(아직 발행이 아니다), 예약은 발행 약속이다. */
-  /* ⚠️ user_id 로 반드시 좁힌다. connected_accounts 에는 "team members read" 정책이
-     있어 팀원이 **소유자의** 연동 행을 읽는다 — 안 좁히면 자기 계정엔 연동이 없는데
-     게이트를 통과하고, 발행 크론은 user_id 로 토큰을 찾으므로 그 예약은 반드시
-     실패한다(설정 화면·크론이 이미 쓰는 패턴과 맞춘다). */
-  const acc = await loadConnectedAccount(supabase, user.id, channel);
-  if (!acc.ok) return { ok: false, error: "잠시 후 다시 시도해 주세요." };
-  if (!acc.found) return { ok: false, error: `먼저 설정에서 ${channelLabel(channel)} 계정을 연동해 주세요.` };
+/** 초안·실패 글 → 예약. when 은 "YYYY-MM-DDTHH:mm"(KST). */
+export async function scheduleDraft(id: string, when: string): Promise<{ ok: boolean; error?: string }> {
+  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 저장할 수 없어요." };
+  const at = resolveScheduledAt(when);
+  if (!at.ok) return { ok: false, error: at.error };
 
-  /* 발행 권한이 **확실히 없으면** 여기서 막는다. 예약을 받아 두면 새벽 6시 크론이 돌 때
-     권한 오류로 실패하고, 그 사이 사용자는 발행될 거라고 믿는다.
-     확인 불가(0075 이전 연동)면 통과시킨다 — 모른다고 멀쩡한 예약을 막지 않는다. */
-  const scopeCheck = checkScope(
-    acc.scopes,
-    channel === "threads" ? REQUIRED_SCOPE.threadsPublish : REQUIRED_SCOPE.instagramPublish,
-  );
-  if (scopeCheck.state === "missing") {
-    return {
-      ok: false,
-      error: `${channelLabel(channel)} 발행 권한이 없어요. 설정에서 다시 연동하면 바로 쓸 수 있어요.`,
-    };
-  }
+  const user = await getAuthUser();
+  if (!user) return { ok: false, error: "로그인이 필요해요." };
+  const supabase = await createClient();
 
-  /* 배치는 KST 06:00 에 돈다(vercel.json "0 21 * * *" = UTC 21시). 그 날 아침에
-     집히려면 scheduled_at 이 그 시각 이전이어야 하므로 KST 자정(=UTC 15:00 전날)으로 둔다. */
-  const scheduledAt = new Date(`${date}T00:00:00+09:00`).toISOString();
+  const ch = await loadPostChannel(supabase, id);
+  if (!ch.ok) return { ok: false, error: ch.error };
+  const gate = await publishGate(supabase, user.id, ch.channel);
+  if (!gate.ok) return { ok: false, error: gate.error };
 
-  /* draft 뿐 아니라 **failed 도 받는다.** 발행에 실패한 글은 재시도도 삭제도 안 돼서
-     목록에 영구히 박제됐다(크론도 status="scheduled" 만 집는다). 실패 알림은
-     "스튜디오에서 다시 예약해 주세요"라고 안내했지만, 발행 컴포저로 만든 글은 스튜디오에 없다. */
+  /* draft 뿐 아니라 **failed 도 받는다.** 발행에 실패한 글은 재시도도 삭제도 안 돼서 목록에 영구히 박제됐다. */
   const { data, error } = await supabase
     .from("scheduled_posts")
-    .update({ status: "scheduled", scheduled_at: scheduledAt, error: null })
+    .update({ status: "scheduled", scheduled_at: at.iso, error: null })
     .eq("id", id)
     .in("status", ["draft", "failed"])
     .select("id");
@@ -163,7 +184,65 @@ export async function scheduleDraft(id: string, date: string): Promise<{ ok: boo
     return { ok: false, error: "예약으로 바꾸지 못했어요." };
   }
   if (!data || data.length === 0) return { ok: false, error: "이미 처리된 글이에요." };
+  revalidatePath("/publish");
   return { ok: true };
+}
+
+/**
+ * 「지금 발행」 — 초안·예약·실패 글을 그 자리에서 내보내고 결과를 돌려준다.
+ * 최대 1분 남짓 걸릴 수 있다(메타가 이미지를 처리하는 시간) — /publish 페이지에 maxDuration 이 걸려 있다.
+ */
+export async function publishNow(id: string): Promise<{ ok: false; error: string } | { ok: true; outcome: PublishOutcome }> {
+  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 발행할 수 없어요." };
+  const user = await getAuthUser();
+  if (!user) return { ok: false, error: "로그인이 필요해요." };
+  const supabase = await createClient();
+
+  /* RLS 로 본인 행만 읽힌다 — 여기서 못 읽으면 남의 글이거나 없는 글이다 */
+  const { data: row, error: rowErr } = await supabase
+    .from("scheduled_posts")
+    .select("id, caption, image_urls, status")
+    .eq("id", id)
+    .maybeSingle();
+  if (rowErr) {
+    console.error("[publish] 글 조회 실패:", rowErr.message);
+    return { ok: false, error: "잠시 후 다시 시도해 주세요." };
+  }
+  if (!row) return { ok: false, error: "이미 처리된 글이에요." };
+  if (!["draft", "scheduled", "failed"].includes(row.status)) {
+    return {
+      ok: false,
+      error: row.status === "published" ? "이미 발행된 글이에요." : row.status === "publishing" ? "지금 발행 중이에요." : "지금은 발행할 수 없는 상태예요.",
+    };
+  }
+  const ch = await loadPostChannel(supabase, id);
+  if (!ch.ok) return { ok: false, error: ch.error };
+  const gate = await publishGate(supabase, user.id, ch.channel);
+  if (!gate.ok) return { ok: false, error: gate.error };
+
+  /* 토큰 암호문은 admin 으로만 읽는다(0085). 선점·발행 쿼리에 user_id 를 거는 이유는 위 주석과 같다 —
+     admin 은 RLS 를 우회하므로 필터가 곧 권한이다. */
+  const admin = createAdminClient();
+  if (!admin) {
+    console.error("[publish] 지금 발행 불가 — 서버 자격증명 미설정");
+    return { ok: false, error: "잠시 후 다시 시도해 주세요." };
+  }
+  const claimed = await claimPost(admin, id, ["draft", "scheduled", "failed"], {
+    userId: user.id,
+    scheduledAt: new Date().toISOString(),
+  });
+  if (!claimed) return { ok: false, error: "이미 발행이 시작된 글이에요. 잠시 후 목록을 확인해 주세요." };
+
+  const outcome = await runClaimedPost(
+    admin,
+    { id, user_id: user.id, caption: row.caption, image_urls: (row.image_urls as string[] | null) ?? [], channel: ch.channel },
+    { source: "now", waitBudgetMs: NOW_WAIT_BUDGET_MS },
+  );
+  revalidatePath("/publish");
+  return {
+    ok: true,
+    outcome: outcome.ok ? { published: true, label: outcome.label } : { published: false, error: outcome.error, label: outcome.label },
+  };
 }
 
 /** 초안·발행 실패 글 삭제. 발행**된** 글은 지울 수 없다 — 이력이다.
@@ -198,6 +277,7 @@ export async function deleteDraft(id: string): Promise<{ ok: boolean; error?: st
     const { error: rmErr } = await supabase.storage.from("cardnews").remove(paths);
     if (rmErr) console.error("[publish] 초안 이미지 삭제 실패(행은 지워짐):", rmErr.message);
   }
+  revalidatePath("/publish");
   return { ok: true };
 }
 
@@ -213,10 +293,7 @@ export async function deleteDraft(id: string): Promise<{ ok: boolean; error?: st
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 /**
- * 게시물을 직접 만들어 예약/초안으로 넣는다.
- *
- * 지금까지 발행 대기열(scheduled_posts)에 넣는 길은 스튜디오 카드뉴스뿐이었다 —
- * 포스팅 화면에서 이미지+글을 바로 써서 올리는 길을 연다.
+ * 게시물을 직접 만들어 지금 발행 / 예약 / 초안으로 넣는다.
  *
  * 채널: 실제 발행 어댑터가 있는 것만 받는다(instagram·threads).
  * 틱톡은 발행 API 자체가 없어 "(준비 중)" 비활성 — 값이 오면 사용자가 아니라
@@ -224,19 +301,21 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
  *
  * 채널별 상한(글자·장수)은 lib/publish-rules.ts 가 정한다 — 컴포저와 같은 값을 본다.
  *
- * "즉시 발행"은 없다 — 발행은 KST 06:00 배치라 "즉시"가 거짓이 된다.
- * 실시간 발행 API 배선(맨 마지막 단계) 전까지 mode 는 schedule | draft 둘뿐이다.
+ * mode=now 는 행을 scheduled(지금)로 넣은 뒤 **같은 요청 안에서** 내보낸다. 발행이 실패해도 저장은 된 것이라
+ * ok:true 에 outcome 으로 결과를 싣는다 — 컴포저는 닫히고 결과 모달이 뜨며, 실패한 글은 목록에 남아
+ * 다시 시도하거나 지울 수 있다(컴포저를 열어 둔 채 오류만 보여 주면 같은 글을 두 번 올리게 된다).
  */
 export async function createPost(input: {
   channel: string;
   caption: string;
   /** FileReader data URL — 1~10장 */
   images: string[];
-  mode: "schedule" | "draft";
-  /** mode=schedule 일 때 YYYY-MM-DD(KST) */
-  date?: string;
-}): Promise<{ ok: boolean; error?: string }> {
+  mode: "now" | "schedule" | "draft";
+  /** mode=schedule 일 때 "YYYY-MM-DDTHH:mm"(KST) */
+  when?: string;
+}): Promise<CreatePostResult> {
   if (isDemoMode()) return { ok: false, error: "데모 모드에서는 저장할 수 없어요." };
+  const startedAt = Date.now();
   const user = await getAuthUser();
   if (!user) return { ok: false, error: "로그인이 필요해요." };
 
@@ -266,51 +345,30 @@ export async function createPost(input: {
     return { ok: false, error: `이미지는 ${rules.maxImages}장까지예요.` };
   }
 
-  /* 날짜 검증은 초안 예약 전환(scheduleDraft)과 같은 규칙 — 관문이 갈리면 어긋난다 */
+  /* 시각 검증은 초안 예약 전환(scheduleDraft)과 같은 규칙 — 관문이 갈리면 어긋난다 */
   let scheduledAt: string;
   if (input.mode === "schedule") {
-    const date = input.date ?? "";
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: "날짜 형식이 올바르지 않아요." };
-    const earliest = earliestPublishDate();
-    if (date < earliest) {
-      return {
-        ok: false,
-        error:
-          date < new Date().toISOString().slice(0, 10)
-            ? "지난 날짜로는 예약할 수 없어요."
-            : "오늘 아침 발행 배치가 이미 지났어요. 내일 이후로 골라 주세요.",
-      };
-    }
-    scheduledAt = new Date(`${date}T00:00:00+09:00`).toISOString();
+    const at = resolveScheduledAt(input.when ?? "");
+    if (!at.ok) return { ok: false, error: at.error };
+    scheduledAt = at.iso;
   } else {
-    /* 초안의 scheduled_at 은 "만든 시각"의 의미다(0043) — 크론은 draft 를 안 집는다 */
+    /* 초안의 scheduled_at 은 "만든 시각"의 의미다(0043) — 크론은 draft 를 안 집는다.
+       지금 발행도 «지금»이다 — 목록·달력이 실제 발행 시각을 보여 준다. */
     scheduledAt = new Date().toISOString();
   }
 
   const supabase = await createClient();
 
-  /* 예약은 발행 약속이다 — 연동 없이 예약하면 배치가 반드시 실패한다.
+  /* 예약·지금 발행은 발행 약속이다 — 연동 없이 받으면 반드시 실패한다.
      초안은 연동을 요구하지 않는다(아직 발행이 아니다). scheduleDraft 와 같은 규칙. */
-  if (input.mode === "schedule") {
-    const acc = await loadConnectedAccount(supabase, user.id, channel);
-    if (!acc.ok) return { ok: false, error: "잠시 후 다시 시도해 주세요." };
-    if (!acc.found) return { ok: false, error: `먼저 설정에서 ${channelLabel(channel)} 계정을 연동해 주세요.` };
-    /* 위 scheduleDraft 와 같은 관문 — 예약은 발행 약속이므로 권한을 여기서 본다 */
-    const scopeCheck = checkScope(
-      acc.scopes,
-      channel === "threads" ? REQUIRED_SCOPE.threadsPublish : REQUIRED_SCOPE.instagramPublish,
-    );
-    if (scopeCheck.state === "missing") {
-      return {
-        ok: false,
-        error: `${channelLabel(channel)} 발행 권한이 없어요. 설정에서 다시 연동하면 바로 쓸 수 있어요.`,
-      };
-    }
+  if (input.mode !== "draft") {
+    const gate = await publishGate(supabase, user.id, channel);
+    if (!gate.ok) return { ok: false, error: gate.error };
   }
 
   /* 이미지 업로드 — 카드뉴스와 같은 버킷·같은 본인 폴더 규칙(0010 RLS).
      전부 올린 뒤에 insert 한다: insert 먼저 하면 업로드 실패 시 이미지 없는
-     행이 남고, 그 행은 배치에서 반드시 실패한다. */
+     행이 남고, 그 행은 발행에서 반드시 실패한다. */
   const urls: string[] = [];
   /* 올린 객체의 경로를 함께 모은다 — 아래 insert 가 실패하면 **되돌려 지운다**.
      예전에는 그냥 두어 고아가 됐다: 저장에 실패한 글의 사진이 공개 주소로 영원히 남았다(2026-09-08 감사). */
@@ -349,23 +407,24 @@ export async function createPost(input: {
     caption,
     image_urls: urls,
     scheduled_at: scheduledAt,
-    status: input.mode === "schedule" ? "scheduled" : "draft",
+    status: input.mode === "draft" ? "draft" : "scheduled",
   };
-  let { error } = await supabase.from("scheduled_posts").insert({ ...row, channel });
-  if (isMissingColumnError(error, /channel/i)) {
+  let inserted = await supabase.from("scheduled_posts").insert({ ...row, channel }).select("id").single();
+  if (isMissingColumnError(inserted.error, /channel/i)) {
     if (channel !== "instagram") {
-      console.error("[publish] channel 컬럼 미적용 — 스레드 저장 거절:", error?.message);
+      console.error("[publish] channel 컬럼 미적용 — 스레드 저장 거절:", inserted.error?.message);
       await rollbackUploads();
       return { ok: false, error: "스레드 발행 준비가 아직 끝나지 않았어요. 잠시 후 다시 시도해 주세요." };
     }
-    ({ error } = await supabase.from("scheduled_posts").insert(row));
+    inserted = await supabase.from("scheduled_posts").insert(row).select("id").single();
   }
-  if (error) {
+  if (inserted.error || !inserted.data) {
+    const error = inserted.error;
     /* image_urls 체크에 걸린 경우 — 「저장 실패」로 뭉뚱그리면 뭘 고쳐야 하는지 알 수 없다.
        문구는 채널 규칙에서 만든다: 스레드에 «이미지를 1장 이상»은 틀린 안내다.
        (0074 미적용이어도 스레드 글 전용은 통과한다 — 빈 배열의 array_length 가 null 이라
         0010 의 체크가 위반으로 보지 않는다. 0074 는 그 우연을 명시적 규칙으로 바꾼다.) */
-    if (/image_urls/i.test(error.message)) {
+    if (error && /image_urls/i.test(error.message)) {
       console.error("[publish] image_urls 체크 위반:", error.message);
       await rollbackUploads();
       return {
@@ -376,11 +435,40 @@ export async function createPost(input: {
             : `이미지는 ${rules.maxImages}장까지예요.`,
       };
     }
-    console.error("[publish] 게시물 생성 실패:", error.message);
+    console.error("[publish] 게시물 생성 실패:", error?.message ?? "행 없음");
     await rollbackUploads();
     return { ok: false, error: "저장하지 못했어요. 잠시 후 다시 시도해 주세요." };
   }
 
+  if (input.mode !== "now") {
+    revalidatePath("/publish");
+    return { ok: true, mode: input.mode };
+  }
+
+  /* ── 지금 발행 — 방금 넣은 행을 그 자리에서 내보낸다 ── */
+  const label = channelLabel(channel);
+  const admin = createAdminClient();
+  if (!admin) {
+    /* 저장은 됐다. 크론이 5분 안에 집어 가므로 «지금»은 못 지켜도 발행은 된다 — 그 사실을 그대로 말한다 */
+    console.error("[publish] 지금 발행 불가 — 서버 자격증명 미설정. 크론에 맡긴다:", inserted.data.id);
+    revalidatePath("/publish");
+    return { ok: true, mode: "now", outcome: { published: false, label, error: "지금 바로는 올리지 못했어요. 5분 안에 자동으로 발행돼요." } };
+  }
+  const claimed = await claimPost(admin, inserted.data.id, ["scheduled"], { userId: user.id });
+  if (!claimed) {
+    revalidatePath("/publish");
+    return { ok: true, mode: "now", outcome: { published: false, label, error: "발행이 이미 시작됐어요. 잠시 후 목록을 확인해 주세요." } };
+  }
+  /* 업로드에 쓴 시간만큼 대기 예산을 줄인다 — 10장 업로드 뒤에도 액션 상한 안에서 끝나게 */
+  const outcome = await runClaimedPost(
+    admin,
+    { id: inserted.data.id, user_id: user.id, caption, image_urls: urls, channel },
+    { source: "now", waitBudgetMs: Math.min(NOW_WAIT_BUDGET_MS, Math.max(15_000, NOW_TOTAL_BUDGET_MS - (Date.now() - startedAt))) },
+  );
   revalidatePath("/publish");
-  return { ok: true };
+  return {
+    ok: true,
+    mode: "now",
+    outcome: outcome.ok ? { published: true, label } : { published: false, label, error: outcome.error },
+  };
 }

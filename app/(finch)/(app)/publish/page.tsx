@@ -11,11 +11,16 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/* 「지금 발행」 서버 액션이 이 페이지에서 불린다 — 메타가 캐러셀 이미지를 처리하는 데 최대 1분 남짓 걸린다.
+   이 값이 없으면 플랫폼 기본값에 걸려 액션이 도중에 죽고, 그러면 실패 처리가 실행되지 않아
+   행이 'publishing' 으로 굳는다(크론이 30분 뒤 회수하지만 사용자는 그동안 결과를 모른다). */
+export const maxDuration = 120;
+
 /*
   발행 — 2026-08-15 IA 개편으로 신설.
 
   예약 발행 자체는 원래 있었다(0010_scheduled_posts + /api/studio/schedule +
-  하루 1회 크론 publish-scheduled). 문제는 **진입점**이었다:
+  크론 publish-scheduled — 2026-09-09 까지는 하루 1회, 지금은 5분마다). 문제는 **진입점**이었다:
    · 스튜디오 화면 하단에 패널 한 줄로 붙어 있어 메뉴에 존재하지 않았고
    · 그 패널이 예약 0건이면 null 을 반환해 **화면에서 통째로 사라졌다**.
   즉 한 번도 예약해본 적 없는 사람에게는 없는 기능이었다.
@@ -114,7 +119,7 @@ export default async function PublishPage() {
     <div className="space-y-5">
       <PageHeader
         title="발행"
-        description="인스타그램·스레드 예약 발행을 확인하고 관리합니다. 예약일 아침 배치에서 자동으로 발행됩니다."
+        description="인스타그램·스레드 게시물을 지금 올리거나 예약합니다. 예약한 시각부터 5분 안에 자동으로 발행돼요."
       />
       <PublishList initialItems={items} channels={channels} isDemo={isDemoMode()} truncated={truncated} loadFailed={failed} />
     </div>
