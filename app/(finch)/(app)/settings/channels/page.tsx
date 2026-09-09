@@ -258,6 +258,8 @@ const CONNECT_MESSAGES: Record<string, { tone: NoticeTone; title: string; descri
   /* «취소»와 구분한다 — 개통 초기에 가장 흔한 원인은 «앱 테스터로 등록되지 않은 계정»이다 */
   not_allowed: { tone: "negative", title: "이 계정에는 아직 연결 권한이 없어요", description: "계정을 확인하고 다시 시도해 주세요." },
   state: { tone: "negative", title: "보안 검증에 실패했어요", description: "다시 시도해 주세요." },
+  /* 인가 화면에 머무는 사이 로그인이 풀린 경우 — 콜백이 code 를 버리고 로그인으로 보내며 이 결과를 싣는다 */
+  session: { tone: "warning", title: "로그인이 풀려 연결을 저장하지 못했어요", description: "다시 연결해 주세요." },
   unconfigured: { tone: "warning", title: "지금은 이 채널을 연결할 수 없어요", description: "곧 열릴 예정이니 조금만 기다려 주세요." },
   /* 운영자가 할 일이 있는 상태 — 사용자에게 설정 이름을 말하지 않는다 */
   no_encryption_key: { tone: "warning", title: "지금은 연결을 마무리할 수 없어요", description: "준비가 끝나는 대로 안내드릴게요." },
@@ -529,7 +531,7 @@ export default async function ChannelsSettingsPage({
                       action={disconnectAccount}
                       hiddenFields={{ accountId: card.id }}
                       title="연결을 해제할까요?"
-                      description={`${card.handle} 계정의 연결 정보가 삭제되고 지표 수집이 멈춰요. 언제든 다시 연결할 수 있어요.`}
+                      description={`${card.handle} 계정의 연결 정보가 삭제되고 지표 수집·댓글 자동 DM이 멈춰요. 이 채널로 예약해 둔 글은 발행되지 않아요(다시 연결한 뒤 다시 예약할 수 있어요).`}
                       confirmLabel="해제하기"
                       pendingLabel="해제 중…"
                       trigger="연결 해제"

@@ -48,12 +48,13 @@ export function SchedulePublish({
     setBusy(mode);
     setError(null);
     try {
-      const blobs = await buildFinalBlobs(slides, aiGenerated, edits, template, logo);
+      /* JPEG 로 굽는다 — 인스타 발행 API 는 JPEG 만 받는다. 다운로드 버튼은 그대로 PNG(무손실)다. */
+      const blobs = await buildFinalBlobs(slides, aiGenerated, edits, template, logo, "jpeg");
       const form = new FormData();
       form.set("caption", caption.trim());
       form.set("scheduledAt", when);
       if (mode === "draft") form.set("draft", "1");
-      blobs.forEach((b, i) => form.append("images", b, `slide-${i + 1}.png`));
+      blobs.forEach((b, i) => form.append("images", b, `slide-${i + 1}.jpg`));
 
       const res = await fetch("/api/studio/schedule", { method: "POST", body: form });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };

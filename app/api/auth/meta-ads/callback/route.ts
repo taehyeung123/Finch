@@ -77,7 +77,9 @@ export async function GET(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.redirect(`${origin}/login?next=/settings/channels`);
+    /* 인가 화면에 머무는 사이 세션이 사라진 경우 — 인스타 콜백과 같은 처리(2026-09-09 감사) */
+    consoleErrorThrottled(`oauth.no_session.${TAG}`, 10 * 60 * 1000, `[${TAG}] 콜백 도착 시 세션 없음 — code 폐기`);
+    return NextResponse.redirect(`${origin}/login?next=${encodeURIComponent("/settings/channels?connect=error&reason=session")}`);
   }
 
   /* 토큰 암호문을 쓰는 조회·저장은 **service_role 로** 한다(마이그레이션 0085, 2026-09-07 감사).

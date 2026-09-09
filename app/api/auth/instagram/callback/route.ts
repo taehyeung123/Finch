@@ -81,7 +81,11 @@ export async function GET(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.redirect(`${origin}/login?next=/settings/channels`);
+    /* 인가 화면에 머무는 사이 세션이 사라진 경우(다른 탭 로그아웃·만료). code 는 쓰지 못하고 버려진다 —
+       예전엔 로그도 안 남고 로그인 뒤 화면에도 아무 결과가 없어 «승인했는데 왜 안 붙었지»를 알 길이 없었다(2026-09-09 감사).
+       인증 전 경로라 스로틀 로그. next 에 결과 쿼리를 실어 로그인 뒤 모달로 말한다(safe-next 는 same-origin 상대경로를 통과시킨다). */
+    consoleErrorThrottled(`oauth.no_session.${TAG}`, 10 * 60 * 1000, `[${TAG}] 콜백 도착 시 세션 없음 — code 폐기`);
+    return NextResponse.redirect(`${origin}/login?next=${encodeURIComponent("/settings/channels?connect=error&reason=session")}`);
   }
 
   const config = getInstagramOAuthConfig();

@@ -35,10 +35,25 @@ export async function disconnectAccount(formData: FormData): Promise<void> {
     .delete()
     .eq("id", accountId)
     .eq("user_id", user.id)
-    .select("id");
+    .select("id, channel");
   if (error || !deleted || deleted.length === 0) {
     console.error("[settings] 연동 해제 실패:", error?.message ?? "0행 삭제(권한 또는 이미 삭제됨)");
     redirect("/settings/channels?connect=error&reason=disconnect_failed");
+  }
+
+  /* 그 채널로 예약된 글은 이제 나갈 수 없다 — 예약 시각에 «연동이 끊겼어요»로 조용히 실패하게 두지 않고
+     지금 실패로 내려 목록에서 바로 보이게 한다(다시 연결한 뒤 「다시 예약」·「지금 발행」이 된다). (2026-09-09 감사)
+     0053 이전 DB 는 channel 컬럼이 없어 이 갱신이 실패한다 — 해제 자체는 이미 끝났으므로 로그만 남긴다. */
+  const channel = (deleted[0] as { channel?: string | null }).channel;
+  if (channel) {
+    const { error: postsErr } = await supabase
+      .from("scheduled_posts")
+      .update({ status: "failed", error: "연결을 해제해서 발행하지 못했어요 — 다시 연결한 뒤 예약해 주세요" })
+      .eq("user_id", user.id)
+      .eq("channel", channel)
+      .eq("status", "scheduled");
+    if (postsErr) console.error("[settings] 해제 채널의 예약 글 정리 실패:", postsErr.message);
+    revalidatePath("/publish");
   }
   revalidatePath("/settings/channels");
   redirect("/settings/channels?connect=disconnected");

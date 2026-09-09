@@ -137,9 +137,12 @@ export async function POST(request: Request) {
   for (let i = 0; i < images.length; i++) {
     const file = images[i];
     const buf = Buffer.from(await file.arrayBuffer());
-    const objectPath = `${user.id}/${batchId}/${String(i + 1).padStart(2, "0")}.png`;
+    /* 인스타 발행 API 는 JPEG 만 받는다 — 스튜디오 패널이 JPEG 로 굽는다(2026-09-09). 옛 클라이언트의 PNG 도
+       받되 확장자·타입을 실제 파일에 맞춘다(PNG 발행은 메타 관용도에 달린 스펙 밖 경로다). */
+    const isJpeg = file.type === "image/jpeg";
+    const objectPath = `${user.id}/${batchId}/${String(i + 1).padStart(2, "0")}.${isJpeg ? "jpg" : "png"}`;
     const { error: upErr } = await supabase.storage.from("cardnews").upload(objectPath, buf, {
-      contentType: "image/png",
+      contentType: isJpeg ? "image/jpeg" : "image/png",
       upsert: false,
     });
     if (upErr) {

@@ -307,10 +307,39 @@ function drawSlide(
   return canvas;
 }
 
-function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+type BlobFormat = "png" | "jpeg";
+
+/** 다운로드는 PNG(무손실), 인스타 발행은 JPEG — 발행 API 는 JPEG 만 받는다(«JPEG is the only image format supported») */
+function canvasToBlob(canvas: HTMLCanvasElement, format: BlobFormat = "png"): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("blob_failed"))), "image/png");
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error("blob_failed"))),
+      format === "jpeg" ? "image/jpeg" : "image/png",
+      format === "jpeg" ? 0.9 : undefined,
+    );
   });
+}
+
+/**
+ * 편집기가 만든 PNG data URL 을 JPEG 로 다시 굽는다 — JPEG 엔 알파가 없으니 흰 바탕을 먼저 깐다.
+ * (카드 자체는 drawSlide 가 전체를 불투명하게 칠하므로 렌더 경로는 이 걱정이 없다.)
+ */
+async function dataUrlToJpegBlob(dataUrl: string): Promise<Blob> {
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error("decode"));
+    el.src = dataUrl;
+  });
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("canvas");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0);
+  return canvasToBlob(canvas, "jpeg");
 }
 
 /** 미리보기용 — 슬라이드를 data URL 배열로 렌더한다 (화면에 실제 카드 그대로 표시, WYSIWYG). */
@@ -344,6 +373,9 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
 /**
  * 최종 이미지 Blob 배열 — 편집기로 수정한 슬라이드(edits[index]=dataUrl)는 그 이미지를,
  * 아닌 슬라이드는 자동 렌더 결과를 쓴다. (다운로드·예약 발행 공용)
+ *
+ * format: 다운로드는 png, **발행 업로드는 jpeg** — 인스타 발행 API 가 JPEG 만 받는데 스튜디오 경로만 PNG 로 올리고
+ * 있었다(컴포저는 처음부터 JPEG 로 굽는다). 2026-09-09 감사.
  */
 export async function buildFinalBlobs(
   slides: ExportSlide[],
@@ -351,11 +383,16 @@ export async function buildFinalBlobs(
   edits: Record<number, string>,
   tpl: CardTemplate = DEFAULT_TEMPLATE,
   logo?: LoadedLogo,
+  format: BlobFormat = "png",
 ): Promise<Blob[]> {
   const out: Blob[] = [];
   for (let i = 0; i < slides.length; i += 1) {
     const edited = edits[i];
-    out.push(edited ? await dataUrlToBlob(edited) : await canvasToBlob(drawSlide(slides[i], slides.length, aiGenerated, tpl, logo)));
+    if (edited) {
+      out.push(format === "jpeg" ? await dataUrlToJpegBlob(edited) : await dataUrlToBlob(edited));
+    } else {
+      out.push(await canvasToBlob(drawSlide(slides[i], slides.length, aiGenerated, tpl, logo), format));
+    }
   }
   return out;
 }
