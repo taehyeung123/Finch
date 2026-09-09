@@ -93,13 +93,24 @@ export async function runClaimedPost(
 
   /* 토큰은 **글 소유자**의 것이다. 팀원이 만든 글은 팀원 자신의 연동으로 나간다(예약 관문도 그렇게 잠근다) —
      소유자 토큰으로 대신 내보내지 않는다. 암호문 스코프(AAD)도 같은 userId 라야 풀린다. */
-  const { data: account } = await admin
+  const { data: account, error: accErr } = await admin
     .from("connected_accounts")
     .select("platform_user_id, access_token_cipher, token_expires_at")
     .eq("user_id", post.user_id)
     .eq("channel", channel)
     .eq("connected", true)
     .maybeSingle();
+  if (accErr) {
+    /* 조회 «실패»는 «연동 없음»이 아니다(lib/data/internal.ts 규칙). 예전엔 error 를 버려서 DB 가 잠깐 흔들리면
+       멀쩡히 연동된 글이 failed 가 되고 «다시 연동하세요» 알림이 갔다 — 사용자는 정상 연동을 해제·재연동한다.
+       크론은 예약으로 되돌려 다음 실행(5분 뒤)이 다시 집게 하고, 「지금 발행」은 잠시 후 다시 시도하라고만 말한다. */
+    console.error("[publish] 연동 조회 실패:", post.id, channel, accErr.message);
+    if (opts.source === "cron") {
+      await admin.from("scheduled_posts").update({ status: "scheduled" }).eq("id", post.id);
+      return { ok: false, error: "transient", label };
+    }
+    return fail("연동 상태를 확인하지 못했어요 — 잠시 후 다시 시도해 주세요");
+  }
   const token = decryptToken(account?.access_token_cipher ?? null, {
     userId: post.user_id,
     field: "connected_accounts.access_token_cipher",

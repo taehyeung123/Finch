@@ -46,7 +46,10 @@ export function deriveChannelState(channel: string, card: ChannelCardInput, read
       chip: { tone: "ok", label: "연결됨" },
       hint: who,
       hintTone: "sub",
-      meta: channel === "tiktok" ? "팔로워·좋아요·영상 수 기준으로 집계돼요" : d !== null ? `${d}일 뒤 다시 연결` : null,
+      /* 정상 연결에서는 «N일 뒤 다시 연결»을 쓰지 않는다 — 인스타·스레드는 refresh-tokens 크론이 만료 15일 전에
+         자동으로 연장한다. 사용자가 할 일이 없는데 달력에 적어 두게 만들었다(2026-09-09 감사). 카운트다운은 갱신이
+         실패해 «만료 임박»(≤14일)으로 내려왔을 때만 보인다. */
+      meta: channel === "tiktok" ? "팔로워·좋아요·영상 수 기준으로 집계돼요" : "자동으로 연장돼요",
       metaTone: "sub",
       action: "manage",
     };

@@ -68,6 +68,8 @@ async function notifyTokenExpiry(admin: Admin, userId: string, channel: Channel,
     userId,
     type: "token_expiry",
     dedupeMs: 3 * 86_400_000,
+    /* 채널별로 따로 억제한다 — type 만 보면 만료 상태로 방치된 인스타의 3일 주기 알림이 Threads 의 D-7~D-1 알림을 전부 삼켰다(2026-09-09 감사) */
+    dedupeByTitle: true,
     title: `${CHANNEL_LABEL[channel]} 연동 토큰 만료 임박`,
     body,
   });
@@ -323,12 +325,26 @@ export async function GET(request: Request) {
     }
   }
 
+  /* 정기결제 청구·해지 만료·사전고지를 **먼저** 돈다(2026-09-09 감사). 예전엔 계정 루프 뒤에 있어서 루프가
+     300초를 넘겨 함수가 죽으면 그날 청구와 「3일 전 사전 고지」(전자상거래법)가 통째로 빠졌고, 다음 날도 같은
+     자리에서 죽었다. 매출·법정 고지가 부수 작업의 인질이 되면 안 된다. */
+  const billing = await processSubscriptions(admin);
+
   let refreshed = 0;
   let failed = 0;
   let notified = 0;
   let spikes = 0;
+  /* 벽시계 예산 — 넘기면 나머지 계정은 다음 실행으로 미룬다. 함수가 도중에 죽는 것보다 낫다 */
+  const LOOP_BUDGET_MS = 240_000;
+  const loopStartedAt = Date.now();
+  let deferredAccounts = 0;
 
-  for (const acc of accounts ?? []) {
+  for (const [idx, acc] of (accounts ?? []).entries()) {
+    if (Date.now() - loopStartedAt > LOOP_BUDGET_MS) {
+      deferredAccounts = (accounts?.length ?? 0) - idx;
+      console.warn("[cron:refresh] 시간 예산 소진 — 나머지 계정은 다음 실행으로:", deferredAccounts);
+      break;
+    }
     const channel = acc.channel as Channel;
 
     if (channel === "tiktok") {
@@ -472,12 +488,15 @@ export async function GET(request: Request) {
          사용자에게 거짓 알림을 쏜다 — 100팔로워 미만 계정에서 매일 일어난다. */
       let followersCount: number | null;
       let postsCount: number | null = null;
+      /* 인스타 프로페셔널 계정 ID(웹훅 entry.id, 0091) — 기존 연동 계정을 여기서 백필한다(재연동 없이) */
+      let igId: string | null = null;
       if (channel === "threads") {
         followersCount = await fetchThreadsFollowersCount(acc.platform_user_id ?? "", token);
       } else {
         const info = await fetchAccountInfo(token);
         followersCount = info.followersCount;
         postsCount = info.mediaCount;
+        igId = info.igId;
       }
       const prev = acc.followers ?? 0;
       const delta = followersCount === null ? 0 : followersCount - prev;
@@ -495,21 +514,27 @@ export async function GET(request: Request) {
       }
       /* null 인 컬럼은 아예 빼고 갱신한다 — 모르는 값으로 아는 값을 덮지 않는다.
          둘 다 null 이면 갱신 자체를 건너뛴다(빈 update 는 updated_at 만 흔든다). */
-      const snapshot = {
+      const snapshot: Record<string, unknown> = {
         ...(followersCount !== null ? { followers: followersCount } : {}),
         ...(postsCount !== null ? { posts: postsCount } : {}),
+        ...(igId ? { ig_id: igId } : {}),
       };
       if (Object.keys(snapshot).length > 0) {
-        await admin.from("connected_accounts").update(snapshot).eq("id", acc.id);
+        const { error: snapErr } = await admin.from("connected_accounts").update(snapshot).eq("id", acc.id);
+        if (snapErr && /ig_id/i.test(snapErr.message)) {
+          /* 0091 미적용 — 백필만 포기하고 팔로워/게시물 수는 그대로 갱신한다 */
+          const { ig_id: _i, ...withoutIg } = snapshot;
+          void _i;
+          if (Object.keys(withoutIg).length > 0) await admin.from("connected_accounts").update(withoutIg).eq("id", acc.id);
+        } else if (snapErr) {
+          throw new Error(snapErr.message);
+        }
       }
     } catch (e) {
       // 스냅샷 실패는 치명적이지 않다 — 다음 실행에서 재시도
       console.warn("[cron:refresh] 계정 스냅샷 실패:", acc.id, e instanceof Error ? e.message : String(e));
     }
   }
-
-  // 정기결제 청구·만료·사전고지 (같은 일일 크론에 통합 — 크론 개수는 별도 제한 없지만 관련 로직 응집)
-  const billing = await processSubscriptions(admin);
 
   return NextResponse.json({
     ok: accountsFailed === null,
@@ -518,6 +543,7 @@ export async function GET(request: Request) {
     refreshed,
     failed,
     notified,
+    deferredAccounts,
     spikes,
     billing,
   });

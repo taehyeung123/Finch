@@ -74,6 +74,9 @@ function pickRandomReplies(n: number, avoid: string[] = []): string[] {
   return shuffled.slice(0, n);
 }
 
+/** 「팔로우 요청 후 메시지」 — 발송 경로가 아직 이 옵션을 읽지 않는다. 배선되기 전까지 화면에서 뺀다(2026-09-09). */
+const FOLLOW_REQUEST_WIRED = false;
+
 export function RuleWizard({
   initial,
   posts,
@@ -950,6 +953,9 @@ export function RuleWizard({
                 {wantReply && !publicReplies.some((r) => r.trim()) ? (
                   <p className="text-[12px] text-negative">답글 문구가 비어 있어요 — 뒤로 이동해 답글을 채워 주세요.</p>
                 ) : null}
+                {/* ⚠️ 발송 경로가 follow_request 를 읽지 않는다 — 웹훅·flush-dms 어디에도 팔로우 여부 확인·요청 메시지 코드가 없다
+                    (2026-09-09 감사). 되지 않는 스위치를 되는 것처럼 두지 않는다(0051 규칙). 배선되면 FOLLOW_REQUEST_WIRED 를 켠다. */}
+                {FOLLOW_REQUEST_WIRED ? (
                 <div className="flex items-center justify-between gap-3">
                   <span className={cn("text-[15px] font-medium", !followRequestReady && "text-fg-sub")}>
                     팔로우 요청 후 메시지 보내기
@@ -967,8 +973,6 @@ export function RuleWizard({
                     label="팔로우 요청 후 메시지 보내기"
                   />
                 </div>
-                {!followRequestReady ? (
-                  <p className="text-[12px] text-fg-sub">팔로우 요청은 서버 업데이트(0052) 적용 후 쓸 수 있어요.</p>
                 ) : null}
               </div>
 

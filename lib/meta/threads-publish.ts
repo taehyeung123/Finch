@@ -50,12 +50,12 @@ async function threadsCall<T>(
 }
 
 /**
- * 컨테이너 상태 조회 필드 이름이 **실 계정으로 확정되지 않았다.**
- * 인스타는 `status_code`(instagram-publish.ts), Threads 문서는 `status` 로 보이지만
- * docs/REAL_API_SPEC.md 5절에 컨테이너 상태 조회 자체가 기술돼 있지 않다.
- * 그래서 두 이름을 모두 읽는다 — 실 테스터 계정으로 확인한 뒤 하나로 줄일 것.
+ * 컨테이너 상태 조회 필드 — Threads 문서(Troubleshooting «Publishing Status»)가 정하는 필드는 `status`·`error_message`·`id` 뿐이다.
+ * ⚠️ 예전엔 인스타 이름인 `status_code` 까지 같이 요청했는데, Graph 는 없는 필드를 요청하면 **요청 전체를 400 으로 거절**한다 —
+ * 그래서 첫 폴링부터 실패로 떨어져 상태를 한 번도 못 읽은 채 «장님 대기» 뒤 발행을 강행했다(이미지 처리가 30초를 넘기면
+ * «Media ID is not available» 로 실패). 2026-09-09 감사에서 문서로 확정. 아래 blind 경로는 순수 네트워크 오류용 안전망으로만 남는다.
  */
-const STATUS_FIELDS = "status,status_code,error_message";
+const STATUS_FIELDS = "status,error_message";
 
 /** 상태를 못 읽을 때 최소한 기다리는 시간 — 스펙 권고 «평균 30초» 근거 */
 const BLIND_WAIT_MS = 30_000;

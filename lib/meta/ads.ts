@@ -105,7 +105,8 @@ export async function fbGetAll<T>(path: string, accessToken: string, what: strin
     const next = page.paging?.next;
     if (!next) return out;
     /* next 는 토큰까지 박힌 완전한 URL 이라 그대로 부른다 */
-    const res = await fetch(next, { cache: "no-store" });
+    /* 2쪽부터도 같은 상한 — 없으면 첫 쪽만 15초이고 다음 쪽은 함수 예산까지 매달렸다(2026-09-09 감사) */
+    const res = await fetch(next, { cache: "no-store", signal: AbortSignal.timeout(READ_TIMEOUT_MS) });
     if (!res.ok) throw new Error(`fb_get_failed ${what} page${i}: http_${res.status}`);
     page = (await res.json().catch(() => ({}))) as Paged<T>;
     out.push(...(page.data ?? []));

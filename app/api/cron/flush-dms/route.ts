@@ -1,3 +1,4 @@
+import { ownerDevToken } from "@/lib/auto-dm/dev-token";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptToken } from "@/lib/crypto/tokens";
@@ -96,15 +97,28 @@ export async function GET(request: Request) {
     }
     return { rules: (first.data ?? []) as unknown as FlushRule[], error: first.error?.message ?? null };
   };
-  const [{ rules, error: rulesLoadErr }, { data: accounts }] = await Promise.all([
-    loadRules(),
-    admin
+  /* ig_id(프로페셔널 계정 ID, 0091)를 함께 읽는다 — /{IG_ID}/messages 의 경로 노드는 웹훅이 쓰는 entry.id 와 같아야 한다.
+     platform_user_id 는 앱 범위 id 라 다른 값일 수 있다. 0091 미적용이면 컬럼 없이 다시 읽는다. */
+  type FlushAccount = { user_id: string; platform_user_id: string | null; ig_id: string | null; access_token_cipher: string | null };
+  const loadAccounts = async (): Promise<{ data: FlushAccount[] | null }> => {
+    const withIg = await admin
       .from("connected_accounts")
-      .select("user_id, platform_user_id, access_token_cipher")
+      .select("user_id, platform_user_id, ig_id, access_token_cipher")
       .eq("channel", "instagram")
       .eq("connected", true)
-      .in("user_id", userIds),
-  ]);
+      .in("user_id", userIds);
+    if (withIg.error && /ig_id/i.test(withIg.error.message)) {
+      const legacy = await admin
+        .from("connected_accounts")
+        .select("user_id, platform_user_id, access_token_cipher")
+        .eq("channel", "instagram")
+        .eq("connected", true)
+        .in("user_id", userIds);
+      return { data: ((legacy.data ?? []) as Omit<FlushAccount, "ig_id">[]).map((a) => ({ ...a, ig_id: null })) };
+    }
+    return { data: (withIg.data ?? []) as unknown as FlushAccount[] };
+  };
+  const [{ rules, error: rulesLoadErr }, { data: accounts }] = await Promise.all([loadRules(), loadAccounts()]);
   if (rulesLoadErr) {
     console.error("[cron:flush] 규칙 조회 실패 — 실행 중단(다음 크론 재시도):", rulesLoadErr);
     return NextResponse.json({ ok: false, error: rulesLoadErr }, { status: 500 });
@@ -134,11 +148,12 @@ export async function GET(request: Request) {
     }
 
     const account = accountByUser.get(s.user_id);
+    /* 개발용 토큰 폴백은 운영자 본인 계정에만(lib/auto-dm/dev-token.ts) */
     const token =
       decryptToken(account?.access_token_cipher ?? null, { userId: s.user_id, field: "connected_accounts.access_token_cipher" }) ??
-      process.env.IG_TEST_ACCESS_TOKEN ??
-      null;
-    if (!account?.platform_user_id || !token) {
+      (account ? await ownerDevToken(admin, s.user_id) : null);
+    const igUserId = account?.ig_id ?? account?.platform_user_id ?? null;
+    if (!igUserId || !token) {
       // 토큰 여전히 없음 — pending 유지 (7일 창 내 다음 실행에서 재시도)
       skipped++;
       continue;
@@ -146,7 +161,7 @@ export async function GET(request: Request) {
 
     const message = applyAdDisclosure(rule.dm_message, rule.is_advertising);
     const outcome = await sendPrivateReply({
-      igUserId: account.platform_user_id,
+      igUserId,
       commentId: s.ig_comment_id,
       message,
       buttons: parseButtons(rule),

@@ -145,8 +145,15 @@ async function loadAccountCards(): Promise<AccountCard[] | null> {
       avatarUrl: row?.avatar_url ?? null,
       connected: Boolean(row?.connected),
       // TikTok은 액세스 토큰이 24시간짜리라 매일 자동 갱신된다 — "N일 후 만료"를 그대로 보여주면
-      // 정상 상태에서도 매번 "만료 임박"처럼 보여 오해를 유발하므로 숨긴다(lib/data/live.ts 주석과 동일 근거).
-      tokenExpiresInDays: channel === "tiktok" ? null : daysUntil(row?.token_expires_at ?? null),
+      // 정상 상태에서도 매번 "만료 임박"처럼 보여 오해를 유발하므로 카운트다운은 숨긴다(lib/data/live.ts 주석과 동일 근거).
+      // ⚠️ 다만 «만료됨» 판정까지 지우면 안 된다 — 갱신이 죽어도(권한 회수·refresh_token 만료) 영원히 「연결됨」이었다.
+      //    마지막 성공 만료시각이 하루 넘게 지났으면(=일일 갱신을 한 번 이상 놓쳤으면) 0 으로 넘겨 「만료됨」으로 그린다.
+      tokenExpiresInDays:
+        channel === "tiktok"
+          ? row?.token_expires_at && Date.parse(row.token_expires_at) < Date.now() - 24 * 60 * 60 * 1000
+            ? 0
+            : null
+          : daysUntil(row?.token_expires_at ?? null),
     };
   });
 }
@@ -265,7 +272,8 @@ const CONNECT_MESSAGES: Record<string, { tone: NoticeTone; title: string; descri
   no_encryption_key: { tone: "warning", title: "지금은 연결을 마무리할 수 없어요", description: "준비가 끝나는 대로 안내드릴게요." },
   already_linked: { tone: "warning", title: "이미 다른 핀치 계정에 연결된 계정이에요", description: "그 계정으로 로그인하거나 다른 계정으로 연결해 주세요." },
   /* 토큰은 저장됐는데 광고 계정을 못 읽은 «절반 성공» — 실패로 덮으면 승인한 연결을 처음부터 다시 하게 만든다 */
-  ads_accounts_unavailable: { tone: "warning", title: "연결은 됐지만 광고 계정 목록을 불러오지 못했어요", description: "잠시 후 광고 화면을 다시 열어 주세요." },
+  /* «잠시 후 광고 화면을 다시 열라»고 했었다 — 목록을 다시 받는 코드는 OAuth 콜백뿐이라 지킬 수 없는 약속이었다(2026-09-09 감사) */
+  ads_accounts_unavailable: { tone: "warning", title: "연결은 됐지만 광고 계정 목록을 불러오지 못했어요", description: "설정에서 「다시 연결」을 눌러 주세요." },
   no_ad_account: { tone: "warning", title: "연결은 됐지만 쓸 수 있는 광고 계정이 없어요", description: "메타에서 이 계정에 광고 계정 권한이 있는지 확인해 주세요." },
   ads_profile: { tone: "negative", title: "계정 정보를 읽지 못했어요", description: "잠시 후 다시 시도해 주세요." },
   migration_needed: { tone: "warning", title: "지금은 이 연결을 마무리할 수 없어요", description: "준비가 끝나는 대로 안내드릴게요." },

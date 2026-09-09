@@ -1,3 +1,5 @@
+import { ownerDevToken } from "@/lib/auto-dm/dev-token";
+import { consoleErrorThrottled } from "@/lib/monitoring/log-throttle";
 import { NextResponse, after } from "next/server";
 import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -26,6 +28,10 @@ import { isNightInKST, isOptOutMessage, pickRule, type CommentEvent, type Matcha
  */
 
 export const runtime = "nodejs"; // node:crypto 사용 (edge 아님)
+/* after() 안의 처리(댓글당 DB 왕복 + Graph 호출, 메타는 한 POST 에 댓글 여러 개를 묶는다)가 함수 실행시간에 포함된다 —
+   선언이 없으면 플랫폼 기본값에 걸려 도중에 강제 종료되고, Private Reply 1회 제한 때문에 재처리 때 이미 보낸 건이
+   실패로 집계된다(flush-dms·refresh-tokens·publish-scheduled 와 같은 근거, 2026-09-09 감사). */
+export const maxDuration = 300;
 
 /**
  * 월 발송 한도 폐지(2026-08-14) — DM은 원가 0원이라 발송량 게이팅을 없앴다.
@@ -174,25 +180,41 @@ async function processEntry(entry: WebhookEntry) {
   const igAccountId = entry.id;
   if (!igAccountId) return;
 
-  // 웹훅 계정 → 핀치 사용자 매핑 (platform_user_id는 0004에서 채널별 유니크 — 중복 연동 불가)
-  const { data: account, error: accountErr } = await admin
-    .from("connected_accounts")
-    .select("user_id, access_token_cipher, platform_user_id")
-    .eq("platform_user_id", igAccountId)
-    .eq("channel", "instagram")
-    .maybeSingle();
+  /* 웹훅 계정 → 핀치 사용자 매핑.
+     ⚠️ entry.id 는 **인스타그램 프로페셔널 계정 ID(IG_ID)** 다. 콜백이 platform_user_id 에 저장하던 /me 의 `id` 는
+     **앱 범위 ID** 라 값이 다르다(메타 문서: user_id — «This ID is the value of the id field received in webhook
+     notifications»). 그래서 이 매핑이 영영 0행이었고 자동 DM 이 한 통도 나갈 수 없는 구조였다(2026-09-09 감사).
+     이제 콜백이 ig_id(=user_id)를 따로 저장하고(0091) 여기서 그걸로 먼저 찾는다. 0091 미적용·아직 백필 안 된 계정은
+     platform_user_id 로 한 번 더 찾는다(두 값이 같은 계정도 있다). connected=false(앱에서 해제)는 잡지 않는다 —
+     끊긴 계정의 댓글을 예약해 봐야 token_unavailable 로 남았다가 6.5일 뒤 실패로 집계될 뿐이다. */
+  const findAccount = (col: "ig_id" | "platform_user_id") =>
+    admin
+      .from("connected_accounts")
+      .select("user_id, access_token_cipher, platform_user_id")
+      .eq(col, igAccountId)
+      .eq("channel", "instagram")
+      .eq("connected", true)
+      .maybeSingle();
+  let lookup = await findAccount("ig_id");
+  if (lookup.error && /ig_id/i.test(lookup.error.message)) lookup = await findAccount("platform_user_id");
+  else if (!lookup.error && !lookup.data) lookup = await findAccount("platform_user_id");
+  const { data: account, error: accountErr } = lookup;
   if (accountErr) {
     // DB 오류를 '미연동 계정'으로 오인하면 파이프라인이 조용히 죽는다 — 반드시 로그
     console.error("[auto-dm] 계정 매핑 조회 실패:", igAccountId, accountErr.message);
     return;
   }
-  if (!account) return;
+  if (!account) {
+    /* 예전엔 여기서 로그 한 줄 없이 끝나 매핑 실패를 관측할 수 없었다. 인증 전 경로라 스로틀. */
+    consoleErrorThrottled("auto-dm.unmapped", 10 * 60 * 1000, "[auto-dm] 웹훅 계정에 대응하는 연동이 없음:", igAccountId);
+    return;
+  }
 
   const ownerId: string = account.user_id;
+  /* 개발용 토큰 폴백은 운영자 본인 계정에만(lib/auto-dm/dev-token.ts) — 남의 계정에 쓰면 실패를 확정시킨다 */
   const accessToken =
     decryptToken(account.access_token_cipher, { userId: ownerId, field: "connected_accounts.access_token_cipher" }) ??
-    process.env.IG_TEST_ACCESS_TOKEN ??
-    null;
+    (await ownerDevToken(admin, ownerId));
 
   /* ── 1) 수신 메시지: '수신거부' 답장 → 옵트아웃 등록 ── */
   for (const msg of entry.messaging ?? []) {
@@ -309,7 +331,14 @@ async function processEntry(entry: WebhookEntry) {
       p_user_hash_legacy: rh.legacy,
     });
     if (reserve.error && isMissingFunction(reserve.error.message)) {
-      /* 0090 적용 전 배포 — 옛 시그니처로 한 번 더. 여기서 멈추면 자동 DM 이 통째로 죽는다. */
+      /* 0090 적용 전 배포 — 옛 시그니처로 한 번 더. 여기서 멈추면 자동 DM 이 통째로 죽는다.
+         ⚠️ 단, 페퍼가 켜져 있으면(rh.legacy 가 있다) 폴백하지 않는다 — 옛 함수는 해시 하나만 대조하므로
+         페퍼 이전에 저장된 «수신거부»가 안 보여 되돌릴 수 없는 DM 이 나간다. 그 조합에선 이번 댓글을 건너뛰고
+         (dm_sends 행이 없으니 0090 적용 뒤 재전송 때 처리된다) 로그로 알린다. */
+      if (rh.legacy !== null) {
+        console.error("[auto-dm] 0090 미적용인데 DM_HASH_PEPPER 가 켜져 있다 — 옛 함수로 폴백하지 않음(수신거부 대조 누락 방지):", event.commentId);
+        continue;
+      }
       reserve = await admin.rpc("reserve_dm_send", {
         p_owner: ownerId,
         p_rule_id: rule.id,

@@ -181,6 +181,10 @@ export async function GET(request: Request) {
       return settingsRedirect(origin, { connect: "warn", reason: "ads_accounts_unavailable" });
     }
     if (accounts.length === 0) {
+      /* «0개»는 «모름»(null)과 달리 사실이다 — 이전 연동 때 저장된 계정 행을 지운다. 안 지우면 설정은 「연결됨·계정 있음」,
+         모달은 「계정 없음」, /ads 는 권한 없는 옛 계정을 불러 영구 「불러오지 못했어요」가 된다(2026-09-09 감사). */
+      const { error: pruneErr } = await store.from("meta_ad_accounts").delete().eq("user_id", user.id).eq("connection_id", connectionId);
+      if (pruneErr) console.error(`[${TAG}] 계정 0개 정리 실패:`, pruneErr.message);
       return settingsRedirect(origin, { connect: "warn", reason: "no_ad_account" });
     }
 

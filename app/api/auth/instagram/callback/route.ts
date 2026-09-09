@@ -144,7 +144,9 @@ export async function GET(request: Request) {
       ...(info.mediaCount !== null && info.mediaCount !== undefined ? { posts: info.mediaCount } : {}),
       access_token_cipher: cipher,
       token_expires_at: expiresAt,
+      /* platform_user_id = 앱 범위 id(해제 콜백이 대조), ig_id = 프로페셔널 계정 ID(웹훅 entry.id) — 둘은 다른 값이다(0091) */
       platform_user_id: info.id,
+      ig_id: info.igId,
       /* 동의 시점에 실제로 받은 권한 — 스코프는 여기서 고정되므로 나중에 배열을 늘려도
          이 토큰은 안 바뀐다. 기록해 두면 «예약 발행이 새벽에 권한 오류로 실패»하기 전에
          화면에서 재연동을 안내할 수 있다(0075). 응답에 permissions 가 없으면 빈 배열이 오는데,
@@ -181,6 +183,14 @@ export async function GET(request: Request) {
       write = existing
         ? await store.from("connected_accounts").update(row).eq("id", existing.id).select("id")
         : await store.from("connected_accounts").insert(row).select("id");
+    }
+    if (write.error && /ig_id/i.test(write.error.message)) {
+      // 0091 미적용 DB — 웹훅용 ID 기록만 포기하고 나머지는 저장한다(웹훅은 platform_user_id 로 한 번 더 찾는다)
+      const { ig_id: _i, ...withoutIg } = rowWithAvatar as Record<string, unknown>;
+      void _i;
+      write = existing
+        ? await store.from("connected_accounts").update(withoutIg).eq("id", existing.id).select("id")
+        : await store.from("connected_accounts").insert(withoutIg).select("id");
     }
 
     if (write.error) {

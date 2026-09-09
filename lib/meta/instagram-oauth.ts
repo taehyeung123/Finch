@@ -222,7 +222,10 @@ export async function subscribeWebhookFields(accessToken: string): Promise<{ ok:
 }
 
 export interface InstagramAccountInfo {
+  /** 앱 범위(app-scoped) ID — 해제 콜백(signed_request.user_id)과 대조하는 값. platform_user_id 에 들어간다 */
   id: string;
+  /** 인스타그램 프로페셔널 계정 ID(IG_ID) — **댓글 웹훅 entry.id 와 같은 값**. 옛 토큰 응답엔 없을 수 있어 null 허용(0091) */
+  igId: string | null;
   username: string;
   name: string | null;
   /** 100팔로워 미만 계정은 인스타그램이 안 준다 — 그때는 null 이다(0 이 아니다) */
@@ -236,7 +239,8 @@ export interface InstagramAccountInfo {
 
 /** 연동 직후 계정 기본 정보 조회 (설정·대시보드 표시용). 100팔로워 미만이면 일부 필드 결측 가능. */
 export async function fetchAccountInfo(accessToken: string): Promise<InstagramAccountInfo> {
-  const fields = "id,username,name,followers_count,follows_count,media_count,profile_picture_url,biography,website";
+  /* user_id 를 함께 받는다 — id(앱 범위)와 다른 값이고, 웹훅은 이걸로 계정을 찾는다(2026-09-09 감사, 0091) */
+  const fields = "id,user_id,username,name,followers_count,follows_count,media_count,profile_picture_url,biography,website";
   const res = await fetch(`${GRAPH_INSTAGRAM_BASE}/me?fields=${fields}&access_token=${encodeURIComponent(accessToken)}`);
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: { message?: string } };
   if (!res.ok || !json.id) {
@@ -244,6 +248,7 @@ export async function fetchAccountInfo(accessToken: string): Promise<InstagramAc
   }
   return {
     id: String(json.id),
+    igId: typeof json.user_id === "string" || typeof json.user_id === "number" ? String(json.user_id) : null,
     username: typeof json.username === "string" ? json.username : "",
     name: typeof json.name === "string" ? json.name : null,
     /* ⚠️ 결측을 0 으로 확정하지 않는다. 100팔로워 미만 계정은 followers_count 가 **아예 안 온다**

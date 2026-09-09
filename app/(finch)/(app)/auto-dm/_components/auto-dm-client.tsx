@@ -339,10 +339,7 @@ export function AutoDmClient({
                           <dd className={rule.publicReplies.length > 0 ? "font-semibold text-positive" : "text-fg-sub"}>
                             {rule.publicReplies.length > 0 ? "ON" : "OFF"}
                           </dd>
-                          <dt className="ml-1.5 text-fg-faint">팔로우 요청 :</dt>
-                          <dd className={rule.followRequest ? "font-semibold text-positive" : "text-fg-sub"}>
-                            {rule.followRequest ? "ON" : "OFF"}
-                          </dd>
+                          {/* 「팔로우 요청」 표시는 뺐다 — 발송 경로가 이 옵션을 읽지 않아 ON 이어도 아무 일이 없다(2026-09-09, rule-wizard 참조) */}
                         </div>
                       </dl>
 

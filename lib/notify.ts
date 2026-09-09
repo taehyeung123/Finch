@@ -16,6 +16,8 @@ export interface NotifyParams {
   settingKey?: string;
   /** 설정되면 이 기간(ms) 내 같은 type 알림이 있으면 건너뛴다 */
   dedupeMs?: number;
+  /** dedupe 를 type 이 아니라 **type + title** 로 본다 — 한 type 을 여러 채널이 나눠 쓸 때(토큰 만료) 채널별로 억제하려고 */
+  dedupeByTitle?: boolean;
   /**
    * **법정 고지** — 수신 설정을 따르지 않고 항상 보낸다.
    * 정기결제 갱신 3일 전 고지·결제 실패·구독 종료가 여기 해당한다. 구독 시작 화면의 필수 동의문이
@@ -48,13 +50,14 @@ export async function notifyUser(admin: SupabaseClient, params: NotifyParams): P
   if (!pref.inapp) return false;
 
   if (params.dedupeMs) {
-    const { data: recent } = await admin
+    let recentQ = admin
       .from("notifications")
       .select("id")
       .eq("user_id", params.userId)
       .eq("type", params.type)
-      .gte("created_at", new Date(Date.now() - params.dedupeMs).toISOString())
-      .limit(1);
+      .gte("created_at", new Date(Date.now() - params.dedupeMs).toISOString());
+    if (params.dedupeByTitle) recentQ = recentQ.eq("title", params.title);
+    const { data: recent } = await recentQ.limit(1);
     if (recent && recent.length > 0) return false;
   }
 
