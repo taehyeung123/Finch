@@ -45,13 +45,14 @@ export async function claimPost(
   opts: {
     /** 서버 액션 경로는 **반드시** 넘긴다 — admin 은 RLS 를 우회하므로 이 필터가 곧 권한이다 */
     userId?: string;
-    /** 「지금 발행」은 예약 시각을 지금으로 바꿔 둔다 — 목록·달력이 실제 발행 시각을 보여 주게 */
-    scheduledAt?: string;
   } = {},
 ): Promise<boolean> {
+  /* ⚠️ 여기서 scheduled_at 을 건드리지 않는다. 「지금 발행」이 선점하면서 «지금»으로 덮었더니, 실패했을 때
+     원래 9/20 이던 예약이 오늘 칸의 실패로 옮겨 앉아 예약일 칸에서는 사라졌다(2026-09-09 점검).
+     실제 발행 시각은 **성공했을 때만** runClaimedPost 가 적는다. */
   let q = admin
     .from("scheduled_posts")
-    .update({ status: "publishing", error: null, ...(opts.scheduledAt ? { scheduled_at: opts.scheduledAt } : {}) })
+    .update({ status: "publishing", error: null })
     .eq("id", id)
     .in("status", from);
   if (opts.userId) q = q.eq("user_id", opts.userId);
@@ -145,12 +146,15 @@ export async function runClaimedPost(
      회수 로직이 failed 로 뒤집으며, 사용자가 「다시 시도」를 누르면 **같은 글이 두 번 올라간다.** 그래서 세 번까지
      다시 쓰고, 끝내 안 되면 media id 를 로그에 남겨 손으로 맞출 수 있게 한다(회수 문구도 «올라갔는지 확인하라»고 말한다).
      ig_media_id 는 인스타 시절 이름이지만 스레드 media id 도 여기 들어간다(0074 주석). */
+  /* 「지금 발행」은 성공한 시각을 예약 시각으로 적는다 — 목록·달력이 실제 발행 시각을 보여 주게. 크론은 예약 시각 그대로. */
+  const published = {
+    status: "published",
+    ig_media_id: result.mediaId,
+    ...(opts.source === "now" ? { scheduled_at: new Date().toISOString() } : {}),
+  };
   let recorded = false;
   for (let attempt = 1; attempt <= 3 && !recorded; attempt++) {
-    const { error: upErr } = await admin
-      .from("scheduled_posts")
-      .update({ status: "published", ig_media_id: result.mediaId })
-      .eq("id", post.id);
+    const { error: upErr } = await admin.from("scheduled_posts").update(published).eq("id", post.id);
     if (!upErr) {
       recorded = true;
     } else {

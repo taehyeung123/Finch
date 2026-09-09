@@ -37,7 +37,8 @@ async function threadsCall<T>(
 ): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
   const q = new URLSearchParams({ ...params, access_token: accessToken });
   try {
-    const res = await fetch(`${GRAPH_THREADS_BASE}${path}?${q.toString()}`, { method: "POST" });
+    /* 호출마다 상한 — 없으면 캐러셀 아이템 생성 루프가 메타 지연에 무한정 매달려 함수 maxDuration 을 넘긴다(인스타 어댑터와 같은 수리) */
+    const res = await fetch(`${GRAPH_THREADS_BASE}${path}?${q.toString()}`, { method: "POST", signal: AbortSignal.timeout(15_000) });
     const json = (await res.json().catch(() => ({}))) as T & GraphErrorBody;
     if (!res.ok) {
       return { ok: false, error: json.error?.message ?? `http_${res.status}` };
@@ -81,8 +82,10 @@ async function pollContainerStatus(
   const blindWait = Math.min(BLIND_WAIT_MS, Math.max(0, maxWaitMs - 3_000));
 
   while (Date.now() - start < maxWaitMs) {
+    /* 한 번의 상태 조회도 남은 예산 안에서만 기다린다 — 루프 조건은 «시작 시점»만 보므로 한 호출이 매달리면 예산을 넘긴다 */
     const res = await fetch(
       `${GRAPH_THREADS_BASE}/${containerId}?fields=${STATUS_FIELDS}&access_token=${encodeURIComponent(accessToken)}`,
+      { signal: AbortSignal.timeout(Math.min(15_000, Math.max(1_000, maxWaitMs - (Date.now() - start)))) },
     );
     const json = (await res.json().catch(() => ({}))) as {
       status?: string;

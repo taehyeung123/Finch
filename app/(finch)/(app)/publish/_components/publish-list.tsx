@@ -547,7 +547,8 @@ export function PublishList({
                             <button
                               type="button"
                               onClick={() => cancel(post.id)}
-                              className="trans-state rounded-card p-1 text-fg-faint hover:bg-tint-hover hover:text-negative"
+                              disabled={nowBusy !== null}
+                              className="trans-state rounded-card p-1 text-fg-faint hover:bg-tint-hover hover:text-negative disabled:opacity-40"
                               aria-label="예약 취소"
                             >
                               <X className="size-3.5" />
@@ -608,10 +609,12 @@ export function PublishList({
                       </Button>
                     ) : null}
                     {post.status === "scheduled" ? (
+                      /* 「지금 발행」이 도는 동안은 막는다 — 서버는 이미 publishing 이라 취소가 0행에 적용되고, 화면만 «취소됨»이 되면서 글은 올라갔다 */
                       <button
                         type="button"
                         onClick={() => cancel(post.id)}
-                        className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-negative"
+                        disabled={nowBusy !== null}
+                        className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-negative disabled:opacity-40"
                         aria-label="예약 취소"
                         title="예약 취소"
                       >

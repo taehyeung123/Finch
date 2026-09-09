@@ -30,14 +30,18 @@ import {
   쓰되(0085 — 암호문은 서버만 읽는다), 그 앞에서 RLS 로 본인 행임을 먼저 확인하고 admin 쿼리에도 user_id 를 건다.
 */
 
-/* 「지금 발행」이 메타 컨테이너 처리를 기다릴 상한. /publish 의 maxDuration(120s) 안에서
-   이미지 업로드·DB·알림 몫을 빼고 잡는다 — 넘기면 플랫폼이 액션을 죽여 실패 처리가 실행되지 않는다.
+/* 「지금 발행」이 메타 쪽 흐름(아이템 생성·컨테이너·폴링·발행 합계)에 쓸 시간 상한. /publish 의 maxDuration(120s)
+   안에서 이미지 업로드·DB·알림 몫을 빼고 잡는다 — 넘기면 플랫폼이 액션을 죽여 실패 처리가 실행되지 않는다.
+   어댑터가 이 값을 **전체 흐름**의 데드라인으로 쓰므로(instagram-publish.ts) 장수와 무관하게 이 안에서 끝난다.
    createPost 는 업로드에 쓴 시간만큼 더 줄인다(아래). */
-const NOW_WAIT_BUDGET_MS = 70_000;
-const NOW_TOTAL_BUDGET_MS = 100_000;
+const NOW_WAIT_BUDGET_MS = 80_000;
+const NOW_TOTAL_BUDGET_MS = 105_000;
 
 /** 「지금 발행」의 결과 — 화면이 모달로 그린다 */
-export type PublishOutcome = { published: true; label: string } | { published: false; error: string; label: string };
+export type PublishOutcome =
+  | { published: true; label: string }
+  /** deferred: 저장은 됐고 크론이 5분 안에 집어 간다 — «실패»가 아니라 «지금은 못 했다»다(화면이 다르게 말한다) */
+  | { published: false; error: string; label: string; deferred?: boolean };
 
 export type CreatePostResult =
   /** 저장 자체가 안 됐다 — 컴포저는 열린 채로 이유를 보여 준다 */
@@ -227,10 +231,7 @@ export async function publishNow(id: string): Promise<{ ok: false; error: string
     console.error("[publish] 지금 발행 불가 — 서버 자격증명 미설정");
     return { ok: false, error: "잠시 후 다시 시도해 주세요." };
   }
-  const claimed = await claimPost(admin, id, ["draft", "scheduled", "failed"], {
-    userId: user.id,
-    scheduledAt: new Date().toISOString(),
-  });
+  const claimed = await claimPost(admin, id, ["draft", "scheduled", "failed"], { userId: user.id });
   if (!claimed) return { ok: false, error: "이미 발행이 시작된 글이에요. 잠시 후 목록을 확인해 주세요." };
 
   const outcome = await runClaimedPost(
@@ -452,7 +453,11 @@ export async function createPost(input: {
     /* 저장은 됐다. 크론이 5분 안에 집어 가므로 «지금»은 못 지켜도 발행은 된다 — 그 사실을 그대로 말한다 */
     console.error("[publish] 지금 발행 불가 — 서버 자격증명 미설정. 크론에 맡긴다:", inserted.data.id);
     revalidatePath("/publish");
-    return { ok: true, mode: "now", outcome: { published: false, label, error: "지금 바로는 올리지 못했어요. 5분 안에 자동으로 발행돼요." } };
+    return {
+      ok: true,
+      mode: "now",
+      outcome: { published: false, deferred: true, label, error: "지금 바로는 올리지 못했어요. 5분 안에 자동으로 발행돼요." },
+    };
   }
   const claimed = await claimPost(admin, inserted.data.id, ["scheduled"], { userId: user.id });
   if (!claimed) {

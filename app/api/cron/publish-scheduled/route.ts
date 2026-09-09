@@ -28,8 +28,10 @@ const MIN_PER_POST_MS = 20_000;
 const PUBLISH_RESERVE_MS = 8_000;
 /** 한 건이 컨테이너 처리를 기다릴 상한 — 캐러셀 10장도 보통 이 안에 끝난다 */
 const MAX_WAIT_PER_POST_MS = 90_000;
-/** 이 시간을 넘긴 publishing 은 이전 실행이 죽으며 남긴 것으로 보고 회수한다 */
-const STUCK_MINUTES = 30;
+/** 이 시간을 넘긴 publishing 은 이전 실행이 죽으며 남긴 것으로 보고 회수한다.
+    정상 실행은 길어야 5분(크론 maxDuration 300)·2분(「지금 발행」)이라 10분이면 확실히 죽은 것이다 —
+    30분이던 것을 줄였다: 그동안 사용자는 그 글을 다시 시도도 삭제도 못 한다(둘 다 publishing 을 안 받는다). */
+const STUCK_MINUTES = 10;
 
 export async function GET(request: Request) {
   if (!isAuthorizedCron(request)) {

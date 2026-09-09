@@ -229,6 +229,16 @@ export function PostComposer({
 
   async function save() {
     if (!canSave) return;
+    /* earliestAt 은 렌더 시점 값이다 — 창을 열어 두고 머뭇거리면 «지금»이 지나가 서버가 «지난 시각»으로 거절한다.
+       제출 직전에 다시 재고, 지났으면 방금 시각으로 맞춘 뒤 한 번 더 누르게 한다(타이머 없이 제출이라는 사건에서만). */
+    if (mode === "schedule") {
+      const fresh = earliestPublishAt();
+      if (when < fresh) {
+        setWhen(fresh);
+        setError("시간이 좀 지났어요 — 예약 시각을 방금으로 다시 맞췄어요. 확인하고 다시 눌러 주세요.");
+        return;
+      }
+    }
     setSaving(true);
     setError(null);
     try {
@@ -251,12 +261,15 @@ export function PostComposer({
         onSaved(
           res.outcome.published
             ? { tone: "positive", title: `${label}에 올라갔어요`, description: "「발행완료」 탭에서 확인할 수 있어요." }
-            : /* 저장은 됐고 발행만 실패 — 컴포저를 닫는다. 열어 둔 채 오류만 보이면 같은 글을 두 번 올리게 된다 */
-              {
-                tone: "negative",
-                title: `${label}에 올리지 못했어요`,
-                description: `${res.outcome.error} — 글은 「발행예약」 탭에 남아 있어요. 다시 시도하거나 지울 수 있어요.`,
-              },
+            : res.outcome.deferred
+              ? /* 저장은 됐고 크론이 곧 집어 간다 — «실패»로 말하면 정상 발행 예정 글을 지우게 된다 */
+                { tone: "warning", title: "저장했어요 — 5분 안에 자동으로 올라가요", description: "지금 바로는 올리지 못했어요. 「발행예약」 탭에서 상태를 볼 수 있어요." }
+              : /* 저장은 됐고 발행만 실패 — 컴포저를 닫는다. 열어 둔 채 오류만 보이면 같은 글을 두 번 올리게 된다 */
+                {
+                  tone: "negative",
+                  title: `${label}에 올리지 못했어요`,
+                  description: `${res.outcome.error} — 글은 「발행예약」 탭에 남아 있어요. 다시 시도하거나 지울 수 있어요.`,
+                },
         );
       } else if (res.mode === "draft") {
         onSaved({ tone: "positive", title: "초안으로 저장했어요", description: "「초안」 탭에서 언제든 시각을 정하거나 지금 발행할 수 있어요." });

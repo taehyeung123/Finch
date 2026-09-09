@@ -517,14 +517,19 @@ export async function cancelScheduledPost(id: string): Promise<{ ok: boolean }> 
   } = await supabase.auth.getUser();
   if (!user) return { ok: false };
 
-  const { error } = await supabase
+  /* ⚠️ .select() 로 실제로 바뀐 행 수를 본다 — PostgREST 는 조건에 맞는 행이 0개여도 오류를 내지 않는다.
+     「지금 발행」이 먼저 선점해 status 가 publishing 이면 이 UPDATE 는 0행이고, 예전엔 그걸 ok:true 로 돌려
+     화면이 «취소됨»을 그리는 사이 글은 그대로 올라갔다(2026-09-09 점검). */
+  const { data, error } = await supabase
     .from("scheduled_posts")
     .update({ status: "canceled" })
     .eq("id", id)
-    .eq("status", "scheduled");
+    .eq("status", "scheduled")
+    .select("id");
   if (error) {
     console.error("[studio] 예약 취소 실패:", error.message);
     return { ok: false };
   }
+  if (!data || data.length === 0) return { ok: false };
   return { ok: true };
 }
