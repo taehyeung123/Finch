@@ -8,8 +8,8 @@ import { isDemoMode } from "@/lib/supabase/config";
 /**
  * 채널 연동 해제 — 저장된 계정 행(암호화 토큰 포함)을 삭제한다.
  * RLS(auth.uid()=user_id) + user_id 명시 필터 이중 방어로 타인 계정은 건드릴 수 없다.
- * 데모 모드는 지울 DB가 없으므로 성공 배너만 재현한다(버튼이 조용히 무반응이면 고장으로 보인다).
- * 성공/실패는 OAuth 콜백과 같은 배너 파이프라인(page.tsx의 connect 쿼리)으로 피드백한다.
+ * 데모 모드는 지울 DB가 없으므로 성공 모달만 재현한다(버튼이 조용히 무반응이면 고장으로 보인다).
+ * 성공/실패는 OAuth 콜백과 같은 파이프라인(page.tsx의 connect 쿼리 → ResultModal)으로 피드백한다.
  */
 export async function disconnectAccount(formData: FormData): Promise<void> {
   const accountId = formData.get("accountId");
@@ -29,7 +29,7 @@ export async function disconnectAccount(formData: FormData): Promise<void> {
   }
 
   // .select("id")로 삭제 행 수를 확인한다 — RLS 등으로 0행이 지워졌는데
-  // 성공 배너가 뜨면 "해제했는데 그대로예요"라는 최악의 혼란이 된다.
+  // 성공 모달이 뜨면 "해제했는데 그대로예요"라는 최악의 혼란이 된다.
   const { data: deleted, error } = await supabase
     .from("connected_accounts")
     .delete()

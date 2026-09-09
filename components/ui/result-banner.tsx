@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { NoticeBar } from "./notice-bar";
 
 /*
-  결과 배너 — 서버 액션이 쿼리(?planChanged=1, ?err=save, ?connect=success …)로 넘긴 결과를 보여주고,
+  결과 배너 — 서버 액션이 쿼리(?planChanged=1, ?err=save …)로 넘긴 결과를 보여주고,
+  ⚠️ **연동·해제 결과는 여기서 그리지 않는다** — 2026-09-09 에 모달(components/ui/result-modal.tsx)로 옮겼다.
+  결제·프로필처럼 «화면 안에서 저장한 결과»만 남았다. 채널 화면을 여기에 도로 붙이지 말 것.
   새로고침마다 다시 뜨지 않게 표시 직후 쿼리를 URL 에서 지운다(2026-08-14 결제 감사 → 2026-09-03 설정 전체로 승격).
   URL 을 지워 props 가 비어도 배너는 로컬 상태로 남는다.
 

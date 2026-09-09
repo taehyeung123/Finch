@@ -11,10 +11,23 @@ import { cn } from "@/lib/cn";
 */
 export type NoticeTone = "positive" | "warning" | "negative";
 
-const TONE: Record<NoticeTone, { box: string; icon: typeof CheckCircle2; iconColor: string }> = {
-  positive: { box: "border-positive/40 bg-positive-weak text-positive-strong", icon: CheckCircle2, iconColor: "text-positive" },
-  warning: { box: "border-warning/40 bg-warning-weak text-warning-strong", icon: AlertTriangle, iconColor: "text-warning" },
-  negative: { box: "border-negative/40 bg-negative-weak text-negative-strong", icon: XCircle, iconColor: "text-negative" },
+/* 톤 ↔ 아이콘·잉크는 **여기 한 벌뿐**이다 — 결과 모달(result-modal.tsx)도 이걸 읽는다.
+   두 벌로 갈라지면 같은 결과가 화면마다 다른 아이콘·다른 색으로 나온다. */
+export const NOTICE_ICON: Record<NoticeTone, typeof CheckCircle2> = {
+  positive: CheckCircle2,
+  warning: AlertTriangle,
+  negative: XCircle,
+};
+export const NOTICE_ICON_COLOR: Record<NoticeTone, string> = {
+  positive: "text-positive",
+  warning: "text-warning",
+  negative: "text-negative",
+};
+
+const TONE: Record<NoticeTone, { box: string }> = {
+  positive: { box: "border-positive/40 bg-positive-weak text-positive-strong" },
+  warning: { box: "border-warning/40 bg-warning-weak text-warning-strong" },
+  negative: { box: "border-negative/40 bg-negative-weak text-negative-strong" },
 };
 
 export function NoticeBar({
@@ -35,7 +48,7 @@ export function NoticeBar({
   children: React.ReactNode;
 }) {
   const t = TONE[tone];
-  const Icon = t.icon;
+  const Icon = NOTICE_ICON[tone];
   return (
     <div
       role={role ?? (tone === "negative" ? "alert" : "status")}
@@ -46,7 +59,7 @@ export function NoticeBar({
         className,
       )}
     >
-      <Icon className={cn("mt-0.5 size-4 shrink-0", size === "sm" && t.iconColor)} aria-hidden />
+      <Icon className={cn("mt-0.5 size-4 shrink-0", size === "sm" && NOTICE_ICON_COLOR[tone])} aria-hidden />
       <div className="min-w-0 flex-1">{children}</div>
       {action ? <div className="shrink-0 text-[14px]">{action}</div> : null}
     </div>

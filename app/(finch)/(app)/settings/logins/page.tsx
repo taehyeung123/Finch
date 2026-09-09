@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
+import { isProvider } from "@/lib/account/providers";
 import { SettingsShell } from "../_components/settings-shell";
 import { LoginLinksClient, type LoginIdentity } from "./_components/login-links-client";
 
@@ -31,7 +32,9 @@ export default async function LoginsSettingsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const sp = await searchParams;
-  const linked = typeof sp.linked === "string" ? sp.linked : null;
+  /* 유효한 provider 만 넘긴다 — 결과 모달이 «결과가 있을 때만» URL 을 지우므로, 여기서 거르지 않으면
+     `?linked=아무값` 이 주소창에 계속 남는다(예전 배너는 값과 무관하게 지웠다). */
+  const linked = typeof sp.linked === "string" && isProvider(sp.linked) ? sp.linked : null;
   const demo = isDemoMode();
 
   let identities: LoginIdentity[] = DEMO_IDENTITIES;

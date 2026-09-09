@@ -71,7 +71,8 @@ export function ConfirmSubmit({
 
       {open ? (
         <div
-          className="modal-scrim-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          /* m-0! — ModalShell 과 같은 이유(세로 간격 유틸 안에 놓이면 inset-0 스크림이 위에서 모자라게 깔린다) */
+          className="modal-scrim-in fixed inset-0 z-50 m-0! flex items-center justify-center bg-black/40 p-4"
           role="dialog"
           aria-modal="true"
           aria-label={title}
@@ -96,12 +97,21 @@ export function ConfirmSubmit({
               </button>
             </div>
             <p className="mt-2 text-[15px] leading-relaxed text-fg-sub">{description}</p>
-            {/* 액션이 끝나면 모달을 닫는다 — 리다이렉트하는 서버 액션은 어차피 화면이 바뀌지만, 결과를 화면의 NoticeBar 로
-                알리는 클라이언트 핸들러(팀 멤버 제거 등)는 모달이 남아 오류가 스크림 뒤에 숨었다(소넷 점검 2026-09-03) */}
+            {/* 무슨 일이 있어도 모달을 닫는다 — **finally 여야 한다.**
+                `redirect()` 로 끝나는 서버 액션은 프라미스가 **reject 된다**(next/dist/client/components/
+                router-reducer/reducers/server-action-reducer.js 의 `reject(redirectError)`). 그래서 예전의
+                «await 다음 줄에서 닫기»는 그런 액션에서 **한 번도 실행되지 않았다**. 모달이 닫히는 유일한 경로가
+                «에러 경계가 트리를 리마운트하는 부작용»에 얹혀 있었고, 리다이렉트 목적지가 **같은 주소**면
+                (실패 → `?connect=error`, `?planError=…`, `?write=error`) 행이 그대로라 리마운트가 일어나지 않아
+                모달이 「처리 중…」인 채로 굳고 오류 안내는 스크림 뒤에 숨었다(2026-09-09 사장님 신고, 12곳 공통).
+                에러를 삼키지는 않는다 — 다시 던져야 리다이렉트가 프레임워크 경로 그대로 처리된다. */}
             <form
               action={async (formData) => {
-                await action(formData);
-                setOpen(false);
+                try {
+                  await action(formData);
+                } finally {
+                  setOpen(false);
+                }
               }}
               className="mt-5 flex justify-end gap-2"
             >

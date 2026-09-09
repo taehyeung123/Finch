@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { KeyRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { AvatarImage } from "@/components/ui/avatar-image";
 import { InfoTip } from "@/components/ui/info-tip";
 import { ModalShell } from "@/components/ui/modal-shell";
-import { NoticeBar } from "@/components/ui/notice-bar";
+import { ResultModal, type ResultModalContent } from "@/components/ui/result-modal";
 import { StateChip } from "@/components/ui/state-chip";
 import { ProviderTile } from "@/components/icons/provider-icons";
 import { formatDate } from "@/lib/format";
@@ -33,35 +33,43 @@ export interface LoginIdentity {
   마지막 하나는 뗄 수 없다 — 버튼 대신 «유일한 로그인» + 설명 팁.
   해제 확인은 인라인 빨간 박스가 아니라 ModalShell(파괴적 행동은 모달 — 설정 공통 규칙).
 */
-function describeError(e: { code?: string; message?: string } | null): string {
+/* 제목(무슨 일이 있었나)과 설명(이제 뭘 하나)으로 나눠 돌려준다 — 결과 모달이 두 줄로 그린다.
+   제목에는 마침표를 찍지 않는다(ResultModal 이 접근성 이름으로도 쓴다). */
+function describeError(e: { code?: string; message?: string } | null): { title: string; description?: string } {
   const code = e?.code ?? "";
   const msg = e?.message ?? "";
-  if (code === "manual_linking_disabled" || /manual linking/i.test(msg)) return "지금은 계정 연결을 할 수 없어요. 잠시 후 다시 시도하거나 고객센터로 문의해 주세요.";
-  if (code === "identity_already_exists" || /already linked/i.test(msg)) return "이 계정은 이미 다른 핀치 계정에 연결돼 있어요. 그 계정으로 로그인해 주세요.";
-  if (code === "single_identity_not_deletable" || /at least 1 identity/i.test(msg)) return "마지막 남은 로그인 방식은 해제할 수 없어요.";
-  return "처리하지 못했어요. 잠시 후 다시 시도해 주세요.";
+  if (code === "manual_linking_disabled" || /manual linking/i.test(msg))
+    return { title: "지금은 계정 연결을 할 수 없어요", description: "잠시 후 다시 시도하거나 고객센터로 문의해 주세요." };
+  if (code === "identity_already_exists" || /already linked/i.test(msg))
+    return { title: "이미 다른 핀치 계정에 연결된 계정이에요", description: "그 계정으로 로그인해 주세요." };
+  if (code === "single_identity_not_deletable" || /at least 1 identity/i.test(msg))
+    return { title: "마지막 남은 로그인 방식은 해제할 수 없어요" };
+  return { title: "처리하지 못했어요", description: "잠시 후 다시 시도해 주세요." };
 }
 
-type Flash = { tone: "positive" | "negative" | "warning"; text: string } | null;
+/** 해제 확인 모달 **안**의 인라인 오류용 — 모달 위에 모달을 겹치지 않고 한 문장으로 보여준다 */
+function errorSentence(e: { code?: string; message?: string } | null): string {
+  const { title, description } = describeError(e);
+  return description ? `${title}. ${description}` : `${title}.`;
+}
 
 export function LoginLinksClient({ identities, demo, linkedParam }: { identities: LoginIdentity[]; demo: boolean; linkedParam: string | null }) {
   const router = useRouter();
   const [busy, setBusy] = useState<Provider | null>(null);
   const [confirming, setConfirming] = useState<Provider | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
-  /* ?linked= 성공 플래시 — 표시 직후 URL 에서 지운다(뒤로가기·새로고침 재표시 방지) */
-  const [flash, setFlash] = useState<Flash>(() =>
-    linkedParam && isProvider(linkedParam) ? { tone: "positive", text: `${PROVIDER_LABEL[linkedParam]} 계정을 연결했어요.` } : null,
+  /* 연결·해제 결과는 모달로 한 번 세운다(2026-09-09 사장님 지시 — 채널 화면과 같은 규칙).
+     ?linked= 성공은 OAuth 에서 **돌아온 직후**라 첫 렌더의 초기값으로 들어온다.
+     URL 청소(뒤로가기·새로고침 재표시 방지)는 ResultModal 이 path 로 맡는다. */
+  const [flash, setFlash] = useState<ResultModalContent | null>(() =>
+    linkedParam && isProvider(linkedParam) ? { tone: "positive", title: `${PROVIDER_LABEL[linkedParam]} 계정을 연결했어요` } : null,
   );
-  useEffect(() => {
-    if (linkedParam) window.history.replaceState(null, "", "/settings/logins");
-  }, [linkedParam]);
 
   const linkedCount = identities.length;
 
   async function link(provider: Provider) {
     if (demo) {
-      setFlash({ tone: "warning", text: "지금은 예시 화면이라 계정을 연결할 수 없어요." });
+      setFlash({ tone: "warning", title: "지금은 예시 화면이라 계정을 연결할 수 없어요" });
       return;
     }
     setBusy(provider);
@@ -73,7 +81,7 @@ export function LoginLinksClient({ identities, demo, linkedParam }: { identities
       options: { redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
     });
     if (error) {
-      setFlash({ tone: "negative", text: describeError(error) });
+      setFlash({ tone: "negative", ...describeError(error) });
       setBusy(null);
     }
     /* 성공이면 브라우저가 인가 화면으로 떠난다 — busy 는 그대로 둬 이중 클릭을 막는다 */
@@ -88,19 +96,19 @@ export function LoginLinksClient({ identities, demo, linkedParam }: { identities
     const { data, error } = await supabase.auth.getUserIdentities();
     const target = data?.identities.find((i) => i.provider === provider);
     if (error || !target) {
-      setModalError(describeError(error));
+      setModalError(errorSentence(error));
       setBusy(null);
       return;
     }
     const { error: unlinkErr } = await supabase.auth.unlinkIdentity(target);
     if (unlinkErr) {
-      setModalError(describeError(unlinkErr));
+      setModalError(errorSentence(unlinkErr));
       setBusy(null);
       return;
     }
     setConfirming(null);
     setBusy(null);
-    setFlash({ tone: "positive", text: `${PROVIDER_LABEL[provider]} 연결을 해제했어요.` });
+    setFlash({ tone: "positive", title: `${PROVIDER_LABEL[provider]} 연결을 해제했어요` });
     router.refresh();
   }
 
@@ -108,18 +116,7 @@ export function LoginLinksClient({ identities, demo, linkedParam }: { identities
 
   return (
     <>
-      {flash ? (
-        <NoticeBar
-          tone={flash.tone}
-          action={
-            <button type="button" onClick={() => setFlash(null)} className="relative rounded-card text-[14px] font-medium underline underline-offset-2 after:absolute after:-inset-2 after:content-['']">
-              닫기
-            </button>
-          }
-        >
-          {flash.text}
-        </NoticeBar>
-      ) : null}
+      <ResultModal result={flash} path="/settings/logins" onClose={() => setFlash(null)} />
 
       <SummaryCard
         leading={

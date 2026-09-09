@@ -187,7 +187,7 @@ export async function GET(request: Request) {
     /* ⚠️ error 만 보면 안 된다 — PostgREST 는 조건에 맞는 행이 **0개여도 오류를 내지 않는다.**
        팀 멤버가 연동할 때 실제로 이 경로를 탄다: 읽기 정책은 소유자 행까지 열어 주는데
        쓰기 정책은 본인 행만 허용하므로, 소유자 행 id 를 잡아 UPDATE 하면 0행이 갱신되고
-       사용자에게는 «연동이 완료되었어요» 배너만 뜬다. 몇 번을 눌러도 같고 로그도 안 남는다.
+       사용자에게는 «연동이 완료되었어요» 모달만 뜬다. 몇 번을 눌러도 같고 로그도 안 남는다.
        같은 함정을 연동 해제(settings/actions.ts)는 이미 .select() 로 막고 있었다. */
     if (!write.data || write.data.length === 0) {
       console.error("[ig-oauth] 저장 결과 0행 — RLS 로 막혔을 가능성(user_id 불일치)");

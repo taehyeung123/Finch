@@ -60,7 +60,10 @@ export function ModalShell({
 
   return (
     <div
-      className="modal-scrim-in fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+      /* m-0! — 스크림은 흐름 밖이지만 **마진은 여전히 먹는다.** `space-y-6` 같은 세로 간격 유틸의 안쪽에
+         놓이면(설정 화면들이 그렇다) margin-top 이 붙어 inset-0 스크림이 위에서 24px 모자라게 깔린다.
+         space-y 의 선택자가 더 세서 important 가 필요하다. */
+      className="modal-scrim-in fixed inset-0 z-50 m-0! flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-label={label}

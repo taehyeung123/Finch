@@ -263,7 +263,7 @@ export default async function SettingsHubPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const sp = await searchParams;
-  /* 옛 주소 호환 — OAuth 콜백이 /settings?connect=… 로 돌아오던 시절의 링크. 배너는 채널 화면이 그린다 */
+  /* 옛 주소 호환 — OAuth 콜백이 /settings?connect=… 로 돌아오던 시절의 링크. 결과는 채널 화면이 모달로 그린다 */
   if (typeof sp.connect === "string") {
     const q = new URLSearchParams();
     for (const [k, v] of Object.entries(sp)) if (typeof v === "string") q.set(k, v);

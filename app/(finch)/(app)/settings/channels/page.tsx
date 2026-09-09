@@ -8,10 +8,12 @@ import { buttonClasses } from "@/components/ui/button";
 import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { InfoTip } from "@/components/ui/info-tip";
 import { LoadFailed } from "@/components/ui/load-failed";
-import { ResultBanner } from "@/components/ui/result-banner";
+import type { NoticeTone } from "@/components/ui/notice-bar";
+import { ResultModal, type ResultModalContent } from "@/components/ui/result-modal";
 import { StateChip } from "@/components/ui/state-chip";
 import type { Channel } from "@/lib/types";
 import { CHANNEL_LABEL } from "@/lib/channels";
+import { eulReul } from "@/lib/josa";
 import { accounts as mockAccounts } from "@/lib/data";
 import { isDemoMode } from "@/lib/supabase/config";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
@@ -51,7 +53,8 @@ export const metadata: Metadata = {
   - 실 모드: connected_accounts 에서 연결 상태를 읽고, 인스타그램·Threads·TikTok 은 실제 OAuth 로 연결/해제
   - 데모 모드: 목데이터로 화면 미리보기(요약 카드의 «예시 화면» 배지 하나로만 말한다)
   - 실 스펙: docs/REAL_API_SPEC.md 1절(인스타그램)·5절(Threads)·6절(TikTok)
-  ⚠️ 로더·액션·OAuth 게이트·콜백 배너 규약은 재설계 전과 같다 — 표현만 바뀌었다.
+  ⚠️ 로더·액션·OAuth 게이트 규약은 재설계 전과 같다 — 표현만 바뀌었다.
+     연결·해제 결과는 2026-09-09 에 띠(ResultBanner) → **모달(ResultModal)** 로 다시 바뀌었다(사장님 지시).
 */
 
 const CHANNELS: Channel[] = ["instagram", "tiktok", "threads"];
@@ -83,7 +86,7 @@ async function loadAccountCards(): Promise<AccountCard[] | null> {
     return CHANNELS.map((channel) => {
       const m = mockAccounts.find((a) => a.channel === channel);
       return {
-        // 데모에도 가짜 id를 준다 — 해제 버튼·확인 모달·성공 배너 흐름을 체험 가능하게
+        // 데모에도 가짜 id를 준다 — 해제 버튼·확인 모달·성공 모달 흐름을 체험 가능하게
         id: m?.connected ? `demo-${channel}` : null,
         channel,
         handle: m?.handle ?? "",
@@ -242,33 +245,57 @@ async function loadAdsCard(): Promise<AdsCard | null> {
 
 // 채널명을 박지 않은 범용 메시지 — 인스타그램·Threads·TikTok 이 같은 콜백 파라미터 규약을 쓴다.
 // 연결 성공은 handle 쿼리로 구체적인 계정을 보여준다. 고객 문구는 «연동»이 아니라 «연결»이다(허브·sections.ts 와 통일).
-const CONNECT_MESSAGES: Record<string, { tone: "positive" | "warning" | "negative"; text: string }> = {
-  denied: { tone: "warning", text: "연결을 취소했어요." },
+/* 연결 결과 사전 — 모달 한 장에 «무엇이 일어났나»(제목)와 «이제 뭘 하나»(설명)를 나눠 담는다.
+   제목에 마침표를 찍지 않는다(ResultModal 이 접근성 이름으로도 쓴다). 문구는 19가지 reason 을 모두 덮는다 —
+   콜백·start 라우트가 실제로 만들어내는 값 전부다(2026-09-09 전수 대조). */
+const CONNECT_MESSAGES: Record<string, { tone: NoticeTone; title: string; description?: string }> = {
+  denied: { tone: "warning", title: "연결을 취소했어요", description: "다시 하려면 「연결하기」를 눌러 주세요." },
   /* «취소»와 구분한다 — 개통 초기에 가장 흔한 원인은 «앱 테스터로 등록되지 않은 계정»이다 */
-  not_allowed: { tone: "negative", text: "이 계정에는 아직 연결 권한이 없어요. 계정을 확인하고 다시 시도해 주세요." },
-  state: { tone: "negative", text: "보안 검증에 실패했어요. 다시 시도해 주세요." },
-  unconfigured: { tone: "warning", text: "지금은 이 채널을 연결할 수 없어요. 곧 열릴 예정이니 조금만 기다려 주세요." },
+  not_allowed: { tone: "negative", title: "이 계정에는 아직 연결 권한이 없어요", description: "계정을 확인하고 다시 시도해 주세요." },
+  state: { tone: "negative", title: "보안 검증에 실패했어요", description: "다시 시도해 주세요." },
+  unconfigured: { tone: "warning", title: "지금은 이 채널을 연결할 수 없어요", description: "곧 열릴 예정이니 조금만 기다려 주세요." },
   /* 운영자가 할 일이 있는 상태 — 사용자에게 설정 이름을 말하지 않는다 */
-  no_encryption_key: { tone: "warning", text: "지금은 연결을 마무리할 수 없어요. 준비가 끝나는 대로 안내드릴게요." },
-  already_linked: { tone: "warning", text: "이미 다른 핀치 계정에 연결된 계정이에요." },
+  no_encryption_key: { tone: "warning", title: "지금은 연결을 마무리할 수 없어요", description: "준비가 끝나는 대로 안내드릴게요." },
+  already_linked: { tone: "warning", title: "이미 다른 핀치 계정에 연결된 계정이에요", description: "그 계정으로 로그인하거나 다른 계정으로 연결해 주세요." },
   /* 토큰은 저장됐는데 광고 계정을 못 읽은 «절반 성공» — 실패로 덮으면 승인한 연결을 처음부터 다시 하게 만든다 */
-  ads_accounts_unavailable: { tone: "warning", text: "연결은 됐지만 광고 계정 목록을 불러오지 못했어요. 잠시 후 광고 화면을 다시 열어 주세요." },
-  no_ad_account: { tone: "warning", text: "연결은 됐지만 접근할 수 있는 광고 계정이 없어요. 메타에서 이 계정에 광고 계정 권한이 있는지 확인해 주세요." },
-  ads_profile: { tone: "negative", text: "계정 정보를 읽지 못했어요. 잠시 후 다시 시도해 주세요." },
-  migration_needed: { tone: "warning", text: "지금은 이 연결을 마무리할 수 없어요. 준비가 끝나는 대로 안내드릴게요." },
+  ads_accounts_unavailable: { tone: "warning", title: "연결은 됐지만 광고 계정 목록을 불러오지 못했어요", description: "잠시 후 광고 화면을 다시 열어 주세요." },
+  no_ad_account: { tone: "warning", title: "연결은 됐지만 쓸 수 있는 광고 계정이 없어요", description: "메타에서 이 계정에 광고 계정 권한이 있는지 확인해 주세요." },
+  ads_profile: { tone: "negative", title: "계정 정보를 읽지 못했어요", description: "잠시 후 다시 시도해 주세요." },
+  migration_needed: { tone: "warning", title: "지금은 이 연결을 마무리할 수 없어요", description: "준비가 끝나는 대로 안내드릴게요." },
   /* 예시 화면에서는 연결해도 그 계정이 화면에 안 나온다 — «데모 모드»라는 내부 용어 없이 사실만 */
-  demo_mode: { tone: "warning", text: "지금은 예시 화면이라 계정을 연결할 수 없어요." },
-  save_failed: { tone: "negative", text: "연결 정보를 저장하는 중 오류가 났어요. 다시 시도해 주세요." },
-  exchange: { tone: "negative", text: "연결 승인 뒤 단계에서 오류가 났어요. 다시 시도해 주세요." },
+  demo_mode: { tone: "warning", title: "지금은 예시 화면이라 계정을 연결할 수 없어요" },
+  save_failed: { tone: "negative", title: "연결 정보를 저장하지 못했어요", description: "잠시 후 다시 시도해 주세요." },
+  exchange: { tone: "negative", title: "연결 승인 뒤 단계에서 오류가 났어요", description: "잠시 후 다시 시도해 주세요." },
   /* 단계별로 가른다 — 사용자가 할 일이 단계마다 다르다(2026-08-31) */
-  exchange_code: { tone: "negative", text: "연결 승인은 받았는데 그다음 단계에서 막혔어요. 잠시 후 다시 시도해 주세요." },
-  exchange_longlived: { tone: "negative", text: "장기 접속 권한을 받는 중에 막혔어요. 잠시 후 다시 시도해 주세요." },
-  account_info: { tone: "negative", text: "계정 정보를 읽지 못했어요. 인스타그램이 비즈니스 또는 크리에이터 계정인지 확인해 주세요." },
-  encrypt_failed: { tone: "negative", text: "연결 정보를 저장하는 중 오류가 났어요. 다시 시도해 주세요." },
-  disconnect_failed: { tone: "negative", text: "연결 해제 중 오류가 났어요. 다시 시도해 주세요." },
+  exchange_code: { tone: "negative", title: "연결 승인은 받았는데 그다음 단계에서 막혔어요", description: "잠시 후 다시 시도해 주세요." },
+  exchange_longlived: { tone: "negative", title: "장기 접속 권한을 받는 중에 막혔어요", description: "잠시 후 다시 시도해 주세요." },
+  account_info: { tone: "negative", title: "계정 정보를 읽지 못했어요", description: "인스타그램이 비즈니스 또는 크리에이터 계정인지 확인해 주세요." },
+  encrypt_failed: { tone: "negative", title: "연결 정보를 저장하지 못했어요", description: "잠시 후 다시 시도해 주세요." },
+  disconnect_failed: { tone: "negative", title: "연결을 해제하지 못했어요", description: "잠시 후 다시 시도해 주세요." },
   /* 연결은 됐지만 댓글 웹훅 구독이 실패 — 성공으로 덮으면 자동 DM 이 한 통도 안 나가는데 화면은 정상으로 보인다 */
-  partial_webhook: { tone: "warning", text: "연결은 됐지만 댓글 알림 연결에 실패했어요. 댓글 자동 DM을 쓰시려면 다시 연결해 주세요." },
+  partial_webhook: { tone: "warning", title: "연결은 됐지만 댓글 알림 연결에 실패했어요", description: "댓글 자동 DM을 쓰시려면 다시 연결해 주세요." },
 };
+
+/* 실패·경고 결과 조립. ⚠️ **«아는 reason 인데 설명을 일부러 비웠다»와 «모르는 reason»을 갈라야 한다.**
+   `?.description ?? 폴백` 한 줄로 쓰면 둘이 같아져, 예시 화면의 「지금은 예시 화면이라 연결할 수 없어요」에
+   「잠시 후 다시 시도해 주세요」가 붙는다 — 아무리 기다려도 안 풀리는 일에 틀린 다음 행동을 안내하게 된다. */
+function connectFailure(connect: string, reason: string | null, detail: string | null): ResultModalContent {
+  const known = reason ? CONNECT_MESSAGES[reason] : connect === "unconfigured" ? CONNECT_MESSAGES.unconfigured : undefined;
+  if (known) return { tone: known.tone, title: known.title, description: known.description ?? null, detail };
+  return {
+    tone: connect === "error" ? "negative" : "warning",
+    title: "요청을 처리하지 못했어요",
+    description: "잠시 후 다시 시도해 주세요.",
+    detail,
+  };
+}
+
+/* 연결 성공 제목 — handle 은 두 모양으로 온다. 채널 3종은 «@아이디», 광고는 «광고 계정 3개» 같은 요약이라
+   조사가 갈린다(예전에는 둘 다 «… 계정을 연결했어요» 로 찍어 «광고 계정 3개 계정을 연결했어요» 가 나갔다). */
+function connectedTitle(handle: string | null): string {
+  if (!handle) return "계정을 연결했어요";
+  return handle.startsWith("@") ? `${handle} 계정을 연결했어요` : `${eulReul(handle)} 연결했어요`;
+}
 
 const DOT_TONE: Record<string, string> = {
   ok: "bg-positive",
@@ -311,17 +338,24 @@ export default async function ChannelsSettingsPage({
   const viewer = await getAuthUser();
   const ownerEmail = process.env.OWNER_EMAIL?.trim().toLowerCase();
   const isOwner = !!ownerEmail && viewer?.email?.trim().toLowerCase() === ownerEmail;
-  /* connect=warn — 연결은 됐지만 부수 작업이 실패한 «절반 성공». 성공으로도 실패로도 덮지 않는다 */
-  const banner =
+  /* connect=warn — 연결은 됐지만 부수 작업이 실패한 «절반 성공». 성공으로도 실패로도 덮지 않는다.
+     ⚠️ 톤은 사전에서 먼저 찾고, **모르는 reason 이면 connect 값**으로 정한다. 예전에는 폴백이
+     `CONNECT_MESSAGES.exchange`(negative) 하나여서, 모르는 reason 이 붙은 warn 이 통째로 빨간 실패로 뒤집혔다.
+     reason 이 없는 error/warn 도 예전엔 어느 가지에도 안 걸려 **결과가 조용히 사라졌다** — 이제 폴백으로 떨어진다. */
+  const connectResult: ResultModalContent | null =
     connectParam === "success"
-      ? { tone: "positive" as const, text: `${handleParam ?? "채널"} 계정을 연결했어요.` }
+      ? { tone: "positive", title: connectedTitle(handleParam) }
       : connectParam === "disconnected"
-        ? { tone: "positive" as const, text: "연결을 해제했어요." }
-        : connectParam === "unconfigured" && !reasonParam
-          ? CONNECT_MESSAGES.unconfigured
-          : (connectParam === "error" || connectParam === "warn") && reasonParam
-            ? (CONNECT_MESSAGES[reasonParam] ?? CONNECT_MESSAGES.exchange)
+        ? { tone: "positive", title: "연결을 해제했어요" }
+        : connectParam === "warn" && reasonParam === "partial_webhook"
+          ? /* 계정명을 실어 오는 유일한 warn — «무엇이 됐는지»를 제목에, «무엇이 안 됐는지»를 설명에 둔다 */
+            { tone: "warning", title: connectedTitle(handleParam), description: CONNECT_MESSAGES.partial_webhook.description }
+          : connectParam === "error" || connectParam === "warn" || connectParam === "unconfigured"
+            ? connectFailure(connectParam, reasonParam, isOwner ? detailParam : null)
             : null;
+  /* 결과가 «방금 도착했다»는 표식 — ResultModal 이 같은 문구의 두 번째 결과도 띄우게 하는 열쇠다.
+     서버 컴포넌트는 탐색이 있을 때만 다시 렌더되므로 렌더마다 새로 만든 값이 곧 «새 결과»를 뜻한다. */
+  const arrivalId = connectResult ? crypto.randomUUID() : null;
 
   const instagramOAuthConfigured = isInstagramOAuthConfigured();
   const threadsOAuthConfigured = isThreadsOAuthConfigured();
@@ -385,15 +419,10 @@ export default async function ChannelsSettingsPage({
 
   return (
     <SettingsShell title="SNS 계정 연결" description="인스타그램·틱톡·스레드 계정과 메타 광고 계정을 연결하고 관리해요.">
-      {banner ? (
-        <ResultBanner
-          notice={banner.tone === "positive" ? banner.text : null}
-          warning={banner.tone === "warning" ? banner.text : null}
-          error={banner.tone === "negative" ? banner.text : null}
-          detail={isOwner ? detailParam : null}
-          path="/settings/channels"
-        />
-      ) : null}
+      {/* 연결·해제 결과는 **모달**로 한 번 세운다(2026-09-09 사장님 지시) — 화면 맨 위 띠는 돌아온 직후에
+          «내가 방금 한 일의 결과»로 안 읽혔고, 해제 실패는 확인 모달 스크림 뒤에 숨었다. path 를 주면
+          ResultModal 이 표시 직후 쿼리를 지운다 — 새로고침·뒤로가기에 다시 뜨지 않게. */}
+      <ResultModal result={connectResult} arrivalId={arrivalId} path="/settings/channels" />
 
       {/* 운영자 전용 알림 — 이 화면은 운영자에게 «열림»으로 보이므로, 고객에게는 아직 닫혀 있다는 사실을
           여기서 말해 주지 않으면 승인이 난 뒤에도 아무도 그걸 눈치채지 못한다(lib/channel-availability.ts).
