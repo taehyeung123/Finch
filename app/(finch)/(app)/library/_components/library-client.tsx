@@ -582,12 +582,19 @@ export function LibraryClient({
     return { ok: false, error: result.error };
   }
 
-  async function handleRemoveSource(id: string) {
+  /* 낙관적 제거 — 서버가 실패를 «돌려주든» «던지든» 원래대로 되돌린다. 예전엔 던지는 경우(망 끊김·배포 교체)를 안 받아
+     화면에서만 지워진 채 남고(새로고침하면 되살아난다) 오류는 서랍의 onClick 에서 조용히 삼켜졌다(2026-09-11 감사). */
+  async function handleRemoveSource(id: string): Promise<{ ok: boolean }> {
     const before = sources;
-    setSources((prev) => prev.filter((s) => s.id !== id)); // 낙관적 제거
-    const result = await removeReferenceSource(id);
-    if (!result.ok) setSources(before);
-    return result;
+    setSources((prev) => prev.filter((s) => s.id !== id));
+    try {
+      const result = await removeReferenceSource(id);
+      if (!result.ok) setSources(before);
+      return result;
+    } catch {
+      setSources(before);
+      return { ok: false };
+    }
   }
 
   async function handleAddAdSource(value: string) {
@@ -599,12 +606,17 @@ export function LibraryClient({
     return { ok: false, error: result.error };
   }
 
-  async function handleRemoveAdSource(id: string) {
+  async function handleRemoveAdSource(id: string): Promise<{ ok: boolean }> {
     const before = adSources;
     setAdSources((prev) => prev.filter((s) => s.id !== id));
-    const result = await removeAdSource(id);
-    if (!result.ok) setAdSources(before);
-    return result;
+    try {
+      const result = await removeAdSource(id);
+      if (!result.ok) setAdSources(before);
+      return result;
+    } catch {
+      setAdSources(before);
+      return { ok: false };
+    }
   }
 
   function handleUpdateSettings(next: CollectSettings) {
