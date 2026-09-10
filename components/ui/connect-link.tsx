@@ -64,7 +64,11 @@ export function ConnectLink({
 }) {
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    const reset = () => setBusy(false);
+    /* bfcache 복원(persisted)일 때만 원복한다. 첫 로드의 pageshow 는 load 뒤에 온다 — 그 전에 누른 클릭의 모달을
+       지우면 떠나는 중인데 화면이 되살아난다(로그인 계정 연결·로그인 버튼과 같은 규칙, 2026-09-11 소넷 점검) */
+    const reset = (e: PageTransitionEvent) => {
+      if (e.persisted) setBusy(false);
+    };
     window.addEventListener("pageshow", reset);
     return () => window.removeEventListener("pageshow", reset);
   }, []);

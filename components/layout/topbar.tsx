@@ -81,7 +81,10 @@ export function Topbar({
      누르는 즉시 모달(LeavingModal — ModalShell busy)을 세운다(CLAUDE.md 2026-09-10 규칙). 뒤로가기(bfcache)로 돌아오면 원복. */
   const [leaving, setLeaving] = useState(false);
   useEffect(() => {
-    const reset = () => setLeaving(false);
+    /* bfcache 복원일 때만 — 첫 로드의 pageshow 가 막 누른 로그아웃 모달을 지우지 않게(connect-link.tsx 와 같은 규칙) */
+    const reset = (e: PageTransitionEvent) => {
+      if (e.persisted) setLeaving(false);
+    };
     window.addEventListener("pageshow", reset);
     return () => window.removeEventListener("pageshow", reset);
   }, []);
