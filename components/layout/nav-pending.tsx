@@ -83,6 +83,17 @@ export function NavPendingProvider({ children }: { children: React.ReactNode }) 
     setPending(false);
   }, []);
 
+  /* 어느 경로로 끝나든(아래 렌더 중 경로 조정 포함) pending 이 false 가 되면 기록을 비운다.
+     렌더 중 조정은 ref 를 만질 수 없어 setPending(false) 만 한다 — 예전엔 그 뒤 기록이 남아, **다음** 이동의
+     begin() 이 «누르던 순간의 주소»를 갱신하지 않았고(fromRef 가 null 이 아니라서) 주소 감시가 첫 프레임에
+     «이미 도착했다»로 판정해 덮개가 1프레임 만에 사라졌다(2026-09-10 소넷 점검, 33a8a49 의 회귀). */
+  useEffect(() => {
+    if (pending) return;
+    pendingRef.current = false;
+    fromRef.current = null;
+    targetRef.current = null;
+  }, [pending]);
+
   /* 경로가 바뀌면 이동이 끝난 것 — 렌더 중 상태 조정. 경로가 바뀌는 이동에서는 이것이 한 프레임도 새지 않게 해 주는
      유일한 경로다(effect 의 setState 는 한 프레임 늦다). 쿼리만 바뀌는 이동은 아래 «주소 감시»가 맡는다. */
   const [seenPathname, setSeenPathname] = useState(pathname);
@@ -111,8 +122,10 @@ export function NavPendingProvider({ children }: { children: React.ReactNode }) 
         return;
       }
       pendingRef.current = true;
-      /* 연달아 다른 곳을 누르면 «누르던 순간의 주소»는 처음 것 그대로 둔다 — 아직 아무것도 커밋되지 않았다 */
-      if (fromRef.current === null) fromRef.current = currentKey();
+      /* 연달아 다른 곳을 누르면 «누르던 순간의 주소»는 처음 것 그대로 둔다 — 아직 아무것도 커밋되지 않았다.
+         단, 주소가 이미 그 기록과 다르면 앞선 이동은 끝난 것이다(기록이 남은 채였다) — 지금 주소로 새로 잡는다. */
+      const here = currentKey();
+      if (fromRef.current === null || fromRef.current !== here) fromRef.current = here;
       targetRef.current = href ? locationKey(href) : null;
       startedAtRef.current = performance.now();
       setAttempt((n) => n + 1);
@@ -136,7 +149,9 @@ export function NavPendingProvider({ children }: { children: React.ReactNode }) 
   /* 주소 감시 — 쿼리만 바뀌는 이동(/library → /library?q=…)과 서버 redirect 는 경로 조정으로 안 잡힌다.
      Next 는 새 화면을 커밋하는 순간 주소를 바꾸므로(HistoryUpdater), «누르던 순간의 주소와 달라졌다» = 도착이다.
      «목표 주소와 같아졌다»로 판정하지 않는다 — redirect·인코딩 차이로 영영 같아지지 않아 15초 멈춤이 재발한다.
-     매 프레임 문자열 비교 한 번뿐이고, 이동 중에만 돈다. 숨은 탭은 rAF 가 멈추니 visibilitychange 로 한 번 더 본다. */
+     매 프레임 문자열 비교 한 번뿐이고, 이동 중에만 돈다. 숨은 탭은 rAF 가 멈추니 visibilitychange 로 한 번 더 본다.
+     알려진 한계: 결과 모달·띠(result-modal.tsx·result-banner.tsx)가 도착 직후 effect 에서 replaceState 로 쿼리를 지운다.
+     그 한 프레임 사이에 다른 링크를 누르면 이것을 «도착»으로 오인해 덮개가 일찍 걷힌다 — 창이 한 프레임이라 두지 않는다. */
   useEffect(() => {
     if (!pending) return;
     let frame = 0;

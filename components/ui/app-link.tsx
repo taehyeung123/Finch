@@ -24,7 +24,19 @@ function hrefToString(href: AppLinkProps["href"]): string | null {
   if (typeof href === "string") return href;
   if (href && typeof href === "object") {
     const pathname = href.pathname ?? "";
-    const search = typeof href.search === "string" ? href.search : href.query ? `?${new URLSearchParams(href.query as Record<string, string>).toString()}` : "";
+    let search = typeof href.search === "string" ? href.search : "";
+    if (!search && href.query && typeof href.query === "object") {
+      /* Next 와 같은 직렬화 — 배열 값은 같은 키를 반복한다(?t=a&t=b). String(["a","b"]) 로 «a,b» 가 되면
+         «지금 주소를 눌렀나» 판정이 어긋난다(2026-09-10 소넷 점검). */
+      const params = new URLSearchParams();
+      for (const [k, v] of Object.entries(href.query)) {
+        if (v === undefined || v === null) continue;
+        if (Array.isArray(v)) v.forEach((x) => params.append(k, String(x)));
+        else params.append(k, String(v));
+      }
+      const qs = params.toString();
+      search = qs ? `?${qs}` : "";
+    }
     return pathname ? `${pathname}${search}` : null;
   }
   return null;
