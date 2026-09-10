@@ -66,6 +66,7 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { trapFocus } from "@/components/ui/trap-focus";
 import { ModalShell } from "@/components/ui/modal-shell";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { SnsIcon } from "@/components/sns-brand-icons";
@@ -3577,40 +3578,6 @@ function ShareBox({
       {children ? <p className="h-[1.25rem] truncate whitespace-nowrap text-center text-[12px] leading-[1.6] text-fg-sub">{children}</p> : null}
       {qr ? <QrModal url={url} onClose={() => setQr(false)} /> : null}
     </div>
-  );
-}
-
-/* 되돌릴 수 없는 조작의 확인 — native window.confirm 을 대체한다.
-   OS 대화상자는 테마·글꼴·문구 위계가 없고, 무엇보다 «무엇이 어떻게 사라지는지» 를 말할 자리가 없다 */
-function ConfirmDialog({
-  title,
-  description,
-  confirmLabel,
-  busy,
-  onCancel,
-  onConfirm,
-}: {
-  title: string;
-  description: string;
-  confirmLabel: string;
-  busy: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <ModalShell label={title} title={title} size="sm" busy={busy} onClose={onCancel}>
-      <div className="space-y-3">
-        <p className="text-[14px] leading-[1.7] text-fg-sub">{description}</p>
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
-            취소
-          </Button>
-          <Button variant="danger" size="sm" onClick={onConfirm} disabled={busy}>
-            {confirmLabel}
-          </Button>
-        </div>
-      </div>
-    </ModalShell>
   );
 }
 

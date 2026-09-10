@@ -5,6 +5,8 @@ import { ImagePlus, LoaderCircle, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { nextPaint } from "@/lib/next-paint";
 import { Button, ButtonLink } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { isTopmostDialog } from "@/components/ui/trap-focus";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { earliestPublishAt } from "@/lib/calendar";
 import type { ResultModalContent } from "@/components/ui/result-modal";
@@ -104,7 +106,12 @@ export function PostComposer({
   }, []);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  /** 스크림(role="dialog") — Esc 를 «내가 맨 위일 때만» 처리하는 판정에 쓴다 */
+  const scrimRef = useRef<HTMLDivElement>(null);
   const requestCloseRef = useRef<() => void>(() => {});
+  /* 「닫을까요?」 확인 — window.confirm 이었다. 브라우저가 대화상자를 막으면 confirm 이 즉시 false 라
+     dirty 인 동안 X·Esc·바깥 클릭 세 출구가 **전부** 막혀 모달에 갇혔다(새로고침 말고 나갈 길이 없었다). */
+  const [confirmClose, setConfirmClose] = useState(false);
 
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
@@ -113,7 +120,11 @@ export function PostComposer({
   }, []);
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && !e.isComposing) requestCloseRef.current();
+      if (e.key !== "Escape" || e.isComposing) return;
+      /* 위에 확인 모달이 떠 있으면 그쪽(ModalShell)이 Esc 를 받는다 — 여기서도 받으면 Esc 한 번에
+         확인 모달과 작성 화면이 같이 닫혀, 사라진다고 경고하던 내용이 그대로 사라진다 */
+      if (!isTopmostDialog(scrimRef.current)) return;
+      requestCloseRef.current();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -122,7 +133,11 @@ export function PostComposer({
   const dirty = images.length > 0 || caption.trim().length > 0;
   function requestClose() {
     if (saving) return;
-    if (dirty && !window.confirm("작성 중인 내용이 사라져요. 닫을까요?")) return;
+    /* 멱등 — X·Esc·바깥 클릭 어느 경로로 와도 같은 확인 모달 하나를 연다 */
+    if (dirty) {
+      setConfirmClose(true);
+      return;
+    }
     onClose();
   }
   useEffect(() => {
@@ -416,6 +431,7 @@ export function PostComposer({
   if (!anyConnected) {
     return (
       <div
+        ref={scrimRef}
         className="modal-scrim-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
         role="dialog"
         aria-modal="true"
@@ -449,7 +465,9 @@ export function PostComposer({
     "w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none";
 
   return (
+    <>
     <div
+      ref={scrimRef}
       className="modal-scrim-in fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
@@ -704,6 +722,21 @@ export function PostComposer({
         </div>
       </div>
     </div>
+    {/* 작성 화면의 **형제**로 둔다(뒤에 = 위에). 안쪽에 두면 카드의 transform 애니메이션·키 처리와 얽힌다 */}
+    {confirmClose ? (
+      <ConfirmDialog
+        title="작성 중인 내용이 사라져요"
+        description="닫으면 지금 쓴 글과 올린 사진이 저장되지 않아요."
+        confirmLabel="닫기"
+        cancelLabel="계속 쓰기"
+        onCancel={() => setConfirmClose(false)}
+        onConfirm={() => {
+          setConfirmClose(false);
+          onClose();
+        }}
+      />
+    ) : null}
+    </>
   );
 }
 

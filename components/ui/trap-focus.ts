@@ -18,3 +18,13 @@ export function trapFocus(root: HTMLElement | null, e: React.KeyboardEvent) {
     first.focus();
   }
 }
+
+/**
+ * 이 스크림(role="dialog" aria-modal="true" 인 요소)이 지금 맨 위 모달인가 — DOM 상 마지막 dialog 가 맨 위다(둘 다 z-50 이면 DOM 순서가 쌓임 순서).
+ * document 에 Esc 리스너를 거는 모달은 닫기 전에 이걸 본다 — 안 보면 위에 뜬 확인 모달·날짜 픽커와 함께 Esc 한 번에 둘 다 닫혀
+ * 바깥 모달의 입력이 증발한다(2026-08-27 ModalShell, 2026-09-11 작성 모달 두 곳).
+ */
+export function isTopmostDialog(scrim: Element | null | undefined): boolean {
+  const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+  return dialogs.length <= 1 || dialogs[dialogs.length - 1] === scrim;
+}

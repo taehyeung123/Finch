@@ -9,6 +9,8 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Switch } from "@/components/ui/switch";
 import { FinchMark } from "@/components/logo";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { isTopmostDialog } from "@/components/ui/trap-focus";
 
 /*
   자동화 만들기 위저드 — 리틀리 실측(2026-08-14) 5단계 + 최종 검수(2026-08-19 스딩 실측).
@@ -102,7 +104,9 @@ export function RuleWizard({
   accountAvatar: string | null;
   /** 0052(follow_request) 컬럼 존재 여부 — false 면 토글 비활성(조용한 유실 방지) */
   followRequestReady: boolean;
-  onSave: (draft: RuleDraft) => void | Promise<void>;
+  /** 실패하면 **고객에게 보여 줄 문장**을 돌려준다 — 위저드가 열린 채 그 문장을 CTA 위에 띄운다(재시도·수정 가능).
+      성공이면 부모가 위저드를 닫는다. 예전엔 부모가 window.alert 를 띄웠다(브라우저가 막으면 실패가 통째로 안 보였다). */
+  onSave: (draft: RuleDraft) => Promise<string | null>;
   onClose: () => void;
 }) {
   const [postId, setPostId] = useState(initial && initial.postId !== NEXT_POST_SENTINEL ? initial.postId : "");
@@ -123,10 +127,17 @@ export function RuleWizard({
     initial?.publicReplies.length ? initial.publicReplies : pickRandomReplies(3),
   );
   const [saving, setSaving] = useState(false);
+  /** 저장 실패 문장 — 화면 안 저장이라 결과 모달이 아니라 위저드 안에 인라인으로 띄운다 */
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [stepIdx, setStepIdx] = useState(0);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  /** 스크림(role="dialog") — Esc 를 «내가 맨 위일 때만» 처리하는 판정에 쓴다 */
+  const scrimRef = useRef<HTMLDivElement>(null);
   const requestCloseRef = useRef<() => void>(() => {});
+  /* 「닫을까요?」 확인 — window.confirm 이었다. 브라우저가 대화상자를 막으면 confirm 이 즉시 false 라
+     dirty 인 동안 X·Esc·바깥 클릭 세 출구가 **전부** 막혀 위저드에 갇혔다. */
+  const [confirmClose, setConfirmClose] = useState(false);
 
   // 포커스 관리 — 열릴 때 모달로 이동, 닫힐 때 원래 위치로 복원 (aria-modal 선언에 맞는 실동작)
   useEffect(() => {
@@ -138,7 +149,11 @@ export function RuleWizard({
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       // IME 조합 취소(Escape)와 모달 닫기를 구분한다
-      if (e.key === "Escape" && !e.isComposing) requestCloseRef.current();
+      if (e.key !== "Escape" || e.isComposing) return;
+      /* 위에 확인 모달이 떠 있으면 그쪽(ModalShell)이 Esc 를 받는다 — 여기서도 받으면 Esc 한 번에 둘 다 닫혀
+         다섯 단계 입력이 그대로 날아간다 */
+      if (!isTopmostDialog(scrimRef.current)) return;
+      requestCloseRef.current();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -215,7 +230,11 @@ export function RuleWizard({
 
   function requestClose() {
     if (saving) return;
-    if (dirty && !window.confirm("작성 중인 내용이 사라져요. 닫을까요?")) return;
+    /* 멱등 — X·Esc·바깥 클릭 어느 경로로 와도 같은 확인 모달 하나를 연다 */
+    if (dirty) {
+      setConfirmClose(true);
+      return;
+    }
     onClose();
   }
   // Escape 리스너(1회 등록)가 항상 최신 상태의 requestClose를 보게 한다 — 렌더 중 ref 쓰기 금지 규칙 준수
@@ -283,6 +302,7 @@ export function RuleWizard({
     }
     if (postMode === "current" && !selectedPost) return;
     setSaving(true);
+    setSaveError(null);
     try {
       const postFields =
         postMode === "next" || !selectedPost
@@ -304,7 +324,7 @@ export function RuleWizard({
               postThumb:
                 selectedPost.thumb ?? (initial && selectedPost.id === initial.postId ? initial.postThumb : null),
             };
-      await onSave({
+      const failed = await onSave({
         id: initial?.id ?? makeId(),
         ...postFields,
         trigger,
@@ -320,6 +340,10 @@ export function RuleWizard({
         dailyCap: initial?.dailyCap ?? 300, // 스팸 정책 안전 상한 — 위저드에선 노출하지 않는 기본값
         createdAt: initial?.createdAt,
       });
+      if (failed) setSaveError(failed);
+    } catch {
+      /* {ok:false} 가 아니라 호출 자체가 던진 경우(네트워크·배포 교체) — 잡지 않으면 오류 오버레이가 뜬다 */
+      setSaveError("저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
     } finally {
       setSaving(false);
     }
@@ -428,7 +452,9 @@ export function RuleWizard({
   const stepNo = stepIdx + 1;
 
   return (
+    <>
     <div
+      ref={scrimRef}
       className="modal-scrim-in fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
@@ -449,7 +475,10 @@ export function RuleWizard({
             <button
               type="button"
               aria-label="이전 단계"
-              onClick={() => setStepIdx((i) => Math.max(0, i - 1))}
+              onClick={() => {
+                setSaveError(null); // 저장 실패 문장은 마지막 단계의 것이다 — 뒤로 가면 걷는다
+                setStepIdx((i) => Math.max(0, i - 1));
+              }}
               className="-ml-1.5 relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg hover:bg-tint-hover"
             >
               <ChevronLeft className="size-5" />
@@ -985,6 +1014,11 @@ export function RuleWizard({
 
         {/* CTA — 리틀리 실측: 풀폭 54px, 16px/500, 활성 검정/비활성 회색 */}
         <div className="px-5 pb-5 pt-3">
+          {saveError ? (
+            <p role="alert" className="mb-2.5 text-center text-[14px] text-negative-strong">
+              {saveError}
+            </p>
+          ) : null}
           <button
             type="button"
             onClick={next}
@@ -1009,5 +1043,20 @@ export function RuleWizard({
         </div>
       </div>
     </div>
+    {/* 위저드의 **형제**로 둔다(뒤에 = 위에). 안쪽에 두면 카드의 onKeyDown 포커스 트랩이 확인 모달의 Tab 을 가로챈다 */}
+    {confirmClose ? (
+      <ConfirmDialog
+        title="작성 중인 내용이 사라져요"
+        description={initial ? "닫으면 바꾼 내용이 저장되지 않아요." : "닫으면 지금까지 고른 게시물과 문구가 저장되지 않아요."}
+        confirmLabel="닫기"
+        cancelLabel="계속 작성"
+        onCancel={() => setConfirmClose(false)}
+        onConfirm={() => {
+          setConfirmClose(false);
+          onClose();
+        }}
+      />
+    ) : null}
+    </>
   );
 }

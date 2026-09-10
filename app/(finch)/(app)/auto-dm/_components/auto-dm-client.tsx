@@ -21,6 +21,7 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { Switch } from "@/components/ui/switch";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { RuleWizard, type RuleDraft } from "./rule-wizard";
 import { createRule, deleteRule, toggleRule, updateRule } from "../actions";
 
@@ -73,6 +74,8 @@ export function AutoDmClient({
   const [rules, setRules] = useState<AutoDmRule[]>(initialRules);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<AutoDmRule | null>(null);
+  /* 삭제 확인을 기다리는 규칙 — window.confirm 이었다(브라우저가 대화상자를 막으면 휴지통이 조용히 아무 일도 안 했다) */
+  const [removing, setRemoving] = useState<AutoDmRule | null>(null);
 
   // 규칙이 연결할 수 있는 인스타그램 게시물 (연동 전이면 빈 배열 → 에디터가 안내)
   const igPosts = useMemo(() => posts.filter((p) => p.channel === "instagram"), [posts]);
@@ -110,24 +113,31 @@ export function AutoDmClient({
     }
   }
 
+  /* deleteRule 은 하드 삭제다(actions.ts) — 규칙·문구·발송 기록이 함께 사라지고 복구 경로가 없다.
+     그런데 확인창도 되돌리기도 없어서, 휴지통을 한 번 잘못 누르면 그걸로 끝이었다(실측). 확인은 아래 ConfirmDialog 가 받는다. */
   async function removeRule(rule: AutoDmRule) {
-    /* deleteRule 은 하드 삭제다(actions.ts) — 규칙·문구·발송 기록이 함께 사라지고 복구 경로가 없다.
-       그런데 확인창도 되돌리기도 없어서, 휴지통을 한 번 잘못 누르면 그걸로 끝이었다(실측). */
-    if (!window.confirm("이 자동화를 지울까요? 규칙과 문구가 함께 사라지고 되돌릴 수 없어요.")) return;
+    /* 확인을 누른 **시점의** 목록에서 자리를 잰다 — 실패하면 원래 자리로 되돌린다(예전엔 맨 앞에 꽂혀 순서가 바뀌었다) */
+    const at = rules.findIndex((r) => r.id === rule.id);
+    if (at < 0) return; // 그 사이 이미 사라졌다
+    const restore = () =>
+      setRules((prev) => (prev.some((r) => r.id === rule.id) ? prev : [...prev.slice(0, at), rule, ...prev.slice(at)]));
     setRules((prev) => prev.filter((r) => r.id !== rule.id));
-    const res = await deleteRule(rule.id);
-    if (!res.ok) {
-      setRules((prev) => [rule, ...prev]);
+    try {
+      const res = await deleteRule(rule.id);
+      if (!res.ok) restore();
+    } catch {
+      restore();
     }
   }
 
   // 저장은 서버 확정 후 반영 — 실제 모드에서 DB가 생성한 id·타임스탬프를 그대로 쓴다
-  async function saveRule(draft: RuleDraft) {
+  async function saveRule(draft: RuleDraft): Promise<string | null> {
     const exists = rules.some((r) => r.id === draft.id);
     const res = await (exists ? updateRule(draft) : createRule(draft));
     if (!res.ok) {
-      alert(res.error ?? "저장에 실패했습니다.");
-      return; // 모달 유지 — 사용자가 재시도/수정 가능
+      /* 모달 유지 — 사용자가 재시도/수정 가능. 문장은 위저드가 CTA 위에 띄운다(role=alert).
+         예전엔 window.alert 였다 — 브라우저가 대화상자를 막으면 실패가 통째로 안 보였다. */
+      return res.error ?? "저장하지 못했어요. 잠시 후 다시 시도해 주세요.";
     }
     setRules((prev) => {
       if (exists) {
@@ -149,6 +159,7 @@ export function AutoDmClient({
     });
     setEditorOpen(false);
     setEditing(null);
+    return null;
   }
 
   /* 조회가 실패했으면 «0» 이 아니라 «—» 다. 0 은 "안 돌고 있다"는 사실 주장이고,
@@ -376,7 +387,7 @@ export function AutoDmClient({
                       <button
                         type="button"
                         aria-label="삭제"
-                        onClick={() => removeRule(rule)}
+                        onClick={() => setRemoving(rule)}
                         className="rounded-card p-2 text-fg-sub hover:bg-negative-weak hover:text-negative"
                       >
                         <Trash2 className="size-4" />
@@ -404,6 +415,19 @@ export function AutoDmClient({
           onClose={() => {
             setEditorOpen(false);
             setEditing(null);
+          }}
+        />
+      ) : null}
+      {removing ? (
+        <ConfirmDialog
+          title="이 자동화를 지울까요?"
+          description="규칙과 문구가 함께 사라지고 되돌릴 수 없어요."
+          confirmLabel="삭제"
+          onCancel={() => setRemoving(null)}
+          onConfirm={() => {
+            const rule = removing;
+            setRemoving(null);
+            void removeRule(rule);
           }}
         />
       ) : null}

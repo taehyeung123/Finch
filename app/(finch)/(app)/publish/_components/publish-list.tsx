@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { StatusPill, type PostStatus } from "@/components/ui/status-pill";
 import { ResultModal, type ResultModalContent } from "@/components/ui/result-modal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   WEEKDAYS,
   earliestPublishAt,
@@ -23,6 +24,22 @@ import { SnsIcon } from "@/components/sns-brand-icons";
 import { cancelScheduledPost } from "@/app/(finch)/(app)/studio/actions";
 import { deleteDraft, publishNow, scheduleDraft } from "../actions";
 import { PostComposer, type ComposerChannel } from "./post-composer";
+
+/* 확인을 받는 세 조작 — 전부 되돌릴 수 없다(취소한 예약을 되살리는 액션도, 올라간 글을 내리는 액션도, 지운 글을 되찾는 액션도 없다) */
+type AskKind = "cancel" | "now" | "delete";
+/** 확인을 누른 **시점에** 그 글이 아직 이 조작을 받을 수 있는 상태인가 — 확인 모달이 떠 있는 몇 초 사이 목록이 새로 올 수 있다 */
+const ASK_ALLOWED: Record<AskKind, readonly PostStatus[]> = {
+  cancel: ["scheduled"],
+  now: ["draft", "scheduled", "failed"],
+  delete: ["draft", "failed"],
+};
+
+/** 확인 모달에 «어느 글인지»를 붙인다 — 목록에서 누른 줄이 맞는지 한 번 더 보게 */
+function captionSnippet(caption: string): string {
+  const line = caption.split("\n")[0]?.trim() ?? "";
+  if (!line) return "(캡션 없음)";
+  return line.length > 24 ? `${line.slice(0, 24)}…` : line;
+}
 
 export interface ScheduledPost {
   id: string;
@@ -103,6 +120,9 @@ export function PublishList({
   const [nowBusy, setNowBusy] = useState<string | null>(null);
   /* 예약 취소 실패 안내 — 낙관적 «취소됨»이 조용히 되돌아가던 자리(실측) */
   const [cancelError, setCancelError] = useState<string | null>(null);
+  /* 확인을 기다리는 조작 — window.confirm 이었다. 브라우저가 대화상자를 막으면(«추가 대화상자 표시 안 함») confirm 이
+     즉시 false 라 세 버튼이 **조용히 아무 일도 안 했다.** 무엇을 누구에게 할지는 id 로 들고, 실행은 확인 시점에 다시 판정한다. */
+  const [ask, setAsk] = useState<{ kind: AskKind; id: string } | null>(null);
 
   /* 날짜별 묶음. 초안은 날짜가 "미정"의 의미라 캘린더에 찍지 않는다 —
      안 정한 날짜를 달력에 찍으면 계획이 있는 것처럼 보인다. */
@@ -139,8 +159,7 @@ export function PublishList({
        그 경우 DB 는 published 인데 화면만 "취소됨"으로 굳는다.
        그래서 성공·실패와 무관하게 refresh 로 서버 상태를 다시 읽는다. */
     /* 되돌릴 수 없는 조작이다 — 취소된 행을 다시 예약으로 되돌리는 액션이 코드에 없다.
-       그런데 되돌릴 수 있는 «컴포저 닫기»에는 확인창이 있고 여기엔 없었다. 순서가 뒤집혀 있었다. */
-    if (!window.confirm("이 예약을 취소할까요? 되돌릴 수 없어요.")) return;
+       확인은 호출 전에 ConfirmDialog 가 받는다(confirmAsk). 아래 스냅샷(before)은 **확인 뒤** 찍혀야 실패 복원이 옛 상태로 안 간다. */
     const before = items.find((p) => p.id === id)?.status ?? "scheduled";
     setCancelError(null);
     setItems((prev) => prev.map((p) => (p.id === id ? { ...p, status: "canceled" } : p)));
@@ -160,8 +179,13 @@ export function PublishList({
   /* 「지금 발행」 — 초안·예약·실패 글을 그 자리에서 내보낸다. 되돌릴 수 없는 외부 행동이라 확인을 받는다.
      결과는 성공·실패 모두 모달로 보여 준다 — 실패한 글은 목록에 남아 다시 시도하거나 지울 수 있다. */
   function runNow(id: string) {
-    if (nowBusy || draftBusy) return;
-    if (!window.confirm("지금 바로 올릴까요? 올라간 게시물은 여기서 되돌릴 수 없어요.")) return;
+    /* 확인(confirmAsk)을 거친 뒤에만 불린다. 동시 발행 가드는 **여기, 확인 시점에** 다시 본다 —
+       window.confirm 은 동기라 확인하는 동안 다른 줄을 못 눌렀지만, 모달은 사람이 읽는 몇 초가 걸린다.
+       막을 때는 조용히 끝내지 않고 말한다(조용한 return 이 이번에 걷어 낸 «클릭 무시» 그 자체다). */
+    if (nowBusy || draftBusy) {
+      setResult({ tone: "warning", title: "다른 글을 처리하고 있어요", description: "끝난 뒤 다시 눌러 주세요." });
+      return;
+    }
     setNowBusy(id);
     setDraftError(null);
     startTransition(async () => {
@@ -186,6 +210,40 @@ export function PublishList({
       }
     });
   }
+
+  /* 확인 모달의 「확인」 — 누른 시점의 목록으로 다시 판정한 뒤 실행한다 */
+  function confirmAsk() {
+    const a = ask;
+    setAsk(null);
+    if (!a) return;
+    const post = items.find((p) => p.id === a.id);
+    if (!post || !ASK_ALLOWED[a.kind].includes(post.status)) {
+      /* 그 사이 크론이 발행했거나 다른 조작의 새로고침이 먼저 왔다 — 옛 판단으로 실행하지 않는다 */
+      setResult({ tone: "warning", title: "그 사이 글의 상태가 바뀌었어요", description: "목록을 다시 확인하고 눌러 주세요." });
+      router.refresh();
+      return;
+    }
+    if (a.kind === "now") {
+      runNow(a.id);
+      return;
+    }
+    if (a.kind === "cancel") {
+      /* 「지금 발행」이 도는 중이면 서버는 이미 publishing 이라 취소가 0행에 적용된다(아래 버튼 주석) */
+      if (nowBusy) {
+        setResult({ tone: "warning", title: "발행이 끝난 뒤 다시 눌러 주세요", description: "지금 올리고 있는 글이 있어요." });
+        return;
+      }
+      cancel(a.id);
+      return;
+    }
+    if (draftBusy) {
+      setResult({ tone: "warning", title: "다른 글을 처리하고 있어요", description: "끝난 뒤 다시 눌러 주세요." });
+      return;
+    }
+    runDraft(a.id, "delete");
+  }
+  const askPost = ask ? items.find((p) => p.id === ask.id) : undefined;
+  const askLead = askPost ? `「${captionSnippet(askPost.caption)}」 — ` : "";
 
   function runDraft(id: string, mode: "schedule" | "delete") {
     if (draftBusy) return;
@@ -328,6 +386,31 @@ export function PublishList({
       </div>
 
       <ResultModal result={result} onClose={() => setResult(null)} />
+      {ask ? (
+        <ConfirmDialog
+          {...(ask.kind === "cancel"
+            ? {
+                title: "이 예약을 취소할까요?",
+                description: `${askLead}예약을 취소하면 되돌릴 수 없어요.`,
+                confirmLabel: "예약 취소",
+                cancelLabel: "그대로 두기",
+              }
+            : ask.kind === "now"
+              ? {
+                  title: "지금 바로 올릴까요?",
+                  description: `${askLead}올라간 게시물은 여기서 되돌릴 수 없어요.`,
+                  confirmLabel: "지금 발행",
+                  tone: "primary" as const,
+                }
+              : {
+                  title: "이 글을 지울까요?",
+                  description: `${askLead}지운 글은 되돌릴 수 없어요.`,
+                  confirmLabel: "삭제",
+                })}
+          onCancel={() => setAsk(null)}
+          onConfirm={confirmAsk}
+        />
+      ) : null}
 
       {view === "calendar" ? (
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -534,7 +617,7 @@ export function PublishList({
                           {post.status === "scheduled" || post.status === "failed" ? (
                             <button
                               type="button"
-                              onClick={() => runNow(post.id)}
+                              onClick={() => setAsk({ kind: "now", id: post.id })}
                               disabled={nowBusy !== null}
                               className="trans-state rounded-card p-1 text-fg-faint hover:bg-tint-hover hover:text-fg disabled:opacity-40"
                               aria-label="지금 발행"
@@ -546,7 +629,7 @@ export function PublishList({
                           {post.status === "scheduled" ? (
                             <button
                               type="button"
-                              onClick={() => cancel(post.id)}
+                              onClick={() => setAsk({ kind: "cancel", id: post.id })}
                               disabled={nowBusy !== null}
                               className="trans-state rounded-card p-1 text-fg-faint hover:bg-tint-hover hover:text-negative disabled:opacity-40"
                               aria-label="예약 취소"
@@ -604,7 +687,7 @@ export function PublishList({
                     </div>
                     <StatusPill status={post.status} />
                     {post.status === "scheduled" || post.status === "failed" ? (
-                      <Button size="sm" variant="secondary" disabled={nowBusy !== null || draftBusy !== null} onClick={() => runNow(post.id)}>
+                      <Button size="sm" variant="secondary" disabled={nowBusy !== null || draftBusy !== null} onClick={() => setAsk({ kind: "now", id: post.id })}>
                         <Send className="size-3.5" aria-hidden /> {nowBusy === post.id ? "발행 중…" : "지금 발행"}
                       </Button>
                     ) : null}
@@ -612,7 +695,7 @@ export function PublishList({
                       /* 「지금 발행」이 도는 동안은 막는다 — 서버는 이미 publishing 이라 취소가 0행에 적용되고, 화면만 «취소됨»이 되면서 글은 올라갔다 */
                       <button
                         type="button"
-                        onClick={() => cancel(post.id)}
+                        onClick={() => setAsk({ kind: "cancel", id: post.id })}
                         disabled={nowBusy !== null}
                         className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-negative disabled:opacity-40"
                         aria-label="예약 취소"
@@ -645,9 +728,7 @@ export function PublishList({
                         </Button>
                         <button
                           type="button"
-                          onClick={() => {
-                            if (window.confirm("이 글을 지울까요? 되돌릴 수 없어요.")) runDraft(post.id, "delete");
-                          }}
+                          onClick={() => setAsk({ kind: "delete", id: post.id })}
                           disabled={draftBusy !== null}
                           className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-negative disabled:opacity-40"
                           aria-label="삭제"
@@ -692,7 +773,7 @@ export function PublishList({
                   </p>
                   <StatusPill status="draft" />
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button size="sm" variant="secondary" disabled={nowBusy !== null || draftBusy !== null} onClick={() => runNow(post.id)}>
+                    <Button size="sm" variant="secondary" disabled={nowBusy !== null || draftBusy !== null} onClick={() => setAsk({ kind: "now", id: post.id })}>
                       <Send className="size-3.5" aria-hidden /> {nowBusy === post.id ? "발행 중…" : "지금 발행"}
                     </Button>
                     <input
