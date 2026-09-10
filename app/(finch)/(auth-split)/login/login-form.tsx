@@ -6,9 +6,9 @@ import { useSearchParams } from "next/navigation";
 import { ButtonLink } from "@/components/ui/button";
 import { FinchLogo } from "@/components/logo";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { createClient } from "@/lib/supabase/client";
 import { safeNext } from "@/lib/auth/safe-next";
 import { GoogleIcon, KakaoIcon } from "@/components/icons/provider-icons";
+import { OAuthStartFailed, useOAuthStart } from "@/components/auth/use-oauth-start";
 
 /* 소셜 버튼 공통 — 브랜드 배경색 위 텍스트는 text-on-kakao(다크) 토큰 사용 */
 const socialButton =
@@ -33,6 +33,8 @@ function LoginCard() {
      (lib/auth/safe-next.ts). 접두 문자열 검사는 탭·개행으로 뚫렸다(2026-09-07 감사).
      오리진은 브라우저에서만 알 수 있으므로 클릭 시점에 판정한다 — 렌더 중 location 을 읽지 않는다. */
   const nextParam = searchParams.get("next");
+  /* 누르는 즉시 «○○로 이동하고 있어요» 모달 + 연타 차단 + 실패 알림(components/auth/use-oauth-start.tsx) */
+  const oauth = useOAuthStart();
 
   function signIn(provider: "google" | "kakao") {
     if (!configured) {
@@ -40,10 +42,7 @@ function LoginCard() {
       return;
     }
     const next = safeNext(nextParam, location.origin);
-    void createClient().auth.signInWithOAuth({
-      provider,
-      options: { redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
-    });
+    void oauth.start(provider, `${location.origin}/auth/callback?next=${encodeURIComponent(next)}`);
   }
 
   return (
@@ -55,26 +54,36 @@ function LoginCard() {
       <h1 className="text-2xl font-bold leading-tight">로그인</h1>
       <p className="mt-1 text-[15px] text-fg-sub">핀치 계정으로 계속하세요.</p>
 
-      {authError ? (
+      {authError && !oauth.failed ? (
         <p role="alert" className="mt-4 rounded-card bg-negative-weak p-3 text-[14px] text-negative">
           로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.
         </p>
       ) : null}
+      {oauth.failed ? <OAuthStartFailed /> : null}
 
       <div className="mt-6 space-y-2">
         <button
           type="button"
           onClick={() => signIn("google")}
+          disabled={oauth.leaving !== null}
+          aria-busy={oauth.leaving === "google"}
           className={`${socialButton} border border-line bg-body text-fg`}
         >
           <GoogleIcon className="size-5" />
           Google로 계속하기
         </button>
-        <button type="button" onClick={() => signIn("kakao")} className={`${socialButton} bg-kakao text-on-kakao`}>
+        <button
+          type="button"
+          onClick={() => signIn("kakao")}
+          disabled={oauth.leaving !== null}
+          aria-busy={oauth.leaving === "kakao"}
+          className={`${socialButton} bg-kakao text-on-kakao`}
+        >
           <KakaoIcon className="size-5" />
           카카오로 계속하기
         </button>
       </div>
+      {oauth.modal}
 
       {configNotice ? (
         <p role="status" className="mt-3 rounded-card bg-warning-weak p-3 text-[14px] text-warning">

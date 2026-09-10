@@ -5,8 +5,8 @@ import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button";
 import { FinchLogo } from "@/components/logo";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { createClient } from "@/lib/supabase/client";
 import { GoogleIcon, KakaoIcon } from "@/components/icons/provider-icons";
+import { OAuthStartFailed, useOAuthStart } from "@/components/auth/use-oauth-start";
 
 /* 소셜 버튼 공통 — 브랜드 배경색 위 텍스트는 text-on-kakao(다크) 토큰 사용 */
 const socialButton =
@@ -22,18 +22,15 @@ const socialButton =
 export function SignupForm({ nextPath = "/onboarding" }: { nextPath?: string }) {
   const configured = isSupabaseConfigured();
   const [configNotice, setConfigNotice] = useState(false);
+  /* 누르는 즉시 «○○로 이동하고 있어요» 모달 + 연타 차단 + 실패 알림(components/auth/use-oauth-start.tsx) */
+  const oauth = useOAuthStart();
 
   function signUp(provider: "google" | "kakao") {
     if (!configured) {
       setConfigNotice(true);
       return;
     }
-    void createClient().auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
-      },
-    });
+    void oauth.start(provider, `${location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`);
   }
 
   return (
@@ -45,20 +42,31 @@ export function SignupForm({ nextPath = "/onboarding" }: { nextPath?: string }) 
       <h1 className="text-2xl font-bold leading-tight">무료로 시작하기</h1>
       <p className="mt-1 text-[15px] text-fg-sub">소셜 계정으로 3초 만에 시작 — 신용카드가 필요 없어요</p>
 
+      {oauth.failed ? <OAuthStartFailed /> : null}
+
       <div className="mt-6 space-y-2">
         <button
           type="button"
           onClick={() => signUp("google")}
+          disabled={oauth.leaving !== null}
+          aria-busy={oauth.leaving === "google"}
           className={`${socialButton} border border-line bg-body text-fg`}
         >
           <GoogleIcon className="size-5" />
           Google로 시작하기
         </button>
-        <button type="button" onClick={() => signUp("kakao")} className={`${socialButton} bg-kakao text-on-kakao`}>
+        <button
+          type="button"
+          onClick={() => signUp("kakao")}
+          disabled={oauth.leaving !== null}
+          aria-busy={oauth.leaving === "kakao"}
+          className={`${socialButton} bg-kakao text-on-kakao`}
+        >
           <KakaoIcon className="size-5" />
           카카오로 시작하기
         </button>
       </div>
+      {oauth.modal}
 
       {configNotice ? (
         <p role="status" className="mt-3 rounded-card bg-warning-weak p-3 text-[14px] text-warning">
