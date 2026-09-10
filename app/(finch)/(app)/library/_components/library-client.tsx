@@ -142,6 +142,8 @@ export function LibraryClient({
   poolReady,
   poolSavedIds,
   isDemo,
+  urlQuery = "",
+  urlTarget = null,
 }: {
   sources: ReferenceSource[];
   items: ReferenceItem[];
@@ -157,6 +159,10 @@ export function LibraryClient({
   /** 이미 저장한 풀 소재 id — 카드 북마크 상태를 첫 렌더부터 맞춘다 */
   poolSavedIds: string[];
   isDemo: boolean;
+  /** 주소의 ?q= — 서버가 읽어 준다(page.tsx). 바뀔 때마다 검색에 반영한다 */
+  urlQuery?: string;
+  /** 주소의 ?target= — 알 수 없는 값은 무시한다 */
+  urlTarget?: string | null;
 }) {
   const router = useRouter();
 
@@ -295,29 +301,34 @@ export function LibraryClient({
     runPoolSearch("", next, 0);
   }, [filters.sort, filters.scope, runPoolSearch]);
 
-  /* 홈 검색바·추천 칩 딥링크(/library?q=…&target=…) — 최초 1회만 URL을 상태로 주입.
-     useSearchParams 대신 window에서 읽는다: 이 페이지는 정적 렌더라 Suspense 경계가 없다. */
-  const deepLinkApplied = useRef(false);
+  /* 검색어 딥링크(/library?q=…&target=…) — 홈 검색바·추천 칩·**상단바 검색**이 여기로 보낸다.
+     주소 값이 **바뀔 때마다** 한 번씩 상태로 옮긴다(예전엔 마운트 1회뿐이라 이 화면 안에서 상단바 검색을 하면
+     주소만 바뀌고 결과는 그대로였다 — 2026-09-10 감사). 값은 서버가 page.tsx 에서 읽어 props 로 준다.
+
+     «마지막으로 적용한 주소 값»과만 비교한다 — 지금 검색어 상태와 비교하지 않는다. 본문 검색창에서 친 검색어는
+     주소에 쓰지 않으므로(한 방향: 주소→상태), 상태와 비교하면 router.refresh·[전체 해제] 뒤에 옛 q 가 되살아난다
+     (clearAll 주석의 그 회귀). key={q} 로 리마운트하지 말 것 — 열어 둔 상세·저장 상태가 날아간다. */
+  const lastAppliedUrl = useRef<string | null>(null);
   useEffect(() => {
-    if (deepLinkApplied.current) return;
-    deepLinkApplied.current = true;
-    const params = new URLSearchParams(window.location.search);
-    const q = (params.get("q") ?? "").trim();
-    const targetRaw = params.get("target");
+    const q = urlQuery.trim();
     const target: LibraryFilters["target"] | null =
-      targetRaw === "instagram" || targetRaw === "tiktok" || targetRaw === "threads" || targetRaw === "ads"
-        ? targetRaw
+      urlTarget === "instagram" || urlTarget === "tiktok" || urlTarget === "threads" || urlTarget === "ads"
+        ? urlTarget
         : null;
-    if (!q && !target) return;
+    const key = `${q}|${target ?? ""}`;
+    if (lastAppliedUrl.current === key) return;
+    const firstVisit = lastAppliedUrl.current === null;
+    lastAppliedUrl.current = key;
+    /* 그냥 /library 로 들어온 첫 방문 — 옮길 것이 없다(서버 첫 목록 그대로) */
+    if (firstVisit && !q && !target) return;
     const nextFilters = target ? { ...filters, target } : filters;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- URL→상태 마운트 1회 동기화(딥링크)라 effect가 맞는 자리
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 주소→상태 한 방향 동기화. 서버 검색(부수효과)을 함께 불러야 해서 렌더 중 조정으로는 못 한다
     if (target) setFilters(nextFilters);
-     
-    if (q) setQuery(q);
+    setQuery(q);
     setVisibleCount(PAGE_SIZE);
     runPoolSearch(q, nextFilters, 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 딥링크 주입
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 주소 값이 바뀔 때만 돈다(filters·runPoolSearch 변화로 다시 돌면 본문 검색을 덮어쓴다)
+  }, [urlQuery, urlTarget]);
 
   /* ---------------- 패싯 (수집물에 실재하는 값만) ---------------- */
 

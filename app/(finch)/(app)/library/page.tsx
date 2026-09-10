@@ -26,7 +26,17 @@ import { LibraryClient } from "./_components/library-client";
 /* 수집(공급사 런 대기 포함)이 60초를 넘을 수 있어 서버 액션 실행 상한을 올린다 — 플랜 상한 내에서 적용 */
 export const maxDuration = 300;
 
-export default async function LibraryPage() {
+export default async function LibraryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string | string[]; target?: string | string[] }>;
+}) {
+  /* 검색어 딥링크(홈 검색바·추천 칩·상단바 검색 → /library?q=…&target=…)를 **서버가** 읽어 내려준다.
+     예전엔 클라이언트가 마운트 때 window.location 을 한 번만 읽어서, 탐색 화면 안에서 상단바 검색을 하면
+     주소만 바뀌고 결과는 그대로였다(2026-09-10 감사). 쿼리가 바뀌면 이 페이지가 새 값으로 다시 렌더된다. */
+  const sp = await searchParams;
+  const urlQuery = (Array.isArray(sp.q) ? sp.q[0] : sp.q) ?? "";
+  const urlTarget = (Array.isArray(sp.target) ? sp.target[0] : sp.target) ?? null;
   const isDemo = isDemoMode();
   const [sources, ownItems, settings, adSources, ownAds, pool, poolSavedIds] = isDemo
     ? [mockSources, mockItems, DEFAULT_COLLECT_SETTINGS, mockAdSources, mockAds, null, []]
@@ -56,6 +66,8 @@ export default async function LibraryPage() {
       poolReady={Boolean(pool?.ready)}
       poolSavedIds={poolSavedIds}
       isDemo={isDemo}
+      urlQuery={urlQuery}
+      urlTarget={urlTarget}
     />
   );
 }

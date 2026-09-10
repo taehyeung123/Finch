@@ -2,7 +2,6 @@
 
 import Link, { useLinkStatus } from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef } from "react";
 import { LoaderCircle, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useNavPending } from "@/components/layout/nav-pending";
@@ -32,20 +31,18 @@ function hrefToString(href: AppLinkProps["href"]): string | null {
 }
 
 export function AppLink({ prefetch, onNavigate, onMouseEnter, onFocus, onTouchStart, href, ...rest }: AppLinkProps) {
-  const { begin } = useNavPending();
+  const { begin, isNavigatingTo } = useNavPending();
   const router = useRouter();
   const intentMode = prefetch === "intent";
   /* intent 모드: Link 의 자동 프리페치는 끄고(prefetch={false}) 의도가 보이는 순간 router.prefetch 를 **직접** 부른다.
      prop 을 false→null 로 바꾸는 방식은 그 이벤트의 재렌더 뒤에야 먹혀 한 틱 늦고 우선순위도 낮다(2026-09-10 소넷 점검).
-     링크당 한 번만 — 라우터 캐시가 만료를 알아서 관리한다. */
-  const prefetched = useRef(false);
+     매번 부른다 — 캐시가 신선하면 Next 가 요청을 보내지 않는다. 예전의 «링크당 평생 1회» 가드는 캐시가 만료된
+     몇 분 뒤부터 프리페치를 영영 막아 클릭 뒤에야 요청이 나가게 했다(2026-09-10 감사). */
   const prefetchProp: boolean | null | undefined = intentMode ? false : prefetch;
   const showIntent = () => {
-    if (!intentMode || prefetched.current) return;
+    if (!intentMode) return;
     const target = hrefToString(href);
-    if (!target) return;
-    prefetched.current = true;
-    router.prefetch(target);
+    if (target) router.prefetch(target);
   };
 
   return (
@@ -65,6 +62,13 @@ export function AppLink({ prefetch, onNavigate, onMouseEnter, onFocus, onTouchSt
         onTouchStart?.(e);
       }}
       onNavigate={(e) => {
+        const target = hrefToString(href);
+        /* 방금 같은 곳으로 가기 시작했다 — 이 클릭을 흘려보내면 Next 가 진행 중인 이동을 버리고 처음부터 다시 한다.
+           삼킨다(4초 창). 그 뒤의 재클릭은 재시도로 통과한다. */
+        if (isNavigatingTo(target)) {
+          e.preventDefault();
+          return;
+        }
         /* 바깥 onNavigate 가 이동을 막았으면 «이동 중»도 켜지 않는다 */
         let prevented = false;
         if (onNavigate) {
@@ -75,7 +79,7 @@ export function AppLink({ prefetch, onNavigate, onMouseEnter, onFocus, onTouchSt
             },
           });
         }
-        if (!prevented) begin(hrefToString(href));
+        if (!prevented) begin(target);
       }}
       {...rest}
     />
