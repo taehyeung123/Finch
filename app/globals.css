@@ -1678,6 +1678,8 @@ input[type="search"]::-webkit-search-cancel-button {
   to { opacity: 1; pointer-events: auto; }
 }
 .busy-veil-in { animation: busy-veil-in 0.16s ease-out 0.2s both; }
+/* 재빌드 유도 — cb15c9a 배포에서 Turbopack 빌드 캐시가 위 키프레임 변경을 삼켜 옛 규칙(modal-scrim-in)을 그대로 내보냈다(2026-09-10).
+   이 블록을 고친 배포는 운영에서 getComputedStyle(베일).pointerEvents 로 확인한다. */
 .modal-card-in { animation: modal-card-in 0.24s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .anim-swap { animation: anim-swap-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
