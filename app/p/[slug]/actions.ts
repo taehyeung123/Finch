@@ -21,6 +21,7 @@ import {
   type ViewRow,
 } from "@/lib/links/views";
 import { consoleErrorThrottled } from "@/lib/monitoring/log-throttle";
+import { clientIp } from "@/lib/net/client-ip";
 
 /** 방문자 액션 결과 — error 는 한국어 기본 문구, code 는 페이지 언어로 번역할 키(감사 C8) */
 export type VisitorResult = { ok: true } | { ok: false; error: string; code: LpErrorCode };
@@ -91,29 +92,7 @@ async function unlockSourceKey(): Promise<string | null> {
   }
 }
 
-/**
- * 이 요청을 실제로 보낸 주소 — **신뢰할 수 있는 출처부터** 본다.
- *
- * ⚠️ `x-forwarded-for` 의 **첫** 값을 쓰면 안 된다(소넷 점검). 그 헤더는 요청자가 직접 넣을 수 있고,
- * 앞단 프록시는 자기가 본 주소를 **뒤에 덧붙인다.** 즉 첫 값은 공격자가 매 요청마다 바꿔 넣는 값이다 —
- * 쿠키를 안 보내는 바로 그 공격자에게 «출처 단위 상한»이 통째로 무의미해진다.
- *
- * 우선순위:
- *  ① `cf-connecting-ip` — Cloudflare 가 넣고, 들어온 같은 이름의 헤더는 지운다. 우리 앞에 Cloudflare 가 있다.
- *  ② `x-real-ip` — ①이 없다는 것은 Cloudflare 를 안 거쳤다는 뜻이고, 그때는 플랫폼이 넣는 이 값이 실제 접속자다.
- *  ③ `x-forwarded-for` 의 **마지막** 값 — 가장 가까운 프록시가 붙인 값이라 첫 값보다 믿을 만하다.
- */
-function clientIp(h: Headers): string {
-  const cf = h.get("cf-connecting-ip")?.trim();
-  if (cf) return cf;
-  const real = h.get("x-real-ip")?.trim();
-  if (real) return real;
-  const chain = (h.get("x-forwarded-for") ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  return chain.length > 0 ? chain[chain.length - 1] : "";
-}
+/* 접속 IP 판정은 lib/net/client-ip.ts 한 곳에서 한다 — Cloudflare 헤더는 Cloudflare 에지에서 온 연결일 때만 믿는다(2026-09-10). */
 
 /** 열림 쿠키와 같은 비밀(lib/links/password.ts pepper) — 여기서만 쓰려고 다시 파생한다 */
 function unlockPepper(): string {

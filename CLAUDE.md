@@ -117,9 +117,11 @@
 - **검증 없는 경로 조각을 `new URL()`·`redirect()` 의 목적지로 쓰지 않는다.** 라우트 파라미터는 **디코드된 값**이라
   `\`(`%5C`)가 들어오면 `//` 로 읽혀 크로스 오리진이 된다. 로그인 `next` 는 `lib/auth/safe-next.ts`,
   프로필 slug 는 `SLUG_RE` 로 먼저 거른다.
-- **접속 IP 는 `cf-connecting-ip` → `x-real-ip` → `x-forwarded-for` 의 마지막 값** 순으로 본다
-  (`app/p/[slug]/actions.ts` 의 `clientIp`). xff **첫** 값은 요청자가 직접 넣는 값이라 위조된다.
-  IP 원문은 저장하지 않는다 — 페퍼를 섞어 해시만 남긴다.
+- **접속 IP 는 `lib/net/client-ip.ts` 의 `clientIp()` 로만 본다.** 출발점은 Vercel 이 덮어써 위조할 수 없는
+  «바로 앞 접속자»(`x-vercel-forwarded-for` → `x-real-ip` → xff **마지막** 값)이고, 그 주소가 **Cloudflare 에지 대역일 때만**
+  `cf-connecting-ip` 를 믿는다. `cf-connecting-ip` 를 무조건 믿으면 안 된다 — Vercel 은 Cloudflare 를 건너뛴 직접 접속도
+  받아서, 그 헤더를 위조해 IP 상한을 우회할 수 있었다(2026-09-10 적발). 이 방식은 Cloudflare 프록시를 켜든 끄든 그대로 맞다.
+  xff **첫** 값은 요청자가 직접 넣는 값이라 위조된다. IP 원문은 저장하지 않는다 — 페퍼를 섞어 해시만 남긴다.
 - **시크릿을 읽는 모듈 1행에 `import "server-only";`** 를 넣는다. 경계를 사람이 아니라 빌드가 지킨다.
 - **인증 «전» 경로의 `console.error` 는 반드시 `consoleErrorThrottled` + `flatten`** 으로 감싼다
   (`lib/monitoring/log-throttle.ts`). Sentry 가 console.error 를 전부 이벤트로 올리므로, 안 감싸면
