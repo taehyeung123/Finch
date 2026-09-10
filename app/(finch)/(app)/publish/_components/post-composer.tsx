@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ImagePlus, X } from "lucide-react";
+import { ImagePlus, LoaderCircle, X } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { nextPaint } from "@/lib/next-paint";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { earliestPublishAt } from "@/lib/calendar";
@@ -36,6 +37,8 @@ export interface ComposerChannel {
   handle: string | null;
   connected: boolean;
 }
+
+type Progress = { done: number; total: number };
 
 export function PostComposer({
   channels,
@@ -74,6 +77,31 @@ export function PostComposer({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  /* 사진 처리 상태 — 둘은 따로 둔다(문구가 다르고, 한쪽의 끝이 다른 쪽의 잠금을 풀면 안 된다).
+     예전엔 둘 다 상태가 없었다: 처리 중에도 저장이 열려 있어 **일부 사진만** 발행되거나
+     인스타 비율로 자르기 전 사진이 그대로 나갔다(외부 발행이라 되돌릴 수 없다, 2026-09-10 점검). */
+  /** 파일 → JPEG 처리 진행. 동시 호출은 importsRef 카운터가 센다(먼저 끝난 쪽이 잠금을 풀지 않게) */
+  const [importing, setImporting] = useState<Progress | null>(null);
+  /** 인스타로 바꿀 때 이미 올린 사진을 비율 안으로 다시 맞추는 진행 */
+  const [refitting, setRefitting] = useState<Progress | null>(null);
+  /** 인스타 비율에 맞춰 **실제로 잘린** 사진(data URL 동일성) — 안내 문구의 장수. 지운 사진은 자연히 빠진다 */
+  const [cropped, setCropped] = useState<ReadonlySet<string>>(() => new Set());
+  /** 인스타 비율로 맞추지 못한 사진 — 인스타로는 저장을 막는다(발행 시각에 거절당한다) */
+  const [unfit, setUnfit] = useState<ReadonlySet<string>>(() => new Set());
+  /** 처리 루프가 **지금** 채널을 읽는 곳 — 렌더 클로저의 channel 은 처리 도중 칩을 바꾸면 옛값이다 */
+  const channelRef = useRef(channel);
+  const importsRef = useRef(0);
+  /** 재맞춤 세대 — 채널을 바꿀 때마다 올린다. 늦게 끝난 옛 세대의 결과는 버린다(인스타→스레드 즉시 복귀) */
+  const refitGenRef = useRef(0);
+  /** 모달이 닫히면 처리 루프를 멈춘다 — 언마운트 뒤 setState 는 무해하지만 CPU·배터리를 끝까지 태운다 */
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const requestCloseRef = useRef<() => void>(() => {});
@@ -125,28 +153,34 @@ export function PostComposer({
   }
 
   /**
-   * 축소 + JPEG 변환 (+ 인스타면 비율 안으로 **가운데 크롭**).
+   * 축소 + JPEG 변환 (+ 인스타면 비율 안으로 **가운데 크롭**). cropped = 실제로 잘랐는지.
    * src 는 object URL(파일) 또는 data URL(이미 처리한 이미지 — 채널을 인스타로 바꿀 때 다시 태운다).
+   * keepIfFit: src 가 이 파이프라인이 이미 구운 JPEG 일 때만 켠다 — 자를 것도 줄일 것도 없으면
+   * 다시 굽지 않고 그대로 돌려준다(스레드↔인스타를 오갈 때마다 q0.85 로 화질이 깎이지 않게).
    */
-  async function toJpegDataUrl(src: string, forInstagram: boolean): Promise<string> {
+  async function toJpeg(src: string, forInstagram: boolean, keepIfFit = false): Promise<{ url: string; cropped: boolean }> {
     const img = await loadImage(src);
     let sx = 0;
     let sy = 0;
     let sw = img.naturalWidth;
     let sh = img.naturalHeight;
+    let cropped = false;
     if (forInstagram && sw > 0 && sh > 0) {
       const ratio = sw / sh;
       if (ratio < IG_MIN_RATIO) {
         /* 너무 세로 — 위아래를 잘라 4:5 로 */
         sh = Math.round(sw / IG_MIN_RATIO);
         sy = Math.round((img.naturalHeight - sh) / 2);
+        cropped = true;
       } else if (ratio > IG_MAX_RATIO) {
         /* 너무 가로 — 좌우를 잘라 1.91:1 로 */
         sw = Math.round(sh * IG_MAX_RATIO);
         sx = Math.round((img.naturalWidth - sw) / 2);
+        cropped = true;
       }
     }
     const scale = Math.min(1, MAX_DIMENSION / Math.max(sw, sh));
+    if (keepIfFit && !cropped && scale === 1) return { url: src, cropped: false };
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(sw * scale));
     canvas.height = Math.max(1, Math.round(sh * scale));
@@ -156,15 +190,18 @@ export function PostComposer({
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-    const out = canvas.toDataURL("image/jpeg", 0.85);
+    const first = canvas.toDataURL("image/jpeg", 0.85);
     /* 장당 상한 — 고엔트로피 원본이 크게 구워지면 한 단계 낮춰 다시(아래 합산 가드와 짝) */
-    return out.length > 1_400_000 ? canvas.toDataURL("image/jpeg", 0.72) : out;
+    const out = first.length > 1_400_000 ? canvas.toDataURL("image/jpeg", 0.72) : first;
+    /* 캔버스 한도를 넘으면(iOS) 예외 없이 "data:," 가 온다 — 빈 사진을 올리느니 실패로 닫는다 */
+    if (!out.startsWith("data:image/jpeg")) throw new Error("encode");
+    return { url: out, cropped };
   }
 
-  async function fileToJpegDataUrl(file: File, forInstagram: boolean): Promise<string> {
+  async function fileToJpeg(file: File, forInstagram: boolean): Promise<{ url: string; cropped: boolean }> {
     const url = URL.createObjectURL(file);
     try {
-      return await toJpegDataUrl(url, forInstagram);
+      return await toJpeg(url, forInstagram);
     } finally {
       URL.revokeObjectURL(url);
     }
@@ -176,13 +213,91 @@ export function PostComposer({
     const room = MAX_IMAGES - images.length;
     /* 정상 선택이면 이전 경고를 지운다 — 안 지우면 상한 경고가 해소된 뒤에도 남는다 */
     setError(files.length > room ? `이미지는 ${MAX_IMAGES}장까지예요.` : null);
-    for (const f of files.slice(0, Math.max(0, room))) {
-      try {
-        const dataUrl = await fileToJpegDataUrl(f, channel === "instagram");
-        setImages((prev) => (prev.length >= MAX_IMAGES ? prev : [...prev, dataUrl]));
-      } catch {
-        setError("이미지를 읽지 못했어요. 다른 파일로 시도해 주세요.");
+    const todo = files.slice(0, Math.max(0, room));
+    if (todo.length === 0) return; // 0장이면 표시를 번쩍이지 않는다
+    /* 고른 즉시 켠다 — 이 change 핸들러 안의 setState 는 이벤트 끝에 바로 커밋된다(디코드보다 먼저) */
+    importsRef.current += 1;
+    setImporting((p) => ({ done: p?.done ?? 0, total: (p?.total ?? 0) + todo.length }));
+    try {
+      for (const f of todo) {
+        /* 표시(진행 수)가 먼저 칠해지게 한 프레임 양보 — 한 장의 디코드·인코딩은 메인 스레드를 통째로 잡는다 */
+        await nextPaint();
+        if (!aliveRef.current) return;
+        try {
+          /* 채널은 장마다 **지금** 값을 읽는다. 굽는 사이 칩을 바꿨으면 원본 파일로 한 번 더 굽는다 —
+             이 장은 전환 재맞춤의 스냅숏에 없으니(아직 목록에 안 들어갔다) 여기서 맞추지 않으면 영영 안 맞는다 */
+          let forIg = channelRef.current === "instagram";
+          let out = await fileToJpeg(f, forIg);
+          if (forIg !== (channelRef.current === "instagram")) {
+            forIg = !forIg;
+            out = await fileToJpeg(f, forIg);
+          }
+          if (!aliveRef.current) return;
+          const { url, cropped: wasCropped } = out;
+          const cap = channelRules(channelRef.current).maxImages;
+          setImages((prev) => (prev.length >= cap ? prev : [...prev, url]));
+          if (wasCropped) setCropped((s) => new Set(s).add(url));
+        } catch {
+          setError("이미지를 읽지 못했어요. 다른 파일로 시도해 주세요.");
+        }
+        setImporting((p) => p && { ...p, done: p.done + 1 });
       }
+    } finally {
+      importsRef.current -= 1;
+      if (importsRef.current === 0) setImporting(null);
+    }
+  }
+
+  /**
+   * 스레드로 고른 사진을 인스타로 옮길 때 비율 한계(4:5~1.91:1)를 다시 적용한다.
+   * 늦게 끝난 결과가 엉뚱한 상태를 덮지 않게 세 겹으로 거른다:
+   *  ① 세대 — 그사이 칩을 또 바꿨으면(인스타→스레드 즉시 복귀) 통째로 버린다. 스레드 글 사진이 잘리면 안 된다.
+   *  ② 채널 — 반영 시점에도 인스타여야 한다.
+   *  ③ 원소 동일성 — 스냅숏의 data URL 을 결과로 **바꿔 끼운다**. 옛 코드는 «장수가 같을 때만 통째 교체»라
+   *     도중에 한 장이 늘거나 줄면 크롭 전체가 버려졌고, 늘고 준 수가 같으면 지운 사진이 되살아났다.
+   * 칩은 잠그지 않는다 — 마지막 클릭이 이기고, 정합은 위 세대가 지킨다.
+   */
+  async function refitForInstagram(gen: number, snap: string[]) {
+    setRefitting({ done: 0, total: snap.length });
+    const fitted = new Map<string, string>();
+    const newlyCropped: string[] = [];
+    const failed: string[] = [];
+    try {
+      for (const src of snap) {
+        await nextPaint();
+        if (!aliveRef.current || gen !== refitGenRef.current) return;
+        if (!fitted.has(src) && !failed.includes(src)) {
+          try {
+            const out = await toJpeg(src, true, true);
+            fitted.set(src, out.url);
+            if (out.cropped) newlyCropped.push(out.url);
+          } catch {
+            /* 폴백 없음 — 예전엔 .catch(() => src) 로 안 맞춘 사진을 조용히 남겨 발행 시각에 거절당했다 */
+            failed.push(src);
+          }
+        }
+        if (gen !== refitGenRef.current) return;
+        setRefitting((p) => p && { ...p, done: p.done + 1 });
+      }
+      if (!aliveRef.current || gen !== refitGenRef.current || channelRef.current !== "instagram") return;
+      setImages((prev) => prev.map((p) => fitted.get(p) ?? p));
+      if (newlyCropped.length > 0) {
+        setCropped((s) => {
+          const n = new Set(s);
+          for (const u of newlyCropped) n.add(u);
+          return n;
+        });
+      }
+      if (failed.length > 0) {
+        setUnfit((s) => {
+          const n = new Set(s);
+          for (const u of failed) n.add(u);
+          return n;
+        });
+        setError(`사진 ${failed.length}장을 인스타그램 비율로 맞추지 못했어요 — 그 사진을 빼고 다시 올려 주세요.`);
+      }
+    } finally {
+      if (gen === refitGenRef.current) setRefitting(null);
     }
   }
 
@@ -192,27 +307,37 @@ export function PostComposer({
   const underImages = images.length < rules.minImages;
   const overImages = images.length > MAX_IMAGES;
   const missingText = rules.requiresText && caption.trim().length === 0;
+  /* 인스타로 못 맞춘 사진이 남아 있으면 인스타로는 못 보낸다(Graph API 가 비율로 거절) */
+  const hasUnfit = channel === "instagram" && images.some((s) => unfit.has(s));
+  /* 사진을 처리하는 동안은 저장을 닫는다 — 열어 두면 그 렌더의 images 스냅숏만 나가서
+     «지금 발행»이면 일부 사진만 올라가거나, 자르기 전 사진이 인스타로 나간다(되돌릴 수 없다) */
+  const photosBusy = importing !== null || refitting !== null;
   const canSave =
     !missingText &&
     !underImages &&
     !overImages &&
     !overText &&
+    !hasUnfit &&
+    !photosBusy &&
     (caption.trim().length > 0 || images.length > 0) &&
     (mode !== "schedule" || when >= earliestAt) &&
     !saving;
+  const croppedCount = images.filter((s) => cropped.has(s)).length;
 
   /* 채널을 바꾸면 이미 쓴 내용이 소급해 무효가 될 수 있다(인스타 1000자 → 스레드 500자,
      스레드 글 전용 → 인스타 이미지 필수). 예전엔 저장 버튼만 조용히 꺼져서 **왜 막혔는지
      화면 어디에도 없었다** — 특히 이미지 쪽은 빨개지는 것조차 없었다(2026-08-31 점검 적발). */
   function switchChannel(next: string) {
+    const prevChannel = channelRef.current;
+    channelRef.current = next; // 처리 중인 루프가 다음 장부터 새 채널로 굽는다
     setChannel(next);
     const r = channelRules(next);
     const name = channelLabel(next);
-    /* 스레드로 고른 사진을 인스타로 옮기면 비율 한계(4:5~1.91:1)를 다시 적용해야 한다 — 이미 처리한 data URL 을 다시 태운다 */
-    if (next === "instagram" && channel !== "instagram" && images.length > 0) {
-      void Promise.all(images.map((src) => toJpegDataUrl(src, true).catch(() => src))).then((fitted) =>
-        setImages((prev) => (prev.length === fitted.length ? fitted : prev)),
-      );
+    if (next !== prevChannel) {
+      /* 세대를 올려 진행 중이던 재맞춤을 무효로 만든다 — 스레드로 돌아왔으면 표시도 바로 걷는다 */
+      const gen = ++refitGenRef.current;
+      if (next === "instagram" && images.length > 0) void refitForInstagram(gen, images);
+      else setRefitting(null);
     }
     if (caption.length > r.textMax) {
       setError(`${eunNeun(name)} ${r.textMax}자까지 쓸 수 있어요 — ${caption.length - r.textMax}자를 줄여 주세요.`);
@@ -392,38 +517,70 @@ export function PostComposer({
                 {images.length}/{MAX_IMAGES}
               </span>
             </p>
-            <div className="mt-1.5 grid grid-cols-4 gap-1.5">
-              {images.map((src, i) => (
-                <span key={i} className="relative aspect-square overflow-hidden rounded-card border border-line">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- 업로드 전 로컬 미리보기(data URL) */}
-                  <img src={src} alt={`이미지 ${i + 1}`} className="size-full object-cover" />
+            <div className="relative mt-1.5">
+              <div className="grid grid-cols-4 gap-1.5">
+                {images.map((src, i) => (
+                  <span key={i} className="relative aspect-square overflow-hidden rounded-card border border-line">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- 업로드 전 로컬 미리보기(data URL) */}
+                    <img src={src} alt={`이미지 ${i + 1}`} className="size-full object-cover" />
+                    {/* 처리 중엔 지우지 못한다 — 재맞춤 결과를 바꿔 끼울 원소가 사라진다 */}
+                    <button
+                      type="button"
+                      aria-label={`이미지 ${i + 1} 제거`}
+                      disabled={photosBusy}
+                      onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
+                      className="absolute right-1 top-1 rounded-card bg-scrim p-1 text-on-scrim hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </span>
+                ))}
+                {importing ? (
+                  /* 「추가」 자리에 진행 수 — FinchLoader(80px)는 약 83px 타일에 안 들어간다 */
+                  <span
+                    role="status"
+                    aria-live="polite"
+                    className="flex aspect-square flex-col items-center justify-center gap-1 rounded-card border border-dashed border-line text-fg-sub"
+                  >
+                    <LoaderCircle className="size-5 animate-spin" aria-hidden />
+                    <span className="tnum text-[11px]">
+                      준비 중 {importing.done}/{importing.total}
+                    </span>
+                  </span>
+                ) : images.length < MAX_IMAGES ? (
                   <button
                     type="button"
-                    aria-label={`이미지 ${i + 1} 제거`}
-                    onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
-                    className="absolute right-1 top-1 rounded-card bg-scrim p-1 text-on-scrim hover:opacity-80"
+                    disabled={photosBusy}
+                    onClick={() => fileRef.current?.click()}
+                    className="trans-state flex aspect-square flex-col items-center justify-center gap-1 rounded-card border border-dashed border-line text-fg-sub hover:border-primary hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <X className="size-3" />
+                    <ImagePlus className="size-5" aria-hidden />
+                    <span className="text-[11px]">추가</span>
                   </button>
-                </span>
-              ))}
-              {images.length < MAX_IMAGES ? (
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  className="trans-state flex aspect-square flex-col items-center justify-center gap-1 rounded-card border border-dashed border-line text-fg-sub hover:border-primary hover:text-fg"
-                >
-                  <ImagePlus className="size-5" aria-hidden />
-                  <span className="text-[11px]">추가</span>
-                </button>
+                ) : null}
+              </div>
+              {refitting ? (
+                <div className="absolute inset-0 flex items-center justify-center gap-2 rounded-card bg-scrim px-3 text-center text-on-scrim">
+                  <LoaderCircle className="size-4 shrink-0 animate-spin" aria-hidden />
+                  <span role="status" className="tnum text-[12px]">
+                    인스타그램 비율로 맞추는 중… {refitting.done}/{refitting.total}
+                  </span>
+                </div>
               ) : null}
             </div>
+            {/* 실제로 잘린 장이 있을 때만, 처리가 끝난 뒤에 — 진행 표시 안에 넣으면 0.5초 만에 사라져 아무도 못 읽는다 */}
+            {croppedCount > 0 && !photosBusy ? (
+              <p className="mt-1.5 text-[12px] text-fg-sub">
+                사진 {croppedCount}장을 인스타그램 비율(4:5~1.91:1)에 맞춰 가운데를 기준으로 잘랐어요.
+              </p>
+            ) : null}
             <input
               ref={fileRef}
               type="file"
               accept="image/png,image/jpeg,image/webp"
               multiple
               hidden
+              disabled={photosBusy}
               onChange={pickFiles}
             />
           </div>

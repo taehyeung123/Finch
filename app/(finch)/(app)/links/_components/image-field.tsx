@@ -1,9 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ImagePlus, X } from "lucide-react";
+import { ImagePlus, LoaderCircle, X } from "lucide-react";
 import { uploadLinkImage } from "../actions";
 import { FinchLoader } from "@/components/ui/finch-loader";
+import { nextPaint } from "@/lib/next-paint";
 
 /*
   이미지 입력 — 업로드 또는 주소 붙여넣기.
@@ -26,6 +27,38 @@ import { FinchLoader } from "@/components/ui/finch-loader";
 const CROP_MAX_W = 2000;
 /** 전송 안전 상한 — Vercel 요청 본문 4.5MB 하드캡을 base64(+33%) 포함해 넘지 않는 선 */
 const WIRE_MAX_BYTES = 3_000_000;
+/** 조정 작업본의 긴 변 상한 — 저장본(CROP_MAX_W)의 2배라 확대해 잘라도 해상도가 남는다 */
+const PENDING_MAX = CROP_MAX_W * 2;
+/** 작업본을 **줄이지 않고 그대로 쓰는** 문턱. 4000 에 딱 걸던 시절엔 아이폰 원본(4032×3024)이
+    1.6% 줄자고 4000px JPEG 를 통째로 다시 구웠다 — 선택 직후 0.3~0.6초(저사양 1~1.3초) 멈춤의 주범이었다
+    (2026-09-10 실측). 저장본은 applyCrop 가 2000 으로 다시 줄이므로 결과는 같다. 이 위(48MP 등)만 줄인다. */
+const PENDING_KEEP_MAX = 4096;
+
+/** 처리 단계 — 문구가 단계마다 다르고, 무엇이든 진행 중이면 칸의 버튼을 모두 잠근다 */
+type Phase = null | "read" | "prep" | "upload";
+const PHASE_LABEL: Record<Exclude<Phase, null>, string> = {
+  read: "사진을 읽는 중…",
+  prep: "사진을 준비하는 중…",
+  upload: "올리는 중…",
+};
+
+/** 칸이 FinchLoader(링 80px + 14px 문구 ≈ 113px 높이·문구 폭 약 130px)를 품을 만큼 큰가.
+    4:1 로고·1.91:1 공유 카드·16:9 칸은 높이가 50~112px, 버튼형 썸네일(120px)은 폭이 모자라
+    로더가 칸을 밀어 올리거나 위 라벨·아래 주소칸을 덮는다 — 그런 칸은 작은 스피너 한 줄로 그린다.
+    읽지 못하는 값은 «작다»로 본다(넘치지 않는 쪽). */
+function roomyForFinchLoader(aspect: string, cap: string): boolean {
+  const wm = /max-w-\[(\d+)px\]/.exec(cap);
+  if (!wm) return false;
+  const width = Number(wm[1]);
+  let ratio: number;
+  if (/(^|\s)aspect-square(\s|$)/.test(aspect)) ratio = 1;
+  else {
+    const m = /aspect-\[(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)\]/.exec(aspect);
+    if (!m) return false;
+    ratio = Number(m[1]) / Number(m[2]);
+  }
+  return width >= 136 && width / ratio >= 140;
+}
 
 /** 가장자리 «여백 띠» 경계 — 완전 투명 + **균일 단색 테두리**(합성 이미지의 흰 배경 등)를
     프로브(≤512px)로 찾아 원본 좌표로 돌려준다. 단색 판정은 네 모서리 색이 서로 같을 때만
@@ -160,9 +193,13 @@ export function ImageField({
   const cap = maxW ?? "max-w-[200px]";
   const boxCls = `${cap} ${round ? "rounded-full" : "rounded-card"} ${aspect}`.trim();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
+  /* 예전엔 boolean busy 가 «올리는 중»에만 켜졌다 — 폰 사진을 고른 뒤 읽기·디코드·축소 동안(0.3~1.3초)
+     칸이 아무 반응이 없어 다시 누르게 됐고, 두 처리가 경합해 늦게 끝난 쪽이 이겼다(2026-09-10 점검). */
+  const [phase, setPhase] = useState<Phase>(null);
+  /** 실행 토큰 — 새 처리를 시작할 때마다 올린다. 늦게 도착한 옛 onload 는 상태를 건드리지 않는다 */
+  const runRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
-  /** 조정 대기 중인 이미지(4000px 캡 축소본) — 원본 그대로면 25MB 를 조정 내내 물고,
+  /** 조정 대기 중인 이미지(긴 변 4096 이하는 원본, 넘으면 4000px 축소본) — 원본 그대로면 25MB 를 조정 내내 물고,
       2000px 로 깎으면 크롭 후 해상도가 상한에 못 미친다 */
   const [pending, setPending] = useState<{ dataUrl: string; w: number; h: number } | null>(null);
   /** 조정값 — 확대 1~3배, 위치 0~100(2축). 프레임 비율은 **칸이 정한다**(cropAspect):
@@ -186,7 +223,7 @@ export function ImageField({
   }
 
   async function upload(dataUrl: string, dims?: { w: number; h: number }) {
-    setBusy(true);
+    setPhase("upload");
     try {
       const res = await uploadLinkImage(dataUrl);
       if (!res.ok || !res.url) setError(res.error ?? "업로드하지 못했어요.");
@@ -194,7 +231,7 @@ export function ImageField({
     } catch {
       setError("업로드하지 못했어요.");
     } finally {
-      setBusy(false);
+      setPhase(null);
     }
   }
 
@@ -211,43 +248,74 @@ export function ImageField({
     }
     const fileBytes = f.size;
 
+    /* 크기 검사를 지난 뒤에 켠다(앞에서 켜면 출구가 하나 더 생긴다). change 핸들러 안이라 읽기보다 먼저 칠해진다 */
+    const run = ++runRef.current;
+    setPhase("read");
+    const fail = (msg: string) => {
+      if (run !== runRef.current) return;
+      setError(msg);
+      setPhase(null);
+    };
     const r = new FileReader();
-    r.onerror = () => setError("파일을 읽지 못했어요.");
+    r.onerror = () => fail("파일을 읽지 못했어요.");
+    r.onabort = () => fail("파일을 읽지 못했어요.");
     r.onload = () => {
-      const dataUrl = String(r.result);
-      /* gif(애니)·svg(벡터)는 크롭·축소가 원본을 망가뜨린다 — 그대로 올리되 전송 상한만 지킨다.
-         Vercel 요청 본문 4.5MB 하드캡(base64 +33% 포함)이 진짜 한계다(2026-08-26 실측·조사) */
-      if (/^data:image\/gif/.test(dataUrl)) {
-        if (fileBytes > WIRE_MAX_BYTES) {
-          setError("움직이는 GIF는 3MB 이하만 올릴 수 있어요 — 용량을 줄여 다시 시도해 주세요.");
+      if (run !== runRef.current) return;
+      try {
+        const dataUrl = String(r.result);
+        /* gif(애니)·svg(벡터)는 크롭·축소가 원본을 망가뜨린다 — 그대로 올리되 전송 상한만 지킨다.
+           Vercel 요청 본문 4.5MB 하드캡(base64 +33% 포함)이 진짜 한계다(2026-08-26 실측·조사) */
+        if (/^data:image\/gif/.test(dataUrl)) {
+          if (fileBytes > WIRE_MAX_BYTES) {
+            fail("움직이는 GIF는 3MB 이하만 올릴 수 있어요 — 용량을 줄여 다시 시도해 주세요.");
+            return;
+          }
+          void upload(dataUrl); // 단계는 upload 가 이어받는다
           return;
         }
-        void upload(dataUrl);
-        return;
-      }
-      if (/^data:image\/svg/.test(dataUrl)) {
-        if (fileBytes > 1024 * 1024) {
-          setError("SVG는 1MB 이하만 올릴 수 있어요.");
+        if (/^data:image\/svg/.test(dataUrl)) {
+          if (fileBytes > 1024 * 1024) {
+            fail("SVG는 1MB 이하만 올릴 수 있어요.");
+            return;
+          }
+          void upload(dataUrl);
           return;
         }
-        void upload(dataUrl);
-        return;
+        origRef.current = dataUrl;
+        startAdjust(dataUrl, true);
+      } catch {
+        fail("파일을 읽지 못했어요.");
       }
-      origRef.current = dataUrl;
-      startAdjust(dataUrl, true);
     };
     r.readAsDataURL(f);
   }
 
-  /** 조정 단계 진입 — (선택적)여백 트림 후 4000px 작업본을 만든다.
+  /** 조정 단계 진입 — (선택적)여백 트림 후 작업본(긴 변 4096 초과면 4000px 로 축소)을 만든다.
       «원본 유지» 버튼이 같은 함수를 트림 없이 다시 태운다(쏘넷 점검: 무통보 트림 옵트아웃). */
   function startAdjust(srcUrl: string, allowTrim: boolean) {
+    /* 「원본 유지」 경로도 여기로 온다 — 그래서 켜는 자리가 pick 이 아니라 이 함수 첫 줄이다 */
+    const run = ++runRef.current;
+    setPhase("prep");
+    const fail = (msg: string) => {
+      if (run !== runRef.current) return;
+      setError(msg);
+      setPhase(null);
+    };
     let dataUrl = srcUrl;
     const img = new Image();
-    img.onerror = () => setError("이미지를 읽지 못했어요.");
+    img.onerror = () => fail("이미지를 읽지 못했어요.");
     /* 투명·단색 여백 자동 트림 — 잘라낸 사본을 같은 img 로 한 번만 다시 로드해 아래를 그대로 태운다 */
     let trimmedOnce = false;
     img.onload = () => {
+      if (run !== runRef.current) return;
+      /* 본문의 어느 줄이 던져도(캔버스 한도·메모리) 단계를 내린다 — 안 내리면 칸이 다시 마운트될 때까지 잠긴다 */
+      try {
+        onLoaded();
+      } catch {
+        fail("이미지를 처리하지 못했어요.");
+      }
+    };
+    function onLoaded() {
       if (allowTrim && !trimmedOnce && /^data:image\/(png|webp|jpe?g)/.test(dataUrl)) {
         const box = alphaTrimBox(img);
         if (box) {
@@ -259,8 +327,10 @@ export function ImageField({
             tx.drawImage(img, box.x, box.y, box.w, box.h, 0, 0, box.w, box.h);
             trimmedOnce = true;
             const mime = /^data:(image\/(?:png|webp|jpeg))/.exec(dataUrl)?.[1] ?? "image/png";
-            dataUrl = tc.toDataURL(mime, 0.95);
-            img.src = dataUrl;
+            const trimmed = tc.toDataURL(mime, 0.95);
+            if (!trimmed.startsWith("data:image/")) throw new Error("encode"); // 캔버스 한도 초과면 "data:,"
+            dataUrl = trimmed;
+            img.src = dataUrl; // 단계는 그대로 — 다시 로드된 onload 가 이어서 내린다
             return;
           }
         }
@@ -271,9 +341,8 @@ export function ImageField({
          원본 바이트 직행이라 화질 손해도 없다. */
       setAdj({ zoom: 1, x: 50, y: 50 });
       setWasTrimmed(trimmedOnce);
-      const PENDING_MAX = CROP_MAX_W * 2;
       const longest = Math.max(img.naturalWidth, img.naturalHeight);
-      if (longest <= PENDING_MAX) {
+      if (longest <= PENDING_KEEP_MAX) {
         setPending({ dataUrl, w: img.naturalWidth, h: img.naturalHeight });
       } else {
         const c = document.createElement("canvas");
@@ -284,13 +353,20 @@ export function ImageField({
         if (cx) {
           cx.drawImage(img, 0, 0, c.width, c.height);
           const mime = /^data:(image\/(?:png|webp))/.exec(dataUrl)?.[1] ?? "image/jpeg";
-          setPending({ dataUrl: c.toDataURL(mime, 0.92), w: c.width, h: c.height });
+          const shrunk = c.toDataURL(mime, 0.92);
+          if (!shrunk.startsWith("data:image/")) throw new Error("encode");
+          setPending({ dataUrl: shrunk, w: c.width, h: c.height });
         } else {
           setPending({ dataUrl, w: img.naturalWidth, h: img.naturalHeight });
         }
       }
-    };
-    img.src = dataUrl;
+      setPhase(null);
+    }
+    /* 「사진을 준비하는 중…」이 먼저 칠해지게 한 프레임 양보한 뒤 디코드를 건다 —
+       onload 의 drawImage(전체 디코드)·인코딩은 한 번 시작하면 메인 스레드를 통째로 잡는다 */
+    void nextPaint().then(() => {
+      if (run === runRef.current) img.src = dataUrl;
+    });
   }
 
   /** 보일 창(원본 좌표) — 미리보기와 applyCrop 이 같은 수식을 쓴다: «보이는 대로 잘린다» */
@@ -304,7 +380,7 @@ export function ImageField({
 
   /** 고른 창만 잘라 저장 — 저장본 = 화면에 보이던 영역 */
   function applyCrop() {
-    if (!pending) return;
+    if (!pending || phase !== null) return;
     const { dataUrl, w, h } = pending;
     const { winW, winH, x, y } = cropWindow(pending, adj);
     /* 창=원본 전체(무변경)이고 원본이 이미 작고 가벼우면 재인코딩 없이 그대로 —
@@ -314,24 +390,43 @@ export function ImageField({
       void upload(dataUrl, { w, h });
       return;
     }
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(1, CROP_MAX_W / Math.max(winW, winH));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(winW * scale));
-      canvas.height = Math.max(1, Math.round(winH * scale));
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        setError("이미지를 처리하지 못했어요.");
-        return;
-      }
-      ctx.drawImage(img, x, y, winW, winH, 0, 0, canvas.width, canvas.height);
-      setPending(null);
-      /* WebP 우선 — 알파가 살아서 흰 바탕 강제(옛 JPEG 고정)의 투명 손실이 없다 */
-      const srcMime = /^data:(image\/(?:png|webp))/.exec(dataUrl)?.[1] ?? "image/jpeg";
-      void upload(encodeCanvas(canvas, srcMime), { w: canvas.width, h: canvas.height });
+    const run = ++runRef.current;
+    setPhase("prep");
+    const fail = (msg: string) => {
+      if (run !== runRef.current) return;
+      setError(msg);
+      setPhase(null);
     };
-    img.src = dataUrl;
+    const img = new Image();
+    /* 예전엔 onerror 가 없었다 — 단계를 켜 둔 채 로드가 실패하면 칸이 영구히 잠긴다 */
+    img.onerror = () => fail("이미지를 처리하지 못했어요.");
+    img.onload = () => {
+      if (run !== runRef.current) return;
+      try {
+        const scale = Math.min(1, CROP_MAX_W / Math.max(winW, winH));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(winW * scale));
+        canvas.height = Math.max(1, Math.round(winH * scale));
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          fail("이미지를 처리하지 못했어요.");
+          return;
+        }
+        ctx.drawImage(img, x, y, winW, winH, 0, 0, canvas.width, canvas.height);
+        /* WebP 우선 — 알파가 살아서 흰 바탕 강제(옛 JPEG 고정)의 투명 손실이 없다 */
+        const srcMime = /^data:(image\/(?:png|webp))/.exec(dataUrl)?.[1] ?? "image/jpeg";
+        const encoded = encodeCanvas(canvas, srcMime);
+        if (!encoded.startsWith("data:image/")) throw new Error("encode");
+        /* 굽기가 끝난 뒤에 조정 무대를 걷는다 — 실패하면 무대가 남아 다시 누를 수 있다 */
+        setPending(null);
+        void upload(encoded, { w: canvas.width, h: canvas.height }); // 단계는 upload 가 이어받는다
+      } catch {
+        fail("이미지를 처리하지 못했어요.");
+      }
+    };
+    void nextPaint().then(() => {
+      if (run === runRef.current) img.src = dataUrl;
+    });
   }
 
   /* 끌어서 위치 조정 — 화면 이동량을 원본 좌표로 환산해 0~100 위치로 되돌린다 */
@@ -399,7 +494,8 @@ export function ImageField({
                 onClick={() => {
                   if (origRef.current) startAdjust(origRef.current, false);
                 }}
-                className="trans-state shrink-0 rounded-chip border border-line px-2 py-0.5 font-medium hover:bg-tint-hover hover:text-fg"
+                disabled={phase !== null}
+                className="trans-state shrink-0 rounded-chip border border-line px-2 py-0.5 font-medium hover:bg-tint-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
               >
                 원본 유지
               </button>
@@ -421,15 +517,22 @@ export function ImageField({
             <button
               type="button"
               onClick={applyCrop}
-              disabled={busy}
-              className="trans-state flex-1 rounded-card bg-primary px-3 py-2 text-[14px] font-semibold text-on-primary hover:bg-primary-hover disabled:opacity-50"
+              disabled={phase !== null}
+              className="trans-state inline-flex flex-1 items-center justify-center gap-1.5 rounded-card bg-primary px-3 py-2 text-[14px] font-semibold text-on-primary hover:bg-primary-hover disabled:opacity-50"
             >
-              {busy ? "올리는 중…" : "이 영역으로 올리기"}
+              {phase ? (
+                <>
+                  <LoaderCircle className="size-4 shrink-0 animate-spin" aria-hidden />
+                  <span role="status">{PHASE_LABEL[phase]}</span>
+                </>
+              ) : (
+                "이 영역으로 올리기"
+              )}
             </button>
             <button
               type="button"
               onClick={() => setPending(null)}
-              disabled={busy}
+              disabled={phase !== null}
               className="trans-state rounded-card border border-line px-3 py-2 text-[14px] font-medium text-fg-sub hover:bg-tint-hover disabled:opacity-50"
             >
               취소
@@ -462,16 +565,24 @@ export function ImageField({
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          disabled={busy}
+          disabled={phase !== null}
           aria-label={`${label} 올리기`}
           /* busy 중엔 로더가 내용이라 흐리게 하지 않는다 */
           /* w-full 은 항상 둔다 — 빼면 button 이 내용 폭(fit-content)으로 쪼그라들어
              사진이 있을 때(152px)와 없을 때 칸 크기가 달라진다. 상한은 max-w 가 잡는다 */
           className={`trans-state mt-1.5 flex w-full items-center justify-center gap-1.5 border border-dashed border-line bg-plate text-fg-sub hover:border-primary hover:text-fg ${boxCls}`}
         >
-          {busy ? (
-            /* 올리는 동안은 핀치 로더 — "로딩 중이면 로딩 화면" (2026-08-22 지시) */
-            <FinchLoader label="올리는 중…" />
+          {phase ? (
+            /* 처리·업로드 동안은 핀치 로더 — "로딩 중이면 로딩 화면" (2026-08-22 지시).
+               가로로 긴 칸은 로더가 칸을 밀어 올리므로 작은 스피너 한 줄로 */
+            !roomyForFinchLoader(aspect, cap) ? (
+              <span role="status" aria-live="polite" className="inline-flex items-center gap-1.5">
+                <LoaderCircle className="size-4 shrink-0 animate-spin" aria-hidden />
+                <span className="text-[12px]">{PHASE_LABEL[phase]}</span>
+              </span>
+            ) : (
+              <FinchLoader label={PHASE_LABEL[phase]} />
+            )
           ) : (
             <>
               {/* 한 줄 구성 — 4:1(내 로고)·3:1(배경) 칸은 200px 폭에서 높이가 50~67px 뿐이라
@@ -508,7 +619,9 @@ export function ImageField({
         placeholder="또는 이미지 주소 붙여넣기"
         data-autofocus-skip
         aria-label={`${label} 주소`}
-        className="mt-2 h-9 w-full rounded-card border border-line bg-body px-2.5 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none"
+        /* 처리 중 붙여넣기는 값이 됐다가 곧 업로드 결과에 덮인다 — 조정 무대에서 접는 것과 같은 이유 */
+        disabled={phase !== null}
+        className="mt-2 h-9 w-full rounded-card border border-line bg-body px-2.5 text-[14px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none disabled:opacity-50"
       />
       </>
       )}
