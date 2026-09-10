@@ -4,8 +4,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AvatarImage } from "@/components/ui/avatar-image";
 import { AppIconTile, type BrandApp } from "@/components/icons/brand";
-import { buttonClasses } from "@/components/ui/button";
 import { ConfirmSubmit } from "@/components/ui/confirm-submit";
+import { ConnectLink } from "./_components/connect-link";
 import { InfoTip } from "@/components/ui/info-tip";
 import { LoadFailed } from "@/components/ui/load-failed";
 import type { NoticeTone } from "@/components/ui/notice-bar";
@@ -531,9 +531,9 @@ export default async function ChannelsSettingsPage({
                   <>
                     {/* 해제는 OAuth 자격증명과 무관하다(저장된 행 삭제) — 게이트 안에 두면 키 회수 후 영영 못 지운다 */}
                     {ready && startHref ? (
-                      <a href={startHref} className={buttonClasses("secondary", "sm")}>
+                      <ConnectLink href={startHref} variant="secondary">
                         다시 연결
-                      </a>
+                      </ConnectLink>
                     ) : null}
                     <ConfirmSubmit
                       action={disconnectAccount}
@@ -547,9 +547,9 @@ export default async function ChannelsSettingsPage({
                     />
                   </>
                 ) : d.action === "connect" && startHref ? (
-                  <a href={startHref} className={buttonClasses("primary", "sm")}>
+                  <ConnectLink href={startHref} variant="primary">
                     연결하기
-                  </a>
+                  </ConnectLink>
                 ) : null
               }
             />
@@ -587,9 +587,9 @@ export default async function ChannelsSettingsPage({
             adsCard?.connected && adsCard.connectionId ? (
               <>
                 {metaAdsReady ? (
-                  <a href={META_ADS_START_PATH} className={buttonClasses("secondary", "sm")}>
+                  <ConnectLink href={META_ADS_START_PATH} variant="secondary">
                     다시 연결
-                  </a>
+                  </ConnectLink>
                 ) : null}
                 <ConfirmSubmit
                   action={disconnectMetaAds}
@@ -603,9 +603,9 @@ export default async function ChannelsSettingsPage({
                 />
               </>
             ) : adsRow.action === "connect" ? (
-              <a href={META_ADS_START_PATH} className={buttonClasses("primary", "sm")}>
+              <ConnectLink href={META_ADS_START_PATH} variant="primary">
                 연결하기
-              </a>
+              </ConnectLink>
             ) : null
           }
         />
