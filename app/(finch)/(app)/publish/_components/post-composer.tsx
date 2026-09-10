@@ -224,11 +224,13 @@ export function PostComposer({
         await nextPaint();
         if (!aliveRef.current) return;
         try {
-          /* 채널은 장마다 **지금** 값을 읽는다. 굽는 사이 칩을 바꿨으면 원본 파일로 한 번 더 굽는다 —
-             이 장은 전환 재맞춤의 스냅숏에 없으니(아직 목록에 안 들어갔다) 여기서 맞추지 않으면 영영 안 맞는다 */
+          /* 채널은 장마다 **지금** 값을 읽는다. 굽는 사이 칩을 바꿨으면 원본 파일로 다시 굽는다 —
+             이 장은 전환 재맞춤의 스냅숏에 없으니(아직 목록에 안 들어갔다) 여기서 맞추지 않으면 영영 안 맞는다.
+             1회성(if)이면 재굽기 도중 칩을 한 번 더 바꿨을 때 어긋난 채 들어간다(스레드인데 인스타 비율로 잘린 사진) —
+             반영 직전 채널과 마지막 굽기가 일치할 때까지 되풀이한다. 칩을 멈추면 끝난다(굽기 사이 await 는 사용자 입력뿐) */
           let forIg = channelRef.current === "instagram";
           let out = await fileToJpeg(f, forIg);
-          if (forIg !== (channelRef.current === "instagram")) {
+          while (aliveRef.current && forIg !== (channelRef.current === "instagram")) {
             forIg = !forIg;
             out = await fileToJpeg(f, forIg);
           }
