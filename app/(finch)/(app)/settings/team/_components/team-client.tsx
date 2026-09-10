@@ -17,6 +17,7 @@ import { NoticeBar } from "@/components/ui/notice-bar";
 import { StateChip } from "@/components/ui/state-chip";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { formatDate } from "@/lib/format";
+import { actionRejectHint } from "@/lib/monitoring/action-reject";
 import { SettingsGroup, SettingsRow } from "../../_components/settings-row";
 import { SummaryCard } from "../../_components/summary-card";
 import { inviteMember, revokeMember, updateMemberRole } from "../actions";
@@ -60,14 +61,26 @@ export function TeamClient({
   const [, startRowTransition] = useTransition();
   const [inviteOpen, setInviteOpen] = useState(false);
 
+  /* 두 핸들러 모두 pendingId 해제가 finally 다(2026-09-11). 예전엔 await 뒤 줄에서 풀어, 액션이 reject 하면
+     (망 끊김·배포 교체) 그 행이 잠긴 채 남았다. 둘 다 트랜지션 안에서 돈다(ConfirmSubmit 의 폼 action ·
+     startRowTransition) — 라우터 신호(redirect 등)는 삼키지 말고 다시 던져 프레임워크가 처리하게 한다. */
   async function handleRevoke(memberId: string) {
     if (demoMode) return;
     setNotice(null);
     setPendingId(memberId);
-    const res = await revokeMember(memberId);
-    if (!res.ok) setNotice({ tone: "negative", text: res.error });
-    else router.refresh();
-    setPendingId(null);
+    try {
+      const res = await revokeMember(memberId);
+      if (!res.ok) setNotice({ tone: "negative", text: res.error });
+      else router.refresh();
+    } catch (e) {
+      const hint = actionRejectHint("team.revoke", e);
+      if (hint === null) throw e;
+      setNotice({ tone: "negative", text: `처리하지 못했어요. ${hint}` });
+      /* 결과를 모른다 — 서버가 실제로 지웠을 수도 있으니 목록을 서버 상태로 다시 그린다 */
+      router.refresh();
+    } finally {
+      setPendingId(null);
+    }
   }
 
   function handleRoleChange(memberId: string, nextRole: Exclude<TeamRole, "owner">) {
@@ -75,11 +88,18 @@ export function TeamClient({
     setNotice(null);
     setPendingId(memberId);
     startRowTransition(async () => {
-      const res = await updateMemberRole(memberId, nextRole);
-      if (!res.ok) setNotice({ tone: "negative", text: res.error });
+      try {
+        const res = await updateMemberRole(memberId, nextRole);
+        if (!res.ok) setNotice({ tone: "negative", text: res.error });
+      } catch (e) {
+        const hint = actionRejectHint("team.role", e);
+        if (hint === null) throw e;
+        setNotice({ tone: "negative", text: `역할을 바꾸지 못했어요. ${hint}` });
+      } finally {
+        setPendingId(null);
+      }
       /* 실패 시에도 refresh 로 서버 상태(원래 역할)를 다시 그려 화면과 DB 를 일치시킨다 */
       router.refresh();
-      setPendingId(null);
     });
   }
 

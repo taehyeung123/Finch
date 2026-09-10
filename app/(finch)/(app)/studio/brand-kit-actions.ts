@@ -90,7 +90,7 @@ export interface SaveBrandKitInput {
 export async function saveBrandKit(
   input: SaveBrandKitInput,
 ): Promise<{ ok: true; kit: BrandKit } | { ok: false; error: string }> {
-  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 사용할 수 없어요." };
+  if (isDemoMode()) return { ok: false, error: "지금은 예시 화면이라 저장할 수 없어요." };
   const supabase = await createClient();
   const {
     data: { user },
@@ -153,15 +153,32 @@ export async function saveBrandKit(
   return { ok: true, kit: rowToKit(row, logoUrl) };
 }
 
-export async function deleteBrandKit(): Promise<void> {
-  if (isDemoMode()) return;
+/**
+ * 브랜드 킷 삭제. 예전엔 `Promise<void>` 라 로그인 풀림·삭제 오류를 알릴 길이 없었고, 화면은 무조건 「없음」으로 그렸다.
+ * 순서도 바꿨다 — 행을 먼저 지우고 로고 파일을 나중에 지운다. 파일부터 지우고 행 삭제가 실패하면
+ * 킷은 남았는데 로고만 깨진 상태가 된다. 반대로 파일 삭제가 실패하면 고아 파일만 남는다(화면엔 영향 없음).
+ */
+export async function deleteBrandKit(): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (isDemoMode()) return { ok: false, error: "지금은 예시 화면이라 삭제할 수 없어요." };
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
-  const { data } = await supabase.from("brand_kits").select("logo_path").eq("user_id", user.id);
+  if (!user) return { ok: false, error: "로그인이 필요해요." };
+  const { data, error: readErr } = await supabase.from("brand_kits").select("logo_path").eq("user_id", user.id);
+  if (readErr) {
+    console.error("[brand-kit] 삭제 전 조회 실패:", readErr.message);
+    return { ok: false, error: "삭제하지 못했어요. 잠시 후 다시 시도해 주세요." };
+  }
   const paths = (data ?? []).map((d) => (d as { logo_path: string | null }).logo_path).filter(Boolean) as string[];
-  if (paths.length) await supabase.storage.from("brand-logos").remove(paths);
-  await supabase.from("brand_kits").delete().eq("user_id", user.id);
+  const { error: delErr } = await supabase.from("brand_kits").delete().eq("user_id", user.id);
+  if (delErr) {
+    console.error("[brand-kit] 삭제 실패:", delErr.message);
+    return { ok: false, error: "삭제하지 못했어요. 잠시 후 다시 시도해 주세요." };
+  }
+  if (paths.length) {
+    const { error: rmErr } = await supabase.storage.from("brand-logos").remove(paths);
+    if (rmErr) console.error("[brand-kit] 로고 파일 정리 실패:", rmErr.message);
+  }
+  return { ok: true };
 }

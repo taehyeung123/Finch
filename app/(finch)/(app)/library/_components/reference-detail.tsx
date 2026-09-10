@@ -17,6 +17,7 @@ import { cn } from "@/lib/cn";
 import { Badge, ChannelBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/ui/info-tip";
+import { actionRejectHint } from "@/lib/monitoring/action-reject";
 
 /*
   레퍼런스 상세 모달 — 카드 클릭 시. 미리보기 크게 + AI 분석 + 원본 캡션 전문 +
@@ -127,13 +128,23 @@ export function ReferenceDetailModal({
     navigate("/studio");
   }
 
+  /* 아래 서버 액션 핸들러는 전부 try/finally 다(2026-09-11). 예전엔 await 뒤 줄에서 잠금을 풀어, 액션이 reject 하면
+     (망 끊김·긴 AI 응답이 도중에 끊김·배포 교체) 잠금이 영영 안 풀렸다. 대본·분석은 더 나빴다 — 진행 중엔 버튼 자리가
+     WorkingBlock 으로 바뀌므로 «보통 10~40초» 스피너가 끝없이 돌고 다시 누를 버튼 자체가 사라졌다.
+     문구는 동작마다 제 자리에 띄운다(메모·대본·분석·삭제가 각자 칸과 ARIA 가 다르다). */
   async function handleSaveNote() {
     if (noteSaving) return;
     setNoteSaving(true);
     setNoteMsg(null);
-    const result = await saveReferenceNote(item.id, note);
-    setNoteSaving(false);
-    setNoteMsg(result.ok ? "저장했어요" : (result.error ?? "저장에 실패했습니다."));
+    try {
+      const result = await saveReferenceNote(item.id, note);
+      setNoteMsg(result.ok ? "저장했어요" : (result.error ?? "저장에 실패했습니다."));
+    } catch (e) {
+      const hint = actionRejectHint("library.detail.note", e);
+      if (hint !== null) setNoteMsg(`저장하지 못했어요. ${hint}`);
+    } finally {
+      setNoteSaving(false);
+    }
   }
 
   async function handleStatus(next: NonNullable<ReferenceItem["status"]>) {
@@ -145,25 +156,37 @@ export function ReferenceDetailModal({
     if (extracting) return;
     setExtracting(true);
     setTranscriptMsg(null);
-    /* 풀 소재는 id 가 creatives 의 것이라 개인용 액션이 행을 못 찾는다 — 경로 분리 */
-    const result = poolMode ? await extractPoolTranscript(item.id) : await extractTranscript(item.id);
-    setExtracting(false);
-    if (result.ok) setTranscript(result.transcript);
-    else setTranscriptMsg(result.error);
+    try {
+      /* 풀 소재는 id 가 creatives 의 것이라 개인용 액션이 행을 못 찾는다 — 경로 분리 */
+      const result = poolMode ? await extractPoolTranscript(item.id) : await extractTranscript(item.id);
+      if (result.ok) setTranscript(result.transcript);
+      else setTranscriptMsg(result.error);
+    } catch (e) {
+      const hint = actionRejectHint("library.detail.transcript", e);
+      if (hint !== null) setTranscriptMsg(`대본을 받아오지 못했어요. ${hint}`);
+    } finally {
+      setExtracting(false);
+    }
   }
 
   async function handleAnalyze() {
     if (analyzing) return;
     setAnalyzing(true);
     setAnalysisMsg(null);
-    const result = await analyzePoolCreative(item.id);
-    setAnalyzing(false);
-    if (result.ok) {
-      setAnalysis(result.analysis);
-      // 분석 과정에서 대본이 새로 추출됐으면 대본 칸도 같이 채운다 — 두 번 살 필요 없다
-      if (result.transcript && !transcript) setTranscript(result.transcript);
-    } else {
-      setAnalysisMsg(result.error);
+    try {
+      const result = await analyzePoolCreative(item.id);
+      if (result.ok) {
+        setAnalysis(result.analysis);
+        // 분석 과정에서 대본이 새로 추출됐으면 대본 칸도 같이 채운다 — 두 번 살 필요 없다
+        if (result.transcript && !transcript) setTranscript(result.transcript);
+      } else {
+        setAnalysisMsg(result.error);
+      }
+    } catch (e) {
+      const hint = actionRejectHint("library.detail.analyze", e);
+      if (hint !== null) setAnalysisMsg(`분석 결과를 받아오지 못했어요. ${hint}`);
+    } finally {
+      setAnalyzing(false);
     }
   }
 
@@ -218,10 +241,22 @@ export function ReferenceDetailModal({
       return;
     }
     setDeleting(true);
-    const result = await deleteReferenceItem(item.id);
+    let result: Awaited<ReturnType<typeof deleteReferenceItem>>;
+    try {
+      result = await deleteReferenceItem(item.id);
+    } catch (e) {
+      setDeleting(false);
+      const hint = actionRejectHint("library.detail.delete", e);
+      if (hint !== null) setNoteMsg(`삭제하지 못했어요. ${hint}`);
+      return;
+    }
+    /* 성공은 onDeleted() 가 이 모달을 언마운트한다 — 잠금은 실패 경로에서만 푼다 */
+    if (result.ok) {
+      onDeleted();
+      return;
+    }
     setDeleting(false);
-    if (result.ok) onDeleted();
-    else setNoteMsg("삭제에 실패했습니다. 잠시 후 다시 시도해주세요.");
+    setNoteMsg("삭제에 실패했습니다. 잠시 후 다시 시도해주세요.");
   }
 
   return (

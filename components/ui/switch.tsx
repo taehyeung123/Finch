@@ -17,12 +17,16 @@ export function Switch({
   checked,
   onChange,
   disabled,
+  busy,
   label,
   className,
 }: {
   checked: boolean;
   onChange: (next: boolean) => void;
   disabled?: boolean;
+  /** 저장 왕복 중 — **disabled 가 아니다.** 흐려지지도 포커스를 잃지도 않고 aria-busy·진행 커서만 건다.
+      연타를 막을지는 호출부가 onChange 에서 정한다(disabled 는 0.75~2초 동안 스위치를 40% 로 흐린다). */
+  busy?: boolean;
   /** 스크린리더용 이름 — 아이콘/텍스트가 밖에 있으면 반드시 넘길 것 */
   label: string;
   className?: string;
@@ -33,13 +37,16 @@ export function Switch({
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      aria-busy={busy || undefined}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        "relative h-5 w-9 shrink-0 cursor-pointer rounded-chip transition-colors duration-200 ease-out",
+        "relative h-5 w-9 shrink-0 rounded-chip transition-colors duration-200 ease-out",
         "after:absolute after:-inset-3 after:content-['']", // 44px 히트 영역
         "focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2",
         "disabled:cursor-not-allowed disabled:opacity-40",
+        /* 같은 속성 유틸 두 개를 함께 두면 이기는 쪽이 CSS 생성 순서에 달린다 — 하나만 건다 */
+        busy ? "cursor-progress" : "cursor-pointer",
         checked ? "bg-primary" : "bg-line-strong",
         className,
       )}

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Palette, ImagePlus, Trash2, Check, X } from "lucide-react";
 import { Card, CardBody } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { actionRejectHint } from "@/lib/monitoring/action-reject";
 import { saveBrandKit, deleteBrandKit, type BrandKit, type LogoPlacement } from "../brand-kit-actions";
 
 /**
@@ -36,6 +37,8 @@ export function BrandKitPanel({ kit, onChange }: { kit: BrandKit | null; onChang
   const [logoPreview, setLogoPreview] = useState<string | null>(kit?.logoUrl ?? null);
   const [placement, setPlacement] = useState<LogoPlacement>(kit?.logoPlacement ?? "closing");
   const [busy, setBusy] = useState(false);
+  /* 같은 틱 연타 잠금 — state 는 다음 렌더에야 보인다 */
+  const busyLock = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   function pickLogo(e: React.ChangeEvent<HTMLInputElement>) {
@@ -55,28 +58,54 @@ export function BrandKitPanel({ kit, onChange }: { kit: BrandKit | null; onChang
     r.readAsDataURL(f);
   }
 
+  /* 두 함수 모두 try/finally 다. 예전엔 await 뒤 줄에서 busy 를 풀어, 서버 액션이 reject 하면(망 끊김·배포 교체)
+     「저장 중…」에 굳었다 — 이 카드는 스튜디오에 늘 떠 있어 닫았다 열어도 풀리지 않고 새로고침만이 답이었다. */
   async function save() {
+    if (busyLock.current) return;
+    busyLock.current = true;
     setBusy(true);
     setError(null);
-    const r = await saveBrandKit({ ...colors, logoPlacement: placement, logoDataUrl });
-    setBusy(false);
-    if (r.ok) {
-      onChange(r.kit);
-      setLogoDataUrl(undefined);
-      setOpen(false);
-    } else {
-      setError(r.error);
+    try {
+      const r = await saveBrandKit({ ...colors, logoPlacement: placement, logoDataUrl });
+      if (r.ok) {
+        onChange(r.kit);
+        setLogoDataUrl(undefined);
+        setOpen(false);
+      } else {
+        setError(r.error);
+      }
+    } catch (e) {
+      const hint = actionRejectHint("studio.brand-kit.save", e);
+      if (hint !== null) setError(`저장하지 못했어요. ${hint}`);
+    } finally {
+      busyLock.current = false;
+      setBusy(false);
     }
   }
 
+  /* 삭제도 결과를 본다 — 예전엔 반환값을 안 봐서 실패해도 「내 디자인 없음」으로 그렸다(새로고침하면 되살아났다) */
   async function remove() {
+    if (busyLock.current) return;
+    busyLock.current = true;
     setBusy(true);
-    await deleteBrandKit();
-    setBusy(false);
-    onChange(null);
-    setLogoPreview(null);
-    setLogoDataUrl(undefined);
-    setOpen(false);
+    setError(null);
+    try {
+      const r = await deleteBrandKit();
+      if (r.ok) {
+        onChange(null);
+        setLogoPreview(null);
+        setLogoDataUrl(undefined);
+        setOpen(false);
+      } else {
+        setError(r.error);
+      }
+    } catch (e) {
+      const hint = actionRejectHint("studio.brand-kit.delete", e);
+      if (hint !== null) setError(`삭제하지 못했어요. ${hint}`);
+    } finally {
+      busyLock.current = false;
+      setBusy(false);
+    }
   }
 
   return (

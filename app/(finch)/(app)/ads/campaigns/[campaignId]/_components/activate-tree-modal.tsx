@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ModalShell } from "@/components/ui/modal-shell";
 import { formatMoney } from "@/lib/format";
 import { adsWriteMessage } from "@/lib/ads/campaign-rules";
+import { isRouterSignal } from "@/lib/monitoring/action-reject";
 import { activateCampaignTreeAction } from "@/app/(finch)/(app)/ads/tree-status-actions";
 
 /*
@@ -83,8 +84,8 @@ export function ActivateTreeModal({
         /* 성공·실패 모두 서버가 redirect 로 상세 화면에 결과를 붙인다 — 여기까지 돌아오면 전송 자체가 안 된 것 */
         await activateCampaignTreeAction(form);
       } catch (e) {
-        /* Next 의 redirect 는 예외로 전달된다 — 그건 실패가 아니다 */
-        if (e && typeof e === "object" && "digest" in e && String((e as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT")) throw e;
+        /* Next 의 redirect 는 예외로 전달된다 — 그건 실패가 아니다(판별 규칙은 한 곳: lib/monitoring/action-reject.ts) */
+        if (isRouterSignal(e)) throw e;
         setError(adsWriteMessage("failed"));
       }
     });

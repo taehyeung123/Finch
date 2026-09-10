@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Wand2, Check, RotateCcw, X } from "lucide-react";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { actionRejectHint } from "@/lib/monitoring/action-reject";
 import { getBrandProfile, learnBrandProfile, clearBrandProfile, type BrandProfile } from "../actions";
 
 /**
@@ -18,6 +20,12 @@ export function BrandTone() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* 초기화 — 되돌릴 수 없는 삭제라 확인을 받고, 왕복(0.75~2초) 동안 잠근다.
+     예전엔 확인도 진행 표시도 없어 눌러도 한동안 아무 일이 없었고, 실패해도 「학습 안 됨」으로 그렸다 */
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
+  const resetLock = useRef(false);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -58,9 +66,27 @@ export function BrandTone() {
   }
 
   async function reset() {
-    await clearBrandProfile();
-    setProfile(null);
-    setOpen(false);
+    if (resetLock.current) return;
+    resetLock.current = true;
+    setResetBusy(true);
+    setResetError(null);
+    try {
+      const r = await clearBrandProfile();
+      /* 성공일 때만 비운다 — 실패를 «없음»으로 그리면 새로고침 뒤 톤이 되살아난다 */
+      if (r.ok) {
+        setProfile(null);
+        setOpen(false);
+      } else {
+        setResetError(r.error);
+      }
+    } catch (e) {
+      const hint = actionRejectHint("studio.brand-tone.reset", e);
+      if (hint !== null) setResetError(`초기화하지 못했어요. ${hint}`);
+    } finally {
+      resetLock.current = false;
+      setResetBusy(false);
+      setConfirmReset(false);
+    }
   }
 
   // 로드 전엔 스켈레톤 카드로 자리를 잡는다 — null 을 반환하면 2열 그리드에서 왼쪽
@@ -99,7 +125,17 @@ export function BrandTone() {
               <Button size="sm" variant="secondary" onClick={() => setOpen((v) => !v)}>
                 다시 학습
               </Button>
-              <Button size="sm" variant="ghost" onClick={reset} title="톤 초기화">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setResetError(null);
+                  setConfirmReset(true);
+                }}
+                disabled={resetBusy}
+                title="톤 초기화"
+                aria-label="톤 초기화"
+              >
                 <RotateCcw className="size-4" aria-hidden />
               </Button>
             </div>
@@ -110,6 +146,12 @@ export function BrandTone() {
             </Button>
           ) : null}
         </div>
+
+        {resetError ? (
+          <p role="alert" className="text-[14px] text-negative">
+            {resetError}
+          </p>
+        ) : null}
 
         {/* 학습된 프로필 요약 */}
         {profile && !open ? (
@@ -168,6 +210,16 @@ export function BrandTone() {
           </div>
         ) : null}
       </CardBody>
+      {confirmReset ? (
+        <ConfirmDialog
+          title="브랜드 톤을 초기화할까요?"
+          description="학습한 말투와 자주 쓰는 표현이 지워지고, 이후 카드뉴스는 기본 톤으로 만들어져요. 지운 내용은 되돌릴 수 없어요 — 다시 쓰려면 톤을 새로 학습시켜야 해요."
+          confirmLabel={resetBusy ? "초기화하는 중…" : "초기화"}
+          busy={resetBusy}
+          onCancel={() => setConfirmReset(false)}
+          onConfirm={() => void reset()}
+        />
+      ) : null}
     </Card>
   );
 }

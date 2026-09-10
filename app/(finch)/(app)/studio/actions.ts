@@ -410,16 +410,25 @@ export async function learnBrandProfile(input: string): Promise<LearnResult> {
   }
 }
 
-/** 저장된 브랜드 톤 프로필 삭제 (초기화) */
-export async function clearBrandProfile(): Promise<void> {
+/**
+ * 저장된 브랜드 톤 프로필 삭제 (초기화).
+ * 예전엔 `Promise<void>` 라 로그인 풀림·삭제 오류를 알릴 길이 없었고, 화면은 무조건 「학습 안 됨」으로 그렸다 —
+ * 새로고침하면 톤이 그대로 살아 있었다(«실패는 없음이 아니다»). 실패는 ok:false 로 닫는 쪽으로 돌려준다.
+ */
+export async function clearBrandProfile(): Promise<{ ok: true } | { ok: false; error: string }> {
   /* learnBrandProfile 과 같은 이유로 데모를 먼저 막는다 — 데모에서 지울 수 있는 것이 없다 */
-  if (isDemoMode()) return;
+  if (isDemoMode()) return { ok: true };
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
-  await supabase.from("brand_profiles").delete().eq("user_id", user.id);
+  if (!user) return { ok: false, error: "로그인이 필요해요." };
+  const { error } = await supabase.from("brand_profiles").delete().eq("user_id", user.id);
+  if (error) {
+    console.error("[studio] 브랜드 톤 초기화 실패:", error.message);
+    return { ok: false, error: "초기화하지 못했어요. 잠시 후 다시 시도해 주세요." };
+  }
+  return { ok: true };
 }
 
 export async function generateIdeas(keyword: string, category: string): Promise<IdeasResult> {

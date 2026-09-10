@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/ui/info-tip";
 import { cn } from "@/lib/cn";
 import { formatCompact } from "@/lib/format";
+import { actionRejectHint } from "@/lib/monitoring/action-reject";
 import type { AdSource, Channel, CollectSettings, ReferenceSource } from "@/lib/types";
 
 /*
@@ -181,13 +182,24 @@ export function LibrarySettingsDrawer({
 
   if (!open) return null;
 
+  /* 두 제출 모두 try/finally 다. 예전엔 await 뒤 줄에서 잠금을 풀어, 서버 액션이 reject 하면(망 끊김·배포 교체)
+     「추가」 버튼이 굳었다 — 이 드로어는 닫아도 언마운트되지 않아(부모가 늘 렌더, 위 `if (!open) return null`)
+     닫았다 열어도 풀리지 않고 새로고침만이 답이었다. preventDefault 는 반드시 첫 줄(비동기 앞)에 둔다. */
   async function submitSource(e: React.FormEvent) {
     e.preventDefault();
     if (submitting) return;
     setMsg(null);
     setSubmitting(true);
-    const result = await onAddSource({ channel, kind, value });
-    setSubmitting(false);
+    let result: { ok: boolean; error?: string };
+    try {
+      result = await onAddSource({ channel, kind, value });
+    } catch (err) {
+      const hint = actionRejectHint("library.add-source", err);
+      if (hint !== null) setMsg({ tone: "error", text: `등록하지 못했어요. ${hint}` });
+      return;
+    } finally {
+      setSubmitting(false);
+    }
     if (result.ok) {
       onValueChange("");
       return;
@@ -204,8 +216,16 @@ export function LibrarySettingsDrawer({
     if (adSubmitting) return;
     setAdMsg(null);
     setAdSubmitting(true);
-    const result = await onAddAdSource(adValue);
-    setAdSubmitting(false);
+    let result: { ok: boolean; error?: string };
+    try {
+      result = await onAddAdSource(adValue);
+    } catch (err) {
+      const hint = actionRejectHint("library.add-ad-source", err);
+      if (hint !== null) setAdMsg({ tone: "error", text: `등록하지 못했어요. ${hint}` });
+      return;
+    } finally {
+      setAdSubmitting(false);
+    }
     if (result.ok) {
       setAdValue("");
       return;

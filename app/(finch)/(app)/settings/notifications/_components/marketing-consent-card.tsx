@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { StateChip } from "@/components/ui/state-chip";
 import { Switch } from "@/components/ui/switch";
 import { formatDate } from "@/lib/format";
+import { actionRejectHint } from "@/lib/monitoring/action-reject";
 import { SettingsGroup, SettingsRow } from "../../_components/settings-row";
 import { setMarketingConsent } from "../actions";
 
@@ -46,21 +47,30 @@ export function MarketingConsentRow({ initial }: { initial: MarketingConsentStat
     setMessage(null);
     /* 낙관적 반영 — 실패하면 되돌린다(알림 매트릭스와 같은 규칙) */
     setState({ kind: "ok", at: next ? new Date().toISOString() : null });
-    const res = await setMarketingConsent(next);
-    if (res.ok) {
-      setState({ kind: "ok", at: res.at });
-      setMessage({ tone: "positive", text: next ? "마케팅 정보 수신에 동의했어요." : "마케팅 정보 수신을 철회했어요." });
-    } else {
+    /* try/finally — 예전엔 액션이 reject 하면(망 끊김·배포 교체) busy 가 굳어 토글이 잠겼고, 그보다 나쁘게
+       위 낙관 반영이 되돌려지지 않아 **저장된 적 없는 동의 상태**를 켜진 채로 보여 줬다. reject 도 prev 로 원복한다. */
+    try {
+      const res = await setMarketingConsent(next);
+      if (res.ok) {
+        setState({ kind: "ok", at: res.at });
+        setMessage({ tone: "positive", text: next ? "마케팅 정보 수신에 동의했어요." : "마케팅 정보 수신을 철회했어요." });
+      } else {
+        setState(prev);
+        setMessage({
+          tone: "negative",
+          text:
+            res.reason === "no_record"
+              ? "동의 기록을 찾지 못했어요. 잠시 후 다시 시도해 주세요."
+              : "저장하지 못했어요. 잠시 후 다시 시도해 주세요.",
+        });
+      }
+    } catch (e) {
       setState(prev);
-      setMessage({
-        tone: "negative",
-        text:
-          res.reason === "no_record"
-            ? "동의 기록을 찾지 못했어요. 잠시 후 다시 시도해 주세요."
-            : "저장하지 못했어요. 잠시 후 다시 시도해 주세요.",
-      });
+      const hint = actionRejectHint("settings.marketing-consent", e);
+      if (hint !== null) setMessage({ tone: "negative", text: `저장하지 못했어요. ${hint}` });
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   const hint =

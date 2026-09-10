@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   ImageOff,
   MessageSquareReply,
@@ -22,6 +22,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { Switch } from "@/components/ui/switch";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { actionRejectHint } from "@/lib/monitoring/action-reject";
 import { RuleWizard, type RuleDraft } from "./rule-wizard";
 import { createRule, deleteRule, toggleRule, updateRule } from "../actions";
 
@@ -76,6 +77,12 @@ export function AutoDmClient({
   const [editing, setEditing] = useState<AutoDmRule | null>(null);
   /* 삭제 확인을 기다리는 규칙 — window.confirm 이었다(브라우저가 대화상자를 막으면 휴지통이 조용히 아무 일도 안 했다) */
   const [removing, setRemoving] = useState<AutoDmRule | null>(null);
+  /* 저장 왕복 중인 규칙 — 규칙별이다(전역이면 여러 규칙을 연달아 끄는 흐름이 통째로 줄 선다).
+     ref 는 같은 틱 연타를 막는 잠금, state 는 스위치의 aria-busy 표시용. 스위치는 disabled 로 잠그지 않는다 */
+  const togglingRef = useRef(new Set<string>());
+  const [toggling, setToggling] = useState<ReadonlySet<string>>(() => new Set());
+  /* 스위치·삭제가 실패했을 때 그 규칙 카드 안에 띄우는 한 줄(role=alert). 화면 안 저장이라 결과 모달이 아니다(CLAUDE.md) */
+  const [ruleNotice, setRuleNotice] = useState<{ ruleId: string; text: string } | null>(null);
 
   // 규칙이 연결할 수 있는 인스타그램 게시물 (연동 전이면 빈 배열 → 에디터가 안내)
   const igPosts = useMemo(() => posts.filter((p) => p.channel === "instagram"), [posts]);
@@ -101,16 +108,38 @@ export function AutoDmClient({
     setEditorOpen(true);
   }
 
-  // 낙관적 로컬 업데이트 후 서버 액션으로 지속(데모 모드에서는 no-op 성공)
+  function markToggling(id: string, on: boolean) {
+    if (on) togglingRef.current.add(id);
+    else togglingRef.current.delete(id);
+    setToggling(new Set(togglingRef.current));
+  }
+
+  /* 낙관적 로컬 업데이트 후 서버 액션으로 지속(데모 모드에서는 no-op 성공).
+     예전엔 try 가 없어 서버 액션이 reject 하면(망 끊김·배포 교체) 원복 줄이 안 돌았다 — 스위치는 켜져 보이는데
+     DB 는 꺼진 채로 남았고, `{ok:false}` 실패도 원복만 할 뿐 알림이 0곳이라 «스위치가 혼자 도로 꺼짐»으로 보였다.
+     왕복 중인 규칙의 재클릭은 무시한다(규칙별) — 되돌리기 전의 실패가 뒤 클릭의 결과를 덮어쓰지 않게. */
   async function toggleStatus(rule: AutoDmRule) {
     if (rule.status === "review") return;
-    const next: AutoDmStatus = rule.status === "active" ? "paused" : "active";
+    if (togglingRef.current.has(rule.id)) return;
+    const prevStatus = rule.status;
+    const next: AutoDmStatus = prevStatus === "active" ? "paused" : "active";
+    markToggling(rule.id, true);
+    setRuleNotice((n) => (n?.ruleId === rule.id ? null : n));
     setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, status: next } : r)));
-    const res = await toggleRule(rule.id, next);
-    if (!res.ok) {
-      // 실패 시 원복
-      setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, status: rule.status } : r)));
+    let failText: string | null = null;
+    try {
+      const res = await toggleRule(rule.id, next);
+      if (!res.ok) failText = `${res.error ?? "실행 상태를 바꾸지 못했어요."} 스위치를 원래대로 돌렸어요.`;
+    } catch (e) {
+      const hint = actionRejectHint("auto-dm.toggle", e);
+      if (hint !== null) failText = `실행 상태를 바꾸지 못해 스위치를 원래대로 돌렸어요. ${hint}`;
+    } finally {
+      markToggling(rule.id, false);
     }
+    if (failText === null) return;
+    /* 함수형 원복 — 그 규칙이 **아직 우리가 넣은 값일 때만** 되돌린다(그 사이 편집 저장 등으로 바뀌었으면 건드리지 않는다) */
+    setRules((prev) => prev.map((r) => (r.id === rule.id && r.status === next ? { ...r, status: prevStatus } : r)));
+    setRuleNotice({ ruleId: rule.id, text: failText });
   }
 
   /* deleteRule 은 하드 삭제다(actions.ts) — 규칙·문구·발송 기록이 함께 사라지고 복구 경로가 없다.
@@ -121,12 +150,19 @@ export function AutoDmClient({
     if (at < 0) return; // 그 사이 이미 사라졌다
     const restore = () =>
       setRules((prev) => (prev.some((r) => r.id === rule.id) ? prev : [...prev.slice(0, at), rule, ...prev.slice(at)]));
+    setRuleNotice((n) => (n?.ruleId === rule.id ? null : n));
     setRules((prev) => prev.filter((r) => r.id !== rule.id));
+    /* 실패는 되돌리기만 하면 «지운 규칙이 말없이 되살아남»으로 보인다 — 되살아난 그 카드에 이유를 붙인다 */
     try {
       const res = await deleteRule(rule.id);
-      if (!res.ok) restore();
-    } catch {
+      if (!res.ok) {
+        restore();
+        setRuleNotice({ ruleId: rule.id, text: `${res.error ?? "삭제하지 못했어요."} 규칙은 그대로 남아 있어요.` });
+      }
+    } catch (e) {
       restore();
+      const hint = actionRejectHint("auto-dm.delete", e);
+      if (hint !== null) setRuleNotice({ ruleId: rule.id, text: `삭제하지 못해 규칙을 그대로 두었어요. ${hint}` });
     }
   }
 
@@ -371,8 +407,9 @@ export function AutoDmClient({
                     <div className="flex w-full items-center justify-end gap-1.5 sm:w-auto sm:justify-start">
                       <Switch
                         checked={rule.status === "active"}
-                        onChange={() => toggleStatus(rule)}
+                        onChange={() => void toggleStatus(rule)}
                         disabled={rule.status === "review"}
+                        busy={toggling.has(rule.id)}
                         label={rule.status === "active" ? "일시중지" : "실행"}
                       />
                       <button
@@ -394,6 +431,11 @@ export function AutoDmClient({
                       </button>
                     </div>
                   </div>
+                  {ruleNotice?.ruleId === rule.id ? (
+                    <p role="alert" className="mt-3 border-t border-line pt-3 text-[14px] text-negative-strong">
+                      {ruleNotice.text}
+                    </p>
+                  ) : null}
                 </Card>
               </li>
             );
