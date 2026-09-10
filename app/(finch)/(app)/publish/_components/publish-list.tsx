@@ -794,7 +794,7 @@ export function PublishList({
                     </Button>
                     <button
                       type="button"
-                      onClick={() => runDraft(post.id, "delete")}
+                      onClick={() => setAsk({ kind: "delete", id: post.id })}
                       disabled={draftBusy !== null}
                       aria-label="초안 삭제"
                       title="초안 삭제"
