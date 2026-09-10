@@ -1105,6 +1105,8 @@ export function LinksClient({
   };
 
   const canvasEditHead: Omit<CanvasEdit, "onProfileCommit"> = {
+    /* 폰 툴바 ↑/↓/삭제의 연타 가드 — 툴바는 disabled 를 안 쓰므로(포커스 소실) 이 값을 핸들러가 본다 */
+    busy,
     onEdit: openEditor,
     /* 온오프는 낙관 즉시 반영 — 스위치가 서버 왕복을 기다리면 고장처럼 보인다 */
     onToggle: (id, active) =>

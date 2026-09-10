@@ -1668,8 +1668,16 @@ input[type="search"]::-webkit-search-cancel-button {
 }
 .modal-scrim-in { animation: modal-scrim-in 0.18s ease-out both; }
 /* 작업 중 베일(프로필 링크 편집기 등) — 200ms 동안은 투명하게 있다가 나타난다.
-   300ms 안에 끝나는 저장에도 로더가 번쩍이면 화면이 더 불안해 보인다. */
-.busy-veil-in { animation: modal-scrim-in 0.16s ease-out 0.2s both; }
+   300ms 안에 끝나는 저장에도 로더가 번쩍이면 화면이 더 불안해 보인다.
+   투명한 동안은 클릭도 통과시킨다 — 전엔 modal-scrim-in(opacity 만)을 빌려 써서 지연 0.2초 동안
+   «안 보이는데 화면 전체 클릭을 먹는» 판이 됐다. pointer-events 는 discrete 라 both 의 앞 채움에서 none,
+   보이기 시작한 뒤 auto 로 넘어간다. ⚠️ modal-scrim-in 을 고치지 말 것(모든 모달 스크림이 공유한다).
+   모션 축소(아래 animation:none)면 기본값 auto·opacity 1 — 즉시 보이고 즉시 막는다. */
+@keyframes busy-veil-in {
+  from { opacity: 0; pointer-events: none; }
+  to { opacity: 1; pointer-events: auto; }
+}
+.busy-veil-in { animation: busy-veil-in 0.16s ease-out 0.2s both; }
 .modal-card-in { animation: modal-card-in 0.24s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .anim-swap { animation: anim-swap-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both; }
 

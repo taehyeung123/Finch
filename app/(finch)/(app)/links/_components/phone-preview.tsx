@@ -101,6 +101,10 @@ const SNS_LABEL = new Map<string, string>(SNS_KINDS.map((k) => [k.key, k.label])
 
 /** 캔버스 직접 편집 콜백 — 넘기면 draft 미리보기가 편집기가 된다(링크팜 캔버스, 2026-08-20) */
 export type CanvasEdit = {
+  /** 편집기의 순서 작업(run()) 진행 중 — 툴바 ↑/↓/삭제는 핸들러에서 삼킨다.
+      disabled 로 바꾸지 않는다(누른 버튼이 포커스를 잃고 툴바가 사라진다 — 아래 ↑ 버튼 주석).
+      전엔 편집기 베일이 이 창을 막았는데, 베일은 처음 0.2초 투명한 동안 클릭을 통과시킨다(globals.css .busy-veil-in) */
+  busy: boolean;
   /** 알약(핀치 배지) × — 무료 플랜이면 유료 안내를 연다(2026-08-26). 유료면 undefined */
   onUpgrade?: () => void;
   onEdit: (id: string) => void;
@@ -646,7 +650,7 @@ export function PhonePreview({
                       <button
                         type="button"
                         onClick={() => {
-                          if (i === 0) return;
+                          if (i === 0 || edit.busy) return;
                           edit.onMove(b.id, "up", label);
                         }}
                         aria-disabled={i === 0}
@@ -658,7 +662,7 @@ export function PhonePreview({
                       <button
                         type="button"
                         onClick={() => {
-                          if (i === visible.length - 1) return;
+                          if (i === visible.length - 1 || edit.busy) return;
                           edit.onMove(b.id, "down", label);
                         }}
                         aria-disabled={i === visible.length - 1}
@@ -678,7 +682,10 @@ export function PhonePreview({
                       </button>
                       <button
                         type="button"
-                        onClick={() => edit.onDelete(b.id, label)}
+                        onClick={() => {
+                          if (edit.busy) return;
+                          edit.onDelete(b.id, label);
+                        }}
                         aria-label={`${label} 삭제`}
                         className="trans-state rounded-full p-1 text-on-scrim/85 hover:text-negative"
                       >

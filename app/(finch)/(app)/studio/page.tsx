@@ -10,6 +10,7 @@ import {
   Info,
   LayoutTemplate,
   Lightbulb,
+  LoaderCircle,
   Pencil,
   Search,
   Sparkles,
@@ -117,7 +118,9 @@ function TemplateMock({ t }: { t: (typeof TEMPLATES)[number] }) {
   );
 }
 
-/** 미리보기 렌더 — try/catch를 컴포넌트 밖으로 빼 React 컴파일러가 자동 메모하게 한다(SSR에선 slides null→[]) */
+/** 미리보기 렌더 — 호출부의 useMemo 가 메모한다. try/catch 를 여기(컴포넌트 밖)에 두는 건
+    useMemo 콜백 안의 try/catch 를 react-hooks 린트(preserve-manual-memoization)가 문제 삼기 때문이다.
+    React Compiler 는 꺼져 있다(next.config.ts 에 reactCompiler 없음) — 자동 메모는 없다. (SSR에선 slides null→[]) */
 function safeRenderPreviews(
   slides: Slide[] | null,
   aiGenerated: boolean,
@@ -304,6 +307,9 @@ export default function StudioPage() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [restored, setRestored] = useState(false);
   const [videoBusy, setVideoBusy] = useState(false);
+  // PNG 내보내기 진행 중 — 5장을 250ms 간격으로 내려받는 ~1.3초 동안 다시 누르면 루프가 겹쳐 파일이 두 벌 생겼다
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [videoSupported, setVideoSupported] = useState(false); // 클라이언트 마운트 후 감지
   // 다안 생성 — 한 번에 받은 여러 안 중 현재 보고 있는 안
   const [variants, setVariants] = useState<{ angle: string; slides: Slide[] }[]>([]);
@@ -315,13 +321,13 @@ export default function StudioPage() {
   const [logoImg, setLogoImg] = useState<HTMLImageElement | null>(null);
 
   // 실제 적용 템플릿 — '내 브랜드' 선택 시 브랜드 킷 색을, 아니면 프리셋.
-  // useMemo로 안정화(안 하면 매 렌더 새 객체라 previews memo가 매번 재계산).
+  // useMemo로 안정화(안 하면 매 렌더 새 객체라 아래 previews 의 useMemo 가 매번 재계산).
   const template = useMemo(
     () => (templateId === "brand" && brandKit ? customTemplate(brandKit) : getTemplate(templateId)),
     [templateId, brandKit],
   );
   // 로고는 '내 브랜드' 템플릿을 쓰고, 로고가 실제로 있고 로드까지 끝났을 때만 적용.
-  // useMemo로 안정화 — 안 하면 매 렌더 새 객체라 미리보기 memo가 매번 재계산된다.
+  // useMemo로 안정화 — 안 하면 매 렌더 새 객체라 previews 의 useMemo 가 매번 재계산된다.
   const logo = useMemo<LoadedLogo | undefined>(
     () =>
       templateId === "brand" && brandKit?.logoUrl && logoImg
@@ -424,6 +430,16 @@ export default function StudioPage() {
     setEdits({});
   }
 
+  // 실제 카드 이미지를 캔버스로 렌더한 미리보기 (WYSIWYG) — 다운로드 결과물과 100% 동일.
+  // 1080px PNG 를 장마다 동기로 인코딩한다(5장 약 0.1초, 첫 회 0.3~0.4초). React Compiler 는 꺼져 있어서
+  // 이 useMemo 가 없으면 이 화면의 모든 렌더(주제 입력 키 한 번·톤·탭·편집 열기)가 5장을 다시 굽는다.
+  // slides·template·logo 가 바뀔 때만 재계산되고(template·logo 는 위에서 useMemo 로 안정화), slides 가 null 이면 캔버스를 안 건드린다.
+  // ⚠️ 이 줄은 handleMakeVideo 보다 위에 있어야 한다 — 아래(함수 뒤)로 옮기면 preserve-manual-memoization 린트가 깨진다.
+  const previews = useMemo(
+    () => safeRenderPreviews(slides, slidesFromAi, template, logo),
+    [slides, slidesFromAi, template, logo],
+  );
+
   // 모션 카드뉴스 영상(webm) — 화면의 카드 이미지를 슬라이드쇼로. 실시간 녹화라 장수×2.4초 소요.
   async function handleMakeVideo() {
     if (!slides || videoBusy) return;
@@ -440,10 +456,20 @@ export default function StudioPage() {
     }
   }
 
-  // 실제 카드 이미지를 캔버스로 렌더한 미리보기 (WYSIWYG) — 다운로드 결과물과 100% 동일.
-  // useMemo라 slides가 바뀔 때만 재계산되고, slides가 null(초기·SSR)이면 캔버스를 건드리지 않는다.
-  // 컴파일러가 인자 기준으로 자동 메모 — 수동 useMemo(try/catch)로는 preserve가 안 돼 헬퍼로 분리
-  const previews = safeRenderPreviews(slides, slidesFromAi, template, logo);
+  // PNG 내보내기 — 연타 방지. 루프는 시작 시점의 slides·편집본·템플릿으로 끝까지 돌아서, 도중에 바꿔도 결과가 섞이지 않는다.
+  async function handleExportPng() {
+    if (!slides || exportBusy) return;
+    setExportBusy(true);
+    setExportError(null);
+    try {
+      await exportSlidesAsPng(slides, slidesFromAi, editPngs, template, logo);
+    } catch {
+      // 캔버스 미지원 등 — 조용히 삼키지 않고 알린다(성공으로 치지 않는다)
+      setExportError("이미지를 만들지 못했어요. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setExportBusy(false);
+    }
+  }
 
   // localStorage 임시저장 — 서버를 쓰지 않아 비용·부담이 없다. 이 브라우저에서만 유지된다.
   const DRAFT_KEY = "finch:studio:cardnews-draft";
@@ -848,11 +874,19 @@ export default function StudioPage() {
                 </p>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  {/* 진행 중에는 아이콘만 돌린다 — 문구를 바꾸면 버튼 폭이 줄어 flex-wrap 행의 옆 버튼(영상·예약)이
+                      커서 쪽으로 밀려와, 다시 누른 클릭이 엉뚱한 버튼에 닿는다 */}
                   <Button
                     variant="secondary"
-                    onClick={() => exportSlidesAsPng(slides, slidesFromAi, editPngs, template, logo)}
+                    onClick={handleExportPng}
+                    disabled={exportBusy}
+                    aria-busy={exportBusy}
                   >
-                    <ImageDown className="size-4" aria-hidden />
+                    {exportBusy ? (
+                      <LoaderCircle className="size-4 animate-spin" aria-hidden />
+                    ) : (
+                      <ImageDown className="size-4" aria-hidden />
+                    )}
                     이미지 내보내기 (PNG {slides.length}장)
                   </Button>
                   {videoSupported ? (
@@ -869,6 +903,11 @@ export default function StudioPage() {
                     logo={logo}
                   />
                 </div>
+                {exportError ? (
+                  <p role="alert" className="rounded-card bg-negative-weak px-3 py-2 text-[14px] text-negative">
+                    {exportError}
+                  </p>
+                ) : null}
               </CardBody>
             </Card>
           ) : (
