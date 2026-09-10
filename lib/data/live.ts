@@ -13,6 +13,7 @@
  * next/headers(createClient) 경유라 서버 컨텍스트에서만 동작한다.
  */
 
+import { after } from "next/server";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
@@ -414,6 +415,47 @@ interface DashboardPiece {
   raw: DashboardPieceRaw;
 }
 
+/**
+ * 연동 계정 행(팔로워·게시물 수·표시 이름·소개·프로필 사진) 최신화를 **응답 뒤로** 미룬다.
+ *
+ * 예전엔 이 update 를 await 한 뒤에야 다음 Graph 라운드(게시물 인사이트)가 시작돼, 홈 렌더에
+ * DB 왕복 1회가 통째로 얹혀 있었다. 화면은 이미 받은 값(info)을 쓰므로 저장을 기다릴 이유가 없다.
+ *
+ * ⚠️ 떠 있는 프라미스(fire-and-forget)로 두지 않는다 — Vercel 은 응답 뒤 함수를 얼려서 쓰기가 유실되고,
+ * 그러면 «팀원 화면의 프로필·팔로워가 영영 옛날 값»(소넷 점검 #3)이 되돌아온다. `after()` 는 waitUntil 로
+ * 함수 수명을 쓰기가 끝날 때까지 늘린다. 응답 밖이라 화면에 신호가 없으니 실패는 반드시 로그로 남긴다.
+ *
+ * 갱신은 service_role 로 — 이 행은 **워크스페이스 소유자의 것**일 수 있다(팀원이 보는 화면). 세션 클라이언트로는
+ * RLS 쓰기 정책이 본인 행만 허용해서 0행이 갱신되고 오류도 안 났다. admin 이 없으면 갱신만 건너뛴다
+ * (세션 클라이언트로 폴백하지 않는다 — 지표 표시는 끝났고 갱신은 부수 작업이다).
+ * avatar_url 은 0006 미적용 DB 에 없을 수 있어 그 오류일 때만 컬럼을 빼고 한 번 더 쓴다.
+ */
+function patchAccountRowAfterResponse(
+  rowId: string,
+  patch: Record<string, string | number | null>,
+  avatarUrl: string | null,
+  label: string,
+): void {
+  const store = createAdminClient();
+  if (!store) return;
+  after(async () => {
+    try {
+      const { error } = await store
+        .from("connected_accounts")
+        .update({ ...patch, avatar_url: avatarUrl })
+        .eq("id", rowId);
+      if (error && /avatar_url/i.test(error.message)) {
+        const { error: retryErr } = await store.from("connected_accounts").update(patch).eq("id", rowId);
+        if (retryErr) console.error(`[live] ${label} 계정 정보 갱신 실패:`, retryErr.message);
+      } else if (error) {
+        console.error(`[live] ${label} 계정 정보 갱신 실패:`, error.message);
+      }
+    } catch (e) {
+      console.error(`[live] ${label} 계정 정보 갱신 실패:`, e instanceof Error ? e.message : String(e));
+    }
+  });
+}
+
 function contentMixFromCounts(typeCounts: Partial<Record<PostType, number>>): ContentMix[] {
   const total = Object.values(typeCounts).reduce((s, n) => s + (n ?? 0), 0);
   if (total === 0) return [];
@@ -438,40 +480,34 @@ async function computeInstagramPiece(row: AccountRow): Promise<DashboardPiece | 
   // 계정 정보는 실패해도 DB 행 값으로 폴백
   const infoPromise = fetchAccountInfo(token).catch(() => null);
 
-  const [info, cur7, prev7, followerSeries, media] = await Promise.all([
+  /* Graph 라운드 1 — 서로 의존이 없는 조회는 전부 여기서 함께 띄운다.
+     reach 시계열은 예전엔 게시물 인사이트(라운드 2)까지 끝난 **뒤에** 따로 불러 라운드 하나를 더 먹었다
+     (인자는 그때도 이미 다 있었다). fetchDailySeries 는 reject 하지 않는다(실패=null). */
+  const [info, cur7, prev7, followerSeries, reachSeries, media] = await Promise.all([
     infoPromise,
     fetchAccountInsightsRange(ig, token, since7, until),
     fetchAccountInsightsRange(ig, token, since14, since7),
     fetchDailySeries(ig, token, "follower_count", since14, until),
+    fetchDailySeries(ig, token, "reach", since14, until),
     fetchRecentMedia(ig, token, 12),
   ]);
 
-  /* 팔로워/게시물 수·프로필 사진 최신화 — 실패는 무시 (다음 로드에서 재시도).
+  /* 팔로워/게시물 수·프로필 사진 최신화 — 응답 뒤에 쓴다(patchAccountRowAfterResponse). 실패는 다음 로드에서 재시도.
      ⚠️ followers·posts 가 null 이면 **컬럼을 아예 빼고** 갱신한다. 100팔로워 미만 계정은
      인스타그램이 그 값을 안 주는데, 그걸 0 으로 덮으면 이미 아는 숫자까지 0 이 된다
      (그리고 다음 크론이 그 0 을 보고 «팔로워가 크게 줄었어요» 알림을 쏜다). */
-  /* 갱신은 service_role 로 — 이 행은 **워크스페이스 소유자의 것**일 수 있다(팀원이 보는 화면).
-     세션 클라이언트로는 RLS 쓰기 정책이 본인 행만 허용해서 0행이 갱신되고 오류도 안 났다:
-     팀원 화면에서는 프로필·팔로워 수가 영영 옛날 값으로 남았다(소넷 점검 #3).
-     admin 이 없으면 갱신만 건너뛴다 — 지표 표시는 이미 끝났고 갱신은 부수 작업이다. */
-  const store = createAdminClient();
-  if (info && store) {
-    const patch = {
-      ...(info.followersCount !== null ? { followers: info.followersCount } : {}),
-      ...(info.mediaCount !== null ? { posts: info.mediaCount } : {}),
-      display_name: info.name ?? info.username ?? null,
-      bio: info.biography,
-    };
-    // avatar_url은 0006 미적용 DB에 없을 수 있어 실패 시 컬럼 제외 재시도
-    const { error: patchErr } = await store
-      .from("connected_accounts")
-      .update({ ...patch, avatar_url: info.profilePictureUrl })
-      .eq("id", row.id);
-    if (patchErr && /avatar_url/i.test(patchErr.message)) {
-      await store.from("connected_accounts").update(patch).eq("id", row.id);
-    } else if (patchErr) {
-      console.error("[live] 계정 정보 갱신 실패:", patchErr.message);
-    }
+  if (info) {
+    patchAccountRowAfterResponse(
+      row.id,
+      {
+        ...(info.followersCount !== null ? { followers: info.followersCount } : {}),
+        ...(info.mediaCount !== null ? { posts: info.mediaCount } : {}),
+        display_name: info.name ?? info.username ?? null,
+        bio: info.biography,
+      },
+      info.profilePictureUrl,
+      "인스타그램",
+    );
   }
 
   const followers = info?.followersCount ?? row.followers;
@@ -486,7 +522,10 @@ async function computeInstagramPiece(row: AccountRow): Promise<DashboardPiece | 
     withInsights.map((m) => fetchMediaInsights(m.id, m.mediaProductType, token)),
   );
 
-  const followersDelta7d = followerSeries.slice(-7).reduce((s, p) => s + p.value, 0);
+  /* 시계열 실패(null)는 아래 trend.failed 로 화면에 올린다. 계산은 빈 시계열로 진행한다. */
+  const followerPts = followerSeries ?? [];
+  const reachPts = reachSeries ?? [];
+  const followersDelta7d = followerPts.slice(-7).reduce((s, p) => s + p.value, 0);
   const avg = (xs: number[]) => (xs.length > 0 ? xs.reduce((s, v) => s + v, 0) / xs.length : 0);
   /* 인사이트 조회 실패는 null 이다(instagram.ts 주석). 한쪽만 실패했는데 0 으로 눌러 비교하면
      «-100% 급락»이 나온다 — 두 창이 **모두** 성공했을 때만 증감을 낸다. */
@@ -519,7 +558,8 @@ async function computeInstagramPiece(row: AccountRow): Promise<DashboardPiece | 
     type: toPostType(m),
     caption: m.caption?.split("\n")[0]?.slice(0, 80) || "(캡션 없음)",
     publishedAt: m.timestamp ?? new Date().toISOString(),
-    views: mediaInsights[i]?.views ?? 0,
+    /* 게시물 인사이트 실패(null)는 «조회 0회»가 아니다 — null 로 두고 화면이 «—» 로 그린다 */
+    views: mediaInsights[i]?.views ?? null,
     likes: m.likeCount,
     comments: m.commentsCount,
     shares: mediaInsights[i]?.shares ?? 0,
@@ -529,7 +569,7 @@ async function computeInstagramPiece(row: AccountRow): Promise<DashboardPiece | 
   const grid: ProfileGridPost[] = withInsights.slice(0, 9).map((m, i) => ({
     id: m.id,
     type: toPostType(m),
-    views: mediaInsights[i]?.views ?? 0,
+    views: mediaInsights[i]?.views ?? null,
     likes: m.likeCount,
     // VIDEO/REELS만 thumbnail_url 제공 — 이미지는 media_url 폴백 (docs/REAL_API_SPEC.md 2절)
     thumbnailUrl: m.thumbnailUrl ?? m.mediaUrl,
@@ -545,24 +585,31 @@ async function computeInstagramPiece(row: AccountRow): Promise<DashboardPiece | 
 
   // 성과 추이 — 팔로워: 일별 순증감을 현재 팔로워에서 역산해 누적 곡선으로.
   // 조회 곡선은 일별 도달(reach) 시계열을 쓴다(views는 시계열 미지원 — UI에서 '도달'로 표기).
-  const reachSeries = await fetchDailySeries(ig, token, "reach", since14, until);
   let cumulative = followers;
-  const followerCurve: number[] = new Array(followerSeries.length);
-  for (let i = followerSeries.length - 1; i >= 0; i--) {
+  const followerCurve: number[] = new Array(followerPts.length);
+  for (let i = followerPts.length - 1; i >= 0; i--) {
     followerCurve[i] = cumulative;
-    cumulative -= followerSeries[i].value;
+    cumulative -= followerPts[i].value;
   }
   const fmtLabel = (d: string | undefined) => (d ? `${d.slice(5, 7)}.${d.slice(8, 10)}` : "");
+  /* 못 가져온 시계열은 «추이 없음»이 아니다 — 카드가 「불러오지 못했어요」로 그리게 표시한다 */
+  const failed: NonNullable<ChannelTrend["failed"]> = [
+    ...(followerSeries === null ? (["followers"] as const) : []),
+    ...(reachSeries === null ? (["views"] as const) : []),
+  ];
   const trend: ChannelTrend =
-    followerSeries.length >= 2 || reachSeries.length >= 2
+    followerPts.length >= 2 || reachPts.length >= 2
       ? {
-          startLabel: fmtLabel(followerSeries[0]?.date ?? reachSeries[0]?.date),
-          endLabel: fmtLabel(followerSeries.at(-1)?.date ?? reachSeries.at(-1)?.date),
+          startLabel: fmtLabel(followerPts[0]?.date ?? reachPts[0]?.date),
+          endLabel: fmtLabel(followerPts.at(-1)?.date ?? reachPts.at(-1)?.date),
           followers: followerCurve,
-          views: reachSeries.map((p) => p.value),
+          views: reachPts.map((p) => p.value),
           engagement: [], // 일별 참여율은 공식 API 미제공(합산 지표만) — 탭에서 안내
+          ...(failed.length > 0 ? { failed } : {}),
         }
-      : EMPTY_TREND;
+      : failed.length > 0
+        ? { ...EMPTY_TREND, failed }
+        : EMPTY_TREND;
 
   const account: ChannelAccount = {
     channel: "instagram",
@@ -639,34 +686,29 @@ async function computeThreadsPiece(row: AccountRow): Promise<DashboardPiece | nu
      «팔로워가 크게 줄었어요» 거짓 알림을 쏜다(인스타 쪽과 같은 규칙). */
   const followers = followersFetched ?? row.followers;
 
-  // 계정 정보 최신화 — 실패는 무시 (다음 로드에서 재시도)
-  /* 갱신은 service_role 로 — 이 행은 **워크스페이스 소유자의 것**일 수 있다(팀원이 보는 화면).
-     세션 클라이언트로는 RLS 쓰기 정책이 본인 행만 허용해서 0행이 갱신되고 오류도 안 났다:
-     팀원 화면에서는 프로필·팔로워 수가 영영 옛날 값으로 남았다(소넷 점검 #3).
-     admin 이 없으면 갱신만 건너뛴다 — 지표 표시는 이미 끝났고 갱신은 부수 작업이다. */
-  const store = createAdminClient();
-  if (info && store) {
-    const patch = {
-      ...(followersFetched !== null ? { followers: followersFetched } : {}),
-      posts: postCount,
-      display_name: info.name ?? info.username ?? null,
-      bio: info.biography,
-    };
-    const { error: patchErr } = await store
-      .from("connected_accounts")
-      .update({ ...patch, avatar_url: info.profilePictureUrl })
-      .eq("id", row.id);
-    if (patchErr && /avatar_url/i.test(patchErr.message)) {
-      await store.from("connected_accounts").update(patch).eq("id", row.id);
-    } else if (patchErr) {
-      console.error("[live] Threads 계정 정보 갱신 실패:", patchErr.message);
-    }
+  // 계정 정보 최신화 — 응답 뒤에 쓴다(patchAccountRowAfterResponse). 실패는 다음 로드에서 재시도
+  if (info) {
+    patchAccountRowAfterResponse(
+      row.id,
+      {
+        ...(followersFetched !== null ? { followers: followersFetched } : {}),
+        posts: postCount,
+        display_name: info.name ?? info.username ?? null,
+        bio: info.biography,
+      },
+      info.profilePictureUrl,
+      "Threads",
+    );
   }
 
   // 게시물별 인사이트 — 최근 10개만 (호출량 절제, 300초 캐시). Threads 목록 필드엔 좋아요/댓글 수가
   // 없어(스펙 9절) 인사이트 호출이 IG보다 더 필수적이다.
+  // 조회수 일별 시계열은 게시물 목록에 의존하지 않는다 — 같은 라운드에 띄운다(예전엔 뒤에 따로 한 라운드).
   const withInsights = media.slice(0, 10);
-  const postInsights = await Promise.all(withInsights.map((p) => fetchThreadsPostInsights(p.id, token)));
+  const [postInsights, viewsSeries] = await Promise.all([
+    Promise.all(withInsights.map((p) => fetchThreadsPostInsights(p.id, token))),
+    fetchThreadsDailyViews(th, token, since14, until),
+  ]);
 
   const likesSum = postInsights.reduce((s, i) => s + (i?.likes ?? 0), 0);
   const repliesSum = postInsights.reduce((s, i) => s + (i?.replies ?? 0), 0);
@@ -705,7 +747,8 @@ async function computeThreadsPiece(row: AccountRow): Promise<DashboardPiece | nu
     type: toThreadsPostType(p),
     caption: p.text?.split("\n")[0]?.slice(0, 80) || "(텍스트 없음)",
     publishedAt: p.timestamp ?? new Date().toISOString(),
-    views: postInsights[i]?.views ?? 0,
+    /* 게시물 인사이트 실패(null)는 «조회 0회»가 아니다(인스타 쪽과 같은 규칙) */
+    views: postInsights[i]?.views ?? null,
     likes: postInsights[i]?.likes ?? 0,
     comments: postInsights[i]?.replies ?? 0,
     shares: postInsights[i]?.shares ?? 0,
@@ -715,7 +758,7 @@ async function computeThreadsPiece(row: AccountRow): Promise<DashboardPiece | nu
   const grid: ProfileGridPost[] = withInsights.slice(0, 9).map((p, i) => ({
     id: p.id,
     type: toThreadsPostType(p),
-    views: postInsights[i]?.views ?? 0,
+    views: postInsights[i]?.views ?? null,
     likes: postInsights[i]?.likes ?? 0,
     thumbnailUrl: p.mediaUrl,
   }));
@@ -727,11 +770,10 @@ async function computeThreadsPiece(row: AccountRow): Promise<DashboardPiece | nu
   }
   const mix = contentMixFromCounts(typeCounts);
 
-  // 조회수 일별 시계열 — 팔로워 시계열은 없어 followers 곡선은 항상 빈 배열(EmptyState로 안내됨)
-  const viewsSeries = await fetchThreadsDailyViews(th, token, since14, until);
+  // 조회수 일별 시계열(위에서 게시물 인사이트와 함께 받았다) — 팔로워 시계열은 없어 followers 곡선은 항상 빈 배열
   const fmtLabel = (d: string | undefined) => (d ? `${d.slice(5, 7)}.${d.slice(8, 10)}` : "");
   const trend: ChannelTrend =
-    viewsSeries.length >= 2
+    viewsSeries !== null && viewsSeries.length >= 2
       ? {
           startLabel: fmtLabel(viewsSeries[0]?.date),
           endLabel: fmtLabel(viewsSeries.at(-1)?.date),
@@ -739,7 +781,9 @@ async function computeThreadsPiece(row: AccountRow): Promise<DashboardPiece | nu
           views: viewsSeries.map((p) => p.value),
           engagement: [],
         }
-      : EMPTY_TREND;
+      : viewsSeries === null
+        ? { ...EMPTY_TREND, failed: ["views"] }
+        : EMPTY_TREND;
 
   const account: ChannelAccount = {
     channel: "threads",
@@ -797,27 +841,14 @@ async function computeTiktokPiece(row: AccountRow): Promise<DashboardPiece | nul
   const followers = info?.followerCount ?? row.followers;
   const postCount = info?.videoCount ?? row.posts;
 
-  // 프로필 최신화 — 실패는 무시 (다음 로드에서 재시도)
-  /* 갱신은 service_role 로 — 이 행은 **워크스페이스 소유자의 것**일 수 있다(팀원이 보는 화면).
-     세션 클라이언트로는 RLS 쓰기 정책이 본인 행만 허용해서 0행이 갱신되고 오류도 안 났다:
-     팀원 화면에서는 프로필·팔로워 수가 영영 옛날 값으로 남았다(소넷 점검 #3).
-     admin 이 없으면 갱신만 건너뛴다 — 지표 표시는 이미 끝났고 갱신은 부수 작업이다. */
-  const store = createAdminClient();
-  if (info && store) {
-    const patch = {
-      followers,
-      posts: postCount,
-      display_name: info.displayName ?? info.username ?? null,
-    };
-    const { error: patchErr } = await store
-      .from("connected_accounts")
-      .update({ ...patch, avatar_url: info.avatarUrl })
-      .eq("id", row.id);
-    if (patchErr && /avatar_url/i.test(patchErr.message)) {
-      await store.from("connected_accounts").update(patch).eq("id", row.id);
-    } else if (patchErr) {
-      console.error("[live] TikTok 계정 정보 갱신 실패:", patchErr.message);
-    }
+  // 프로필 최신화 — 응답 뒤에 쓴다(patchAccountRowAfterResponse). 실패는 다음 로드에서 재시도
+  if (info) {
+    patchAccountRowAfterResponse(
+      row.id,
+      { followers, posts: postCount, display_name: info.displayName ?? info.username ?? null },
+      info.avatarUrl,
+      "TikTok",
+    );
   }
 
   const summary: DashboardSummary = { ...zeroSummary("tiktok"), followers, postCount };
@@ -1069,6 +1100,12 @@ export interface LiveAudience {
    * 일별(daily)은 별도 호출이라 이 플래그와 무관하게 채워질 수 있다.
    */
   totalsOk: boolean;
+  /**
+   * 일별 시계열(도달·팔로워 순증감·스레드 조회수) 조회가 **전부 성공했는가.** false 면 daily 는 비었거나
+   * 일부 채널이 빠진 자리채움이다 — «도달 0»·«순증감 0»이나 「연동하면 시작돼요」로 그리면 안 된다.
+   * (예전엔 실패를 빈 배열로 삼켜 레이트리밋·시간 초과가 «연동 전» 안내로 나갔다. 2026-09-10)
+   */
+  dailyOk: boolean;
 }
 
 type AudienceTotals = LiveAudience["totals7"];
@@ -1097,6 +1134,7 @@ export async function getLiveAudience(): Promise<LiveAudience | null> {
   let igTotals14: AudienceTotals = ZERO_AUDIENCE_TOTALS;
   let igPrev7: AudienceTotals = ZERO_AUDIENCE_TOTALS;
   let igTotalsOk = true;
+  let igDailyOk = true;
 
   if (igToken && igRow?.platform_user_id) {
     const ig = igRow.platform_user_id;
@@ -1107,11 +1145,15 @@ export async function getLiveAudience(): Promise<LiveAudience | null> {
       fetchAccountInsightsRange(ig, igToken, since14, until),
       fetchAccountInsightsRange(ig, igToken, since14, since7), // 직전 7일 — 뺄셈 금지(위 prev7 주석)
     ]);
-    const followerByDate = new Map(followerSeries.map((p) => [p.date, p.value]));
+    /* 실패(null)는 dailyOk 로 화면에 올린다 — 빈 시계열로 계산은 이어 가되 숫자로 확언하지 않게 한다 */
+    igDailyOk = reachSeries !== null && followerSeries !== null;
+    const reachPts = reachSeries ?? [];
+    const followerPts = followerSeries ?? [];
+    const followerByDate = new Map(followerPts.map((p) => [p.date, p.value]));
     igDaily =
-      reachSeries.length > 0
-        ? reachSeries.map((p) => ({ date: p.date, reach: p.value, followerNet: followerByDate.get(p.date) ?? 0 }))
-        : followerSeries.map((p) => ({ date: p.date, reach: 0, followerNet: p.value }));
+      reachPts.length > 0
+        ? reachPts.map((p) => ({ date: p.date, reach: p.value, followerNet: followerByDate.get(p.date) ?? 0 }))
+        : followerPts.map((p) => ({ date: p.date, reach: 0, followerNet: p.value }));
     igTotalsOk = cur7 !== null && cur14 !== null && prv7 !== null;
     const [i7, i14, ip7] = [cur7 ?? ZERO_ACCOUNT_TOTALS, cur14 ?? ZERO_ACCOUNT_TOTALS, prv7 ?? ZERO_ACCOUNT_TOTALS];
     igTotals7 = { accountsEngaged: i7.accountsEngaged, totalInteractions: i7.totalInteractions, profileLinksTaps: i7.profileLinksTaps };
@@ -1124,6 +1166,7 @@ export async function getLiveAudience(): Promise<LiveAudience | null> {
   let thTotals14: AudienceTotals = ZERO_AUDIENCE_TOTALS;
   let thPrev7: AudienceTotals = ZERO_AUDIENCE_TOTALS;
   let thTotalsOk = true;
+  let thDailyOk = true;
 
   if (thToken && thRow?.platform_user_id) {
     const th = thRow.platform_user_id;
@@ -1134,7 +1177,8 @@ export async function getLiveAudience(): Promise<LiveAudience | null> {
       fetchThreadsAccountInsightsRange(th, thToken, since14, since7),
     ]);
     // followerNet: Threads 팔로워는 스냅샷만 제공돼 일별 순증감 산출 불가 — 0 고정
-    thDaily = viewsSeries.map((p) => ({ date: p.date, reach: p.value, followerNet: 0 }));
+    thDailyOk = viewsSeries !== null;
+    thDaily = (viewsSeries ?? []).map((p) => ({ date: p.date, reach: p.value, followerNet: 0 }));
     // accountsEngaged 대응 지표 없음(TODO) — totalInteractions은 좋아요+답글+리포스트+인용, profileLinksTaps 대용은 clicks
     thTotalsOk = cur7 !== null && cur14 !== null && prv7 !== null;
     const [t7, t14, tp7] = [cur7 ?? ZERO_THREADS_TOTALS, cur14 ?? ZERO_THREADS_TOTALS, prv7 ?? ZERO_THREADS_TOTALS];
@@ -1176,6 +1220,7 @@ export async function getLiveAudience(): Promise<LiveAudience | null> {
       profileLinksTaps: igPrev7.profileLinksTaps + thPrev7.profileLinksTaps,
     },
     totalsOk: igTotalsOk && thTotalsOk,
+    dailyOk: igDailyOk && thDailyOk,
   };
 }
 

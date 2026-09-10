@@ -27,6 +27,21 @@ const GRAPH_BASE = GRAPH_INSTAGRAM_BASE;
 export const GRAPH_THREADS_VERSION = "v1.0";
 export const GRAPH_THREADS_BASE = `https://graph.threads.net/${GRAPH_THREADS_VERSION}`;
 
+/**
+ * 화면 렌더 경로의 Graph **읽기** 왕복 상한(인스타·스레드 인사이트·계정 정보).
+ *
+ * 예전엔 상한이 없어서 Graph 가 매달리는 날 홈(/dashboard) 전체가 제한 없이 기다렸다 — 홈은 Suspense
+ * 경계가 없어 인스타 한 채널이 걸리면 광고 요약까지 함께 멈춘다. 10초에 끊고 실패는 실패로 그린다
+ * (호출부가 null → «—» / 「불러오지 못했어요」로 받는다. 0·빈 목록으로 삼키지 않는다).
+ *
+ * ⚠️ `AbortSignal.timeout()` 은 **fetch 할 때마다 새로** 만든다. 모듈 상수로 한 번 만들어 공유하면
+ * 타이머가 생성 시점부터 돌아, 첫 사용 10초 뒤부터 모든 호출이 즉시 abort 된다.
+ * `next: { revalidate }` 와 함께 써도 이 Next 버전은 안전하다 — 신선 페치에만 signal 을 넘기고
+ * 백그라운드 재검증에서는 뺀다(node_modules/next/dist/server/lib/patch-fetch.js).
+ * OAuth 콜백·크론 전용 호출(코드 교환·장기 토큰 교환·갱신·웹훅 구독)은 쓰기·1회용이라 이 상수를 쓰지 않는다.
+ */
+export const GRAPH_READ_TIMEOUT_MS = 10_000;
+
 /** 발송 결과 — dm_sends.status 값과 1:1 매핑 */
 export type SendOutcome =
   | { ok: true; igMessageId: string | null }

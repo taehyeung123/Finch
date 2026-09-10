@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
-import { getCurrentPlan } from "@/lib/data/internal";
+import { getCurrentPlan, type PlanKey } from "@/lib/data/internal";
 import { linkWorkspace } from "@/lib/data";
 import { sanitizeThemeCustom } from "@/lib/links/themes";
 import { sanitizeLinkSettings } from "@/lib/links/settings";
@@ -30,7 +30,11 @@ export const metadata: Metadata = {
 const STATS_RANGES = [1, 7, 30, 90, 180, 365] as const;
 const DEFAULT_DAYS = 30;
 
-type Loaded = LinkWorkspace;
+/* plan 을 함께 돌려준다 — Page 가 배지 숨김·내 로고 게이트(paid)를 위해 플랜을 **다시 읽지 않게** 한다.
+   예전엔 load 안에서 한 번, Page 에서 또 한 번 따로 읽어서 두 판정이 서로 다를 수 있었다
+   (한쪽 실패 → 「플랜 확인 못 함」 배지 + 유료 기능 열림이 한 화면에). getCurrentPlan 은 이제 요청 캐시지만
+   캐시 적중에 기대지 않고 값을 넘긴다. */
+type Loaded = LinkWorkspace & { plan: PlanKey | null };
 
 const EMPTY_STATS: LinkStats = {
   days: DEFAULT_DAYS,
@@ -49,7 +53,27 @@ const EMPTY_STATS: LinkStats = {
   dwell: { avgMs: 0, n: 0 },
 };
 
-const EMPTY: Loaded = { page: null, pages: [], pageLimit: { used: 0, max: 1 }, multiReady: false, blocks: [], snapshot: null, stats: EMPTY_STATS, leads: [] };
+const EMPTY: LinkWorkspace = { page: null, pages: [], pageLimit: { used: 0, max: 1 }, multiReady: false, blocks: [], snapshot: null, stats: EMPTY_STATS, leads: [] };
+
+/** 페이지 목록(멀티, 0060) — parent_id/sub_slug 는 미적용 DB 에 없다 → 계단식으로 없이 읽는다.
+ *  함수로 떼어 둔 것은 플랜 조회와 **한 라운드에** 띄우기 위해서다(둘은 서로 의존이 없다). */
+async function loadPageList(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  let multiReady = true;
+  let listRes = await supabase
+    .from("link_pages")
+    .select("id, slug, title, published, parent_id, sub_slug")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+  if (listRes.error && /parent_id|sub_slug/i.test(listRes.error.message)) {
+    multiReady = false;
+    listRes = (await supabase
+      .from("link_pages")
+      .select("id, slug, title, published")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true })) as unknown as typeof listRes;
+  }
+  return { listRes, multiReady };
+}
 
 /** link_page_stats 가 돌려주는 원형 */
 interface RawStats {
@@ -93,6 +117,7 @@ async function load(days: number, wantPageId?: string): Promise<Loaded> {
     const cut = (n: number) => Math.max(n > 0 ? 1 : 0, Math.round(n * ratio));
     return {
       ...linkWorkspace,
+      plan: await getCurrentPlan(), // 데모는 getCurrentPlan 관례대로 creator
       stats: {
         ...base,
         days,
@@ -116,28 +141,16 @@ async function load(days: number, wantPageId?: string): Promise<Loaded> {
   }
 
   const user = await getAuthUser();
-  if (!user) return { ...EMPTY, stats: { ...EMPTY_STATS, days } };
+  // 비로그인은 getCurrentPlan 과 같은 규칙으로 free (레이아웃 가드가 먼저 막으므로 실제로는 안 탄다)
+  if (!user) return { ...EMPTY, plan: "free", stats: { ...EMPTY_STATS, days } };
 
   const supabase = await createClient();
 
-  /* 페이지 목록(멀티, 0060) — parent_id/sub_slug 는 미적용 DB 에 없다 → 계단식으로 없이 읽는다 */
-  let multiReady = true;
-  let listRes = await supabase
-    .from("link_pages")
-    .select("id, slug, title, published, parent_id, sub_slug")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: true });
-  if (listRes.error && /parent_id|sub_slug/i.test(listRes.error.message)) {
-    multiReady = false;
-    listRes = (await supabase
-      .from("link_pages")
-      .select("id, slug, title, published")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: true })) as unknown as typeof listRes;
-  }
+  /* 목록과 플랜을 한 라운드에 — 예전엔 목록을 기다린 **뒤에** 플랜을 직렬로 읽었다 */
+  const [{ listRes, multiReady }, linksPlan] = await Promise.all([loadPageList(supabase, user.id), getCurrentPlan()]);
   if (listRes.error) {
     console.error("[links] link_pages 목록 조회 실패:", listRes.error.message);
-    return { ...EMPTY, loadFailed: true, stats: { ...EMPTY_STATS, days, failed: true } };
+    return { ...EMPTY, plan: linksPlan, loadFailed: true, stats: { ...EMPTY_STATS, days, failed: true } };
   }
   const pageRows = (listRes.data ?? []) as Array<Record<string, unknown> & { id: string; slug: string }>;
   const pages = pageRows.map((r) => ({
@@ -151,13 +164,13 @@ async function load(days: number, wantPageId?: string): Promise<Loaded> {
   /* 상한 표시용 — 최종 관문은 DB 트리거(0060). 무료 1·유료 3.
      ⚠️ 조회 실패를 «무료»로 단정하지 않는다. 예전엔 error 를 버리고 `?? "free"` 로 떨어져서, 플랜 조회가
      한 번 실패하면 유료 고객도 max=1 로 잠기고 「플랜을 올리면 3개까지」라는 업그레이드 권유가 떴다 —
-     돈을 낸 사람에게 이미 산 기능을 파는 화면이다. getCurrentPlan 은 실패를 null 로 준다(2026-09-07 감사). */
-  const linksPlan = await getCurrentPlan();
+     돈을 낸 사람에게 이미 산 기능을 파는 화면이다. getCurrentPlan 은 실패를 null 로 준다(2026-09-07 감사).
+     linksPlan 은 위에서 목록과 함께 읽었다. */
   const pageLimit = { used: pages.length, max: linksPlan === "free" ? 1 : 3, planFailed: linksPlan === null };
 
   /* 활성 페이지 — ?page= 가 내 것이면 그 장, 아니면 첫 메인 장 */
   const active = (wantPageId && pages.find((p) => p.id === wantPageId)) || pages.find((p) => !p.parentId) || pages[0] || null;
-  if (!active) return { ...EMPTY, pages, pageLimit, multiReady, stats: { ...EMPTY_STATS, days } };
+  if (!active) return { ...EMPTY, plan: linksPlan, pages, pageLimit, multiReady, stats: { ...EMPTY_STATS, days } };
 
   const PAGE_COLS =
     "id, slug, title, bio, published, layout, theme, align, avatar_path, cover_path, sns_links, sns_placement, title_size, seo_title, seo_desc, published_at, published_snapshot, updated_at";
@@ -175,10 +188,10 @@ async function load(days: number, wantPageId?: string): Promise<Loaded> {
   /* 조회 오류 ≠ 페이지 없음. 오류를 "없음"으로 흘리면 생성 폼 → 23505 → 새로고침 → 생성 폼 루프(감사 #10) */
   if (pageRes.error) {
     console.error("[links] link_pages 조회 실패:", pageRes.error.message);
-    return { ...EMPTY, loadFailed: true, stats: { ...EMPTY_STATS, days, failed: true } };
+    return { ...EMPTY, plan: linksPlan, loadFailed: true, stats: { ...EMPTY_STATS, days, failed: true } };
   }
   const page = pageRes.data as (Record<string, unknown> & { id: string }) | null;
-  if (!page) return { ...EMPTY, stats: { ...EMPTY_STATS, days } };
+  if (!page) return { ...EMPTY, plan: linksPlan, stats: { ...EMPTY_STATS, days } };
 
   const [blockRes, statsRes, leadRows, guestRes, contactCnt, subscribeCnt, guestCnt] = await Promise.all([
     supabase
@@ -226,7 +239,7 @@ async function load(days: number, wantPageId?: string): Promise<Loaded> {
   /* 블록 조회 실패를 빈 배열로 뭉개면 빈 캔버스 + 「초안 수정됨」 + 통계 전부 "지운 블록" 이 된다(감사 #11) */
   if (blockRes.error) {
     console.error("[links] 블록 조회 실패:", blockRes.error.message);
-    return { ...EMPTY, loadFailed: true, stats: { ...EMPTY_STATS, days, failed: true } };
+    return { ...EMPTY, plan: linksPlan, loadFailed: true, stats: { ...EMPTY_STATS, days, failed: true } };
   }
   const rows = blockRes.data;
   const blocks: LinkBlock[] = (
@@ -356,6 +369,7 @@ async function load(days: number, wantPageId?: string): Promise<Loaded> {
     : null;
 
   return {
+    plan: linksPlan,
     pages,
     pageLimit,
     multiReady,
@@ -402,10 +416,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
   const days = (STATS_RANGES as readonly number[]).includes(asked) ? asked : DEFAULT_DAYS;
 
   const wantPage = typeof sp.page === "string" ? sp.page : undefined;
-  const { page, pages, pageLimit, multiReady, blocks, snapshot, stats, leads, leadCounts, leadsFailed, guestbookFailed, guestbook, loadFailed } = await load(days, wantPage);
+  const { plan, page, pages, pageLimit, multiReady, blocks, snapshot, stats, leads, leadCounts, leadsFailed, guestbookFailed, guestbook, loadFailed } = await load(days, wantPage);
   /* 배지 숨김·내 로고는 유료 게이트(2026-08-26 사장님 지시) — 판정은 fail-closed(조회 실패=무료).
-     데모는 getCurrentPlan 관례대로 creator(열림) — 어차피 저장이 막혀 있다. */
-  const paid = ((await getCurrentPlan()) ?? "free") !== "free";
+     데모는 getCurrentPlan 관례대로 creator(열림) — 어차피 저장이 막혀 있다.
+     플랜은 load 가 읽은 값을 그대로 쓴다 — 여기서 다시 읽으면 pageLimit.planFailed 와 판정이 갈릴 수 있다. */
+  const paid = (plan ?? "free") !== "free";
 
   /* 복사 버튼이 주는 주소는 **지금 접속한 도메인** 기준이어야 한다.
      프로덕션 도메인을 하드코딩하면 로컬·프리뷰에서 복사한 주소가 안 열린다. */

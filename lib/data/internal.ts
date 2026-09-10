@@ -5,6 +5,7 @@
  * next/headers(createClient) 경유라 서버 컨텍스트에서만 동작한다.
  */
 
+import { cache } from "react";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import {
@@ -107,14 +108,24 @@ export async function getUsageStats(): Promise<UsageStat[] | null> {
 
 export type PlanKey = "free" | "creator" | "pro" | "agency" | "enterprise";
 
-/** 현재 플랜 — users_profile.plan. 데모는 creator, 비로그인/조회실패는 free. */
 /**
- * 현재 플랜 — **null 이면 조회 실패**(«무료»와 다르다).
+ * 현재 플랜 — users_profile.plan. 데모는 creator, 비로그인은 free, **null 이면 조회 실패**(«무료»와 다르다).
  * 예전엔 실패를 "free" 로 폴백해서 유료 고객의 화면이 잠긐 무료로 읽혔다 —
  * 기능이 잠기고 업그레이드 권유가 뜨는, 가장 민망한 종류의 오동작이다.
  * 권한 판정은 여전히 fail-closed 로(호출부가 ?? "free"), 표시만 «확인 못 함»으로 가른다.
+ *
+ * React `cache()` 로 **요청당 한 번만** 읽는다(2026-09-10). 예전엔 /links 한 렌더가 두 번 따로 읽어서,
+ * 한 번은 실패·한 번은 성공하면 「플랜 확인 못 함」 배지와 «유료 기능 열림»이 한 화면에 같이 떴다.
+ * 이제 한 요청 안의 모든 호출부가 같은 답(실패도 같은 실패)을 본다. React cache 는 요청 단위라 사용자 간 누수는 없다.
+ *
+ * ⚠️ **같은 요청 안에서 플랜을 쓰고 나서 이 함수로 다시 읽지 말 것** — 쓰기 전 값이 조용히 나온다.
+ *   (지금 그런 자리는 없다. 플랜을 쓰는 곳: settings/billing/actions.ts, settings/billing/success/page.tsx,
+ *   api/billing/issue, cron/refresh-tokens — 그 자리에 표시를 붙이려면 쓴 값을 그대로 넘기거나 직접 select 한다.)
+ * ⚠️ **인자를 붙이지 말 것** — cache 는 인자 목록이 키라 `fn()` 과 `fn(undefined)` 가 다른 슬롯이 된다
+ *   (lib/data/ads.ts 의 arguments.length 사고). `.map(getCurrentPlan)` 처럼 콜백으로 넘기지도 말 것.
+ * 서버 액션 안에서는 한 액션 = 한 요청이라 안전하지만, 횟수 제한·과금의 «1회» 근거로 쓰지는 않는다.
  */
-export async function getCurrentPlan(): Promise<PlanKey | null> {
+export const getCurrentPlan = cache(async (): Promise<PlanKey | null> => {
   if (isDemoMode()) return "creator";
   const { supabase, user } = await getUser();
   if (!user) return "free";
@@ -129,7 +140,7 @@ export async function getCurrentPlan(): Promise<PlanKey | null> {
   }
   const plan = data?.plan;
   return plan === "creator" || plan === "pro" || plan === "agency" || plan === "enterprise" ? plan : "free";
-}
+});
 
 export interface SubscriptionView {
   id: string;

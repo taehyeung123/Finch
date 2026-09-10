@@ -246,7 +246,8 @@ export function DashboardClient({
                       <td className="py-3 pr-3">
                         <ChannelBadge channel={p.channel} />
                       </td>
-                      <td className="tnum py-3 text-right">{formatCompact(p.views)}</td>
+                      {/* 조회수 null = 게시물 인사이트를 못 가져왔다 — «0» 으로 확언하지 않는다 */}
+                      <td className="tnum py-3 text-right">{p.views === null ? "—" : formatCompact(p.views)}</td>
                       <td className="tnum py-3 text-right">{formatCompact(p.likes)}</td>
                       <td className="tnum py-3 text-right">{formatCompact(p.comments)}</td>
                       <td className="py-3 pl-4">

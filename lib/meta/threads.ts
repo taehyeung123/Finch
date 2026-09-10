@@ -10,17 +10,20 @@
  * 서버 전용: 액세스 토큰을 클라이언트로 노출하지 않는다.
  */
 
-import { GRAPH_THREADS_BASE } from "./graph";
+import { GRAPH_READ_TIMEOUT_MS, GRAPH_THREADS_BASE } from "./graph";
 
 async function graphGet<T>(path: string, accessToken: string): Promise<T> {
   const sep = path.includes("?") ? "&" : "?";
   const res = await fetch(`${GRAPH_THREADS_BASE}${path}${sep}access_token=${encodeURIComponent(accessToken)}`, {
     // 인사이트는 자주 안 바뀌므로 짧게 캐시(중복 호출·레이트리밋 완화) — IG 어댑터와 동일 정책
     next: { revalidate: 300 },
+    // 호출마다 새로 만든다 — 모듈 상수로 공유하면 두 번째 호출부터 즉시 끊긴다(graph.ts 주석)
+    signal: AbortSignal.timeout(GRAPH_READ_TIMEOUT_MS),
   });
-  const json = (await res.json().catch(() => ({}))) as T & { error?: { message?: string; code?: number } };
-  if (!res.ok) {
-    throw new Error(`graph_get_failed ${path}: ${json.error?.message ?? `http_${res.status}`}`);
+  /* 본문 도중에 끊긴 응답을 {} 로 눌러 «성공»으로 돌려주지 않는다 — 호출부가 «데이터 없음»으로 읽는다 */
+  const json = (await res.json().catch(() => null)) as (T & { error?: { message?: string; code?: number } }) | null;
+  if (!res.ok || json === null) {
+    throw new Error(`graph_get_failed ${path}: ${json?.error?.message ?? `http_${res.status}`}`);
   }
   return json;
 }
@@ -116,13 +119,16 @@ export interface ThreadsDailyPoint {
   value: number;
 }
 
-/** 일별 조회수 시계열 — IG의 reach 시계열에 대응해 "도달" 대용으로 쓴다(Threads엔 reach 지표 없음). */
+/**
+ * 일별 조회수 시계열 — IG의 reach 시계열에 대응해 "도달" 대용으로 쓴다(Threads엔 reach 지표 없음).
+ * **못 가져왔으면 null** — 빈 배열(«추이 없음»)과 다르다(instagram.ts fetchDailySeries 와 같은 규약).
+ */
 export async function fetchThreadsDailyViews(
   threadsUserId: string,
   accessToken: string,
   sinceUnix: number,
   untilUnix: number,
-): Promise<ThreadsDailyPoint[]> {
+): Promise<ThreadsDailyPoint[] | null> {
   try {
     const res = await graphGet<{ data?: InsightRow[] }>(
       `/${threadsUserId}/threads_insights?metric=views&since=${sinceUnix}&until=${untilUnix}`,
@@ -135,8 +141,9 @@ export async function fetchThreadsDailyViews(
       return row.values.map((v) => ({ date: (v.end_time ?? "").slice(0, 10), value: v.value ?? 0 }));
     }
     return [];
-  } catch {
-    return [];
+  } catch (e) {
+    console.error("[threads-insights] 일별 조회수 조회 실패:", e instanceof Error ? e.message : String(e));
+    return null;
   }
 }
 

@@ -60,7 +60,8 @@ const KIND_OF: Record<string, PostKind> = {
 /** 데모 성과표 — 목 게시물에서 합성. 실측이 아니라 화면 확인용 샘플이다. */
 function demoPerformance(): GrowthPerformance {
   const posts: PostPerf[] = recentPosts
-    .filter((p) => p.views > 0) // reach=0 → NaN 방지. 실경로의 reach<=0 제외와 대칭
+    // reach=0 → NaN 방지. 실경로의 reach<=0 제외와 대칭. 조회수 null(=못 가져옴)도 계산에서 뺀다
+    .flatMap((p) => (p.views !== null && p.views > 0 ? [{ ...p, views: p.views }] : []))
     .map((p) => {
     /* 도달(순 계정 수) ≤ 조회수(반복 조회 포함)다 — 정의상 뒤집힐 수 없다.
        예전 계수 1.12 는 «평균 도달» 카드를 화면에 올리자마자 조회수보다 큰 값을 뱉었다. */

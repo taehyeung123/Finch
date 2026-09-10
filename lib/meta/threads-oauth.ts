@@ -16,7 +16,7 @@ import "server-only";
  * 개발자 모드 테스터 계정 기준 — 사업자등록·앱심사 없이 Standard Access(테스터 역할 계정)로 동작한다.
  */
 
-import { GRAPH_THREADS_BASE } from "./graph";
+import { GRAPH_READ_TIMEOUT_MS, GRAPH_THREADS_BASE } from "./graph";
 
 /** 문서에서 확인된 전체 스코프. 최소 권한 원칙상 실제 요청은 필요한 기능만 넣는 게 이상적이나,
  *  핀치는 발행·인사이트·댓글까지 전부 쓰므로 전 범위를 요청한다 (docs/REAL_API_SPEC.md 5절). */
@@ -191,7 +191,10 @@ export interface ThreadsAccountInfo {
  */
 export async function fetchThreadsAccountInfo(accessToken: string): Promise<ThreadsAccountInfo> {
   const fields = "id,username,name,threads_profile_picture_url,threads_biography,is_verified";
-  const res = await fetch(`${GRAPH_THREADS_BASE}/me?fields=${fields}&access_token=${encodeURIComponent(accessToken)}`);
+  /* 홈 렌더 경로다 — 상한을 둔다. `next: { revalidate }` 금지(토큰 든 URL 이 캐시에 평문, instagram-oauth 와 같은 이유) */
+  const res = await fetch(`${GRAPH_THREADS_BASE}/me?fields=${fields}&access_token=${encodeURIComponent(accessToken)}`, {
+    signal: AbortSignal.timeout(GRAPH_READ_TIMEOUT_MS),
+  });
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: { message?: string } };
   if (!res.ok || !json.id) {
     throw new Error(`account_info_failed: ${json.error?.message ?? `http_${res.status}`}`);

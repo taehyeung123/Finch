@@ -9,6 +9,7 @@ import { Badge, ChannelBadge } from "@/components/ui/badge";
 import { MiniBars } from "@/components/ui/charts";
 import { InfoTip } from "@/components/ui/info-tip";
 import { EmptyState } from "@/components/ui/empty-state";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { formatAgo, formatCompact, formatDeltaCompact } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import type { TopEngager } from "@/lib/types";
@@ -30,6 +31,8 @@ export interface AudienceView {
   prev7: AudienceTotals;
   /** 합산 지표 조회 성공 여부 — false 면 위 세 값은 자리채움이라 «—»로 표시한다 */
   totalsOk: boolean;
+  /** 일별 시계열 조회 성공 여부 — false 면 daily 는 자리채움이라 도달·순증감을 «—»로, 비었으면 「불러오지 못했어요」로 */
+  dailyOk: boolean;
   topEngagers: TopEngager[];
   isLive: boolean;
 }
@@ -42,6 +45,17 @@ export interface AudienceView {
  */
 export function AudienceClient({ view }: { view: AudienceView | null }) {
   const [period, setPeriod] = useState<Period>(7);
+
+  /* 조회 실패로 빈 것은 «연동 전»이 아니다 — 빈 상태 분기 **앞에** 실패 분기를 둔다.
+     예전엔 레이트리밋·시간 초과가 「채널을 연동하면 팔로워 분석이 시작돼요」로 나갔다(연동한 사람에게). */
+  if (view && view.daily.length === 0 && !view.dailyOk) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="팔로워 분석" description="내 프로필을 찾아오는 흐름을 확인할 수 있는 지표로 분석합니다." />
+        <LoadFailed title="팔로워 분석을 불러오지 못했어요" />
+      </div>
+    );
+  }
 
   // 연동 전(빈 데이터) — 계산·차트를 건너뛰고 안내만 표시
   if (!view || view.daily.length === 0) {
@@ -96,6 +110,8 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
   /* 조회 실패는 0이 아니다 — 값 자체를 «—»로 둔다. 그러지 않으면 «참여 계정 0 · -100%»가
      «다 떨어져 나갔다»는 확언으로 읽힌다(실제로는 못 가져온 것뿐이다). */
   const totalOrDash = (n: number) => (view.totalsOk ? formatCompact(n) : "—");
+  /* 일별 시계열이 일부라도 실패했으면 도달·순증감 합계는 빠진 날·빠진 채널이 섞인 값이다 — 같은 규칙으로 «—» */
+  const dailyOk = view.dailyOk;
 
   return (
     <div className="space-y-6">
@@ -128,8 +144,8 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
       <section aria-label="팔로워 분석 요약" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
           label="도달"
-          value={formatCompact(reach)}
-          delta={reachDelta === undefined ? undefined : Number(reachDelta.toFixed(1))}
+          value={dailyOk ? formatCompact(reach) : "—"}
+          delta={!dailyOk || reachDelta === undefined ? undefined : Number(reachDelta.toFixed(1))}
           deltaLabel={`직전 ${period}일 대비`}
           trend={days.map((d) => d.reach)}
         />
@@ -157,8 +173,8 @@ export function AudienceClient({ view }: { view: AudienceView | null }) {
               </InfoTip>
             </>
           }
-          value={formatDeltaCompact(followerNet)}
-          delta={followerDelta}
+          value={dailyOk ? formatDeltaCompact(followerNet) : "—"}
+          delta={dailyOk ? followerDelta : undefined}
           deltaUnit="명"
           deltaLabel={`직전 ${period}일 대비`}
         />

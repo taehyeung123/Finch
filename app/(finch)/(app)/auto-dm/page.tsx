@@ -1,8 +1,8 @@
 import { isDemoMode } from "@/lib/supabase/config";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { autoDmRules as sampleRules, recentPosts as samplePosts } from "@/lib/data";
 import { getIgAvatarUrl, getRecentPostsForPicker } from "@/lib/data/live";
-import { getCurrentPlan } from "@/lib/data/internal";
+import { getCurrentPlan, type PlanKey } from "@/lib/data/internal";
 import {
   RULE_COLUMNS,
   RULE_COLUMNS_LEGACY,
@@ -43,19 +43,21 @@ export default async function AutoDmPage() {
 
   /* 플랜 조회가 실패하면 null 이다 — 한도는 fail-closed 로 free 를 쓰되(dmContentLimitFor),
      화면이 그 한도를 «당신 플랜의 한도»라고 단정하면 안 된다. 유료 고객이 이유도 모른 채
-     "1/1개 사용 중"으로 막히는 화면이 된다(lib/data/internal.ts 규칙). */
-  const plan = await getCurrentPlan();
-  const contentLimit = dmContentLimitFor(plan);
+     "1/1개 사용 중"으로 막히는 화면이 된다(lib/data/internal.ts 규칙).
+     실제 모드에서는 아래 규칙·게시물 조회와 **한 라운드에** 읽는다(예전엔 그 앞에 따로 한 왕복). */
+  let plan: PlanKey | null;
 
-  if (!isDemoMode()) {
+  if (isDemoMode()) {
+    plan = await getCurrentPlan();
+  } else {
     rules = [];
     try {
       const supabase = await createClient();
       /* 연동 조회를 «내 것»으로 좁히려면 사용자 id 가 필요하다 — 레이아웃 가드가 이미 비로그인을 막지만
-         여기서도 없으면 빈 문자열로 좁혀 0행이 나오게 한다(«확인 못 함»이 아니라 «없음»이 맞다). */
-      const {
-        data: { user: pageUser },
-      } = await supabase.auth.getUser();
+         여기서도 없으면 빈 문자열로 좁혀 0행이 나오게 한다(«확인 못 함»이 아니라 «없음»이 맞다).
+         렌더 경로라 getAuthUser(요청당 1회 메모이즈)를 쓴다 — 레이아웃 가드가 이미 읽은 값을 그대로 받는다.
+         예전엔 supabase.auth.getUser() 를 직접 불러 Auth 왕복이 한 번 더 나갔다. */
+      const pageUser = await getAuthUser();
       // buttons/post_thumb(0038) 미적용 DB 폴백 — 컬럼 오류 시 legacy 셋으로 재조회
       /* 컬럼 폴백은 한 단계씩 — 0052 만 없으면 0038·0042 컬럼은 그대로 읽는다.
          폴백 발동 여부는 반환값으로 알린다(클로저 밖 재할당은 린트가 막는다). */
@@ -71,7 +73,7 @@ export default async function AutoDmPage() {
         if (res.error && missingLegacyColumns(res.error.message)) res = await q(RULE_COLUMNS_LEGACY);
         return { data: res.data, error: res.error?.message ?? null, followReady };
       };
-      const [{ data, error, followReady }, livePosts, accountRes, avatarUrl] = await Promise.all([
+      const [{ data, error, followReady }, livePosts, accountRes, avatarUrl, planRes] = await Promise.all([
         loadRules(),
         getRecentPostsForPicker(),
         /* ⚠️ user_id 로 좁힌다 — 안 좁히면 팀원 화면에 **소유자의 핸들**이 자기 계정처럼 뜨고,
@@ -88,7 +90,9 @@ export default async function AutoDmPage() {
           .limit(1)
           .maybeSingle(),
         getIgAvatarUrl(),
+        getCurrentPlan(),
       ]);
+      plan = planRes;
       /* null = 게시물 목록을 못 불러왔다. 예전엔 빈 배열이라 위저드 피커가 「이 계정에 게시물이 없어요 —
          게시물이 있는 계정으로 연동을 바꾸세요」라고 말했다. 멀쩡한 계정을 갈아엎으라는 소리다(2026-09-07 감사). */
       postsFailed = livePosts === null;
@@ -113,8 +117,10 @@ export default async function AutoDmPage() {
       console.error("[auto-dm] 규칙 조회 실패:", e);
       rulesFailed = true;
       igConnected = null; // 확인 못 함 — 관문을 띄우지 않는다
+      plan = null; // 확인 못 함 — 한도는 fail-closed(free), 화면은 «플랜 확인 못 함»으로 말한다
     }
   }
+  const contentLimit = dmContentLimitFor(plan);
 
   return (
     <AutoDmClient

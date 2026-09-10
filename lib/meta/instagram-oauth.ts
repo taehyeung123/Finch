@@ -15,7 +15,7 @@ import "server-only";
  * 서버 전용: client_secret·토큰을 클라이언트로 절대 노출하지 않는다 (NEXT_PUBLIC_ 금지).
  */
 
-import { GRAPH_INSTAGRAM_BASE } from "./graph";
+import { GRAPH_INSTAGRAM_BASE, GRAPH_READ_TIMEOUT_MS } from "./graph";
 
 /**
  * 인사이트 + 댓글 + 메시징 + 발행에 필요한 신형 스코프 (구형 값은 2025-01-27 폐기).
@@ -241,7 +241,11 @@ export interface InstagramAccountInfo {
 export async function fetchAccountInfo(accessToken: string): Promise<InstagramAccountInfo> {
   /* user_id 를 함께 받는다 — id(앱 범위)와 다른 값이고, 웹훅은 이걸로 계정을 찾는다(2026-09-09 감사, 0091) */
   const fields = "id,user_id,username,name,followers_count,follows_count,media_count,profile_picture_url,biography,website";
-  const res = await fetch(`${GRAPH_INSTAGRAM_BASE}/me?fields=${fields}&access_token=${encodeURIComponent(accessToken)}`);
+  /* 홈 렌더 경로다(lib/data/live.ts) — 상한이 없으면 Graph 가 매달리는 날 홈 전체가 따라 멈춘다.
+     ⚠️ `next: { revalidate }` 는 붙이지 않는다: 토큰이 든 URL 이 페치 캐시에 평문으로 남는다(lib/meta/ads.ts 주석). */
+  const res = await fetch(`${GRAPH_INSTAGRAM_BASE}/me?fields=${fields}&access_token=${encodeURIComponent(accessToken)}`, {
+    signal: AbortSignal.timeout(GRAPH_READ_TIMEOUT_MS),
+  });
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: { message?: string } };
   if (!res.ok || !json.id) {
     throw new Error(`account_info_failed: ${json.error?.message ?? `http_${res.status}`}`);

@@ -297,7 +297,9 @@ export function RuleWizard({
               postId: selectedPost.id,
               postCaption: selectedPost.caption,
               postType: selectedPost.type,
-              postViews: selectedPost.views,
+              /* 규칙에 붙여 두는 참고값일 뿐 화면에 안 나간다. 피커 목록은 인사이트를 안 불러 원래 0 이다
+                 (live.ts getRecentPostsForPicker) — null(못 가져옴)도 같은 자리채움으로 둔다 */
+              postViews: selectedPost.views ?? 0,
               // 편집에서 다른 게시물로 바꿨는데 이전 썸네일이 남는 사고 방지 — 폴백은 같은 게시물일 때만
               postThumb:
                 selectedPost.thumb ?? (initial && selectedPost.id === initial.postId ? initial.postThumb : null),

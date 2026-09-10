@@ -35,6 +35,7 @@ export default async function AudiencePage() {
       totals14: totalsOf(14),
       prev7: totalsOf(14, 7),
       totalsOk: true, // 목데이터는 조회가 없어 실패할 수 없다
+      dailyOk: true,
       topEngagers,
       isLive: false,
     };

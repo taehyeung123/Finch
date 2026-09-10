@@ -32,7 +32,8 @@ export interface ChannelAccount {
 export interface ProfileGridPost {
   id: string;
   type: PostType;
-  views: number;
+  /** 게시물 인사이트를 **못 가져왔으면 null** — 0(«조회 0회»라는 사실)과 다르다. 화면은 «—» 로 그린다 */
+  views: number | null;
   likes: number;
   /** 게시물 썸네일 URL (실 연동 시 공식 API 값) — 없으면 유형 아이콘 폴백 */
   thumbnailUrl?: string | null;
@@ -46,6 +47,11 @@ export interface ChannelTrend {
   followers: number[]; // 일별 누적 팔로워
   views: number[]; // 일별 조회수
   engagement: number[]; // 일별 참여율(%)
+  /**
+   * 조회가 **실패한** 시계열 — 비어 있는 시계열(«추이 없음»)과 가르기 위해 둔다.
+   * 여기 든 지표는 빈 배열이어도 «아직 없어요»가 아니라 「불러오지 못했어요」로 그린다. 목데이터엔 없다.
+   */
+  failed?: ("followers" | "views")[];
 }
 
 export type PostType = "reels" | "feed" | "story" | "video" | "carousel" | "text";
@@ -56,7 +62,11 @@ export interface Post {
   type: PostType;
   caption: string;
   publishedAt: string; // ISO
-  views: number;
+  /**
+   * 조회수. 게시물 인사이트 조회가 **실패했으면 null** 이다 — 예전엔 `?? 0` 으로 눌러 «조회 0회»를
+   * 확언했다(홈 최근 게시물 표·리포트 CSV). 화면은 «—» 로 그린다(2026-09-10).
+   */
+  views: number | null;
   likes: number;
   comments: number;
   shares: number;

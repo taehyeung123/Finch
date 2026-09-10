@@ -24,7 +24,8 @@ export interface ReportPdfInput {
   generatedAt: string;
   summaryRows: [string, string][];
   dailyRows?: { date: string; reach: number; followerNet: number }[];
-  postRows?: { date: string; type: string; caption: string; views: number; likes: number; comments: number }[];
+  /** views null = 게시물 인사이트를 못 가져왔다(«—» 로 찍는다 — 0 이 아니다) */
+  postRows?: { date: string; type: string; caption: string; views: number | null; likes: number; comments: number }[];
 }
 
 function loadFontBytes(filename: string): Buffer {
@@ -108,7 +109,7 @@ export async function renderReportPdf(input: ReportPdfInput): Promise<Uint8Array
       y -= 12;
       page.drawText(p.caption.slice(0, 60), { x: MARGIN, y, size: 9, font });
       y -= 12;
-      page.drawText(`조회 ${p.views}  ·  좋아요 ${p.likes}  ·  댓글 ${p.comments}`, {
+      page.drawText(`조회 ${p.views ?? "—"}  ·  좋아요 ${p.likes}  ·  댓글 ${p.comments}`, {
         x: MARGIN,
         y,
         size: 8,

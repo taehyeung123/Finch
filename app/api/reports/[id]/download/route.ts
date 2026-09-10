@@ -150,7 +150,8 @@ export async function GET(
         ["[최근 게시물]"],
         ["게시일", "유형", "캡션", "조회수", "좋아요", "댓글", "공유"],
         ...dashboard.posts.map(
-          (p) => [p.publishedAt.slice(0, 10), p.type, p.caption, p.views, p.likes, p.comments, p.shares] as (string | number)[],
+          /* 조회수 null = 게시물 인사이트를 못 가져왔다 — 0 을 적으면 광고주에게 «조회 0회»를 확언한다 */
+          (p) => [p.publishedAt.slice(0, 10), p.type, p.caption, p.views ?? "—", p.likes, p.comments, p.shares] as (string | number)[],
         ),
       ),
     );

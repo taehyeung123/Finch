@@ -11,17 +11,32 @@
  * 서버 전용: 액세스 토큰을 클라이언트로 노출하지 않는다.
  */
 
-import { GRAPH_INSTAGRAM_BASE } from "./graph";
+import { GRAPH_INSTAGRAM_BASE, GRAPH_READ_TIMEOUT_MS } from "./graph";
+
+/** Graph 가 돌려준 오류 — 호출부가 «지원 안 되는 지표»(code 100)와 «못 가져옴»을 가를 수 있게 코드를 싣는다 */
+class GraphReadError extends Error {
+  constructor(
+    message: string,
+    readonly code: number | undefined,
+  ) {
+    super(message);
+    this.name = "GraphReadError";
+  }
+}
 
 async function graphGet<T>(path: string, accessToken: string): Promise<T> {
   const sep = path.includes("?") ? "&" : "?";
   const res = await fetch(`${GRAPH_INSTAGRAM_BASE}${path}${sep}access_token=${encodeURIComponent(accessToken)}`, {
     // 인사이트는 자주 안 바뀌므로 짧게 캐시(중복 호출·레이트리밋 완화)
     next: { revalidate: 300 },
+    // 호출마다 새로 만든다 — 모듈 상수로 공유하면 두 번째 호출부터 즉시 끊긴다(graph.ts 주석)
+    signal: AbortSignal.timeout(GRAPH_READ_TIMEOUT_MS),
   });
-  const json = (await res.json().catch(() => ({}))) as T & { error?: { message?: string; code?: number } };
-  if (!res.ok) {
-    throw new Error(`graph_get_failed ${path}: ${json.error?.message ?? `http_${res.status}`}`);
+  /* 본문을 읽다 끊기면(시간 초과가 본문 도중에 오는 경우) 파싱이 실패한다 — 그걸 {} 로 눌러 «성공»으로
+     돌려주면 호출부가 «데이터 없음»으로 읽는다. 성공 응답인데 본문이 없으면 실패로 올린다. */
+  const json = (await res.json().catch(() => null)) as (T & { error?: { message?: string; code?: number } }) | null;
+  if (!res.ok || json === null) {
+    throw new GraphReadError(`graph_get_failed ${path}: ${json?.error?.message ?? `http_${res.status}`}`, json?.error?.code);
   }
   return json;
 }
@@ -151,7 +166,13 @@ export interface DailyPoint {
 /**
  * 일별 시계열 — time_series를 지원하는 지표(follower_count·reach)만.
  * follower_count는 일별 '순증감'(신규-이탈), reach는 일별 도달 수다.
- * 100팔로워 미만 계정은 follower_count가 막혀 빈 배열이 온다 — 호출측은 빈 값 허용.
+ *
+ * **못 가져왔으면 null 이다 — 빈 배열이 아니다.** 예전엔 모든 실패를 [] 로 삼켜서, 레이트리밋·시간 초과가
+ * 홈 추이 카드에 「추이 데이터가 아직 없어요」(= 사실 주장)로 나갔다. 호출마다 10초 상한을 건 뒤로는
+ * 그런 실패가 더 잦아지므로 여기서 가른다(2026-09-10).
+ *  - Graph code 100(잘못된 매개변수) = 이 계정에서 **지원 안 되는 지표**다. 100팔로워 미만 계정의
+ *    follower_count 가 이렇게 막힌다 — 다시 불러도 안 나오니 «없음»([])이 사실이다.
+ *  - 그 밖(시간 초과·네트워크·레이트리밋·토큰 오류·5xx)은 «모름»(null) — 호출측이 실패로 그린다.
  */
 export async function fetchDailySeries(
   igUserId: string,
@@ -159,7 +180,7 @@ export async function fetchDailySeries(
   metric: "follower_count" | "reach",
   sinceUnix: number,
   untilUnix: number,
-): Promise<DailyPoint[]> {
+): Promise<DailyPoint[] | null> {
   try {
     const res = await graphGet<{ data?: { values?: { value?: number; end_time?: string }[] }[] }>(
       `/${igUserId}/insights?metric=${metric}&period=day&metric_type=time_series&since=${sinceUnix}&until=${untilUnix}`,
@@ -169,9 +190,10 @@ export async function fetchDailySeries(
       date: (v.end_time ?? "").slice(0, 10),
       value: v.value ?? 0,
     }));
-  } catch {
-    // 소액 계정 차단·지표 미지원 — 빈 시계열로 폴백
-    return [];
+  } catch (e) {
+    if (e instanceof GraphReadError && e.code === 100) return [];
+    console.error(`[ig-insights] 일별 ${metric} 조회 실패:`, e instanceof Error ? e.message : String(e));
+    return null;
   }
 }
 

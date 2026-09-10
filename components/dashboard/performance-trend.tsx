@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { LineChart } from "@/components/ui/charts";
 import { EmptyState } from "@/components/ui/empty-state";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { LineChart as LineChartIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { ChannelTrend } from "@/lib/types";
@@ -34,7 +35,20 @@ export function PerformanceTrend({
     { key: "engagement", label: "참여율" },
   ];
 
+  /* 못 가져온 시계열(trend.failed)은 «아직 없어요»가 아니다 — 빈 상태 분기 **앞에** 실패를 가른다.
+     예전엔 레이트리밋·시간 초과가 「추이 데이터가 아직 없어요」로 나갔다(2026-09-10). */
+  const failedSet = new Set<Metric>(trend.failed ?? []);
   const allEmpty = metrics.every((m) => (trend[m.key]?.length ?? 0) < 2);
+  if (allEmpty && failedSet.size > 0) {
+    return (
+      <Card>
+        <CardHeader title="성과 추이" description="최근 14일" />
+        <CardBody>
+          <LoadFailed title="추이를 불러오지 못했어요" />
+        </CardBody>
+      </Card>
+    );
+  }
   if (allEmpty) {
     return (
       <Card>
@@ -81,6 +95,19 @@ export function PerformanceTrend({
   /* min-h-[232px] = 수치 블록(48) + 여백(16) + 차트(168).
      지표마다 내용 유무가 달라도 카드 높이가 출렁이지 않게 **두 분기 모두** 같은 높이를 깐다.
      key={metric} + anim-swap: 지표 전환 시 뚝 바뀌지 않고 스르륵 떠오른다 (2026-08-13 지시). */
+  if (!hasSeries && failedSet.has(metric)) {
+    return (
+      <Card>
+        {header}
+        <CardBody>
+          <div key={metric} className="anim-swap flex min-h-[232px] items-center justify-center">
+            <LoadFailed dense title="이 지표를 불러오지 못했어요" />
+          </div>
+        </CardBody>
+      </Card>
+    );
+  }
+
   if (!hasSeries) {
     return (
       <Card>

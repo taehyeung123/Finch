@@ -5,6 +5,24 @@
 
 전제: GitHub `taehyeung123/Finch` 저장소, Supabase 프로젝트(`wdutrxqryvjqbufxwxem`) 생성·마이그레이션 완료.
 
+## 리전 — 함수와 DB 는 둘 다 서울이다 (2026-09-10 확인)
+
+| 무엇 | 리전 | 정본·확인법 |
+|---|---|---|
+| Vercel 함수(페이지 렌더·서버 액션·라우트·크론 14개) | `icn1`(서울) | `vercel.json` 의 `"regions": ["icn1"]` |
+| Supabase 프로젝트(DB·Auth·Storage) | `ap-northeast-2`(서울) | 아래 `nslookup` |
+
+- **Supabase 리전 재확인**: `nslookup -type=AAAA db.wdutrxqryvjqbufxwxem.supabase.co` — IPv6 가 `2406:da12::/36` 안이면
+  AWS ap-northeast-2(서울)다(AWS 공개 ip-ranges 대조). 2026-09-10 값: `2406:da12:5ca:b702:…`.
+- ⚠️ **API 호스트(`wdutrxqryvjqbufxwxem.supabase.co`, `db.` 없는 쪽)로 재지 말 것.** Cloudflare 애니캐스트
+  (`104.18.x`·`172.64.x`)라 어디서 찍어도 리전이 안 보인다. 그걸 보고 «Supabase 가 미국이었다»고 결론 내면
+  없는 이전 작업을 계획하게 된다.
+- ⚠️ **리전을 옮기지 않는다.** 체감 지연의 큰 몫은 리전 배치가 아니라 진입 경로(Cloudflare 프록시가 미국 PoP 로
+  들어오는 것)다. 특히 진입 PoP 가 미국으로 잡힌다고 `vercel.json` 을 `iad1` 로 «맞추면» 서버 렌더마다
+  서울 DB 까지 왕복(≈180ms)이 쿼리 수만큼 붙는다 — 지금보다 확실히 느려진다. `scripts/check-vercel-json.mjs` 는
+  `regions` 값을 검사하지 않아 빌드가 조용히 통과하니 사람이 지켜야 한다.
+  Supabase 리전 이전은 새 프로젝트 + 이관이다(URL·키·OAuth 리다이렉트·웹훅 주소·토큰 암호문·마이그레이션 전부) — 할 이유가 없다.
+
 ## 1. Vercel 프로젝트 생성
 
 1. https://vercel.com → **Continue with GitHub**로 가입/로그인

@@ -138,7 +138,8 @@ export function ChannelProfilePanel({
                 )}
                 <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-scrim py-1 text-[11px] font-semibold text-on-scrim opacity-0 transition-opacity group-hover:opacity-100">
                   <Play className="size-3" aria-hidden />
-                  <span className="tnum">{formatCompact(post.views)}</span>
+                  {/* null = 인사이트를 못 가져왔다 — «0» 으로 확언하지 않는다 */}
+                  <span className="tnum">{post.views === null ? "—" : formatCompact(post.views)}</span>
                 </span>
               </div>
             );
