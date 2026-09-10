@@ -307,7 +307,11 @@ export function PostComposer({
             <Button variant="ghost" onClick={onClose}>
               닫기
             </Button>
-            <ButtonLink href="/settings/channels">연동하러 가기</ButtonLink>
+            {/* 모달(fixed z-50) 안의 화면 이동 — 누르는 즉시 모달을 걷어야 «이동 중» 덮개(<main> 안 z-20)가 보인다.
+                onClick 이 아니라 onNavigate: 새 탭(Ctrl/Cmd·가운데 클릭)에선 안 불려 모달이 남는다. onClose 는 부모의 로컬 상태뿐이다. */}
+            <ButtonLink href="/settings/channels" onNavigate={() => onClose()}>
+              연동하러 가기
+            </ButtonLink>
           </div>
         </div>
       </div>

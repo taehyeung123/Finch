@@ -107,6 +107,10 @@ export function ReferenceDetailModal({
   const Glyph = GLYPH[item.channel];
   const empathy = item.views > 0 ? (((item.likes + (item.comments ?? 0)) / item.views) * 100).toFixed(2) : null;
 
+  /* 모달을 먼저 걷고 이동한다. 모달(스크림 fixed z-50)이 남아 있으면 «이동 중» 덮개(<main> 안 z-20)가 그 뒤에 깔려
+     링이 카드에 정확히 가려지고, RSC 첫 바이트(1~2초)까지 모달이 그대로라 «눌렀는데 아무 일도 없다»였다.
+     ⚠️ 전제: onClose 는 **순수 로컬 상태**여야 한다 — 지금 두 부모(library-client·scrap-client) 모두 setSelectedId(null) 뿐이다.
+     onClose 에 URL 동기화(router.replace/back)·refresh 를 붙이면 아래 navigate 의 push 와 경합한다. */
   function pushToStudio() {
     try {
       localStorage.setItem(
@@ -119,6 +123,7 @@ export function ReferenceDetailModal({
     } catch {
       // localStorage 실패해도 이동은 계속
     }
+    onClose();
     navigate("/studio");
   }
 

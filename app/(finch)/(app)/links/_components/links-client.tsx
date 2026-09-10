@@ -66,11 +66,12 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { trapFocus } from "@/components/ui/trap-focus";
 import { ModalShell } from "@/components/ui/modal-shell";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { DualLineChart } from "@/components/ui/charts";
 import { EmptyState } from "@/components/ui/empty-state";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { InfoTip } from "@/components/ui/info-tip";
 import { Switch } from "@/components/ui/switch";
 import { FinchLoader } from "@/components/ui/finch-loader";
@@ -1009,17 +1010,14 @@ export function LinksClient({
     }
   }
 
+  /* 공용 실패 화면(components/ui/load-failed.tsx — 원래 이 화면에서 뽑아낸 것이다).
+     예전엔 여기만 맨 router.refresh() 라 1~3초 동안 버튼이 아무 티를 안 냈고, 연타는 새로고침을 줄 세웠다.
+     LoadFailed 는 useTransition 으로 「다시 시도하는 중…」+잠금을 준다. 테두리가 실선인 것도 의도다(점선 = «아직 없음»). */
   if (loadFailed) {
     return (
-      <EmptyState
-        icon={AlertTriangle}
+      <LoadFailed
         title="프로필 링크를 불러오지 못했어요"
         description="서버와 잠시 연결이 끊겼어요. 페이지는 그대로 있으니 다시 시도해 주세요."
-        action={
-          <Button variant="secondary" onClick={() => router.refresh()}>
-            다시 시도
-          </Button>
-        }
       />
     );
   }
@@ -3264,7 +3262,6 @@ function SnsKindPicker({ value, onPick }: { value: string; onPick: (k: string) =
 }
 
 function UpgradeModal({ onClose }: { onClose: () => void }) {
-  const router = useRouter();
   return (
     <ModalShell label="유료 플랜 안내" title="유료 플랜에서 쓸 수 있어요" onClose={onClose} busy={false} size="sm">
       <div className="space-y-3">
@@ -3276,9 +3273,15 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
           <Button variant="ghost" size="sm" onClick={onClose}>
             닫기
           </Button>
-          <Button size="sm" onClick={() => router.push("/pricing")}>
+          {/* 누르는 즉시 모달을 걷어 «이동 중» 덮개를 드러낸다(Next 문서 preserving-ui-state 의 onNavigate 처방).
+              모달을 남기면 덮개가 안 보인다 — 스크림은 fixed z-50(modal-shell), 덮개는 <main>(relative·z-index auto)
+              안 z-20 이라 스크림 뒤에 깔리고, 링 자리는 모달 카드가 정확히 가린다. 예전 router.push 는 RSC 첫 바이트까지
+              1.5초 동안 모달이 그대로라 «눌렀는데 아무 일도 없다»였다.
+              onNavigate 는 새 탭(Ctrl/Cmd·가운데 클릭)에선 안 불린다 — 그땐 모달이 남는 게 맞다.
+              prefetch="intent": 기본값이면 모달이 열릴 때마다 마케팅 화면을 뷰포트 프리페치한다. */}
+          <ButtonLink href="/pricing" size="sm" prefetch="intent" onNavigate={() => onClose()}>
             요금제 보기
-          </Button>
+          </ButtonLink>
         </div>
       </div>
     </ModalShell>
@@ -3556,7 +3559,14 @@ function ShareBox({
           <Share2 className="size-3.5" aria-hidden />
           {shared ? "복사됨" : "공유하기"}
         </button>
-        <button type="button" onClick={() => setQr(true)} disabled={busy} className={btn}>
+        <button
+          type="button"
+          onClick={() => setQr(true)}
+          onPointerEnter={preloadQr}
+          onFocus={preloadQr}
+          disabled={busy}
+          className={btn}
+        >
           <QrCode className="size-3.5" aria-hidden />
           QR 코드
         </button>
@@ -3602,26 +3612,44 @@ function ConfirmDialog({
   );
 }
 
+/* QR 캔버스 한 변(px). 캔버스의 width/height 속성과 qrcode 의 width 옵션이 이 값 하나를 쓴다 —
+   따로 적으면 한쪽만 바뀌어 그리는 순간 크기가 다시 튄다. className 의 size-[220px] 도 이 값과 같아야 한다
+   (qrcode 가 인라인 style 로 같은 220px 를 넣는다). */
+const QR_SIZE = 220;
+
+/* QR 버튼에 마우스·포커스가 오면 qrcode 청크를 미리 받는다 — 모달을 연 뒤에야 받으면 첫 열기에 빈 판이 선다.
+   catch 필수: 오프라인·청크 404 에서 호버마다 unhandledrejection 이 오류 추적으로 올라가 한도를 태운다.
+   실패해도 모달의 import 는 다시 시도한다(런타임이 실패한 항목을 캐시에서 지운다). */
+function preloadQr() {
+  void import("qrcode").catch(() => {});
+}
+
 function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [failed, setFailed] = useState(false);
+  /* loading → ready | failed. setState 는 **프라미스 콜백 안에서만** 부른다(효과 본문의 동기 setState 는
+     set-state-in-effect 린트). url 이 바뀌는 경우는 모달이 닫혀 언마운트될 때뿐이라 되돌릴 일이 없다.
+     예전엔 failed 하나라 로딩 중에도 「PNG 저장」이 눌려 빈 투명 PNG 가 저장됐다. */
+  const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
 
   useEffect(() => {
     let alive = true;
     import("qrcode")
       .then((QR) => {
-        if (alive && canvasRef.current) {
-          /* 카메라가 읽어야 하므로 테마와 무관하게 **항상 검정-흰색**이다 —
-             다크 토큰을 따르면 대비가 뒤집혀 스캔이 안 된다(의도된 hex 예외) */
-          return QR.toCanvas(canvasRef.current, url, {
-            width: 220,
-            margin: 1,
-            color: { dark: "#111111", light: "#ffffff" },
-          });
-        }
+        const c = canvasRef.current;
+        /* 캔버스는 항상 마운트돼 있다 — 그리지 못하고 건너뛴 경우엔 ready 로 두지 않는다(빈 PNG 저장이 다시 열린다) */
+        if (!alive || !c) return;
+        /* 카메라가 읽어야 하므로 테마와 무관하게 **항상 검정-흰색**이다 —
+           다크 토큰을 따르면 대비가 뒤집혀 스캔이 안 된다(의도된 hex 예외) */
+        return QR.toCanvas(c, url, {
+          width: QR_SIZE,
+          margin: 1,
+          color: { dark: "#111111", light: "#ffffff" },
+        }).then(() => {
+          if (alive) setState("ready");
+        });
       })
       .catch(() => {
-        if (alive) setFailed(true);
+        if (alive) setState("failed");
       });
     return () => {
       alive = false;
@@ -3630,7 +3658,7 @@ function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
 
   function download() {
     const c = canvasRef.current;
-    if (!c) return;
+    if (!c || state !== "ready") return;
     /* data: URL 은 일부 사파리가 다운로드 대신 새 탭으로 연다 — Blob 경로가 안전하다 */
     c.toBlob((blob) => {
       if (!blob) return;
@@ -3654,7 +3682,7 @@ function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
       onClose={onClose}
       footer={
         <div className="flex justify-center gap-2">
-          <Button size="sm" onClick={download} disabled={failed}>
+          <Button size="sm" onClick={download} disabled={state !== "ready"}>
             PNG 저장
           </Button>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -3664,11 +3692,33 @@ function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
       }
     >
       <div className="text-center">
-        {/* 카메라가 읽어야 하므로 QR 판은 테마와 무관하게 항상 흰색이다(의도된 예외) */}
-        <div className="mx-auto w-fit rounded-card bg-white p-2.5">
-          <canvas ref={canvasRef} aria-label={`${url} QR 코드`} />
+        {/* 카메라가 읽어야 하므로 그려진 QR 판은 테마와 무관하게 항상 흰색이다(의도된 예외).
+            그리기 전에는 토큰 면(bg-plate)이다 — 흰 모달 위 흰 판은 테두리조차 안 보여 «빈 자리»로 읽혔고,
+            다크에선 흰 사각형만 떴다. 캔버스는 처음부터 220×220 자리를 잡는다 — 속성이 없으면 그리기 전 기본값
+            300×150 이라 그리는 순간 판이 가로 −80·세로 +70px 튀었다. 캔버스는 항상 마운트해 둔다
+            (조건부로 빼면 canvasRef 가 null 이라 영영 안 그려진다). */}
+        <div
+          className={cn(
+            "relative mx-auto w-fit rounded-card p-2.5",
+            state === "ready" ? "bg-white" : "bg-plate",
+          )}
+        >
+          <canvas
+            ref={canvasRef}
+            width={QR_SIZE}
+            height={QR_SIZE}
+            className="block size-[220px]"
+            aria-label={`${url} QR 코드`}
+          />
+          {/* busy-veil-in: 200ms 동안 투명 — 청크가 이미 있으면(두 번째 열기·호버 예열) 로더가 번쩍이지 않는다.
+              문구는 판(bg-plate, 토큰) 위라 두 테마 모두 읽힌다 */}
+          {state === "loading" ? (
+            <div className="busy-veil-in absolute inset-0 grid place-items-center">
+              <FinchLoader label="QR 코드를 만드는 중…" />
+            </div>
+          ) : null}
         </div>
-        {failed ? (
+        {state === "failed" ? (
           <p role="alert" className="mt-2 text-[12px] text-negative-strong">
             QR 을 만들지 못했어요. 잠시 후 다시 열어 주세요.
           </p>
@@ -6159,7 +6209,14 @@ function MarketingPanel({
           </Button>
           {/* disabled={busy} — QR 은 컴포넌트 로컬 state 라 최상위 베일 제외 목록이 알 수 없다.
               busy 중에 열리면 z-[60] 베일이 z-50 모달을 덮어 로더가 둘이 된다(소넷 확정) */}
-          <Button variant="secondary" size="sm" disabled={busy} onClick={() => setQr(true)}>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={busy}
+            onClick={() => setQr(true)}
+            onPointerEnter={preloadQr}
+            onFocus={preloadQr}
+          >
             <QrCode className="size-3.5" aria-hidden />
             QR 코드
           </Button>

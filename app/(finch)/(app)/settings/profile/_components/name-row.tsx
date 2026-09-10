@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -18,6 +18,9 @@ export function NameRow({ displayName, failed, demo }: { displayName: string; fa
   const [editing, setEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const inputId = useId();
+  /* 훅은 아래 early return 보다 위 — failed 가 바뀌어도 key(page.tsx 의 displayName)가 "" 로 같으면 같은 인스턴스라
+     훅 수가 달라지면 React 가 깨진다 */
+  const [retrying, startRetry] = useTransition();
 
   if (failed) {
     return (
@@ -26,8 +29,17 @@ export function NameRow({ displayName, failed, demo }: { displayName: string; fa
         value={<span className="text-warning-strong">이름을 불러오지 못했어요</span>}
         hint="잠시 못 읽은 것이라 변경을 막아 두었어요"
         action={
-          <Button variant="ghost" size="sm" onClick={() => router.refresh()}>
-            다시 시도
+          /* 맨 router.refresh() 는 서버 트리를 통째로 다시 받는 1~3초 동안 아무 티가 없었다(연타는 새로고침을 줄 세웠다).
+             LoadFailed 와 같은 문법 — 잠그고 「다시 시도하는 중…」. secondary 인 이유: ghost(fg-sub)에 disabled
+             opacity-40 이 겹치면 대비가 약 1.8:1 이라 바뀐 글자가 안 보인다(같은 자리 「변경」도 secondary 다). */
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={retrying}
+            aria-busy={retrying}
+            onClick={() => startRetry(() => router.refresh())}
+          >
+            {retrying ? "다시 시도하는 중…" : "다시 시도"}
           </Button>
         }
       />

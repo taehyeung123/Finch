@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { Download, FileSpreadsheet, FileText, Plus, X } from "lucide-react";
+import { Download, FileSpreadsheet, FileText, LoaderCircle, Plus, X } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge, ChannelBadge } from "@/components/ui/badge";
@@ -31,6 +31,43 @@ const FORMAT_LABEL: Record<ReportItem["format"], string> = {
 const inputClass =
   "h-10 w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg focus:outline-2 focus:outline-primary focus:outline-offset-2";
 
+/*
+  리포트 내려받기 — 맨 <a href> 가 아니라 fetch 로 받는다.
+  ① 실패 응답(401·404·400)은 Content-Disposition 없는 text/plain 이라, 맨 링크면 브라우저가 **그 텍스트 문서로 이동**했다 —
+     앱이 사라지고 흰 화면에 「not_found」 같은 내부 문자열이 떴다. 인스타 미연동 계정은 매번 이 길(400)이었다.
+  ② 성공해도 3~5초(클릭 시점 라이브 수집 + PDF 생성) 동안 아무 티가 없었다. 끝을 아는 유일한 방법은 fetch 의 완료다
+     (타이머·focus 복귀는 추측이라 거짓말을 하거나 영영 안 온다).
+  전역 «이동 중» 덮개는 쓰지 않는다 — 주소가 안 바뀌어 15초 안전판까지 목록이 통째로 덮인다.
+*/
+const DOWNLOAD_TIMEOUT_MS = 60_000;
+const DOWNLOAD_FALLBACK_ERROR = "리포트를 내려받지 못했어요. 잠시 뒤 다시 시도해 주세요.";
+
+/* 응답 본문을 그대로 보여 주지 않는다 — 401 「unauthorized」·404 「not_found」는 내부 문자열이다.
+   400 만 라우트가 고객용 한국어 문장을 준다(「인스타그램 계정을 먼저 연동해 주세요.」) — 한글이 있을 때만 쓴다. */
+async function downloadErrorMessage(res: Response): Promise<string> {
+  if (res.status === 401) return "로그인이 풀렸어요. 다시 로그인해 주세요.";
+  if (res.status === 404) return "이 리포트를 찾을 수 없어요.";
+  if (res.status === 400) {
+    const text = (await res.text().catch(() => "")).trim();
+    if (/[가-힣]/.test(text) && text.length <= 200) return text;
+  }
+  return DOWNLOAD_FALLBACK_ERROR;
+}
+
+/* 파일명은 라우트가 정한다(Content-Disposition — finch-report-YYYY-MM-DD.pdf|csv). 없으면 같은 모양으로 만든다
+   — 표시용 이름이라 보안 폴백과 무관하다. 안 넣으면 blob 이름(UUID)으로 저장된다. */
+function downloadFilename(header: string | null, r: ReportItem): string {
+  const m = header?.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+  if (m?.[1]) {
+    try {
+      return decodeURIComponent(m[1]);
+    } catch {
+      return m[1];
+    }
+  }
+  return `finch-report-${r.createdAt.slice(0, 10)}.${r.format === "pdf" ? "pdf" : "csv"}`;
+}
+
 function addDays(base: Date, days: number): Date {
   const d = new Date(base);
   d.setDate(d.getDate() + days);
@@ -53,6 +90,62 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const idRef = useRef(0);
+  /* 행별 잠금 — 인덱스가 아니라 r.id 로 잡는다(새 리포트가 목록 앞에 붙으면 인덱스가 밀린다).
+     ref 는 같은 프레임 2연타까지 막는 동기 가드, state 는 그리기용이다. */
+  const inflightRef = useRef<Set<string>>(new Set());
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [downloadErrors, setDownloadErrors] = useState<Readonly<Record<string, string>>>({});
+
+  function setRowError(id: string, message: string | null) {
+    setDownloadErrors((prev) => {
+      if (message === null) {
+        if (!(id in prev)) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      }
+      return { ...prev, [id]: message };
+    });
+  }
+
+  function setRowBusy(id: string, busy: boolean) {
+    if (busy) inflightRef.current.add(id);
+    else inflightRef.current.delete(id);
+    setBusyIds(new Set(inflightRef.current));
+  }
+
+  async function download(r: ReportItem) {
+    if (inflightRef.current.has(r.id)) return;
+    setRowBusy(r.id, true);
+    setRowError(r.id, null);
+    try {
+      /* same-origin 이라 쿠키가 기본으로 실린다. 멈춘 요청에 버튼이 영영 잠기지 않게 60초 상한 */
+      const res = await fetch(`/api/reports/${r.id}/download`, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
+      if (!res.ok) {
+        setRowError(r.id, await downloadErrorMessage(res));
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = downloadFilename(res.headers.get("content-disposition"), r);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      /* 즉시 해제하면 일부 브라우저가 받기 전에 취소한다 — QR·CSV 저장과 같은 10초 지연 */
+      window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (e) {
+      setRowError(
+        r.id,
+        e instanceof DOMException && e.name === "TimeoutError"
+          ? "파일을 만드는 데 너무 오래 걸리고 있어요. 잠시 뒤 다시 시도해 주세요."
+          : "리포트를 내려받지 못했어요. 연결을 확인하고 다시 시도해 주세요.",
+      );
+    } finally {
+      setRowBusy(r.id, false);
+    }
+  }
 
   function toggleChannel(ch: Channel) {
     setChannels((prev) => (prev.includes(ch) ? prev.filter((c) => c !== ch) : [...prev, ch]));
@@ -303,12 +396,37 @@ export function ReportsClient({ initial }: { initial: ReportItem[] }) {
                       다운로드
                     </Button>
                   ) : (
-                    <a href={`/api/reports/${r.id}/download`} className={buttonClasses("secondary", "sm")}>
-                      <Download className="size-3.5" aria-hidden />
+                    /* href 는 남긴다 — 새 탭·주소 복사·「다른 이름으로 저장」은 브라우저 몫. 수식키·보조 버튼이면 손대지 않는다.
+                       글자는 「다운로드」 고정(390px 에서 트레일링 폭이 빠듯하다 — 위 주석) — 아이콘만 회전, 설명은 행 아래 한 줄 */
+                    <a
+                      href={`/api/reports/${r.id}/download`}
+                      onClick={(e) => {
+                        if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                        e.preventDefault();
+                        void download(r);
+                      }}
+                      aria-busy={busyIds.has(r.id) || undefined}
+                      aria-disabled={busyIds.has(r.id) || undefined}
+                      className={buttonClasses("secondary", "sm", busyIds.has(r.id) ? "pointer-events-none" : undefined)}
+                    >
+                      {busyIds.has(r.id) ? (
+                        <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
+                      ) : (
+                        <Download className="size-3.5" aria-hidden />
+                      )}
                       다운로드
                     </a>
                   )}
                   </div>
+                  {busyIds.has(r.id) ? (
+                    <p role="status" className="col-span-full text-right text-[12px] text-fg-sub">
+                      파일을 만들고 있어요
+                    </p>
+                  ) : downloadErrors[r.id] ? (
+                    <p role="alert" className="col-span-full break-keep text-right text-[14px] text-negative">
+                      {downloadErrors[r.id]}
+                    </p>
+                  ) : null}
                 </div>
               ))}
             </div>
