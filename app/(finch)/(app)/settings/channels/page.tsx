@@ -531,7 +531,7 @@ export default async function ChannelsSettingsPage({
                   <>
                     {/* 해제는 OAuth 자격증명과 무관하다(저장된 행 삭제) — 게이트 안에 두면 키 회수 후 영영 못 지운다 */}
                     {ready && startHref ? (
-                      <ConnectLink href={startHref} variant="secondary">
+                      <ConnectLink href={startHref} variant="secondary" label={CHANNEL_LABEL[card.channel]}>
                         다시 연결
                       </ConnectLink>
                     ) : null}
@@ -547,7 +547,7 @@ export default async function ChannelsSettingsPage({
                     />
                   </>
                 ) : d.action === "connect" && startHref ? (
-                  <ConnectLink href={startHref} variant="primary">
+                  <ConnectLink href={startHref} variant="primary" label={CHANNEL_LABEL[card.channel]}>
                     연결하기
                   </ConnectLink>
                 ) : null
@@ -587,7 +587,7 @@ export default async function ChannelsSettingsPage({
             adsCard?.connected && adsCard.connectionId ? (
               <>
                 {metaAdsReady ? (
-                  <ConnectLink href={META_ADS_START_PATH} variant="secondary">
+                  <ConnectLink href={META_ADS_START_PATH} variant="secondary" label="Meta 광고">
                     다시 연결
                   </ConnectLink>
                 ) : null}
@@ -603,7 +603,7 @@ export default async function ChannelsSettingsPage({
                 />
               </>
             ) : adsRow.action === "connect" ? (
-              <ConnectLink href={META_ADS_START_PATH} variant="primary">
+              <ConnectLink href={META_ADS_START_PATH} variant="primary" label="Meta 광고">
                 연결하기
               </ConnectLink>
             ) : null

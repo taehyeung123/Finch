@@ -34,3 +34,12 @@ export function eulReul(word: string): string {
 export function iGa(word: string): string {
   return `${word}${hasJongseong(word) ? "이" : "가"}`;
 }
+
+/** 으로/로 — 받침이 없거나 ㄹ 받침이면 «로»(「스레드로」·「메일로」), 그 밖의 받침은 «으로»(「인스타그램으로」) */
+export function euroRo(word: string): string {
+  const last = word.trim().slice(-1);
+  const code = last.charCodeAt(0);
+  const hangul = code >= 0xac00 && code <= 0xd7a3;
+  const jong = hangul ? (code - 0xac00) % 28 : 0;
+  return `${word}${jong === 0 || jong === 8 ? "로" : "으로"}`;
+}
