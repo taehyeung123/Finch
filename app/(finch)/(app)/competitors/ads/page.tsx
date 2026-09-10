@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import Link from "next/link";
+import { AppLink as Link } from "@/components/ui/app-link";
 import { AlertTriangle, BellRing, Image as ImageIcon, Images, Info, Video } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";

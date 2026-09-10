@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { createPortal } from "react-dom";
+import { usePathname, useRouter } from "next/navigation";
 import { Bell, LogOut, Search, Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { isDemoMode } from "@/lib/supabase/config";
-import { createClient } from "@/lib/supabase/client";
+import { AppLink } from "@/components/ui/app-link";
+import { FinchLoader } from "@/components/ui/finch-loader";
+import { ModalShell } from "@/components/ui/modal-shell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { FinchMark } from "@/components/logo";
 import { cn } from "@/lib/cn";
 import { useChannel } from "./channel-context";
+import { useNavPending } from "./nav-pending";
 import { ChannelIndicator, ChannelSwitcher, getChannelScope } from "./channel-switcher";
 import { NAV_FOOTER_ITEMS, NAV_GROUPS, NAV_HOME } from "./sidebar";
 import { SETTINGS_TITLES } from "@/lib/settings/sections";
@@ -45,34 +47,44 @@ const menuItem =
   "flex w-full items-center gap-2 rounded-card px-2.5 py-2 text-left text-[15px] text-fg-sub trans-state hover:bg-tint-hover hover:text-fg";
 
 /** 상단바 — 채널 스위처 / 전역 검색 / 알림 벨 / 계정 드롭다운 (PART 6.2) */
-export function Topbar({ unread = 0 }: { unread?: number }) {
+export function Topbar({
+  email = null,
+  unreadBadge = null,
+}: {
+  /** 로그인 사용자 이메일 — 레이아웃(서버)이 내려준다. 데모 모드·미로그인은 null */
+  email?: string | null;
+  /**
+   * 벨의 미읽음 배지 — 레이아웃이 <Suspense> 로 감싼 서버 컴포넌트(topbar-unread.tsx)를 넣어 준다.
+   * 예전엔 레이아웃이 알림 100건을 다 세고 나서야 화면을 내려보냈고(모든 이동이 그걸 기다렸다),
+   * 그 전엔 상단바가 정적 목데이터를 세어 실제 모드에서 벨이 영원히 0 이었다. /notifications 와 같은 조회를 쓴다.
+   */
+  unreadBadge?: React.ReactNode;
+}) {
   const { channel, setChannel } = useChannel();
   const pathname = usePathname();
+  const router = useRouter();
+  const { navigate } = useNavPending();
   const scope = getChannelScope(pathname);
-  /*
-    ⚠️ 미읽음 수는 **서버가 센 값을 받는다.** 예전엔 여기서 정적 모듈 상수(@/lib/data 의 notifications)를
-    세고 있었는데, /notifications 화면은 DB 를 실조회한다(lib/data/internal.ts) — 두 화면이 **다른 소스**를
-    봤다. 그래서 실제 모드에서는 알림이 아무리 쌓여도 벨이 영원히 0 이었고, 데모에서는 「모두 읽음」을
-    눌러 목록이 다 회색이 된 뒤에도 벨이 «2» 를 달고 있었다(실측). 레이아웃이 같은 조회로 세어 내려준다.
-  */
 
-  const [email, setEmail] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // 로그인 사용자 조회 — 데모 모드면 호출하지 않는다. Supabase 다운 시에도 조용히 무시.
+  /* 레퍼런스 검색 — 예전엔 핸들러가 하나도 없는 장식 입력칸이라 Enter 가 조용히 무시됐다(2026-09-10 감사).
+     탐색 화면의 검색으로 보낸다. 포커스가 오면 그 화면을 미리 당긴다(칠 동안 준비된다). */
+  const [query, setQuery] = useState("");
+  function submitSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const q = query.trim();
+    navigate(q ? `/library?q=${encodeURIComponent(q)}` : "/library");
+  }
+
+  /* 로그아웃은 밖으로 나가는 전체 이동이다(POST → 303 → 랜딩). 응답까지 아무 표시가 없으면 두 번 눌린다 —
+     누르는 즉시 모달(ModalShell busy)을 세운다(CLAUDE.md 2026-09-10 규칙). 뒤로가기(bfcache)로 돌아오면 원복. */
+  const [leaving, setLeaving] = useState(false);
   useEffect(() => {
-    if (isDemoMode()) return;
-    let active = true;
-    createClient()
-      .auth.getUser()
-      .then(({ data }) => {
-        if (active) setEmail(data.user?.email ?? null);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
+    const reset = () => setLeaving(false);
+    window.addEventListener("pageshow", reset);
+    return () => window.removeEventListener("pageshow", reset);
   }, []);
 
   // 외부 클릭·Escape로 드롭다운 닫기
@@ -104,9 +116,9 @@ export function Topbar({ unread = 0 }: { unread?: number }) {
     <header className={cn("sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-line bg-body/90 px-3 backdrop-blur md:gap-3 md:px-6", menuOpen && "z-50")}>
       {/* 브랜드 마크 — 모바일에는 사이드바가 없어 **화면 어디에도 로고가 없었다**
           (2026-08-29 사장님 지적). 데스크톱은 사이드바가 로고를 지므로 여기선 감춘다. */}
-      <Link href="/dashboard" aria-label="핀치 홈" className="-my-1 flex shrink-0 items-center py-1 md:hidden">
+      <AppLink href="/dashboard" aria-label="핀치 홈" className="-my-1 flex shrink-0 items-center py-1 md:hidden">
         <FinchMark className="size-6 text-primary" aria-hidden />
-      </Link>
+      </AppLink>
 
       {/* 페이지 성격별 채널 영역 — 스위처(필터 동작) / 전용 표시 / 숨김 (channel-switcher.tsx) */}
       {scope.mode === "switch" ? (
@@ -118,32 +130,34 @@ export function Topbar({ unread = 0 }: { unread?: number }) {
       )}
 
       <div className="ml-auto hidden items-center gap-2 sm:flex">
-        <label className="relative">
+        <form role="search" onSubmit={submitSearch} className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-faint" aria-hidden />
           <input
             type="search"
-            placeholder="계정·콘텐츠 검색"
+            name="q"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => router.prefetch("/library")}
+            placeholder="레퍼런스 검색"
+            aria-label="레퍼런스 검색"
             className="h-8 w-48 rounded-card border border-line bg-body pl-9 pr-3 text-[14px] placeholder:text-fg-faint focus:border-primary focus:outline-none lg:w-56"
           />
-        </label>
+        </form>
       </div>
 
       {/* 검색이 숨는 모바일에서는 토글이 오른쪽 정렬을 맡는다 */}
       <ThemeToggle className="ml-auto shrink-0 sm:ml-0" />
 
-      <Link
+      <AppLink
         href="/notifications"
-        aria-label={`알림 ${unread}건`}
+        prefetch="intent"
+        aria-label="알림"
         className="relative shrink-0 rounded-card p-2 text-fg-sub hover:bg-tint-hover hover:text-fg"
       >
         <Bell className="size-[18px]" aria-hidden />
-        {/* 알림이 사이드바에서 빠져 이 벨이 유일한 상시 진입점 — 점 대신 미읽음 개수를 노출한다 */}
-        {unread > 0 ? (
-          <span className="absolute right-0.5 top-0.5 min-w-4 rounded-chip bg-primary px-1 text-[11px] font-bold leading-4 text-on-primary tnum">
-            {unread > 99 ? "99+" : unread}
-          </span>
-        ) : null}
-      </Link>
+        {/* 알림이 사이드바에서 빠져 이 벨이 유일한 상시 진입점 — 점 대신 미읽음 개수를 노출한다(topbar-unread.tsx) */}
+        {unreadBadge}
+      </AppLink>
 
       <div ref={menuRef} className="relative shrink-0">
         <button
@@ -168,12 +182,12 @@ export function Topbar({ unread = 0 }: { unread?: number }) {
                   {email}
                 </p>
                 <div className="mx-2.5 my-1 h-px bg-line" aria-hidden />
-                <Link href="/settings" role="menuitem" className={menuItem} onClick={() => setMenuOpen(false)}>
+                <AppLink href="/settings" role="menuitem" className={menuItem} onClick={() => setMenuOpen(false)}>
                   <Settings className="size-4" aria-hidden />
                   설정
-                </Link>
-                <form action="/auth/signout" method="post">
-                  <button type="submit" role="menuitem" className={menuItem}>
+                </AppLink>
+                <form action="/auth/signout" method="post" onSubmit={() => setLeaving(true)}>
+                  <button type="submit" role="menuitem" className={menuItem} disabled={leaving} aria-busy={leaving}>
                     <LogOut className="size-4" aria-hidden />
                     로그아웃
                   </button>
@@ -186,14 +200,27 @@ export function Topbar({ unread = 0 }: { unread?: number }) {
                   <Badge>예시 화면</Badge>
                 </div>
                 <div className="mx-2.5 my-1 h-px bg-line" aria-hidden />
-                <Link href="/login" role="menuitem" className={menuItem} onClick={() => setMenuOpen(false)}>
+                <AppLink href="/login" role="menuitem" className={menuItem} onClick={() => setMenuOpen(false)}>
                   로그인
-                </Link>
+                </AppLink>
               </>
             )}
           </div>
         ) : null}
       </div>
+
+      {/* 포털 — 상단바는 sticky+z 로 자기 쌓임 맥락을 만들어, 안에서 띄운 fixed 스크림이 FAB(z-40) 아래로 깔린다 */}
+      {leaving
+        ? createPortal(
+            <ModalShell label="로그아웃 중" size="sm" busy onClose={() => {}}>
+              <div className="flex flex-col items-center gap-4 py-4 text-center">
+                <FinchLoader />
+                <p className="break-keep text-[17px] font-semibold leading-snug">로그아웃하고 있어요</p>
+              </div>
+            </ModalShell>,
+            document.body,
+          )
+        : null}
     </header>
   );
 }

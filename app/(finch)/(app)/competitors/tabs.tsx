@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { AppLink as Link } from "@/components/ui/app-link";
 import { cn } from "@/lib/cn";
 
 /** 경쟁사 분석 하위 탭 — 계정 분석·비교(/competitors)와 광고 모니터링(/competitors/ads) 공용 */

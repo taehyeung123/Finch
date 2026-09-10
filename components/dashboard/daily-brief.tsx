@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AppLink as Link } from "@/components/ui/app-link";
+import { useNavPending } from "@/components/layout/nav-pending";
 import {
   ArrowRight,
   CalendarClock,
@@ -122,6 +123,8 @@ const SEARCH_TARGETS = [
 /** ② 중앙 대형 검색바 — 세그먼트 + 필 형태 + 포커스 글로우 */
 export function HomeSearch({ stats }: { stats: PoolHomeStats }) {
   const router = useRouter();
+  /* «이동 중» 덮개와 함께 옮긴다 — 맨 router.push 는 탐색 화면의 조회 7개가 끝날 때까지 1~3초 아무 반응이 없었다 */
+  const { navigate } = useNavPending();
   const [q, setQ] = useState("");
   const [target, setTarget] = useState<(typeof SEARCH_TARGETS)[number]["value"]>("all");
 
@@ -130,7 +133,7 @@ export function HomeSearch({ stats }: { stats: PoolHomeStats }) {
     if (v) params.set("q", v);
     if (target !== "all") params.set("target", target);
     const qs = params.toString();
-    router.push(qs ? `/library?${qs}` : "/library");
+    navigate(qs ? `/library?${qs}` : "/library");
   }
 
   function submit(e: React.FormEvent) {
@@ -171,6 +174,8 @@ export function HomeSearch({ stats }: { stats: PoolHomeStats }) {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
+          /* 홈에서 탐색으로 가는 길이 가장 잦다 — 커서가 들어오면 그 화면을 미리 당긴다 */
+          onFocus={() => router.prefetch("/library")}
           placeholder="생각나는 레퍼런스를 문장으로 검색해 보세요"
           aria-label="레퍼런스 검색"
           className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-fg-faint"

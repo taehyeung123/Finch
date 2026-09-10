@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { AppLink as Link } from "@/components/ui/app-link";
 import { ArrowRight, Link2 } from "lucide-react";
 import { useChannel } from "@/components/layout/channel-context";
 import { PageHeader } from "@/components/ui/section-header";

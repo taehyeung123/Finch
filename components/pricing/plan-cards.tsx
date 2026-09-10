@@ -1,5 +1,5 @@
 import { Check, Coins } from "lucide-react";
-import Link from "next/link";
+import { AppLink as Link } from "@/components/ui/app-link";
 import { cn } from "@/lib/cn";
 import { CREDIT_COSTS, PLAN_CREDIT_ALLOWANCE, creditsBuy } from "@/lib/pricing/credit-config";
 import { PLAN_PRICES } from "@/lib/toss/config";

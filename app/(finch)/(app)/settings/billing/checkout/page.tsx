@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { AppLink as Link } from "@/components/ui/app-link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card } from "@/components/ui/card";

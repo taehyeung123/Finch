@@ -1,5 +1,6 @@
 "use client";
 
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { EmptyState } from "./empty-state";
@@ -27,6 +28,8 @@ export function LoadFailed({
   dense?: boolean;
 }) {
   const router = useRouter();
+  /* refresh 는 서버 트리를 통째로 다시 받는다(레이아웃의 인증·동의 확인 포함) — 1~2초 동안 버튼이 «눌린 티»를 내야 한다 */
+  const [pending, startTransition] = useTransition();
   return (
     <EmptyState
       icon={AlertTriangle}
@@ -36,8 +39,14 @@ export function LoadFailed({
       /* 실선 — 점선 상자는 «아직 없음»의 모양이라 실패에 쓰면 뜻이 뒤집힌다 */
       className="border-solid"
       action={
-        <Button variant="secondary" size={dense ? "sm" : "md"} onClick={() => router.refresh()}>
-          다시 시도
+        <Button
+          variant="secondary"
+          size={dense ? "sm" : "md"}
+          disabled={pending}
+          aria-busy={pending}
+          onClick={() => startTransition(() => router.refresh())}
+        >
+          {pending ? "다시 시도하는 중…" : "다시 시도"}
         </Button>
       }
     />

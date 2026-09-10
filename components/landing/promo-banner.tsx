@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import Link from "next/link";
+import { AppLink as Link } from "@/components/ui/app-link";
 import { ArrowRight, X } from "lucide-react";
 
 const STORAGE_KEY = "finch-promo-dismissed";

@@ -52,7 +52,14 @@
   `ResultBanner`(띠)는 결제·프로필처럼 «화면 안에서 저장한 결과»에만 남는다. 채널·로그인 계정 화면을 거기 도로 붙이지 말 것.
   결과 모달은 **모달 껍데기를 새로 짜지 말고** `ModalShell` 위에 얹는다(이미 손으로 짠 복제본이 둘 있다).
   **밖으로 나가는 이동(OAuth 인가 화면 등)도 마찬가지다** — 버튼 글자를 「이동 중…」으로 바꾸는 식은 작아서 아무도 못 본다
-  (2026-09-10 지시). 누르는 즉시 「○○으로 이동하고 있어요」 모달(`settings/channels/_components/connect-link.tsx`)을 세운다.
+  (2026-09-10 지시). 누르는 즉시 「○○으로 이동하고 있어요」 모달(`components/ui/connect-link.tsx`)을 세운다.
+- **클릭은 그 자리에서 반응해야 한다 — 서버 응답을 기다려서 보여주는 피드백은 피드백이 아니다** (2026-09-10 지시
+  «클릭하면 바로 반응 오게, 준비 안 됐으면 로딩창»). 앱 안 화면 이동은 `next/link` 대신 `components/ui/app-link.tsx` 의
+  `AppLink`(`ButtonLink` 도 이걸 쓴다)로 — 누르는 즉시 `<main>` 위에 로딩 화면이 덮이고(`components/layout/nav-pending.tsx`),
+  새 화면이 오면 걷힌다. 버튼에서 `router.push` 를 부를 땐 `useNavPending().navigate()` 로. 항상 보이는 메뉴는
+  `prefetch="intent"`(호버·터치 시작 때 프리페치), 아예 끄는 `prefetch={false}` 는 쓰지 않는다 — 운영 실측에서
+  클릭 뒤 첫 바이트까지 0.6~1.1초 동안 아무 반응이 없던 원인이다. `(app)/layout.tsx` 는 인증·동의 확인 밖의
+  조회를 **await 하지 않는다**(레이아웃이 끝나기 전엔 `loading.tsx` 도 못 뜬다 — 알림 배지처럼 `Suspense` 로 뒤따르게).
 - 브랜드 컬러 시그널 코랄(`bg-primary`) 위 텍스트는 **항상 다크**(`text-on-primary`) — 흰색 금지(WCAG 대비 미달)
 - 상승=초록(`positive`), 하락=빨강(`negative`) — 주식 관행(빨강=상승) 금지
 - 숫자 지표에는 `.tnum`(tabular-nums) 클래스 적용

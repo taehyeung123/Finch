@@ -4,7 +4,8 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { X } from "lucide-react";
 import { trapFocus } from "@/components/ui/trap-focus";
 import { AppIconTile } from "@/components/icons/brand";
-import { Button, buttonClasses } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { ConnectLink } from "@/components/ui/connect-link";
 import { CHANNEL_LABEL } from "@/lib/channels";
 import type { Channel } from "@/lib/types";
 
@@ -135,10 +136,11 @@ export function ConnectChannelsModal({ openChannels }: { openChannels: Channel[]
                   <AppIconTile app={channel} size={34} />
                   <span className="text-[15px] font-semibold">{CHANNEL_LABEL[channel]}</span>
                 </div>
-                {/* API 라우트다 — 서버가 OAuth 로 302 를 쏜다. next/link 는 리다이렉트를 삼킨다. */}
-                <a href={startHref} className={buttonClasses("secondary", "sm")}>
+                {/* API 라우트다 — 서버가 OAuth 로 302 를 쏜다. next/link 는 리다이렉트를 삼킨다.
+                    설정 화면과 같은 ConnectLink — 누르는 즉시 「○○으로 이동하고 있어요」 모달(맨 <a> 는 1~3초 무반응이었다). */}
+                <ConnectLink href={startHref} variant="secondary" label={CHANNEL_LABEL[channel]}>
                   연동하기
-                </a>
+                </ConnectLink>
               </div>
               <p className="mt-2 text-[12px] leading-relaxed text-fg-sub">{note}</p>
             </div>

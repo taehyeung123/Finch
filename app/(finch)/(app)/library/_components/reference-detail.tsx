@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useNavPending } from "@/components/layout/nav-pending";
 import { Bookmark, Captions, Download, ExternalLink, Eye, Heart, Loader2, MessageCircle, Share2, Sparkles, Trash2, X } from "lucide-react";
 import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 import type { Channel, ReferenceItem } from "@/lib/types";
@@ -80,7 +80,8 @@ export function ReferenceDetailModal({
   onClose: () => void;
   onDeleted: () => void;
 }) {
-  const router = useRouter();
+  /* 화면 이동은 «이동 중» 덮개와 함께(components/layout/nav-pending.tsx) */
+  const { navigate } = useNavPending();
   const [note, setNote] = useState(item.note ?? "");
   const [noteMsg, setNoteMsg] = useState<string | null>(null);
   const [noteSaving, setNoteSaving] = useState(false);
@@ -118,7 +119,7 @@ export function ReferenceDetailModal({
     } catch {
       // localStorage 실패해도 이동은 계속
     }
-    router.push("/studio");
+    navigate("/studio");
   }
 
   async function handleSaveNote() {

@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Bell, CalendarClock, LayoutDashboard, Search, Sparkles, MoreHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { AppLink, LinkStatusIcon } from "@/components/ui/app-link";
 import { NAV_FOOTER_ITEMS, NAV_GROUPS, isNavActive, type NavItem } from "./sidebar";
 
 /** 모바일: 사이드바 대신 하단 탭바 — 핵심 4개 + 더보기 (PART 6.2 반응형 기준) */
@@ -49,8 +49,10 @@ export function MobileTabbar() {
     const active = isActive(href);
     return (
       <li key={href}>
-        <Link
+        {/* 시트 항목은 열었을 때만 보인다 — 터치가 시작되는 순간부터 프리페치(intent) */}
+        <AppLink
           href={href}
+          prefetch="intent"
           aria-current={active ? "page" : undefined}
           onClick={() => setSheetOpen(false)}
           className={cn(
@@ -58,9 +60,9 @@ export function MobileTabbar() {
             active ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-tint-hover hover:text-fg",
           )}
         >
-          <Icon className="size-[18px] shrink-0" aria-hidden />
+          <LinkStatusIcon icon={Icon} className="size-[18px] shrink-0" />
           {label}
-        </Link>
+        </AppLink>
       </li>
     );
   }
@@ -114,7 +116,8 @@ export function MobileTabbar() {
         {TABS.map(({ href, label, icon: Icon }) => {
           const active = isActive(href);
           return (
-            <Link
+            /* 탭 4개는 기본 프리페치(뷰포트) — 항상 보이는 데다 개수가 적고, 모바일 회선에선 미리 받아 둔 만큼 그대로 빨라진다 */
+            <AppLink
               key={href}
               href={href}
               aria-current={active ? "page" : undefined}
@@ -122,12 +125,12 @@ export function MobileTabbar() {
               className={cn(
                 "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium",
                 /* 1차 내비 라벨은 fg-faint(4.0:1) 금지 — AA 미달이고, 탭바는 앱에서 가장 자주 읽는 글자다 */
-            active ? "text-primary-ink" : "text-fg-sub",
+                active ? "text-primary-ink" : "text-fg-sub",
               )}
             >
-              <Icon className="size-5" aria-hidden />
+              <LinkStatusIcon icon={Icon} className="size-5" />
               {label}
-            </Link>
+            </AppLink>
           );
         })}
 

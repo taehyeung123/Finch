@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { AppLink as Link } from "@/components/ui/app-link";
 import { CalendarClock, ImageIcon, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { Card, CardBody } from "@/components/ui/card";

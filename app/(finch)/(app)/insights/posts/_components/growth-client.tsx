@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useNavPending } from "@/components/layout/nav-pending";
 import {
   Rocket,
   Sparkles,
@@ -25,7 +25,8 @@ import { diagnoseAccount, type DiagnosisResult } from "../actions";
 
 /** 성장 진단 UI — 실측 성과 표(즉시) + AI 진단(버튼 호출) + 아이디어→스튜디오 핸드오프 */
 export function GrowthClient({ performance }: { performance: GrowthPerformance | null }) {
-  const router = useRouter();
+  /* 화면 이동은 «이동 중» 덮개와 함께 — 맨 router.push 는 스튜디오 청크를 받는 동안 아무 반응이 없었다 */
+  const { navigate } = useNavPending();
   const [diag, setDiag] = useState<DiagnosisResult | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -65,7 +66,7 @@ export function GrowthClient({ performance }: { performance: GrowthPerformance |
     } catch {
       /* noop */
     }
-    router.push("/studio");
+    navigate("/studio");
   }
 
   const REPURPOSE_NOTE =

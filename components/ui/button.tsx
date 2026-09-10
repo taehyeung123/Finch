@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { AppLink } from "@/components/ui/app-link";
 import { cn } from "@/lib/cn";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
@@ -42,12 +42,13 @@ export function Button({ variant = "primary", size = "md", className, ...props }
   return <button className={cn(base, variants[variant], sizes[size], className)} {...props} />;
 }
 
-interface ButtonLinkProps extends React.ComponentProps<typeof Link> {
+interface ButtonLinkProps extends React.ComponentProps<typeof AppLink> {
   variant?: Variant;
   size?: Size;
   className?: string;
 }
 
+/** 버튼 모양의 화면 이동 링크 — AppLink 라 누르는 즉시 «이동 중» 화면이 덮인다(components/layout/nav-pending.tsx) */
 export function ButtonLink({ variant = "primary", size = "md", className, ...props }: ButtonLinkProps) {
-  return <Link className={cn(base, variants[variant], sizes[size], className)} {...props} />;
+  return <AppLink className={cn(base, variants[variant], sizes[size], className)} {...props} />;
 }

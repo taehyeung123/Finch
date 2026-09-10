@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { AppLink as Link } from "@/components/ui/app-link";
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Send, X } from "lucide-react";
 import { cn } from "@/lib/cn";

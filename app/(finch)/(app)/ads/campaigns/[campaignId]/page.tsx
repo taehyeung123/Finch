@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { AppLink as Link } from "@/components/ui/app-link";
 import { notFound, redirect } from "next/navigation";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Layers, Megaphone, Plus, ShieldAlert } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { AppLink as Link } from "@/components/ui/app-link";
 import { ChevronLeft } from "lucide-react";
 import { PageHeader } from "@/components/ui/section-header";
 import { cn } from "@/lib/cn";

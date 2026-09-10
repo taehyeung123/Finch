@@ -1,5 +1,6 @@
 "use client";
 
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 
@@ -10,16 +11,19 @@ import { cn } from "@/lib/cn";
 */
 export function RetryLink({ children = "새로고침", className }: { children?: React.ReactNode; className?: string }) {
   const router = useRouter();
+  const [pending, startTransition] = useTransition();
   return (
     <button
       type="button"
-      onClick={() => router.refresh()}
+      disabled={pending}
+      aria-busy={pending}
+      onClick={() => startTransition(() => router.refresh())}
       className={cn(
         "relative cursor-pointer rounded-card font-semibold underline underline-offset-2 after:absolute after:-inset-2 after:content-[''] focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2",
         className,
       )}
     >
-      {children}
+      {pending ? "새로고침 중…" : children}
     </button>
   );
 }

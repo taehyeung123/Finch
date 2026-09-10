@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { AppLink as Link } from "@/components/ui/app-link";
 
 /*
   모바일 하단 고정 CTA (2026-08-29 사장님 지시 — 벤치마크 대조).

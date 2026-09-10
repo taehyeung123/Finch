@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { AvatarImage } from "@/components/ui/avatar-image";
 import { AppIconTile, type BrandApp } from "@/components/icons/brand";
 import { ConfirmSubmit } from "@/components/ui/confirm-submit";
-import { ConnectLink } from "./_components/connect-link";
+import { ConnectLink } from "@/components/ui/connect-link";
 import { InfoTip } from "@/components/ui/info-tip";
 import { LoadFailed } from "@/components/ui/load-failed";
 import type { NoticeTone } from "@/components/ui/notice-bar";

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { AppLink as Link } from "@/components/ui/app-link";
 
 import { useState } from "react";
 import { CalendarClock, X } from "lucide-react";

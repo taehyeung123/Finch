@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { AppLink as Link } from "@/components/ui/app-link";
 import { ScrollText, ShieldCheck } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { RetryLink } from "@/components/ui/retry-link";

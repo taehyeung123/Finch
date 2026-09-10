@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { ChannelProvider } from "@/components/layout/channel-context";
+import { MainStage, NavPendingProvider } from "@/components/layout/nav-pending";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
+import { TopbarUnread } from "@/components/layout/topbar-unread";
 import { AgentPanel } from "@/components/layout/agent-panel";
 import { MobileTabbar } from "@/components/layout/mobile-tabbar";
 import { OpeningNotice } from "@/components/layout/opening-notice";
@@ -10,7 +13,6 @@ import { isDemoMode } from "@/lib/supabase/config";
 import { getAuthUser } from "@/lib/supabase/server";
 import { getConsentStatus } from "@/lib/legal/consent";
 import { IS_SAMPLE_DATA } from "@/lib/data";
-import { getNotifications } from "@/lib/data/internal";
 
 /* 로그인 후 영역 전체 — 검색 노출 금지 (PART 13.1) */
 export const metadata: Metadata = {
@@ -18,6 +20,9 @@ export const metadata: Metadata = {
 };
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  /* 상단바 계정 메뉴의 이메일 — 서버가 이미 아는 값이라 내려준다. 예전엔 상단바가 브라우저에서
+     supabase 클라이언트(gz 62KB)를 따로 띄워 getUser() 를 다시 불렀다(2026-09-10 감사) — 이메일 머리글자 하나 때문에. */
+  let email: string | null = null;
   // 인증 가드 — 판단은 반드시 getUser() (getSession() 금지).
   // 데모 모드(키 미설정 또는 NEXT_PUBLIC_DEMO_MODE)면 가드 없이 통과.
   // Supabase가 일시정지/한도초과로 죽어 getUser()가 예외를 던지면, 로그인으로 내몰지 않고
@@ -27,6 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       // getAuthUser는 요청당 1회 메모이즈 — 이 가드가 왕복을 내고 페이지 조회 함수들은 재사용
       const user = await getAuthUser();
       if (!user) redirect("/login");
+      email = user.email ?? null;
       /* 가입 필수 동의 게이트 — OAuth 는 가입=로그인이라 가입 «전»에 받을 자리가 없다.
          첫 로그인 후 동의(만 14세·약관·개인정보) 기록이 없으면 서비스를 쓰기 전에 받는다(0079).
          unknown(0079 미적용·조회 실패)은 통과 — «모름»으로 사람을 가두지 않는다(위 fail-open 과 같은 원칙).
@@ -49,36 +55,44 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     }
   }
 
-  /* 상단바 벨의 미읽음 수 — /notifications 화면과 **같은 조회**를 쓴다.
-     예전엔 상단바가 정적 목데이터를 세고 있어서 실제 모드에서는 영원히 0 이었고,
-     데모에서는 다 읽은 뒤에도 숫자가 그대로였다. null 은 조회 실패라 배지를 띄우지 않는다
-     (없는 것과 모르는 것을 구분한다 — lib/data/internal.ts 규칙). */
-  const notis = await getNotifications();
-  const unread = notis ? notis.filter((n) => !n.read).length : 0;
-
+  /* 여기서 더 기다리지 않는다. 레이아웃이 await 하는 모든 것은 **모든 화면 이동**이 기다린다 —
+     Next 는 레이아웃이 끝나기 전엔 loading.tsx 폴백도 못 내보낸다(문서 layout.md «Interaction with loading.js»).
+     그래서 알림 100건 조회는 상단바 배지(TopbarUnread)로 떼어 Suspense 뒤에서 뒤따라오게 했다(2026-09-10). */
   return (
     <ChannelProvider>
-      <div className="flex min-h-screen w-full">
-        <Sidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar unread={unread} />
-          {IS_SAMPLE_DATA ? (
-            /* 좌측 정렬 — text-center 라 1632px 띠 한가운데 한 줄이 떠 있었고,
-               그게 모든 페이지 최상단에서 매번 반복됐다. */
-            <p className="border-b border-line bg-plate px-4 py-1.5 text-[12px] text-fg-sub md:px-6">
-              지금 보이는 수치는 <span className="font-semibold text-warning">예시 데이터</span>입니다 —
-              채널 연동이 완료되면 실제 데이터로 교체됩니다
-            </p>
-          ) : null}
-          {/* 우하단 AI 에이전트 FAB(52px, z-40)이 페이지 마지막 줄 위에 겹쳐, 1440×950 에서
-              /settings 의 「문의하기」 링크가 통째로 가려졌다 — 눌렀더니 에이전트 패널이 열렸다(실측).
-              데스크톱에서도 FAB 높이만큼 바닥을 비운다(모바일 pb-24 는 하단 탭바 몫이라 그대로). */}
-          <main className="flex-1 px-4 py-5 pb-24 md:px-6 md:pb-24">{children}</main>
+      <NavPendingProvider>
+        <div className="flex min-h-screen w-full">
+          <Sidebar />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <Topbar
+              email={email}
+              unreadBadge={
+                <Suspense fallback={null}>
+                  <TopbarUnread />
+                </Suspense>
+              }
+            />
+            {IS_SAMPLE_DATA ? (
+              /* 좌측 정렬 — text-center 라 1632px 띠 한가운데 한 줄이 떠 있었고,
+                 그게 모든 페이지 최상단에서 매번 반복됐다. */
+              <p className="border-b border-line bg-plate px-4 py-1.5 text-[12px] text-fg-sub md:px-6">
+                지금 보이는 수치는 <span className="font-semibold text-warning">예시 데이터</span>입니다 —
+                채널 연동이 완료되면 실제 데이터로 교체됩니다
+              </p>
+            ) : null}
+            {/* 우하단 AI 에이전트 FAB(52px, z-40)이 페이지 마지막 줄 위에 겹쳐, 1440×950 에서
+                /settings 의 「문의하기」 링크가 통째로 가려졌다 — 눌렀더니 에이전트 패널이 열렸다(실측).
+                데스크톱에서도 FAB 높이만큼 바닥을 비운다(모바일 pb-24 는 하단 탭바 몫이라 그대로).
+                relative — 이동 중 덮개(MainStage)가 이 넓이에 맞춰 깔린다. */}
+            <main className="relative flex-1 px-4 py-5 pb-24 md:px-6 md:pb-24">
+              <MainStage>{children}</MainStage>
+            </main>
+          </div>
         </div>
-      </div>
-      <AgentPanel />
-      <MobileTabbar />
-      <OpeningNotice />
+        <AgentPanel />
+        <MobileTabbar />
+        <OpeningNotice />
+      </NavPendingProvider>
     </ChannelProvider>
   );
 }

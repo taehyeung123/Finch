@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import {
@@ -26,6 +25,7 @@ import {
 import { cn } from "@/lib/cn";
 import { FinchMark } from "@/components/logo";
 import { ButtonLink } from "@/components/ui/button";
+import { AppLink, LinkStatusIcon } from "@/components/ui/app-link";
 
 export type NavItem = { href: string; label: string; icon: LucideIcon };
 
@@ -184,13 +184,14 @@ export function Sidebar() {
     const active = isActive(href);
     return (
       <li key={href}>
-        <Link
+        <AppLink
           href={href}
-          /* prefetch={false} — 사이드바는 앱 화면마다 항상 뜨고 항목이 14개라, 기본 프리페치(뷰포트
+          /* prefetch="intent" — 사이드바는 앱 화면마다 항상 뜨고 항목이 14개라, 기본 프리페치(뷰포트
              진입 시 자동)면 로그인 직후 첫 페인트마다 그 14개가 동시에 RSC 를 당겨온다(요금 방어
-             기획서 «사이드바 프리페치 다이어트»). 클릭 시엔 그대로 이동하고, 지금처럼 눈에 항상
-             보이는 메뉴라 호버 프리페치가 없어도 체감 지연이 크지 않다. */
-          prefetch={false}
+             기획서 «사이드바 프리페치 다이어트»). 그렇다고 아예 끄면(2026-09-10 까지 그랬다) 클릭 뒤에야
+             요청이 나가 첫 바이트까지 0.6~1.1초 동안 아무 반응이 없었다(실측). 마우스가 올라오거나
+             터치가 시작되는 순간부터 프리페치한다 — 갈 것 같은 링크만 미리 당긴다. */
+          prefetch="intent"
           aria-current={active ? "page" : undefined}
           title={collapsed ? (groupLabel ? `${groupLabel} · ${label}` : label) : undefined}
           className={cn(
@@ -198,7 +199,8 @@ export function Sidebar() {
             active ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-tint-hover hover:text-fg",
           )}
         >
-          <Icon className="size-4 shrink-0" aria-hidden />
+          {/* 누른 항목의 아이콘이 도는 원으로 바뀐다 — 본문 덮개와 함께 «눌렸다»를 두 군데서 말한다 */}
+          <LinkStatusIcon icon={Icon} className="size-4 shrink-0" />
           <span
             className={cn(
               "overflow-hidden whitespace-nowrap transition-all duration-300",
@@ -208,7 +210,7 @@ export function Sidebar() {
           >
             {label}
           </span>
-        </Link>
+        </AppLink>
       </li>
     );
   }
@@ -224,7 +226,7 @@ export function Sidebar() {
       {/* 헤더 — 접힘 폭(64px)에선 로고 하나만으로도 여유가 빠듯해 토글 버튼을 여기 두면
           겹친다. 토글은 하단에 고정 위치로 따로 둔다(아래 footer 참고). */}
       <div className="flex h-14 items-center gap-2 border-b border-line pl-4 pr-3">
-        <Link href="/dashboard" aria-label="핀치 홈" className="flex min-w-0 items-center gap-2">
+        <AppLink href="/dashboard" aria-label="핀치 홈" className="flex min-w-0 items-center gap-2">
           <FinchMark className="shrink-0 text-primary" />
           <span
             className={cn(
@@ -235,7 +237,7 @@ export function Sidebar() {
           >
             핀치
           </span>
-        </Link>
+        </AppLink>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="주 메뉴">
