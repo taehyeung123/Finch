@@ -6,8 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Bell, LogOut, Search, Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AppLink } from "@/components/ui/app-link";
-import { FinchLoader } from "@/components/ui/finch-loader";
-import { ModalShell } from "@/components/ui/modal-shell";
+import { LeavingModal } from "@/components/ui/connect-link";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { FinchMark } from "@/components/logo";
 import { cn } from "@/lib/cn";
@@ -79,7 +78,7 @@ export function Topbar({
   }
 
   /* 로그아웃은 밖으로 나가는 전체 이동이다(POST → 303 → 랜딩). 응답까지 아무 표시가 없으면 두 번 눌린다 —
-     누르는 즉시 모달(ModalShell busy)을 세운다(CLAUDE.md 2026-09-10 규칙). 뒤로가기(bfcache)로 돌아오면 원복. */
+     누르는 즉시 모달(LeavingModal — ModalShell busy)을 세운다(CLAUDE.md 2026-09-10 규칙). 뒤로가기(bfcache)로 돌아오면 원복. */
   const [leaving, setLeaving] = useState(false);
   useEffect(() => {
     const reset = () => setLeaving(false);
@@ -212,12 +211,7 @@ export function Topbar({
       {/* 포털 — 상단바는 sticky+z 로 자기 쌓임 맥락을 만들어, 안에서 띄운 fixed 스크림이 FAB(z-40) 아래로 깔린다 */}
       {leaving
         ? createPortal(
-            <ModalShell label="로그아웃 중" size="sm" busy onClose={() => {}}>
-              <div className="flex flex-col items-center gap-4 py-4 text-center">
-                <FinchLoader />
-                <p className="break-keep text-[17px] font-semibold leading-snug">로그아웃하고 있어요</p>
-              </div>
-            </ModalShell>,
+            <LeavingModal label="로그아웃 중" title="로그아웃하고 있어요" />,
             document.body,
           )
         : null}

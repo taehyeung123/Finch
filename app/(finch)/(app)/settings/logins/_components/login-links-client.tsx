@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { KeyRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LeavingModal } from "@/components/ui/connect-link";
 import { AvatarImage } from "@/components/ui/avatar-image";
 import { InfoTip } from "@/components/ui/info-tip";
 import { ModalShell } from "@/components/ui/modal-shell";
@@ -12,6 +14,7 @@ import { ResultModal, type ResultModalContent } from "@/components/ui/result-mod
 import { StateChip } from "@/components/ui/state-chip";
 import { ProviderTile } from "@/components/icons/provider-icons";
 import { formatDate } from "@/lib/format";
+import { euroRo } from "@/lib/josa";
 import { createClient } from "@/lib/supabase/client";
 import { PROVIDERS, PROVIDER_LABEL, isProvider, type Provider } from "@/lib/account/providers";
 import { SettingsGroup, SettingsRow } from "../../_components/settings-row";
@@ -56,6 +59,9 @@ function errorSentence(e: { code?: string; message?: string } | null): string {
 export function LoginLinksClient({ identities, demo, linkedParam }: { identities: LoginIdentity[]; demo: boolean; linkedParam: string | null }) {
   const router = useRouter();
   const [busy, setBusy] = useState<Provider | null>(null);
+  /* 연결은 **밖으로 나가는 이동**이다(인가 화면) — 누르는 즉시 「○○로 이동하고 있어요」 모달(CLAUDE.md 2026-09-10 규칙).
+     해제용 busy 와 따로 둔다: busy 로 모달을 걸면 해제 확인 모달 위에 이동 모달이 겹치고, busy 라 닫지도 못한다. */
+  const [leaving, setLeaving] = useState<Provider | null>(null);
   const [confirming, setConfirming] = useState<Provider | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
   /* 연결·해제 결과는 모달로 한 번 세운다(2026-09-09 사장님 지시 — 채널 화면과 같은 규칙).
@@ -67,24 +73,49 @@ export function LoginLinksClient({ identities, demo, linkedParam }: { identities
 
   const linkedCount = identities.length;
 
+  /* 인가 화면에서 뒤로가기(bfcache)로 돌아오면 떠나던 상태가 그대로 살아나 닫을 수 없는 이동 모달에 화면이 갇힌다 —
+     connect-link.tsx·topbar.tsx 와 같은 원복. 복원(persisted)일 때만 푼다: 첫 로드의 pageshow 가 load 뒤에 와서
+     그 사이 시작한 해제의 busy 를 지우면 안 된다. 결과 모달(flash)은 건드리지 않는다. */
+  useEffect(() => {
+    const reset = (e: PageTransitionEvent) => {
+      if (!e.persisted) return;
+      setLeaving(null);
+      setBusy(null);
+    };
+    window.addEventListener("pageshow", reset);
+    return () => window.removeEventListener("pageshow", reset);
+  }, []);
+
   async function link(provider: Provider) {
     if (demo) {
       setFlash({ tone: "warning", title: "지금은 예시 화면이라 계정을 연결할 수 없어요" });
       return;
     }
+    setLeaving(provider);
     setBusy(provider);
     setFlash(null);
     /* 콜백은 로그인과 같은 /auth/callback — code 교환이 곧 연결 완료. next 는 same-origin 앱 경로만 */
     const next = `/settings/logins?linked=${provider}`;
-    const { error } = await createClient().auth.linkIdentity({
-      provider,
-      options: { redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
-    });
-    if (error) {
-      setFlash({ tone: "negative", ...describeError(error) });
+    /* 실패하면 이동 모달을 **먼저** 내리고 결과 모달을 세운다(같은 배치) — busy 스크림이 위에 남으면 확인 버튼이 안 눌린다.
+       finally 로 풀지 않는다: linkIdentity 는 성공해도(인가 화면으로 떠나는 중에) resolve 되므로, 풀면 떠나기 직전
+       모달이 사라지고 버튼이 되살아나 «눌렀는데 아무 일도 없다»가 돌아온다. 성공 경로는 떠나는 중 그대로 둔다. */
+    try {
+      const { error } = await createClient().auth.linkIdentity({
+        provider,
+        options: { redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
+      });
+      if (error) {
+        setLeaving(null);
+        setFlash({ tone: "negative", ...describeError(error) });
+        setBusy(null);
+      }
+    } catch {
+      /* 네트워크 실패는 AuthError 로 위의 error 에 온다 — 여기 오는 건 세션 락 타임아웃·저장소 차단처럼 던지는 경우다.
+         삼키지 않고 실패로 닫는다(없으면 행과 화면이 영영 잠긴다). */
+      setLeaving(null);
+      setFlash({ tone: "negative", ...describeError(null) });
       setBusy(null);
     }
-    /* 성공이면 브라우저가 인가 화면으로 떠난다 — busy 는 그대로 둬 이중 클릭을 막는다 */
   }
 
   async function unlink(provider: Provider) {
@@ -173,11 +204,13 @@ export function LoginLinksClient({ identities, demo, linkedParam }: { identities
               busy={isBusy}
               trailing={
                 demo ? null : !linked ? (
+                  /* 글자는 「연결하기」 그대로 — 「이동 중…」으로 바꾸는 식은 작아서 못 본다(2026-09-10 지시). 반응은 이동 모달이 맡는다.
+                     disabled 는 스크림이 뜨기 전 한 프레임의 이중 클릭을 막는다. */
                   <Button variant="primary" size="sm" onClick={() => link(key)} disabled={isBusy} aria-busy={isBusy}>
-                    {isBusy ? "이동 중…" : "연결하기"}
+                    연결하기
                   </Button>
                 ) : linkedCount >= 2 ? (
-                  <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => setConfirming(key)}>
+                  <Button variant="ghost" size="sm" disabled={busy !== null || leaving !== null} onClick={() => setConfirming(key)}>
                     연결 해제
                   </Button>
                 ) : (
@@ -224,6 +257,19 @@ export function LoginLinksClient({ identities, demo, linkedParam }: { identities
           ) : null}
         </ModalShell>
       ) : null}
+
+      {/* 포털 — 행(SettingsRow)은 busy 면 opacity-60 이라 쌓임 맥락을 만들어, 안에 두면 모달이 반투명해지고 z 가 행에 갇힌다.
+          프래그먼트 최상위도 page-enter 의 nth-child 지연을 탄다. leaving 은 클릭 뒤에만 켜져 SSR 에서 document 를 안 만진다. */}
+      {leaving
+        ? createPortal(
+            <LeavingModal
+              label={`${PROVIDER_LABEL[leaving]} 연결 화면으로 이동 중`}
+              title={`${euroRo(PROVIDER_LABEL[leaving])} 이동하고 있어요`}
+              description={`${PROVIDER_LABEL[leaving]} 로그인·권한 확인 화면이 열려요. 잠시만 기다려 주세요.`}
+            />,
+            document.body,
+          )
+        : null}
     </>
   );
 }
