@@ -84,7 +84,12 @@ export function ConnectChannelsModal({ openChannels }: { openChannels: Channel[]
     const prev = document.activeElement as HTMLElement | null;
     boxRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setClosedThisSession(true);
+      if (e.key !== "Escape") return;
+      /* 안의 ConnectLink 가 「이동하고 있어요」 모달(busy, 닫을 수 없음)을 띄운 동안 Esc 로 이 창이 닫히면
+         그 모달까지 함께 사라져 «아무 일도 없었던» 것처럼 보인다(2026-09-10 소넷 점검). 맨 위 dialog 가 우리가 아니면 무시. */
+      const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+      if (dialogs.length > 1 && dialogs[dialogs.length - 1] !== boxRef.current?.parentElement) return;
+      setClosedThisSession(true);
     };
     document.addEventListener("keydown", onKey);
     return () => {

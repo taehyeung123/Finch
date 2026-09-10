@@ -129,7 +129,8 @@ export function MainStage({ children }: { children: React.ReactNode }) {
       {pending ? (
         <div className="absolute inset-0 z-20 bg-surface">
           {/* 긴 화면에서 스크롤이 내려가 있어도 링은 보이는 화면 한가운데에 — 상단바(3.5rem) 아래 뷰포트 높이만큼 */}
-          <div className="sticky top-14 h-[calc(100dvh-3.5rem)]">
+          {/* overflow-hidden — PageLoading 의 min-h(26rem)가 아주 낮은 화면에선 이 상자보다 커서 밖으로 삐져나온다 */}
+          <div className="sticky top-14 h-[calc(100dvh-3.5rem)] overflow-hidden">
             <PageLoading />
           </div>
         </div>

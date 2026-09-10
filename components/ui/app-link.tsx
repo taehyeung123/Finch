@@ -1,7 +1,8 @@
 "use client";
 
 import Link, { useLinkStatus } from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useRef } from "react";
 import { LoaderCircle, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useNavPending } from "@/components/layout/nav-pending";
@@ -32,24 +33,35 @@ function hrefToString(href: AppLinkProps["href"]): string | null {
 
 export function AppLink({ prefetch, onNavigate, onMouseEnter, onFocus, onTouchStart, href, ...rest }: AppLinkProps) {
   const { begin } = useNavPending();
-  const [intent, setIntent] = useState(false);
+  const router = useRouter();
   const intentMode = prefetch === "intent";
-  const prefetchProp: boolean | null | undefined = intentMode ? (intent ? null : false) : prefetch;
+  /* intent 모드: Link 의 자동 프리페치는 끄고(prefetch={false}) 의도가 보이는 순간 router.prefetch 를 **직접** 부른다.
+     prop 을 false→null 로 바꾸는 방식은 그 이벤트의 재렌더 뒤에야 먹혀 한 틱 늦고 우선순위도 낮다(2026-09-10 소넷 점검).
+     링크당 한 번만 — 라우터 캐시가 만료를 알아서 관리한다. */
+  const prefetched = useRef(false);
+  const prefetchProp: boolean | null | undefined = intentMode ? false : prefetch;
+  const showIntent = () => {
+    if (!intentMode || prefetched.current) return;
+    const target = hrefToString(href);
+    if (!target) return;
+    prefetched.current = true;
+    router.prefetch(target);
+  };
 
   return (
     <Link
       href={href}
       prefetch={prefetchProp}
       onMouseEnter={(e) => {
-        if (intentMode) setIntent(true);
+        showIntent();
         onMouseEnter?.(e);
       }}
       onFocus={(e) => {
-        if (intentMode) setIntent(true);
+        showIntent();
         onFocus?.(e);
       }}
       onTouchStart={(e) => {
-        if (intentMode) setIntent(true);
+        showIntent();
         onTouchStart?.(e);
       }}
       onNavigate={(e) => {
