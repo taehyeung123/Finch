@@ -57,22 +57,15 @@ export interface ChannelRules {
   minMedia: number;
   /** 사진·영상 최대 개수(직접 업로드 기준 — 인스타 10, 스레드 20) */
   maxMedia: number;
-  /**
-   * @deprecated 옛 컴포저(사진을 data URL 로 서버 액션에 싣던 길) 전용. 그 길은 Vercel 요청 본문 4.5MB 에 묶여
-   * 합계 3MB·10장이 실제 상한이었다. UI 조각이 직접 업로드로 옮기면 minMedia/maxMedia 만 남기고 지운다.
-   */
-  minImages: number;
-  /** @deprecated minImages 와 같다 */
-  maxImages: number;
   /** 본문 입력칸 라벨 — 인스타는 «캡션», 스레드는 그 자체가 «글»이다 */
   textLabel: string;
 }
 
 const RULES: Record<PublishChannel, ChannelRules> = {
-  instagram: { textMax: 2200, requiresText: true, minMedia: 1, maxMedia: 10, minImages: 1, maxImages: 10, textLabel: "캡션" },
+  instagram: { textMax: 2200, requiresText: true, minMedia: 1, maxMedia: 10, textLabel: "캡션" },
   /* 스레드만 본문이 선택이다 — 사진·영상 없이 글만, 글 없이 사진·영상만 둘 다 정상이다.
      대신 «글도 미디어도 없음»은 validatePostText 가 막는다. */
-  threads: { textMax: 500, requiresText: false, minMedia: 0, maxMedia: 20, minImages: 0, maxImages: 10, textLabel: "글" },
+  threads: { textMax: 500, requiresText: false, minMedia: 0, maxMedia: 20, textLabel: "글" },
 };
 
 /** 발행 불가 채널까지 안전하게 다루기 위한 기본값 — 화면이 상한을 못 구해 깨지지 않게 한다 */
@@ -81,8 +74,6 @@ const FALLBACK: ChannelRules = {
   requiresText: true,
   minMedia: 1,
   maxMedia: 10,
-  minImages: 1,
-  maxImages: 10,
   textLabel: "캡션",
 };
 

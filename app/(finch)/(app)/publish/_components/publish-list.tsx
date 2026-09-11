@@ -2,9 +2,26 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, FileText, ImageIcon, Plus, RotateCcw, Send, Trash2, X } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarClock,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  FileText,
+  Film,
+  ImageIcon,
+  Play,
+  Plus,
+  RotateCcw,
+  Send,
+  Trash2,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button, ButtonLink } from "@/components/ui/button";
+import { ChannelBadge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { StatusPill, type PostStatus } from "@/components/ui/status-pill";
@@ -23,6 +40,7 @@ import {
 import { SnsIcon } from "@/components/sns-brand-icons";
 import type { PublishListItem } from "@/lib/types";
 import { iGa } from "@/lib/josa";
+import { channelLabel } from "@/lib/publish-rules";
 import { cancelScheduledPost } from "@/app/(finch)/(app)/studio/actions";
 import { deleteDraft, publishNow, scheduleDraft } from "../actions";
 import { PostComposer, type ComposerChannel } from "./post-composer";
@@ -47,6 +65,32 @@ function captionSnippet(caption: string): string {
 
 /** 목록 한 줄 — 서버(lib/publish/list-item.ts)가 만든다. 썸네일은 서명된 thumb_url 로 온다 */
 export type ScheduledPost = PublishListItem;
+
+/** 보관 기간이 지나 영상 파일을 지운 글 — 다시 예약·지금 발행이 안 된다(서버 actions.ts 와 같은 문구) */
+const PURGED_TEXT = "영상 파일이 보관 기간이 지나 지워졌어요 — 지운 뒤 다시 만들어 주세요.";
+
+/**
+ * 한 줄에서 할 수 있는 조작 — 버튼은 **실제 상태(status)** 로 가른다(보이는 상태 display_status 가 아니라).
+ * · 미리 준비 중인 예약 영상(processing 인데 «예약됨»으로 보임): 취소 + 지금 발행(준비물이 있어 곧바로 올라간다)
+ * · 처리 중: 취소만 — 그것도 발행을 시도하기 전일 때만(can_cancel). 시도한 뒤엔 이미 올라갔을 수 있다
+ * · 파일이 지워진 실패 글: 다시 예약·지금 발행 없이 삭제만
+ */
+function actionsFor(post: ScheduledPost) {
+  const prepared = post.status === "processing" && post.display_status === "scheduled";
+  return {
+    now: !post.media_purged && (post.status === "draft" || post.status === "scheduled" || post.status === "failed" || prepared),
+    cancel: post.can_cancel && (post.status === "scheduled" || post.status === "processing"),
+    reschedule: post.status === "failed" && !post.media_purged,
+    del: post.status === "draft" || post.status === "failed" || post.status === "canceled",
+  };
+}
+
+/** 스토리 링크는 24시간만 산다 — 그 뒤엔 링크를 숨긴다(눌러도 «없는 게시물»이다) */
+function storyStillUp(publishedAt: string | null): boolean {
+  if (!publishedAt) return false;
+  const t = Date.parse(publishedAt);
+  return Number.isFinite(t) && Date.now() - t < 24 * 3600_000;
+}
 
 /**
  * 발행 — 캘린더 + 목록 + 초안.
@@ -158,17 +202,18 @@ export function PublishList({
        그래서 성공·실패와 무관하게 refresh 로 서버 상태를 다시 읽는다. */
     /* 되돌릴 수 없는 조작이다 — 취소된 행을 다시 예약으로 되돌리는 액션이 코드에 없다.
        확인은 호출 전에 ConfirmDialog 가 받는다(confirmAsk). 아래 스냅샷(before)은 **확인 뒤** 찍혀야 실패 복원이 옛 상태로 안 간다. */
-    const before = items.find((p) => p.id === id)?.status ?? "scheduled";
+    const before = items.find((p) => p.id === id);
     setCancelError(null);
-    setItems((prev) => prev.map((p) => (p.id === id ? { ...p, status: "canceled" } : p)));
+    setItems((prev) => prev.map((p) => (p.id === id ? { ...p, status: "canceled", display_status: "canceled", can_cancel: false } : p)));
     startTransition(async () => {
       /* 예전엔 반환값을 받지도 않았다 — 비로그인·DB 오류로 {ok:false} 가 와도 화면은 잠깐
          «취소됨»을 보였다가 refresh 후 조용히 «예약됨»으로 되돌아갔다. 사용자는 자기가
          잘못 눌렀다고 생각한다. 실패는 말해 준다. */
       const res = await cancelScheduledPost(id);
       if (!res?.ok) {
-        setItems((prev) => prev.map((p) => (p.id === id ? { ...p, status: before } : p)));
-        setCancelError("예약을 취소하지 못했어요. 잠시 후 다시 시도해 주세요.");
+        if (before) setItems((prev) => prev.map((p) => (p.id === id ? before : p)));
+        /* 서버가 이유를 준다(«이미 올리는 중이라 취소할 수 없어요» 등) — «잠시 후 다시»는 틀린 안내일 수 있다 */
+        setCancelError(res?.error ?? "예약을 취소하지 못했어요. 잠시 후 다시 시도해 주세요.");
       }
       router.refresh();
     });
@@ -198,15 +243,17 @@ export function PublishList({
           o.state === "published"
             ? { tone: "positive", title: `${o.label}에 올라갔어요`, description: "「발행완료」 탭에서 확인할 수 있어요." }
             : o.state === "processing"
-              ? o.soon
-                ? { tone: "positive", title: "곧 올라가요", description: `준비가 끝났어요. 곧 ${o.label}에 올라가요.` }
+              ? /* 메타가 영상·사진을 처리 중 — 매분 크론이 이어서 올리고 알림을 보낸다. soon = 준비가 끝나 다음 확인에서 올라간다 */
+                o.soon
+                ? { tone: "positive", title: "곧 올라가요", description: `준비가 끝났어요. 곧 ${o.label}에 올라가고, 올라가면 알림으로 알려 드려요.` }
                 : {
                     tone: "positive",
                     title: `${iGa(o.label)} ${o.hasVideo ? "영상을" : "게시물을"} 처리하고 있어요`,
-                    description: "끝나는 대로 자동으로 올라가요. 올라가면 알림으로 알려 드려요.",
+                    description: "끝나는 대로 자동으로 올라가요. 보통 몇 분 걸리고, 올라가면 알림으로 알려 드려요. 「발행예약」 탭에서 상태를 볼 수 있어요.",
                   }
               : o.state === "deferred"
-                ? { tone: "warning", title: "저장했어요 — 곧 자동으로 올라가요", description: o.error }
+                ? /* 이미 있던 글이다 — «저장했어요»가 아니라 «곧 다시 한다» */
+                  { tone: "warning", title: "곧 자동으로 다시 시도해요", description: o.error }
                 : { tone: "negative", title: `${o.label}에 올리지 못했어요`, description: `${o.error} — 다시 시도하거나 지울 수 있어요.` },
         );
         router.refresh();
@@ -226,7 +273,12 @@ export function PublishList({
     setAsk(null);
     if (!a) return;
     const post = items.find((p) => p.id === a.id);
-    if (!post || !ASK_ALLOWED[a.kind].includes(post.status)) {
+    const still =
+      !!post &&
+      ASK_ALLOWED[a.kind].includes(post.status) &&
+      (a.kind !== "cancel" || actionsFor(post).cancel) &&
+      (a.kind !== "now" || actionsFor(post).now);
+    if (!still) {
       /* 그 사이 크론이 발행했거나 다른 조작의 새로고침이 먼저 왔다 — 옛 판단으로 실행하지 않는다 */
       setResult({ tone: "warning", title: "그 사이 글의 상태가 바뀌었어요", description: "목록을 다시 확인하고 눌러 주세요." });
       router.refresh();
@@ -398,16 +450,23 @@ export function PublishList({
       {ask ? (
         <ConfirmDialog
           {...(ask.kind === "cancel"
-            ? {
-                title: "이 예약을 취소할까요?",
-                description: `${askLead}예약을 취소하면 되돌릴 수 없어요.`,
-                confirmLabel: "예약 취소",
-                cancelLabel: "그대로 두기",
-              }
+            ? askPost?.display_status === "processing"
+              ? {
+                  title: "처리 중인 게시물을 취소할까요?",
+                  description: `${askLead}취소하면 올라가지 않고, 되돌릴 수 없어요.`,
+                  confirmLabel: "발행 취소",
+                  cancelLabel: "그대로 두기",
+                }
+              : {
+                  title: "이 예약을 취소할까요?",
+                  description: `${askLead}예약을 취소하면 되돌릴 수 없어요.`,
+                  confirmLabel: "예약 취소",
+                  cancelLabel: "그대로 두기",
+                }
             : ask.kind === "now"
               ? {
                   title: "지금 바로 올릴까요?",
-                  description: `${askLead}올라간 게시물은 여기서 되돌릴 수 없어요.`,
+                  description: `${askLead}올라간 게시물은 여기서 되돌릴 수 없어요.${askPost?.has_video ? " 영상은 처리하는 데 몇 분 걸릴 수 있어요." : ""}`,
                   confirmLabel: "지금 발행",
                   tone: "primary" as const,
                 }
@@ -550,7 +609,7 @@ export function PublishList({
                   [
                     ["bg-positive", "게시됨"],
                     ["bg-primary", "예약됨"],
-                    ["bg-warning", "발행 중"],
+                    ["bg-warning", "발행·처리 중"],
                     ["bg-negative", "실패"],
                     ["bg-fg-faint", "취소됨"],
                   ] as const
@@ -613,46 +672,49 @@ export function PublishList({
                 )
               ) : (
                 <ul className="space-y-3">
-                  {selectedPosts.map((post) => (
-                    <li key={post.id} className="flex gap-2.5">
-                      <Thumb url={post.thumb_url ?? undefined} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[14px] font-medium">
-                          {post.caption.split("\n")[0] || "(캡션 없음)"}
-                        </p>
-                        <div className="mt-1 flex items-center gap-2">
-                          <StatusPill status={post.display_status} />
-                          <span className="tnum text-[12px] text-fg-sub">{kstTimeKey(post.display_at)}</span>
-                          {post.status === "scheduled" || post.status === "failed" ? (
-                            <button
-                              type="button"
-                              onClick={() => setAsk({ kind: "now", id: post.id })}
-                              disabled={nowBusy !== null}
-                              className="trans-state rounded-card p-1 text-fg-faint hover:bg-tint-hover hover:text-fg disabled:opacity-40"
-                              aria-label="지금 발행"
-                              title="지금 발행"
-                            >
-                              <Send className={cn("size-3.5", nowBusy === post.id && "anim-pulse")} />
-                            </button>
-                          ) : null}
-                          {post.status === "scheduled" ? (
-                            <button
-                              type="button"
-                              onClick={() => setAsk({ kind: "cancel", id: post.id })}
-                              disabled={nowBusy !== null}
-                              className="trans-state rounded-card p-1 text-fg-faint hover:bg-tint-hover hover:text-negative disabled:opacity-40"
-                              aria-label="예약 취소"
-                            >
-                              <X className="size-3.5" />
-                            </button>
-                          ) : null}
+                  {selectedPosts.map((post) => {
+                    const act = actionsFor(post);
+                    return (
+                      <li key={post.id} className="flex gap-2.5">
+                        <PostThumb post={post} small />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[14px] font-medium">
+                            {post.caption.split("\n")[0] || "(캡션 없음)"}
+                          </p>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <StatusPill status={post.display_status} />
+                            <ChannelBadge channel={post.channel} />
+                            <span className="tnum text-[12px] text-fg-sub">{kstTimeKey(post.display_at)}</span>
+                            {act.now ? (
+                              <button
+                                type="button"
+                                onClick={() => setAsk({ kind: "now", id: post.id })}
+                                disabled={nowBusy !== null}
+                                className="trans-state relative rounded-card p-1 text-fg-sub after:absolute after:-inset-2 after:content-[''] hover:bg-tint-hover hover:text-fg disabled:opacity-40"
+                                aria-label="지금 발행"
+                                title="지금 발행"
+                              >
+                                <Send className={cn("size-3.5", nowBusy === post.id && "anim-pulse")} />
+                              </button>
+                            ) : null}
+                            {act.cancel ? (
+                              <button
+                                type="button"
+                                onClick={() => setAsk({ kind: "cancel", id: post.id })}
+                                disabled={nowBusy !== null}
+                                className="trans-state relative rounded-card p-1 text-fg-sub after:absolute after:-inset-2 after:content-[''] hover:bg-tint-hover hover:text-negative disabled:opacity-40"
+                                aria-label={post.display_status === "processing" ? "발행 취소" : "예약 취소"}
+                                title={post.display_status === "processing" ? "발행 취소" : "예약 취소"}
+                              >
+                                <X className="size-3.5" />
+                              </button>
+                            ) : null}
+                          </div>
+                          <PostNotes post={post} />
                         </div>
-                        {post.status === "failed" && post.error ? (
-                          <p className="mt-1 text-[12px] text-negative-strong">{post.error}</p>
-                        ) : null}
-                      </div>
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </CardBody>
@@ -667,8 +729,8 @@ export function PublishList({
             }
           />
           <CardBody>
-            {/* 실패 행의 「다시 예약」·「삭제」도 runDraft 를 타므로, 그 오류를 이 탭에서도 보여준다 */}
-            {draftError && view === "scheduled" ? (
+            {/* 실패 행의 「다시 예약」·「삭제」, 취소된 글의 「삭제」도 runDraft 를 타므로, 그 오류를 이 탭들에서도 보여준다 */}
+            {draftError ? (
               <p role="alert" className="mb-3 text-[14px] text-negative-strong">
                 {draftError}
               </p>
@@ -681,74 +743,88 @@ export function PublishList({
               </p>
             ) : (
               <ul className="divide-y divide-line">
-                {(view === "scheduled" ? scheduledItems : doneItems).map((post) => (
-                  <li key={post.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                    <Thumb url={post.thumb_url ?? undefined} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[15px] font-medium">{post.caption.split("\n")[0] || "(캡션 없음)"}</p>
-                      <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-fg-sub">
-                        <CalendarClock className="size-3" aria-hidden />
-                        <span className="tnum">
-                          {kstDayKey(post.display_at)} {kstTimeKey(post.display_at)}
-                        </span>
-                        {post.status === "failed" && post.error ? ` · ${post.error}` : ""}
-                      </p>
-                    </div>
-                    <StatusPill status={post.display_status} />
-                    {post.status === "scheduled" || post.status === "failed" ? (
-                      <Button size="sm" variant="secondary" disabled={nowBusy !== null || draftBusy !== null} onClick={() => setAsk({ kind: "now", id: post.id })}>
-                        <Send className="size-3.5" aria-hidden /> {nowBusy === post.id ? "발행 중…" : "지금 발행"}
-                      </Button>
-                    ) : null}
-                    {post.status === "scheduled" ? (
-                      /* 「지금 발행」이 도는 동안은 막는다 — 서버는 이미 publishing 이라 취소가 0행에 적용되고, 화면만 «취소됨»이 되면서 글은 올라갔다 */
-                      <button
-                        type="button"
-                        onClick={() => setAsk({ kind: "cancel", id: post.id })}
-                        disabled={nowBusy !== null}
-                        className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-negative disabled:opacity-40"
-                        aria-label="예약 취소"
-                        title="예약 취소"
-                      >
-                        <X className="size-4" />
-                      </button>
-                    ) : null}
-                    {/* 발행 실패한 글은 여기 말고 갈 곳이 없다 — 예전엔 버튼이 하나도 없어서
-                        재시도도 삭제도 못 하고 목록에 영구히 남았다(크론도 scheduled 만 집는다).
-                        날짜 입력은 초안 탭과 같은 컨트롤을 쓴다(같은 액션 scheduleDraft 를 탄다). */}
-                    {post.status === "failed" ? (
-                      <div className="flex shrink-0 items-center gap-2">
-                        <input
-                          type="datetime-local"
-                          min={earliestAt}
-                          step={300}
-                          value={draftDate[post.id] ?? ""}
-                          onChange={(e) => setDraftDate((d) => ({ ...d, [post.id]: e.target.value }))}
-                          aria-label="다시 예약할 시각"
-                          className="tnum h-9 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg focus:border-primary focus:outline-none"
-                        />
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={!draftDate[post.id] || draftBusy !== null}
-                          onClick={() => runDraft(post.id, "schedule")}
-                        >
-                          <RotateCcw className="size-3.5" aria-hidden /> 다시 예약
-                        </Button>
-                        <button
-                          type="button"
-                          onClick={() => setAsk({ kind: "delete", id: post.id })}
-                          disabled={draftBusy !== null}
-                          className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-faint hover:bg-tint-hover hover:text-negative disabled:opacity-40"
-                          aria-label="삭제"
-                          title="삭제"
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
+                {(view === "scheduled" ? scheduledItems : doneItems).map((post) => {
+                  const act = actionsFor(post);
+                  const any = act.now || act.cancel || act.reschedule || act.del;
+                  return (
+                    /* 줄바꿈이 되는 한 줄 — 좁은 화면에선 조작이 둘째 줄로 내려간다(예전엔 실패 줄의 날짜 입력·버튼이 가로로 넘쳤다) */
+                    <li key={post.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 first:pt-0 last:pb-0">
+                      <PostThumb post={post} />
+                      <div className="min-w-0 flex-1 basis-40">
+                        <p className="truncate text-[15px] font-medium">{post.caption.split("\n")[0] || "(캡션 없음)"}</p>
+                        <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-fg-sub">
+                          <CalendarClock className="size-3 shrink-0" aria-hidden />
+                          <span className="tnum">
+                            {kstDayKey(post.display_at)} {kstTimeKey(post.display_at)}
+                          </span>
+                        </p>
+                        <PostNotes post={post} />
                       </div>
-                    ) : null}
-                  </li>
-                ))}
+                      <div className="flex shrink-0 items-center gap-2">
+                        <ChannelBadge channel={post.channel} />
+                        <StatusPill status={post.display_status} />
+                      </div>
+                      {any ? (
+                        <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+                          {act.now ? (
+                            <Button size="sm" variant="secondary" disabled={nowBusy !== null || draftBusy !== null} onClick={() => setAsk({ kind: "now", id: post.id })}>
+                              <Send className="size-3.5" aria-hidden /> {nowBusy === post.id ? "발행 중…" : "지금 발행"}
+                            </Button>
+                          ) : null}
+                          {/* 발행 실패한 글은 여기 말고 갈 곳이 없다 — 예전엔 버튼이 하나도 없어서
+                              재시도도 삭제도 못 하고 목록에 영구히 남았다(크론도 scheduled 만 집는다).
+                              날짜 입력은 초안 탭과 같은 컨트롤을 쓴다(같은 액션 scheduleDraft 를 탄다). */}
+                          {act.reschedule ? (
+                            <>
+                              <input
+                                type="datetime-local"
+                                min={earliestAt}
+                                step={300}
+                                value={draftDate[post.id] ?? ""}
+                                onChange={(e) => setDraftDate((d) => ({ ...d, [post.id]: e.target.value }))}
+                                aria-label="다시 예약할 시각"
+                                className="tnum h-9 min-w-0 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg focus:border-primary focus:outline-none"
+                              />
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                disabled={!draftDate[post.id] || draftBusy !== null}
+                                onClick={() => runDraft(post.id, "schedule")}
+                              >
+                                <RotateCcw className="size-3.5" aria-hidden /> 다시 예약
+                              </Button>
+                            </>
+                          ) : null}
+                          {act.cancel ? (
+                            /* 「지금 발행」이 도는 동안은 막는다 — 서버는 이미 publishing 이라 취소가 0행에 적용되고, 화면만 «취소됨»이 되면서 글은 올라갔다 */
+                            <button
+                              type="button"
+                              onClick={() => setAsk({ kind: "cancel", id: post.id })}
+                              disabled={nowBusy !== null}
+                              className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-negative disabled:opacity-40"
+                              aria-label={post.display_status === "processing" ? "발행 취소" : "예약 취소"}
+                              title={post.display_status === "processing" ? "발행 취소" : "예약 취소"}
+                            >
+                              <X className="size-4" />
+                            </button>
+                          ) : null}
+                          {act.del ? (
+                            <button
+                              type="button"
+                              onClick={() => setAsk({ kind: "delete", id: post.id })}
+                              disabled={draftBusy !== null}
+                              className="trans-state relative after:absolute after:-inset-1 after:content-[''] rounded-card p-1.5 text-fg-sub hover:bg-tint-hover hover:text-negative disabled:opacity-40"
+                              aria-label="삭제"
+                              title="삭제"
+                            >
+                              <Trash2 className="size-4" />
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             )}
             {truncated ? <p className="mt-3 text-[12px] text-fg-sub">최근 200건만 표시하고 있어요.</p> : null}
@@ -776,10 +852,11 @@ export function PublishList({
             <ul className={cn("divide-y divide-line", drafts.length === 0 && "hidden")}>
               {drafts.map((post) => (
                 <li key={post.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0">
-                  <Thumb url={post.thumb_url ?? undefined} />
-                  <p className="min-w-0 flex-1 truncate text-[15px] font-medium">
+                  <PostThumb post={post} />
+                  <p className="min-w-0 flex-1 basis-40 truncate text-[15px] font-medium">
                     {post.caption.split("\n")[0] || "(캡션 없음)"}
                   </p>
+                  <ChannelBadge channel={post.channel} />
                   <StatusPill status="draft" />
                   <div className="flex flex-wrap items-center gap-2">
                     <Button size="sm" variant="secondary" disabled={nowBusy !== null || draftBusy !== null} onClick={() => setAsk({ kind: "now", id: post.id })}>
@@ -792,7 +869,7 @@ export function PublishList({
                       value={draftDate[post.id] ?? ""}
                       onChange={(e) => setDraftDate((d) => ({ ...d, [post.id]: e.target.value }))}
                       aria-label="발행 시각"
-                      className="tnum h-9 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg focus:border-primary focus:outline-none"
+                      className="tnum h-9 min-w-0 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg focus:border-primary focus:outline-none"
                     />
                     <Button
                       size="sm"
@@ -838,15 +915,70 @@ export function PublishList({
   );
 }
 
-function Thumb({ url }: { url?: string }) {
+/**
+ * 목록 썸네일 — 첫 항목(사진이면 그 사진, 영상이면 커버). 서버가 서명한 thumb_url 로 온다.
+ * 영상이면 ▶ 칩, 여러 개면 +N 칩. 썸네일이 없으면 종류 아이콘(영상=필름, 사진=그림, 글만=문서).
+ */
+function PostThumb({ post, small = false }: { post: ScheduledPost; small?: boolean }) {
+  const kind = post.has_video ? "영상" : post.media_count > 0 ? "사진" : null;
   return (
-    <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-card border border-line bg-plate">
-      {url ? (
-        // eslint-disable-next-line @next/next/no-img-element -- Supabase Storage 공개 URL, 최적화 프록시 불필요
-        <img src={url} alt="" className="size-full object-cover" />
-      ) : (
-        <ImageIcon className="size-4 text-fg-faint" aria-hidden />
+    <span
+      className={cn(
+        "relative flex shrink-0 items-center justify-center overflow-hidden rounded-card border border-line bg-plate",
+        small ? "size-10" : "size-12",
       )}
+    >
+      {post.thumb_url ? (
+        // eslint-disable-next-line @next/next/no-img-element -- Supabase Storage 서명·공개 URL, 최적화 프록시 불필요
+        <img src={post.thumb_url} alt="" className="size-full object-cover" />
+      ) : post.has_video ? (
+        <Film className="size-4 text-fg-faint" aria-hidden />
+      ) : post.media_count > 0 ? (
+        <ImageIcon className="size-4 text-fg-faint" aria-hidden />
+      ) : (
+        <FileText className="size-4 text-fg-faint" aria-hidden />
+      )}
+      {post.has_video && post.thumb_url ? (
+        <span className="absolute bottom-0.5 left-0.5 flex items-center rounded-chip bg-scrim p-0.5 text-on-scrim" aria-hidden>
+          <Play className="size-2.5 fill-current" />
+        </span>
+      ) : null}
+      {post.media_count > 1 ? (
+        <span className="tnum absolute right-0.5 top-0.5 rounded-chip bg-scrim px-1 text-[11px] font-semibold leading-4 text-on-scrim" aria-hidden>
+          +{post.media_count - 1}
+        </span>
+      ) : null}
+      {kind ? <span className="sr-only">{post.media_count > 1 ? `${kind} 포함 ${post.media_count}개` : kind}</span> : null}
     </span>
+  );
+}
+
+/** 한 줄 아래 붙는 설명 — 처리 중 안내·실패 이유·게시물 링크 */
+function PostNotes({ post }: { post: ScheduledPost }) {
+  const label = channelLabel(post.channel);
+  const story = post.ig_surface === "story";
+  const link = post.status === "published" && post.permalink && (!story || storyStillUp(post.published_at)) ? post.permalink : null;
+  return (
+    <>
+      {post.display_status === "processing" ? (
+        <p className="mt-0.5 text-[12px] text-fg-sub">{iGa(label)} 처리하고 있어요 · 끝나면 자동으로 올라가요</p>
+      ) : null}
+      {post.status === "failed" && (post.media_purged || post.error) ? (
+        <p className="mt-0.5 text-[12px] text-negative-strong">{post.media_purged ? PURGED_TEXT : post.error}</p>
+      ) : null}
+      {link ? (
+        /* 밖으로 나가는 새 탭 링크 — 앱 안 이동이 아니라 AppLink 가 아니다. 주소는 서버가 인스타·스레드 호스트만 남겼다(safePermalink) */
+        <a
+          href={link}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${label}에서 ${story ? "스토리" : "게시물"} 보기(새 창)`}
+          className="relative mt-1 inline-flex items-center gap-1 text-[12px] font-medium text-primary-ink after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-[''] hover:underline"
+        >
+          <ExternalLink className="size-3" aria-hidden />
+          {story ? "스토리 보기" : "게시물 보기"}
+        </a>
+      ) : null}
+    </>
   );
 }

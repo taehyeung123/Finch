@@ -12,8 +12,18 @@
 - 서버 쪽(백엔드) 완료: 규칙(`lib/publish-rules.ts`)·미디어 모델(`lib/publish/media-core.ts`, `media.ts`)·업로드 발급/확인/버리기(`lib/publish/uploads.ts` + `publish/actions.ts`)·
   단계별 어댑터(`lib/meta/instagram-publish.ts`, `threads-publish.ts`)·한국어 오류(`lib/meta/publish-errors.ts`)·상태 기계(`lib/publish/engine-core.ts` 판단 + `run.ts` 실행)·
   크론 3개(`publish-scheduled` 개편·`publish-processing` 매분·`publish-media-sweep` 매일)·CSP `media-src`·파일 수명(발행 7일 뒤 영상 삭제·초안 삭제·계정 삭제·고아 관찰).
-- 남은 것: 컴포저 UI(타일·진행 막대·커버 고르기·영상 검사 `mp4-inspect-core`/`video-inspect`/`image-bake`/`upload-client`), 목록의 처리 중·링크·배지 표시, S0 실측.
-- 검사: `node scripts/test-publish-rules.ts` · `test-publish-engine.ts` · `test-publish-errors.ts` · `test-publish-media.ts [ffmpeg 픽스처 폴더]`.
+- UI 조각 완료(`feat/video-ui`, 2026-09-12): 작성기가 사진·영상을 섞어 고르고(MP4·MOV / JPG·PNG·WEBP), 고르는 즉시 검사하고,
+  브라우저가 직접 올린다 — `publish/_components/use-media-tiles.ts`(타일 상태 기계: 준비→보류→대기→올리는 중→완료/실패, 동시 2개,
+  «다시 올리기», 채널·스토리가 바뀌면 **결과가 달라지는 사진만** 원본에서 다시 굽기, 닫으면 올린 파일 버리기)·`media-tiles.tsx`(격자·◀▶·끌어 옮기기·진행 막대)·
+  `cover-picker.tsx`(ModalShell, 장면 막대 → JPEG 커버, 못 그리는 브라우저는 «초»로). 브라우저 모듈: `lib/publish/mp4-inspect-core.ts`(상자 파서)·
+  `video-inspect.ts`·`image-bake.ts`·`upload-client.ts`(XHR PUT, 60초 멈춤 감시·100% 뒤 응답 대기 3분·네트워크 오류 1회 재시도).
+  **지금 규칙으로 못 올리는 영상(길이·해상도·코덱·프레임·소리)은 올리지 않고 «보류»한다** — 300MB 를 올린 뒤에 거절하지 않게. 규칙이 바뀌어 통과하면 그때 올린다.
+  목록: «처리 중» 상태·안내 줄·범례(«발행·처리 중»), 채널 배지, 영상·여러 장 썸네일 칩, 발행된 글의 «게시물 보기»(스토리는 24시간만),
+  처리 중 취소(발행 시도 전만)·취소된 글 삭제·파일이 지워진 실패 글은 삭제만. 옛 data URL 경로(`createPost.images`)는 지웠다.
+  `next.config.ts` 의 `bodySizeLimit` 은 **남는다** — 프로필 링크 이미지·브랜드 킷 로고·광고 소재가 아직 서버 액션 본문으로 파일을 싣는다.
+- 남은 것: S0 실측, 운영 적용(0093 → Storage 전역 상한 300MB).
+- 검사: `node scripts/test-publish-rules.ts` · `test-publish-engine.ts` · `test-publish-errors.ts` · `test-publish-media.ts [ffmpeg 픽스처 폴더]` ·
+  `test-mp4-inspect.ts [ffmpeg 픽스처 폴더]`(만드는 명령은 파일 머리말) · `test-upload-client.ts`.
 - 두 번 올리지 않기·선점·회수·정리 규칙의 정본은 `lib/publish/engine-core.ts`·`run.ts` 머리말과 0093 머리말이다.
 
 ## 한 줄 요약

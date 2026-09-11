@@ -7,7 +7,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { storagePathsFromPublicUrls } from "@/lib/storage/public-url";
 import { isDemoMode } from "@/lib/supabase/config";
 import { parseKstDateTimeLocal } from "@/lib/calendar";
-import { eulReul } from "@/lib/josa";
 import { publishGate } from "@/lib/publish/gate";
 import { advanceClaimedPost, claimPost, type AdvanceOutcome } from "@/lib/publish/run";
 import { publishDbErrorText } from "@/lib/publish/db-errors";
@@ -17,10 +16,8 @@ import type { FinalizeResult, PublishUploadRequest, PublishUploadTicket } from "
 import {
   IG_STORY_ENABLED,
   PUBLISHABLE_CHANNELS,
-  channelRules,
   channelLabel,
   hasBlockingIssue,
-  isMissingColumnError,
   resolveIgSurface,
   validateMediaSet,
   validatePostText,
@@ -368,13 +365,8 @@ export async function deleteDraft(id: string): Promise<{ ok: boolean; error?: st
 export async function createPost(input: {
   channel: string;
   caption: string;
-  /** 새 경로 — 직접 업로드한 사진·영상 */
+  /** 직접 업로드한 사진·영상(업로드 표의 경로) — 순서 = 게시물 순서. 없으면 글만(스레드) */
   media?: PostMediaInput[];
-  /**
-   * @deprecated 옛 경로 — FileReader data URL(사진만, 합계 3MB). UI 조각이 직접 업로드로 옮기면 지운다
-   * (그때 next.config.ts 의 serverActions.bodySizeLimit 도 함께 지운다 — 이 경로 때문에만 있다).
-   */
-  images?: string[];
   /** 인스타 — 항목이 정확히 1개일 때 스토리로 */
   igStory?: boolean;
   /** 인스타 릴스 — 피드에도 보이기(기본 켬) */
@@ -392,9 +384,6 @@ export async function createPost(input: {
     return { ok: false, error: `${channelLabel(input.channel)} 발행은 준비 중이에요.` };
   }
   const channel = input.channel as PublishChannel;
-  if (!Array.isArray(input.media) && Array.isArray(input.images)) {
-    return createPostLegacyImages({ ...input, channel }, user.id, startedAt);
-  }
 
   const mediaIn = Array.isArray(input.media) ? input.media : [];
   if (mediaIn.length > 20) return { ok: false, error: "사진·영상이 너무 많아요." };
@@ -532,7 +521,7 @@ export async function createPost(input: {
   return runNow(admin, newId, user.id, channel, startedAt);
 }
 
-/** 방금 만든 글을 그 자리에서 내보낸다 — 새 경로·옛 경로 공통 */
+/** 방금 만든 글을 그 자리에서 내보낸다 */
 async function runNow(
   admin: NonNullable<ReturnType<typeof createAdminClient>>,
   id: string,
@@ -562,117 +551,4 @@ async function runNow(
   const out = await advanceClaimedPost(admin, claimed.row, { source: "now", budgetMs });
   revalidatePath("/publish");
   return { ok: true, mode: "now", outcome: toOutcome(out) };
-}
-
-/* ── LEGACY: 옛 컴포저의 data URL 사진 경로 — UI 조각(직접 업로드)이 들어오면 이 함수와 input.images 를 통째로 지운다 ──
-   장당 8MB(2차 방어) — 요청 전체는 next.config.ts 의 bodySizeLimit 이, Vercel 에서는 4.5MB 본문 상한이 먼저 자른다. */
-const LEGACY_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
-
-async function createPostLegacyImages(
-  input: { channel: PublishChannel; caption: string; images?: string[]; mode: "now" | "schedule" | "draft"; when?: string },
-  userId: string,
-  startedAt: number,
-): Promise<CreatePostResult> {
-  const channel = input.channel;
-  const rules = channelRules(channel);
-  const caption = input.caption.trim();
-  const images = Array.isArray(input.images) ? input.images : [];
-  if (rules.requiresText && !caption) return { ok: false, error: `${eulReul(rules.textLabel)} 입력해 주세요.` };
-  if (!caption && images.length === 0) return { ok: false, error: "내용을 입력해 주세요." };
-  if (caption.length > rules.textMax) return { ok: false, error: `${rules.textLabel} ${rules.textMax}자까지 쓸 수 있어요.` };
-  if (images.length < rules.minImages) return { ok: false, error: `이미지를 ${rules.minImages}장 이상 올려 주세요.` };
-  if (images.length > rules.maxImages) return { ok: false, error: `이미지는 ${rules.maxImages}장까지예요.` };
-
-  let scheduledAt: string;
-  if (input.mode === "schedule") {
-    const at = resolveScheduledAt(input.when ?? "");
-    if (!at.ok) return { ok: false, error: at.error };
-    scheduledAt = at.iso;
-  } else {
-    scheduledAt = new Date().toISOString();
-  }
-
-  const supabase = await createClient();
-  if (input.mode !== "draft") {
-    const gate = await publishGate(supabase, userId, channel);
-    if (!gate.ok) return { ok: false, error: gate.error };
-  }
-
-  const urls: string[] = [];
-  const uploaded: string[] = [];
-  const rollbackUploads = async () => {
-    if (uploaded.length === 0) return;
-    const { error: rmErr } = await supabase.storage.from("cardnews").remove(uploaded);
-    if (rmErr) console.error("[publish] 업로드 롤백 실패:", rmErr.message);
-  };
-  for (const dataUrl of images) {
-    const m = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(dataUrl);
-    if (!m) {
-      await rollbackUploads();
-      return { ok: false, error: "PNG·JPG·WEBP 이미지만 올릴 수 있어요." };
-    }
-    const buf = Buffer.from(m[2], "base64");
-    if (buf.byteLength > LEGACY_MAX_IMAGE_BYTES) {
-      await rollbackUploads();
-      return { ok: false, error: "이미지는 장당 8MB 이하만 올릴 수 있어요." };
-    }
-    const ext = m[1].split("/")[1].replace("jpeg", "jpg");
-    const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-    const { error: upErr } = await supabase.storage.from("cardnews").upload(path, buf, { contentType: m[1], upsert: false });
-    if (upErr) {
-      console.error("[publish] 이미지 업로드 실패:", upErr.message);
-      await rollbackUploads();
-      return { ok: false, error: "이미지를 올리지 못했어요. 잠시 후 다시 시도해 주세요." };
-    }
-    uploaded.push(path);
-    urls.push(supabase.storage.from("cardnews").getPublicUrl(path).data.publicUrl);
-  }
-
-  const inserted = await supabase
-    .from("scheduled_posts")
-    .insert({
-      user_id: userId,
-      caption,
-      image_urls: urls,
-      scheduled_at: scheduledAt,
-      status: input.mode === "draft" ? "draft" : "scheduled",
-      channel,
-    })
-    .select("id")
-    .single();
-  if (inserted.error || !inserted.data) {
-    const error = inserted.error;
-    await rollbackUploads();
-    const known = publishDbErrorText(error);
-    if (known) return { ok: false, error: known };
-    if (error && /image_urls/i.test(error.message)) {
-      return {
-        ok: false,
-        error: rules.minImages > 0 ? `이미지를 ${rules.minImages}장 이상 올려 주세요.` : `이미지는 ${rules.maxImages}장까지예요.`,
-      };
-    }
-    if (isMissingColumnError(error, /channel/i)) {
-      console.error("[publish] channel 컬럼 없음 — 0053 미적용:", error?.message);
-    } else {
-      console.error("[publish] 게시물 생성 실패:", error?.message ?? "행 없음");
-    }
-    return { ok: false, error: "저장하지 못했어요. 잠시 후 다시 시도해 주세요." };
-  }
-
-  if (input.mode !== "now") {
-    revalidatePath("/publish");
-    return { ok: true, mode: input.mode };
-  }
-  const admin = createAdminClient();
-  if (!admin) {
-    /* 저장은 됐다. 크론이 5분 안에 집어 가므로 «지금»은 못 지켜도 발행은 된다 — 그 사실을 그대로 말한다 */
-    console.error("[publish] 지금 발행 불가 — 서버 자격증명 미설정. 크론에 맡긴다:", inserted.data.id);
-    revalidatePath("/publish");
-    return {
-      ok: true,
-      mode: "now",
-      outcome: { state: "deferred", label: channelLabel(channel), error: "지금 바로는 올리지 못했어요. 몇 분 안에 자동으로 다시 올려요." },
-    };
-  }
-  return runNow(admin, inserted.data.id, userId, channel, startedAt);
 }

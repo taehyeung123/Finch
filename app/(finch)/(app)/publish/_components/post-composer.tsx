@@ -1,37 +1,51 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ImagePlus, LoaderCircle, X } from "lucide-react";
+import { Clapperboard, X } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { nextPaint } from "@/lib/next-paint";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Switch } from "@/components/ui/switch";
 import { isTopmostDialog } from "@/components/ui/trap-focus";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { earliestPublishAt } from "@/lib/calendar";
 import type { ResultModalContent } from "@/components/ui/result-modal";
-import { createPost } from "../actions";
-import { COMPOSER_CHANNELS, channelLabel, channelRules, isPublishableChannel } from "@/lib/publish-rules";
+import { createPost, type CreatePostResult } from "../actions";
+import {
+  COMPOSER_CHANNELS,
+  IG_STORY_ENABLED,
+  channelLabel,
+  channelRules,
+  formatDurationKo,
+  hasBlockingIssue,
+  isPublishableChannel,
+  mediaRules,
+  validateMediaSet,
+  validatePostText,
+  type IgSurface,
+} from "@/lib/publish-rules";
 import { eunNeun, iGa } from "@/lib/josa";
+import { MediaTiles } from "./media-tiles";
+import { CoverPicker } from "./cover-picker";
+import { PICK_ACCEPT, surfaceOf, tileBusy, tileFacts, toPostMedia, useMediaTiles } from "./use-media-tiles";
 
 /*
-  새 게시물 포스팅 — 링크팜 포스팅 실측(2026-08-19) 재구현.
+  새 게시물 포스팅 — 링크팜 포스팅 실측(2026-08-19) 재구현 → 2026-09-11 사진·영상 섞은 게시물.
 
   링크팜 흐름: 상단 「+ 새 게시물 포스팅」 → SNS 미연동이면 "SNS 연동하기" 안내
   모달(연동하러 가기), 연동이면 작성 화면. 우리도 같은 관문을 둔다 — 연동 없이
   작성부터 시키고 발행에서 실패하게 만드는 것보다, 문 앞에서 이유를 말하는 게 낫다.
 
-  발행 방식은 셋이다: **지금 발행 / 예약 발행(시각) / 초안 저장.**
-  2026-09-09 까지 「즉시 발행」은 비활성이었고 예약은 «날짜»만 받았다 — 발행 크론이 하루 한 번(06:00 KST)
-  도는 Hobby 시절 설계가 남아 있어서다. 지금은 크론이 5분마다 돌고, 「지금 발행」은 서버 액션이 그 자리에서
-  내보내고 결과를 돌려준다(app/(finch)/(app)/publish/actions.ts). 결과는 목록 화면이 모달로 그린다.
+  발행 방식은 셋이다: **지금 발행 / 예약 발행(시각) / 초안 저장.** 결과는 목록 화면이 모달로 그린다.
+  채널: 발행 어댑터가 있는 인스타그램·스레드가 활성이다(lib/meta/*-publish.ts). 틱톡은 발행 API 자체가 없어 «준비 중».
 
-  채널: 발행 어댑터가 있는 인스타그램·스레드가 활성이다(lib/meta/*-publish.ts).
-  틱톡은 발행 API 자체가 없어 "(준비 중)" 비활성 — social_feed 채널 선택과 같은 규칙.
+  사진·영상(2026-09-11): 고르는 즉시 굽기·검사를 하고 **브라우저가 Storage 로 직접** 올린다(use-media-tiles.ts).
+  예전엔 사진을 data URL 로 서버 액션 본문에 실어 Vercel 본문 상한(4.5MB) 때문에 합계 3MB 에서 막혔고 영상은 불가능했다.
+  인스타: 사진 1장 → 사진 게시물, 영상 1개 → 릴스(피드에도 보이기 기본 켬), 2~10개(섞어도 된다) → 캐러셀, 1개 + 스토리 스위치 → 스토리.
+  스레드: 글만 / 사진·영상 0~20개(섞어도 된다).
 
-  **글자·장수 상한은 채널마다 다르다**(인스타 2200자·이미지 필수 / 스레드 500자·글만도 가능).
-  값은 lib/publish-rules.ts 한 곳에서 서버 액션과 함께 본다 — 여기 하드코딩하면
-  「화면은 막는데 서버는 받는」 식으로 갈라진다.
+  **상한은 채널·게시 면마다 다르다**(글자 수·개수·영상 길이·해상도…). 값은 lib/publish-rules.ts 한 곳에서
+  서버 액션과 함께 본다 — 여기 하드코딩하면 «화면은 막는데 서버는 받는» 식으로 갈라진다.
 */
 
 export interface ComposerChannel {
@@ -40,7 +54,64 @@ export interface ComposerChannel {
   connected: boolean;
 }
 
-type Progress = { done: number; total: number };
+/** 저장 결과 → 결과 모달 문구(목록 화면이 띄운다) */
+function resultFor(res: Extract<CreatePostResult, { ok: true }>, channel: string, when: string, hasVideo: boolean): ResultModalContent {
+  const label = channelLabel(channel);
+  if (res.mode !== "now") {
+    if (res.mode === "draft") {
+      return { tone: "positive", title: "초안으로 저장했어요", description: "「초안」 탭에서 언제든 시각을 정하거나 지금 발행할 수 있어요." };
+    }
+    return {
+      tone: "positive",
+      title: `${label} 발행을 예약했어요`,
+      description: `${formatWhen(when)}부터 5분 안에 자동으로 올라가요.${hasVideo ? " 영상은 처리 때문에 조금 늦을 수 있어요." : ""}`,
+    };
+  }
+  const o = res.outcome;
+  switch (o.state) {
+    case "published":
+      return { tone: "positive", title: `${label}에 올라갔어요`, description: "「발행완료」 탭에서 확인할 수 있어요." };
+    case "processing":
+      /* 메타가 처리 중 — 매분 크론이 이어서 올리고 알림을 보낸다. «실패»도 «완료»도 아니다 */
+      return o.soon
+        ? { tone: "positive", title: "곧 올라가요", description: `준비가 끝났어요. 곧 ${label}에 올라가고, 올라가면 알림으로 알려 드려요.` }
+        : {
+            tone: "positive",
+            title: `${iGa(label)} ${o.hasVideo ? "영상을" : "게시물을"} 처리하고 있어요`,
+            description: "끝나는 대로 자동으로 올라가요. 보통 몇 분 걸리고, 올라가면 알림으로 알려 드려요. 「발행예약」 탭에서 상태를 볼 수 있어요.",
+          };
+    case "deferred":
+      /* 저장은 됐고 크론이 곧 집어 간다 — «실패»로 말하면 정상 발행 예정 글을 지우게 된다 */
+      return { tone: "warning", title: "저장했어요 — 곧 자동으로 올라가요", description: `${o.error} 「발행예약」 탭에서 상태를 볼 수 있어요.` };
+    case "failed":
+      /* 저장은 됐고 발행만 실패 — 컴포저를 닫는다. 열어 둔 채 오류만 보이면 같은 글을 두 번 올리게 된다 */
+      return {
+        tone: "negative",
+        title: `${label}에 올리지 못했어요`,
+        description: `${o.error} — 글은 「발행예약」 탭에 남아 있어요. 다시 시도하거나 지울 수 있어요.`,
+      };
+    default:
+      return { tone: "warning", title: "결과를 확인하지 못했어요", description: "「발행예약」 탭에서 상태를 확인해 주세요." };
+  }
+}
+
+/** 사진·영상 칸 아래 한 줄 — 지금 구성이 어떤 게시물로 올라가는지 */
+function surfaceHint(channel: string, surface: IgSurface | null, count: number, hasVideo: boolean): string {
+  if (channel === "threads") {
+    const r = mediaRules("threads", null);
+    return `사진·영상 최대 ${r.maxItems}개 · 영상은 ${formatDurationKo(r.video.maxDurationMs)}까지 · 글만 올려도 돼요`;
+  }
+  if (channel !== "instagram") return "";
+  if (count === 0) return "사진 1장은 사진 게시물, 영상 1개는 릴스, 2개 이상은 캐러셀로 올라가요";
+  const r = mediaRules("instagram", surface);
+  /* «3초~1분»이 좁은 화면에서 «3초 / ~1분»으로 갈라지지 않게 물결표 양옆을 단어 결합(U+2060)으로 묶는다 */
+  const range = (min: number | null, max: number) =>
+    min ? `${formatDurationKo(min)}\u2060~\u2060${formatDurationKo(max)}` : `${formatDurationKo(max)}까지`;
+  if (surface === "story") return `스토리로 올라가요 · 24시간 뒤 사라지고 글은 올라가지 않아요 · 영상은 ${range(null, r.video.maxDurationMs)}`;
+  if (surface === "reels") return `릴스로 올라가요 · 영상은 ${range(r.video.minDurationMs, r.video.maxDurationMs)}`;
+  if (count === 1) return "사진 게시물로 올라가요";
+  return `캐러셀로 올라가요 · 모든 항목이 첫 번째 항목 비율로 잘려요${hasVideo ? ` · 영상은 ${range(r.video.minDurationMs, r.video.maxDurationMs)}` : ""}`;
+}
 
 export function PostComposer({
   channels,
@@ -62,13 +133,16 @@ export function PostComposer({
   const anyConnected = isDemo || channels === null || channels.some((c) => c.connected);
 
   const earliestAt = earliestPublishAt();
-  const [channel, setChannel] = useState("instagram");
-  /* 채널을 바꾸면 상한도 바뀐다 — 인스타 2200자로 쓰다 스레드로 넘기면 500자에 걸린다.
-     그 사실을 저장 버튼을 누른 뒤가 아니라 글자수 카운터에서 즉시 보이게 한다. */
+  /* 처음 채널 = 고를 수 있는 첫 채널. 예전엔 늘 인스타그램이라 스레드만 연동한 사람은 꺼진 칩이 골라진 채로 시작했고,
+     이제는 사진을 고르는 즉시 올리기가 «인스타그램을 연동하세요»로 막힌다 */
+  const [channel, setChannel] = useState<string>(
+    () =>
+      COMPOSER_CHANNELS.find(
+        (ch) => isPublishableChannel(ch) && (isDemo || channels === null || !!channels.find((c) => c.channel === ch)?.connected),
+      ) ?? "instagram",
+  );
   const rules = channelRules(channel);
-  const MAX_IMAGES = rules.maxImages;
   const CAPTION_MAX = rules.textMax;
-  const [images, setImages] = useState<string[]>([]);
   const [caption, setCaption] = useState("");
   /* 기본은 예약이다 — 「지금 발행」은 되돌릴 수 없는 외부 행동이라 기본값으로 두지 않는다 */
   const [mode, setMode] = useState<"now" | "schedule" | "draft">("schedule");
@@ -78,32 +152,17 @@ export function PostComposer({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** 인스타 — 항목이 1개일 때 «스토리로 올리기» */
+  const [igStory, setIgStory] = useState(false);
+  /** 인스타 릴스 — 피드에도 보이기(기본 켬) */
+  const [shareToFeed, setShareToFeed] = useState(true);
+  /** 커버 고르기 모달이 열린 타일 */
+  const [coverFor, setCoverFor] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  /* 사진 처리 상태 — 둘은 따로 둔다(문구가 다르고, 한쪽의 끝이 다른 쪽의 잠금을 풀면 안 된다).
-     예전엔 둘 다 상태가 없었다: 처리 중에도 저장이 열려 있어 **일부 사진만** 발행되거나
-     인스타 비율로 자르기 전 사진이 그대로 나갔다(외부 발행이라 되돌릴 수 없다, 2026-09-10 점검). */
-  /** 파일 → JPEG 처리 진행. 동시 호출은 importsRef 카운터가 센다(먼저 끝난 쪽이 잠금을 풀지 않게) */
-  const [importing, setImporting] = useState<Progress | null>(null);
-  /** 인스타로 바꿀 때 이미 올린 사진을 비율 안으로 다시 맞추는 진행 */
-  const [refitting, setRefitting] = useState<Progress | null>(null);
-  /** 인스타 비율에 맞춰 **실제로 잘린** 사진(data URL 동일성) — 안내 문구의 장수. 지운 사진은 자연히 빠진다 */
-  const [cropped, setCropped] = useState<ReadonlySet<string>>(() => new Set());
-  /** 인스타 비율로 맞추지 못한 사진 — 인스타로는 저장을 막는다(발행 시각에 거절당한다) */
-  const [unfit, setUnfit] = useState<ReadonlySet<string>>(() => new Set());
-  /** 처리 루프가 **지금** 채널을 읽는 곳 — 렌더 클로저의 channel 은 처리 도중 칩을 바꾸면 옛값이다 */
-  const channelRef = useRef(channel);
-  const importsRef = useRef(0);
-  /** 재맞춤 세대 — 채널을 바꿀 때마다 올린다. 늦게 끝난 옛 세대의 결과는 버린다(인스타→스레드 즉시 복귀) */
-  const refitGenRef = useRef(0);
-  /** 모달이 닫히면 처리 루프를 멈춘다 — 언마운트 뒤 setState 는 무해하지만 CPU·배터리를 끝까지 태운다 */
-  const aliveRef = useRef(true);
-  useEffect(() => {
-    aliveRef.current = true;
-    return () => {
-      aliveRef.current = false;
-    };
-  }, []);
+  /* initialTarget 은 첫 렌더에만 쓰인다(그 뒤 채널·스토리는 핸들러가 retarget 으로 알린다) */
+  const media = useMediaTiles({ isDemo, initialTarget: { channel, story: false } });
+  const tiles = media.tiles;
 
   const containerRef = useRef<HTMLDivElement>(null);
   /** 스크림(role="dialog") — Esc 를 «내가 맨 위일 때만» 처리하는 판정에 쓴다 */
@@ -121,8 +180,8 @@ export function PostComposer({
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape" || e.isComposing) return;
-      /* 위에 확인 모달이 떠 있으면 그쪽(ModalShell)이 Esc 를 받는다 — 여기서도 받으면 Esc 한 번에
-         확인 모달과 작성 화면이 같이 닫혀, 사라진다고 경고하던 내용이 그대로 사라진다 */
+      /* 위에 확인·커버 모달이 떠 있으면 그쪽(ModalShell)이 Esc 를 받는다 — 여기서도 받으면 Esc 한 번에
+         둘이 같이 닫혀, 사라진다고 경고하던 내용이 그대로 사라진다 */
       if (!isTopmostDialog(scrimRef.current)) return;
       requestCloseRef.current();
     }
@@ -130,7 +189,19 @@ export function PostComposer({
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  const dirty = images.length > 0 || caption.trim().length > 0;
+  const dirty = tiles.length > 0 || caption.trim().length > 0;
+  /* 올리는 중·올린 뒤 저장 전에 탭을 닫으려 하면 브라우저 확인을 띄운다 — 닫히면 올린 파일은 정리 크론이 24시간 뒤 치운다 */
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      /* 사파리는 returnValue 를 채워야 확인을 띄운다 */
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
+
   function requestClose() {
     if (saving) return;
     /* 멱등 — X·Esc·바깥 클릭 어느 경로로 와도 같은 확인 모달 하나를 연다 */
@@ -144,229 +215,96 @@ export function PostComposer({
     requestCloseRef.current = requestClose;
   });
 
-  /* 업로드 전 클라이언트 축소 — 이유가 둘 겹친다.
-     ① 서버 액션 바디 상한: 원본 사진(1~8MB)을 base64(+33%)로 통째 넘기면
-        next.config.ts 의 bodySizeLimit(25mb)에 캐러셀이 못 든다. 여기서 줄여야
-        10장이 안전하게 들어간다 — 상한을 올리는 쪽만 하면 100MB 급 요청을
-        서버가 받아주는 꼴이 된다.
-     ② 인스타그램 발행 API 는 JPEG 만 받는다 — 어차피 변환할 것, 지금 한다.
-     1440px 는 인스타 권장 최대 해상도라 화질 손해가 아니다. */
-  const MAX_DIMENSION = 1440;
-  /* 인스타그램 게시 비율 한계 — 세로 4:5(0.8) ~ 가로 1.91:1. 이 밖이면 Graph API 가 컨테이너 생성에서 거절한다
-     (인스타 앱은 알아서 잘라 주지만 API 는 안 잘라 준다). 폰 기본 세로 사진(3:4=0.75)·스크린샷(9:16)이 정확히 밖이라,
-     안 자르면 «예약했어요» 뒤 발행 시각에 영어 원문 오류로 실패한다(2026-09-09 감사). 광고 소재(lib/ads/image-spec.ts)와 같은 값. */
-  const IG_MIN_RATIO = 0.8;
-  const IG_MAX_RATIO = 1.91;
+  /* ── 사진·영상 규칙(고르는 즉시·저장 직전이 같은 함수) ── */
+  const story = IG_STORY_ENABLED && channel === "instagram" && igStory;
+  const surface = surfaceOf({ channel, story }, tiles);
+  const onStory = surface === "story";
+  const mRules = mediaRules(channel, surface);
+  const issues = validateMediaSet(channel, surface, tiles.map(tileFacts));
+  const badIndexes = new Set(issues.flatMap((i) => (i.severity === "error" && i.index !== null ? [i.index] : [])));
+  const hasVideo = tiles.some((t) => t.kind === "video");
+  const busyTiles = tiles.filter(tileBusy);
+  const readyCount = tiles.filter((t) => t.state.phase === "ready").length;
+  const failedTiles = tiles.filter((t) => t.state.phase === "error");
+  const croppedCount = tiles.filter((t) => t.kind === "image" && t.cropped && t.state.phase !== "preparing").length;
+  const textError = validatePostText(channel, surface, caption, tiles.length);
+  const overText = !onStory && caption.length > CAPTION_MAX;
+  const timeOk = mode !== "schedule" || when >= earliestAt;
+  const canSave =
+    !saving && busyTiles.length === 0 && failedTiles.length === 0 && !hasBlockingIssue(issues) && !textError && !overText && timeOk;
 
-  function loadImage(src: string): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
-      const el = new Image();
-      el.onload = () => resolve(el);
-      el.onerror = () => reject(new Error("decode"));
-      el.src = src;
-    });
+  /* 사진·영상 칸 아래 문제 목록 — 올리기 실패 + 규칙 위반(오류는 빨강, 경고는 주황). 0개일 때 «1개 이상»은 저장 버튼 아래로만 */
+  const problems: Array<{ text: string; tone: "error" | "warning" }> = [];
+  tiles.forEach((t, i) => {
+    if (t.state.phase === "error") problems.push({ text: `${i + 1}번째 ${t.kind === "video" ? "영상" : "사진"} — ${t.state.message}`, tone: "error" });
+  });
+  for (const it of issues) {
+    if (it.code === "count_low" && tiles.length === 0) continue;
+    problems.push({ text: it.message, tone: it.severity });
   }
+  const shownProblems = problems.filter((p, i) => problems.findIndex((q) => q.text === p.text) === i);
 
-  /**
-   * 축소 + JPEG 변환 (+ 인스타면 비율 안으로 **가운데 크롭**). cropped = 실제로 잘랐는지.
-   * src 는 object URL(파일) 또는 data URL(이미 처리한 이미지 — 채널을 인스타로 바꿀 때 다시 태운다).
-   * keepIfFit: src 가 이 파이프라인이 이미 구운 JPEG 일 때만 켠다 — 자를 것도 줄일 것도 없으면
-   * 다시 굽지 않고 그대로 돌려준다(스레드↔인스타를 오갈 때마다 q0.85 로 화질이 깎이지 않게).
-   */
-  async function toJpeg(src: string, forInstagram: boolean, keepIfFit = false): Promise<{ url: string; cropped: boolean }> {
-    const img = await loadImage(src);
-    let sx = 0;
-    let sy = 0;
-    let sw = img.naturalWidth;
-    let sh = img.naturalHeight;
-    let cropped = false;
-    if (forInstagram && sw > 0 && sh > 0) {
-      const ratio = sw / sh;
-      if (ratio < IG_MIN_RATIO) {
-        /* 너무 세로 — 위아래를 잘라 4:5 로 */
-        sh = Math.round(sw / IG_MIN_RATIO);
-        sy = Math.round((img.naturalHeight - sh) / 2);
-        cropped = true;
-      } else if (ratio > IG_MAX_RATIO) {
-        /* 너무 가로 — 좌우를 잘라 1.91:1 로 */
-        sw = Math.round(sh * IG_MAX_RATIO);
-        sx = Math.round((img.naturalWidth - sw) / 2);
-        cropped = true;
-      }
-    }
-    const scale = Math.min(1, MAX_DIMENSION / Math.max(sw, sh));
-    if (keepIfFit && !cropped && scale === 1) return { url: src, cropped: false };
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(sw * scale));
-    canvas.height = Math.max(1, Math.round(sh * scale));
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("canvas");
-    /* JPEG 엔 알파가 없다 — PNG 투명 영역이 검게 구워지지 않게 흰 바탕을 먼저 깐다 */
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-    const first = canvas.toDataURL("image/jpeg", 0.85);
-    /* 장당 상한 — 고엔트로피 원본이 크게 구워지면 한 단계 낮춰 다시(아래 합산 가드와 짝) */
-    const out = first.length > 1_400_000 ? canvas.toDataURL("image/jpeg", 0.72) : first;
-    /* 캔버스 한도를 넘으면(iOS) 예외 없이 "data:," 가 온다 — 빈 사진을 올리느니 실패로 닫는다 */
-    if (!out.startsWith("data:image/jpeg")) throw new Error("encode");
-    return { url: out, cropped };
-  }
+  /* 저장 버튼이 왜 막혔는지 — 버튼만 조용히 꺼져 있으면 이유를 찾아 헤맨다(2026-08-31 점검) */
+  const blockReason = saving
+    ? null
+    : busyTiles.length > 0
+      ? `파일을 올리는 중이에요 — ${readyCount}/${tiles.length}`
+      : failedTiles.length > 0
+        ? "올리지 못한 파일이 있어요 — 다시 올리거나 빼 주세요."
+        : hasBlockingIssue(issues)
+          ? tiles.length === 0
+            ? (issues.find((i) => i.code === "count_low")?.message ?? null)
+            : "위 사진·영상 문제를 먼저 고쳐 주세요."
+          : textError ?? (overText ? `${eunNeun(rules.textLabel)} ${CAPTION_MAX}자까지 쓸 수 있어요.` : !timeOk ? "예약 시각을 지금 이후로 골라 주세요." : null);
 
-  async function fileToJpeg(file: File, forInstagram: boolean): Promise<{ url: string; cropped: boolean }> {
-    const url = URL.createObjectURL(file);
-    try {
-      return await toJpeg(url, forInstagram);
-    } finally {
-      URL.revokeObjectURL(url);
+  /** 인스타 스토리는 항목이 정확히 1개일 때만 — 개수가 바뀌면 끈다(되살아나지 않게) */
+  function syncStory(count: number) {
+    if (igStory && count !== 1) {
+      setIgStory(false);
+      media.retarget({ channel, story: false });
     }
   }
 
-  async function pickFiles(e: React.ChangeEvent<HTMLInputElement>) {
+  function addFiles(files: File[]) {
+    if (files.length === 0 || saving) return;
+    const msg = media.add(files);
+    /* 정상 선택이면 이전 경고를 지운다 — 안 지우면 상한 경고가 해소된 뒤에도 남는다 */
+    setError(msg);
+    syncStory(media.countNow());
+  }
+
+  function pickFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = [...(e.target.files ?? [])];
     e.target.value = ""; // 같은 파일 재선택 허용
-    const room = MAX_IMAGES - images.length;
-    /* 정상 선택이면 이전 경고를 지운다 — 안 지우면 상한 경고가 해소된 뒤에도 남는다 */
-    setError(files.length > room ? `이미지는 ${MAX_IMAGES}장까지예요.` : null);
-    const todo = files.slice(0, Math.max(0, room));
-    if (todo.length === 0) return; // 0장이면 표시를 번쩍이지 않는다
-    /* 고른 즉시 켠다 — 이 change 핸들러 안의 setState 는 이벤트 끝에 바로 커밋된다(디코드보다 먼저) */
-    importsRef.current += 1;
-    setImporting((p) => ({ done: p?.done ?? 0, total: (p?.total ?? 0) + todo.length }));
-    try {
-      for (const f of todo) {
-        /* 표시(진행 수)가 먼저 칠해지게 한 프레임 양보 — 한 장의 디코드·인코딩은 메인 스레드를 통째로 잡는다 */
-        await nextPaint();
-        if (!aliveRef.current) return;
-        try {
-          /* 채널은 장마다 **지금** 값을 읽는다. 굽는 사이 칩을 바꿨으면 원본 파일로 다시 굽는다 —
-             이 장은 전환 재맞춤의 스냅숏에 없으니(아직 목록에 안 들어갔다) 여기서 맞추지 않으면 영영 안 맞는다.
-             1회성(if)이면 재굽기 도중 칩을 한 번 더 바꿨을 때 어긋난 채 들어간다(스레드인데 인스타 비율로 잘린 사진) —
-             반영 직전 채널과 마지막 굽기가 일치할 때까지 되풀이한다. 칩을 멈추면 끝난다(굽기 사이 await 는 사용자 입력뿐) */
-          let forIg = channelRef.current === "instagram";
-          let out = await fileToJpeg(f, forIg);
-          while (aliveRef.current && forIg !== (channelRef.current === "instagram")) {
-            forIg = !forIg;
-            out = await fileToJpeg(f, forIg);
-          }
-          if (!aliveRef.current) return;
-          const { url, cropped: wasCropped } = out;
-          const cap = channelRules(channelRef.current).maxImages;
-          setImages((prev) => (prev.length >= cap ? prev : [...prev, url]));
-          if (wasCropped) setCropped((s) => new Set(s).add(url));
-        } catch {
-          setError("이미지를 읽지 못했어요. 다른 파일로 시도해 주세요.");
-        }
-        setImporting((p) => p && { ...p, done: p.done + 1 });
-      }
-    } finally {
-      importsRef.current -= 1;
-      if (importsRef.current === 0) setImporting(null);
-    }
+    addFiles(files);
   }
 
-  /**
-   * 스레드로 고른 사진을 인스타로 옮길 때 비율 한계(4:5~1.91:1)를 다시 적용한다.
-   * 늦게 끝난 결과가 엉뚱한 상태를 덮지 않게 세 겹으로 거른다:
-   *  ① 세대 — 그사이 칩을 또 바꿨으면(인스타→스레드 즉시 복귀) 통째로 버린다. 스레드 글 사진이 잘리면 안 된다.
-   *  ② 채널 — 반영 시점에도 인스타여야 한다.
-   *  ③ 원소 동일성 — 스냅숏의 data URL 을 결과로 **바꿔 끼운다**. 옛 코드는 «장수가 같을 때만 통째 교체»라
-   *     도중에 한 장이 늘거나 줄면 크롭 전체가 버려졌고, 늘고 준 수가 같으면 지운 사진이 되살아났다.
-   * 칩은 잠그지 않는다 — 마지막 클릭이 이기고, 정합은 위 세대가 지킨다.
-   */
-  async function refitForInstagram(gen: number, snap: string[]) {
-    setRefitting({ done: 0, total: snap.length });
-    const fitted = new Map<string, string>();
-    const newlyCropped: string[] = [];
-    const failed: string[] = [];
-    try {
-      for (const src of snap) {
-        await nextPaint();
-        if (!aliveRef.current || gen !== refitGenRef.current) return;
-        if (!fitted.has(src) && !failed.includes(src)) {
-          try {
-            const out = await toJpeg(src, true, true);
-            fitted.set(src, out.url);
-            if (out.cropped) newlyCropped.push(out.url);
-          } catch {
-            /* 폴백 없음 — 예전엔 .catch(() => src) 로 안 맞춘 사진을 조용히 남겨 발행 시각에 거절당했다 */
-            failed.push(src);
-          }
-        }
-        if (gen !== refitGenRef.current) return;
-        setRefitting((p) => p && { ...p, done: p.done + 1 });
-      }
-      if (!aliveRef.current || gen !== refitGenRef.current || channelRef.current !== "instagram") return;
-      setImages((prev) => prev.map((p) => fitted.get(p) ?? p));
-      if (newlyCropped.length > 0) {
-        setCropped((s) => {
-          const n = new Set(s);
-          for (const u of newlyCropped) n.add(u);
-          return n;
-        });
-      }
-      if (failed.length > 0) {
-        setUnfit((s) => {
-          const n = new Set(s);
-          for (const u of failed) n.add(u);
-          return n;
-        });
-        setError(`사진 ${failed.length}장을 인스타그램 비율로 맞추지 못했어요 — 그 사진을 빼고 다시 올려 주세요.`);
-      }
-    } finally {
-      if (gen === refitGenRef.current) setRefitting(null);
-    }
+  function removeTile(key: string) {
+    media.remove(key);
+    if (coverFor === key) setCoverFor(null);
+    syncStory(media.countNow());
   }
 
-  /* 스레드는 글만 있는 게시물이 정상이라 이미지를 요구하지 않는다(rules.minImages=0).
-     인스타는 캡션도 이미지도 둘 다 필수다 — requiresText 와 minImages 는 별개 관문이다. */
-  const overText = caption.length > CAPTION_MAX;
-  const underImages = images.length < rules.minImages;
-  const overImages = images.length > MAX_IMAGES;
-  const missingText = rules.requiresText && caption.trim().length === 0;
-  /* 인스타로 못 맞춘 사진이 남아 있으면 인스타로는 못 보낸다(Graph API 가 비율로 거절) */
-  const hasUnfit = channel === "instagram" && images.some((s) => unfit.has(s));
-  /* 사진을 처리하는 동안은 저장을 닫는다 — 열어 두면 그 렌더의 images 스냅숏만 나가서
-     «지금 발행»이면 일부 사진만 올라가거나, 자르기 전 사진이 인스타로 나간다(되돌릴 수 없다) */
-  const photosBusy = importing !== null || refitting !== null;
-  const canSave =
-    !missingText &&
-    !underImages &&
-    !overImages &&
-    !overText &&
-    !hasUnfit &&
-    !photosBusy &&
-    (caption.trim().length > 0 || images.length > 0) &&
-    (mode !== "schedule" || when >= earliestAt) &&
-    !saving;
-  const croppedCount = images.filter((s) => cropped.has(s)).length;
-
-  /* 채널을 바꾸면 이미 쓴 내용이 소급해 무효가 될 수 있다(인스타 1000자 → 스레드 500자,
-     스레드 글 전용 → 인스타 이미지 필수). 예전엔 저장 버튼만 조용히 꺼져서 **왜 막혔는지
-     화면 어디에도 없었다** — 특히 이미지 쪽은 빨개지는 것조차 없었다(2026-08-31 점검 적발). */
+  /* 채널을 바꾸면 이미 쓴 내용이 소급해 무효가 될 수 있다(인스타 2200자 → 스레드 500자, 스레드 20개 → 인스타 10개).
+     예전엔 저장 버튼만 조용히 꺼져서 **왜 막혔는지 화면 어디에도 없었다**(2026-08-31 점검 적발). 사진·영상 쪽 이유는 칸 아래 목록이 말한다. */
   function switchChannel(next: string) {
-    const prevChannel = channelRef.current;
-    channelRef.current = next; // 처리 중인 루프가 다음 장부터 새 채널로 굽는다
     setChannel(next);
+    const nextStory = next === "instagram" && igStory;
+    if (!nextStory && igStory) setIgStory(false);
+    /* 사진은 새 채널의 비율 규칙으로 다시 굽고(원본에서), 기다리던 영상은 통과하면 올린다 */
+    media.retarget({ channel: next, story: IG_STORY_ENABLED && nextStory });
     const r = channelRules(next);
     const name = channelLabel(next);
-    if (next !== prevChannel) {
-      /* 세대를 올려 진행 중이던 재맞춤을 무효로 만든다 — 스레드로 돌아왔으면 표시도 바로 걷는다 */
-      const gen = ++refitGenRef.current;
-      if (next === "instagram" && images.length > 0) void refitForInstagram(gen, images);
-      else setRefitting(null);
-    }
     if (caption.length > r.textMax) {
       setError(`${eunNeun(name)} ${r.textMax}자까지 쓸 수 있어요 — ${caption.length - r.textMax}자를 줄여 주세요.`);
-    } else if (images.length < r.minImages) {
-      setError(`${eunNeun(name)} 이미지가 ${r.minImages}장 이상 필요해요.`);
-    } else if (images.length > r.maxImages) {
-      setError(`${eunNeun(name)} 이미지를 ${r.maxImages}장까지 올릴 수 있어요.`);
-    } else if (r.requiresText && caption.trim().length === 0) {
-      setError(`${eunNeun(name)} ${iGa(r.textLabel)} 필요해요.`);
     } else {
       setError(null); // 이전 채널의 경고를 남기지 않는다
     }
+  }
+
+  function toggleStory(on: boolean) {
+    setIgStory(on);
+    media.retarget({ channel, story: IG_STORY_ENABLED && on });
   }
 
   async function save() {
@@ -384,52 +322,25 @@ export function PostComposer({
     setSaving(true);
     setError(null);
     try {
-      /* 전송 합산 가드(쏘넷 점검) — 서버 액션 요청 본문은 Vercel 이 4.5MB 에서 끊는다
-         (next.config bodySizeLimit 과 무관 — links 이미지 업로드와 같은 실측 사실).
-         배열째 한 번에 보내는 구조라, 합산이 3MB(원본 기준)를 넘으면 보내기 전에 막고 말한다. */
-      const totalBytes = images.reduce((n, u) => n + Math.floor((u.length * 3) / 4), 0);
-      if (totalBytes > 3_000_000) {
-        setError("사진 용량 합계가 커요 — 몇 장을 빼고 다시 시도해 주세요.");
-        setSaving(false);
-        return;
-      }
-      const res = await createPost({ channel, caption: caption.trim(), images, mode, when });
+      const res = await createPost({
+        channel,
+        caption: onStory ? "" : caption.trim(),
+        media: tiles.map(toPostMedia),
+        igStory: onStory,
+        shareToFeed,
+        mode,
+        when,
+      });
       if (!res.ok) {
         setError(res.error ?? "저장하지 못했어요.");
         return;
       }
-      const label = channelLabel(channel);
-      if (res.mode === "now") {
-        const o = res.outcome;
-        onSaved(
-          o.state === "published"
-            ? { tone: "positive", title: `${label}에 올라갔어요`, description: "「발행완료」 탭에서 확인할 수 있어요." }
-            : o.state === "processing"
-              ? /* 메타가 처리 중 — 매분 크론이 이어서 올리고 알림을 보낸다 */
-                {
-                  tone: "positive",
-                  title: `${iGa(label)} ${o.hasVideo ? "영상을" : "게시물을"} 처리하고 있어요`,
-                  description: "끝나는 대로 자동으로 올라가요. 올라가면 알림으로 알려 드려요. 「발행예약」 탭에서 상태를 볼 수 있어요.",
-                }
-              : o.state === "deferred"
-                ? /* 저장은 됐고 크론이 곧 집어 간다 — «실패»로 말하면 정상 발행 예정 글을 지우게 된다 */
-                  { tone: "warning", title: "저장했어요 — 5분 안에 자동으로 올라가요", description: `${o.error} 「발행예약」 탭에서 상태를 볼 수 있어요.` }
-                : /* 저장은 됐고 발행만 실패 — 컴포저를 닫는다. 열어 둔 채 오류만 보이면 같은 글을 두 번 올리게 된다 */
-                  {
-                    tone: "negative",
-                    title: `${label}에 올리지 못했어요`,
-                    description: `${o.error} — 글은 「발행예약」 탭에 남아 있어요. 다시 시도하거나 지울 수 있어요.`,
-                  },
-        );
-      } else if (res.mode === "draft") {
-        onSaved({ tone: "positive", title: "초안으로 저장했어요", description: "「초안」 탭에서 언제든 시각을 정하거나 지금 발행할 수 있어요." });
-      } else {
-        onSaved({ tone: "positive", title: `${label} 발행을 예약했어요`, description: `${formatWhen(when)}부터 5분 안에 자동으로 올라가요.` });
-      }
+      /* 이제 파일은 글의 것이다 — 닫히면서 지우지 않는다 */
+      media.markSaved();
+      onSaved(resultFor(res, channel, when, hasVideo));
     } catch {
-      /* {ok:false} 정상 반환이 아니라 호출 자체가 던진 경우(바디 상한 초과·네트워크) —
-         잡지 않으면 에러 오버레이가 뜨고 작성 내용이 통째로 위험해진다 */
-      setError("저장하지 못했어요. 이미지 수를 줄이거나 잠시 후 다시 시도해 주세요.");
+      /* {ok:false} 정상 반환이 아니라 호출 자체가 던진 경우(네트워크·배포 교체) — 잡지 않으면 에러 오버레이가 뜨고 작성 내용이 통째로 위험해진다 */
+      setError("저장하지 못했어요. 연결을 확인하고 잠시 후 다시 시도해 주세요.");
     } finally {
       setSaving(false);
     }
@@ -440,7 +351,7 @@ export function PostComposer({
     return (
       <div
         ref={scrimRef}
-        className="modal-scrim-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+        className="modal-scrim-in fixed inset-0 z-50 m-0! flex items-center justify-center bg-black/40 p-4"
         role="dialog"
         aria-modal="true"
         aria-label="SNS 연동 안내"
@@ -470,13 +381,20 @@ export function PostComposer({
   }
 
   const input =
-    "w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none";
+    "w-full rounded-card border border-line bg-body px-3 text-[15px] text-fg placeholder:text-fg-faint focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-50";
+  const coverTile = coverFor ? tiles.find((t) => t.key === coverFor) : undefined;
+  const single = tiles.length === 1 ? tiles[0] : null;
+  const canPickCover =
+    channel === "instagram" && !!single && single.kind === "video" && single.inspect !== null && single.state.phase !== "preparing" && !saving;
+  const hint = surfaceHint(channel, surface, tiles.length, hasVideo);
 
   return (
     <>
+    {/* m-0! — 부모(publish-list)의 space-y 가 형제(커버 고르기·닫기 확인)가 뒤에 붙는 순간 이 스크림에 아래 여백을 준다.
+        fixed 여도 여백은 먹어서 화면 아래 20px 가 덮이지 않았다(2026-09-12 실측, ModalShell 과 같은 이유) */}
     <div
       ref={scrimRef}
-      className="modal-scrim-in fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+      className="modal-scrim-in fixed inset-0 z-50 m-0! flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-label="새 게시물 포스팅"
@@ -502,7 +420,7 @@ export function PostComposer({
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-          {/* 채널 — 연결된 채널만 활성. 실제 발행 API 는 인스타그램뿐이다 */}
+          {/* 채널 — 연결된 채널만 활성 */}
           <div>
             <p className="text-[12px] font-medium text-fg-sub">채널</p>
             {/* flex-wrap 없이 칩 3개를 한 줄에 눌러 담아서, 390px 에서 라벨이 «인스타그/램» 처럼
@@ -519,109 +437,119 @@ export function PostComposer({
                     type="button"
                     role="radio"
                     aria-checked={channel === ch}
-                    disabled={!usable}
+                    disabled={!usable || saving}
                     onClick={() => switchChannel(ch)}
                     className={cn(
-                      "trans-state inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-chip border px-3 py-1.5 text-[14px] font-medium disabled:cursor-not-allowed disabled:opacity-45",
+                      "trans-state inline-flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-chip border px-3 py-1.5 text-[14px] font-medium disabled:cursor-not-allowed disabled:opacity-45",
                       channel === ch ? "border-2 border-primary" : "border-line hover:bg-tint-hover",
                     )}
                   >
                     <SnsIcon kind={ch} className="size-3.5" />
                     {channelLabel(ch)}
-                    {!publishable ? <span className="text-[11px] text-fg-faint">준비 중</span> : null}
+                    {!publishable ? <span className="text-[11px] text-fg-sub">준비 중</span> : null}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* 이미지 — 1~10장(캐러셀 상한) */}
-          <div>
+          {/* 사진·영상 — 인스타 1~10개 / 스레드 0~20개, 섞어도 된다 */}
+          <div className="min-w-0">
             <p className="text-[12px] font-medium text-fg-sub">
-              이미지{" "}
-              {rules.minImages === 0 ? <span className="font-normal text-fg-faint">(선택)</span> : null}{" "}
-              {/* 부족·초과를 캡션 카운터와 같은 신호로 — 예전엔 이미지만 아무 표시가 없었다 */}
-              <span className={cn("tnum", underImages || overImages ? "text-negative" : undefined)}>
-                {images.length}/{MAX_IMAGES}
+              사진·영상{" "}
+              {rules.minMedia === 0 ? <span className="font-normal text-fg-sub">(선택)</span> : null}{" "}
+              {/* 부족·초과를 캡션 카운터와 같은 신호로 */}
+              <span className={cn("tnum", tiles.length < mRules.minItems || tiles.length > rules.maxMedia ? "text-negative-strong" : undefined)}>
+                {tiles.length}/{rules.maxMedia}
               </span>
             </p>
-            <div className="relative mt-1.5">
-              <div className="grid grid-cols-4 gap-1.5">
-                {images.map((src, i) => (
-                  <span key={i} className="relative aspect-square overflow-hidden rounded-card border border-line">
-                    {/* eslint-disable-next-line @next/next/no-img-element -- 업로드 전 로컬 미리보기(data URL) */}
-                    <img src={src} alt={`이미지 ${i + 1}`} className="size-full object-cover" />
-                    {/* 처리 중엔 지우지 못한다 — 재맞춤 결과를 바꿔 끼울 원소가 사라진다 */}
-                    <button
-                      type="button"
-                      aria-label={`이미지 ${i + 1} 제거`}
-                      disabled={photosBusy}
-                      onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
-                      className="absolute right-1 top-1 rounded-card bg-scrim p-1 text-on-scrim hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  </span>
-                ))}
-                {importing ? (
-                  /* 「추가」 자리에 진행 수 — FinchLoader(80px)는 약 83px 타일에 안 들어간다 */
-                  <span
-                    role="status"
-                    aria-live="polite"
-                    className="flex aspect-square flex-col items-center justify-center gap-1 rounded-card border border-dashed border-line text-fg-sub"
-                  >
-                    <LoaderCircle className="size-5 animate-spin" aria-hidden />
-                    <span className="tnum text-[11px]">
-                      준비 중 {importing.done}/{importing.total}
-                    </span>
-                  </span>
-                ) : images.length < MAX_IMAGES ? (
-                  <button
-                    type="button"
-                    disabled={photosBusy}
-                    onClick={() => fileRef.current?.click()}
-                    className="trans-state flex aspect-square flex-col items-center justify-center gap-1 rounded-card border border-dashed border-line text-fg-sub hover:border-primary hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <ImagePlus className="size-5" aria-hidden />
-                    <span className="text-[11px]">추가</span>
-                  </button>
-                ) : null}
-              </div>
-              {refitting ? (
-                <div className="absolute inset-0 flex items-center justify-center gap-2 rounded-card bg-scrim px-3 text-center text-on-scrim">
-                  <LoaderCircle className="size-4 shrink-0 animate-spin" aria-hidden />
-                  <span role="status" className="tnum text-[12px]">
-                    인스타그램 비율로 맞추는 중… {refitting.done}/{refitting.total}
-                  </span>
-                </div>
-              ) : null}
+            <div className="mt-1.5">
+              <MediaTiles
+                tiles={tiles}
+                max={rules.maxMedia}
+                badIndexes={badIndexes}
+                locked={saving}
+                onPick={() => fileRef.current?.click()}
+                onDropFiles={addFiles}
+                onRemove={removeTile}
+                onMove={media.move}
+                onMoveTo={media.moveTo}
+                onRetry={media.retry}
+              />
             </div>
-            {/* 실제로 잘린 장이 있을 때만, 처리가 끝난 뒤에 — 진행 표시 안에 넣으면 0.5초 만에 사라져 아무도 못 읽는다 */}
-            {croppedCount > 0 && !photosBusy ? (
-              <p className="mt-1.5 text-[12px] text-fg-sub">
+            {hint ? <p className="mt-1.5 text-[12px] text-fg-sub">{hint}</p> : null}
+            {/* 실제로 잘린 장이 있을 때만, 굽기가 끝난 뒤에 — 진행 표시 안에 넣으면 0.5초 만에 사라져 아무도 못 읽는다 */}
+            {croppedCount > 0 && channel === "instagram" && surface === "feed" ? (
+              <p className="mt-1 text-[12px] text-fg-sub">
                 사진 {croppedCount}장을 인스타그램 비율(4:5~1.91:1)에 맞춰 가운데를 기준으로 잘랐어요.
               </p>
             ) : null}
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              multiple
-              hidden
-              disabled={photosBusy}
-              onChange={pickFiles}
-            />
+            {shownProblems.length > 0 ? (
+              <ul className="mt-1.5 space-y-0.5" aria-live="polite">
+                {shownProblems.map((p) => (
+                  <li key={p.text} className={cn("text-[12px]", p.tone === "error" ? "text-negative-strong" : "text-warning-strong")}>
+                    {p.text}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <input ref={fileRef} type="file" accept={PICK_ACCEPT} multiple hidden disabled={saving} onChange={pickFiles} />
+
+            {/* 인스타 전용 — 스토리·피드에도 보이기·커버 */}
+            {channel === "instagram" && ((IG_STORY_ENABLED && tiles.length === 1) || surface === "reels" || canPickCover) ? (
+              <div className="mt-3 space-y-2.5 rounded-card border border-line px-3.5 py-3">
+                {IG_STORY_ENABLED && tiles.length === 1 ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="min-w-0 text-[14px] font-medium">스토리로 올리기</span>
+                    <Switch checked={onStory} onChange={toggleStory} disabled={saving} label="스토리로 올리기" />
+                  </div>
+                ) : null}
+                {surface === "reels" ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="min-w-0">
+                      <span className="block text-[14px] font-medium">피드에도 보이기</span>
+                      <span className="block text-[12px] text-fg-sub">끄면 릴스 탭에만 올라가요.</span>
+                    </span>
+                    <Switch checked={shareToFeed} onChange={setShareToFeed} disabled={saving} label="피드에도 보이기" />
+                  </div>
+                ) : null}
+                {canPickCover && single ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="min-w-0">
+                      <span className="block text-[14px] font-medium">커버</span>
+                      <span className="block text-[12px] text-fg-sub">
+                        {single.inspect?.decodable === false
+                          ? single.thumbOffsetMs !== null
+                            ? `${formatDurationKo(single.thumbOffsetMs)} 장면`
+                            : "1초 장면(기본)"
+                          : "타일에 보이는 장면이 커버예요"}
+                      </span>
+                    </span>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={single.cover?.state === "uploading"}
+                      onClick={() => setCoverFor(single.key)}
+                    >
+                      <Clapperboard className="size-3.5" aria-hidden /> 커버 고르기
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
-          {/* 캡션 */}
+          {/* 캡션 — 스토리에는 글이 올라가지 않는다 */}
           <div>
             <div className="flex items-center justify-between">
               <label htmlFor="pc-caption" className="text-[12px] font-medium text-fg-sub">
                 {rules.textLabel}
               </label>
-              <span className={cn("tnum text-[12px]", caption.length > CAPTION_MAX ? "text-negative" : "text-fg-sub")}>
-                {caption.length}/{CAPTION_MAX}
-              </span>
+              {onStory ? null : (
+                <span className={cn("tnum text-[12px]", caption.length > CAPTION_MAX ? "text-negative-strong" : "text-fg-sub")}>
+                  {caption.length}/{CAPTION_MAX}
+                </span>
+              )}
             </div>
             <textarea
               id="pc-caption"
@@ -629,9 +557,11 @@ export function PostComposer({
               onChange={(e) => setCaption(e.target.value)}
               rows={5}
               maxLength={CAPTION_MAX}
-              placeholder={"본문을 입력하세요.\n#해시태그 도 여기 함께 씁니다."}
+              disabled={onStory || saving}
+              placeholder={onStory ? "스토리에는 글이 올라가지 않아요." : "본문을 입력하세요.\n#해시태그 도 여기 함께 씁니다."}
               className={`${input} mt-1.5 resize-y py-2.5 leading-relaxed`}
             />
+            {onStory ? <p className="mt-1 text-[12px] text-fg-sub">스토리에는 글이 올라가지 않아요.</p> : null}
           </div>
 
           {/* 발행 방식 — 셋 다 실제로 되는 것만 둔다(2026-09-09 «지금 발행» 개통) */}
@@ -649,10 +579,11 @@ export function PostComposer({
                   name="pc-mode"
                   checked={mode === "now"}
                   onChange={() => setMode("now")}
+                  disabled={saving}
                   className="size-4 accent-[var(--color-primary)]"
                 />
                 <span className="text-[15px] font-medium">지금 발행</span>
-                <span className="w-full text-[12px] text-fg-sub">저장하자마자 바로 올라가요. 올라간 뒤엔 여기서 되돌릴 수 없어요.</span>
+                <span className="w-full text-[12px] text-fg-sub">저장하자마자 바로 올라가요. 영상은 처리하는 데 몇 분 걸릴 수 있어요.</span>
               </label>
 
               <label
@@ -666,6 +597,7 @@ export function PostComposer({
                   name="pc-mode"
                   checked={mode === "schedule"}
                   onChange={() => setMode("schedule")}
+                  disabled={saving}
                   className="size-4 accent-[var(--color-primary)]"
                 />
                 <span className="text-[15px] font-medium">예약 발행</span>
@@ -676,11 +608,12 @@ export function PostComposer({
                     step={300}
                     value={when}
                     onChange={(e) => setWhen(e.target.value)}
+                    disabled={saving}
                     aria-label="발행 시각"
-                    className="tnum h-9 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg focus:border-primary focus:outline-none"
+                    className="tnum h-9 min-w-0 rounded-card border border-line bg-body px-2.5 text-[14px] text-fg focus:border-primary focus:outline-none"
                   />
                 ) : null}
-                <span className="w-full text-[12px] text-fg-sub">예약한 시각부터 5분 안에 자동으로 올라가요.</span>
+                <span className="w-full text-[12px] text-fg-sub">예약한 시각에 맞춰 올라가요. 영상은 처리 때문에 조금 늦을 수 있어요.</span>
               </label>
 
               <label
@@ -694,6 +627,7 @@ export function PostComposer({
                   name="pc-mode"
                   checked={mode === "draft"}
                   onChange={() => setMode("draft")}
+                  disabled={saving}
                   className="size-4 accent-[var(--color-primary)]"
                 />
                 <span className="text-[15px] font-medium">초안으로 저장</span>
@@ -721,25 +655,40 @@ export function PostComposer({
                   ? "지금 발행하기"
                   : "예약하기"}
           </Button>
-          {/* 메타가 이미지를 처리하는 시간 — 캐러셀은 1분 가까이 걸리기도 한다. 말없이 돌면 멈춘 줄 안다 */}
+          {/* 메타가 받는 시간 — 캐러셀·영상은 1분 가까이 걸리기도 한다. 말없이 돌면 멈춘 줄 안다.
+              영상 처리가 길어지면 서버가 «처리 중»으로 내려놓고 매분 크론이 이어서 올린다 — 창을 붙잡아 둘 이유가 없다 */}
           {saving && mode === "now" ? (
-            <p className="mt-2 text-center text-[12px] text-fg-sub">
-              {iGa(channelLabel(channel))} 게시물을 처리하는 동안 잠시 걸릴 수 있어요. 창을 닫지 마세요.
+            <p className="mt-2 text-center text-[12px] text-fg-sub" role="status">
+              {iGa(channelLabel(channel))} 게시물을 받는 중이에요. 영상은 처리가 길어지면 자동으로 이어서 올려 드려요.
+            </p>
+          ) : blockReason ? (
+            <p className="mt-2 text-center text-[12px] text-fg-sub" aria-live="polite">
+              {blockReason}
             </p>
           ) : null}
         </div>
       </div>
     </div>
     {/* 작성 화면의 **형제**로 둔다(뒤에 = 위에). 안쪽에 두면 카드의 transform 애니메이션·키 처리와 얽힌다 */}
+    {coverTile ? (
+      <CoverPicker
+        tile={coverTile}
+        story={onStory}
+        onClose={() => setCoverFor(null)}
+        onPick={(blob, ms) => media.replaceCover(coverTile.key, blob, ms)}
+        onPickOffset={(ms) => media.setThumbOffset(coverTile.key, ms)}
+      />
+    ) : null}
     {confirmClose ? (
       <ConfirmDialog
         title="작성 중인 내용이 사라져요"
-        description="닫으면 지금 쓴 글과 올린 사진이 저장되지 않아요."
+        description="닫으면 지금 쓴 글과 올린 사진·영상이 저장되지 않아요."
         confirmLabel="닫기"
         cancelLabel="계속 쓰기"
         onCancel={() => setConfirmClose(false)}
         onConfirm={() => {
           setConfirmClose(false);
+          media.discardAll();
           onClose();
         }}
       />
