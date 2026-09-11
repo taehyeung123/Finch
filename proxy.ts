@@ -3,6 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { isDemoMode } from "@/lib/supabase/config";
 import { SESSION_COOKIE_OPTIONS } from "@/lib/supabase/cookie-options";
 import { isReservedSlug } from "@/lib/links/reserved";
+import { SLUG_RE } from "@/lib/links";
 import { safeUrlBase } from "@/lib/links/url-base";
 
 /**
@@ -12,6 +13,9 @@ import { safeUrlBase } from "@/lib/links/url-base";
  */
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
+  /* 세션 갱신이 쿠키와 함께 넘겨주는 «이 응답은 캐시하지 말라» 머리글(@supabase/ssr) — 마지막 응답에 옮겨 단다.
+     한 사람의 세션 쿠키가 실린 응답이 CDN·리버스 프록시에 저장돼 남에게 나가는 것을 막는 라이브러리 권고다. */
+  let noStoreHeaders: Record<string, string> = {};
 
   // 데모 모드가 아닐 때만 세션 리프레시 (@supabase/ssr 미들웨어 패턴).
   // getUser()가 만료 토큰을 갱신하고, setAll이 갱신된 쿠키를 요청/응답 양쪽에 반영한다.
@@ -24,7 +28,7 @@ export async function proxy(request: NextRequest) {
         {
           cookies: {
             getAll: () => request.cookies.getAll(),
-            setAll: (cookiesToSet) => {
+            setAll: (cookiesToSet, headers) => {
               cookiesToSet.forEach(({ name, value }) =>
                 request.cookies.set(name, value),
               );
@@ -32,6 +36,7 @@ export async function proxy(request: NextRequest) {
               cookiesToSet.forEach(({ name, value, options }) =>
                 response.cookies.set(name, value, options),
               );
+              noStoreHeaders = { ...noStoreHeaders, ...(headers ?? {}) };
             },
           },
           /* 서버·브라우저와 같은 속성 — 여기서 빠지면 세션 갱신이 secure 없는 쿠키로 덮어쓴다(2026-09-07 감사) */
@@ -53,9 +58,13 @@ export async function proxy(request: NextRequest) {
      ⚠️ 이제 사용자 주소와 제품 주소가 같은 이름 공간이다. 첫 조각이 예약어면 제품 페이지,
      아니면 사용자 페이지다(lib/links/reserved.ts — 새 라우트를 만들면 그 목록에도 넣을 것). */
   const path = request.nextUrl.pathname;
-  const first = path.split("/")[1] ?? "";
-  /* 점이 든 조각은 파일 요청이다(예: /foo.png) — 매처가 흔한 확장자는 이미 걸러내지만 나머지도 넘기지 않는다 */
-  const userPage = first !== "" && !first.includes(".") && !isReservedSlug(first);
+  const segs = path.split("/");
+  const first = segs[1] ?? "";
+  /* slug 형식(SLUG_RE — 소문자·숫자·하이픈, 영문·숫자로 시작, 2~30자)에 맞는 첫 조각만 사용자 페이지로 본다.
+     점이 든 조각(파일 요청)도 여기서 걸러진다. 예전엔 «점 없음·예약어 아님»이면 전부 리라이트해서, 스캐너가
+     두드리는 아무 경로나 페이지 렌더·DB 조회가 됐다 — 창고 도입 뒤로는 그 404 가 창고에 쌓인다(2026-09-11).
+     대문자는 아래에서 소문자 주소로 보내므로 소문자로 바꿔 판정한다. 인코딩된 글자(%61)는 slug 가 아니다. */
+  const userPage = first !== "" && SLUG_RE.test(first.toLowerCase()) && !isReservedSlug(first);
 
   /* 옛 주소는 새 주소로 영구 이동 — 이미 뿌려진 /p/… 링크가 안 깨지고, 검색엔진도 새 주소를 정본으로 잡는다.
      GET 만 옮긴다: /dwell 은 keepalive POST 라 리다이렉트가 걸리면 본문이 날아간다. */
@@ -64,6 +73,7 @@ export async function proxy(request: NextRequest) {
     to.pathname = path.slice(2);
     const moved = NextResponse.redirect(to, 301);
     response.cookies.getAll().forEach((c) => moved.cookies.set(c));
+    applyNoStore(moved, noStoreHeaders);
     applySecurityHeaders(moved, true);
     return moved;
   }
@@ -77,13 +87,26 @@ export async function proxy(request: NextRequest) {
     to.pathname = `/${first.toLowerCase()}${path.slice(1 + first.length)}`;
     const moved = NextResponse.redirect(to, 301);
     response.cookies.getAll().forEach((c) => moved.cookies.set(c));
+    applyNoStore(moved, noStoreHeaders);
     applySecurityHeaders(moved, true);
     return moved;
   }
 
   if (userPage) {
     const to = request.nextUrl.clone();
-    to.pathname = `/p${path}`;
+    /* 창고 vs 즉석(2026-09-11) — 공개 프로필의 완성 화면은 Vercel CDN(창고)에 굳혀 모두에게 같은 것을 준다
+       (app/p/[slug]/page.tsx). 쿠키에 따라 화면이 달라져야 하는 요청만 매번 새로 그리는 즉석 경로로 보낸다:
+       핀치 로그인 세션(주인이면 비공개 미리보기·픽셀 제외) · 비밀번호를 연 쿠키. /go·/vcard·/dwell 은 원래 매번 돈다. */
+    const pagePath = isProfilePagePath(segs);
+    const live = pagePath && needsLiveRender(request);
+    to.pathname = live ? `/p/-live${path}` : `/p${path}`;
+    /* ⚠️ 창고 «화면» 요청에만. /go·/vcard 는 쿼리가 곧 데이터다(?i= 항목 번호) — 지우면 갤러리·피드 클릭이 엉뚱한 곳으로 간다 */
+    if (pagePath && !live) {
+      /* 창고 경로엔 쿼리를 넘기지 않는다 — 첫 방문자의 ?fbclid=…·utm_* 가 렌더 결과(RSC 데이터)에 실려 그 뒤
+         모든 방문자에게 나가지 않게. 창고 화면은 쿼리를 쓰지 않는다(?src= 는 브라우저가 주소창에서 읽는다 — view-beacon).
+         _rsc 는 Next 클라이언트 라우터의 요청 표식이라 남긴다. */
+      for (const k of [...to.searchParams.keys()]) if (k !== "_rsc") to.searchParams.delete(k);
+    }
     const rewritten = NextResponse.rewrite(to, { request });
     /* 위 세션 리프레시가 심어 둔 쿠키를 새 응답으로 옮긴다 — 안 옮기면 갱신 토큰이 사라진다 */
     response.cookies.getAll().forEach((c) => rewritten.cookies.set(c));
@@ -112,8 +135,37 @@ export async function proxy(request: NextRequest) {
       path: `/${cookieSlug}`,
     });
   }
+  applyNoStore(response, noStoreHeaders);
   applySecurityHeaders(response, publicLink);
   return response;
+}
+
+/* 창고 경로와 무관한 하위 라우트(라우트 핸들러) — app/p/[slug]/go·vcard·dwell. 서브 주소 예약어(links/actions.ts SUB_RESERVED)에 들어 있다 */
+const PROFILE_HANDLER_SEGMENTS = new Set(["go", "vcard", "dwell"]);
+
+/** 공개 프로필의 «화면» 주소인가 — /{slug} 또는 /{slug}/{서브}. segs 는 pathname.split("/") */
+function isProfilePagePath(segs: string[]): boolean {
+  const rest = segs.slice(2).filter(Boolean);
+  return rest.length === 0 || (rest.length === 1 && !PROFILE_HANDLER_SEGMENTS.has(rest[0]));
+}
+
+/**
+ * 쿠키에 따라 화면이 달라져야 하는 요청인가 — 창고본(익명 화면) 대신 즉석 렌더로 보낸다.
+ *  · 핀치 로그인 세션: Supabase 세션 쿠키 `sb-{프로젝트}-auth-token`(길면 .0 .1 로 쪼개진다). 주인인지는 모른다 —
+ *    그 판정은 즉석 렌더가 DB 로 한다. 로그인한 남의 방문도 여기로 오지만 화면은 익명과 같다(비용만 조금 더 든다).
+ *  · 비밀번호를 연 쿠키: `finch_lu_{페이지 id 앞 16자}`(lib/links/password.ts unlockCookieName), path=그 페이지 주소.
+ * 값은 보지 않는다(검증은 즉석 렌더의 몫) — 여기서는 «창고 화면이 이 사람에게 맞는가»만 가른다. 틀려도 새는 쪽이 아니다:
+ * 가짜 쿠키를 붙이면 즉석 렌더가 검증에 실패해 익명 화면을 그릴 뿐이다.
+ */
+function needsLiveRender(request: NextRequest): boolean {
+  return request.cookies
+    .getAll()
+    .some(({ name }) => (name.startsWith("sb-") && name.includes("-auth-token")) || name.startsWith("finch_lu_"));
+}
+
+/** 세션 갱신이 요구한 캐시 금지 머리글을 붙인다(없으면 아무것도 안 한다) */
+function applyNoStore(response: NextResponse, headers: Record<string, string>) {
+  for (const [k, v] of Object.entries(headers)) response.headers.set(k, v);
 }
 
 function applySecurityHeaders(response: NextResponse, publicLink = false) {

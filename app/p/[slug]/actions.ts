@@ -2,7 +2,7 @@
 
 import { createHmac } from "node:crypto";
 import { cookies, headers } from "next/headers";
-import { revalidatePath } from "next/cache";
+import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
 import { unlockCookieName, unlockToken, verifyPagePassword } from "@/lib/links/password";
@@ -22,6 +22,7 @@ import {
 } from "@/lib/links/views";
 import { consoleErrorThrottled } from "@/lib/monitoring/log-throttle";
 import { clientIp } from "@/lib/net/client-ip";
+import { publicPageTag, purgePublicPage } from "@/lib/links/public-cache";
 
 /** 방문자 액션 결과 — error 는 한국어 기본 문구, code 는 페이지 언어로 번역할 키(감사 C8) */
 export type VisitorResult = { ok: true } | { ok: false; error: string; code: LpErrorCode };
@@ -99,8 +100,35 @@ function unlockPepper(): string {
   return process.env.LINK_COOKIE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "finch-dev-pepper";
 }
 
+/**
+ * slug → 공개 여부 요약(2026-09-11 창고 도입). 방문 기록은 창고 도입 뒤에도 **방문마다** 도는 서버 일이라,
+ * 예전처럼 스냅샷 통째(수십 KB)를 매번 읽으면 창고가 아낀 DB 부하·전송량을 여기서 도로 쓴다.
+ * id·발행·잠금만 읽고 5분 기억한다. 공개 화면이 바뀌면 lib/links/public-cache.ts 가 태그로 즉시 비운다.
+ * 이 함수 안에서는 쿠키를 못 읽는다(unstable_cache 규칙) — 잠긴 페이지의 «열었나»는 밖에서 판정한다.
+ * 조회 오류는 던진다 — 던진 결과는 기억하지 않는다.
+ */
+const pageFacts = (slug: string) =>
+  unstable_cache(
+    async (): Promise<{ id: string; published: boolean; locked: boolean } | null> => {
+      const admin = createAdminClient();
+      if (!admin) throw new Error("no admin client");
+      const { data, error } = await admin.from("link_pages").select("id, published, settings").eq("slug", slug).maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) return null;
+      const settings = (data.settings && typeof data.settings === "object" ? data.settings : {}) as { locked?: unknown };
+      return { id: data.id as string, published: !!data.published, locked: settings.locked === true };
+    },
+    ["lp-facts", slug],
+    { tags: [publicPageTag(slug)], revalidate: 300 },
+  )();
+
 /** 슬러그 → 이 요청이 볼 수 있는 공개 페이지 id. 비공개·잠긴(열지 못한) 페이지는 null — loadPublicPage 와 같은 규칙 */
 async function publicPageId(slug: string): Promise<string | null> {
+  const facts = await pageFacts(slug).catch(() => undefined);
+  if (facts === null) return null; // 없는 주소
+  if (facts && !facts.published) return null;
+  if (facts && !facts.locked) return facts.id; // 발행·비잠금 — 대부분의 방문은 여기서 끝난다(DB 0회)
+  /* 잠긴 페이지(열림 쿠키 대조가 필요하다) 또는 요약 조회 실패 — 예전의 정식 판정 그대로 */
   const p = await loadPublicPage(slug);
   return p && p.published && !p.locked ? p.id : null;
 }
@@ -512,6 +540,7 @@ export async function submitGuestbook(input: { slug: string; blockId: string; na
     console.error("[links] 방명록 저장 실패:", error.message);
     return fail("failed", "남기지 못했어요. 잠시 후 다시 시도해 주세요.");
   }
-  revalidatePath(`/p/${input.slug}`);
+  /* 창고본 비우기 — 자기 주소와 (서브면) 방문자가 쓰는 /p/{부모}/{서브} 까지. 주소는 클라이언트 값이 아니라 DB 로 푼다 */
+  await purgePublicPage(pageId, pageRow.slug);
   return { ok: true };
 }

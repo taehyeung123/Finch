@@ -17,6 +17,7 @@ import { LINK_TEMPLATES } from "@/lib/links/templates";
 import { parseLittlyHtml } from "@/lib/links/littly";
 import { parseInpockHtml } from "@/lib/links/inpock";
 import { getLinkFeedItems } from "@/lib/data/live";
+import { collectPublicPaths, mergePublicPaths, purgePublicPage, purgePublicPaths } from "@/lib/links/public-cache";
 import { createClaudeClient, CHAT_MODEL } from "@/lib/ai/claude";
 import { CREDIT_COSTS, chargeGeneration, refundGenerationCredits } from "@/lib/actions/credits";
 import { getCurrentPlan } from "@/lib/data/internal";
@@ -454,6 +455,8 @@ export async function updateLinkProfile(input: {
   /* 주소가 바뀌면 slug_set_at 도 함께 — 0067 미적용(undefined)이면 안 보낸다 */
   const stamp =
     before.slug !== clean && slugSetAt !== undefined ? { slug_set_at: new Date().toISOString() } : {};
+  /* 주소가 바뀌는 저장이면 **바꾸기 전** 공개 주소(옛 주소·그 아래 서브 주소·옛 무덤)를 모아 둔다 — 창고 비우기용 */
+  const oldPublic = before.slug !== clean ? await collectPublicPaths([before.id], { structure: true }) : null;
   const { error } = await supabase
     .from("link_pages")
     .update({ ...base, sns_placement: placement, title_size: titleSize, ...stamp })
@@ -472,11 +475,13 @@ export async function updateLinkProfile(input: {
   }
 
   revalidatePath("/links");
-  revalidatePath(`/p/${clean}`);
-  /* 주소를 바꾸면 **옛 경로도** 무효화한다 — 안 하면 옛 주소가 캐시된 채로 계속 열린다 */
+  /* 공개 화면은 발행본(스냅샷)만 그린다 — 이 저장(초안)은 공개 창고와 무관하다. 0.8초마다 도는 자동 저장이라
+     여기서 창고를 비우면 편집하는 동안 공개 페이지가 사실상 캐시되지 않는다(2026-09-11 창고 도입).
+     예외는 주소가 바뀐 저장 — 주소는 초안이 아니라 곧바로 공개 주소다. 옛 주소는 무덤(새 주소 안내)이 되고,
+     서브 주소·무덤 안내까지 옛·새 양쪽을 비운다(lib/links/public-cache.ts). */
   if (before.slug && before.slug !== clean) {
-    revalidatePath(`/p/${before.slug}`);
     await releaseSlug(before.slug, before.id, user.id);
+    purgePublicPaths(mergePublicPaths(oldPublic ?? { paths: [], slugs: [] }, await collectPublicPaths([before.id], { structure: true })));
   }
   return { ok: true };
 }
@@ -635,6 +640,8 @@ export async function updateLinkSettings(
     return { ok: false, error: "저장하지 못했어요." };
   }
   revalidatePath("/links");
+  /* 설정은 발행과 무관하게 공개 화면이 **곧바로** 읽는다(언어·검색 노출·픽셀·공유 카드·잠금 문구) — 창고를 비운다 */
+  await purgePublicPage(page.id, page.slug);
   return { ok: true };
 }
 
@@ -656,6 +663,8 @@ export async function setLinkPassword(password: string | null, pageId?: string):
     const { error } = await patchSettings(row.id, { locked: false });
     if (error) return { ok: false, error: "해제하지 못했어요." };
     revalidatePath("/links");
+    /* 창고에는 잠금 화면이 굳어 있다 — 풀었으면 곧바로 내용이 보여야 한다 */
+    await purgePublicPage(row.id, row.slug);
     return { ok: true };
   }
 
@@ -674,6 +683,8 @@ export async function setLinkPassword(password: string | null, pageId?: string):
   const { error } = await patchSettings(row.id, { locked: true });
   if (error) return { ok: false, error: isSettingsColumnError(error) ? SETTINGS_MIGRATION_MSG : "저장하지 못했어요." };
   revalidatePath("/links");
+  /* ⚠️ 잠갔으면 창고의 «열린 화면»을 **즉시** 버린다 — 안 버리면 비밀번호를 건 뒤에도 내용이 최대 하루 동안 나간다 */
+  await purgePublicPage(row.id, row.slug);
   return { ok: true };
 }
 
@@ -757,7 +768,8 @@ export async function setLinkPublished(published: boolean, pageId?: string): Pro
     return { ok: false, error: "변경하지 못했어요." };
   }
   revalidatePath("/links");
-  if (data?.slug) revalidatePath(`/p/${data.slug}`);
+  /* 비공개 전환은 창고본을 **즉시** 버려야 한다(다음 방문자부터 404). 서브 페이지의 /p/{부모}/{서브} 까지 */
+  await purgePublicPage(target.id, (data?.slug as string | undefined) ?? target.slug);
   return { ok: true };
 }
 
@@ -774,14 +786,17 @@ export async function deleteLinkPage(pageId?: string): Promise<Result> {
   let subSlugs: string[] = [];
   const subRes = await supabase.from("link_pages").select("slug").eq("parent_id", page.id);
   if (!subRes.error) subSlugs = ((subRes.data ?? []) as Array<{ slug: string }>).map((r) => r.slug);
+  /* 창고 비우기용 주소를 **지우기 전에** 모은다 — 지운 뒤엔 자식·서브 주소·무덤을 알 수 없다(cascade) */
+  const publicPaths = await collectPublicPaths([page.id], { structure: true });
   const { error } = await supabase.from("link_pages").delete().eq("id", page.id);
   if (error) {
     console.error("[links] 페이지 삭제 실패:", error.message);
     return { ok: false, error: "삭제하지 못했어요." };
   }
   revalidatePath("/links");
+  /* 지운 페이지·자식·무덤 안내가 창고에 남지 않게 즉시 비운다 */
+  purgePublicPaths(mergePublicPaths(publicPaths, { paths: [`/p/${page.slug}`], slugs: [page.slug] }));
   if (page?.slug) {
-    revalidatePath(`/p/${page.slug}`);
     /* 삭제도 주소를 **놓는** 것이다 — 여기서 무덤에 안 넣으면, 홧김에 지웠다가
        마음이 바뀐 사이에 남이 그 주소를 즉시 가져간다. 주소 변경 때만 막고
        삭제 때는 열어두면 방어에 큰 구멍이 남는다.
@@ -978,24 +993,32 @@ export async function replyGuestbook(id: number, reply: string): Promise<Result>
     .from("link_guestbook")
     .update({ reply: text || null, replied_at: text ? new Date().toISOString() : null })
     .eq("id", id)
-    .select("id");
+    .select("id, page_id");
   if (error) {
     console.error("[links] 방명록 답글 실패:", error.message);
     return { ok: false, error: /link_guestbook/i.test(error.message) ? "서버 업데이트(0057) 적용 후 쓸 수 있어요." : "저장하지 못했어요." };
   }
   if (!hit || hit.length === 0) return { ok: false, error: "글을 찾지 못했어요." };
   revalidatePath("/links");
+  await purgeGuestbookPage(hit);
   return { ok: true };
+}
+
+/** 방명록 관리(답글·숨김·삭제) 뒤 그 글이 걸린 공개 페이지의 창고를 비운다 — 숨김·삭제는 즉시 사라져야 한다(신고·욕설 대응) */
+async function purgeGuestbookPage(rows: Array<{ page_id?: unknown }>): Promise<void> {
+  const pageId = rows.find((r) => typeof r.page_id === "string")?.page_id as string | undefined;
+  if (pageId) await purgePublicPage(pageId);
 }
 export async function setGuestbookHidden(id: number, hidden: boolean): Promise<Result> {
   if (isDemoMode()) return DEMO;
   const user = await getAuthUser();
   if (!user) return AUTH;
   const supabase = await createClient();
-  const { data: hit, error } = await supabase.from("link_guestbook").update({ hidden }).eq("id", id).select("id");
+  const { data: hit, error } = await supabase.from("link_guestbook").update({ hidden }).eq("id", id).select("id, page_id");
   if (error) return { ok: false, error: "바꾸지 못했어요." };
   if (!hit || hit.length === 0) return { ok: false, error: "글을 찾지 못했어요." };
   revalidatePath("/links");
+  await purgeGuestbookPage(hit);
   return { ok: true };
 }
 /**
@@ -1027,10 +1050,11 @@ export async function deleteGuestbook(id: number): Promise<Result> {
   const user = await getAuthUser();
   if (!user) return AUTH;
   const supabase = await createClient();
-  const { data: hit, error } = await supabase.from("link_guestbook").delete().eq("id", id).select("id");
+  const { data: hit, error } = await supabase.from("link_guestbook").delete().eq("id", id).select("id, page_id");
   if (error) return { ok: false, error: "지우지 못했어요." };
   if (!hit || hit.length === 0) return { ok: false, error: "글을 찾지 못했어요." };
   revalidatePath("/links");
+  await purgeGuestbookPage(hit);
   return { ok: true };
 }
 
@@ -1120,6 +1144,8 @@ export async function changeSlug(raw: string, pageId?: string): Promise<Result> 
   }
 
   const stamp = slugSetAt !== undefined ? { slug_set_at: new Date().toISOString() } : {};
+  /* 창고 비우기용 — **바꾸기 전** 공개 주소(옛 주소·그 아래 서브 주소·옛 무덤)를 모아 둔다 */
+  const oldPublic = await collectPublicPaths([before.id], { structure: true });
   const { error } = await supabase
     .from("link_pages")
     .update({ slug: clean, ...stamp })
@@ -1134,9 +1160,9 @@ export async function changeSlug(raw: string, pageId?: string): Promise<Result> 
   }
 
   revalidatePath("/links");
-  revalidatePath(`/p/${clean}`);
-  revalidatePath(`/p/${before.slug}`);
   await releaseSlug(before.slug, before.id, user.id);
+  /* 옛·새 주소, 그 아래 서브 주소, 무덤 안내(옛 주소 → 새 주소)까지 — 무덤을 쓴 **뒤에** 모아야 새 무덤이 들어간다 */
+  purgePublicPaths(mergePublicPaths(oldPublic, await collectPublicPaths([before.id], { structure: true })));
   return { ok: true };
 }
 
@@ -2042,7 +2068,7 @@ export async function revertLinkDraft(pageId?: string): Promise<Result> {
   }
 
   revalidatePath("/links");
-  revalidatePath(`/p/${page.slug}`);
+  await purgePublicPage(page.id, page.slug);
   return { ok: true };
 }
 
@@ -2156,7 +2182,8 @@ export async function publishLinkPage(pageId?: string): Promise<Result> {
   }
 
   revalidatePath("/links");
-  revalidatePath(`/p/${page.slug}`);
+  /* 창고본 즉시 만료 — 다음 방문자는 방금 발행한 화면을 받는다. 서브 페이지는 /p/{부모}/{서브} 까지(예전엔 빠졌다) */
+  await purgePublicPage(target.id, page.slug as string);
   return { ok: true };
 }
 

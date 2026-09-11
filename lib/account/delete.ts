@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { collectPublicPaths, purgePublicPaths, type PublicPaths } from "@/lib/links/public-cache";
 
 /**
  * 계정 완전 삭제 코어 — 탈퇴(설정)와 «동의 안 함» 이탈(동의 화면)이 **같은 루틴**을 쓴다.
@@ -58,6 +59,18 @@ export async function purgeAndDeleteUser(admin: Admin, userId: string): Promise<
     }
   }
 
+  /* 공개 프로필 창고 — 지울 페이지들의 공개 주소(자식 서브 주소·무덤 안내 포함)를 **지우기 전에** 모아 둔다.
+     cascade 가 행을 지우면 주소를 알 길이 없고, 창고에 굳은 화면은 최대 하루 동안 계속 나간다(2026-09-11).
+     아래 무덤 기록이 옛 무덤의 page_id 를 바꾸기 전이어야 한다. */
+  let publicPaths: PublicPaths | null = null;
+  try {
+    const { data: mine } = await admin.from("link_pages").select("id").eq("user_id", userId);
+    const ids = ((mine ?? []) as Array<{ id: string }>).map((r) => r.id);
+    if (ids.length) publicPaths = await collectPublicPaths(ids, { structure: true });
+  } catch (e) {
+    console.error("[account-delete] 공개 주소 수집 실패:", e);
+  }
+
   /* 주소 무덤 기록 — cascade 가 link_pages 를 지우면서 slug 가 즉시 풀리는 것을 막는다(90일 보류).
      멀티 페이지(0060) — 한 장만 묻으면 나머지 주소가 즉시 풀린다. 전부 묻는다. */
   try {
@@ -82,5 +95,7 @@ export async function purgeAndDeleteUser(admin: Admin, userId: string): Promise<
     console.error("[account-delete] auth 사용자 삭제 실패:", error.message);
     return false;
   }
+  /* 지운 사람의 공개 프로필이 창고에서 계속 나가지 않게 — 탈퇴·동의 거부 두 호출처 모두 서버 액션이다 */
+  if (publicPaths) purgePublicPaths(publicPaths);
   return true;
 }

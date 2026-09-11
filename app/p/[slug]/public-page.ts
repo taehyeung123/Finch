@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createAnonClient } from "@/lib/supabase/anon";
 import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
 import { linkWorkspace } from "@/lib/data";
 import { DEFAULT_LINK_SETTINGS, sanitizeLinkSettings, type LinkPageSettings } from "@/lib/links/settings";
@@ -16,21 +17,24 @@ import { unlockCookieName, unlockTokenMatches } from "@/lib/links/password";
  * 페이지 자체가 삭제된 경우는 page_id 가 null(on delete set null)이라 자연히 안내가 없다 —
  * 지운 페이지로 데려갈 곳은 없다.
  */
-export async function movedTo(slug: string): Promise<string | null> {
+export async function movedTo(slug: string, opts: { strict?: boolean } = {}): Promise<string | null> {
   if (isDemoMode()) return null;
   const admin = createAdminClient();
   if (!admin) return null; // 키 없는 환경 — 안내는 부가 기능이지 404 의 조건이 아니다
-  const { data: grave } = await admin
+  const { data: grave, error: gErr } = await admin
     .from("link_slug_history")
     .select("page_id")
     .eq("slug", slug)
     .maybeSingle();
+  /* strict — 창고(ISR) 렌더. 조회 실패를 «안내 없음»으로 넘기면 404 가 창고에 굳는다. 던지면 Next 가 저장하지 않는다 */
+  if (gErr && opts.strict) throw new Error(`movedTo: ${gErr.message}`);
   if (!grave?.page_id) return null;
-  const { data: page } = await admin
+  const { data: page, error: pErr } = await admin
     .from("link_pages")
     .select("slug, published")
     .eq("id", grave.page_id as string)
     .maybeSingle();
+  if (pErr && opts.strict) throw new Error(`movedTo: ${pErr.message}`);
   const current = (page?.slug as string | undefined) ?? null;
   /* 같은 주소로 돌아오는 안내는 루프다 — 이론상 없지만 무덤 기록이 어긋나면 생길 수 있다 */
   if (!current || current === slug) return null;
@@ -65,12 +69,14 @@ export interface PublicPage {
 type Row = { id: string; slug: string; published: boolean; published_snapshot: unknown; settings?: unknown };
 const COLS = "id, slug, published, published_snapshot";
 
-async function readRow(client: SupabaseClient, slug: string): Promise<Row | null> {
+async function readRow(client: SupabaseClient, slug: string, strict = false): Promise<Row | null> {
   /* settings(0058) 계단식 — 미적용 DB 면 컬럼 없이 다시 읽는다 */
   let res = await client.from("link_pages").select(`${COLS}, settings`).eq("slug", slug).maybeSingle();
   if (res.error && /settings/i.test(res.error.message)) {
     res = await client.from("link_pages").select(COLS).eq("slug", slug).maybeSingle();
   }
+  /* strict(창고 렌더) — 오류를 null(=없는 페이지)로 삼키면 404 가 하루 동안 창고에 굳는다 */
+  if (res.error && strict) throw new Error(`readRow: ${res.error.message}`);
   return (res.data as Row | null) ?? null;
 }
 
@@ -170,12 +176,64 @@ export async function loadPublicPage(slug: string, opts: { withOwner?: boolean }
 }
 
 /**
+ * 창고(ISR)용 조회 — **쿠키를 한 번도 읽지 않는다**(2026-09-11 창고 도입).
+ *
+ * 공개 프로필의 완성 화면은 Vercel CDN 에 굳혀 모든 방문자에게 같은 것을 준다(app/p/[slug]/page.tsx).
+ * 그러니 이 화면은 «처음 온 익명 방문자»의 것이어야 한다:
+ *  · 주인 판정 없음(isOwner=false) — 주인·로그인 방문자는 proxy.ts 가 세션 쿠키를 보고 즉석 경로(/p/-live)로 보낸다
+ *  · 비밀번호 페이지는 **항상 잠금 화면**(snapshot=null) — 연 방문자는 열림 쿠키를 보고 즉석 경로로 간다
+ *  · 발행본은 anon 클라이언트로 읽는다 — RLS(발행·비잠금만)가 코드와 별개로 한 번 더 막는다
+ *  · 잠금 여부만 service_role 로 확인하고, 그때 **스냅샷 컬럼은 고르지 않는다**
+ *  · 조회 오류는 던진다 — null 은 «없는 페이지»라 404 가 창고에 굳는다. 던진 렌더는 Next 가 저장하지 않고
+ *    이전 창고본을 계속 준다(node_modules/next/dist/docs/01-app/02-guides/incremental-static-regeneration.md)
+ * 쿠키가 필요한 판정(/go·/vcard·리드·방명록·방문 기록)은 계속 loadPublicPage 가 한다 — 여기로 옮기지 말 것.
+ */
+export async function loadCachedPublicPage(slug: string): Promise<PublicPage | null> {
+  if (isDemoMode()) return loadPublicPage(slug); // 샘플 페이지 — 쿠키를 읽기 전에 돌아가는 분기다
+  if (!isSupabaseConfigured()) return null;
+  const anon = createAnonClient();
+  if (!anon) return null;
+
+  const row = await readRow(anon, slug, true);
+  if (row) {
+    const settings = sanitizeLinkSettings(row.settings);
+    /* RLS 가 이미 잠긴 행을 걸렀다 — 그래도 잠금 표시가 보이면 닫는 쪽으로(스냅샷을 버린다) */
+    const locked = settings.hasPassword;
+    return {
+      id: row.id,
+      slug: row.slug,
+      published: !!row.published,
+      snapshot: locked ? null : (row.published_snapshot ?? null),
+      settings,
+      locked,
+      isOwner: false,
+    };
+  }
+
+  /* anon 에 안 보인다 = 없는 주소 · 비공개 · 잠금 중 하나. 잠금만 가려 잠금 화면을 그린다(설정: 언어·잠금 문구) */
+  const admin = createAdminClient();
+  if (!admin) return null; // 키 없는 환경 — 잠금 화면 대신 404. 내용은 새지 않는다
+  let res = await admin.from("link_pages").select("id, slug, published, settings").eq("slug", slug).maybeSingle();
+  if (res.error && /settings/i.test(res.error.message)) {
+    res = await admin.from("link_pages").select("id, slug, published").eq("slug", slug).maybeSingle();
+  }
+  if (res.error) throw new Error(`loadCachedPublicPage: ${res.error.message}`);
+  const hidden = res.data as { id: string; slug: string; published: boolean; settings?: unknown } | null;
+  if (!hidden || !hidden.published) return null;
+  const settings = sanitizeLinkSettings(hidden.settings);
+  /* 발행·비잠금인데 anon 이 못 봤다 — 방금 바뀐 찰나(경합)이거나 정책이 달라진 것. 추측해서 내용을 내주지 않고,
+     404 를 굳히지도 않는다(던지면 저장되지 않고 다음 방문자가 다시 그린다) */
+  if (!settings.hasPassword) throw new Error("loadCachedPublicPage: published row invisible to anon");
+  return { id: hidden.id, slug: hidden.slug, published: true, snapshot: null, settings, locked: true, isOwner: false };
+}
+
+/**
  * 서브 페이지 주소 해석(0060) — /p/{부모slug}/{sub_slug} → 자식의 전역 slug.
  * 자식도 전역 slug 를 갖고 모든 방문자 배관(잠금·/go·집계)이 그 슬러그로 돈다.
  * RLS 그대로: 발행된 행만 익명에게 보이고, 주인은 자기 비공개 행도 본다(미리보기).
  * 0060 전(컬럼 없음)·데모 모드는 null — 호출측이 404 로 보낸다.
  */
-export async function resolveSubSlug(parentSlug: string, sub: string): Promise<string | null> {
+export async function resolveSubSlug(parentSlug: string, sub: string, opts: { strict?: boolean } = {}): Promise<string | null> {
   if (isDemoMode() || !isSupabaseConfigured()) return null;
   if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(sub)) return null;
   /* 매핑 해석은 RLS **밖**에서 한다(loadPublicPage 와 같은 2단 원칙, 소넷 확정) —
@@ -184,6 +242,8 @@ export async function resolveSubSlug(parentSlug: string, sub: string): Promise<s
      공개·잠금 판정은 렌더러(loadPublicPage)가 자식 행 기준으로 다시 하므로 내용 노출이 없다.
      자식의 전역 slug 를 부모로 착각하지 않게 부모는 메인(parent_id null)만 받는다. */
   const admin = createAdminClient();
+  /* strict(창고 렌더)는 쿠키를 읽는 세션 클라이언트로 폴백하지 않는다 — anon 은 발행 행만 보여 매핑이 안 된다 */
+  if (!admin && opts.strict) return null;
   const client = admin ?? (await createClient());
   const { data: parent, error: pErr } = await client
     .from("link_pages")
@@ -191,6 +251,8 @@ export async function resolveSubSlug(parentSlug: string, sub: string): Promise<s
     .eq("slug", parentSlug)
     .is("parent_id", null)
     .maybeSingle();
+  /* strict — 조회 실패를 «없는 서브 주소»로 삼키면 404 가 창고에 굳는다 */
+  if (pErr && opts.strict) throw new Error(`resolveSubSlug: ${pErr.message}`);
   if (pErr || !parent) return null;
   const { data: child, error: cErr } = await client
     .from("link_pages")
@@ -198,6 +260,7 @@ export async function resolveSubSlug(parentSlug: string, sub: string): Promise<s
     .eq("parent_id", parent.id)
     .eq("sub_slug", sub)
     .maybeSingle();
+  if (cErr && opts.strict) throw new Error(`resolveSubSlug: ${cErr.message}`);
   if (cErr || !child) return null;
   return (child.slug as string) ?? null;
 }

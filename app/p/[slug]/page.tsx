@@ -1,21 +1,23 @@
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createAnonClient } from "@/lib/supabase/anon";
 import { isDemoMode, isSupabaseConfigured } from "@/lib/supabase/config";
 import { DEFAULT_LINK_SETTINGS, faviconHref } from "@/lib/links/settings";
 import { lpText } from "@/lib/links/i18n";
 import { LockScreen } from "./_components/lock-screen";
 import { TrackingScripts } from "./_components/tracking-scripts";
-import { loadPublicPage, movedTo } from "./public-page";
+import { loadCachedPublicPage, loadPublicPage, movedTo } from "./public-page";
 import { linkWorkspace } from "@/lib/data";
 import { FinchPill } from "./_components/finch-pill";
 import { FinchMark } from "@/components/logo";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { initialOf, publicLinkUrl, sanitizeSnsLinks } from "@/lib/links";
-import { emphasizedCta, hiddenReason, isScheduledHidden, type BlockType } from "@/lib/links/blocks";
+import { emphasizedCta, hiddenReason, isScheduledHidden, nextVisibilityChange, type BlockType } from "@/lib/links/blocks";
 import { redirect } from "next/navigation";
 import { isLightColor, DEFAULT_THEME_KEY as DEFAULT_LINK_THEME_KEY, fontStylesheets, sanitizeThemeCustom, themeByKey, themeVars, SNS_KINDS, WASH_NOISE } from "@/lib/links/themes";
 import { ShareButton } from "./_components/share-button";
@@ -38,9 +40,44 @@ import { ViewBeacon } from "./_components/view-beacon";
 
   소유자는 비공개여도 자기 페이지를 본다(발행 전 확인). 그때는 초안이 아니라
   **마지막 스냅샷**을 보여준다 — "라이브에 지금 뭐가 걸려 있나"가 이 화면의 질문이다.
+  (그 화면은 즉석 경로에서만 나온다 — 아래 «창고» 참조)
+
+  ── 창고(ISR), 2026-09-11 ────────────────────────────────────────────────────
+  이 라우트는 **방문마다 그리지 않는다.** 처음 온 방문자 때 한 번 그린 완성 화면을 Vercel CDN(창고)에 넣어 두고
+  다음 방문자부터 거기서 꺼내 준다(서버 함수·DB 0회). 창고본 수명은 하루(revalidate)이고, 그 전에 바뀌면
+  lib/links/public-cache.ts 가 비운다 — 발행·공개 전환·설정·비밀번호·방명록·주소 변경·삭제·탈퇴.
+   · force-static — 이 라우트의 렌더에서 cookies()·headers() 는 **빈 값**이다. 누가 요청했든 «익명 방문자 화면»만
+     나온다. 기본값(auto)으로 두면 렌더 경로에 쿠키 읽기가 하나라도 남았을 때 **매 방문 500** 이 난다
+     (런타임 ISR 은 정적→동적 전환을 오류로 던진다 — 빌드는 통과해서 배포 뒤에야 보인다).
+     서버 액션 본문은 렌더 전에 돌아 쿠키를 정상으로 읽는다(방문 기록·잠금 해제·리드 제출).
+   · 주인·로그인 방문자·비밀번호를 연 방문자는 proxy.ts 가 쿠키를 보고 **즉석 경로**(app/p/-live)로 보낸다 —
+     같은 렌더러를 live=true 로, 매번 새로 그린다(주인 미리보기·잠금 해제·픽셀 제외가 거기서 산다).
+   · 예약 공개/마감·일정 블록은 «그린 시각»의 판정이 굳는다 — 다음 전환 시각에 만료되게 수명을 줄인다(capLifetimeAt).
+   · generateStaticParams 가 빈 배열 — 빌드 때는 아무것도 굽지 않고 첫 방문 때 굽는다(dynamicParams 는 기본값 true).
 */
 
-export const dynamic = "force-dynamic";
+export const dynamic = "force-static";
+export const revalidate = 86400;
+export function generateStaticParams(): Array<{ slug: string }> {
+  return [];
+}
+
+/**
+ * 창고본 수명을 «다음 예약 전환 시각»까지로 줄인다(창고 렌더 전용).
+ * `export const revalidate` 는 문자 그대로의 상수여야 해서 페이지마다 다르게 줄 수 없다 — 대신 렌더 중 부른
+ * unstable_cache 의 revalidate 가 페이지 수명을 낮추는 규칙을 쓴다(가장 짧은 값이 이긴다 —
+ * node_modules/next/dist/server/web/spec-extension/unstable-cache.js, 문서: caching-without-cache-components.md).
+ * 캐시되는 값은 쓰지 않는다. 바닥은 1초 — 계산 사이에 시각이 흘러 0·음수가 나올 수 있고 unstable_cache 는 0 을 거절한다.
+ * (연달아 굽는 일은 없다: nextVisibilityChange 는 «지금보다 뒤»만 보므로 전환이 지나면 다음 전환으로 넘어간다)
+ * 전환 뒤 첫 방문자는 옛 화면을 한 번 받고(그 요청이 새로 굽는다) 다음 방문자부터 새 화면이다.
+ */
+async function capLifetimeAt(at: number | null): Promise<void> {
+  if (at === null) return;
+  const secs = Math.ceil((at - Date.now()) / 1000);
+  if (secs >= revalidate) return;
+  const life = Math.max(1, secs);
+  await unstable_cache(async () => life, ["lp-life"], { revalidate: life })();
+}
 
 interface Snapshot {
   v: number;
@@ -67,9 +104,10 @@ interface Snapshot {
  * 데모 모드는 샘플 페이지를 공개 주소로도 연다(안 하면 /links 의 「열기」가 404 로 떨어진다).
  */
 /* generateMetadata 와 본문이 각각 부른다 — cache 로 같은 요청 안에서는 1회만 조회(감사4).
-   잠금·로그인 방문 경로는 조회당 admin 쿼리가 여러 번이라 이중 실행 비용이 컸다. */
-const load = cache(async (slug: string) => {
-  const p = await loadPublicPage(slug, { withOwner: true });
+   잠금·로그인 방문 경로는 조회당 admin 쿼리가 여러 번이라 이중 실행 비용이 컸다.
+   live — 즉석 경로(app/p/-live)만 true. 창고 렌더는 쿠키를 한 번도 읽지 않는 조회를 쓴다(public-page.ts). */
+const load = cache(async (slug: string, live: boolean) => {
+  const p = live ? await loadPublicPage(slug, { withOwner: true }) : await loadCachedPublicPage(slug);
   if (!p) return null;
   /* published 조건을 코드에 걸지 않는다 — RLS 가 이미 그 일을 한다(0045). 여기서 또 걸면
      소유자조차 자기 비공개 페이지를 못 봐서 "일단 공개로 켜서 확인"을 강요하게 된다. */
@@ -84,9 +122,9 @@ const load = cache(async (slug: string) => {
 /* 사파리(iOS)는 상태바·노치 영역 색을 theme-color 로 정한다 — 없으면 body(앱 흰색)를 집어
    «맨 위까지 페이지 색»이 안 됐다(2026-08-29 지시, 리틀리 대조). 스냅샷 테마의 지면색을 준다.
    load 는 cache() 라 metadata·본문과 같은 요청에서 추가 조회가 없다. */
-export async function generateViewport({ params }: { params: Promise<{ slug: string }> }): Promise<Viewport> {
+export async function generateViewport({ params, live }: { params: Promise<{ slug: string }>; live?: boolean }): Promise<Viewport> {
   const { slug } = await params;
-  const data = await load(slug);
+  const data = await load(slug, !!live);
   const snap = data?.snap;
   /* 잠긴 페이지는 스냅샷을 읽지 않는 원칙 그대로 — 잠금 화면과 같은 기본 테마 색 */
   const usable = !!snap && !data?.locked;
@@ -114,10 +152,10 @@ function brandedTitle(title: string): string {
   return `${t} | 핀치`;
 }
 
-export async function generateMetadata({ params, urlBase }: { params: Promise<{ slug: string }>; urlBase?: string }): Promise<Metadata> {
+export async function generateMetadata({ params, urlBase, live }: { params: Promise<{ slug: string }>; urlBase?: string; live?: boolean }): Promise<Metadata> {
   const { slug } = await params;
   const canonicalPath = `/${urlBase ?? slug}`;
-  const data = await load(slug);
+  const data = await load(slug, !!live);
   if (data?.locked) {
     /* 잠긴 페이지 — 제목·소개는 스냅샷 안에 있고 스냅샷은 열기 전엔 안 읽는다. 카드에도 아무것도 안 새게 */
     const lt = lpText(data.settings.lang);
@@ -182,16 +220,18 @@ export async function generateMetadata({ params, urlBase }: { params: Promise<{ 
                그 아래에 링크·비콘·잠금 쿠키가 놓여야 한다(안 그러면 쿠키 path 가 어긋나
                해제한 페이지가 다시 잠기고, 클릭·체류가 익명으로 쌓인다).
   기본값은 slug — 최상위 페이지는 둘이 같다.
+  live — 즉석 경로(app/p/-live)가 true 로 부른다. Next 가 부를 때(창고 라우트)는 없다 = false.
 */
-export default async function PublicLinkPage({ params, urlBase }: { params: Promise<{ slug: string }>; urlBase?: string }) {
+export default async function PublicLinkPage({ params, urlBase, live = false }: { params: Promise<{ slug: string }>; urlBase?: string; live?: boolean }) {
   const { slug } = await params;
   const base = urlBase ?? slug;
-  const data = await load(slug);
+  const data = await load(slug, live);
   if (!data) {
-    /* 주소를 바꾼 페이지면 새 주소로 — 302(임시)다. 무덤 보호가 끝나는 90일 뒤 이 주소를
+    /* 주소를 바꾼 페이지면 새 주소로 — 임시 이동(307)이다. 무덤 보호가 끝나는 90일 뒤 이 주소를
        다른 사람이 새로 잡을 수 있는데, 301 을 브라우저가 캐시하면 그때 새 주인의 손님을
-       옛 페이지로 보낸다(옛 /p/ → 루트 301 과는 다른 상황 — 그 주소 공간은 영구히 우리 것이다). */
-    const current = await movedTo(slug);
+       옛 페이지로 보낸다(옛 /p/ → 루트 301 과는 다른 상황 — 그 주소 공간은 영구히 우리 것이다).
+       창고에는 이 안내도 굳는다 — 주소가 또 바뀌거나 페이지가 지워지면 public-cache.ts 가 무덤 주소까지 비운다. */
+    const current = await movedTo(slug, { strict: !live });
     if (current) redirect(`/${current}`);
     notFound();
   }
@@ -236,8 +276,11 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
   /* 직접 꾸미기 — 스냅샷에 굳은 값. 발행 전 잘못 들어온 값이 있어도 관문을 한 번 더 태운다 */
   const themeCustom = sanitizeThemeCustom((snap as { themeCustom?: unknown }).themeCustom);
   const lpVars = themeVars(theme, themeCustom);
-  /* 예약 공개·숨김은 **요청 시점**에 판정한다(이 페이지는 force-dynamic). 스냅샷은 그대로 두고 그리는 목록만 거른다 */
+  /* 예약 공개·숨김은 **그리는 시점**에 판정한다 — 스냅샷은 그대로 두고 그리는 목록만 거른다.
+     창고 렌더는 이 판정이 굳으므로, 다음 전환 시각(예약·일정)에 창고본이 만료되게 수명을 줄인다.
+     ⚠️ 브라우저에서 거르는 방식으로 바꾸지 말 것 — 공개 전 블록 내용이 HTML 에 먼저 실린다. */
   const visibleBlocks = snap.blocks.filter((b) => !isScheduledHidden(b.data));
+  if (!live) await capLifetimeAt(nextVisibilityChange(snap.blocks));
   const emphasized = (() => {
     for (const b of visibleBlocks) {
       const cta = emphasizedCta(b.type as BlockType, b.data, { donate: t.donate, product: t.product, go: t.go });
@@ -342,15 +385,20 @@ export default async function PublicLinkPage({ params, urlBase }: { params: Prom
   if (isDemoMode()) {
     guestbook = (linkWorkspace.guestbook ?? []).filter((g) => !g.hidden).map((g) => ({ id: g.id, name: g.name, message: g.message, reply: g.reply, createdAt: g.createdAt }));
   } else if (visibleBlocks.some((b) => b.type === "guestbook") && isSupabaseConfigured()) {
-    /* 공개 읽기 정책은 anon 전용(0059) — 로그인한 방문자·열린 비밀번호 페이지는 service_role 로 읽는다(숨김 제외는 아래 eq) */
-    const supabase = isOwner ? await createClient() : createAdminClient();
-    const { data: rows } = !supabase ? { data: null } : await supabase
+    /* 창고 렌더는 anon — RLS 가 «발행·비잠금 페이지의 숨기지 않은 글»만 준다(0059).
+       즉석 렌더: 공개 읽기 정책이 anon 전용이라 로그인한 방문자·열린 비밀번호 페이지는 service_role, 주인은 자기 세션.
+       (숨김 제외는 아래 eq — 두 겹이다) */
+    const supabase = !live ? createAnonClient() : isOwner ? await createClient() : createAdminClient();
+    const { data: rows, error: gbErr } = !supabase ? { data: null, error: null } : await supabase
       .from("link_guestbook")
       .select("id, name, message, reply, created_at")
       .eq("page_id", pageId)
       .eq("hidden", false)
       .order("created_at", { ascending: false })
       .limit(20);
+    /* 창고 렌더에서 조회가 실패하면 던진다 — 빈 방명록이 하루 동안 굳는 대신 이전 창고본이 계속 나간다.
+       0057 미적용(표 없음)만 예전처럼 빈 목록 */
+    if (gbErr && !live && gbErr.code !== "42P01") throw new Error(`guestbook: ${gbErr.message}`);
     guestbook = ((rows ?? []) as Array<{ id: number; name: string; message: string; reply: string | null; created_at: string }>).map((g) => ({
       id: g.id, name: g.name, message: g.message, reply: g.reply, createdAt: g.created_at,
     }));

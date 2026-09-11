@@ -7,7 +7,9 @@ import type { LpText } from "@/lib/links/i18n";
 
 /*
   비밀번호 페이지 잠금 화면(리틀리 「공개/비공개: 비밀번호」 카피, 5단계).
-  맞으면 서버가 HttpOnly 열림 쿠키를 심고, 여기선 router.refresh() 로 같은 주소를 다시 그린다.
+  맞으면 서버가 HttpOnly 열림 쿠키를 심고, 여기선 문서를 다시 불러 같은 주소를 연다(아래 reload).
+  창고(ISR)에는 이 잠금 화면만 굳어 있다 — 다시 불러온 요청은 열림 쿠키를 달고 있어서 proxy.ts 가
+  즉석 경로(app/p/-live)로 보내고, 거기서 내용을 그린다. 소프트 새로고침으로 바꾸면 창고본을 다시 받을 수 있다.
   색은 테마 변수(--lp-*)만 — 방문자의 브랜드 화면이다.
 */
 export function LockScreen({ slug, urlBase, message, t, errors }: { slug: string; urlBase?: string; message: string; t: LpText["lock"]; errors: LpText["errors"] }) {

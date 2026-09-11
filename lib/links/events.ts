@@ -11,7 +11,8 @@
 */
 
 /** 지금 시각 — 렌더 중에 Date.now() 를 직접 부르면 순수성 규칙에 걸린다(react-hooks/purity).
-    이 화면은 force-dynamic 이라 요청마다 한 번 읽는 것이 맞고, 테스트는 now 를 넣어 고정한다. */
+    공개 화면은 창고(ISR)에 굳으므로 «그린 시각»이다 — 일정이 끝나는 시각에 창고본이 만료되게
+    lib/links/blocks.ts nextVisibilityChange 가 수명을 줄인다. 테스트는 now 를 넣어 고정한다. */
 export function nowMs(): number {
   return Date.now();
 }

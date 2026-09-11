@@ -104,7 +104,8 @@ export function BlockRenderer({
   isDemo = false,
   t = lpText("ko"),
   ext = EXT_BLANK,
-  /* 일정 블록의 "지났는가" 판정 시각 — 페이지가 force-dynamic 이라 요청 시점이 기본값이다 */
+  /* 일정 블록의 "지났는가" 판정 시각 — 그리는 시점이 기본값이다. 공개 화면은 창고(ISR)에 굳으므로
+     일정이 끝나는 시각에 창고본이 만료되게 page.tsx 가 수명을 줄인다(nextVisibilityChange) */
   now = nowMs(),
 }: {
   block: SnapshotBlock;

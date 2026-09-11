@@ -556,6 +556,40 @@ export function isScheduledHidden(data: Record<string, unknown>, now: number = D
   return false;
 }
 
+/**
+ * 공개 화면이 **시각 때문에** 다음으로 달라지는 순간(epoch ms) — 없으면 null.
+ *
+ * 공개 프로필은 완성 화면을 창고(Vercel CDN)에 굳혀 둔다(app/p/[slug]/page.tsx). 굳힌 화면은 «그린 시각»의
+ * 예약·일정 판정을 그대로 품고 있으므로, 이 시각에 창고본이 만료되도록 수명을 줄인다.
+ *  · 예약 공개(openAt) — 그 시각부터 보인다(now < openAt 이 숨김) → openAt
+ *  · 예약 마감(closeAt) — 그 시각 «이후»부터 숨는다(now > closeAt) → closeAt + 1
+ *  · 일정 블록 — 끝난 시각 «이후»부터 지난 일정이 된다(end < now, block-renderer 의 over) → end + 1
+ * ⚠️ 위 isScheduledHidden · block-renderer 의 over 판정과 **같은 부등호**를 쓴다. 갈리면 만료가 한 발 늦다.
+ */
+export function nextVisibilityChange(
+  blocks: ReadonlyArray<{ type: string; data: Record<string, unknown> }>,
+  now: number = Date.now(),
+): number | null {
+  let next: number | null = null;
+  const consider = (t: number) => {
+    if (Number.isFinite(t) && t > now && (next === null || t < next)) next = t;
+  };
+  for (const b of blocks) {
+    const data = b.data ?? {};
+    const { openAt, closeAt } = blockSchedule(data);
+    if (openAt) consider(Date.parse(openAt));
+    if (closeAt) consider(Date.parse(closeAt) + 1);
+    if (b.type === "events" && Array.isArray(data.items)) {
+      for (const it of data.items as Array<Record<string, unknown> | null>) {
+        const start = parseEventAt(it?.startAt);
+        if (!start) continue;
+        consider(eventEndEpoch(start, parseEventAt(it?.endAt)) + 1);
+      }
+    }
+  }
+  return next;
+}
+
 /** 캔버스 캡션용 한 줄 — "8/25 09:00 공개 예정" / "9/1 18:00 까지 공개" / null */
 export function scheduleCaption(data: Record<string, unknown>, now: number = Date.now()): string | null {
   const { openAt, closeAt } = blockSchedule(data);

@@ -15,6 +15,19 @@
   편집 미리보기 `app/(finch)/(app)/links/_components/phone-preview.tsx`는 **같은 모습을 각자 그린다**(미리보기는 폰 프레임 비율로 축소한 값).
   블록·헤더의 모양을 바꾸면 **반드시 두 파일을 함께** 고친다 — 한쪽만 고치면 "편집기에서 본 것과 발행본이 다르다"가 되고,
   이 저장소가 가장 자주 겪은 회귀다(2026-08-24 기준 소넷 점검에서 4회 적발).
+- **공개 프로필은 «창고»에서 나간다 — 방문마다 그리지 않는다** (2026-09-11, 설명 정본 `docs/PROFILE_CACHE.md`).
+  처음 온 방문자 때 한 번 그린 완성 화면을 Vercel CDN 에 넣어 두고(ISR, 수명 하루) 다음 방문자부터 거기서 준다.
+  ① **방문자에게 보이는 것을 바꾸는 쓰기는 반드시 `lib/links/public-cache.ts` 를 부른다**(`purgePublicPage`,
+     주소 구조가 바뀌면 쓰기 **전에** `collectPublicPaths(…, { structure: true })`). 안 부르면 옛 화면이 최대 하루 나간다 —
+     비공개로 돌린 페이지·비밀번호 건 페이지·숨긴 방명록까지. 발행본(스냅샷)이 아니라 **바로 읽히는 것**(설정·비밀번호·
+     공개 여부·주소·방명록)이 특히 잘 빠진다. 서브 페이지는 창고본이 두 개다(`/p/{child}`, `/p/{부모}/{서브}`).
+     `revalidateTag(…, "max")` 는 옛 화면을 한 번 더 주므로 쓰지 않는다.
+  ② **창고 렌더(`app/p/[slug]/page.tsx`·`[sub]/page.tsx`, live=false)에서 쿠키·헤더로 화면을 가르지 말 것.** `force-static` 이라
+     빈 값이 온다. 쿠키로 달라지는 화면(주인 미리보기·잠금 해제)은 proxy.ts 가 세션·열림 쿠키를 보고 보내는
+     **즉석 경로 `app/p/-live`** 가 그린다. 새 개인화가 필요하면 proxy.ts `needsLiveRender` 에 쿠키를 더한다.
+     창고용 조회는 `loadCachedPublicPage`(anon 클라이언트 — RLS 가 두 번째 안전장치), 쿠키가 필요한 판정은 `loadPublicPage`.
+     창고 렌더의 조회 오류는 **던진다** — null 을 돌려주면 404 가 하루 동안 굳는다.
+  ③ 앱 밖(Supabase 대시보드·SQL)에서 공개 페이지를 바꿨으면 `POST /api/admin/purge-profile` 로 비운다(사용법은 docs).
 
 ## 디자인 규칙 (PRD PART 7)
 
@@ -110,6 +123,8 @@
 - `SUPABASE_SERVICE_ROLE_KEY` 등 시크릿은 절대 클라이언트 코드에서 참조하지 않는다. 클라이언트에는 `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`(공개 가능)만 노출한다.
 - **데모 모드 폴백 유지**: 모든 인증 경로는 `isSupabaseConfigured()`(`lib/supabase/config.ts`)를 먼저 확인하고, 환경변수 미설정 시 빌드·런타임이 깨지지 않고 데모 모드로 동작해야 한다. 설정 절차는 `docs/AUTH_SETUP.md`.
 - Supabase 클라이언트는 `lib/supabase/client.ts`(브라우저) / `lib/supabase/server.ts`(서버, `await cookies()`)만 사용한다. `@supabase/auth-helpers-nextjs`는 deprecated — 절대 쓰지 않는다.
+  예외 두 개: `lib/supabase/admin.ts`(service_role, 세션 없는 서버 작업) · `lib/supabase/anon.ts`(세션 없는 anon — **창고에 굳힐 공개 화면 전용**,
+  쿠키를 안 읽고 RLS 가 그대로 걸린다). 로그인·주인 판정에 anon.ts 를 쓰지 말 것.
 - 세션 리프레시는 `proxy.ts`가 담당한다 (@supabase/ssr 미들웨어 패턴). 기존 보안 헤더 로직을 제거하지 말 것.
 - 로그인은 **구글·카카오뿐이다** — 비밀번호 로그인 코드는 저장소에 한 줄도 없다. 새로 만들지 말 것
   (만들면 무차별 대입·크리덴셜 스터핑·비밀번호 재설정 우회가 통째로 새 공격면이 된다).
