@@ -33,7 +33,7 @@ export function LiveCampaignTable({
       <p className="mb-2 text-[12px] text-fg-faint sm:hidden">
         ← 옆으로 밀면 예산·노출·CTR·ROAS를 볼 수 있어요
       </p>
-      <table className="w-full min-w-[880px] text-[15px]">
+      <table className="w-full min-w-[960px] text-[15px]">
         <thead>
           <tr className="border-b border-line text-left text-xs text-fg-faint">
             <th className="pb-2 font-medium">캠페인</th>
@@ -42,6 +42,9 @@ export function LiveCampaignTable({
             <th className="pb-2 text-right font-medium">일 예산</th>
             <th className="pb-2 text-right font-medium">집행액</th>
             <th className="pb-2 text-right font-medium">노출</th>
+            {/* 도달 = 광고를 본 사람 수(메타 집계). 노출은 같은 사람이 여러 번 보면 여러 번 센다 — 둘은 다른 숫자다.
+                값은 이미 받아 오고 있었는데(lib/meta/ads.ts insights fields) 표에만 없었다(2026-09-11 심사 문구 점검 적발) */}
+            <th className="pb-2 text-right font-medium">도달</th>
             <th className="pb-2 text-right font-medium">링크 클릭</th>
             <th className="pb-2 text-right font-medium">CTR</th>
             <th className="pb-2 text-right font-medium">CPC</th>
@@ -74,6 +77,7 @@ export function LiveCampaignTable({
                 </td>
                 <td className="tnum py-3 text-right">{cell(c.spend, money)}</td>
                 <td className="tnum py-3 text-right">{cell(c.impressions, formatCompact)}</td>
+                <td className="tnum py-3 text-right">{cell(c.reach, formatCompact)}</td>
                 <td className="tnum py-3 text-right">{cell(c.linkClicks, formatCompact)}</td>
                 <td className="tnum py-3 text-right">{cell(c.ctr, formatPercent)}</td>
                 <td className="tnum py-3 text-right">{cell(c.cpc, money)}</td>

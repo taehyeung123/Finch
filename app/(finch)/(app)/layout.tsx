@@ -13,6 +13,7 @@ import { isDemoMode } from "@/lib/supabase/config";
 import { getAuthUser } from "@/lib/supabase/server";
 import { getConsentStatus } from "@/lib/legal/consent";
 import { IS_SAMPLE_DATA } from "@/lib/data";
+import { isOwnerEmail, isPrimaryOwner } from "@/lib/channel-availability";
 
 /* 로그인 후 영역 전체 — 검색 노출 금지 (PART 13.1) */
 export const metadata: Metadata = {
@@ -55,6 +56,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     }
   }
 
+  /* 메타 심사용 계정(OWNER_EMAIL 의 두 번째 이후 주소)에는 임시오픈 안내를 띄우지 않는다 — 새로 열 때마다 뜨는 모달이
+     «기능이 바뀔 수 있다»고 말해 심사 녹화·재현에서 미완성으로 읽힌다(심사 반려 사유, docs/APP_REVIEW.md §5).
+     사장님(첫 주소)과 고객에게는 그대로 뜬다. 이메일은 위에서 이미 받은 값이라 추가 조회가 없다. */
+  const isReviewAccount = isOwnerEmail(email) && !isPrimaryOwner(email);
+
   /* 여기서 더 기다리지 않는다. 레이아웃이 await 하는 모든 것은 **모든 화면 이동**이 기다린다 —
      Next 는 레이아웃이 끝나기 전엔 loading.tsx 폴백도 못 내보낸다(문서 layout.md «Interaction with loading.js»).
      그래서 알림 100건 조회는 상단바 배지(TopbarUnread)로 떼어 Suspense 뒤에서 뒤따라오게 했다(2026-09-10). */
@@ -91,7 +97,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
         <AgentPanel />
         <MobileTabbar />
-        <OpeningNotice />
+        {isReviewAccount ? null : <OpeningNotice />}
       </NavPendingProvider>
     </ChannelProvider>
   );

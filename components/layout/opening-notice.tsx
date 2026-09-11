@@ -18,6 +18,16 @@ import { Button } from "@/components/ui/button";
 
 const STORAGE_KEY = "finch-opening-notice-dismissed-date";
 
+/*
+  연동 결과를 들고 돌아온 방문에는 띄우지 않는다(2026-09-11 심사 문구 점검 적발).
+  인스타·스레드·메타·구글·카카오 인가 화면에서 돌아오면 **새로 고침된 페이지**라 이 안내가 다시 뜨는데,
+  z-60 이라 z-50 인 결과 모달(«…계정을 연결했어요»)을 **덮었다** — 방금 한 일의 결과가 안내 뒤에 가려진다.
+  돌아온 표식은 ?connect=(설정 › SNS 계정 연결)·?linked=(설정 › 로그인 연결)이다. ResultModal 이 표시 직후 쿼리를 지우므로
+  렌더마다 읽으면 곧 조건이 풀려 결과 모달 위로 다시 뜬다 — 페이지를 불러온 순간 한 번만 판정한다(모듈 평가 = 전체 로드 1회).
+*/
+const ARRIVED_WITH_RESULT =
+  typeof window !== "undefined" && /[?&](connect|linked)=/.test(window.location.search);
+
 function todayKST(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
 }
@@ -43,7 +53,7 @@ function dismissToday() {
 export function OpeningNotice() {
   const notDismissedToday = useSyncExternalStore(subscribe, getSnapshot, () => false);
   const [closedThisSession, setClosedThisSession] = useState(false);
-  const open = notDismissedToday && !closedThisSession;
+  const open = notDismissedToday && !closedThisSession && !ARRIVED_WITH_RESULT;
   const boxRef = useRef<HTMLDivElement>(null);
   /* 모달 관문 — 초기 포커스·Escape·닫힌 뒤 포커스 복원. 없으면 키보드가 스크림 뒤 사이드바로 들어가고
      Escape 도 안 먹었다(감사2 C7). 레이아웃이 리마운트되지 않으므로 open 에 의존한다. */
