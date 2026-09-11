@@ -3,6 +3,19 @@
 > 2026-09-11 조사(코드 전수 + 메타·Supabase·Vercel 공식 문서). 만들기 시작하면 이 문서를 정본으로 고쳐 가며 쓴다.
 > 심사 관련 결정은 [APP_REVIEW.md](APP_REVIEW.md) 가 정본이다.
 
+## 구현 상태 (2026-09-11, 백엔드 조각 `feat/video-core`)
+
+아래 설계에서 바뀐 것 — **이 절이 아래 본문보다 우선한다**:
+
+- 마이그레이션 번호는 **0093**(`supabase/migrations/0093_publish_media.sql`, 0092 는 자동 DM 이 먼저 썼다). **코드보다 먼저 적용**하고, 적용 뒤 Storage 전역 파일 상한을 300MB 이상으로 올린다.
+- 업로드는 TUS 가 아니라 **서명 업로드 URL 에 원본 바이트를 한 번 PUT**(XHR — 진행률이 나온다, 새 의존성 없음). 끊기면 한 번 다시 올린다. 현장에서 실패가 잦으면 TUS 로 바꾼다(같은 토큰이 `x-signature` 로 된다).
+- 서버 쪽(백엔드) 완료: 규칙(`lib/publish-rules.ts`)·미디어 모델(`lib/publish/media-core.ts`, `media.ts`)·업로드 발급/확인/버리기(`lib/publish/uploads.ts` + `publish/actions.ts`)·
+  단계별 어댑터(`lib/meta/instagram-publish.ts`, `threads-publish.ts`)·한국어 오류(`lib/meta/publish-errors.ts`)·상태 기계(`lib/publish/engine-core.ts` 판단 + `run.ts` 실행)·
+  크론 3개(`publish-scheduled` 개편·`publish-processing` 매분·`publish-media-sweep` 매일)·CSP `media-src`·파일 수명(발행 7일 뒤 영상 삭제·초안 삭제·계정 삭제·고아 관찰).
+- 남은 것: 컴포저 UI(타일·진행 막대·커버 고르기·영상 검사 `mp4-inspect-core`/`video-inspect`/`image-bake`/`upload-client`), 목록의 처리 중·링크·배지 표시, S0 실측.
+- 검사: `node scripts/test-publish-rules.ts` · `test-publish-engine.ts` · `test-publish-errors.ts` · `test-publish-media.ts [ffmpeg 픽스처 폴더]`.
+- 두 번 올리지 않기·선점·회수·정리 규칙의 정본은 `lib/publish/engine-core.ts`·`run.ts` 머리말과 0093 머리말이다.
+
 ## 한 줄 요약
 
 영상은 **메타가 막은 게 아니라 핀치가 사진 전용으로 만들어져서** 안 된다. 권한은 이미 받은 두 개로 충분하다

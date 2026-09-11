@@ -15,6 +15,12 @@ import { collectPublicPaths, purgePublicPaths, type PublicPaths } from "@/lib/li
      (reference-thumbs 의 `pool/` 프리픽스는 공용 풀이라 대상이 아니다)
 */
 const USER_BUCKETS = ["cardnews", "brand-logos", "reference-thumbs", "link-assets"] as const;
+/*
+  publish-media(발행 사진·영상, 0093)는 따로 지운다 — 경로가 한 단계(`${uid}/${uuid}.ext`)라 위 루프처럼 항목마다
+  하위 목록을 한 번 더 부를 필요가 없다(파일 수만큼 목록 호출이 붙는다). 원장(publish_uploads)의 정확한 경로 + 폴더 목록(원장에 없는 것까지).
+  원장 행은 auth.users 삭제 cascade 로 함께 사라진다.
+*/
+const PUBLISH_MEDIA_BUCKET = "publish-media";
 
 type Admin = NonNullable<ReturnType<typeof createAdminClient>>;
 
@@ -57,6 +63,20 @@ export async function purgeAndDeleteUser(admin: Admin, userId: string): Promise<
     } catch (e) {
       console.error(`[account-delete] ${bucket} 정리 실패:`, e);
     }
+  }
+  try {
+    const paths = new Set<string>();
+    const { data: uploads, error: upErr } = await admin.from("publish_uploads").select("path").eq("user_id", userId);
+    if (upErr) console.error("[account-delete] 발행 업로드 원장 조회 실패:", upErr.message);
+    for (const r of (uploads ?? []) as Array<{ path: string }>) if (r.path.startsWith(`${userId}/`)) paths.add(r.path);
+    for (const name of await listAll(admin, PUBLISH_MEDIA_BUCKET, userId)) paths.add(`${userId}/${name}`);
+    const list = [...paths];
+    for (let i = 0; i < list.length; i += 100) {
+      const { error } = await admin.storage.from(PUBLISH_MEDIA_BUCKET).remove(list.slice(i, i + 100));
+      if (error) console.error("[account-delete] publish-media 삭제 실패:", error.message);
+    }
+  } catch (e) {
+    console.error("[account-delete] publish-media 정리 실패:", e);
   }
 
   /* 공개 프로필 창고 — 지울 페이지들의 공개 주소(자식 서브 주소·무덤 안내 포함)를 **지우기 전에** 모아 둔다.

@@ -2,6 +2,8 @@
 // PART 3 채널 매트릭스, PART 4 기능 명세 기준.
 // 실제 API 연동 시 이 타입을 유지한 채 lib/mock 대신 실제 데이터 소스로 교체한다 (PART 10 데이터 소스 추상화).
 
+import type { IgSurface } from "./publish-rules";
+
 export type Channel = "instagram" | "tiktok" | "threads";
 export type ChannelFilter = Channel | "all";
 
@@ -361,17 +363,42 @@ export interface PlanFeature {
 }
 
 /**
- * 예약 발행 샘플 한 줄 — DB 의 scheduled_posts 행과 같은 모양(snake_case)으로 둔다.
- * 화면(publish-list.tsx)이 그 모양을 그대로 받으므로, 데모와 실제가 같은 길로 들어간다.
+ * 발행 글 상태(scheduled_posts.status, 0093). processing = 메타가 영상·사진을 처리하는 중(매분 크론이 이어서 본다).
  */
-export interface ScheduledPostSample {
+export type PostStatus = "draft" | "scheduled" | "publishing" | "processing" | "published" | "failed" | "canceled";
+
+/**
+ * 발행 목록 한 줄 — 서버(lib/publish/list-item.ts toListItem)가 DB 행에서 만들고, 데모는 목데이터가 같은 모양으로 준다.
+ * 화면(publish-list.tsx)은 이 모양만 안다 — 미디어 경로·서명은 서버에서 끝낸다(thumb_url).
+ */
+export interface PublishListItem {
   id: string;
   caption: string;
-  image_urls: string[];
+  channel: Channel;
+  /** 실제 상태 — 버튼(취소·지금 발행·삭제)은 이것으로 가른다 */
+  status: PostStatus;
+  /** 화면용 — 미리 준비 중인 예약 영상(processing + 미래 발행 시각)은 «예약됨» */
+  display_status: PostStatus;
   scheduled_at: string;
-  status: "draft" | "scheduled" | "publishing" | "published" | "failed" | "canceled";
+  published_at: string | null;
+  /** 달력·목록 기준 시각 — published 는 published_at ?? scheduled_at */
+  display_at: string;
   error: string | null;
+  /** 인스타·스레드 게시물 주소(검증된 것만) */
+  permalink: string | null;
+  /** 목록 썸네일(서명 URL 또는 옛 공개 URL) — null 이면 영상은 필름 아이콘, 사진은 이미지 아이콘 */
+  thumb_url: string | null;
+  media_count: number;
+  has_video: boolean;
+  ig_surface: IgSurface | null;
+  /** 보관 기간이 지나 영상 파일을 지웠다 — 다시 예약·지금 발행 불가 */
+  media_purged: boolean;
+  /** 지금 취소할 수 있나(예약, 또는 발행 시도 전 처리 중) */
+  can_cancel: boolean;
 }
+
+/** 옛 이름 — 목데이터·데모 경로 호환 */
+export type ScheduledPostSample = PublishListItem;
 
 export interface UsageStat {
   label: string;

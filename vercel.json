@@ -21,6 +21,7 @@
     { "path": "/api/cron/refresh-tokens", "schedule": "0 18 * * *" },
     { "path": "/api/cron/flush-dms", "schedule": "10 23 * * *" },
     { "path": "/api/cron/publish-scheduled", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/publish-processing", "schedule": "* * * * *" },
 
     { "path": "/api/cron/pool-plan", "schedule": "0 20 * * *" },
 
@@ -37,6 +38,7 @@
 
     { "path": "/api/cron/retention", "schedule": "20 19 * * *" },
 
-    { "path": "/api/cron/storage-sweep", "schedule": "40 20 * * *" }
+    { "path": "/api/cron/storage-sweep", "schedule": "40 20 * * *" },
+    { "path": "/api/cron/publish-media-sweep", "schedule": "50 20 * * *" }
   ]
 }

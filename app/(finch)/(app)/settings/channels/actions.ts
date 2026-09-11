@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
 
 /**
@@ -46,13 +47,31 @@ export async function disconnectAccount(formData: FormData): Promise<void> {
      0053 이전 DB 는 channel 컬럼이 없어 이 갱신이 실패한다 — 해제 자체는 이미 끝났으므로 로그만 남긴다. */
   const channel = (deleted[0] as { channel?: string | null }).channel;
   if (channel) {
-    const { error: postsErr } = await supabase
-      .from("scheduled_posts")
-      .update({ status: "failed", error: "연결을 해제해서 발행하지 못했어요 — 다시 연결한 뒤 예약해 주세요" })
-      .eq("user_id", user.id)
-      .eq("channel", channel)
-      .eq("status", "scheduled");
-    if (postsErr) console.error("[settings] 해제 채널의 예약 글 정리 실패:", postsErr.message);
+    /* 2026-09-11: 이 쓰기는 이제 서버(admin)로 한다 — 0093 가드가 로그인 사용자의 «예약 → 실패» 전이를 막는다(상태는 서버만 옮긴다).
+       admin 은 RLS 를 우회하므로 user_id 필터가 곧 권한이다. 처리 중(미리 만든 준비물이 옛 계정 것)인 글도 함께 내린다 —
+       다른 인스타 계정으로 다시 연결하면 옛 계정의 준비물로 발행하려 들기 때문이다. 단 **발행을 시도한 글은 건드리지 않는다**
+       (이미 올라갔을 수 있다 — 매분 크론이 «올라갔나»를 확인해 기록한다). admin 이 없으면 로그만 남긴다(폴백 없음 — 해제 자체는 끝났다). */
+    const admin = createAdminClient();
+    if (!admin) {
+      console.error("[settings] 해제 채널의 예약 글 정리 불가 — 서버 자격증명 미설정");
+    } else {
+      const fields = {
+        status: "failed",
+        error: "연결을 해제해서 발행하지 못했어요 — 다시 연결한 뒤 예약해 주세요",
+        error_code: "NOT_CONNECTED",
+        next_check_at: null,
+      };
+      const a = await admin.from("scheduled_posts").update(fields).eq("user_id", user.id).eq("channel", channel).eq("status", "scheduled");
+      if (a.error) console.error("[settings] 해제 채널의 예약 글 정리 실패:", a.error.message);
+      const b = await admin
+        .from("scheduled_posts")
+        .update(fields)
+        .eq("user_id", user.id)
+        .eq("channel", channel)
+        .eq("status", "processing")
+        .is("publish_attempted_at", null);
+      if (b.error) console.error("[settings] 해제 채널의 처리 중 글 정리 실패:", b.error.message);
+    }
     revalidatePath("/publish");
   }
   revalidatePath("/settings/channels");

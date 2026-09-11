@@ -35,7 +35,7 @@ graph.facebook.com + Page 연결 + pages_* 스코프가 필요해 온보딩이 �
 - `instagram_business_manage_insights` — 계정·미디어 인사이트
 - `instagram_business_manage_comments` — 댓글 조회/모더레이션 + Private Reply 게이팅
 - `instagram_business_manage_messages` — DM 송수신
-- `instagram_business_content_publish` — 예약 발행(캐러셀/카드뉴스 게시)
+- `instagram_business_content_publish` — 발행(사진·릴스·스토리·사진+영상 캐러셀). 영상도 이 권한 하나로 된다(2026-09-11, 새 권한 없음)
 
 구형 값(`business_basic`, `business_manage_messages` 등)은 2025-01-27 폐기. `instagram_manage_*`(business 없는)는
 Facebook Login 경로 값이라 혼용 금지.
@@ -211,19 +211,21 @@ Instagram과 동일하게 **Standard Access(개발자 모드, 앱 역할에 등�
    `link_attachment`, `gif_attachment`, `topic_tag`
 2. 발행: `POST /{threads-user-id}/threads_publish` — `creation_id` 필수. 처리 대기 권장(평균 30초).
 
-**구현 완료(2026-08-31): `lib/meta/threads-publish.ts`.** 예약 발행 크론
-(`app/api/cron/publish-scheduled/route.ts`)이 `channel='threads'` 행을 이 어댑터로 보낸다.
-분기: 이미지 0장 `TEXT` / 1장 `IMAGE` / 2장 이상 `CAROUSEL`.
+**구현(2026-09-11 영상 발행으로 개편): `lib/meta/threads-publish.ts`(단계별 호출) + `lib/publish/run.ts`(상태 기계).**
+분기: 미디어 0개 `TEXT` / 사진 1 `IMAGE` / 영상 1 `VIDEO` / 2~20개 `CAROUSEL`(사진·영상 섞음, 글은 부모에만).
+상태 조회는 `fields=status,error_message` 로 **확정**(2026-09-09 감사) — 옛 «30초 기다렸다 발행 강행»은 없앴다. 처리 중이면 행을
+`processing` 으로 내려놓고 매분 크론(`/api/cron/publish-processing`)이 이어 본다. `error_message` 값(FAILED_DOWNLOADING_VIDEO·INVALID_ASPEC_RATIO(메타 오타)…)은
+`lib/meta/publish-errors.ts` 가 한국어로 바꾼다. 발행 한도는 `/threads_publishing_limit`(250/24시간)를 발행 직전에 읽는다.
 
 인스타와 다른 점 셋 — 이식할 때 여기서 어긋난다:
 - 본문 파라미터가 `caption` 이 아니라 **`text`**, 상한 **500자**(인스타 2200)
 - **글만 있는 게시물이 정상**이다(인스타는 이미지 필수). DB 는 0074 가 채널별로 장수 규칙을 가른다
 - 단일 이미지도 `media_type=IMAGE` 를 **명시**해야 한다(인스타는 `image_url` 만 줘도 된다)
 
-> ⚠️ **컨테이너 상태 조회 필드 이름이 실 계정으로 확정되지 않았다.** 인스타는 `status_code`,
-> Threads 문서는 `status` 로 보인다. 어댑터는 두 이름을 모두 읽고, 어느 쪽도 못 읽으면
-> 실패로 단정하지 않되 **권고치(30초)만큼 기다린 뒤** 발행으로 넘어간다.
-> 테스터 계정으로 1회 호출해 확정하면 이 절과 어댑터를 함께 줄일 것.
+> 인스타 발행(같은 엔진, `lib/meta/instagram-publish.ts`): 사진은 `media_type` 없이 `image_url`, 영상 1개는 `REELS`(+`share_to_feed`·`thumb_offset` 항상),
+> 캐러셀 아이템은 사진 `image_url` / 영상 `media_type=VIDEO`+`is_carousel_item`, 스토리는 `STORIES`. 상태는 `fields=status_code`, ERROR 일 때만 `status` 로 하위 코드(2207xxx).
+> 한도는 `content_publishing_limit?fields=quota_usage,config`. 두 번 올리지 않기 규칙은 `lib/publish/engine-core.ts` 머리말.
+> 실측 전(S0): 서명 URL 수락 여부·폰 원본(moov 뒤쪽·HDR)·캐러셀 영상 아이템 한도·두 번째 발행 호출의 응답 — `docs/PUBLISH_VIDEO_PLAN.md`.
 
 ### 인사이트
 

@@ -21,6 +21,8 @@ import {
   shiftMonth,
 } from "@/lib/calendar";
 import { SnsIcon } from "@/components/sns-brand-icons";
+import type { PublishListItem } from "@/lib/types";
+import { iGa } from "@/lib/josa";
 import { cancelScheduledPost } from "@/app/(finch)/(app)/studio/actions";
 import { deleteDraft, publishNow, scheduleDraft } from "../actions";
 import { PostComposer, type ComposerChannel } from "./post-composer";
@@ -29,9 +31,11 @@ import { PostComposer, type ComposerChannel } from "./post-composer";
 type AskKind = "cancel" | "now" | "delete";
 /** 확인을 누른 **시점에** 그 글이 아직 이 조작을 받을 수 있는 상태인가 — 확인 모달이 떠 있는 몇 초 사이 목록이 새로 올 수 있다 */
 const ASK_ALLOWED: Record<AskKind, readonly PostStatus[]> = {
-  cancel: ["scheduled"],
-  now: ["draft", "scheduled", "failed"],
-  delete: ["draft", "failed"],
+  /* 처리 중 취소는 서버가 «발행 시도 전»인지 한 번 더 본다(can_cancel·DB 가드 0093) */
+  cancel: ["scheduled", "processing"],
+  now: ["draft", "scheduled", "failed", "processing"],
+  /* 취소된 글도 지울 수 있다 — 안 그러면 사진·영상 파일이 영구히 남는다 */
+  delete: ["draft", "failed", "canceled"],
 };
 
 /** 확인 모달에 «어느 글인지»를 붙인다 — 목록에서 누른 줄이 맞는지 한 번 더 보게 */
@@ -41,14 +45,8 @@ function captionSnippet(caption: string): string {
   return line.length > 24 ? `${line.slice(0, 24)}…` : line;
 }
 
-export interface ScheduledPost {
-  id: string;
-  caption: string;
-  image_urls: string[];
-  scheduled_at: string;
-  status: PostStatus;
-  error: string | null;
-}
+/** 목록 한 줄 — 서버(lib/publish/list-item.ts)가 만든다. 썸네일은 서명된 thumb_url 로 온다 */
+export type ScheduledPost = PublishListItem;
 
 /**
  * 발행 — 캘린더 + 목록 + 초안.
@@ -130,7 +128,7 @@ export function PublishList({
     const map = new Map<string, ScheduledPost[]>();
     for (const p of items) {
       if (p.status === "draft") continue;
-      const key = kstDayKey(p.scheduled_at);
+      const key = kstDayKey(p.display_at);
       if (!key) continue;
       const list = map.get(key);
       if (list) list.push(p);
@@ -142,7 +140,7 @@ export function PublishList({
   const drafts = useMemo(() => items.filter((p) => p.status === "draft"), [items]);
   /* 발행예약 = 아직 손댈 수 있는 것(예약·발행 중·실패) / 발행완료 = 이력(발행됨·취소됨) */
   const scheduledItems = useMemo(
-    () => items.filter((p) => p.status === "scheduled" || p.status === "publishing" || p.status === "failed"),
+    () => items.filter((p) => p.status === "scheduled" || p.status === "publishing" || p.status === "processing" || p.status === "failed"),
     [items],
   );
   const doneItems = useMemo(
@@ -195,10 +193,21 @@ export function PublishList({
           setResult({ tone: "negative", title: "발행하지 못했어요", description: res.error });
           return;
         }
+        const o = res.outcome;
         setResult(
-          res.outcome.published
-            ? { tone: "positive", title: `${res.outcome.label}에 올라갔어요`, description: "「발행완료」 탭에서 확인할 수 있어요." }
-            : { tone: "negative", title: `${res.outcome.label}에 올리지 못했어요`, description: `${res.outcome.error} — 다시 시도하거나 지울 수 있어요.` },
+          o.state === "published"
+            ? { tone: "positive", title: `${o.label}에 올라갔어요`, description: "「발행완료」 탭에서 확인할 수 있어요." }
+            : o.state === "processing"
+              ? o.soon
+                ? { tone: "positive", title: "곧 올라가요", description: `준비가 끝났어요. 곧 ${o.label}에 올라가요.` }
+                : {
+                    tone: "positive",
+                    title: `${iGa(o.label)} ${o.hasVideo ? "영상을" : "게시물을"} 처리하고 있어요`,
+                    description: "끝나는 대로 자동으로 올라가요. 올라가면 알림으로 알려 드려요.",
+                  }
+              : o.state === "deferred"
+                ? { tone: "warning", title: "저장했어요 — 곧 자동으로 올라가요", description: o.error }
+                : { tone: "negative", title: `${o.label}에 올리지 못했어요`, description: `${o.error} — 다시 시도하거나 지울 수 있어요.` },
         );
         router.refresh();
       } catch {
@@ -518,7 +527,7 @@ export function PublishList({
                                     ? "bg-positive"
                                     : p.status === "canceled"
                                       ? "bg-fg-faint"
-                                      : p.status === "publishing"
+                                      : p.status === "publishing" || p.display_status === "processing"
                                         ? "anim-pulse bg-warning"
                                         : "bg-primary",
                               )}
@@ -606,14 +615,14 @@ export function PublishList({
                 <ul className="space-y-3">
                   {selectedPosts.map((post) => (
                     <li key={post.id} className="flex gap-2.5">
-                      <Thumb url={post.image_urls[0]} />
+                      <Thumb url={post.thumb_url ?? undefined} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[14px] font-medium">
                           {post.caption.split("\n")[0] || "(캡션 없음)"}
                         </p>
                         <div className="mt-1 flex items-center gap-2">
-                          <StatusPill status={post.status} />
-                          <span className="tnum text-[12px] text-fg-sub">{kstTimeKey(post.scheduled_at)}</span>
+                          <StatusPill status={post.display_status} />
+                          <span className="tnum text-[12px] text-fg-sub">{kstTimeKey(post.display_at)}</span>
                           {post.status === "scheduled" || post.status === "failed" ? (
                             <button
                               type="button"
@@ -674,18 +683,18 @@ export function PublishList({
               <ul className="divide-y divide-line">
                 {(view === "scheduled" ? scheduledItems : doneItems).map((post) => (
                   <li key={post.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                    <Thumb url={post.image_urls[0]} />
+                    <Thumb url={post.thumb_url ?? undefined} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[15px] font-medium">{post.caption.split("\n")[0] || "(캡션 없음)"}</p>
                       <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-fg-sub">
                         <CalendarClock className="size-3" aria-hidden />
                         <span className="tnum">
-                          {kstDayKey(post.scheduled_at)} {kstTimeKey(post.scheduled_at)}
+                          {kstDayKey(post.display_at)} {kstTimeKey(post.display_at)}
                         </span>
                         {post.status === "failed" && post.error ? ` · ${post.error}` : ""}
                       </p>
                     </div>
-                    <StatusPill status={post.status} />
+                    <StatusPill status={post.display_status} />
                     {post.status === "scheduled" || post.status === "failed" ? (
                       <Button size="sm" variant="secondary" disabled={nowBusy !== null || draftBusy !== null} onClick={() => setAsk({ kind: "now", id: post.id })}>
                         <Send className="size-3.5" aria-hidden /> {nowBusy === post.id ? "발행 중…" : "지금 발행"}
@@ -767,7 +776,7 @@ export function PublishList({
             <ul className={cn("divide-y divide-line", drafts.length === 0 && "hidden")}>
               {drafts.map((post) => (
                 <li key={post.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0">
-                  <Thumb url={post.image_urls[0]} />
+                  <Thumb url={post.thumb_url ?? undefined} />
                   <p className="min-w-0 flex-1 truncate text-[15px] font-medium">
                     {post.caption.split("\n")[0] || "(캡션 없음)"}
                   </p>

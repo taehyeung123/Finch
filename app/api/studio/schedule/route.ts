@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { parseKstDateTimeLocal } from "@/lib/calendar";
 import { publishGate } from "@/lib/publish/gate";
+import { publishDbErrorText } from "@/lib/publish/db-errors";
 
 /**
  * 카드뉴스 예약 발행 등록 — 이미지(FormData)를 Storage(cardnews 버킷, 본인 폴더)에 업로드하고
@@ -102,16 +103,16 @@ export async function POST(request: Request) {
     }
   }
 
-  /* 미발행 보관 상한 — 업로드 **전에** 본다. 없으면 계정 하나가 스토리지와 scheduled_posts 를
-     무한히 채운다(둘 다 사용량 과금이다). 조회가 실패하면 막지 않는다 — «확인 못 함»을
-     «초과»로 단정해 정상 사용자의 저장을 막는 쪽이 더 나쁘다(2026-09-07 감사). */
+  /* 미발행 보관 상한 — 업로드 **전에** 한 번 본다(빠른 거절로 스토리지를 아낀다). 진짜 관문은 DB 가드(0093
+     scheduled_posts_guard)다: 잠금 아래에서 세어 동시 요청이 상한을 넘지 못하고, 「실패 → 다시 예약」 UPDATE 로도
+     우회되지 않는다. 여기 조회가 실패해도 막지 않는다 — 아래 insert 에서 가드가 본다. */
   const { count: pendingCount, error: countErr } = await supabase
     .from("scheduled_posts")
     .select("id", { count: "exact", head: true })
     .eq("user_id", user.id)
-    .in("status", ["draft", "scheduled"]);
+    .in("status", ["draft", "scheduled", "processing", "publishing"]);
   if (countErr) {
-    console.error("[studio:schedule] 보관 수 확인 실패:", countErr.message);
+    console.error("[studio:schedule] 보관 수 확인 실패(가드가 다시 본다):", countErr.message);
   } else if ((pendingCount ?? 0) >= MAX_UNPUBLISHED) {
     return NextResponse.json(
       { error: `저장해 둔 초안과 예약이 너무 많아요(최대 ${MAX_UNPUBLISHED}개). 발행했거나 필요 없는 것을 지운 뒤 다시 시도해 주세요.` },
@@ -158,8 +159,11 @@ export async function POST(request: Request) {
     status: asDraft ? "draft" : "scheduled",
   });
   if (insertErr) {
-    console.error("[studio:schedule] 예약 등록 실패:", insertErr.message);
     await rollbackUploads();
+    /* DB 가드(0093)의 거절(상한·지난 시각)은 사람이 고칠 수 있는 이유다 — 그대로 말한다 */
+    const known = publishDbErrorText(insertErr);
+    if (known) return NextResponse.json({ error: known }, { status: 400 });
+    console.error("[studio:schedule] 예약 등록 실패:", insertErr.message);
     return NextResponse.json({ error: "예약 등록에 실패했어요. 다시 시도해 주세요." }, { status: 500 });
   }
 

@@ -400,18 +400,26 @@ export function PostComposer({
       }
       const label = channelLabel(channel);
       if (res.mode === "now") {
+        const o = res.outcome;
         onSaved(
-          res.outcome.published
+          o.state === "published"
             ? { tone: "positive", title: `${label}에 올라갔어요`, description: "「발행완료」 탭에서 확인할 수 있어요." }
-            : res.outcome.deferred
-              ? /* 저장은 됐고 크론이 곧 집어 간다 — «실패»로 말하면 정상 발행 예정 글을 지우게 된다 */
-                { tone: "warning", title: "저장했어요 — 5분 안에 자동으로 올라가요", description: "지금 바로는 올리지 못했어요. 「발행예약」 탭에서 상태를 볼 수 있어요." }
-              : /* 저장은 됐고 발행만 실패 — 컴포저를 닫는다. 열어 둔 채 오류만 보이면 같은 글을 두 번 올리게 된다 */
+            : o.state === "processing"
+              ? /* 메타가 처리 중 — 매분 크론이 이어서 올리고 알림을 보낸다 */
                 {
-                  tone: "negative",
-                  title: `${label}에 올리지 못했어요`,
-                  description: `${res.outcome.error} — 글은 「발행예약」 탭에 남아 있어요. 다시 시도하거나 지울 수 있어요.`,
-                },
+                  tone: "positive",
+                  title: `${iGa(label)} ${o.hasVideo ? "영상을" : "게시물을"} 처리하고 있어요`,
+                  description: "끝나는 대로 자동으로 올라가요. 올라가면 알림으로 알려 드려요. 「발행예약」 탭에서 상태를 볼 수 있어요.",
+                }
+              : o.state === "deferred"
+                ? /* 저장은 됐고 크론이 곧 집어 간다 — «실패»로 말하면 정상 발행 예정 글을 지우게 된다 */
+                  { tone: "warning", title: "저장했어요 — 5분 안에 자동으로 올라가요", description: `${o.error} 「발행예약」 탭에서 상태를 볼 수 있어요.` }
+                : /* 저장은 됐고 발행만 실패 — 컴포저를 닫는다. 열어 둔 채 오류만 보이면 같은 글을 두 번 올리게 된다 */
+                  {
+                    tone: "negative",
+                    title: `${label}에 올리지 못했어요`,
+                    description: `${o.error} — 글은 「발행예약」 탭에 남아 있어요. 다시 시도하거나 지울 수 있어요.`,
+                  },
         );
       } else if (res.mode === "draft") {
         onSaved({ tone: "positive", title: "초안으로 저장했어요", description: "「초안」 탭에서 언제든 시각을 정하거나 지금 발행할 수 있어요." });

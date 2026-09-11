@@ -1,172 +1,203 @@
+/* 연동 토큰으로 메타에 쓰는 모듈 — 서버 밖으로 나가면 안 된다 */
+import "server-only";
+
 /**
- * Instagram 콘텐츠 발행 어댑터 — 캐러셀(카드뉴스) 자동 게시.
- * graph.instagram.com v25.0(Instagram Login), scope instagram_business_content_publish 필요 —
- * 연동 동의 때 함께 받는다(lib/meta/instagram-oauth.ts 의 INSTAGRAM_SCOPES).
- * 그 배열에서 빠지면 여기서는 아무 신호도 없고, 발행 시각에야 권한 오류로 실패한다.
+ * Instagram 콘텐츠 발행 어댑터 — **단계별 호출**(만들기·상태 읽기·발행·확인) (2026-09-11 영상 발행으로 재작성).
+ * graph.instagram.com v25.0(Instagram Login), scope instagram_business_content_publish —
+ * 연동 동의 때 함께 받는다(lib/meta/instagram-oauth.ts 의 INSTAGRAM_SCOPES). 새 권한은 필요 없다.
  *
- * 흐름: 이미지별 아이템 컨테이너 생성 → 캐러셀 컨테이너 생성(children) → 상태 폴링 → 발행.
- * Meta가 image_url을 직접 크롤링하므로 공개 접근 가능한 URL이어야 한다(Supabase Storage 공개 버킷).
- * 이미지는 **JPEG 만** 받는다(«JPEG is the only image format supported») — 컴포저·스튜디오가 JPEG 로 굽는다.
+ * 예전엔 «만들기 → 2초마다 폴링 → 발행»을 요청 하나 안에서 끝냈다. 영상은 메타가 몇 분씩 처리하므로 그 모델이 성립하지 않는다.
+ * 이제 이 파일은 **한 번의 호출씩**만 제공하고, 흐름(언제 다시 볼지·두 번 올리지 않기)은 lib/publish/run.ts +
+ * engine-core.ts 가 여러 번의 실행에 걸쳐 진행한다.
  *
- * ⚠️ 시간 예산은 **전체 흐름**에 건다(2026-09-09 점검). 예전엔 마지막 폴링에만 상한이 있고 아이템 컨테이너 생성
- * 루프(최대 10회 순차 Graph 왕복)는 타임아웃이 없어, 메타가 느리면 함수 maxDuration 을 넘겨 플랫폼이 죽이고
- * 행이 'publishing' 으로 굳었다. 이제 호출마다 남은 예산만큼만 기다리고, 예산이 다하면 실패로 돌려준다.
+ * 메타 규칙(IG content publishing·IG User Media 문서, 2026-09-11 확인):
+ *  · 사진: media_type 을 **보내지 않는다**(문서화된 값은 CAROUSEL·REELS·STORIES 뿐). image_url 은 JPEG.
+ *  · 영상 1개: media_type=REELS(피드 VIDEO 단일 게시물은 2023-11 부터 안 된다). share_to_feed 는 기본값이 문서에 없어 항상 명시.
+ *    thumb_offset(ms)는 **항상** 보낸다 — 안 보내면 메타는 첫 프레임을 커버로 쓰고, 우리 목록 썸네일(1초 지점)과 달라진다.
+ *  · 캐러셀 아이템: 사진 image_url / 영상 media_type=VIDEO + video_url, 둘 다 is_carousel_item=true. 아이템엔 캡션을 싣지 않는다.
+ *  · 스토리: media_type=STORIES + image_url|video_url. 캡션·share_to_feed·커버 없음.
+ *  · 상태: fields=status_code(IN_PROGRESS·FINISHED·PUBLISHED·ERROR·EXPIRED). 하위 코드는 ERROR 일 때만 status 필드로 따로 읽는다 —
+ *    같은 요청에 모르는 필드를 섞으면 그래프가 요청 전체를 거절한다(스레드에서 한 번 겪었다, threads-publish.ts).
+ *  · POST 는 폼 본문으로 보낸다 — 2,200자 한글 캡션을 쿼리에 실으면 주소가 20KB 가 되고, 토큰이 주소 로그에 남는다.
+ * 메타는 image_url/video_url 을 **직접 가져간다** — 우리가 짧은 서명 URL 을 만들어 넘긴다(lib/publish/media.ts).
  */
 
 import { GRAPH_INSTAGRAM_BASE } from "./graph";
+import { extractIgSubcode } from "./publish-errors";
+import type {
+  ContainerCheck,
+  ContainerSpec,
+  ContainerStatus,
+  GraphFailure,
+  GraphResult,
+  PublishAdapter,
+  QuotaInfo,
+  RecentMedia,
+} from "./publish-types";
 
-export type PublishResult = { ok: true; mediaId: string } | { ok: false; error: string };
+type Budget = { slice(): number | null };
 
 interface GraphErrorBody {
-  error?: { message?: string; code?: number };
+  error?: { message?: string; code?: number; error_subcode?: number };
 }
 
-/** 호출 하나가 기다릴 상한 — 예산이 더 남아 있어도 한 호출을 이 이상 붙들지 않는다 */
-const PER_CALL_TIMEOUT_MS = 15_000;
-/** 이보다 적게 남았으면 새 호출을 시작하지 않는다(응답을 받아도 처리할 시간이 없다) */
-const MIN_CALL_BUDGET_MS = 1_500;
+const fail = (f: Partial<GraphFailure> & { kind: GraphFailure["kind"] }): { ok: false; failure: GraphFailure } => ({
+  ok: false,
+  failure: { httpStatus: null, code: null, subcode: null, message: null, ...f },
+});
 
-/** 전체 흐름의 시간 예산 — 스레드 어댑터도 같은 것을 쓴다(threads-publish.ts) */
-export class Deadline {
-  private readonly at: number;
-  constructor(totalMs: number) {
-    this.at = Date.now() + totalMs;
-  }
-  remaining(): number {
-    return this.at - Date.now();
-  }
-  /** 다음 호출에 줄 시간 — 없으면 null(예산 소진) */
-  slice(): number | null {
-    const r = this.remaining();
-    return r < MIN_CALL_BUDGET_MS ? null : Math.min(PER_CALL_TIMEOUT_MS, r);
-  }
-}
-
-async function graphCall<T>(
+/** 그래프 한 번 — 예외를 던지지 않는다. 시간은 흐름 예산(Deadline)의 몫만 쓴다 */
+export async function graphCall<T>(
+  base: string,
+  method: "GET" | "POST",
   path: string,
-  accessToken: string,
+  token: string,
   params: Record<string, string>,
-  deadline: Deadline,
-): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+  deadline: Budget,
+): Promise<GraphResult<T>> {
   const budget = deadline.slice();
-  if (budget === null) return { ok: false, error: "publish_timeout" };
-  const q = new URLSearchParams({ ...params, access_token: accessToken });
+  if (budget === null) return fail({ kind: "budget" });
   try {
-    const res = await fetch(`${GRAPH_INSTAGRAM_BASE}${path}?${q.toString()}`, {
-      method: "POST",
-      signal: AbortSignal.timeout(budget),
-    });
-    const json = (await res.json().catch(() => ({}))) as T & GraphErrorBody;
+    const q = new URLSearchParams({ ...params, access_token: token });
+    const res =
+      method === "POST"
+        ? await fetch(`${base}${path}`, {
+            method: "POST",
+            headers: { "content-type": "application/x-www-form-urlencoded" },
+            body: q,
+            cache: "no-store",
+            signal: AbortSignal.timeout(budget),
+          })
+        : await fetch(`${base}${path}?${q.toString()}`, { cache: "no-store", signal: AbortSignal.timeout(budget) });
+    const json = (await res.json().catch(() => null)) as (T & GraphErrorBody) | null;
     if (!res.ok) {
-      return { ok: false, error: json.error?.message ?? `http_${res.status}` };
+      const err = json?.error;
+      return fail({
+        kind: "http",
+        httpStatus: res.status,
+        code: typeof err?.code === "number" ? err.code : null,
+        subcode: typeof err?.error_subcode === "number" ? err.error_subcode : null,
+        message: err?.message ?? null,
+      });
     }
+    /* 성공 응답인데 본문을 못 읽었다 — 결과를 모르는 것이다(발행이면 올라갔을 수 있다) */
+    if (json === null) return fail({ kind: "network", httpStatus: res.status, message: "unreadable_body" });
     return { ok: true, data: json };
   } catch (e) {
-    if (e instanceof Error && e.name === "TimeoutError") return { ok: false, error: "publish_timeout" };
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) return fail({ kind: "timeout" });
+    return fail({ kind: "network", message: e instanceof Error ? e.message : String(e) });
   }
 }
 
-async function createCarouselItem(igUserId: string, accessToken: string, imageUrl: string, deadline: Deadline) {
-  return graphCall<{ id: string }>(`/${igUserId}/media`, accessToken, { image_url: imageUrl, is_carousel_item: "true" }, deadline);
+const STATUS_VALUES: ReadonlySet<string> = new Set(["IN_PROGRESS", "FINISHED", "PUBLISHED", "ERROR", "EXPIRED"]);
+
+export function toContainerStatus(v: unknown): ContainerStatus {
+  const s = typeof v === "string" ? v.toUpperCase() : "";
+  return STATUS_VALUES.has(s) ? (s as ContainerStatus) : "UNKNOWN";
 }
 
-async function createCarouselContainer(
-  igUserId: string,
-  accessToken: string,
-  caption: string,
-  childrenIds: string[],
-  deadline: Deadline,
-) {
-  return graphCall<{ id: string }>(
-    `/${igUserId}/media`,
-    accessToken,
-    { media_type: "CAROUSEL", caption, children: childrenIds.join(",") },
-    deadline,
-  );
+/** 인스타 준비물 파라미터 — 사양이 인스타에 없는 것(글 전용 등)이면 null */
+export function igContainerParams(spec: ContainerSpec): Record<string, string> | null {
+  switch (spec.type) {
+    case "image":
+      return spec.carouselItem
+        ? { image_url: spec.url, is_carousel_item: "true" }
+        : { image_url: spec.url, ...(spec.caption ? { caption: spec.caption } : {}) };
+    case "video":
+      /* 인스타의 VIDEO 는 캐러셀 아이템에만 남았다 — 단일 영상은 reels 로 온다 */
+      if (!spec.carouselItem) return null;
+      return {
+        media_type: "VIDEO",
+        video_url: spec.url,
+        is_carousel_item: "true",
+        ...(spec.thumbOffsetMs !== null ? { thumb_offset: String(spec.thumbOffsetMs) } : {}),
+      };
+    case "reels":
+      return {
+        media_type: "REELS",
+        video_url: spec.url,
+        caption: spec.caption,
+        share_to_feed: spec.shareToFeed ? "true" : "false",
+        ...(spec.thumbOffsetMs !== null ? { thumb_offset: String(spec.thumbOffsetMs) } : {}),
+      };
+    case "story":
+      return spec.mediaKind === "video"
+        ? { media_type: "STORIES", video_url: spec.url }
+        : { media_type: "STORIES", image_url: spec.url };
+    case "carousel":
+      return { media_type: "CAROUSEL", children: spec.children.join(","), ...(spec.caption ? { caption: spec.caption } : {}) };
+    case "text":
+      return null;
+  }
 }
 
-/** 단일 이미지(1장짜리 카드뉴스)는 캐러셀이 아니라 일반 IMAGE 컨테이너로 만든다 */
-async function createSingleImageContainer(igUserId: string, accessToken: string, caption: string, imageUrl: string, deadline: Deadline) {
-  return graphCall<{ id: string }>(`/${igUserId}/media`, accessToken, { image_url: imageUrl, caption }, deadline);
-}
+/** 연동 한 건(인스타 사용자 id + 토큰)에 묶인 어댑터 */
+export function makeInstagramAdapter(igUserId: string, token: string): PublishAdapter {
+  const call = <T>(method: "GET" | "POST", path: string, params: Record<string, string>, d: Budget) =>
+    graphCall<T>(GRAPH_INSTAGRAM_BASE, method, path, token, params, d);
 
-async function pollContainerStatus(
-  containerId: string,
-  accessToken: string,
-  deadline: Deadline,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  for (;;) {
-    const budget = deadline.slice();
-    if (budget === null) return { ok: false, error: "container_timeout" };
-    let json: { status_code?: string; error?: { message?: string } };
-    try {
-      const res = await fetch(
-        `${GRAPH_INSTAGRAM_BASE}/${containerId}?fields=status_code&access_token=${encodeURIComponent(accessToken)}`,
-        { signal: AbortSignal.timeout(budget) },
+  return {
+    channel: "instagram",
+
+    async create(spec, d) {
+      const params = igContainerParams(spec);
+      if (!params) return fail({ kind: "http", httpStatus: 400, message: `unsupported_spec:${spec.type}` });
+      const r = await call<{ id?: string }>("POST", `/${igUserId}/media`, params, d);
+      if (!r.ok) return r;
+      if (!r.data.id) return fail({ kind: "network", message: "no_container_id" });
+      return { ok: true, data: { id: String(r.data.id) } };
+    },
+
+    async check(containerId, d): Promise<GraphResult<ContainerCheck>> {
+      const r = await call<{ status_code?: string }>("GET", `/${containerId}`, { fields: "status_code" }, d);
+      if (!r.ok) return r;
+      const status = toContainerStatus(r.data.status_code);
+      if (status !== "ERROR") return { ok: true, data: { status, subcode: null, detail: null } };
+      /* 하위 코드는 따로 읽는다 — 실패해도 ERROR 는 ERROR 다 */
+      const detail = await call<{ status?: string }>("GET", `/${containerId}`, { fields: "status" }, d);
+      const text = detail.ok && typeof detail.data.status === "string" ? detail.data.status : null;
+      return { ok: true, data: { status, subcode: extractIgSubcode(text), detail: text } };
+    },
+
+    async publish(containerId, d) {
+      const r = await call<{ id?: string }>("POST", `/${igUserId}/media_publish`, { creation_id: containerId }, d);
+      if (!r.ok) return r;
+      if (!r.data.id) return fail({ kind: "network", message: "no_media_id" });
+      return { ok: true, data: { id: String(r.data.id) } };
+    },
+
+    async permalink(mediaId, d) {
+      const r = await call<{ permalink?: string }>("GET", `/${mediaId}`, { fields: "permalink" }, d);
+      return r.ok && typeof r.data.permalink === "string" ? r.data.permalink : null;
+    },
+
+    async recent(d): Promise<GraphResult<RecentMedia[]>> {
+      const r = await call<{ data?: Array<{ id?: string; caption?: string; timestamp?: string; permalink?: string }> }>(
+        "GET",
+        `/${igUserId}/media`,
+        { fields: "id,caption,timestamp,permalink", limit: "10" },
+        d,
       );
-      json = (await res.json().catch(() => ({}))) as typeof json;
-      if (!res.ok) return { ok: false, error: json.error?.message ?? `http_${res.status}` };
-    } catch (e) {
-      if (e instanceof Error && e.name === "TimeoutError") return { ok: false, error: "container_timeout" };
-      return { ok: false, error: e instanceof Error ? e.message : String(e) };
-    }
-    if (json.status_code === "FINISHED") return { ok: true };
-    if (json.status_code === "ERROR" || json.status_code === "EXPIRED") {
-      return { ok: false, error: `container_${json.status_code.toLowerCase()}` };
-    }
-    // IN_PROGRESS — 2초 대기 후 재확인(남은 예산 안에서)
-    if (deadline.remaining() < 2_000 + MIN_CALL_BUDGET_MS) return { ok: false, error: "container_timeout" };
-    await new Promise((r) => setTimeout(r, 2000));
-  }
-}
+      if (!r.ok) return r;
+      return {
+        ok: true,
+        data: (r.data.data ?? [])
+          .filter((m) => typeof m.id === "string")
+          .map((m) => ({ id: String(m.id), caption: m.caption ?? null, timestamp: m.timestamp ?? null, permalink: m.permalink ?? null })),
+      };
+    },
 
-async function publishContainer(igUserId: string, accessToken: string, containerId: string, deadline: Deadline) {
-  return graphCall<{ id: string }>(`/${igUserId}/media_publish`, accessToken, { creation_id: containerId }, deadline);
-}
-
-/**
- * 카드뉴스 게시 — 이미지 1장이면 단일 이미지, 2장 이상이면 캐러셀로 발행한다.
- * 각 단계 실패는 명확한 사유와 함께 즉시 중단(부분 상태로 남기지 않음).
- *
- * @param maxWaitMs **전체 흐름**의 시간 상한(아이템 생성·컨테이너·폴링·발행 합계). 호출측이 자기 실행시간 예산에
- *   맞춰 줘야 한다 — 함수 maxDuration 보다 길면 플랫폼이 함수를 먼저 죽이고 행이 'publishing' 으로 굳는다.
- *   ⚠️ 마지막 media_publish 가 성공한 뒤 예산이 다해도 결과는 그대로 돌려준다 — 올라간 글은 기록해야 한다.
- */
-export async function publishCardNews(params: {
-  igUserId: string;
-  accessToken: string;
-  caption: string;
-  imageUrls: string[];
-  maxWaitMs?: number;
-}): Promise<PublishResult> {
-  const { igUserId, accessToken, caption, imageUrls, maxWaitMs = 60_000 } = params;
-  if (imageUrls.length === 0) return { ok: false, error: "이미지가 없습니다." };
-  const deadline = new Deadline(maxWaitMs);
-
-  let containerId: string;
-
-  if (imageUrls.length === 1) {
-    const single = await createSingleImageContainer(igUserId, accessToken, caption, imageUrls[0], deadline);
-    if (!single.ok) return { ok: false, error: `이미지 준비 실패: ${single.error}` };
-    containerId = single.data.id;
-  } else {
-    const childIds: string[] = [];
-    for (const url of imageUrls) {
-      const item = await createCarouselItem(igUserId, accessToken, url, deadline);
-      if (!item.ok) return { ok: false, error: `슬라이드 준비 실패: ${item.error}` };
-      childIds.push(item.data.id);
-    }
-    const carousel = await createCarouselContainer(igUserId, accessToken, caption, childIds, deadline);
-    if (!carousel.ok) return { ok: false, error: `캐러셀 준비 실패: ${carousel.error}` };
-    containerId = carousel.data.id;
-  }
-
-  const status = await pollContainerStatus(containerId, accessToken, deadline);
-  if (!status.ok) return { ok: false, error: `콘텐츠 처리 실패: ${status.error}` };
-
-  const published = await publishContainer(igUserId, accessToken, containerId, deadline);
-  if (!published.ok) return { ok: false, error: `발행 실패: ${published.error}` };
-
-  return { ok: true, mediaId: published.data.id };
+    async quota(d): Promise<QuotaInfo | null> {
+      /* 필드는 이 둘만 — 참조 문서 예시의 rate_limit_settings 는 옛 필드다 */
+      const r = await call<{ data?: Array<{ quota_usage?: number; config?: { quota_total?: number } }> }>(
+        "GET",
+        `/${igUserId}/content_publishing_limit`,
+        { fields: "quota_usage,config" },
+        d,
+      );
+      const row = r.ok ? r.data.data?.[0] : undefined;
+      if (typeof row?.quota_usage !== "number" || typeof row.config?.quota_total !== "number") return null;
+      return { usage: row.quota_usage, total: row.config.quota_total };
+    },
+  };
 }
