@@ -4,6 +4,13 @@ import { withSentryConfig } from "@sentry/nextjs/config";
 
 const nextConfig: NextConfig = {
   experimental: {
+    /* Turbopack 빌드 캐시를 끈다. 16.3.0 부터 기본으로 켜졌고(node_modules/next/dist/docs/.../turbopackFileSystemCache.md),
+       Vercel 이 .next/cache 를 다음 빌드에 되살린다. 그 캐시가 app/globals.css 에 손으로 쓴 규칙의 변경을 놓쳐,
+       배포는 «성공»인데 운영 CSS 가 옛것인 사고가 16.3.1 업그레이드(2026-08-20) 뒤 세 번 났다
+       (2026-08-30, cb15c9a, 63d68e7 — 63d68e7 은 로컬에서도 재현, .next 삭제 후 재빌드로만 풀렸다).
+       Tailwind 가 소스에서 뽑는 유틸리티는 새로 들어가고 손으로 쓴 규칙만 옛것이라 눈으로는 알아채기 어렵다.
+       빌드가 조금 느려지는 대신 매번 새로 굽는다. 개발 캐시(ForDev)는 그대로 둔다. */
+    turbopackFileSystemCacheForBuild: false,
     serverActions: {
       /* 발행 컴포저(post-composer.tsx)가 이미지를 base64 data URL 로 서버 액션에
          넘긴다. 기본 1MB 로는 사진 한 장도 못 들어간다 — 컴포저가 클라이언트에서
