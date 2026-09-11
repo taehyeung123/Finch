@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 에이전트 워크트리(저장소 사본) — 같은 파일을 두 번 검사하게 된다
+    ".claude/**",
   ]),
 ]);
 

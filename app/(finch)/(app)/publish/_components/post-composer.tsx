@@ -716,7 +716,7 @@ export function PostComposer({
           {/* 메타가 이미지를 처리하는 시간 — 캐러셀은 1분 가까이 걸리기도 한다. 말없이 돌면 멈춘 줄 안다 */}
           {saving && mode === "now" ? (
             <p className="mt-2 text-center text-[12px] text-fg-sub">
-              {channelLabel(channel)}이 이미지를 처리하는 동안 잠시 걸릴 수 있어요. 창을 닫지 마세요.
+              {iGa(channelLabel(channel))} 게시물을 처리하는 동안 잠시 걸릴 수 있어요. 창을 닫지 마세요.
             </p>
           ) : null}
         </div>

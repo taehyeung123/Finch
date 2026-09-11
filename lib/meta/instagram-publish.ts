@@ -26,7 +26,8 @@ const PER_CALL_TIMEOUT_MS = 15_000;
 /** 이보다 적게 남았으면 새 호출을 시작하지 않는다(응답을 받아도 처리할 시간이 없다) */
 const MIN_CALL_BUDGET_MS = 1_500;
 
-class Deadline {
+/** 전체 흐름의 시간 예산 — 스레드 어댑터도 같은 것을 쓴다(threads-publish.ts) */
+export class Deadline {
   private readonly at: number;
   constructor(totalMs: number) {
     this.at = Date.now() + totalMs;

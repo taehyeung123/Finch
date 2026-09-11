@@ -18,7 +18,7 @@
  */
 
 import { GRAPH_THREADS_BASE } from "./graph";
-import type { PublishResult } from "./instagram-publish";
+import { Deadline, type PublishResult } from "./instagram-publish";
 
 /** Threads 글자 상한 — 스펙 5절. 인스타(2200)와 다르므로 화면·서버가 같이 참조한다. */
 export const THREADS_TEXT_MAX = 500;
@@ -30,24 +30,36 @@ interface GraphErrorBody {
   error?: { message?: string; code?: number };
 }
 
+/**
+ * ⚠️ 시간 예산은 **전체 흐름**에 건다(2026-09-11, 인스타 어댑터 3c0bf5c 와 같은 수리).
+ * 예전엔 호출마다 15초 상한만 있고 흐름 전체의 상한이 없어서, 캐러셀 아이템 10개 생성(순차 10왕복) + 폴링 + 발행이
+ * 「지금 발행」의 함수 한도(120초)를 넘길 수 있었다 — 플랫폼이 함수를 죽이면 행이 'publishing' 으로 굳는다.
+ * 이제 모든 호출이 같은 Deadline 에서 남은 시간만큼만 기다리고, 예산이 다하면 실패로 돌려준다.
+ */
 async function threadsCall<T>(
   path: string,
   accessToken: string,
   params: Record<string, string>,
+  deadline: Deadline,
 ): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+  const budget = deadline.slice();
+  if (budget === null) return { ok: false, error: "publish_timeout" };
   const q = new URLSearchParams({ ...params, access_token: accessToken });
   try {
-    /* 호출마다 상한 — 없으면 캐러셀 아이템 생성 루프가 메타 지연에 무한정 매달려 함수 maxDuration 을 넘긴다(인스타 어댑터와 같은 수리) */
-    const res = await fetch(`${GRAPH_THREADS_BASE}${path}?${q.toString()}`, { method: "POST", signal: AbortSignal.timeout(15_000) });
+    const res = await fetch(`${GRAPH_THREADS_BASE}${path}?${q.toString()}`, { method: "POST", signal: AbortSignal.timeout(budget) });
     const json = (await res.json().catch(() => ({}))) as T & GraphErrorBody;
     if (!res.ok) {
       return { ok: false, error: json.error?.message ?? `http_${res.status}` };
     }
     return { ok: true, data: json };
   } catch (e) {
+    if (e instanceof Error && e.name === "TimeoutError") return { ok: false, error: "publish_timeout" };
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
+
+/** 폴링이 끝난 뒤 발행 호출(threads_publish)에 남겨 둘 시간 — 폴링이 예산을 다 쓰면 다 된 컨테이너를 못 올린다 */
+const PUBLISH_CALL_RESERVE_MS = 5_000;
 
 /**
  * 컨테이너 상태 조회 필드 — Threads 문서(Troubleshooting «Publishing Status»)가 정하는 필드는 `status`·`error_message`·`id` 뿐이다.
@@ -78,7 +90,10 @@ async function pollContainerStatus(
   const start = Date.now();
   let sawStatusField = false;
   /* 예산이 권고 대기(30초)보다 짧을 수 있다 — 그때는 예산 안에서 최대한 기다린다.
-     상한을 넘겨 기다리면 함수가 죽고 행이 굳는다. */
+     상한을 넘겨 기다리면 함수가 죽고 행이 굳는다.
+     (2026-09-11 전체 흐름 예산 도입 뒤로는 캐러셀 아이템 생성에 쓴 시간만큼 이 대기도 줄어든다 — 소넷 점검 지적.
+      그래도 괜찮은 이유: 이 경로는 «상태를 못 읽을 때»뿐이고, 준비 안 된 컨테이너는 threads_publish 가 **거절**하지
+      깨진 채 올리지 않는다. 결과는 어느 쪽이든 실패(다시 시도 가능)이고, 달라지는 건 실패 문구뿐이다.) */
   const blindWait = Math.min(BLIND_WAIT_MS, Math.max(0, maxWaitMs - 3_000));
 
   while (Date.now() - start < maxWaitMs) {
@@ -132,13 +147,15 @@ export async function publishThreadsPost(params: {
   text: string;
   imageUrls: string[];
   /**
-   * 컨테이너 처리를 기다릴 상한. **호출측이 자기 실행시간 예산에 맞춰 줄여야 한다** —
+   * **전체 흐름**(아이템 생성·컨테이너·폴링·발행 합계)의 시간 상한. **호출측이 자기 실행시간 예산에 맞춰 줄여야 한다** —
    * 크론 함수의 maxDuration 보다 길게 기다리면 플랫폼이 함수를 죽이고,
    * 그러면 예약 행이 'publishing' 인 채로 굳는다(2026-08-31 점검 적발).
+   * ⚠️ 마지막 threads_publish 가 성공한 뒤 예산이 다해도 결과는 그대로 돌려준다 — 올라간 글은 기록해야 한다.
    */
   maxWaitMs?: number;
 }): Promise<PublishResult> {
   const { threadsUserId, accessToken, text, imageUrls } = params;
+  const deadline = new Deadline(params.maxWaitMs ?? 90_000);
 
   const body = text.trim();
   if (!body && imageUrls.length === 0) {
@@ -157,7 +174,7 @@ export async function publishThreadsPost(params: {
     const t = await threadsCall<{ id: string }>(`/${threadsUserId}/threads`, accessToken, {
       media_type: "TEXT",
       text: body,
-    });
+    }, deadline);
     if (!t.ok) return { ok: false, error: `글 준비 실패: ${t.error}` };
     containerId = t.data.id;
   } else if (imageUrls.length === 1) {
@@ -168,7 +185,7 @@ export async function publishThreadsPost(params: {
       media_type: "IMAGE",
       image_url: imageUrls[0],
       ...(body ? { text: body } : {}),
-    });
+    }, deadline);
     if (!single.ok) return { ok: false, error: `이미지 준비 실패: ${single.error}` };
     containerId = single.data.id;
   } else {
@@ -184,7 +201,7 @@ export async function publishThreadsPost(params: {
         media_type: "IMAGE",
         image_url: url,
         is_carousel_item: "true",
-      });
+      }, deadline);
       if (!item.ok) return { ok: false, error: `슬라이드 준비 실패: ${item.error}` };
       childIds.push(item.data.id);
     }
@@ -192,17 +209,20 @@ export async function publishThreadsPost(params: {
       media_type: "CAROUSEL",
       children: childIds.join(","),
       ...(body ? { text: body } : {}),
-    });
+    }, deadline);
     if (!carousel.ok) return { ok: false, error: `캐러셀 준비 실패: ${carousel.error}` };
     containerId = carousel.data.id;
   }
 
-  const status = await pollContainerStatus(containerId, accessToken, params.maxWaitMs);
+  /* 폴링은 흐름 예산에서 발행 호출 몫을 뺀 만큼만 — 0 이하면 기다릴 시간이 없는 것이다 */
+  const pollBudget = deadline.remaining() - PUBLISH_CALL_RESERVE_MS;
+  if (pollBudget <= 0) return { ok: false, error: "콘텐츠 처리 실패: container_timeout" };
+  const status = await pollContainerStatus(containerId, accessToken, pollBudget);
   if (!status.ok) return { ok: false, error: `콘텐츠 처리 실패: ${status.error}` };
 
   const published = await threadsCall<{ id: string }>(`/${threadsUserId}/threads_publish`, accessToken, {
     creation_id: containerId,
-  });
+  }, deadline);
   if (!published.ok) return { ok: false, error: `발행 실패: ${published.error}` };
 
   return { ok: true, mediaId: published.data.id };
