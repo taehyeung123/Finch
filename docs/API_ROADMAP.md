@@ -101,9 +101,9 @@ Pro 결제·프로젝트 생성 완료. Google/Kakao 로그인 동작 중(구글
      Facebook Login 경로 값이라 섞어 신청하면 안 된다. 예전 이 자리에 그 이름들이 적혀 있었고
      발행 권한은 아예 빠져 있었다(2026-08-30 적발) — 그대로 신청했으면 심사를 통과하고도
      예약 발행이 권한 오류로 실패했다.
-8. Threads 앱 심사 — 스코프 **5개**다(`lib/meta/threads-oauth.ts`):
-   `threads_basic` · `threads_content_publish`(발행) · `threads_manage_replies` ·
-   `threads_read_replies` · `threads_manage_insights`
+8. Threads 앱 심사 — 스코프 **3개**다(`lib/meta/threads-oauth.ts`):
+   `threads_basic` · `threads_content_publish`(발행) · `threads_manage_insights`
+   (답글 2개는 쓰는 기능이 없어 2026-09-11 뺐다 — 스레드 API 에는 DM 이 없고 답글 권한은 공개 답글용이다. [APP_REVIEW.md](APP_REVIEW.md) §2)
 9. 앱 대시보드 > 설정 > 기본 설정에 콜백 URL 4개 등록 — **코드는 전부 구현돼 있다, 등록만 하면 된다**:
    - Data Deletion Instructions: `/api/auth/instagram/data-deletion` · `/api/auth/threads/data-deletion`
    - Deauthorize(연동 해제): `/api/auth/instagram/deauthorize` · `/api/auth/threads/deauthorize`

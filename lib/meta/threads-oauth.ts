@@ -18,13 +18,17 @@ import "server-only";
 
 import { GRAPH_READ_TIMEOUT_MS, GRAPH_THREADS_BASE } from "./graph";
 
-/** 문서에서 확인된 전체 스코프. 최소 권한 원칙상 실제 요청은 필요한 기능만 넣는 게 이상적이나,
- *  핀치는 발행·인사이트·댓글까지 전부 쓰므로 전 범위를 요청한다 (docs/REAL_API_SPEC.md 5절). */
+/**
+ * 요청하는 스코프 — **코드가 실제로 쓰는 것만** 넣는다(docs/APP_REVIEW.md §2).
+ *
+ * ⚠️ 답글 권한 2개(threads_read_replies·threads_manage_replies)는 2026-09-11 에 뺐다(사장님 결정).
+ * 쓰는 기능이 하나도 없었다 — 메타 심사는 «요청만 하고 안 쓰는 권한»·«나중에 쓸 권한»을 반려한다.
+ * 그 둘로 되는 것은 **공개 답글**(읽기·달기·숨기기)뿐이고, 스레드 API 에는 DM 이 아예 없다(메타 문서 확인).
+ * 스레드 자동 공개 답글을 만들면 그때 다시 넣고 심사를 새로 받는다 — 이미 연결한 사람은 다시 연결해야 새 권한이 붙는다.
+ */
 export const THREADS_SCOPES = [
   "threads_basic",
   "threads_content_publish",
-  "threads_manage_replies",
-  "threads_read_replies",
   "threads_manage_insights",
 ] as const;
 
@@ -33,8 +37,6 @@ export const THREADS_SCOPES = [
 export const THREADS_SCOPE_LABELS: Record<(typeof THREADS_SCOPES)[number], string> = {
   threads_basic: "프로필 기본 정보 조회",
   threads_content_publish: "게시물 발행(카드뉴스 예약 발행)",
-  threads_manage_replies: "답글 작성",
-  threads_read_replies: "답글 조회",
   threads_manage_insights: "계정·게시물 인사이트 조회",
 };
 

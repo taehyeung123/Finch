@@ -192,8 +192,9 @@ Instagram과 동일하게 **Standard Access(개발자 모드, 앱 역할에 등�
 
 ### 스코프
 
-`threads_basic`(필수) · `threads_content_publish`(발행) · `threads_manage_replies`(답글 작성) ·
-`threads_read_replies`(답글 조회) · `threads_manage_insights`(인사이트). `threads_delete` 등은 문서에서 미확인.
+`threads_basic`(필수) · `threads_content_publish`(발행) · `threads_manage_insights`(인사이트) — 핀치가 요청하는 3개.
+`threads_manage_replies`(답글 작성)·`threads_read_replies`(답글 조회)는 공개 답글용이라 쓰는 기능이 없어 2026-09-11 요청에서 뺐다.
+스레드 API 에는 DM 권한·엔드포인트가 없다(권한 12개 목록 기준, docs/APP_REVIEW.md §2).
 
 ### 프로필 조회 (GET /{threads-user-id} 또는 /me)
 
