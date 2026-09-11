@@ -29,6 +29,8 @@ export interface ResultModalContent {
   description?: string | null;
   /** 운영자에게만 보여주는 원문(호출측이 owner 판정 뒤에만 넘긴다) — 고객 화면엔 안 나간다 */
   detail?: string | null;
+  /** 세부 내역 몇 줄(예: 자동 DM «지금 확인»의 건너뛴 이유) — 설명 아래 보조 글자로 */
+  lines?: string[] | null;
 }
 
 export function ResultModal({
@@ -36,6 +38,7 @@ export function ResultModal({
   arrivalId,
   path,
   onClose,
+  action,
 }: {
   result: ResultModalContent | null;
   /** «이 결과가 방금 도착했다»는 표식 — 서버 컴포넌트가 렌더마다 새로 만들어 넘긴다(아래 주석) */
@@ -44,6 +47,8 @@ export function ResultModal({
   path?: string;
   /** 부모가 결과를 상태로 들고 있을 때 비우기 */
   onClose?: () => void;
+  /** 이어서 할 일 버튼 하나(예: 「다시 연결하기」) — 있으면 「확인」은 보조 버튼으로 내려간다 */
+  action?: React.ReactNode;
 }) {
   /* «무엇이 새 결과인가»의 열쇠. 렌더 중 상태 조정(React 공식 패턴).
 
@@ -58,7 +63,9 @@ export function ResultModal({
      결과가 **null 을 한 번 거치면** 기억을 지운다 — 닫으면 부모가 상태를 비우므로, 같은 실패를 다시 시도해도 또 뜬다.
      ⚠️ `close()` 에서 곧바로 seen 을 비우면 안 된다 — result prop 이 그대로 남는 화면에서는 닫는 즉시
      `key !== seen` 이 다시 참이 되어 그 자리에서 도로 열린다. 「null 을 거쳤는가」로 판정해야 양쪽이 안전하다. */
-  const key = result ? (arrivalId ?? `${result.tone}|${result.title}|${result.description ?? ""}|${result.detail ?? ""}`) : null;
+  const key = result
+    ? (arrivalId ?? `${result.tone}|${result.title}|${result.description ?? ""}|${result.detail ?? ""}|${(result.lines ?? []).join("|")}`)
+    : null;
   const [seen, setSeen] = useState(key);
   const [open, setOpen] = useState(key !== null);
   if (key !== null && key !== seen) {
@@ -90,10 +97,20 @@ export function ResultModal({
           <p className="break-keep text-[17px] font-semibold leading-snug">{result.title}</p>
           {result.description ? <p className="break-keep text-[15px] leading-relaxed text-fg-sub">{result.description}</p> : null}
         </div>
+        {result.lines && result.lines.length > 0 ? (
+          <ul className="w-full space-y-1 rounded-card bg-plate p-3 text-left text-[14px] leading-relaxed text-fg-sub">
+            {result.lines.map((line) => (
+              <li key={line} className="break-keep">
+                {line}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {result.detail ? (
           <p className="w-full break-all rounded-card bg-plate p-3 text-left font-mono text-[12px] leading-relaxed text-fg-sub">{result.detail}</p>
         ) : null}
-        <Button type="button" variant="primary" size="md" className="mt-1 w-full" onClick={close}>
+        {action ? <div className="mt-1 flex w-full justify-center">{action}</div> : null}
+        <Button type="button" variant={action ? "secondary" : "primary"} size="md" className="mt-1 w-full" onClick={close}>
           확인
         </Button>
       </div>

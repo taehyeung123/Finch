@@ -1,15 +1,10 @@
-import { ownerDevToken } from "@/lib/auto-dm/dev-token";
 import { consoleErrorThrottled } from "@/lib/monitoring/log-throttle";
 import { NextResponse, after } from "next/server";
 import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { decryptToken } from "@/lib/crypto/tokens";
 import { recipientHash, recipientHashes } from "@/lib/auto-dm/recipient-hash";
-import { sendPrivateReply, replyToComment } from "@/lib/meta/graph";
-import { applyAdDisclosure } from "@/lib/ads/ad-disclosure";
-import { parseButtons, parseReplies, NEXT_POST_SENTINEL } from "@/lib/auto-dm/db";
-import { fetchMediaMeta } from "@/lib/meta/instagram";
-import { isNightInKST, isOptOutMessage, pickRule, type CommentEvent, type MatchableRule } from "@/lib/auto-dm/match";
+import { isOptOutMessage, type CommentEvent } from "@/lib/auto-dm/match";
+import { isMissingFunction, processCommentEvent, resolveAutoDmToken } from "@/lib/auto-dm/pipeline";
 
 /**
  * 인스타그램 그래프 웹훅 — 댓글 자동 DM 발송 파이프라인.
@@ -17,9 +12,12 @@ import { isNightInKST, isOptOutMessage, pickRule, type CommentEvent, type Matcha
  * 처리 순서 (docs/AUTO_DM_COST_RISK.md의 안전장치 그대로):
  *  1) GET  — Meta 구독 검증 핸드셰이크
  *  2) POST — 원문 HMAC-SHA256 서명검증 → 즉시 200 응답 → after()로 비동기 처리
- *     비동기: 자기댓글 가드 → 계정 매핑 → 규칙 매칭(댓글당 1개) → reserve_dm_send(멱등·하루상한·
- *     옵트아웃·24h 쿨다운·월한도 원자 처리) → 광고 야간 보류 → Private Reply 발송 → finalize
+ *     비동기: 자기댓글 가드 → 계정 매핑 → 이벤트 로그 → **공통 파이프라인**(lib/auto-dm/pipeline.ts:
+ *     권한 확인 → 규칙 매칭(댓글당 1개) → reserve_dm_send(멱등·하루상한·옵트아웃·24h 쿨다운·월한도 원자 처리)
+ *     → 광고 야간 보류 → Private Reply 발송 → finalize)
  *     + 수신 메시지의 '수신거부' 답장은 옵트아웃 등록
+ *  ⚠️ 댓글 한 건의 판정·발송은 pipeline.ts 한 곳이다 — «지금 확인»(lib/auto-dm/check-now.ts)도 같은 함수를 부른다.
+ *     여기서 발송 로직을 다시 쓰지 말 것(두 경로가 갈라지면 같은 댓글에 다른 판정이 나간다).
  *
  * 시크릿(전부 서버 전용, NEXT_PUBLIC_ 금지):
  *  - IG_WEBHOOK_VERIFY_TOKEN : 구독 핸드셰이크
@@ -33,14 +31,6 @@ export const runtime = "nodejs"; // node:crypto 사용 (edge 아님)
    선언이 없으면 플랫폼 기본값에 걸려 도중에 강제 종료되고, Private Reply 1회 제한 때문에 재처리 때 이미 보낸 건이
    실패로 집계된다(flush-dms·refresh-tokens·publish-scheduled 와 같은 근거, 2026-09-09 감사). */
 export const maxDuration = 300;
-
-/**
- * 월 발송 한도 폐지(2026-08-14) — DM은 원가 0원이라 발송량 게이팅을 없앴다.
- * 플랜 차별화는 "자동화 콘텐츠 개수"(규칙 생성 시점, lib/auto-dm/limits.ts)가 담당하고,
- * 스팸 방지는 규칙별 daily_cap이 담당한다. reserve_dm_send 함수 시그니처는 유지하되
- * 실질 무제한 값을 넘긴다.
- */
-const MONTHLY_LIMIT_UNLIMITED = 1000000;
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -79,13 +69,8 @@ function signatureValid(rawBody: string, header: string | null, appSecret: strin
    조회는 새 해시와 옛 해시를 **함께** 본다 — 옛 방식으로 남은 수신거부를 놓치면
    수신거부한 사람에게 DM 이 나간다(되돌릴 수 없다). */
 
-/** RPC 가 «함수를 못 찾음»인가 — 0090 적용 전 배포에서 옛 시그니처로 한 번 더 시도하기 위한 판정 */
-function isMissingFunction(msg: string | undefined): boolean {
-  return !!msg && /could not find the function|does not exist/i.test(msg);
-}
-
-/* 채널 토큰 복호화는 lib/crypto/tokens.decryptToken(AES-256-GCM, 서버 전용) 사용.
- * TOKEN_ENCRYPTION_KEY 미설정이거나 저장 토큰이 없으면 null → IG_TEST_ACCESS_TOKEN(개발자 모드) 폴백. */
+/* 채널 토큰 복호화는 lib/crypto/tokens.decryptToken(AES-256-GCM, 서버 전용) 사용 — pipeline.resolveAutoDmToken.
+ * TOKEN_ENCRYPTION_KEY 미설정이거나 저장 토큰이 없으면 null → IG_TEST_ACCESS_TOKEN(개발자 모드, 운영자 본인만) 폴백. */
 
 /* ── Meta 웹훅 페이로드 타입 (필요 필드만) ─────────────────────── */
 interface WebhookCommentValue {
@@ -107,71 +92,12 @@ interface WebhookBody {
   entry?: WebhookEntry[];
 }
 
-/**
- * "다음에 올릴 게시물" 예약 규칙 바인딩 — 리틀리 예약발송 대응 (2026-08-14).
- *
- * 규칙 생성 시 post_id 를 NEXT_POST_SENTINEL 로 두고, 새 게시물에 첫 댓글이 달려
- * 웹훅이 들어오는 순간 실제 media id 로 치환한다. 게시물 업로드 시각이 규칙 생성
- * 시각보다 뒤인 경우에만 — 옛날 게시물 댓글이 예약 규칙을 가로채는 것을 막는다.
- * 메타 조회 실패·토큰 부재 시엔 그냥 null 반환 — 다음 댓글 웹훅에서 재시도된다.
- */
-async function tryBindNextPostRules(
-  admin: NonNullable<ReturnType<typeof createAdminClient>>,
-  ownerId: string,
-  mediaId: string,
-  accessToken: string | null,
-): Promise<Record<string, unknown>[] | null> {
-  const RULE_SELECT =
-    "id, post_id, trigger, keywords, status, is_advertising, dm_message, public_reply, button_label, button_url, created_at";
-  const query = (columns: string) =>
-    admin
-      .from("auto_dm_rules")
-      .select(columns)
-      .eq("user_id", ownerId)
-      .eq("post_id", NEXT_POST_SENTINEL)
-      .eq("status", "active");
-  let res = await query(`${RULE_SELECT}, buttons, public_replies`);
-  if (res.error && /buttons|public_replies/i.test(res.error.message)) res = await query(RULE_SELECT);
-  if (res.error) {
-    console.error("[auto-dm] 예약 규칙 조회 실패:", res.error.message);
-    return null;
-  }
-  const pending = (res.data ?? []) as unknown as ({ id: string; created_at: string } & Record<string, unknown>)[];
-  if (pending.length === 0 || !accessToken) return null;
-
-  const meta = await fetchMediaMeta(mediaId, accessToken);
-  if (!meta?.timestamp) return null;
-  const mediaTime = new Date(meta.timestamp).getTime();
-  const toBind = pending.filter((r) => new Date(r.created_at).getTime() < mediaTime);
-  if (toBind.length === 0) return null;
-
-  const postType =
-    meta.mediaProductType === "REELS"
-      ? "reels"
-      : meta.mediaType === "VIDEO"
-        ? "video"
-        : meta.mediaType === "CAROUSEL_ALBUM"
-          ? "carousel"
-          : "feed";
-  const caption = (meta.caption ?? "").split("\n")[0]?.slice(0, 80) || "새 게시물";
-  const ids = toBind.map((r) => r.id);
-
-  let bind = await admin
-    .from("auto_dm_rules")
-    .update({ post_id: mediaId, post_caption: caption, post_type: postType, post_thumb: meta.thumbnailUrl ?? meta.mediaUrl ?? null })
-    .in("id", ids);
-  if (bind.error && /post_thumb/i.test(bind.error.message)) {
-    bind = await admin
-      .from("auto_dm_rules")
-      .update({ post_id: mediaId, post_caption: caption, post_type: postType })
-      .in("id", ids);
-  }
-  if (bind.error) {
-    console.error("[auto-dm] 예약 규칙 바인딩 실패:", bind.error.message);
-    return null;
-  }
-  console.log(`[auto-dm] 예약 규칙 ${ids.length}건을 게시물 ${mediaId}에 바인딩`);
-  return toBind.map((r) => ({ ...r, post_id: mediaId }));
+interface MappedAccount {
+  user_id: string;
+  access_token_cipher: string | null;
+  platform_user_id: string | null;
+  /** 0075 — null 은 «확인 불가»(0075 이전 연동). 0075 미적용 DB 면 컬럼 없이 읽어 undefined */
+  granted_scopes?: string[] | null;
 }
 
 async function processEntry(entry: WebhookEntry) {
@@ -187,24 +113,33 @@ async function processEntry(entry: WebhookEntry) {
      notifications»). 그래서 이 매핑이 영영 0행이었고 자동 DM 이 한 통도 나갈 수 없는 구조였다(2026-09-09 감사).
      이제 콜백이 ig_id(=user_id)를 따로 저장하고(0091) 여기서 그걸로 먼저 찾는다. 0091 미적용·아직 백필 안 된 계정은
      platform_user_id 로 한 번 더 찾는다(두 값이 같은 계정도 있다). connected=false(앱에서 해제)는 잡지 않는다 —
-     끊긴 계정의 댓글을 예약해 봐야 token_unavailable 로 남았다가 6.5일 뒤 실패로 집계될 뿐이다. */
-  const findAccount = (col: "ig_id" | "platform_user_id") =>
+     끊긴 계정의 댓글을 예약해 봐야 token_unavailable 로 남았다가 6.5일 뒤 실패로 집계될 뿐이다.
+     granted_scopes(0075)를 함께 읽는다 — 댓글 권한이 **확실히 없는** 연동은 파이프라인이 발송 전에 건너뛴다.
+     0075 미적용 DB 면 그 컬럼만 빼고 다시 읽는다(«확인 불가» = 막지 않는다). */
+  const ACCOUNT_COLUMNS = "user_id, access_token_cipher, platform_user_id";
+  const findAccount = (col: "ig_id" | "platform_user_id", withScopes: boolean) =>
     admin
       .from("connected_accounts")
-      .select("user_id, access_token_cipher, platform_user_id")
+      .select(withScopes ? `${ACCOUNT_COLUMNS}, granted_scopes` : ACCOUNT_COLUMNS)
       .eq(col, igAccountId)
       .eq("channel", "instagram")
       .eq("connected", true)
       .maybeSingle();
-  let lookup = await findAccount("ig_id");
-  if (lookup.error && /ig_id/i.test(lookup.error.message)) lookup = await findAccount("platform_user_id");
-  else if (!lookup.error && !lookup.data) lookup = await findAccount("platform_user_id");
-  const { data: account, error: accountErr } = lookup;
+  const lookupBy = async (col: "ig_id" | "platform_user_id") => {
+    const first = await findAccount(col, true);
+    if (first.error && /granted_scopes/i.test(first.error.message)) return findAccount(col, false);
+    return first;
+  };
+  let lookup = await lookupBy("ig_id");
+  if (lookup.error && /ig_id/i.test(lookup.error.message)) lookup = await lookupBy("platform_user_id");
+  else if (!lookup.error && !lookup.data) lookup = await lookupBy("platform_user_id");
+  const { data: accountData, error: accountErr } = lookup;
   if (accountErr) {
     // DB 오류를 '미연동 계정'으로 오인하면 파이프라인이 조용히 죽는다 — 반드시 로그
     console.error("[auto-dm] 계정 매핑 조회 실패:", igAccountId, accountErr.message);
     return;
   }
+  const account = accountData as unknown as MappedAccount | null;
   if (!account) {
     /* 예전엔 여기서 로그 한 줄 없이 끝나 매핑 실패를 관측할 수 없었다. 인증 전 경로라 스로틀. */
     consoleErrorThrottled("auto-dm.unmapped", 10 * 60 * 1000, "[auto-dm] 웹훅 계정에 대응하는 연동이 없음:", igAccountId);
@@ -213,11 +148,10 @@ async function processEntry(entry: WebhookEntry) {
 
   const ownerId: string = account.user_id;
   /* 개발용 토큰 폴백은 운영자 본인 계정에만(lib/auto-dm/dev-token.ts) — 남의 계정에 쓰면 실패를 확정시킨다 */
-  const accessToken =
-    decryptToken(account.access_token_cipher, { userId: ownerId, field: "connected_accounts.access_token_cipher" }) ??
-    (await ownerDevToken(admin, ownerId));
+  const accessToken = await resolveAutoDmToken(admin, ownerId, account.access_token_cipher);
 
-  /* ── 1) 수신 메시지: '수신거부' 답장 → 옵트아웃 등록 ── */
+  /* ── 1) 수신 메시지: '수신거부' 답장 → 옵트아웃 등록 ──
+     권한 확인과 무관하게 **항상** 처리한다 — 수신거부 등록은 사람을 보호하는 쓰기라 어떤 이유로도 건너뛰지 않는다. */
   for (const msg of entry.messaging ?? []) {
     const senderId = msg.sender?.id;
     const text = msg.message?.text;
@@ -274,141 +208,14 @@ async function processEntry(entry: WebhookEntry) {
     }
     if (logErr) console.error("[auto-dm] 이벤트 로그 실패:", logErr.message);
 
-    // 이 게시물의 활성 규칙 조회 → 댓글당 1개만 실행.
-    // 조회 오류는 '규칙 없음'과 다르다 — 멱등 예약 전이므로 중단하면 Meta 재전송으로 재처리된다.
-    // buttons(0038)는 미적용 DB 폴백을 위해 실패 시 legacy 컬럼만으로 재조회한다.
-    const RULE_SELECT_BASE =
-      "id, post_id, trigger, keywords, status, is_advertising, dm_message, public_reply, button_label, button_url";
-    const loadRules = async (): Promise<{ data: unknown; error: string | null }> => {
-      const query = (columns: string) =>
-        admin
-          .from("auto_dm_rules")
-          .select(columns)
-          .eq("user_id", ownerId)
-          .eq("post_id", event.mediaId)
-          .eq("status", "active");
-      const first = await query(`${RULE_SELECT_BASE}, buttons, public_replies`);
-      if (first.error && /buttons|public_replies/i.test(first.error.message)) {
-        const fallback = await query(RULE_SELECT_BASE);
-        return { data: fallback.data, error: fallback.error?.message ?? null };
-      }
-      return { data: first.data, error: first.error?.message ?? null };
-    };
-    const { data: rulesData, error: rulesErr } = await loadRules();
-    let rules = rulesData as (MatchableRule & Record<string, unknown>)[] | null;
-    if (rulesErr) {
-      console.error("[auto-dm] 규칙 조회 실패:", event.commentId, rulesErr);
-      continue;
-    }
-    // 이 게시물에 규칙이 없으면 "다음 게시물" 예약 규칙 바인딩을 시도한다 (새 게시물 첫 댓글)
-    if (!rules || rules.length === 0) {
-      rules = (await tryBindNextPostRules(admin, ownerId, event.mediaId, accessToken)) as
-        | (MatchableRule & Record<string, unknown>)[]
-        | null;
-    }
-    if (!rules || rules.length === 0) continue;
-
-    const rule = pickRule(rules, event) as
-      | (MatchableRule & {
-          dm_message: string;
-          public_reply: string | null;
-          public_replies?: unknown;
-          button_label: string | null;
-          button_url: string | null;
-          buttons?: unknown;
-        })
-      | null;
-    if (!rule) continue;
-
-    // 멱등 예약 — 중복 웹훅·댓글당 1회·하루 상한·옵트아웃·24h 쿨다운을 DB가 원자적으로 판정.
-    // 월 한도는 폐지(2026-08-14) — 실질 무제한 값으로 함수 시그니처만 유지한다.
-    const rh = recipientHashes(event.fromId);
-    let reserve = await admin.rpc("reserve_dm_send", {
-      p_owner: ownerId,
-      p_rule_id: rule.id,
-      p_comment_id: event.commentId,
-      p_user_hash: rh.current,
-      p_monthly_limit: MONTHLY_LIMIT_UNLIMITED,
-      p_user_hash_legacy: rh.legacy,
-    });
-    if (reserve.error && isMissingFunction(reserve.error.message)) {
-      /* 0090 적용 전 배포 — 옛 시그니처로 한 번 더. 여기서 멈추면 자동 DM 이 통째로 죽는다.
-         ⚠️ 단, 페퍼가 켜져 있으면(rh.legacy 가 있다) 폴백하지 않는다 — 옛 함수는 해시 하나만 대조하므로
-         페퍼 이전에 저장된 «수신거부»가 안 보여 되돌릴 수 없는 DM 이 나간다. 그 조합에선 이번 댓글을 건너뛰고
-         (dm_sends 행이 없으니 0090 적용 뒤 재전송 때 처리된다) 로그로 알린다. */
-      if (rh.legacy !== null) {
-        console.error("[auto-dm] 0090 미적용인데 DM_HASH_PEPPER 가 켜져 있다 — 옛 함수로 폴백하지 않음(수신거부 대조 누락 방지):", event.commentId);
-        continue;
-      }
-      reserve = await admin.rpc("reserve_dm_send", {
-        p_owner: ownerId,
-        p_rule_id: rule.id,
-        p_comment_id: event.commentId,
-        p_user_hash: rh.current,
-        p_monthly_limit: MONTHLY_LIMIT_UNLIMITED,
-      });
-    }
-    const { data: sendId, error: reserveErr } = reserve;
-    if (reserveErr) {
-      console.error("[auto-dm] 발송 예약 실패:", event.commentId, reserveErr.message);
-      continue;
-    }
-    if (!sendId) continue; // 스킵 사유는 dm_sends 행에 기록됨
-
-    // 광고성 DM 야간 보류 (21~08 KST, 정보통신망법) — 아침 재개 큐는 TODO(API-last)
-    if (rule.is_advertising && isNightInKST()) {
-      await finalize(admin, sendId, "held_night", null, null);
-      continue;
-    }
-
-    if (!accessToken) {
-      // 토큰 미확보(OAuth 전) — pending 유지, 7일 창 내 재처리 대상
-      await finalize(admin, sendId, "pending", null, "token_unavailable");
-      continue;
-    }
-
-    // 이중 방어: 저장 시점에 고지가 강제되지만(actions.ts), 발송 직전에도 재적용한다.
-    // applyAdDisclosure는 멱등이라 이미 고지된 본문은 그대로 통과한다 (정보통신망법 제50조).
-    const message = applyAdDisclosure(rule.dm_message, rule.is_advertising);
-
-    const outcome = await sendPrivateReply({
-      igUserId: igAccountId,
-      commentId: event.commentId,
-      message,
-      buttons: parseButtons(rule),
-      accessToken,
-    });
-
-    if (outcome.ok) {
-      await finalize(admin, sendId, "sent", outcome.igMessageId, null);
-      // 공개 답글은 부가 동작 — 실패해도 DM 결과에 영향 없음.
-      // 준비된 답글 중 랜덤 1개 — 같은 문구 반복 도배로 인한 스팸 신호를 피한다 (0042)
-      const replies = parseReplies(rule);
-      if (replies.length > 0) {
-        const reply = replies[Math.floor(Math.random() * replies.length)];
-        await replyToComment({ commentId: event.commentId, message: reply, accessToken }).catch(() => {});
-      }
-    } else {
-      await finalize(admin, sendId, outcome.status, null, outcome.error);
-    }
+    /* 판정·발송은 공통 파이프라인 — 결과는 파이프라인이 로그로 남기므로 여기선 버린다.
+       규칙 조회·예약이 실패한 댓글은 dm_sends 행이 없어서 메타 재전송(또는 «지금 확인»)이 다시 처리한다. */
+    await processCommentEvent(
+      admin,
+      { ownerId, igUserId: igAccountId, accessToken, grantedScopes: account.granted_scopes ?? null },
+      event,
+    );
   }
-}
-
-/** finalize_dm_send RPC 래퍼 — 실패를 조용히 삼키지 않고 로그로 남긴다 */
-async function finalize(
-  admin: NonNullable<ReturnType<typeof createAdminClient>>,
-  sendId: string,
-  status: string,
-  igMessageId: string | null,
-  errorMsg: string | null,
-) {
-  const { error } = await admin.rpc("finalize_dm_send", {
-    p_send_id: sendId,
-    p_status: status,
-    p_ig_message_id: igMessageId,
-    p_error: errorMsg,
-  });
-  if (error) console.error("[auto-dm] 발송 결과 확정 실패:", sendId, status, error.message);
 }
 
 /**

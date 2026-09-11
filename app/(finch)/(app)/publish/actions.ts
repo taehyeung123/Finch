@@ -7,7 +7,7 @@ import { storagePathsFromPublicUrls } from "@/lib/storage/public-url";
 import { isDemoMode } from "@/lib/supabase/config";
 import { parseKstDateTimeLocal } from "@/lib/calendar";
 import { eulReul } from "@/lib/josa";
-import { REQUIRED_SCOPE, checkScope } from "@/lib/meta/granted-scopes";
+import { publishGate } from "@/lib/publish/gate";
 import { claimPost, runClaimedPost } from "@/lib/publish/run";
 import {
   PUBLISHABLE_CHANNELS,
@@ -50,79 +50,8 @@ export type CreatePostResult =
   /** 저장은 됐고 발행을 시도했다 — 성공이든 실패든 행은 목록에 남는다 */
   | { ok: true; mode: "now"; outcome: PublishOutcome };
 
-/**
- * 연동 계정 + 부여된 스코프 조회. 0075 미적용 DB 폴백 포함.
- *
- * ⚠️ granted_scopes 컬럼이 없는 DB 에서 그냥 select 하면 **예약 자체가 깨진다** —
- * 지금 잘 돌아가는 기능을 마이그레이션 적용 전까지 죽이는 셈이다. 컬럼 없음이면 없이 다시 조회한다.
- * 반환의 scopes=null 은 «확인 불가» 다(«권한 없음» 이 아니다).
- */
-async function loadConnectedAccount(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
-  channel: PublishChannel,
-): Promise<{ ok: true; found: boolean; scopes: string[] | null } | { ok: false }> {
-  const base = () =>
-    supabase
-      .from("connected_accounts")
-      .select("id, granted_scopes")
-      .eq("user_id", userId)
-      .eq("channel", channel)
-      .eq("connected", true)
-      .limit(1)
-      .maybeSingle();
-
-  const res = await base();
-  if (isMissingColumnError(res.error, /granted_scopes/i)) {
-    const fallback = await supabase
-      .from("connected_accounts")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("channel", channel)
-      .eq("connected", true)
-      .limit(1)
-      .maybeSingle();
-    if (fallback.error) {
-      console.error("[publish] 연동 확인 실패:", fallback.error.message);
-      return { ok: false };
-    }
-    return { ok: true, found: !!fallback.data, scopes: null };
-  }
-  if (res.error) {
-    /* 조회 실패를 «연동 없음»으로 읽으면 멀쩡히 연동한 사람에게 연동하라고 말한다 —
-       이 저장소가 반복해 밟은 «실패는 없음이 아니다» 함정이다. */
-    console.error("[publish] 연동 확인 실패:", res.error.message);
-    return { ok: false };
-  }
-  const row = res.data as { granted_scopes?: string[] | null } | null;
-  return { ok: true, found: !!row, scopes: row?.granted_scopes ?? null };
-}
-
-/**
- * 발행 관문 — 예약이든 지금 발행이든 «발행 약속»을 받기 전에 같은 것을 본다.
- * ⚠️ user_id 로 반드시 좁힌다. connected_accounts 에는 "team members read" 정책이 있어 팀원이 **소유자의**
- * 연동 행을 읽는다 — 안 좁히면 자기 계정엔 연동이 없는데 관문을 통과하고, 발행은 user_id 로 토큰을 찾으므로
- * 반드시 실패한다.
- */
-async function publishGate(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
-  channel: PublishChannel,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const acc = await loadConnectedAccount(supabase, userId, channel);
-  if (!acc.ok) return { ok: false, error: "잠시 후 다시 시도해 주세요." };
-  if (!acc.found) return { ok: false, error: `먼저 설정에서 ${channelLabel(channel)} 계정을 연동해 주세요.` };
-  /* 발행 권한이 **확실히 없으면** 여기서 막는다 — 받아 두면 크론이 돌 때 권한 오류로 실패하고, 그 사이 사용자는
-     발행될 거라고 믿는다. 확인 불가(0075 이전 연동)면 통과시킨다 — 모른다고 멀쩡한 예약을 막지 않는다. */
-  const scopeCheck = checkScope(
-    acc.scopes,
-    channel === "threads" ? REQUIRED_SCOPE.threadsPublish : REQUIRED_SCOPE.instagramPublish,
-  );
-  if (scopeCheck.state === "missing") {
-    return { ok: false, error: `${channelLabel(channel)} 발행 권한이 없어요. 설정에서 다시 연동하면 바로 쓸 수 있어요.` };
-  }
-  return { ok: true };
-}
+/* 발행 관문(연동·발행 권한 확인)은 lib/publish/gate.ts 한 곳이다 — 스튜디오 카드뉴스 예약 라우트도 같은 함수를 부른다.
+   ⚠️ "use server" 파일의 export 는 전부 호출 가능한 서버 액션이 되므로 관문 함수를 여기서 export 하지 말 것. */
 
 /**
  * 예약 시각 판정 — "YYYY-MM-DDTHH:mm"(KST) → ISO.

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { parseKstDateTimeLocal } from "@/lib/calendar";
+import { publishGate } from "@/lib/publish/gate";
 
 /**
  * 카드뉴스 예약 발행 등록 — 이미지(FormData)를 Storage(cardnews 버킷, 본인 폴더)에 업로드하고
@@ -87,24 +88,18 @@ export async function POST(request: Request) {
     scheduledIso = parsed;
   }
 
-  /* 연동 계정 확인 — 없으면 업로드 전에 즉시 차단(불필요한 스토리지 사용 방지).
+  /* 발행 관문 — 업로드 전에 즉시 차단(불필요한 스토리지 사용 방지). 발행 화면(publish/actions.ts)과 **같은 함수**다:
+     연동이 있는가(user_id 로 좁힌다 — "team members read" 정책 때문에 안 좁히면 팀원이 소유자의 연동으로 통과하고,
+     크론은 user_id 로 토큰을 찾으므로 그 예약은 반드시 실패한다) + 발행 권한이 **확실히** 빠지지 않았는가.
+     예전엔 연동 행 유무만 봐서, 발행 권한 없이 연결한 계정의 예약을 받아 두고 크론이 돌 때 권한 오류로 실패했다.
+     또 조회 «오류»를 «연동 없음»으로 읽어 멀쩡한 사람에게 연동하라고 말했다 — 이제 오류는 오류로 답한다(503).
      **초안은 검사하지 않는다** — 아직 발행이 아니고, 연동은 예약을 잡을 때 필요하다.
      여기서 막으면 계정을 안 붙인 사람은 만든 것을 저장조차 못 한다. */
-  const { data: account } = asDraft
-    ? { data: { id: "draft" } }
-    : await supabase
-        .from("connected_accounts")
-        .select("id")
-        /* user_id 로 반드시 좁힌다 — "team members read" 정책 때문에 안 좁히면
-           팀원이 소유자의 연동으로 게이트를 통과하고, 크론은 user_id 로 토큰을
-           찾으므로 그 예약은 반드시 실패한다. */
-        .eq("user_id", user.id)
-        .eq("channel", "instagram")
-        .eq("connected", true)
-        .limit(1)
-        .maybeSingle();
-  if (!account) {
-    return NextResponse.json({ error: "먼저 설정에서 인스타그램 계정을 연동해 주세요." }, { status: 400 });
+  if (!asDraft) {
+    const gate = await publishGate(supabase, user.id, "instagram");
+    if (!gate.ok) {
+      return NextResponse.json({ error: gate.error }, { status: gate.reason === "lookup_failed" ? 503 : 400 });
+    }
   }
 
   /* 미발행 보관 상한 — 업로드 **전에** 본다. 없으면 계정 하나가 스토리지와 scheduled_posts 를

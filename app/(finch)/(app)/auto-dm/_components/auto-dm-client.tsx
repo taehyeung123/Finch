@@ -6,11 +6,14 @@ import {
   MessageSquareReply,
   Pencil,
   Plus,
+  RefreshCw,
   Trash2,
 } from "lucide-react";
 import { FinchMark } from "@/components/logo";
 import { formatAgo, formatCompact } from "@/lib/format";
+import { cn } from "@/lib/cn";
 import { NEXT_POST_SENTINEL } from "@/lib/auto-dm/db";
+import { describeCheckNow, type CheckNowMessage } from "@/lib/auto-dm/check-now-types";
 import type { AutoDmRule, AutoDmStatus, Post } from "@/lib/types";
 import { autoDmSummary } from "@/lib/data";
 import { PageHeader } from "@/components/ui/section-header";
@@ -22,9 +25,13 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { Switch } from "@/components/ui/switch";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ConnectLink } from "@/components/ui/connect-link";
+import { FinchLoader } from "@/components/ui/finch-loader";
+import { NoticeBar } from "@/components/ui/notice-bar";
+import { ResultModal } from "@/components/ui/result-modal";
 import { actionRejectHint } from "@/lib/monitoring/action-reject";
 import { RuleWizard, type RuleDraft } from "./rule-wizard";
-import { createRule, deleteRule, toggleRule, updateRule } from "../actions";
+import { checkRuleNow, createRule, deleteRule, toggleRule, updateRule } from "../actions";
 
 const POST_TYPE_LABEL: Record<Post["type"], string> = {
   reels: "릴스",
@@ -53,6 +60,8 @@ export function AutoDmClient({
   accountAvatar,
   followRequestReady,
   igConnected = true,
+  igScopeMissing = false,
+  reconnectHref = null,
 }: {
   initialRules: AutoDmRule[];
   posts: Post[];
@@ -71,6 +80,10 @@ export function AutoDmClient({
   followRequestReady: boolean;
   /** 인스타 연동 여부. true=연결됨 / false=없음 / null=확인 못 함(관문을 띄우지 않는다) */
   igConnected?: boolean | null;
+  /** 연결은 됐는데 댓글 권한이 **확실히** 빠졌다 — «다시 연결»을 먼저 말한다(«확인 불가»면 false) */
+  igScopeMissing?: boolean;
+  /** 인스타 연결 시작 주소(지금 연결을 받을 수 있을 때만) — null 이면 설정 › 채널로 보낸다 */
+  reconnectHref?: string | null;
 }) {
   const [rules, setRules] = useState<AutoDmRule[]>(initialRules);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -83,6 +96,11 @@ export function AutoDmClient({
   const [toggling, setToggling] = useState<ReadonlySet<string>>(() => new Set());
   /* 스위치·삭제가 실패했을 때 그 규칙 카드 안에 띄우는 한 줄(role=alert). 화면 안 저장이라 결과 모달이 아니다(CLAUDE.md) */
   const [ruleNotice, setRuleNotice] = useState<{ ruleId: string; text: string } | null>(null);
+  /* «지금 확인» 중인 규칙 — 한 번에 하나(화면 전체 막이 뜨므로). ref 는 같은 틱 연타 잠금, state 는 버튼·막 표시용 */
+  const checkingRef = useRef<string | null>(null);
+  const [checking, setChecking] = useState<string | null>(null);
+  /* «지금 확인» 결과 — 결과 모달로 한 번 세운다(방금 누른 일의 결과라 띠가 아니다, CLAUDE.md) */
+  const [checkResult, setCheckResult] = useState<CheckNowMessage | null>(null);
 
   // 규칙이 연결할 수 있는 인스타그램 게시물 (연동 전이면 빈 배열 → 에디터가 안내)
   const igPosts = useMemo(() => posts.filter((p) => p.channel === "instagram"), [posts]);
@@ -166,6 +184,55 @@ export function AutoDmClient({
     }
   }
 
+  /* «지금 확인» — 이 규칙 게시물의 최근 댓글을 지금 읽어 조건에 맞으면 DM 을 보낸다(서버가 웹훅과 같은 파이프라인을 돈다).
+     반응: 누르는 즉시 아이콘이 돈다 → 0.2초가 넘으면 화면 막(busy-veil-in)이 로더와 함께 덮인다 → 끝나면 결과 모달.
+     서버 액션이 reject 돼도(망 끊김·배포 교체) 잠금은 finally 가 푼다 — 버튼이 «확인 중»에 굳지 않게. */
+  async function checkNow(rule: AutoDmRule) {
+    if (checkingRef.current) return;
+    checkingRef.current = rule.id;
+    setChecking(rule.id);
+    setRuleNotice((n) => (n?.ruleId === rule.id ? null : n));
+    let message: CheckNowMessage | null = null;
+    try {
+      const res = await checkRuleNow(rule.id);
+      message = describeCheckNow(res);
+      if (res.ok && res.counters.length > 0) {
+        /* 보낸 만큼 카드 숫자를 맞춘다 — 같은 게시물에 걸린 다른 규칙이 보냈을 수도 있어 게시물의 규칙 전부를 받는다 */
+        const byId = new Map(res.counters.map((c) => [c.id, c]));
+        setRules((prev) =>
+          prev.map((r) => {
+            const c = byId.get(r.id);
+            return c ? { ...r, sentTotal: c.sentTotal, sentToday: c.sentToday, failedTotal: c.failedTotal, lastSentAt: c.lastSentAt } : r;
+          }),
+        );
+      }
+    } catch (e) {
+      const hint = actionRejectHint("auto-dm.check-now", e);
+      if (hint !== null) {
+        message = { tone: "negative", title: "댓글을 확인하지 못했어요", description: hint, lines: [], reconnect: null };
+      }
+    } finally {
+      checkingRef.current = null;
+      setChecking(null);
+    }
+    if (message) setCheckResult(message);
+  }
+
+  /* 연결·다시 연결 버튼 — 인가 화면으로 나가는 이동이라 ConnectLink(누르는 즉시 «이동하고 있어요» 모달).
+     지금 연결을 받을 수 없는 배포면(reconnectHref=null) 설정 › 채널로 보낸다 — 거기서 사정을 말한다 */
+  function connectAction(kind: "connect" | "reconnect") {
+    const label = kind === "connect" ? "인스타그램 연결하기" : "다시 연결하기";
+    return reconnectHref ? (
+      <ConnectLink href={reconnectHref} variant="primary" label="인스타그램">
+        {label}
+      </ConnectLink>
+    ) : (
+      <ButtonLink href="/settings/channels" size="sm">
+        {label}
+      </ButtonLink>
+    );
+  }
+
   // 저장은 서버 확정 후 반영 — 실제 모드에서 DB가 생성한 id·타임스탬프를 그대로 쓴다
   async function saveRule(draft: RuleDraft): Promise<string | null> {
     const exists = rules.some((r) => r.id === draft.id);
@@ -218,7 +285,9 @@ export function AutoDmClient({
              누르면 막히는 버튼 대신 연결하러 가는 길을 준다(발행 화면의 관문과 같은 규칙). */
           igConnected === false ? (
             <ButtonLink href="/settings/channels">인스타그램 연결하기</ButtonLink>
-          ) : (
+          ) : igScopeMissing ? null : (
+            /* 댓글 권한이 빠진 연동이면 만들기를 내리고 아래 안내의 「다시 연결하기」 하나만 둔다 —
+               5단계를 다 채운 뒤 저장에서 막히는 길을 열어 두지 않는다(서버 createRule 도 같은 이유로 막는다) */
             <Button onClick={openNew}>
               <Plus className="size-4" aria-hidden /> 자동화 만들기
             </Button>
@@ -243,6 +312,15 @@ export function AutoDmClient({
             </span>
           ) : null}
         </p>
+      ) : null}
+
+      {igConnected !== false && igScopeMissing ? (
+        /* 권한이 확실히 빠졌을 때만 뜬다(«확인 불가»면 안 뜬다). 규칙이 조용히 실패하는 대신 이유와 할 일을 먼저 말한다.
+           위 「자동화 콘텐츠」 줄은 -mt-3 으로 제목에 붙어 있어야 해서 그 아래에 둔다 */
+        <NoticeBar tone="warning" action={connectAction("reconnect")}>
+          인스타그램을 다시 연결해야 자동 DM이 나가요. 댓글에 답장하는 권한이 빠진 채 연결돼 있어서, 지금은 댓글이
+          달려도 DM을 보낼 수 없어요. 다시 연결할 때 모든 항목을 허용해 주세요.
+        </NoticeBar>
       ) : null}
 
       {/* 요약 지표 */}
@@ -289,9 +367,13 @@ export function AutoDmClient({
           title="아직 자동 DM 규칙이 없어요"
           description="게시물을 고르고 어떤 댓글에 어떤 DM을 보낼지 설정하면, 관심 있는 사람에게 자동으로 메시지가 나갑니다."
           action={
-            <Button onClick={openNew}>
-              <Plus className="size-4" aria-hidden /> 첫 자동화 만들기
-            </Button>
+            igScopeMissing ? (
+              connectAction("reconnect")
+            ) : (
+              <Button onClick={openNew}>
+                <Plus className="size-4" aria-hidden /> 첫 자동화 만들기
+              </Button>
+            )
           }
         />
       ) : (
@@ -405,6 +487,22 @@ export function AutoDmClient({
                     {/* 액션 — 좁은 화면에서는 **아래 줄로 내린다.** 같은 행에 남으면 112px 를 먹어
                         본문 컬럼이 132px 가 되고, 제목·링크·DM 본문이 한 줄에 한글 6~7자로 잘렸다(실측 390px). */}
                     <div className="flex w-full items-center justify-end gap-1.5 sm:w-auto sm:justify-start">
+                      {/* «지금 확인» — 실행 중이고 게시물이 정해진 규칙만(«다음 게시물» 예약은 게시물이 정해진 뒤에).
+                          누르면 게시물의 최근 댓글을 읽어 조건에 맞는 댓글에 DM 을 보내고, 결과를 모달로 알린다 */}
+                      {rule.status === "active" && rule.postId !== NEXT_POST_SENTINEL ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => void checkNow(rule)}
+                          aria-busy={checking === rule.id}
+                          title="이 게시물의 최근 댓글을 지금 확인해, 조건에 맞는 댓글에 DM을 보내요"
+                          className="mr-1"
+                        >
+                          <RefreshCw className={cn("size-4", checking === rule.id && "animate-spin")} aria-hidden />
+                          지금 확인
+                        </Button>
+                      ) : null}
                       <Switch
                         checked={rule.status === "active"}
                         onChange={() => void toggleStatus(rule)}
@@ -473,6 +571,24 @@ export function AutoDmClient({
           }}
         />
       ) : null}
+
+      {/* «지금 확인» 막 — 0.2초(--loading-delay) 안에 끝나면 끝내 안 보이고(번쩍임 없음), 넘으면 로더와 함께 덮인다.
+          댓글 수십 개를 읽고 보내는 데 수십 초가 걸릴 수 있어 그동안 다른 스위치를 건드리지 못하게 한다(편집기 작업 막과 같은 모양) */}
+      {checking ? (
+        <div className="busy-veil-in fixed inset-0 z-[60] m-0! flex items-center justify-center bg-surface/70 backdrop-blur-[2px]">
+          <FinchLoader label="댓글을 확인하고 있어요…" />
+        </div>
+      ) : null}
+
+      <ResultModal
+        result={
+          checkResult
+            ? { tone: checkResult.tone, title: checkResult.title, description: checkResult.description, lines: checkResult.lines }
+            : null
+        }
+        onClose={() => setCheckResult(null)}
+        action={checkResult?.reconnect ? connectAction(checkResult.reconnect) : null}
+      />
     </div>
   );
 }
