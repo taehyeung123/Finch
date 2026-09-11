@@ -87,7 +87,8 @@ Pro 결제·프로젝트 생성 완료. Google/Kakao 로그인 동작 중(구글
    - ⚠️ 인스타 토큰 교환은 **`INSTAGRAM_APP_SECRET`**(Instagram 제품의 시크릿)을 쓴다 —
      `META_APP_SECRET`(설정 > 기본 설정의 앱 시크릿 코드)과 **다른 값**이다. 미설정이면 후자로 폴백한다.
      2026-08-06 에 이 둘을 «통일»한다며 합쳤다가 토큰 교환이 6주간 조용히 깨져 있었다(2026-08-31 적발).
-     웹훅 서명검증은 그대로 `META_APP_SECRET` 을 쓴다 — 제품이 다르면 시크릿도 다르다.
+     인스타 **웹훅 서명검증도 `INSTAGRAM_APP_SECRET` 이 먼저**다(`META_APP_SECRET` 은 두 번째 후보).
+     예전엔 웹훅만 `META_APP_SECRET` 으로 검증해서 운영 댓글 알림이 전부 401 로 버려졌다(2026-09-11 Vercel 로그로 확인·수리).
 6. **개발·테스트는 심사 없이 가능하다.** Standard Access(앱에 역할이 있는 테스터 계정)로
    전 기능을 돌려볼 수 있다. 심사는 **일반 사용자에게 열 때** 필요하다.
 7. Instagram 앱 심사(App Review) — **신청 목록의 정본은 [docs/REAL_API_SPEC.md](REAL_API_SPEC.md) 1절.** 사본:

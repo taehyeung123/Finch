@@ -8,7 +8,9 @@
 
 1. https://developers.facebook.com → 앱 생성(유형: Business) — 이미 만들었다면 그 앱 재사용 (`docs/API_ROADMAP.md` 3번)
 2. 제품 추가: **Messenger** 또는 **Instagram** 제품에서 Instagram 메시지 설정 활성화
-3. 앱 시크릿 확인: 설정 > 기본 설정 > 앱 시크릿 코드 → 배포 환경변수 `META_APP_SECRET`에 입력
+3. 시크릿 확인: 웹훅 서명은 **Instagram 제품의 시크릿**(`INSTAGRAM_APP_SECRET`, 인스타 로그인 연동과 같은 값)으로 먼저 확인하고,
+   맞지 않으면 `META_APP_SECRET` 으로 한 번 더 확인한다(app/api/webhooks/instagram/route.ts `webhookSecrets`).
+   ⚠️ `META_APP_SECRET` 하나로만 검증하던 때 운영 댓글 알림이 전부 401 로 버려졌다(2026-09-11 수리).
 
 ## 2. 웹훅 구독 등록
 

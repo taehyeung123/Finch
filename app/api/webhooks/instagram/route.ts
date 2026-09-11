@@ -22,7 +22,8 @@ import { isNightInKST, isOptOutMessage, pickRule, type CommentEvent, type Matcha
  *     + 수신 메시지의 '수신거부' 답장은 옵트아웃 등록
  *
  * 시크릿(전부 서버 전용, NEXT_PUBLIC_ 금지):
- *  - IG_WEBHOOK_VERIFY_TOKEN / META_APP_SECRET : 웹훅 검증
+ *  - IG_WEBHOOK_VERIFY_TOKEN : 구독 핸드셰이크
+ *  - INSTAGRAM_APP_SECRET (없거나 안 맞으면 META_APP_SECRET) : 페이로드 서명 검증 — 아래 webhookSecrets 참조
  *  - SUPABASE_SERVICE_ROLE_KEY : 세션 없는 컨텍스트의 DB 접근 (lib/supabase/admin)
  *  - IG_TEST_ACCESS_TOKEN(선택) : OAuth 연동 전 개발자 모드 테스트용 임시 토큰
  */
@@ -410,16 +411,33 @@ async function finalize(
   if (error) console.error("[auto-dm] 발송 결과 확정 실패:", sendId, status, error.message);
 }
 
+/**
+ * 서명 검증에 쓸 시크릿 — **인스타 제품 시크릿이 먼저다**(2026-09-11).
+ *
+ * 인스타그램 로그인 방식은 제품 단위로 ID·시크릿 한 쌍을 따로 받는다(INSTAGRAM_APP_SECRET — .env.example 참조).
+ * 연동·해제·데이터 삭제 콜백은 전부 그 쌍을 쓰는데(lib/meta/instagram-oauth.ts) 이 웹훅만 META_APP_SECRET 을 봤다.
+ * 그 결과 운영에 들어온 댓글 알림이 **전부 401** 로 버려졌다 — 9/10 17:04~17:17 31건 전부 invalid_signature,
+ * 자동 DM 이 한 통도 안 나간 원인이다(Vercel 로그로 확인, 2026-09-11).
+ * META_APP_SECRET 은 두 번째 후보로만 남긴다 — 둘 다 우리만 아는 값이라 어느 쪽으로 맞아도 진짜 Meta 발신이다.
+ */
+function webhookSecrets(): string[] {
+  return [process.env.INSTAGRAM_APP_SECRET, process.env.META_APP_SECRET].filter(
+    (v, i, all): v is string => !!v && all.indexOf(v) === i,
+  );
+}
+
 export async function POST(request: Request) {
-  const appSecret = process.env.META_APP_SECRET;
-  if (!appSecret) {
+  const secrets = webhookSecrets();
+  if (secrets.length === 0) {
     return new NextResponse("not_configured", { status: 503 });
   }
 
   // 서명 검증은 반드시 가공 전 원문(raw body) 기준
   const rawBody = await request.text();
   const signature = request.headers.get("x-hub-signature-256");
-  if (!signatureValid(rawBody, signature, appSecret)) {
+  if (!secrets.some((secret) => signatureValid(rawBody, signature, secret))) {
+    /* 조용히 401 만 주면 «알림은 오는데 DM 이 안 나간다»가 로그에서 안 보인다(이번 사고가 그랬다). 인증 전 경로라 스로틀 */
+    consoleErrorThrottled("auto-dm.bad-signature", 10 * 60 * 1000, "[auto-dm] 웹훅 서명 불일치 — 시크릿 설정 확인:", signature ? "서명 있음" : "서명 없음");
     return new NextResponse("invalid_signature", { status: 401 });
   }
 
