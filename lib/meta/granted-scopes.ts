@@ -28,6 +28,10 @@ export const REQUIRED_SCOPE = {
   adsManagement: "ads_management",
   /** 광고를 게시할 페이지 목록(/me/accounts) — 소재 단계에서 필요(2026-09-03 추가) */
   pagesList: "pages_show_list",
+  /** 페이지 게시물 읽기(/{page-id}/posts) — 페이지 고르기의 «최근 게시물»에만 쓴다. 없어도 고르기·저장은 된다(2026-09-11) */
+  pagesReadEngagement: "pages_read_engagement",
+  /** 비즈니스 포트폴리오(/me/businesses) — 설정의 «비즈니스 포트폴리오» 줄에만 쓴다. 없어도 광고 읽기·쓰기는 된다(2026-09-11) */
+  businessManagement: "business_management",
 } as const;
 
 export type ScopeCheck =
@@ -53,6 +57,9 @@ export type ScopedChannel = "instagram" | "threads" | "meta_ads";
  * 이 연동이 지금 코드가 요구하는 스코프를 전부 갖고 있는가 — 설정 화면의 «재연동 필요» 배지용.
  * meta_ads 는 2026-09-03 추가 — 페이지 스코프를 늘리면서 초기 토큰(ads_read·ads_management 만)이
  * 소재 단계에서 막히는데 화면에 이유가 없던 것을 메운다.
+ * ⚠️ 이 목록은 «배지»용이다 — **관문이 아니다.** 2026-09-11 business_management 를 더하자 그 전 연결은 전부
+ * «다시 연결 필요»가 되지만, 막히는 것은 그 권한이 실제로 필요한 곳(REQUIRED_SCOPE 를 checkScope 로 보는 곳)뿐이다.
+ * 기능을 막을 때는 반드시 기능별 스코프 하나를 checkScope 로 본다(missingScopes 가 비었는지로 막지 말 것).
  */
 export function missingScopes(channel: ScopedChannel, granted: string[] | null | undefined): string[] {
   if (!granted || granted.length === 0) return []; // 확인 불가 — 없다고 단정하지 않는다

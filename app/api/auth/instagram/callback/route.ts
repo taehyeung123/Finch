@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { consoleErrorThrottled, flatten } from "@/lib/monitoring/log-throttle";
-import { isOwnerEmail } from "@/lib/channel-availability";
+import { isPrimaryOwner } from "@/lib/channel-availability";
 import { encryptToken, isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
 import {
   exchangeCodeForToken,
@@ -240,8 +240,9 @@ export async function GET(request: Request) {
     /* 우리가 실제로 보낸 redirect_uri 를 함께 보여준다.
        메타 앱에 등록된 값과 **글자 단위로** 다른 곳을 눈으로 찾을 수 있어야 한다. */
     /* ⚠️ detail 은 **운영자 요청일 때만** 붙인다. 예전엔 모든 고객의 주소창·방문 기록에 인가 서버 원문이
-       실려 나갔고, 화면에서 가리는 것만으로는 그게 안 지워졌다(2026-09-06 적발). 원문은 여기 로그와 Sentry 에 남는다. */
-    const forOwner = isOwnerEmail(user.email);
+       실려 나갔고, 화면에서 가리는 것만으로는 그게 안 지워졌다(2026-09-06 적발). 원문은 여기 로그와 Sentry 에 남는다.
+       **주 운영자만**(isPrimaryOwner) — OWNER_EMAIL 의 나머지는 심사 전용 계정이라 원문이 «미완성»으로 읽힌다(2026-09-11). */
+    const forOwner = isPrimaryOwner(user.email);
     return settingsRedirect(origin, {
       connect: "error",
       reason,

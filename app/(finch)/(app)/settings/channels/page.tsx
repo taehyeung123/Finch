@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Check, ChevronDown, ExternalLink, Megaphone, ShieldCheck } from "lucide-react";
+import { Suspense } from "react";
+import { Building2, Check, ChevronDown, ExternalLink, Megaphone, ShieldCheck } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AvatarImage } from "@/components/ui/avatar-image";
@@ -25,7 +26,8 @@ import { isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
 import { THREADS_SCOPES, THREADS_SCOPE_LABELS, isThreadsOAuthConfigured } from "@/lib/meta/threads-oauth";
 import { TIKTOK_SCOPES, TIKTOK_SCOPE_LABELS, isTiktokOAuthConfigured } from "@/lib/tiktok/oauth";
 import { META_ADS_SCOPES, META_ADS_SCOPE_LABELS, isMetaAdsOAuthConfigured } from "@/lib/meta/ads-oauth";
-import { closedForCustomers, isChannelClosed, isChannelOpen, isOwnerEmail, type AvailabilityKey } from "@/lib/channel-availability";
+import { getOwnAdPortfolios } from "@/lib/data/ads";
+import { closedForCustomers, isChannelClosed, isChannelOpen, isPrimaryOwner, type AvailabilityKey } from "@/lib/channel-availability";
 
 /** 운영자 전용 안내에 쓰는 이름 — 고객 화면에는 안 나간다 */
 const CLOSED_LABEL: Record<AvailabilityKey, string> = {
@@ -39,7 +41,7 @@ import { SettingsGroup, SettingsRow } from "../_components/settings-row";
 import { SummaryCard } from "../_components/summary-card";
 import { AdPublisherPicker } from "@/app/(finch)/(app)/ads/_components/ad-publisher-picker";
 import { disconnectAccount, disconnectMetaAds } from "./actions";
-import { deriveAdsState, deriveChannelState } from "./_lib/derive-state";
+import { deriveAdsState, deriveChannelState, derivePortfolioRow } from "./_lib/derive-state";
 
 export const metadata: Metadata = {
   title: "SNS 계정 연결",
@@ -322,6 +324,46 @@ const DOT_TONE: Record<string, string> = {
   todo: "bg-fg-faint",
 };
 
+const PORTFOLIO_TIP = (
+  <InfoTip label="비즈니스 포트폴리오 안내">
+    광고 계정을 소유한 메타 비즈니스 포트폴리오예요. 이 화면을 열 때마다 메타에서 새로 확인해요.
+  </InfoTip>
+);
+
+/**
+ * 비즈니스 포트폴리오 줄(2026-09-11) — 메타에서 **열 때마다** 읽는다(lib/data/ads.ts getOwnAdPortfolios).
+ * 두 번의 조회를 연결 상태 줄이 기다리지 않게 Suspense 로 뒤따라 그린다(CLAUDE.md «클릭은 그 자리에서»).
+ * 실패는 «확인 못 함» — «포트폴리오 없음»으로 그리지 않는다(derivePortfolioRow).
+ */
+async function AdPortfolioRow() {
+  const row = derivePortfolioRow(await getOwnAdPortfolios());
+  if (!row) return null;
+  return (
+    <SettingsRow
+      icon={Building2}
+      label="비즈니스 포트폴리오"
+      tip={PORTFOLIO_TIP}
+      hint={row.hintIsName ? <span className="text-fg">{row.hint}</span> : row.hint}
+      hintTone={row.hintTone}
+      meta={row.meta}
+      metaTone={row.metaTone}
+    >
+      {row.perAccount ? (
+        <ul className="space-y-1" aria-label="광고 계정별 포트폴리오">
+          {row.perAccount.map((a) => (
+            <li key={a.key} className="flex min-w-0 items-center gap-1.5 text-[12px] text-fg-sub">
+              <span className="truncate text-fg">{a.accountName}</span>
+              <span aria-hidden>·</span>
+              <span className={a.tone === "warning" ? "truncate text-warning-strong" : "truncate"}>{a.portfolio}</span>
+            </li>
+          ))}
+          {row.more > 0 ? <li className="text-[12px] text-fg-sub">외 광고 계정 {row.more}개</li> : null}
+        </ul>
+      ) : null}
+    </SettingsRow>
+  );
+}
+
 function ScopeList({ title, items }: { title: string; items: string[] }) {
   return (
     <div>
@@ -348,11 +390,13 @@ export default async function ChannelsSettingsPage({
   const connectParam = typeof sp.connect === "string" ? sp.connect : null;
   const reasonParam = typeof sp.reason === "string" ? sp.reason : null;
   const handleParam = typeof sp.handle === "string" ? sp.handle : null;
-  /* 연결 실패 원문 — **운영자에게만**. 고객에게는 내부 운영 정보라 노출하지 않는다 */
+  /* 연결 실패 원문 — **주 운영자에게만**. 고객에게는 내부 운영 정보라 노출하지 않는다 */
   const detailParam = typeof sp.detail === "string" ? sp.detail : null;
   const viewer = await getAuthUser();
-  /* 정본은 isOwnerEmail — OWNER_EMAIL 이 쉼표 목록이 된 뒤(2026-09-09) 손으로 비교하면 첫 계정만 맞는다 */
-  const isOwner = isOwnerEmail(viewer?.email);
+  /* 운영자 전용 **안내**(닫힌 채널 알림·연동 실패 원문)는 주 운영자(OWNER_EMAIL 첫 번째)에게만 — 목록의 나머지는
+     메타 심사 전용 계정이라, 거기에 내부 안내가 보이면 심사자에게 «미완성 화면»으로 읽힌다(2026-09-11).
+     채널 **접근**은 여전히 목록 전체가 연다(아래 isChannelOpen·isChannelClosed 가 isOwnerEmail 을 본다). */
+  const showOperatorNotes = isPrimaryOwner(viewer?.email);
   /* connect=warn — 연결은 됐지만 부수 작업이 실패한 «절반 성공». 성공으로도 실패로도 덮지 않는다.
      ⚠️ 톤은 사전에서 먼저 찾고, **모르는 reason 이면 connect 값**으로 정한다. 예전에는 폴백이
      `CONNECT_MESSAGES.exchange`(negative) 하나여서, 모르는 reason 이 붙은 warn 이 통째로 빨간 실패로 뒤집혔다.
@@ -366,7 +410,7 @@ export default async function ChannelsSettingsPage({
           ? /* 계정명을 실어 오는 유일한 warn — «무엇이 됐는지»를 제목에, «무엇이 안 됐는지»를 설명에 둔다 */
             { tone: "warning", title: connectedTitle(handleParam), description: CONNECT_MESSAGES.partial_webhook.description }
           : connectParam === "error" || connectParam === "warn" || connectParam === "unconfigured"
-            ? connectFailure(connectParam, reasonParam, isOwner ? detailParam : null)
+            ? connectFailure(connectParam, reasonParam, showOperatorNotes ? detailParam : null)
             : null;
   /* 결과가 «방금 도착했다»는 표식 — ResultModal 이 같은 문구의 두 번째 결과도 띄우게 하는 열쇠다.
      서버 컴포넌트는 탐색이 있을 때만 다시 렌더되므로 렌더마다 새로 만든 값이 곧 «새 결과»를 뜻한다. */
@@ -441,12 +485,12 @@ export default async function ChannelsSettingsPage({
 
       {/* 운영자 전용 알림 — 이 화면은 운영자에게 «열림»으로 보이므로, 고객에게는 아직 닫혀 있다는 사실을
           여기서 말해 주지 않으면 승인이 난 뒤에도 아무도 그걸 눈치채지 못한다(lib/channel-availability.ts).
-          고객에게는 절대 안 보인다 — 내부 운영 정보다. */}
-      {isOwner && closedChannelKeys.length > 0 ? (
+          고객에게는 절대 안 보인다 — 내부 운영 정보다. 심사 전용 계정(OWNER_EMAIL 두 번째부터)에게도 안 보인다. */}
+      {showOperatorNotes && closedChannelKeys.length > 0 ? (
         <div className="rounded-card border border-line bg-plate px-4 py-3 text-[14px] text-fg-sub">
           <span className="font-semibold text-fg">운영자에게만 보이는 안내</span> · 고객 화면에서는{" "}
           <span className="font-semibold text-fg">{closedChannelKeys.map((k) => CLOSED_LABEL[k]).join(" · ")}</span> 이(가) 아직 「준비 중」으로
-          닫혀 있어요. 사장님 계정만 지금 연결할 수 있어요. 열려면 배포 환경변수 <code className="font-mono text-[13px]">CHANNELS_OPEN</code> 에
+          닫혀 있어요. <code className="font-mono text-[13px]">OWNER_EMAIL</code> 에 적은 계정(심사 전용 계정 포함)만 지금 연결할 수 있어요. 열려면 배포 환경변수 <code className="font-mono text-[13px]">CHANNELS_OPEN</code> 에
           그 이름을 더하고 다시 배포하세요.
         </div>
       ) : null}
@@ -609,6 +653,18 @@ export default async function ChannelsSettingsPage({
             ) : null
           }
         />
+        {adsCard?.connected && adsCard.accountCount > 0 && metaAdsReady && adsCard.expiresInDays !== 0 ? (
+          /* 광고 계정이 속한 비즈니스 포트폴리오 — 메타 조회라 늦게 올 수 있다. 0.2초 안에 오면 «확인하는 중»을 안 띄운다(busy-veil-in).
+             만료됐거나(daysUntil 은 0 에서 멈춘다) 이 사람에게 아직 안 열린 연동이면 조회할 수 없으니 자리부터 잡지 않는다 —
+             «확인하는 중»이 떴다가 사라지는 줄이 된다. */
+          <Suspense
+            fallback={
+              <SettingsRow icon={Building2} label="비즈니스 포트폴리오" tip={PORTFOLIO_TIP} hint={<span className="busy-veil-in">확인하는 중…</span>} />
+            }
+          >
+            <AdPortfolioRow />
+          </Suspense>
+        ) : null}
         {adsCard?.connected && adsCard.accountCount > 0 ? (
           /* 광고 게시 주체 — 소재(광고 만들기)에 필요한 페이지·Instagram 계정. 목록은 열 때마다 새로 조회한다(피커 주석) */
           <SettingsRow

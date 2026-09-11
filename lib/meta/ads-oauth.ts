@@ -14,7 +14,7 @@ import "server-only";
  * 인스타(ig_refresh_token)·스레드(th_refresh_token)·틱톡(refresh_token)은 전부 갱신이 되는데
  * 광고만 안 된다 — 그래서 설정 화면이 만료일을 **숨기지 않고 보여줘야** 한다.
  *
- * 지금 구현된 것은 조회뿐이지만 **동의는 관리까지 함께 받는다**(아래 META_ADS_SCOPES 주석).
+ * 조회·관리(캠페인·광고 세트·소재·광고)·게시 페이지·비즈니스 포트폴리오를 **한 번의 동의**로 받는다(아래 META_ADS_SCOPES 주석).
  * 서버 전용: client_secret·토큰을 클라이언트로 절대 노출하지 않는다.
  */
 
@@ -48,15 +48,30 @@ const FB_DIALOG_BASE = `https://www.facebook.com/${GRAPH_FB_VERSION}/dialog/oaut
  * 지금이 재동의 비용이 0 인 유일한 시점이다 — META_APP_ID 미설정이라 이 흐름으로 발급된 토큰이 없다
  * (콜백이 unconfigured 로 즉시 반환). 소재 기능을 연 뒤 늘리면 전원 재연동이다(위 인스타 사례).
  * instagram_basic 은 **미확정**이다 — IG 계정 조회 세 경로를 첫 자격증명으로 실측한 뒤 결정한다(스펙 §13-9).
+ *
+ * 2026-09-11 — 메타 앱 심사를 앞두고 **business_management 를 더한다**(docs/APP_REVIEW.md §4-1-3).
+ * 메타 문서: 마케팅 API 이용 사례에 **필수이고 뺄 수 없는** 권한이다. 그런데 심사는 «요청한 권한마다 성공한 호출 1회 이상 +
+ * 앱 안의 실제 쓰임»을 요구한다 — 요청만 하고 안 쓰는 권한은 반려 사유다. 그래서 쓰는 화면을 함께 만들었다:
+ * 설정 › SNS 계정 연결의 «비즈니스 포트폴리오» 줄이 /me/businesses 로 광고 계정이 어느 포트폴리오 소속인지 보여 준다
+ * (lib/meta/ads.ts fetchMyBusinesses·fetchAdAccountOwners, lib/data/ads.ts getOwnAdPortfolios).
+ * 이 권한이 없어도 읽기·쓰기는 전부 그대로 된다 — 막는 곳은 포트폴리오 줄 하나뿐이다(«다시 연결하면 보여 드려요»).
+ * pages_read_engagement 도 이날부터 실제로 쓴다 — 광고 게시 페이지를 고를 때 그 페이지의 최근 게시물(ads-pages.ts).
  */
-export const META_ADS_SCOPES = ["ads_read", "ads_management", "pages_show_list", "pages_read_engagement"] as const;
+export const META_ADS_SCOPES = [
+  "ads_read",
+  "ads_management",
+  "pages_show_list",
+  "pages_read_engagement",
+  "business_management",
+] as const;
 
 /** 사람이 읽는 권한 설명 — 스코프를 키로 묶어 누락이 컴파일에서 걸리게 한다(instagram-oauth.ts 와 같은 규칙) */
 export const META_ADS_SCOPE_LABELS: Record<(typeof META_ADS_SCOPES)[number], string> = {
   ads_read: "광고 계정·캠페인 성과 조회",
   ads_management: "캠페인·광고 생성·수정·집행 상태 변경",
   pages_show_list: "광고를 게시할 Facebook 페이지 목록 확인",
-  pages_read_engagement: "광고에 사용할 페이지 정보 읽기",
+  pages_read_engagement: "광고 게시 페이지의 정보·최근 게시물 확인",
+  business_management: "광고 계정이 속한 비즈니스 포트폴리오 조회",
 };
 
 export interface MetaAdsOAuthConfig {
@@ -106,7 +121,15 @@ export function resolveAdsCallbackUri(request: Request): string {
   return `${proto}://${host}${META_ADS_CALLBACK_PATH}`;
 }
 
-/** 인가 URL — state 는 CSRF 방지용(쿠키에도 저장해 콜백에서 대조) */
+/**
+ * 인가 URL — state 는 CSRF 방지용(쿠키에도 저장해 콜백에서 대조).
+ *
+ * auth_type=rerequest — **한 번 거절한 권한은 이게 없으면 다시 묻지 않는다**(Facebook Login 수동 흐름 문서:
+ * «the Login Dialog will re-ask for the declined permission»). 설정의 「다시 연결 필요」는 빠진 권한을 받으라는 안내인데,
+ * 그 권한을 한 번 거절한 사람은 이 값 없이는 몇 번을 다시 연결해도 같은 화면으로 돌아와 영영 «다시 연결 필요»로 남는다.
+ * 새로 늘린 권한(business_management 등)은 거절한 적이 없으니 이 값 없이도 물을 것으로 본다 — 명시 문장은 문서에서
+ * 못 찾았다(2026-09-11). 사장님 재연동 때 동의 화면에 새 권한이 보이는지로 확인한다.
+ */
 export function buildAdsAuthorizeUrl(params: { appId: string; redirectUri: string; state: string }): string {
   const q = new URLSearchParams({
     client_id: params.appId,
@@ -114,6 +137,7 @@ export function buildAdsAuthorizeUrl(params: { appId: string; redirectUri: strin
     state: params.state,
     response_type: "code",
     scope: META_ADS_SCOPES.join(","),
+    auth_type: "rerequest",
   });
   return `${FB_DIALOG_BASE}?${q.toString()}`;
 }
