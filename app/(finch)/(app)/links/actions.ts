@@ -16,7 +16,7 @@ import { MIN_PAGE_PASSWORD } from "@/lib/links";
 import { LINK_TEMPLATES } from "@/lib/links/templates";
 import { parseLittlyHtml } from "@/lib/links/littly";
 import { parseInpockHtml } from "@/lib/links/inpock";
-import { getLinkFeedItems } from "@/lib/data/live";
+import { getLinkFeed, type LinkFeedItem, type LinkFeedResult } from "@/lib/data/live";
 import { collectPublicPaths, mergePublicPaths, purgePublicPage, purgePublicPaths } from "@/lib/links/public-cache";
 import { createClaudeClient, CHAT_MODEL } from "@/lib/ai/claude";
 import { CREDIT_COSTS, chargeGeneration, refundGenerationCredits } from "@/lib/actions/credits";
@@ -2076,6 +2076,32 @@ export async function revertLinkDraft(pageId?: string): Promise<Result> {
    라이브 반영 — 초안을 공개 스냅샷으로 굽는다
    ══════════════════════════════════════════════════════════════════ */
 
+/** 발행본의 URL 한 칸 — https 만(주인은 스냅샷을 직접 고칠 수 있다 — 이어 쓰기가 그 값을 새 발행본에 옮기므로 한 번 거른다) */
+function feedUrl(v: unknown): string | null {
+  return typeof v === "string" && v.length <= 2048 && /^https:\/\//i.test(v) ? v : null;
+}
+
+/** 직전 발행본의 「최근 게시물」 블록별 피드 — 인스타가 잠깐 실패한 발행이 이어 쓴다(publishLinkPage) */
+async function previousFeeds(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  pageId: string,
+): Promise<Map<string, { items: LinkFeedItem[]; from: string | null }>> {
+  const out = new Map<string, { items: LinkFeedItem[]; from: string | null }>();
+  const { data, error } = await supabase.from("link_pages").select("published_snapshot").eq("id", pageId).maybeSingle();
+  if (error || !data) return out;
+  const blocks = (data.published_snapshot as { blocks?: unknown } | null)?.blocks;
+  if (!Array.isArray(blocks)) return out;
+  for (const b of blocks as Array<{ id?: unknown; type?: unknown; data?: Record<string, unknown> } | null>) {
+    if (!b || b.type !== "social_feed" || typeof b.id !== "string" || !Array.isArray(b.data?.cached)) continue;
+    const items = (b.data.cached as Array<Record<string, unknown> | null>)
+      .filter((it): it is Record<string, unknown> => !!it && typeof it === "object")
+      .slice(0, 9)
+      .map((it) => ({ thumbUrl: feedUrl(it.thumbUrl), permalink: feedUrl(it.permalink) }));
+    out.set(b.id, { items, from: typeof b.data.cachedFrom === "string" ? b.data.cachedFrom : null });
+  }
+  return out;
+}
+
 export async function publishLinkPage(pageId?: string): Promise<Result> {
   if (isDemoMode()) return DEMO;
   const user = await getAuthUser();
@@ -2113,23 +2139,37 @@ export async function publishLinkPage(pageId?: string): Promise<Result> {
 
   /* 「최근 게시물」 블록을 여기서 **실제로 채운다.** 편집기가 "라이브 반영할 때
      채워집니다"라고 약속하므로, 안 채우면 발행해도 블록이 안 보이는 거짓말이 된다.
-     연동이 없거나 실패하면 빈 배열 → 렌더러가 그 블록을 숨긴다(깨진 자리 대신 없음). */
+     연동이 없으면 빈 배열 → 렌더러가 그 블록을 숨긴다(깨진 자리 대신 없음).
+     인스타가 **잠깐** 실패하면(토큰·호출 오류) 같은 계정의 직전 피드를 이어 쓴다(2026-09-11) —
+     예전엔 그 한 번의 실패가 빈 피드로 발행돼 블록이 라이브에서 사라졌다. */
   const rawBlocks = (blocks ?? []) as Array<{ id: string; type: string; data: Record<string, unknown> }>;
   const feedBlocks = rawBlocks.filter((b) => b.type === "social_feed");
-  const feedCache = new Map<string, Array<{ thumbUrl: string | null; permalink: string | null }>>();
-  for (const b of feedBlocks) {
-    const channel = typeof b.data?.channel === "string" ? b.data.channel : "instagram";
-    /* 인스타그램만 공개 미디어 목록 API 가 있다. 나머지는 빈 배열 */
-    if (channel !== "instagram") {
-      feedCache.set(b.id, []);
-      continue;
-    }
-    const count = typeof b.data?.count === "number" ? b.data.count : 6;
-    try {
-      feedCache.set(b.id, await getLinkFeedItems(count));
-    } catch (e) {
-      console.error("[links] 최근 게시물 조회 실패:", e);
-      feedCache.set(b.id, []);
+  const feedCache = new Map<string, { items: LinkFeedItem[]; from: string | null }>();
+  if (feedBlocks.length > 0) {
+    const prevFeed = await previousFeeds(supabase, target.id);
+    /* 한 번만 부른다 — 블록이 여러 개(개수 3·6·9)여도 9개를 받아 나눠 쓴다. 예전엔 블록마다 따로 불렀다 */
+    let feed: LinkFeedResult | null = null;
+    for (const b of feedBlocks) {
+      const channel = typeof b.data?.channel === "string" ? b.data.channel : "instagram";
+      /* 인스타그램만 공개 미디어 목록 API 가 있다. 나머지는 빈 배열 */
+      if (channel !== "instagram") {
+        feedCache.set(b.id, { items: [], from: null });
+        continue;
+      }
+      const count = typeof b.data?.count === "number" ? b.data.count : 6;
+      feed ??= await getLinkFeed(9);
+      if (feed.status === "ok") {
+        feedCache.set(b.id, { items: feed.items.slice(0, count), from: feed.igUserId });
+      } else if (feed.status === "failed") {
+        const prev = prevFeed.get(b.id);
+        /* **같은 계정**의 직전 피드만 — 출처를 모르는 옛 피드(이 기능 전 발행본)나 다른 계정 것은 남의 게시물일 수 있다.
+           계정 조회 자체가 실패해 지금 계정을 모르면(igUserId null) 직전 피드의 출처를 믿는다 */
+        const same = !!prev?.from && (feed.igUserId === null || feed.igUserId === prev.from);
+        feedCache.set(b.id, same && prev ? { items: prev.items.slice(0, count), from: prev.from } : { items: [], from: null });
+      } else {
+        /* 연동 없음 — 끊은 계정의 게시물을 공개 페이지에 남기지 않는다 */
+        feedCache.set(b.id, { items: [], from: null });
+      }
     }
   }
 
@@ -2163,7 +2203,12 @@ export async function publishLinkPage(pageId?: string): Promise<Result> {
     blocks: rawBlocks.map((b) => ({
       id: b.id,
       type: b.type,
-      data: b.type === "social_feed" ? { ...(b.data ?? {}), cached: feedCache.get(b.id) ?? [] } : (b.data ?? {}),
+      /* cachedFrom — 이 피드를 받은 인스타 계정(앱 범위 id). 다음 발행이 실패했을 때 «같은 계정인가»를 가리는 근거.
+         공개 렌더러·/go 는 cached 만 읽는다 */
+      data:
+        b.type === "social_feed"
+          ? { ...(b.data ?? {}), cached: feedCache.get(b.id)?.items ?? [], cachedFrom: feedCache.get(b.id)?.from ?? null }
+          : (b.data ?? {}),
     })),
   };
 

@@ -1060,22 +1060,44 @@ export async function getRecentPostsForPicker(): Promise<Post[] | null> {
  * 인스타그램 전용이다 — 틱톡·스레드는 공개 미디어 목록 API 가 아직 없다.
  * (블록 편집기가 채널을 고르게 해두었으므로, 그 둘은 빈 배열이 나가고 렌더러가 숨긴다.)
  */
-export async function getLinkFeedItems(
-  limit: number,
-): Promise<Array<{ thumbUrl: string | null; permalink: string | null }>> {
-  const row = await loadInstagramRow();
-  if (!row || !row.platform_user_id) return [];
-  const token = await ensureFreshToken(row);
-  if (!token) return [];
+export type LinkFeedItem = { thumbUrl: string | null; permalink: string | null };
 
-  const media = await fetchRecentMedia(row.platform_user_id, token, Math.min(25, Math.max(1, limit)));
-  /* 발행 시점 스냅샷이라 실패하면 이번 발행에 피드가 안 실린다 — 고객이 화면에서 바로 알아채고 다시 발행할 수 있다.
-     여기서 옛 스냅샷을 유지하는 배관은 아직 없다(별도 작업). */
-  if (media === null) return [];
-  return media.slice(0, limit).map((m) => ({
-    thumbUrl: m.thumbnailUrl ?? m.mediaUrl ?? null,
-    permalink: m.permalink ?? null,
-  }));
+/**
+ * 피드 조회 결과 — **«연동 없음»과 «잠깐 실패»를 가른다**(2026-09-11).
+ * 예전엔 둘 다 빈 배열이라, 인스타가 한 번 삐끗하면 빈 피드로 발행돼 블록이 공개 페이지에서 통째로 사라졌다.
+ * 자동 발행은 편집이 멈출 때마다 돌기 때문에 그 한 번이 그대로 라이브에 나갔다.
+ * 발행(publishLinkPage)은 failed 일 때만 **같은 계정의** 직전 피드를 이어 쓰고, no_account 면 비운다 —
+ * 연동을 끊은 계정의 게시물을 남겨 두면 안 된다.
+ */
+export type LinkFeedResult =
+  | { status: "ok"; igUserId: string; items: LinkFeedItem[] }
+  | { status: "no_account" }
+  /** igUserId 가 null = 계정 조회 자체가 실패해 어느 계정인지 모른다 */
+  | { status: "failed"; igUserId: string | null };
+
+export async function getLinkFeed(limit: number): Promise<LinkFeedResult> {
+  let row: Awaited<ReturnType<typeof loadInstagramRow>>;
+  try {
+    row = await loadInstagramRow();
+  } catch (e) {
+    console.error("[links] 최근 게시물 — 계정 조회 실패:", e instanceof Error ? e.message : String(e));
+    return { status: "failed", igUserId: null };
+  }
+  if (!row || !row.platform_user_id) return { status: "no_account" };
+  const igUserId = row.platform_user_id;
+  const token = await ensureFreshToken(row).catch(() => null);
+  /* 토큰 만료·복호화 실패 — 다시 연결하기 전까지는 새로 못 받는다. 이미 공개된 같은 계정 피드를 지우지는 않는다 */
+  if (!token) return { status: "failed", igUserId };
+  const media = await fetchRecentMedia(igUserId, token, Math.min(25, Math.max(1, limit)));
+  if (media === null) return { status: "failed", igUserId };
+  return {
+    status: "ok",
+    igUserId,
+    items: media.slice(0, limit).map((m) => ({
+      thumbUrl: m.thumbnailUrl ?? m.mediaUrl ?? null,
+      permalink: m.permalink ?? null,
+    })),
+  };
 }
 
 export interface LiveAudience {
