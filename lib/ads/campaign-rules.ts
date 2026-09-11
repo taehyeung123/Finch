@@ -150,6 +150,10 @@ export const ADS_WRITE_MESSAGES = {
   search_unverified: "검색 결과를 가져오지 못했어요. 잠시 후 다시 시도해 주세요.",
   search_paused: "요청이 잠시 몰려 검색을 쉬고 있어요. 잠시 후 다시 시도해 주세요.",
   estimate_unavailable: "지금은 예상 도달을 가져오지 못했어요. 광고 만들기에는 영향이 없어요.",
+  /* ── 2026-09-11: 페이지 고르기의 «최근 게시물»(읽기, pages_read_engagement) — 곁가지라 페이지 선택은 막지 않는다 ── */
+  scope_missing_page_posts: "다시 연결하면 이 페이지의 최근 게시물을 볼 수 있어요. 페이지 선택에는 영향이 없어요.",
+  page_posts_denied: "이 페이지의 게시물을 불러올 권한이 없어요. 페이지 선택에는 영향이 없어요.",
+  page_posts_unverified: "최근 게시물을 불러오지 못했어요. 페이지 선택에는 영향이 없어요.",
 } as const;
 export type AdsWriteFailCode = keyof typeof ADS_WRITE_MESSAGES;
 

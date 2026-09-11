@@ -6,8 +6,9 @@ import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
 import { ModalShell } from "@/components/ui/modal-shell";
 import { adsWriteMessage } from "@/lib/ads/campaign-rules";
-import type { FbIgAccount, FbPage } from "@/lib/meta/ads-pages";
-import { loadAdPagesAction, loadPageInstagramAction, saveAdPublisherAction } from "../publisher-actions";
+import type { FbIgAccount, FbPage, FbPagePost } from "@/lib/meta/ads-pages";
+import { loadAdPagesAction, loadPageStepAction, saveAdPublisherAction } from "../publisher-actions";
+import { PageRecentPosts } from "./page-recent-posts";
 
 /*
   광고 게시 주체 고르기 — 페이지 → Instagram 계정 → 저장. 설정 채널 카드와 마법사 ② 가 같이 쓴다.
@@ -18,10 +19,20 @@ import { loadAdPagesAction, loadPageInstagramAction, saveAdPublisherAction } fro
   - 껍데기는 ModalShell — 포커스 트랩·Escape·저장 중 잠금(busy)을 거기서 한 번에 얻는다(슬라이스 2 소넷 점검 3건).
   - 늦게 도착한 응답은 버린다(seq) — 뒤로 갔다가 다른 페이지를 고른 뒤 옛 IG 목록이 덮어쓰지 않게.
   - 저장 성공 뒤 router.refresh() 로 서버 상태를 다시 그린다.
+  - 페이지를 고르면 그 페이지의 최근 게시물도 함께 보여 준다(2026-09-11, page-recent-posts.tsx) — IG 목록과 **한 액션**으로
+    받는다(서버 액션은 한 번에 하나씩 나가서, 나누면 게시물이 IG 조회를 통째로 기다린다). 게시물 실패는 IG 선택을 막지 않는다.
 */
 
 type PagesState = { loading: boolean; pages: FbPage[]; error: string | null };
-type IgState = { page: FbPage; loading: boolean; accounts: FbIgAccount[]; error: string | null };
+type PostsState = { posts: FbPagePost[]; error: string | null };
+type IgState = {
+  page: FbPage;
+  loading: boolean;
+  accounts: FbIgAccount[];
+  error: string | null;
+  /** null = 게시물 칸을 그리지 않는다(로딩 중이거나, 연결·권한 문제로 둘 다 시작도 못 했을 때 — 그 이유는 error 가 한 번 말한다) */
+  posts: PostsState | null;
+};
 
 const radioBase = "flex w-full items-center gap-3 rounded-card border px-3.5 py-3 text-left trans-state";
 
@@ -72,22 +83,27 @@ export function AdPublisherPicker({
     const id = ++seq.current;
     setSaveError(null);
     setSelectedIg(null);
-    setIg({ page, loading: true, accounts: [], error: null });
-    let res: Awaited<ReturnType<typeof loadPageInstagramAction>>;
+    setIg({ page, loading: true, accounts: [], error: null, posts: null });
+    let res: Awaited<ReturnType<typeof loadPageStepAction>>;
     try {
-      res = await loadPageInstagramAction(page.id);
+      res = await loadPageStepAction(page.id);
     } catch {
       if (seq.current !== id) return;
-      setIg({ page, loading: false, accounts: [], error: "Instagram 계정을 불러오지 못했어요. 연결을 확인하고 다시 시도해 주세요." });
+      setIg({ page, loading: false, accounts: [], error: "Instagram 계정을 불러오지 못했어요. 연결을 확인하고 다시 시도해 주세요.", posts: null });
       return;
     }
     if (seq.current !== id) return;
     if (!res.ok) {
-      setIg({ page, loading: false, accounts: [], error: adsWriteMessage(res.code) });
+      setIg({ page, loading: false, accounts: [], error: adsWriteMessage(res.code), posts: null });
       return;
     }
-    setIg({ page, loading: false, accounts: res.accounts, error: null });
-    if (res.accounts.length === 1) setSelectedIg(res.accounts[0].id);
+    const posts: PostsState = res.posts.ok ? { posts: res.posts.posts, error: null } : { posts: [], error: adsWriteMessage(res.posts.code) };
+    if (!res.ig.ok) {
+      setIg({ page, loading: false, accounts: [], error: adsWriteMessage(res.ig.code), posts });
+      return;
+    }
+    setIg({ page, loading: false, accounts: res.ig.accounts, error: null, posts });
+    if (res.ig.accounts.length === 1) setSelectedIg(res.ig.accounts[0].id);
   }
 
   function backToPages() {
@@ -201,7 +217,7 @@ export function AdPublisherPicker({
                 ))
               )
             ) : ig.loading ? (
-              <p className="py-6 text-center text-[14px] text-fg-sub">Instagram 계정을 확인하는 중…</p>
+              <p className="py-6 text-center text-[14px] text-fg-sub">Instagram 계정과 최근 게시물을 확인하는 중…</p>
             ) : ig.error ? (
               <p role="alert" className="rounded-card bg-warning-weak p-3 text-[14px] text-warning-strong">
                 {ig.error}
@@ -233,6 +249,7 @@ export function AdPublisherPicker({
                 {saveError}
               </p>
             ) : null}
+            {ig && !ig.loading && ig.posts ? <PageRecentPosts posts={ig.posts.posts} error={ig.posts.error} /> : null}
           </div>
         </ModalShell>
       ) : null}

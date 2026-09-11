@@ -158,6 +158,66 @@ export async function fetchAdAccounts(accessToken: string): Promise<FbAdAccount[
   }
 }
 
+/* ── 비즈니스 포트폴리오 (business_management, 2026-09-11) ─────────── */
+
+export interface FbBusiness {
+  id: string;
+  name: string | null;
+}
+
+/**
+ * 내가 속한 비즈니스 포트폴리오 — GET /me/businesses.
+ * 메타 «비즈니스 관리자 API 시작하기» 문서: 앱과 사용자 **둘 다** business_management 가 있어야 한다.
+ * 실패는 null(«모름») — 빈 배열(«포트폴리오가 하나도 없다»)과 다르다.
+ */
+export async function fetchMyBusinesses(accessToken: string): Promise<FbBusiness[] | null> {
+  try {
+    const rows = await fbGetAll<{ id?: string; name?: string }>("/me/businesses?fields=id,name&limit=100", accessToken, "businesses");
+    return rows
+      .filter((b) => typeof b.id === "string" && b.id.length > 0)
+      .map((b) => ({ id: b.id as string, name: typeof b.name === "string" && b.name.trim() ? b.name.trim() : null }));
+  } catch (e) {
+    console.error("[meta-ads] 비즈니스 포트폴리오 조회 실패:", e instanceof Error ? e.message : String(e));
+    return null;
+  }
+}
+
+/**
+ * 광고 계정별 소유 포트폴리오 — AdAccount.business 필드(Marketing API 레퍼런스: «이 광고 계정을 소유한
+ * 비즈니스 관리자, 있으면»). 소유 포트폴리오가 없는 개인 광고 계정은 필드가 **아예 안 온다.**
+ *
+ * 반환 Map: 광고 계정 id(act_ 없음) → 포트폴리오 | null(응답에 계정은 있는데 business 가 없다).
+ * **Map 에 없는 계정은 «모름»**이다 — 목록이 잘렸거나 두 조회 사이에 계정이 바뀐 것이지 «개인 계정»이 아니다.
+ * 실패는 null.
+ *
+ * ⚠️ fetchAdAccounts 와 **따로** 부른다. 이 필드에 필요한 권한은 레퍼런스에 적혀 있지 않다(2026-09-11 확인) —
+ * 권한 때문에 필드가 거절되면 **계정 목록까지 통째로** 떨어지는데, 계정 목록은 연동 자체의 성패다.
+ */
+export async function fetchAdAccountOwners(accessToken: string): Promise<Map<string, FbBusiness | null> | null> {
+  try {
+    const rows = await fbGetAll<{ account_id?: string; business?: { id?: string; name?: string } }>(
+      "/me/adaccounts?fields=account_id,business{id,name}&limit=100",
+      accessToken,
+      "adaccount_owners",
+    );
+    const out = new Map<string, FbBusiness | null>();
+    for (const r of rows) {
+      if (typeof r.account_id !== "string" || r.account_id.length === 0) continue;
+      const b = r.business;
+      out.set(
+        r.account_id,
+        b && typeof b.id === "string" && b.id.length > 0
+          ? { id: b.id, name: typeof b.name === "string" && b.name.trim() ? b.name.trim() : null }
+          : null,
+      );
+    }
+    return out;
+  } catch (e) {
+    console.error("[meta-ads] 광고 계정 소유 포트폴리오 조회 실패:", e instanceof Error ? e.message : String(e));
+    return null;
+  }
+}
+
 /* ── 캠페인 ──────────────────────────────────────────────────────── */
 
 export interface FbCampaign {

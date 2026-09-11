@@ -30,7 +30,15 @@ import { getConsentStatus } from "@/lib/legal/consent";
 import type { AdsWriteFailCode } from "@/lib/ads/campaign-rules";
 import { isMetaAdsOAuthConfigured } from "@/lib/meta/ads-oauth";
 import { isChannelClosed } from "@/lib/channel-availability";
-import { fetchCampaignInsights, fetchCampaigns, type FbCampaign } from "@/lib/meta/ads";
+import {
+  fetchAdAccountOwners,
+  fetchCampaignInsights,
+  fetchCampaigns,
+  fetchMyBusinesses,
+  type FbCampaign,
+} from "@/lib/meta/ads";
+import { checkScope, REQUIRED_SCOPE } from "@/lib/meta/granted-scopes";
+import { resolveAccountBusiness, type AdPortfolioState } from "@/lib/ads/portfolio";
 import {
   fetchAccountAdReview,
   fetchAds,
@@ -516,6 +524,114 @@ export async function getAdsWriteContext(adAccountId?: string): Promise<AdsWrite
           igUsername: selected.ad_ig_username ?? null,
         }
       : null,
+  };
+}
+
+/* ── 비즈니스 포트폴리오 (설정 › SNS 계정 연결, 2026-09-11) ───────────────── */
+
+/** 예시 화면 — 설정 화면의 예시 광고 계정(«핀치 마케팅»)과 짝을 맞춘다 */
+const DEMO_PORTFOLIOS: AdPortfolioState = {
+  state: "ok",
+  accounts: [
+    { adAccountId: "demo", accountName: "핀치 마케팅", isDefault: true, business: { state: "owned", id: "demo-business", name: "핀치 컴퍼니" } },
+  ],
+};
+
+/**
+ * 내 광고 계정이 어느 비즈니스 포트폴리오 소속인지 — 설정 › SNS 계정 연결의 «비즈니스 포트폴리오» 줄(2026-09-11).
+ *
+ * 왜 있나: 메타 앱 심사에서 business_management 는 광고 이용 사례의 **필수 권한**인데, 요청한 권한마다
+ * «성공한 호출 + 앱 안의 실제 쓰임»이 있어야 한다(docs/APP_REVIEW.md §4-1-3). 이 줄이 그 쓰임이다 —
+ * 대행사처럼 계정이 여러 포트폴리오에 걸친 사람에게는 «이 계정이 누구 것인지»를 확인하는 자리이기도 하다.
+ *
+ * **저장하지 않고 열 때마다 읽는다** — 소속은 메타에서 바뀌는 값이고, 두 번의 조회(보통 수백 ms, 동시에 나간다)는 설정 화면이
+ * Suspense 로 뒤따르게 그린다(연결 상태 줄은 기다리지 않는다). 저장하면 마이그레이션과 «옛 소속» 문제가 따라온다.
+ *
+ * ⚠️ «내 연결» 화면이라 **본인 연결**만 본다(user.id) — 워크스페이스 소유자의 것을 보는 getLiveAds 와 다르다.
+ *    설정의 «Meta 광고» 줄(loadAdsCard)도 본인 행만 읽는다 — 둘이 같은 연결을 봐야 줄끼리 말이 맞는다.
+ * ⚠️ 토큰 암호문은 service_role 로만(0085) — 범위는 `.eq("user_id", user.id)` 가 정한다(admin 은 RLS 를 우회한다).
+ *    세션 클라이언트 폴백 없음(loadReadContext 와 같은 이유).
+ * ⚠️ **던지지 않는다** — 설정 화면이 Suspense 안에서 부른다. 여기서 던지면 줄 하나가 아니라 설정 화면 전체가 오류 화면이 된다.
+ */
+export async function getOwnAdPortfolios(): Promise<AdPortfolioState> {
+  try {
+    return await loadOwnAdPortfolios();
+  } catch (e) {
+    console.error("[live-ads] 포트폴리오 조회 중 예외:", e instanceof Error ? e.message : String(e));
+    return { state: "error" };
+  }
+}
+
+async function loadOwnAdPortfolios(): Promise<AdPortfolioState> {
+  if (isDemoMode()) return DEMO_PORTFOLIOS;
+
+  const user = await getAuthUser();
+  if (!user || !isAdsConnectable(user.email)) return { state: "unavailable" };
+
+  const store = createAdminClient();
+  if (!store) {
+    console.error("[live-ads] 포트폴리오 조회 불가 — 서버 자격증명 미설정");
+    return { state: "error" };
+  }
+
+  const { data: connRaw, error: connErr } = await store
+    .from("meta_ad_connections")
+    .select("id, access_token_cipher, token_expires_at, connected, granted_scopes")
+    .eq("user_id", user.id)
+    .eq("connected", true)
+    .limit(1)
+    .maybeSingle();
+  if (connErr) {
+    if (isMissingTableError(connErr)) return { state: "unavailable" };
+    console.error("[live-ads] 포트폴리오용 연동 조회 실패:", connErr.message);
+    return { state: "error" };
+  }
+  const conn = connRaw as (ConnectionRow & { granted_scopes?: string[] | null }) | null;
+  if (!conn || !conn.access_token_cipher) return { state: "unavailable" };
+  const expiresInDays = daysUntil(conn.token_expires_at);
+  if (expiresInDays !== null && expiresInDays <= 0) return { state: "unavailable" };
+
+  /* 권한이 **확실히** 없으면 호출하지 않는다 — 거절될 줄 아는 호출은 오류 로그만 쌓는다.
+     모르면(null, 0075 이전) 불러 본다: 실패하면 error(«확인 못 함»)로 떨어진다. */
+  if (checkScope(conn.granted_scopes ?? null, REQUIRED_SCOPE.businessManagement).state === "missing") {
+    return { state: "scope_missing" };
+  }
+
+  const token = decryptToken(conn.access_token_cipher, { userId: user.id, field: "meta_ad_connections.access_token_cipher" });
+  if (!token) {
+    console.error("[live-ads] 포트폴리오용 토큰 복호화 실패 — 키가 바뀌었거나 소유자가 맞지 않는다");
+    return { state: "error" };
+  }
+
+  /* 계정 행도 본인 것으로 두 번 좁힌다(user_id + connection_id) — loadReadContext 와 같은 이유(2026-09-08 감사) */
+  const { data: acctRaw, error: acctErr } = await store
+    .from("meta_ad_accounts")
+    .select("ad_account_id, account_name, is_default")
+    .eq("user_id", user.id)
+    .eq("connection_id", conn.id)
+    .order("is_default", { ascending: false })
+    .order("account_name", { ascending: true });
+  if (acctErr) {
+    console.error("[live-ads] 포트폴리오용 광고 계정 조회 실패:", acctErr.message);
+    return { state: "error" };
+  }
+  const rows = ((acctRaw ?? []) as Pick<AdAccountRow, "ad_account_id" | "account_name" | "is_default">[]).filter((r) =>
+    isValidAdAccountId(r.ad_account_id),
+  );
+  if (rows.length === 0) return { state: "unavailable" };
+
+  /* 두 조회는 서로를 기다릴 이유가 없다 */
+  const [owners, businesses] = await Promise.all([fetchAdAccountOwners(token), fetchMyBusinesses(token)]);
+  if (owners === null && businesses === null) return { state: "error" };
+
+  return {
+    state: "ok",
+    accounts: rows.map((r) => ({
+      adAccountId: r.ad_account_id,
+      accountName: r.account_name,
+      isDefault: r.is_default,
+      business: resolveAccountBusiness(r.ad_account_id, owners, businesses),
+    })),
   };
 }
 

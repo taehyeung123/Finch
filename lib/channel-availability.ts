@@ -17,6 +17,7 @@ import "server-only";
      그래서 판정에 이메일이 필요하고, 서버에서만 부른다(설정 화면·start 라우트).
      같은 이유로 **운영자에게는 설정 화면이 「고객에게는 아직 닫혀 있다」고 따로 알려 준다** — 안 그러면
      운영자 화면만 멀쩡해서 승인이 난 뒤에도 고객이 계속 막혀 있는 걸 아무도 모른다.
+     그 안내(와 연동 실패 원문)는 **주 운영자에게만** 보인다(isPrimaryOwner) — 목록의 나머지는 심사 전용 계정이다.
 
   고객 문구는 자격증명 미설정과 **똑같이** 나간다: 「준비 중 · 곧 열릴 예정이에요」.
   왜 그 채널이 닫혔는지는 내부 운영 정보라 화면에 쓰지 않는다(CLAUDE.md).
@@ -61,6 +62,23 @@ export function isOwnerEmail(viewerEmail: string | null | undefined): boolean {
   return ownerEmails().includes(viewer);
 }
 
+/**
+ * 이 이메일이 **주** 운영자(목록의 첫 번째)인가 — 운영자 전용 **안내**를 보여 줄지 정할 때만 쓴다(2026-09-11).
+ *
+ * 왜 따로 있나: `OWNER_EMAIL` 에는 메타 심사자에게 줄 심사 전용 계정도 들어간다(위 ownerEmails).
+ * 그 계정에 「고객에게는 아직 닫혀 있어요」 안내나 연동 실패 원문(redirect_uri 등)이 보이면 심사자에게
+ * «미완성 화면»으로 읽힌다 — 반려 사유로 명시된 것이다(docs/APP_REVIEW.md §5).
+ * ⚠️ **채널 접근은 여기로 판정하지 않는다** — 심사 계정도 닫힌 채널을 연결할 수 있어야 하므로
+ *    isChannelClosed·isChannelOpen 은 계속 isOwnerEmail(목록 전체)을 본다.
+ * 양쪽 다 값이 있을 때만 비교한다(isOwnerEmail 과 같은 이유 — 둘 다 비면 «같다»가 된다).
+ */
+export function isPrimaryOwner(viewerEmail: string | null | undefined): boolean {
+  const viewer = viewerEmail?.trim().toLowerCase();
+  if (!viewer) return false;
+  const primary = primaryOwnerEmail();
+  return primary !== null && primary === viewer;
+}
+
 /** 이 채널이 **고객에게** 닫혀 있는가 — 운영자 예외를 보지 않는 순수 판정 */
 export function isChannelClosedForCustomers(channel: AvailabilityKey): boolean {
   return !openSet().has(channel);
@@ -80,7 +98,7 @@ export function isChannelOpen(channel: AvailabilityKey, configured: boolean, vie
   return configured && !isChannelClosed(channel, viewerEmail);
 }
 
-/** 운영자 화면에 「고객에게는 아직 닫혀 있다」고 알릴 채널 목록 — 운영자일 때만 부른다 */
+/** 운영자 화면에 「고객에게는 아직 닫혀 있다」고 알릴 채널 목록 — **주** 운영자(isPrimaryOwner)일 때만 보여 준다 */
 export function closedForCustomers(): AvailabilityKey[] {
   return AVAILABILITY_KEYS.filter(isChannelClosedForCustomers);
 }

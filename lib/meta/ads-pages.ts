@@ -31,12 +31,12 @@ interface GraphError {
 }
 
 /** 조회 한 번 — 권한 오류와 그 밖의 실패를 가른다 */
-async function getJson<T>(path: string, accessToken: string): Promise<PagesResult<T>> {
+async function getJson<T>(path: string, accessToken: string, timeoutMs: number = READ_TIMEOUT_MS): Promise<PagesResult<T>> {
   const sep = path.includes("?") ? "&" : "?";
   try {
     const res = await fetch(`${GRAPH_FB_BASE}${path}${sep}access_token=${encodeURIComponent(accessToken)}`, {
       cache: "no-store",
-      signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const json = (await res.json().catch(() => ({}))) as T & { error?: GraphError };
     if (!res.ok) {
@@ -82,6 +82,88 @@ export async function fetchPages(accessToken: string): Promise<PagesResult<FbPag
     });
   if (res.data.paging?.next) console.warn("[meta-pages] 페이지가 100개를 넘는다 — 첫 100개만 보여준다");
   return { ok: true, data: pages };
+}
+
+/* ── 페이지 최근 게시물 (pages_read_engagement, 2026-09-11) ─────────────── */
+
+export interface FbPagePost {
+  id: string;
+  /** 본문 앞부분(공백 정리·잘라 냄). 글 없이 사진만 올린 게시물은 null */
+  message: string | null;
+  /** ISO 8601(UTC). 못 읽으면 null */
+  createdTime: string | null;
+  /** 메타 CDN(*.fbcdn.net)의 https 주소일 때만 — 그 밖이면 null(글만 보여 준다) */
+  pictureUrl: string | null;
+  /** facebook.com 의 https 고정 주소일 때만 */
+  permalinkUrl: string | null;
+}
+
+/** 최근 게시물은 «맞는 페이지인지» 확인하는 곁가지다 — IG 조회(최대 수십 초)보다 먼저 끝나게 짧게 끊는다 */
+const POSTS_TIMEOUT_MS = 8_000;
+const POST_SNIPPET_MAX = 140;
+
+function httpsUrlOn(v: unknown, host: (h: string) => boolean): string | null {
+  if (typeof v !== "string" || v.length === 0 || v.length > 2048) return null;
+  try {
+    const u = new URL(v);
+    return u.protocol === "https:" && host(u.hostname) ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Graph 의 created_time 은 «+0000»(콜론 없음)이라 브라우저마다 해석이 갈린다 — 서버에서 ISO 로 고정한다 */
+function toIso(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = Date.parse(v.replace(/([+-]\d{2})(\d{2})$/, "$1:$2"));
+  return Number.isFinite(t) ? new Date(t).toISOString() : null;
+}
+
+function snippet(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const flat = v.replace(/\s+/g, " ").trim();
+  if (!flat) return null;
+  return flat.length > POST_SNIPPET_MAX ? `${flat.slice(0, POST_SNIPPET_MAX).trimEnd()}…` : flat;
+}
+
+/**
+ * 페이지의 최근 게시물 — 광고 게시 페이지를 고를 때 «이 페이지가 맞는지» 눈으로 확인하게 한다.
+ * (메타 앱 심사: pages_read_engagement 녹화 요건이 «페이지 게시물 내용을 앱에 보여 주기»다 — docs/APP_REVIEW.md §4-1-3.)
+ *
+ * 토큰: Graph 레퍼런스(Page Feed — /posts 가 같은 문서다)는 «페이지 액세스 토큰»과 pages_read_engagement 를 요구한다.
+ * 그래서 사용자 토큰으로 먼저 찔러 보지 않고 곧장 **요청 안에서만** 페이지 토큰을 받는다(fetchPageInstagramAccounts 와 같은 방식).
+ * 페이지 토큰은 이 함수의 지역 변수로 끝난다 — 반환값·로그·클라이언트 어디에도 담지 않는다.
+ * 페이지 토큰은 내가 역할을 가진 페이지에서만 나온다 — 남의 페이지 id 를 넣으면 여기서 denied 로 끝난다.
+ *
+ * ⚠️ 같은 레퍼런스가 pages_read_user_content 도 함께 적는다(방문자 글·댓글용으로 보인다). 핀치는 요청하지 않는다 —
+ *    페이지 **자신의** 글(/posts)만 읽는다. 첫 실 호출이 권한 오류(denied)면 이 판단부터 다시 본다(UNVERIFIED, 2026-09-11).
+ * 실패(error)·권한(denied)·만료(expired)·0건([])을 가른다 — 0건은 «아직 게시물이 없다»는 사실이다.
+ *
+ * @param pageId 호출측이 숫자 형식을 확인한 값(경로에 그대로 들어간다)
+ */
+export async function fetchPageRecentPosts(pageId: string, accessToken: string, limit = 3): Promise<PagesResult<FbPagePost[]>> {
+  const tokenRes = await getJson<{ access_token?: string }>(`/${pageId}?fields=access_token`, accessToken, POSTS_TIMEOUT_MS);
+  if (!tokenRes.ok) return tokenRes;
+  const pageToken = tokenRes.data.access_token;
+  if (typeof pageToken !== "string" || pageToken.length === 0) return { ok: false, reason: "denied" };
+
+  const res = await getJson<{
+    data?: { id?: string; message?: string; created_time?: string; full_picture?: string; permalink_url?: string }[];
+  }>(`/${pageId}/posts?fields=id,message,created_time,full_picture,permalink_url&limit=${limit}`, pageToken, POSTS_TIMEOUT_MS);
+  if (!res.ok) return res;
+
+  const posts: FbPagePost[] = (res.data.data ?? [])
+    .filter((p) => typeof p.id === "string" && p.id.length > 0)
+    .slice(0, limit)
+    .map((p) => ({
+      id: p.id as string,
+      message: snippet(p.message),
+      createdTime: toIso(p.created_time),
+      /* 브라우저가 그대로 여는 주소라 메타 CDN 만 통과시킨다(CSP img-src 도 *.fbcdn.net 을 연다 — proxy.ts) */
+      pictureUrl: httpsUrlOn(p.full_picture, (h) => h === "fbcdn.net" || h.endsWith(".fbcdn.net")),
+      permalinkUrl: httpsUrlOn(p.permalink_url, (h) => h === "facebook.com" || h.endsWith(".facebook.com")),
+    }));
+  return { ok: true, data: posts };
 }
 
 /* ── Instagram 계정 ─────────────────────────────────────────────── */
