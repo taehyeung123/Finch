@@ -54,3 +54,6 @@ BUSINESS_PLAN.md
 
 # 로컬 프로덕션 서버 로그(포트별)
 .next-*.log
+
+# 에이전트 작업 공간(워크트리) — 커밋 대상 아님
+.claude/worktrees/
