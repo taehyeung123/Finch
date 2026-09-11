@@ -12,7 +12,7 @@ import { OAuthStartFailed, useOAuthStart } from "@/components/auth/use-oauth-sta
 
 /* 소셜 버튼 공통 — 브랜드 배경색 위 텍스트는 text-on-kakao(다크) 토큰 사용 */
 const socialButton =
-  "flex h-12 w-full items-center justify-center gap-2.5 rounded-card text-[15px] font-semibold cursor-pointer transition-opacity hover:opacity-90 active:opacity-80 focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2";
+  "flex h-12 w-full items-center justify-center gap-2.5 rounded-card text-[15px] font-semibold cursor-pointer trans-state hover:opacity-90 focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2";
 
 /** 로그인 — Supabase OAuth(Google·Kakao). 환경변수 미설정 시 데모 모드 폴백 */
 export function LoginForm() {

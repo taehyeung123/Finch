@@ -869,15 +869,16 @@ body {
    컨테이닝 블록을 만들지 않는다. 누르는 동안엔 전환을 끈다 — .trans-state 의 이탈 지연(40ms)+80ms 가 끼면
    «즉시»가 아니다(닐슨 0.1초 한계). 놓으면 각자의 전환으로 돌아간다.
    레이어 밖에 둔다 — .trans-state 가 레이어 밖이라 여기서 전환을 끄려면 같은 층, 그 뒤여야 한다.
-   disabled·aria-disabled 는 제외(누를 수 없다는 뜻이 흐려진다). 공개 프로필(app/p)은 별도 루트라 영향이 없다.
+   disabled·aria-disabled 는 **요소 종류마다** 제외한다(누를 수 없다는 뜻이 흐려진다 — 잠긴 비교 칩·게재 시작·순서 화살표가
+   흐린 채로 있다가 누르면 진해졌다, 2026-09-11 소넷 점검). 공개 프로필(app/p)은 별도 루트라 영향이 없다.
 ─────────────────────────────────────────────────────────────── */
 :where(
-    button:not(:disabled),
-    a[href],
+    button:not(:disabled):not([aria-disabled="true"]),
+    a[href]:not([aria-disabled="true"]),
     [role="button"]:not([aria-disabled="true"]),
-    [role="tab"],
-    [role="menuitem"],
-    [role="option"],
+    [role="tab"]:not([aria-disabled="true"]),
+    [role="menuitem"]:not([aria-disabled="true"]),
+    [role="option"]:not([aria-disabled="true"]),
     summary
   ):active {
   opacity: 0.72;
