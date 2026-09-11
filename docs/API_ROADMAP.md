@@ -3,6 +3,9 @@
 > **최종 대조: 2026-09-03.** 이 문서는 «앞으로 할 일» 목록이라 실제와 어긋나면 곧장 헛수고가 된다.
 > 2026-08-30 점검에서 **20건 넘는 항목이 이미 끝난 일을 «할 일»로 붙들고 있었다** — 전면 개정했다.
 > 고칠 때는 반드시 코드를 열어 확인할 것. 기억으로 쓰면 다시 같은 상태가 된다.
+>
+> **심사·승인(메타·틱톡·페이앱)의 정본은 [docs/APP_REVIEW.md](APP_REVIEW.md) 다(2026-09-11).** 이 문서의 심사 관련 줄과
+> 어긋나면 그쪽이 맞다 — 대시보드 실측·권한별 호출 수·남은 일·일정이 거기 있다.
 
 연동은 두 종류다. **키만 넣으면 도는 것**과 **Meta·TikTok 승인이 있어야 실사용자에게 열리는 것**.
 코드는 대부분 이미 짜여 있다 — 남은 건 자격증명과 승인이다.
@@ -169,14 +172,16 @@ generatepreviews iframe(CSP frame-src 경로 한정) · 광고 세트/광고 켜
    `docs/ADS_STAGE2_SPEC.md` §11 미확정 항목을 지우고, 미리보기 iframe 안폭(320·360·375)을 실측해 scale 계수를 정한다.
    영상·캐러셀·기존 게시물 소재, 광고 계정 스위처, 소재 수정은 2차(§9).
 5. 접근 수준: **본인 광고 계정**은 Standard Access(지금 상태로 동작). **고객 광고 계정 대행**은
-   Advanced Access(사업자등록증 + 비즈니스 인증) — **비즈니스 인증 2026-09-09 완료**(주식회사 딥레드).
-   남은 것은 **앱 심사(App Review)** 뿐이다.
+   Advanced Access(사업자등록증 + 비즈니스 인증) — **비즈니스 인증 2026-09-09 완료**(주식회사 딥레드),
+   **액세스 인증(Tech Provider) 2026-09-11 인증됨**. 남은 것은 앱 심사인데, 지금 스코프 그대로는 못 낸다 —
+   `business_management` 가 이용 사례 필수인데 빠져 있고 `pages_read_engagement` 녹화용 화면이 없다([APP_REVIEW.md](APP_REVIEW.md) §4-1).
 
 > ⚠️ **경쟁사 광고 수집과 혼동하지 말 것.** 그건 별개 기능이고 **이미 돌아간다**(6번).
 
 ## 5. TikTok for Developers — 프로필 지표 (발행은 로드맵 밖)
 
 **코드는 완료**(`lib/tiktok/oauth.ts`, `lib/tiktok/api.ts`, 콜백 라우트, 토큰 회전 컬럼).
+**2026-09-07 Production 심사 제출 — «In review»**(아래 1~3 은 끝났다). 승인되면 `CHANNELS_OPEN` 에 `tiktok` 추가([APP_REVIEW.md](APP_REVIEW.md)).
 
 1. https://developers.tiktok.com → 앱 등록 (서비스 소개, 도메인, 개인정보처리방침)
 2. **심사 없이 개발 가능** — Sandbox 모드 + target user(테스터 계정 최대 10개)
@@ -202,6 +207,9 @@ generatepreviews iframe(CSP frame-src 경로 한정) · 광고 세트/광고 켜
 > ⚠️ `.env.example`에 `SCRAPECREATORS_API_KEY`·`UPSTAGE_API_KEY`·`LINK_COOKIE_SECRET`이 빠져 있다.
 
 ## 7. Toss Payments — 결제
+
+> ⚠️ **PG 는 페이앱으로 정했다(2026-09-07).** 이 절의 토스 배관은 교체 대상이다 — 고치지 말 것.
+> 페이앱 가입·서류·연동 순서는 [APP_REVIEW.md](APP_REVIEW.md) §4.
 
 **코드는 완료**: 결제 위젯(`toss-checkout.tsx`), 정기결제(`lib/toss/billing.ts`), 웹훅
 (`app/api/webhooks/toss/route.ts`), 플랜·크레딧 연동.
@@ -231,12 +239,13 @@ Supabase 수동 연결(manual linking) ON(2026-09-03)
       설정 화면에서 다시 연동하면 발행 권한 획득 + 토큰 만료 60일 리셋 + 웹훅 구독 재시도가 한 번에 된다.
 - [ ] **`LINK_COOKIE_SECRET` 설정** — 없으면 서비스 롤 키를 대신 쓰므로, 그 키를 돌리는 순간
       모든 프로필 링크 잠금해제 쿠키가 무효가 된다
-- [ ] Meta 앱 심사 신청 (위 3-7·3-8 스코프 목록 그대로)
-- [ ] TikTok 개발자 앱 등록 → `TIKTOK_CLIENT_KEY/SECRET`
+- [ ] Meta 앱 심사 신청 — **스코프 목록 그대로 내면 안 된다**(스레드 답글 2개 미사용, 광고 `business_management` 누락). 준비물은 [APP_REVIEW.md](APP_REVIEW.md) §4
+- [x] ~~TikTok 개발자 앱 등록 → `TIKTOK_CLIENT_KEY/SECRET`~~ — 샌드박스 키로 운영 중, **2026-09-07 Production 심사 제출(In review)**
 - [x] ~~사업자등록증 발급~~ · ~~**Meta 비즈니스 인증**(2026-09-09 완료)~~ · ~~도메인 인증(finch.ai.kr, 2026-09-08)~~
       → 이제 가능해진 것: **Meta 앱 심사 신청**(Advanced Access 의 마지막 관문)
-- [ ] **통신판매업 신고번호**(2026-09-03 신고 진행 중) · **대표 전화**(0507 안심번호 또는 070) → `lib/legal/business.ts` 두 줄
-      (약관·방침·푸터·설정 > 사업자 정보가 그 파일 하나를 읽는다. 사업자 항목은 그 둘만 남았다)
+- [x] ~~**통신판매업 신고번호**~~ — 2026-충북청주-2193(2026-09-03, `lib/legal/business.ts` 에 반영됨)
+- [ ] **대표 전화**(0507 안심번호 또는 070) → `lib/legal/business.ts` 한 줄
+      (약관·방침·푸터·설정 > 사업자 정보가 그 파일 하나를 읽는다. 사업자 항목은 이것만 남았다)
 - [ ] support@finch.ai.kr 메일함 — 딥레드 인트라넷에서 관리(사장님)
 - [ ] **Vercel 플랜 확인** — 지금 코드는 Hobby 제약에 맞춰져 있다(크론 하나가 하루 1회만
       돌 수 있어 `pool-work`를 시각만 다른 8줄로 쪼갰고, `maxDuration`도 60초로 묶여 있다).
