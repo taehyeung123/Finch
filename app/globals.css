@@ -468,6 +468,15 @@ body {
 
    opacity 만 움직인다 — transform 은 fixed/sticky 자손의 컨테이닝 블록을 만들어, 스크롤을 유지한 채
    돌아온 편집기의 폰 칸·발행 바가 순간 튀었다(2026-09-03 소넷 점검). 페이드는 그 문제가 없다.
+
+   ⚠️ 채움 방식은 **backwards** 다 — both·forwards 를 쓰지 말 것(2026-09-11 사장님 신고).
+   both 는 애니메이션이 끝난 뒤에도 마지막 장면을 «계속 적용 중»으로 붙잡는다. 크롬은 그동안 그 요소에
+   쌓임 맥락(stacking context)을 계속 만든다 — 섹션마다 따로 층이 생겨, 앞 섹션 안에서 연 모달(z-50)이
+   그 섹션 층에 갇히고 **뒤 섹션이 모달 위로 그려졌다**(설정 > SNS 계정 연결: 해제 확인 모달의 버튼 줄을
+   아래 «Meta 광고» 카드가 덮어 해제를 못 했다). backwards 는 시작 장면만 앞당겨 적용하고, 끝나면 요소가
+   제 스타일로 돌아간다 — 마지막 장면(opacity 1)이 원래 모습과 같아 겉모습은 똑같다.
+   아래 창·시트·서랍·탭 교체·패널 모션도 같은 이유로 backwards 다. transform 을 붙잡으면 쌓임 맥락에 더해
+   fixed 자손의 기준 상자까지 바뀐다(서랍 안에서 연 확인 모달이 서랍 기준으로 놓인다).
 --------------------------------------------------------------- */
 
 @keyframes page-fade {
@@ -480,7 +489,7 @@ body {
 }
 
 .page-enter > * > * {
-  animation: page-fade var(--dur-2) var(--ease-arrive) both;
+  animation: page-fade var(--dur-2) var(--ease-arrive) backwards;
 }
 /* 로딩 폴백(components/ui/page-loading.tsx)은 제외 — 템플릿이 loading 경계를 감싸므로 폴백도
    «페이지 루트»로 잡힌다. 로딩 링까지 페이드하면 모션이 두 번 돈다. */
@@ -1009,7 +1018,7 @@ body {
   to { opacity: 1; }
 }
 .card-appear {
-  animation: card-in var(--dur-2) var(--ease-arrive) both;
+  animation: card-in var(--dur-2) var(--ease-arrive) backwards;
   animation-delay: calc(min(var(--i, 0), 8) * 20ms);
 }
 
@@ -1528,7 +1537,7 @@ input[type="search"]::-webkit-search-cancel-button {
    그래서 열 때마다 화면이 한 번 더 움직여 무겁게 느껴졌다.
    높이는 애니메이션하지 않는다 — 리플로우는 60fps 를 못 낸다. */
 .panel-drop {
-  animation: panel-fade 150ms ease both;
+  animation: panel-fade 150ms ease backwards;
 }
 @keyframes panel-fade {
   from { opacity: 0; }
@@ -1603,7 +1612,7 @@ input[type="search"]::-webkit-search-cancel-button {
      콘솔 헤더(z-40)와 그 안의 패널만 밝게 남는다. */
   z-index: 30;
   background: rgba(15, 23, 42, 0.32);
-  animation: panel-fade 150ms ease both;
+  animation: panel-fade 150ms ease backwards;
 }
 :root[data-theme="dark"] .panel-scrim {
   /* 다크에서 같은 값은 안 보인다 — 더 깊게 */
@@ -1664,7 +1673,7 @@ input[type="search"]::-webkit-search-cancel-button {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
 }
-.modal-scrim-in { animation: modal-scrim-in var(--dur-2) var(--ease-arrive) both; }
+.modal-scrim-in { animation: modal-scrim-in var(--dur-2) var(--ease-arrive) backwards; }
 /* 작업 중 베일(프로필 링크 편집기 등) — 200ms 동안은 투명하게 있다가 나타난다.
    300ms 안에 끝나는 저장에도 로더가 번쩍이면 화면이 더 불안해 보인다.
    투명한 동안은 클릭도 통과시킨다 — 전엔 modal-scrim-in(opacity 만)을 빌려 써서 지연 0.2초 동안
@@ -1678,15 +1687,15 @@ input[type="search"]::-webkit-search-cancel-button {
 .busy-veil-in { animation: busy-veil-in var(--dur-2) var(--ease-arrive) var(--loading-delay) both; }
 /* 재빌드 유도 — cb15c9a 배포에서 Turbopack 빌드 캐시가 위 키프레임 변경을 삼켜 옛 규칙(modal-scrim-in)을 그대로 내보냈다(2026-09-10).
    이 블록을 고친 배포는 운영에서 getComputedStyle(베일).pointerEvents 로 확인한다. */
-.modal-card-in { animation: modal-card-in var(--dur-2) var(--ease-arrive) both; }
-.anim-swap { animation: anim-swap-in var(--dur-2) var(--ease-arrive) both; }
+.modal-card-in { animation: modal-card-in var(--dur-2) var(--ease-arrive) backwards; }
+.anim-swap { animation: anim-swap-in var(--dur-2) var(--ease-arrive) backwards; }
 
 /* 자동 DM 위저드 단계 전환 — 오른쪽에서 스르륵 (key 교체형, 리틀리 감각) */
 @keyframes wizard-step-in {
   from { opacity: 0; transform: translateX(26px); }
   to { opacity: 1; transform: none; }
 }
-.wizard-step-in { animation: wizard-step-in var(--dur-2) var(--ease-arrive) both; }
+.wizard-step-in { animation: wizard-step-in var(--dur-2) var(--ease-arrive) backwards; }
 
 @media (prefers-reduced-motion: reduce) {
   .modal-scrim-in,
@@ -1705,8 +1714,8 @@ input[type="search"]::-webkit-search-cancel-button {
   from { opacity: 0.6; transform: translateY(24px); }
   to { opacity: 1; transform: none; }
 }
-.drawer-in-right { animation: drawer-in-right var(--dur-2) var(--ease-arrive) both; }
-.sheet-in-up { animation: sheet-in-up var(--dur-2) var(--ease-arrive) both; }
+.drawer-in-right { animation: drawer-in-right var(--dur-2) var(--ease-arrive) backwards; }
+.sheet-in-up { animation: sheet-in-up var(--dur-2) var(--ease-arrive) backwards; }
 @media (prefers-reduced-motion: reduce) {
   .drawer-in-right,
   .sheet-in-up { animation: none; }
