@@ -18,25 +18,37 @@ class GraphReadError extends Error {
   constructor(
     message: string,
     readonly code: number | undefined,
+    readonly subcode: number | undefined = undefined,
   ) {
     super(message);
     this.name = "GraphReadError";
   }
 }
 
-async function graphGet<T>(path: string, accessToken: string): Promise<T> {
+/**
+ * @param opts.fresh true 면 캐시를 거치지 않는다 — 인사이트는 5분 캐시가 맞지만, «방금 달린 댓글»을 보는 조회
+ *   (자동 DM «지금 확인»)가 5분 전 목록을 받으면 새 댓글이 없는 것으로 보인다.
+ *   `cache: "no-store"` 와 `next.revalidate` 를 함께 주면 둘 다 무시되므로(Next fetch 문서) 한쪽만 준다.
+ */
+async function graphGet<T>(path: string, accessToken: string, opts?: { fresh?: boolean }): Promise<T> {
   const sep = path.includes("?") ? "&" : "?";
   const res = await fetch(`${GRAPH_INSTAGRAM_BASE}${path}${sep}access_token=${encodeURIComponent(accessToken)}`, {
     // 인사이트는 자주 안 바뀌므로 짧게 캐시(중복 호출·레이트리밋 완화)
-    next: { revalidate: 300 },
+    ...(opts?.fresh ? { cache: "no-store" as const } : { next: { revalidate: 300 } }),
     // 호출마다 새로 만든다 — 모듈 상수로 공유하면 두 번째 호출부터 즉시 끊긴다(graph.ts 주석)
     signal: AbortSignal.timeout(GRAPH_READ_TIMEOUT_MS),
   });
   /* 본문을 읽다 끊기면(시간 초과가 본문 도중에 오는 경우) 파싱이 실패한다 — 그걸 {} 로 눌러 «성공»으로
      돌려주면 호출부가 «데이터 없음»으로 읽는다. 성공 응답인데 본문이 없으면 실패로 올린다. */
-  const json = (await res.json().catch(() => null)) as (T & { error?: { message?: string; code?: number } }) | null;
+  const json = (await res.json().catch(() => null)) as
+    | (T & { error?: { message?: string; code?: number; error_subcode?: number } })
+    | null;
   if (!res.ok || json === null) {
-    throw new GraphReadError(`graph_get_failed ${path}: ${json?.error?.message ?? `http_${res.status}`}`, json?.error?.code);
+    throw new GraphReadError(
+      `graph_get_failed ${path}: ${json?.error?.message ?? `http_${res.status}`}`,
+      json?.error?.code,
+      json?.error?.error_subcode,
+    );
   }
   return json;
 }
@@ -311,6 +323,69 @@ export async function fetchMediaComments(mediaId: string, accessToken: string, l
     return (res.data ?? []).map((c) => c.text ?? "").filter(Boolean);
   } catch {
     return [];
+  }
+}
+
+/** 자동 DM «지금 확인»이 읽는 댓글 한 건 — 웹훅 comments 페이로드와 같은 값들이다 */
+export interface AutoDmComment {
+  id: string;
+  text: string;
+  /** ISO 8601. 없으면 null — 호출측이 «기간 확인 불가»로 건너뛴다 */
+  timestamp: string | null;
+  /** 댓글 단 사람의 인스타 범위 ID(from.id) — 웹훅 value.from.id 와 같은 종류의 값이다. 없으면 null */
+  fromId: string | null;
+  fromUsername: string | null;
+}
+
+/**
+ * 못 가져온 이유 — 화면이 할 일을 가른다(다시 연결 / 게시물 확인 / 잠시 후 다시).
+ * ⚠️ 실패를 빈 배열로 돌려주지 않는다 — «새 댓글 0개»로 읽히면 DM 이 안 나간 이유가 사라진다.
+ */
+export type AutoDmCommentsFetch =
+  | { ok: true; comments: AutoDmComment[] }
+  | { ok: false; reason: "token" | "permission" | "gone" | "failed" };
+
+/**
+ * 게시물의 최근 댓글 — 자동 DM «지금 확인» 전용(캐시 없음).
+ *
+ * 근거(메타 문서, 2026-09-11 확인):
+ *  · GET /{ig-media-id}/comments — Instagram 로그인은 instagram_business_basic + instagram_business_manage_comments.
+ *    최상위 댓글만 준다(답글은 replies 확장이 따로 필요하다). v3.2 부터 **최신순**, 한 번에 **최대 50개**, 시각으로 거를 수 없다.
+ *  · IG Comment 노드 — `from` 은 {id: 댓글 단 사람의 인스타 범위 ID, username} 이고 graph.instagram.com 에서도 준다.
+ *    웹훅 comments 페이로드의 value.from.id 도 같은 인스타 범위 ID 라 수신자 해시가 두 경로에서 같은 값이 된다.
+ * 한 페이지(최신 50개)만 읽는다 — 더 오래된 댓글은 대개 7일 창 밖이고, 누를 때마다 수백 개를 훑지 않게 한다.
+ */
+export async function fetchCommentsForAutoDm(mediaId: string, accessToken: string, limit = 50): Promise<AutoDmCommentsFetch> {
+  try {
+    const res = await graphGet<{
+      data?: { id?: string; text?: string; timestamp?: string; username?: string; from?: { id?: string; username?: string } }[];
+    }>(
+      `/${encodeURIComponent(mediaId)}/comments?fields=id,text,timestamp,username,from{id,username}&limit=${Math.min(Math.max(limit, 1), 50)}`,
+      accessToken,
+      { fresh: true },
+    );
+    const comments: AutoDmComment[] = [];
+    for (const c of res.data ?? []) {
+      if (!c.id) continue;
+      comments.push({
+        id: c.id,
+        text: c.text ?? "",
+        timestamp: c.timestamp ?? null,
+        fromId: c.from?.id ?? null,
+        fromUsername: c.from?.username ?? c.username ?? null,
+      });
+    }
+    return { ok: true, comments };
+  } catch (e) {
+    const code = e instanceof GraphReadError ? e.code : undefined;
+    const subcode = e instanceof GraphReadError ? e.subcode : undefined;
+    const message = e instanceof Error ? e.message : String(e);
+    console.error("[ig-comments] 댓글 조회 실패:", mediaId, message);
+    if (code === 190) return { ok: false, reason: "token" };
+    /* 10·200·3 = 권한 없음(동의 때 댓글 권한을 안 받았거나 거둬들였다) */
+    if (code === 10 || code === 200 || code === 3) return { ok: false, reason: "permission" };
+    if (code === 100 && (subcode === 33 || /does not exist|cannot be loaded/i.test(message))) return { ok: false, reason: "gone" };
+    return { ok: false, reason: "failed" };
   }
 }
 

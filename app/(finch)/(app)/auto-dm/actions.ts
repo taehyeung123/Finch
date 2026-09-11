@@ -18,6 +18,10 @@ import {
   type AutoDmRuleRow,
 } from "@/lib/auto-dm/db";
 import { dmContentLimitFor } from "@/lib/auto-dm/limits";
+import { autoDmScopeCheck } from "@/lib/auto-dm/pipeline";
+import { runCheckNow } from "@/lib/auto-dm/check-now";
+import type { CheckNowResult } from "@/lib/auto-dm/check-now-types";
+import { isMissingColumnError } from "@/lib/publish-rules";
 import type { AutoDmRule, AutoDmStatus } from "@/lib/types";
 
 /*
@@ -40,6 +44,8 @@ export type RuleActionResult = {
   rule?: AutoDmRule;
   /** 콘텐츠 개수 한도 도달 — UI가 업그레이드 안내를 띄운다 */
   limitReached?: boolean;
+  /** 막힌 이유(형식) — scope_missing: 댓글 권한 없이 연결됨(다시 연결해야 풀린다) */
+  code?: "scope_missing";
 };
 
 /** 규칙 입력 — 클라이언트 위저드가 보내는 직렬화 가능한 필드 */
@@ -81,33 +87,47 @@ async function authorize(): Promise<{ ok: true; userId: string | null } | { ok: 
 }
 
 /**
- * 인스타 연동이 있는가. true=있음 / false=없음 / null=확인 못 함.
- * ⚠️ 조회 실패(null)에는 막지 않는다 — 잘 쓰던 사람이 «연결하세요»로 튕기는 쪽이 더 나쁘다.
+ * 인스타 연동 상태 — 있음(+댓글 권한이 확실히 빠졌는가) / 없음 / 확인 못 함.
+ * ⚠️ 조회 실패(unknown)에는 막지 않는다 — 잘 쓰던 사람이 «연결하세요»로 튕기는 쪽이 더 나쁘다.
  * 그 경우 규칙은 저장되지만 발송 경로가 원래 하던 대로 판정한다(실패는 «없음»이 아니다).
+ * 권한도 같은 규칙이다 — granted_scopes 가 null(0075 이전 연동)이면 «확인 불가»라 막지 않고, **확실히 없을 때만** 막는다.
  */
-async function hasInstagramConnection(
+type InstagramConnection = { state: "none" } | { state: "unknown" } | { state: "connected"; scopeMissing: boolean };
+
+async function instagramConnection(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
-): Promise<boolean | null> {
-  const { data, error } = await supabase
-    .from("connected_accounts")
-    .select("id")
-    /* ⚠️ user_id 로 **반드시 좁힌다** — 0064 의 "accounts read" 정책이 활성 팀원에게
-       **소유자의** 연동 행을 읽혀 준다(2026-09-08 감사). 안 좁히면 자기 계정엔 연동이 없는
-       팀원이 이 관문을 통과하고, 규칙은 user_id=팀원 으로 저장된다. 그런데 댓글 웹훅은
-       IG 계정 → **소유자** user_id 로 규칙을 찾으므로 그 규칙은 **영원히 매칭되지 않는다** —
-       화면은 초록 「실행 중」인데 DM 은 한 통도 안 나간다.
-       app/api/studio/schedule/route.ts 가 이미 쓰는 패턴이다. */
-    .eq("user_id", userId)
-    .eq("channel", "instagram")
-    .eq("connected", true)
-    .limit(1);
-  if (error) {
-    console.error("[auto-dm] 인스타 연동 확인 실패 — 저장은 막지 않는다:", error.message);
-    return null;
+): Promise<InstagramConnection> {
+  const query = (columns: string) =>
+    supabase
+      .from("connected_accounts")
+      .select(columns)
+      /* ⚠️ user_id 로 **반드시 좁힌다** — 0064 의 "accounts read" 정책이 활성 팀원에게
+         **소유자의** 연동 행을 읽혀 준다(2026-09-08 감사). 안 좁히면 자기 계정엔 연동이 없는
+         팀원이 이 관문을 통과하고, 규칙은 user_id=팀원 으로 저장된다. 그런데 댓글 웹훅은
+         IG 계정 → **소유자** user_id 로 규칙을 찾으므로 그 규칙은 **영원히 매칭되지 않는다** —
+         화면은 초록 「실행 중」인데 DM 은 한 통도 안 나간다.
+         app/api/studio/schedule/route.ts 가 이미 쓰는 패턴이다. */
+      .eq("user_id", userId)
+      .eq("channel", "instagram")
+      .eq("connected", true)
+      .order("created_at", { ascending: true })
+      .limit(1);
+  let res = await query("id, granted_scopes");
+  /* 0075 미적용 DB — 권한은 «확인 불가»로 두고 연동 유무만 본다 */
+  if (isMissingColumnError(res.error, /granted_scopes/i)) res = await query("id");
+  if (res.error) {
+    console.error("[auto-dm] 인스타 연동 확인 실패 — 저장은 막지 않는다:", res.error.message);
+    return { state: "unknown" };
   }
-  return (data?.length ?? 0) > 0;
+  const row = ((res.data ?? []) as unknown as { id: string; granted_scopes?: string[] | null }[])[0];
+  if (!row) return { state: "none" };
+  return { state: "connected", scopeMissing: autoDmScopeCheck(row.granted_scopes ?? null).state === "missing" };
 }
+
+/** 댓글 권한이 빠진 연동 — 규칙을 만들거나 켜 봐야 한 통도 못 보낸다(보내면 권한 오류로 댓글당 한 번뿐인 기회를 태운다) */
+const SCOPE_MISSING_MESSAGE =
+  "인스타그램을 다시 연결해야 자동 DM을 켤 수 있어요. 댓글에 답장하는 권한이 빠진 채 연결돼 있어요.";
 
 /**
  * 콘텐츠 개수 게이트 — 이 게시물이 "새 콘텐츠"이고 이미 플랜 한도만큼의 게시물에
@@ -224,9 +244,13 @@ export async function createRule(rawInput: RuleInput): Promise<RuleActionResult>
      연동이 없으면 **이벤트가 도착할 경로 자체가 없다** — 예전엔 그대로 저장하고 초록 「실행 중」 배지까지
      붙여, 고객이 5단계를 다 채우고 댓글을 기다리는데 한 통도 안 나갔다(2026-09-07 감사).
      화면 관문(auto-dm-client)만으로는 부족하다 — 서버 액션은 화면을 거치지 않고도 불릴 수 있다. */
-  const igLinked = await hasInstagramConnection(supabase, auth.userId);
-  if (igLinked === false) {
+  const ig = await instagramConnection(supabase, auth.userId);
+  if (ig.state === "none") {
     return { ok: false, error: "인스타그램 계정을 연결하면 자동 DM을 시작할 수 있어요." };
+  }
+  /* 댓글 권한이 **확실히** 빠진 연동 — 만들어 두면 초록 「실행 중」인데 한 통도 못 보낸다. 다시 연결부터 */
+  if (ig.state === "connected" && ig.scopeMissing) {
+    return { ok: false, error: SCOPE_MISSING_MESSAGE, code: "scope_missing" };
   }
   // 앱 게이트(친절한 안내) + 0040 트리거 백스톱(원자적 강제)의 이중 구조
   const gate = await checkContentLimit(supabase, auth.userId, input.postId, null);
@@ -256,6 +280,27 @@ export async function updateRule(rawInput: RuleInput): Promise<RuleActionResult>
   if (isDemoMode() || !auth.userId) return { ok: true };
 
   const supabase = await createClient();
+  /* 편집이 **켜기**를 겸하는 경우(꺼져 있던 규칙을 active 로 저장) — 스위치(toggleRule)와 같은 관문.
+     위저드는 기존 상태를 그대로 보내므로 평소엔 걸리지 않고, 화면을 거치지 않은 직접 호출을 막는다.
+     이미 켜져 있던 규칙의 문구 수정은 막지 않는다(다시 연결할 때까지 기다리는 동안에도 고칠 수 있어야 한다). */
+  if (input.status === "active") {
+    const ig = await instagramConnection(supabase, auth.userId);
+    if (ig.state === "connected" && ig.scopeMissing) {
+      const { data: current, error: currentErr } = await supabase
+        .from("auto_dm_rules")
+        .select("status")
+        .eq("id", input.id)
+        .eq("user_id", auth.userId)
+        .maybeSingle();
+      if (currentErr) {
+        console.error("[auto-dm] 규칙 상태 확인 실패:", currentErr.message);
+        return { ok: false, error: "규칙 수정에 실패했습니다. 잠시 후 다시 시도해 주세요." };
+      }
+      if ((current as { status?: string } | null)?.status !== "active") {
+        return { ok: false, error: SCOPE_MISSING_MESSAGE, code: "scope_missing" };
+      }
+    }
+  }
   // 편집으로 대상 게시물이 바뀌는 경우도 새 콘텐츠 추가와 같다 — 자기 자신은 제외하고 검사
   const gate = await checkContentLimit(supabase, auth.userId, input.postId, input.id);
   if (!gate.ok) return { ok: false, error: gate.error, limitReached: true };
@@ -272,12 +317,21 @@ export async function updateRule(rawInput: RuleInput): Promise<RuleActionResult>
 }
 
 export async function toggleRule(id: string, next: AutoDmStatus): Promise<RuleActionResult> {
+  /* 스위치는 실행/일시중지 둘뿐이다 — 'review' 같은 값을 직접 호출로 넣지 못하게 */
+  if (next !== "active" && next !== "paused") return { ok: false, error: "상태 변경에 실패했습니다." };
   const auth = await authorize();
   if (!auth.ok) return { ok: false, error: auth.error };
 
   if (isDemoMode() || !auth.userId) return { ok: true };
 
   const supabase = await createClient();
+  /* 켜기만 막는다 — 끄기는 언제든 된다(권한이 빠진 채 돌던 규칙을 멈추는 길을 막으면 안 된다) */
+  if (next === "active") {
+    const ig = await instagramConnection(supabase, auth.userId);
+    if (ig.state === "connected" && ig.scopeMissing) {
+      return { ok: false, error: SCOPE_MISSING_MESSAGE, code: "scope_missing" };
+    }
+  }
   const { error } = await supabase
     .from("auto_dm_rules")
     .update({ status: next })
@@ -311,4 +365,24 @@ export async function deleteRule(id: string): Promise<RuleActionResult> {
 
   revalidatePath("/auto-dm");
   return { ok: true };
+}
+
+/**
+ * «지금 확인» — 이 규칙의 게시물 댓글을 지금 읽어, 조건에 맞는 댓글에 DM 을 보낸다(웹훅과 같은 파이프라인).
+ * 본체는 lib/auto-dm/check-now.ts. 여기선 인증만 하고 넘긴다 — 소유 확인·권한·남용 제한(규칙당 30초)은 본체가 한다.
+ * 결과는 형식이 있는 값이다(실패도 «없음»으로 뭉개지 않는다) — 화면이 결과 모달로 그린다.
+ * revalidatePath 는 부르지 않는다: 이 페이지는 렌더마다 인스타 미디어를 다시 읽어 무겁고, 바뀐 카드 숫자는 결과에 실어 보낸다.
+ */
+export async function checkRuleNow(ruleId: string): Promise<CheckNowResult> {
+  if (typeof ruleId !== "string" || ruleId.length === 0) return { ok: false, code: "not_found" };
+  if (isDemoMode()) return { ok: false, code: "demo" };
+  const auth = await authorize();
+  if (!auth.ok || !auth.userId) return { ok: false, code: "auth" };
+  try {
+    const supabase = await createClient();
+    return await runCheckNow(supabase, auth.userId, ruleId);
+  } catch (e) {
+    console.error("[auto-dm:check] 처리 실패:", e instanceof Error ? e.message : String(e));
+    return { ok: false, code: "unavailable" };
+  }
 }

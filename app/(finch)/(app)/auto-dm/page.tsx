@@ -13,8 +13,18 @@ import {
   type AutoDmRuleRow,
 } from "@/lib/auto-dm/db";
 import { dmContentLimitFor } from "@/lib/auto-dm/limits";
+import { autoDmScopeCheck } from "@/lib/auto-dm/pipeline";
+import { isMissingColumnError } from "@/lib/publish-rules";
+import { isInstagramOAuthConfigured } from "@/lib/meta/instagram-oauth";
+import { isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
+import { isChannelOpen } from "@/lib/channel-availability";
 import type { AutoDmRule, Post } from "@/lib/types";
 import { AutoDmClient } from "./_components/auto-dm-client";
+
+/* «지금 확인»(checkRuleNow) 은 이 페이지의 서버 액션이다 — 댓글 50개를 읽고 조건에 맞는 것마다 인스타에 발송한다.
+   본체가 40초 예산에서 새 댓글 처리를 멈추고(lib/auto-dm/check-now.ts), 이 값이 진행 중인 한 건과 응답의 여유를 준다.
+   페이지 단위로 걸어야 서버 액션에 적용된다(Next maxDuration 문서). */
+export const maxDuration = 60;
 
 /**
  * 자동 DM — 서버 페이지.
@@ -40,6 +50,12 @@ export default async function AutoDmPage() {
      예전엔 그대로 저장하고 초록 「실행 중」 배지까지 붙여, 고객이 5단계를 다 채우고 기다리기만 했다(2026-09-07 감사).
      데모 화면은 연동 개념이 없으므로 true 로 둔다. */
   let igConnected: boolean | null = true;
+  /* 연결은 됐는데 댓글 권한이 **확실히** 빠졌는가(granted_scopes 에 instagram_business_manage_comments 가 없다).
+     그대로 두면 규칙은 초록 「실행 중」인데 댓글이 달려도 DM 이 한 통도 안 나간다 — 화면이 «다시 연결»을 먼저 말한다.
+     «확인 불가»(null — 0075 이전 연동·조회 실패)는 막지 않는다(lib/meta/granted-scopes.ts 규칙). */
+  let igScopeMissing = false;
+  /* 다시 연결 버튼이 갈 곳 — 인스타 연결을 지금 받을 수 있으면 인가 시작 주소, 아니면 null(화면이 설정 › 채널로 보낸다) */
+  let reconnectHref: string | null = null;
 
   /* 플랜 조회가 실패하면 null 이다 — 한도는 fail-closed 로 free 를 쓰되(dmContentLimitFor),
      화면이 그 한도를 «당신 플랜의 한도»라고 단정하면 안 된다. 유료 고객이 이유도 모른 채
@@ -73,22 +89,33 @@ export default async function AutoDmPage() {
         if (res.error && missingLegacyColumns(res.error.message)) res = await q(RULE_COLUMNS_LEGACY);
         return { data: res.data, error: res.error?.message ?? null, followReady };
       };
+      /* ⚠️ user_id 로 좁힌다 — 안 좁히면 팀원 화면에 **소유자의 핸들**이 자기 계정처럼 뜨고,
+         연결 관문이 잘못 열린다(2026-09-08 감사, actions.ts 의 같은 수리와 짝).
+         .limit(1)+order: 한 사용자가 IG 를 2행 갖는 상태(0004 유니크는 전역이라 가능하다)에서
+         maybeSingle() 이 다중행 오류로 떨어져 핸들이 사라지던 것도 함께 막는다.
+         granted_scopes(0075)를 함께 읽는다 — 미적용 DB 면 그 컬럼만 빼고 다시 읽는다(«확인 불가»). */
+      const loadAccount = async () => {
+        const q = (cols: string) =>
+          supabase
+            .from("connected_accounts")
+            .select(cols)
+            .eq("user_id", pageUser?.id ?? "")
+            .eq("channel", "instagram")
+            .eq("connected", true)
+            .order("created_at", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+        let res = await q("handle, granted_scopes");
+        if (isMissingColumnError(res.error, /granted_scopes/i)) res = await q("handle");
+        return {
+          data: res.data as unknown as { handle?: string | null; granted_scopes?: string[] | null } | null,
+          error: res.error,
+        };
+      };
       const [{ data, error, followReady }, livePosts, accountRes, avatarUrl, planRes] = await Promise.all([
         loadRules(),
         getRecentPostsForPicker(),
-        /* ⚠️ user_id 로 좁힌다 — 안 좁히면 팀원 화면에 **소유자의 핸들**이 자기 계정처럼 뜨고,
-           연결 관문이 잘못 열린다(2026-09-08 감사, actions.ts 의 같은 수리와 짝).
-           .limit(1)+order: 한 사용자가 IG 를 2행 갖는 상태(0004 유니크는 전역이라 가능하다)에서
-           maybeSingle() 이 다중행 오류로 떨어져 핸들이 사라지던 것도 함께 막는다. */
-        supabase
-          .from("connected_accounts")
-          .select("handle")
-          .eq("user_id", pageUser?.id ?? "")
-          .eq("channel", "instagram")
-          .eq("connected", true)
-          .order("created_at", { ascending: true })
-          .limit(1)
-          .maybeSingle(),
+        loadAccount(),
         getIgAvatarUrl(),
         getCurrentPlan(),
       ]);
@@ -98,11 +125,16 @@ export default async function AutoDmPage() {
       postsFailed = livePosts === null;
       posts = livePosts ?? [];
       followRequestReady = followReady;
-      accountHandle = (accountRes.data?.handle as string | undefined) ?? null;
+      accountHandle = accountRes.data?.handle ?? null;
       accountAvatar = avatarUrl;
       /* 연동 여부는 **세 격**이다 — 연결됨 / 없음 / 확인 못 함(조회 실패).
          조회 실패를 «없음»으로 단정하면 잘 쓰던 사람에게 «연결하세요» 관문이 뜬다(실패는 «없음»이 아니다). */
       igConnected = accountRes.error ? null : accountRes.data != null;
+      igScopeMissing = autoDmScopeCheck(accountRes.data?.granted_scopes ?? null).state === "missing";
+      /* 설정 › 채널의 「다시 연결」과 같은 판정(자격증명·암호화 키·고객에게 열렸는가, 운영자는 예외) */
+      reconnectHref = isChannelOpen("instagram", isInstagramOAuthConfigured() && isTokenEncryptionConfigured(), pageUser?.email)
+        ? "/api/auth/instagram/start"
+        : null;
       if (error) {
         /* 예전엔 로그만 남기고 rules=[] 로 넘어갔다 — 그러면 화면은 「아직 자동 DM 규칙이 없어요」와
            「실행 중 규칙 0 · 누적 발송 0 · 성공률 0.0%」를 그린다. 규칙이 돌고 있는 사람이 그 화면을
@@ -133,6 +165,8 @@ export default async function AutoDmPage() {
       accountAvatar={accountAvatar}
       followRequestReady={followRequestReady}
       igConnected={igConnected}
+      igScopeMissing={igScopeMissing}
+      reconnectHref={reconnectHref}
       postsFailed={postsFailed}
     />
   );

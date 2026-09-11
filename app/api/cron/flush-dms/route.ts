@@ -6,6 +6,7 @@ import { sendPrivateReply, replyToComment } from "@/lib/meta/graph";
 import { applyAdDisclosure } from "@/lib/ads/ad-disclosure";
 import { parseButtons, parseReplies } from "@/lib/auto-dm/db";
 import { isNightInKST } from "@/lib/auto-dm/match";
+import { PRIVATE_REPLY_WINDOW_MS } from "@/lib/auto-dm/pipeline";
 import { isAuthorizedCron } from "@/lib/cron";
 
 /**
@@ -23,7 +24,8 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const BATCH = 100;
-const WINDOW_MS = 6.5 * 86_400_000;
+/* 7일 창(반나절 여유) — «지금 확인»이 댓글을 거르는 창과 같은 값이다(lib/auto-dm/pipeline.ts 한 곳) */
+const WINDOW_MS = PRIVATE_REPLY_WINDOW_MS;
 
 type Admin = NonNullable<ReturnType<typeof createAdminClient>>;
 
