@@ -14,8 +14,9 @@ const base =
 
 /* 코랄 배경 위 텍스트는 항상 다크 (PART 7.3 확정) */
 const variants: Record<Variant, string> = {
-  primary: "bg-primary text-on-primary hover:bg-primary-hover active:bg-primary-pressed font-semibold",
-  secondary: "bg-overlay text-fg border border-line hover:border-line-strong active:bg-body",
+  /* 눌린 표시는 변형마다 두지 않는다 — globals.css 의 누름 반응 한 규칙이 앱의 모든 버튼·링크에 똑같이 건다(2026-09-11) */
+  primary: "bg-primary text-on-primary hover:bg-primary-hover font-semibold",
+  secondary: "bg-overlay text-fg border border-line hover:border-line-strong",
   /* 호버 배경은 **틴트 토큰**이다 — bg-overlay 는 라이트에서 카드·사이드바와 같은 흰색이라
      ghost 버튼의 호버 반응이 통째로 안 보였다(면 역할표: bg-tint-hover 가 호버 틴트다) */
   ghost: "text-fg-sub hover:text-fg hover:bg-tint-hover",

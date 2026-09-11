@@ -229,7 +229,10 @@ export function MainStage({ children }: { children: React.ReactNode }) {
         <div data-nav-overlay className="pointer-events-none absolute inset-0 z-40">
           {/* 긴 화면에서 스크롤이 내려가 있어도 링은 보이는 화면 한가운데에 — 상단바(3.5rem) 아래 뷰포트 높이만큼.
               overflow-hidden — PageLoading 의 min-h(26rem)가 아주 낮은 화면에선 이 상자보다 커서 밖으로 삐져나온다 */}
-          <div className="pointer-events-auto sticky top-14 h-[calc(100dvh-3.5rem)] overflow-hidden bg-surface">
+          {/* busy-veil-in — 0.2초(--loading-delay) 안에 새 화면이 오면 끝내 안 보인다(번쩍임 없음). 그동안은 투명하고
+              클릭도 통과해 지금 화면이 그대로 보인다 — 깃허브·유튜브·토스증권처럼(2026-09-11 실측·지시 «메이저 사이트처럼»).
+              넘으면 0.16초에 걸쳐 나타난다. 누른 순간의 반응은 누름 표시(globals.css)와 메뉴의 대기 색이 맡는다. */}
+          <div className="busy-veil-in pointer-events-auto sticky top-14 h-[calc(100dvh-3.5rem)] overflow-hidden bg-surface">
             <PageLoading />
           </div>
         </div>

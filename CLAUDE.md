@@ -46,6 +46,15 @@
   ⚠️ `fg-faint`는 **본문 텍스트 금지** — 플레이스홀더·아이콘·표 헤더·차트 축 라벨·비활성 UI 전용이다.
   정확한 값은 `app/globals.css` 가 정한다(여기 숫자를 근거로 대비를 계산하지 말 것 — 조정되면 어긋난다).
 - 모션은 `trans-state` 등 프리셋으로 — `transition-*` 유틸 직접 사용은 duration/ease를 의도적으로 오버라이드할 때만.
+- **반응 기준 — 모든 버튼·모든 전환이 같은 속도로 반응한다** (2026-09-11 사장님 지시 «메이저 사이트처럼, 모든 버튼과
+  모든 전환이 같게». 깃허브·유튜브·토스증권 실측 + 구글 INP «0.2초 안»·닐슨 «0.1초»에 맞췄다). 정본은 `app/globals.css`.
+  ① **누름**: 누르는 순간 opacity 0.72, 전환 없이 즉시 — globals.css 의 `:where(button, a[href], [role=button|tab|menuitem|option], summary):active`
+  한 규칙이 앱 전체에 건다. 컴포넌트마다 `active:` 색을 새로 넣지 말 것(예전엔 버튼 두 종류에만 있어 반응이 제각각이었다).
+  ② **로딩 표시**: `--loading-delay`(0.2초) 안에 끝나면 띄우지 않는다 — 빠른 동작에 로더가 번쩍이면 더 불안하다.
+  넘으면 `--dur-2` 로 나타난다. 쓰는 클래스는 `.busy-veil-in` 하나(화면 이동 덮개·편집기 작업 막). 그동안 투명한 막은 클릭을 통과시킨다.
+  ③ **나타남**: 새 화면·모달·시트·서랍·탭 교체·위저드 단계는 전부 `--dur-2`(0.16초)·`--ease-arrive`. 순차 지연(스태거) 금지.
+  ④ Tailwind `duration-200`·`duration-[240ms]` 같은 숫자 직접 쓰기 금지 — `duration-[var(--dur-1|2|3)]` 로. 색만 바뀌는 호버는 `--dur-1`.
+  메뉴 링크는 누른 뒤 도착 전까지 호버 색으로 붙잡아 둔다(`LinkStatusIcon` 의 `data-nav-pending` + `has-[[data-nav-pending]]:`).
 - **연동·해제 결과는 띠가 아니라 모달이다** (`components/ui/result-modal.tsx`, 2026-09-09 사장님 지시).
   연동은 «다른 사이트를 다녀와서» 끝나는데, 돌아온 화면 맨 위의 초록 띠는 «방금 한 일의 결과»가 아니라 «원래 있던 안내»로 읽힌다.
   실패는 더 나쁘다 — 해제 확인 모달이 열린 채 실패 띠가 뜨면 띠가 **스크림 뒤에 숨는다**(실제로 있던 버그다).
@@ -55,8 +64,8 @@
   (2026-09-10 지시). 누르는 즉시 「○○으로 이동하고 있어요」 모달(`components/ui/connect-link.tsx`)을 세운다.
 - **클릭은 그 자리에서 반응해야 한다 — 서버 응답을 기다려서 보여주는 피드백은 피드백이 아니다** (2026-09-10 지시
   «클릭하면 바로 반응 오게, 준비 안 됐으면 로딩창»). 앱 안 화면 이동은 `next/link` 대신 `components/ui/app-link.tsx` 의
-  `AppLink`(`ButtonLink` 도 이걸 쓴다)로 — 누르는 즉시 `<main>` 위에 로딩 화면이 덮이고(`components/layout/nav-pending.tsx`),
-  새 화면이 오면 걷힌다. 버튼에서 `router.push` 를 부를 땐 `useNavPending().navigate()` 로. 항상 보이는 메뉴는
+  `AppLink`(`ButtonLink` 도 이걸 쓴다)로 — 누르는 즉시 이동이 시작되고, 0.2초 안에 새 화면이 안 오면 `<main>` 위에
+  로딩 화면이 덮였다가(`components/layout/nav-pending.tsx`, 위 «반응 기준» ②) 새 화면이 오면 걷힌다. 버튼에서 `router.push` 를 부를 땐 `useNavPending().navigate()` 로. 항상 보이는 메뉴는
   `prefetch="intent"`(호버·터치 시작 때 프리페치), 아예 끄는 `prefetch={false}` 는 쓰지 않는다 — 운영 실측에서
   클릭 뒤 첫 바이트까지 0.6~1.1초 동안 아무 반응이 없던 원인이다. `(app)/layout.tsx` 는 인증·동의 확인 밖의
   조회를 **await 하지 않는다**(레이아웃이 끝나기 전엔 `loading.tsx` 도 못 뜬다 — 알림 배지처럼 `Suspense` 로 뒤따르게).

@@ -932,7 +932,7 @@ export function LibraryClient({
       <section
         aria-label="레퍼런스 결과"
         aria-busy={poolSearching}
-        className={cn("results-area mt-5 transition-opacity duration-150", poolSearching && "opacity-60")}
+        className={cn("results-area mt-5 transition-opacity duration-[var(--dur-2)]", poolSearching && "opacity-60")}
       >
         {/* ①·② 는 **개인 수집 모드 전용** 온보딩이다. 풀·데모 모드에서 열어두면
             0건 검색(totalCollected 는 현재 검색 결과 길이다)이 여기로 떨어져

@@ -522,7 +522,7 @@ function TargetSegmented({
             aria-selected={on}
             onClick={() => onChange(o.value)}
             className={cn(
-              "relative z-10 inline-flex h-8 flex-1 shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-card px-2.5 text-[14px] transition-colors duration-200",
+              "relative z-10 inline-flex h-8 flex-1 shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-card px-2.5 text-[14px] transition-colors duration-[var(--dur-2)]",
               on ? "font-bold text-fg" : "font-medium text-fg-sub hover:text-fg",
             )}
           >

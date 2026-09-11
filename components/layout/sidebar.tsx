@@ -176,7 +176,7 @@ export function Sidebar() {
   /* 접기·펼치기 공용 이징 — 랜딩 진입 애니메이션(globals.css .anim-fade-up/.reveal)과 같은
      커브를 써서 앱 전체 모션 리듬을 통일한다. 폭은 레이아웃 속성이라 GPU 가속 대상이 아니지만
      사이드바 접기는 본질적으로 형제 요소(본문)의 리플로우를 동반하는 레이아웃 동작이라
-     transform으로 대체할 수 없다 — duration을 300ms로 짧게 잡아 버벅임 체감을 줄인다. */
+     transform으로 대체할 수 없다. 길이는 앱의 모든 전환과 같은 --dur-2(0.16초) — 2026-09-11 «모든 전환이 같게» 지시로 300ms 에서 맞췄다. */
   const EASE = "ease-[var(--ease-state)]";
 
   /** 항목 하나 — 그룹 소속이면 접힘 폭 툴팁에 그룹명을 앞에 붙인다 */
@@ -196,14 +196,15 @@ export function Sidebar() {
           title={collapsed ? (groupLabel ? `${groupLabel} · ${label}` : label) : undefined}
           className={cn(
             "flex items-center gap-2.5 rounded-card px-2.5 py-2 text-[14px] font-medium trans-state",
-            active ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-tint-hover hover:text-fg",
+            /* 누른 뒤 도착 전까지 — 호버와 같은 색으로 «이걸 눌렀다»를 붙잡아 둔다(LinkStatusIcon 의 data-nav-pending) */
+            active ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-tint-hover hover:text-fg has-[[data-nav-pending]]:bg-tint-hover has-[[data-nav-pending]]:text-fg",
           )}
         >
-          {/* 누른 항목의 아이콘이 도는 원으로 바뀐다 — 본문 덮개와 함께 «눌렸다»를 두 군데서 말한다 */}
+          {/* 아이콘 + «가는 중» 표식(보이지 않음) — 위 has-[[data-nav-pending]] 가 누른 메뉴를 붙잡아 둔다 */}
           <LinkStatusIcon icon={Icon} className="size-4 shrink-0" />
           <span
             className={cn(
-              "overflow-hidden whitespace-nowrap transition-all duration-300",
+              "overflow-hidden whitespace-nowrap transition-all duration-[var(--dur-2)]",
               EASE,
               collapsed ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[160px] translate-x-0 opacity-100",
             )}
@@ -218,7 +219,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "sticky top-0 hidden h-screen shrink-0 flex-col overflow-hidden border-r border-line bg-rail transition-[width] duration-300 md:flex",
+        "sticky top-0 hidden h-screen shrink-0 flex-col overflow-hidden border-r border-line bg-rail transition-[width] duration-[var(--dur-2)] md:flex",
         EASE,
         collapsed ? "w-16" : "w-52",
       )}
@@ -230,7 +231,7 @@ export function Sidebar() {
           <FinchMark className="shrink-0 text-primary" />
           <span
             className={cn(
-              "overflow-hidden whitespace-nowrap text-[17px] font-bold tracking-tight text-fg transition-all duration-300",
+              "overflow-hidden whitespace-nowrap text-[17px] font-bold tracking-tight text-fg transition-all duration-[var(--dur-2)]",
               EASE,
               collapsed ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[100px] translate-x-0 opacity-100",
             )}
@@ -256,7 +257,7 @@ export function Sidebar() {
                     펼침에선 투명하게 자리만 지켜 접을 때 레이아웃이 튀지 않는다. */}
                 <div
                   className={cn(
-                    "mx-2 my-2 h-px bg-line transition-opacity duration-300",
+                    "mx-2 my-2 h-px bg-line transition-opacity duration-[var(--dur-2)]",
                     collapsed ? "opacity-100" : "opacity-0",
                   )}
                   aria-hidden
@@ -265,7 +266,7 @@ export function Sidebar() {
                 {/* 그룹 헤더 — 접힘 폭에선 사용량 게이지와 같은 grid 0fr↔1fr 트릭으로 높이를 접는다 */}
                 <div
                   className={cn(
-                    "grid transition-[grid-template-rows] duration-300",
+                    "grid transition-[grid-template-rows] duration-[var(--dur-2)]",
                     EASE,
                     collapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]",
                   )}
@@ -282,7 +283,7 @@ export function Sidebar() {
                     >
                       {group.label}
                       <ChevronDown
-                        className={cn("size-3.5 shrink-0 transition-transform duration-200", !open && "-rotate-90")}
+                        className={cn("size-3.5 shrink-0 transition-transform duration-[var(--dur-2)]", !open && "-rotate-90")}
                         aria-hidden
                       />
                     </button>
@@ -313,7 +314,7 @@ export function Sidebar() {
           박혀 있던 셈이다. 진짜 크레딧 미터는 /credits 화면과 함께 붙인다(개편 3단계). */}
       <div
         className={cn(
-          "grid transition-[grid-template-rows,opacity] duration-300",
+          "grid transition-[grid-template-rows,opacity] duration-[var(--dur-2)]",
           EASE,
           collapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] border-t border-line opacity-100",
         )}
@@ -335,7 +336,7 @@ export function Sidebar() {
           aria-label={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
           className="flex w-full items-center justify-center rounded-card p-2 text-fg-sub trans-state hover:bg-tint-hover hover:text-fg"
         >
-          <ChevronsLeft className={cn("size-4 transition-transform duration-300", EASE, collapsed && "rotate-180")} />
+          <ChevronsLeft className={cn("size-4 transition-transform duration-[var(--dur-2)]", EASE, collapsed && "rotate-180")} />
         </button>
       </div>
     </aside>

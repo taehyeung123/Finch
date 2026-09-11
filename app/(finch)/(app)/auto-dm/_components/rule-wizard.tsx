@@ -430,14 +430,14 @@ export function RuleWizard({
     >
       <span
         className={cn(
-          "flex size-[18px] shrink-0 items-center justify-center rounded-full border-2 transition-colors duration-200",
+          "flex size-[18px] shrink-0 items-center justify-center rounded-full border-2 transition-colors duration-[var(--dur-2)]",
           opts.checked ? "border-fg" : "border-line-strong",
         )}
         aria-hidden
       >
         <span
           className={cn(
-            "size-2.5 rounded-full bg-fg transition-all duration-200",
+            "size-2.5 rounded-full bg-fg transition-all duration-[var(--dur-2)]",
             opts.checked ? "scale-100 opacity-100" : "scale-0 opacity-0",
           )}
         />
@@ -501,7 +501,7 @@ export function RuleWizard({
         <div className="px-5 pt-3">
           <div className="h-[7px] overflow-hidden rounded-chip bg-line-strong/50">
             <div
-              className="h-full rounded-chip bg-fg transition-all duration-300 ease-out"
+              className="h-full rounded-chip bg-fg transition-all duration-[var(--dur-2)] ease-[var(--ease-arrive)]"
               style={{ width: `${(stepNo / steps.length) * 100}%` }}
             />
           </div>
@@ -591,7 +591,7 @@ export function RuleWizard({
                         onClick={() => setPostId(p.id)}
                         aria-pressed={active}
                         className={cn(
-                          "group relative aspect-square overflow-hidden rounded-card text-left transition-all duration-150",
+                          "group relative aspect-square overflow-hidden rounded-card text-left transition-all duration-[var(--dur-2)]",
                           // 리틀리 실측: 선택 = 4px 실선 보더 (색만 우리 브랜드 토큰)
                           active ? "border-4 border-primary" : "border border-line hover:border-line-strong",
                           locked ? "cursor-not-allowed opacity-45" : "",

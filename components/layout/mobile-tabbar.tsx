@@ -57,7 +57,7 @@ export function MobileTabbar() {
           onClick={() => setSheetOpen(false)}
           className={cn(
             "flex items-center gap-3 rounded-card px-3 py-2.5 text-[15px] font-medium trans-state",
-            active ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-tint-hover hover:text-fg",
+            active ? "bg-primary-weak text-primary" : "text-fg-sub hover:bg-tint-hover hover:text-fg has-[[data-nav-pending]]:bg-tint-hover has-[[data-nav-pending]]:text-fg",
           )}
         >
           <LinkStatusIcon icon={Icon} className="size-[18px] shrink-0" />
@@ -125,7 +125,8 @@ export function MobileTabbar() {
               className={cn(
                 "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium",
                 /* 1차 내비 라벨은 fg-faint(4.0:1) 금지 — AA 미달이고, 탭바는 앱에서 가장 자주 읽는 글자다 */
-                active ? "text-primary-ink" : "text-fg-sub",
+                /* 누른 탭은 도착 전까지 진한 글자로 붙잡아 둔다(LinkStatusIcon 의 data-nav-pending) */
+                active ? "text-primary-ink" : "text-fg-sub has-[[data-nav-pending]]:text-fg",
               )}
             >
               <LinkStatusIcon icon={Icon} className="size-5" />

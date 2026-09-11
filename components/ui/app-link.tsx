@@ -2,8 +2,7 @@
 
 import Link, { useLinkStatus } from "next/link";
 import { useRouter } from "next/navigation";
-import { LoaderCircle, type LucideIcon } from "lucide-react";
-import { cn } from "@/lib/cn";
+import type { LucideIcon } from "lucide-react";
 import { useNavPending } from "@/components/layout/nav-pending";
 
 /*
@@ -99,15 +98,21 @@ export function AppLink({ prefetch, onNavigate, onMouseEnter, onFocus, onTouchSt
 }
 
 /**
- * 링크 안 아이콘 — 그 링크의 이동이 진행 중이면 회전하는 원으로 바뀐다(useLinkStatus).
- * 자리 크기가 같아 레이아웃이 움직이지 않는다. 프리페치가 끝난 링크는 pending 이 건너뛰어져 그대로 아이콘이다.
+ * 메뉴 링크 안 아이콘 + «가는 중» 표식. 그 링크의 이동이 진행 중이면(useLinkStatus) 보이지 않는
+ * `data-nav-pending` 표식을 함께 그린다 — 링크 쪽 `has-[[data-nav-pending]]:` 클래스가 그걸 보고
+ * 누른 메뉴를 호버와 같은 색으로 붙잡아 둔다(놓은 뒤에도 «이걸 눌렀다»가 남는다).
+ *
+ * 예전엔 아이콘 자리에 도는 원을 그렸다. 2026-09-11 «메이저 사이트처럼, 모든 버튼 반응을 같게» 지시로 뺐다 —
+ * 깃허브·유튜브는 메뉴 아이콘을 돌리지 않고, 로딩 표시는 화면 덮개 하나(0.2초 문턱)로 통일했다.
+ * 프리페치가 끝난 링크는 pending 이 건너뛰어진다 — 그땐 곧바로 도착해 현재 메뉴 색이 옮겨 간다.
  * 반드시 <AppLink>/<Link> 의 자손으로 쓴다.
  */
 export function LinkStatusIcon({ icon: Icon, className }: { icon: LucideIcon; className?: string }) {
   const { pending } = useLinkStatus();
-  return pending ? (
-    <LoaderCircle className={cn(className, "animate-spin")} aria-hidden />
-  ) : (
-    <Icon className={className} aria-hidden />
+  return (
+    <>
+      <Icon className={className} aria-hidden />
+      {pending ? <span data-nav-pending hidden /> : null}
+    </>
   );
 }

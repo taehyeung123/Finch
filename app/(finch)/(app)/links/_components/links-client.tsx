@@ -1692,7 +1692,7 @@ export function LinksClient({
             템플릿 적용하기
           </span>
           <ChevronDown
-            className={cn("size-4 text-fg-sub transition-transform duration-[240ms] ease-[var(--ease-arrive)]", tplOpen && "rotate-180")}
+            className={cn("size-4 text-fg-sub transition-transform duration-[var(--dur-2)] ease-[var(--ease-arrive)]", tplOpen && "rotate-180")}
             aria-hidden
           />
         </button>
@@ -2446,7 +2446,7 @@ function BlockListPanel({
           </span>
           <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">프로필</span>
           <ChevronDown
-            className={cn("size-4 text-fg-sub transition-transform duration-[240ms] ease-[var(--ease-arrive)]", profileOpen && "rotate-180")}
+            className={cn("size-4 text-fg-sub transition-transform duration-[var(--dur-2)] ease-[var(--ease-arrive)]", profileOpen && "rotate-180")}
             aria-hidden
           />
         </button>
@@ -2645,7 +2645,7 @@ function BlockListPanel({
                 className={iconBtn}
               >
                 <ChevronDown
-                  className={cn("size-4 transition-transform duration-[240ms] ease-[var(--ease-arrive)]", expanded && "rotate-180")}
+                  className={cn("size-4 transition-transform duration-[var(--dur-2)] ease-[var(--ease-arrive)]", expanded && "rotate-180")}
                   aria-hidden
                 />
               </button>

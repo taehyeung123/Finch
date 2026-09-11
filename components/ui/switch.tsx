@@ -41,7 +41,7 @@ export function Switch({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        "relative h-5 w-9 shrink-0 rounded-chip transition-colors duration-200 ease-out",
+        "relative h-5 w-9 shrink-0 rounded-chip transition-colors duration-[var(--dur-2)] ease-[var(--ease-arrive)]",
         "after:absolute after:-inset-3 after:content-['']", // 44px 히트 영역
         "focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2",
         "disabled:cursor-not-allowed disabled:opacity-40",
@@ -53,7 +53,7 @@ export function Switch({
     >
       <span
         className={cn(
-          "absolute top-0.5 size-4 rounded-full transition-[left,background-color] duration-200 ease-out",
+          "absolute top-0.5 size-4 rounded-full transition-[left,background-color] duration-[var(--dur-2)] ease-[var(--ease-arrive)]",
           // 켜짐: 코랄 트랙 위 다크 knob(on-primary 규칙) / 꺼짐: 회색 트랙 위 밝은 knob
           checked ? "left-[18px] bg-on-primary" : "left-0.5 bg-overlay",
         )}
