@@ -171,8 +171,8 @@
   - **Meta 광고 관리(Marketing API)도 2026-09-03 에 코드가 다 붙었다** — 읽기·캠페인·광고 세트·소재·광고 생성·
     미리보기·게재 제어까지(`docs/ADS_STAGE2_SPEC.md` 가 설계 정본, §13 이 우선). 자격증명은 들어가 있고(광고 호출 41회 기록, 2026-09-11)
     남은 것은 **메타 앱 심사와 호출 등급(Full)** 이다 — 준비물은 `docs/APP_REVIEW.md` §4.
-    광고 스코프는 `ads_read`+`ads_management`+`pages_show_list`+`pages_read_engagement`(`lib/meta/ads-oauth.ts`) —
-    (⚠️ 메타 심사 전에 `business_management` 를 더해야 한다 — 광고 이용 사례 필수, `docs/APP_REVIEW.md` §4-1) —
+    광고 스코프는 `ads_read`+`ads_management`+`pages_show_list`+`pages_read_engagement`+`business_management`(`lib/meta/ads-oauth.ts`,
+    마지막 것은 2026-09-11 — 마케팅 API 이용 사례 필수, `docs/APP_REVIEW.md` §2) —
     그 전에 연동한 토큰은 설정 > 채널에서 «재연동 필요»로 안내한다. 미리보기 iframe 때문에 `proxy.ts` CSP `frame-src` 에
     `https://www.facebook.com/ads/api/preview_iframe.php` 가 **앱 화면에만** 열려 있다(공개 프로필엔 없다).
   - 새 기능을 «목으로 두라»는 옛 방침은 폐기됐다. 지금 목인 화면은 데모 모드의 예시뿐이다.

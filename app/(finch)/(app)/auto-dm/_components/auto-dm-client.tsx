@@ -366,10 +366,9 @@ export function AutoDmClient({
           icon={MessageSquareReply}
           title="아직 자동 DM 규칙이 없어요"
           description="게시물을 고르고 어떤 댓글에 어떤 DM을 보낼지 설정하면, 관심 있는 사람에게 자동으로 메시지가 나갑니다."
+          /* 권한이 빠졌으면 버튼을 두지 않는다 — 바로 위 안내 줄이 이미 「다시 연결하기」를 갖고 있다(같은 버튼이 두 번 뜨던 것, 소넷 점검) */
           action={
-            igScopeMissing ? (
-              connectAction("reconnect")
-            ) : (
+            igScopeMissing ? undefined : (
               <Button onClick={openNew}>
                 <Plus className="size-4" aria-hidden /> 첫 자동화 만들기
               </Button>

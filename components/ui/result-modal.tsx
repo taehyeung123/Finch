@@ -95,10 +95,10 @@ export function ResultModal({
         <Icon className={cn("size-10", NOTICE_ICON_COLOR[result.tone])} aria-hidden />
         <div className="space-y-1">
           <p className="break-keep text-[17px] font-semibold leading-snug">{result.title}</p>
-          {result.description ? <p className="break-keep text-[15px] leading-relaxed text-fg-sub">{result.description}</p> : null}
+          {result.description ? <p className="tnum break-keep text-[15px] leading-relaxed text-fg-sub">{result.description}</p> : null}
         </div>
         {result.lines && result.lines.length > 0 ? (
-          <ul className="w-full space-y-1 rounded-card bg-plate p-3 text-left text-[14px] leading-relaxed text-fg-sub">
+          <ul className="tnum w-full space-y-1 rounded-card bg-plate p-3 text-left text-[14px] leading-relaxed text-fg-sub">
             {result.lines.map((line) => (
               <li key={line} className="break-keep">
                 {line}

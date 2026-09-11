@@ -132,7 +132,7 @@ generatepreviews iframe(CSP frame-src 경로 한정) · 광고 세트/광고 켜
 ⚠️ **실 호출로 확인된 것이 아직 없다.** `META_APP_ID` 를 넣고 사장님 계정으로 스펙 §11 미확정(adgeolocation `locale`·regions-only
 국가 필수·targetingvalidation 응답 필드·미리보기 iframe 안폭·`instagram_basic` 필요 여부 등)을 지워야 한다.
 본인 광고 계정 범위에서는 `ads_management` 도 Standard Access 로 자동 승인된다(2026-09-02 문서 확인).
-⚠️ 동의 스코프는 `ads_read`+`ads_management`+`pages_show_list`+`pages_read_engagement`(2026-09-03 두 개 추가) — 스코프는 동의 시점에
+⚠️ 동의 스코프는 `ads_read`+`ads_management`+`pages_show_list`+`pages_read_engagement`+`business_management`(2026-09-03 두 개, 2026-09-11 하나 추가) — 스코프는 동의 시점에
 고정되므로 그 전에 연동한 토큰은 설정 > 채널에서 «재연동 필요»로 안내한다(인스타 발행 권한에서 겪은 함정).
 
 **있는 것:**
@@ -174,7 +174,7 @@ generatepreviews iframe(CSP frame-src 경로 한정) · 광고 세트/광고 켜
 5. 접근 수준: **본인 광고 계정**은 Standard Access(지금 상태로 동작). **고객 광고 계정 대행**은
    Advanced Access(사업자등록증 + 비즈니스 인증) — **비즈니스 인증 2026-09-09 완료**(주식회사 딥레드),
    **액세스 인증(Tech Provider) 2026-09-11 인증됨**. 남은 것은 앱 심사인데, 지금 스코프 그대로는 못 낸다 —
-   `business_management` 가 이용 사례 필수인데 빠져 있고 `pages_read_engagement` 녹화용 화면이 없다([APP_REVIEW.md](APP_REVIEW.md) §4-1).
+   `business_management`(이용 사례 필수)와 `pages_read_engagement` 녹화용 화면(페이지 최근 게시물)은 2026-09-11 에 붙였다([APP_REVIEW.md](APP_REVIEW.md) §4-1).
 
 > ⚠️ **경쟁사 광고 수집과 혼동하지 말 것.** 그건 별개 기능이고 **이미 돌아간다**(6번).
 
@@ -239,7 +239,7 @@ Supabase 수동 연결(manual linking) ON(2026-09-03)
       설정 화면에서 다시 연동하면 발행 권한 획득 + 토큰 만료 60일 리셋 + 웹훅 구독 재시도가 한 번에 된다.
 - [ ] **`LINK_COOKIE_SECRET` 설정** — 없으면 서비스 롤 키를 대신 쓰므로, 그 키를 돌리는 순간
       모든 프로필 링크 잠금해제 쿠키가 무효가 된다
-- [ ] Meta 앱 심사 신청 — **스코프 목록 그대로 내면 안 된다**(스레드 답글 2개 미사용, 광고 `business_management` 누락). 준비물은 [APP_REVIEW.md](APP_REVIEW.md) §4
+- [ ] Meta 앱 심사 신청 — 스코프 정리는 2026-09-11 에 끝났다(스레드 답글 2개 뺌, 광고 `business_management` 추가). 남은 준비물은 [APP_REVIEW.md](APP_REVIEW.md) §4
 - [x] ~~TikTok 개발자 앱 등록 → `TIKTOK_CLIENT_KEY/SECRET`~~ — 샌드박스 키로 운영 중, **2026-09-07 Production 심사 제출(In review)**
 - [x] ~~사업자등록증 발급~~ · ~~**Meta 비즈니스 인증**(2026-09-09 완료)~~ · ~~도메인 인증(finch.ai.kr, 2026-09-08)~~
       → 이제 가능해진 것: **Meta 앱 심사 신청**(Advanced Access 의 마지막 관문)

@@ -25,8 +25,10 @@ import { isNightInKST, pickRule, type CommentEvent, type MatchableRule } from "@
  *   → reserve_dm_send(멱등·하루 상한·수신거부·24시간 쿨다운·월 한도를 DB 가 원자 판정)
  *   → 광고 야간 보류 → 토큰 없으면 pending → Private Reply → finalize → (선택) 공개 답글
  *
- * ⚠️ 멱등의 근거는 dm_sends 의 (rule_id, ig_comment_id) 유니크다. 같은 댓글을 웹훅과 «지금 확인»이 둘 다 처리해도,
- *    «지금 확인»을 여러 번 눌러도 reserve 가 두 번째를 null 로 돌려 한 통만 나간다(Private Reply 는 댓글당 1회뿐이다).
+ * ⚠️ 멱등의 근거는 dm_sends 다 — reserve_dm_send 가 **같은 댓글의 기록이 하나라도 있으면** null 을 돌려준다(0092, 규칙과 무관).
+ *    같은 댓글을 웹훅과 «지금 확인»이 둘 다 처리해도, «지금 확인»을 여러 번 눌러도, 규칙을 지우고 새로 만들어도 한 통만 나간다.
+ *    예전엔 (rule_id, ig_comment_id) 유니크뿐이었고 규칙 삭제가 기록을 cascade 로 지워서 «새 규칙으로 한 번 더»가 가능했다
+ *    (2026-09-11 소넷 점검 적발 — 0092 가 기록을 set null 로 남기게 바꿨다).
  */
 
 export type AdminClient = SupabaseClient;

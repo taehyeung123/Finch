@@ -67,7 +67,8 @@ export async function GET(request: Request) {
   }
 
   // 규칙·계정(토큰)을 사용자 단위로 한 번에 로드
-  const ruleIds = [...new Set(sends.map((s) => s.rule_id))];
+  /* 규칙이 지워진 기록은 rule_id 가 null 이다(0092 — 원장은 규칙 삭제를 견딘다). in() 에 null 을 넣지 않는다 */
+  const ruleIds = [...new Set(sends.map((s) => s.rule_id).filter((id): id is string => typeof id === "string"))];
   const userIds = [...new Set(sends.map((s) => s.user_id))];
   // buttons(0038)는 미적용 DB 폴백 — 실패 시 legacy 컬럼만으로 재조회.
   // 조회 "오류"를 빈 배열로 삼키면 안 된다 — 아래 루프가 rule 미스를 '규칙 삭제됨'으로
@@ -141,7 +142,7 @@ export async function GET(request: Request) {
       continue;
     }
 
-    const rule = ruleById.get(s.rule_id);
+    const rule = s.rule_id ? ruleById.get(s.rule_id) : undefined;
     if (!rule || rule.status !== "active") {
       // 규칙 삭제/비활성 — 발송하지 않고 종결 (한도 반납)
       await finalize(admin, s.id, "failed_permission", null, "rule_inactive");

@@ -267,7 +267,7 @@ export const META_ADS_SCOPES = ["ads_read", "ads_management", "pages_show_list",
 | `pages_read_engagement` | 권한 레퍼런스가 `ads_management` 의 **Dependencies** 로 `pages_read_engagement, pages_show_list` 를 명시. `/me/accounts` 오류 문구가 요구하는 «확장 권한» 후보이기도 하다 | 의존 표기 확인, 강제 여부 미확인(§11-8) |
 | 넣지 않음 `instagram_basic` | IG 그래프 경로(`/{page-id}?fields=instagram_business_account`)에만 필요(확인). 우리는 Marketing API 경로(§3.3)를 먼저 쓴다. 의존 권한(`pages_read_user_content`)까지 딸려 와 동의 화면·검수가 길어진다 | 확인 |
 | 넣지 않음 `pages_manage_ads` | `/act_{id}/promote_pages` 에 필요(확인)하지만 `/me/accounts` 로 대체. `adcreatives` 생성에 필수라는 공식 문장은 없다(§11-9) | 추정 |
-| 넣지 않음 `business_management` | 필요 근거를 문서에서 찾지 못했다 | — |
+| ~~넣지 않음~~ **넣음(2026-09-11)** `business_management` | 메타 «마케팅 API 이용 사례» 문서가 **필수·제거 불가**로 명시(2026-09-11 확인 — 이 표를 쓸 때는 못 찾았다). 설정 › SNS 계정 연결 «비즈니스 포트폴리오» 줄이 `/me/businesses` 로 쓴다 | 확인 — `docs/APP_REVIEW.md` §2 |
 
 **왜 지금이 안전한가**: 스코프는 동의 시점에 고정된다(`granted-scopes.ts` 헤더). 광고 연동은 `META_APP_ID` 미설정이라 콜백이 `unconfigured` 로 즉시 반환(`app/api/auth/meta-ads/callback/route.ts:67-70`) — **이 흐름으로 발급된 토큰이 0개**다. 지금 늘리면 재동의 비용 0, 소재 기능을 연 뒤 늘리면 전원 재연동(인스타 발행 권한에서 이미 겪은 함정, `ads-oauth.ts:26-31`).
 비용: 늘린 스코프마다 Advanced Access 검수 스크린캐스트가 붙는다(고객 광고 계정 대행 시 — `ads_read` 포함 **모든** 스코프가 Advanced 여야 한다. 저장소 주석의 «Standard 로 검수 불필요»는 앱 역할 사용자(사장님 본인)에게만 참이다 — 확인). 본인 계정 실측 단계에서는 Standard 로 충분하다.
