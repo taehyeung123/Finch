@@ -27,6 +27,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { StatusPill, type PostStatus } from "@/components/ui/status-pill";
 import { ResultModal, type ResultModalContent } from "@/components/ui/result-modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { SignedThumb } from "@/components/ui/signed-thumb";
 import {
   WEEKDAYS,
   earliestPublishAt,
@@ -928,21 +929,27 @@ function PostThumb({ post, small = false }: { post: ScheduledPost; small?: boole
         small ? "size-10" : "size-12",
       )}
     >
-      {post.thumb_url ? (
-        // eslint-disable-next-line @next/next/no-img-element -- Supabase Storage 서명·공개 URL, 최적화 프록시 불필요
-        <img src={post.thumb_url} alt="" className="size-full object-cover" />
-      ) : post.has_video ? (
-        <Film className="size-4 text-fg-faint" aria-hidden />
-      ) : post.media_count > 0 ? (
-        <ImageIcon className="size-4 text-fg-faint" aria-hidden />
-      ) : (
-        <FileText className="size-4 text-fg-faint" aria-hidden />
-      )}
-      {post.has_video && post.thumb_url ? (
-        <span className="absolute bottom-0.5 left-0.5 flex items-center rounded-chip bg-scrim p-0.5 text-on-scrim" aria-hidden>
-          <Play className="size-2.5 fill-current" />
-        </span>
-      ) : null}
+      {/* 서명 URL(1시간)이 만료돼 깨지면 «썸네일 없음»과 같은 종류 아이콘으로 물러난다 — ▶ 칩도 사진이 보일 때만 */}
+      <SignedThumb
+        src={post.thumb_url}
+        className="size-full object-cover"
+        fallback={
+          post.has_video ? (
+            <Film className="size-4 text-fg-faint" aria-hidden />
+          ) : post.media_count > 0 ? (
+            <ImageIcon className="size-4 text-fg-faint" aria-hidden />
+          ) : (
+            <FileText className="size-4 text-fg-faint" aria-hidden />
+          )
+        }
+        overlay={
+          post.has_video ? (
+            <span className="absolute bottom-0.5 left-0.5 flex items-center rounded-chip bg-scrim p-0.5 text-on-scrim" aria-hidden>
+              <Play className="size-2.5 fill-current" />
+            </span>
+          ) : null
+        }
+      />
       {post.media_count > 1 ? (
         <span className="tnum absolute right-0.5 top-0.5 rounded-chip bg-scrim px-1 text-[11px] font-semibold leading-4 text-on-scrim" aria-hidden>
           +{post.media_count - 1}

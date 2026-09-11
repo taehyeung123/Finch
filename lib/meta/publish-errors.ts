@@ -123,8 +123,9 @@ const TABLE: Record<PublishErrorCode, { kind: PublishErrorKind; text: (c: string
   CONTAINER_EXPIRED: { kind: "recreate", text: () => "준비해 둔 게시물이 만료됐어요 — 다시 시도해 주세요" },
   CONTAINER_ERROR: { kind: "recreate", text: (c) => `${subj(c)} 게시물을 처리하지 못했어요 — 형식을 확인하고 다시 시도해 주세요` },
   PROCESSING_TIMEOUT: {
+    /* 사진만인 글도 같은 마감(10분)에 걸린다 — «영상»이라고 하지 않는다. 다시 시도하면 새 처리 창이 열린다(engine-core «처리 창») */
     kind: "permanent",
-    text: (c) => `${subj(c)} 영상을 처리하는 데 너무 오래 걸려요 — 잠시 후 다시 시도해 주세요`,
+    text: (c) => `${subj(c)} 게시물을 처리하는 데 너무 오래 걸려요 — 잠시 후 다시 시도해 주세요`,
   },
   PUBLISH_AMBIGUOUS: {
     kind: "ambiguous",
@@ -146,7 +147,7 @@ export function publishError(code: PublishErrorCode, channel: string, raw: strin
 /** 모든 코드 — 문구 검사용 */
 export const ALL_PUBLISH_ERROR_CODES = Object.keys(TABLE) as PublishErrorCode[];
 
-/** 인스타 2207xxx 하위 코드 표 */
+/** 인스타 2207xxx 하위 코드 표 — 단계에 따라 뜻이 갈리는 것은 igSubcodeError 가 먼저 본다 */
 const IG_SUBCODES: Record<number, PublishErrorCode> = {
   2207001: "TRANSIENT",
   2207003: "DOWNLOAD_TIMEOUT",
@@ -191,6 +192,25 @@ export function extractIgSubcode(text: string | null | undefined): number | null
   return m ? Number(m[1]) : null;
 }
 
+type GraphPhase = "create" | "status" | "publish" | "read";
+
+/**
+ * 인스타 하위 코드 → 오류. 표에 없으면 null. 메타 오류 코드 표(2026-09-12 다시 확인)에서 **단계에 따라 뜻이 갈리는** 둘:
+ *  · 2207008 «그 준비물이 없거나 만료됐다» — 표의 권고는 «발행 때의 일시 오류, 30초~2분 안에 1~2번 다시»다.
+ *    그래서 만들기·발행에서는 일시 오류로 두고 다음 확인에서 다시 부른다(다시 부르기 전에 상태부터 읽는다 — run.ts).
+ *    하지만 **상태를 읽을 때** 이 답이 오면 그 준비물은 정말 없다 — 만료로 본다(시도 전이면 새로 만든다, engine-core).
+ *    예전엔 상태 읽기에서도 «일시 오류 → 상태 모름»이 되어 죽은 준비물을 처리 마감까지 붙잡고 있었다(2026-09-12 점검).
+ *  · 2207053 «알 수 없는 업로드 오류» — 권고가 «새 준비물을 만들라»다. 만들기에서는 다시 만들면 되고(일시 오류),
+ *    발행에서 오면 같은 준비물을 또 부르지 않고 버린다(recreate — 확실히 안 올라갔다).
+ */
+function igSubcodeError(sub: number, phase: GraphPhase, channel: string, raw: string): PublishError | null {
+  const code = IG_SUBCODES[sub];
+  if (!code) return null;
+  if (sub === 2207008 && phase === "status") return publishError("CONTAINER_EXPIRED", channel, raw);
+  if (sub === 2207053 && phase === "publish") return publishError("TRANSIENT", channel, raw, "recreate");
+  return publishError(code, channel, raw);
+}
+
 /**
  * 그래프 호출 실패 → 오류.
  * @param phase create(준비물 만들기)·status(상태 읽기)·publish(발행 호출)·read(링크·목록·한도 — 부가 조회)
@@ -198,7 +218,7 @@ export function extractIgSubcode(text: string | null | undefined): number | null
  * ⚠️ publish 단계에서 **답을 못 받은** 실패(시간 초과·네트워크·5xx)는 ambiguous 다 — 메타는 받았을 수 있다.
  * 반대로 메타가 4xx 로 **답한** 실패는 거절이 확실하다(안 올라갔다).
  */
-export function mapGraphFailure(channel: string, phase: "create" | "status" | "publish" | "read", f: GraphFailure): PublishError {
+export function mapGraphFailure(channel: string, phase: GraphPhase, f: GraphFailure): PublishError {
   const raw = `${phase}:${f.kind}:${f.httpStatus ?? "-"}:${f.code ?? "-"}/${f.subcode ?? "-"} ${f.message ?? ""}`.trim();
   const unsure = () => (phase === "publish" ? publishError("PUBLISH_AMBIGUOUS", channel, raw) : publishError("TRANSIENT", channel, raw));
   if (f.kind === "budget") {
@@ -209,10 +229,9 @@ export function mapGraphFailure(channel: string, phase: "create" | "status" | "p
 
   const code = f.code;
   const sub = f.subcode ?? extractIgSubcode(f.message);
-  if (sub !== null && IG_SUBCODES[sub]) {
-    /* 하위 코드는 메타가 이유를 밝힌 확정 답이다 — 5xx 여도 이쪽을 믿는다 */
-    return publishError(IG_SUBCODES[sub], channel, raw);
-  }
+  /* 하위 코드는 메타가 이유를 밝힌 확정 답이다 — 5xx 여도 이쪽을 믿는다 */
+  const bySub = sub !== null ? igSubcodeError(sub, phase, channel, raw) : null;
+  if (bySub) return bySub;
   /* 서버 오류(5xx) — 발행 단계라면 결과를 장담 못 한다 */
   if ((f.httpStatus ?? 0) >= 500) return unsure();
   if (code === 190) return publishError("TOKEN_EXPIRED", channel, raw);
@@ -248,8 +267,9 @@ export function mapContainerError(channel: string, check: ContainerCheck): Publi
     return publishError(mapped ?? "CONTAINER_ERROR", channel, raw);
   }
   const sub = check.subcode ?? extractIgSubcode(check.detail);
-  if (sub !== null && IG_SUBCODES[sub]) return publishError(IG_SUBCODES[sub], channel, raw);
-  return publishError("CONTAINER_ERROR", channel, raw);
+  /* 준비물 자신의 상태가 말한 오류 — 상태 읽기와 같은 뜻으로 읽는다(2207008 = 이 준비물은 없다 → 만료) */
+  const bySub = sub !== null ? igSubcodeError(sub, "status", channel, raw) : null;
+  return bySub ?? publishError("CONTAINER_ERROR", channel, raw);
 }
 
 /**

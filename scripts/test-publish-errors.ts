@@ -63,7 +63,14 @@ check("2207028 → 캐러셀 개수", ig(2207028).code === "CAROUSEL_COUNT");
 check("2207006 → 만료(recreate)", ig(2207006).code === "CONTAINER_EXPIRED" && ig(2207006).kind === "recreate");
 check("2207020 → 만료(recreate)", ig(2207020).code === "CONTAINER_EXPIRED");
 check("2207001 → 일시(transient)", ig(2207001).kind === "transient");
-check("2207008 → 일시(transient)", ig(2207008).kind === "transient");
+/* 2207008 — 메타 표: 문구는 «없거나 만료», 권고는 «발행 때 일시 오류, 30초~2분 안에 1~2번 다시»(2026-09-12 점검) */
+check("2207008 만들기·발행 → 일시(transient, 메타 권고대로 다시)", ig(2207008, "create").kind === "transient" && ig(2207008, "publish").kind === "transient");
+check("2207008 상태 읽기 → 만료(그 준비물은 없다 → 새로 만든다)", ig(2207008, "status").code === "CONTAINER_EXPIRED");
+check("2207008 준비물 ERROR → 만료", mapContainerError("instagram", { status: "ERROR", subcode: 2207008, detail: null }).code === "CONTAINER_EXPIRED");
+check("2207008 원문 속 코드도 상태 읽기면 만료", mapGraphFailure("instagram", "status", http(24, null, 400, "code 2207008")).code === "CONTAINER_EXPIRED");
+/* 2207053 — 메타 표 권고 «새 준비물을 만들라» */
+check("2207053 만들기 → 일시(다시 만들면 된다)", ig(2207053, "create").kind === "transient");
+check("2207053 발행 → 준비물 버림(recreate)", ig(2207053, "publish").kind === "recreate");
 check("메시지 속 하위 코드도 읽는다", mapGraphFailure("instagram", "create", http(9004, null, 400, "failed with error code 2207052")).code === "MEDIA_FETCH_FAILED");
 check("하위 코드는 5xx 여도 믿는다", mapGraphFailure("instagram", "publish", http(null, 2207042, 500)).code === "QUOTA");
 

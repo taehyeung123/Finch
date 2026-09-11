@@ -22,9 +22,11 @@ import {
   POLL_INTERVAL_MS,
   PUBLISH_MIN_REMAINING_MS,
   containerWindow,
+  isExtendedDeadline,
   matchRecentMedia,
   nextStep,
   processingDeadlineFor,
+  publishRetryEndMs,
   type EngineSource,
 } from "@/lib/publish/engine-core";
 import { consumeFetchBudget, mintFetchUrls, parsePostMedia } from "@/lib/publish/media";
@@ -279,6 +281,14 @@ async function advance(admin: SupabaseClient, post: EnginePost, source: EngineSo
     return { kind: "failed", label, error: e.message, code: e.code };
   };
 
+  /**
+   * 이번 시도의 창이 끝났다(처리 마감·발행 재시도 끝) — 실패로 멈춘다. engine-core 머리말 «처리 창».
+   *  recreate=false(첫 창): 준비물은 남기고 **마감만 비운다** — «다시 시도»가 새 창을 연다(아래 «처리 창» 열기).
+   *  recreate=true(다시 연 창): 준비물을 버린다 — 다음 시도가 새로 만든다.
+   */
+  const endWindow = (err: PublishError, recreate: boolean, extra: Record<string, unknown> = {}): Promise<AdvanceOutcome> =>
+    recreate ? fail(err, { recreate: true, extra }) : fail(err, { recreate: false, extra: { ...extra, processing_deadline: null } });
+
   /** 예약으로 되돌린다 — 예약 시각이 지났으면 5분 크론이 곧 다시 집는다(준비물이 없을 때만 쓴다) */
   const release = async (): Promise<AdvanceOutcome> => {
     const w = await write({ status: "scheduled" }, true);
@@ -324,6 +334,11 @@ async function advance(admin: SupabaseClient, post: EnginePost, source: EngineSo
   if (channel === "instagram" && items.length === 0) return fail(publishError("MEDIA_INVALID", channel, "ig_without_media"), { recreate: true });
   const surface: IgSurface | null = channel === "instagram" ? (post.ig_surface ?? "feed") : null;
   const carousel = items.length >= 2;
+
+  /* 처리 창 열기 — 준비물은 있는데 마감이 비어 있으면 «다시 시도»다(마감을 넘겨 실패한 글은 endWindow 가 마감만 비운다).
+     이번 시도의 새 창을 연다. 옛 마감을 그대로 쓰면 상태를 한 번 읽고 곧바로 또 실패한다(2026-09-12 점검).
+     여기서 연 창은 첫 창보다 늦으므로 isExtendedDeadline 이 참이 된다 — 이 창마저 넘기면 준비물을 버린다. */
+  if (hasContainers() && st.deadlineMs === null) st.deadlineMs = processingDeadlineFor(Date.now(), items);
 
   /* ── 1. 연동 — 토큰은 **글 소유자**의 것이다(팀원이 만든 글은 팀원 자신의 연동으로 나간다). 암호문 AAD 도 같은 userId 라야 풀린다 ── */
   const { data: account, error: accErr } = await admin
@@ -459,6 +474,7 @@ async function advance(admin: SupabaseClient, post: EnginePost, source: EngineSo
       containerState: st.containerState,
       containerCreatedAtMs: st.createdAtMs,
       deadlineMs: st.deadlineMs,
+      deadlineExtended: isExtendedDeadline(st.createdAtMs, st.deadlineMs, items),
       publishAttemptedAtMs: st.attemptedAtMs,
       publishCalls: st.calls,
       lookup: st.lookup,
@@ -601,6 +617,7 @@ async function advance(admin: SupabaseClient, post: EnginePost, source: EngineSo
           if (source === "prepare" && !isFormatError(err)) return later(err);
           return fail(err, { recreate: step.recreate });
         }
+        if (step.code === "PROCESSING_TIMEOUT") return endWindow(publishError(step.code, channel), step.recreate);
         return fail(publishError(step.code, channel), { recreate: step.recreate });
       }
 
@@ -639,7 +656,13 @@ async function advance(admin: SupabaseClient, post: EnginePost, source: EngineSo
         st.attemptedAtMs = prevAt;
         st.calls = prevCalls;
         if (err.kind === "not_ready" || err.kind === "transient") {
-          /* 2207027 은 «아직 처리 중» — 다음 확인에서 다시 발행한다 */
+          /* 2207027 «아직 처리 중»·2207008 등 «잠시 뒤 다시»(메타 권고) — 다음 확인이 상태부터 다시 읽고(없어진 준비물이면
+             거기서 만료로 보고 새로 만든다) 다시 발행한다. 끝이 있다: 처리 마감과 발행 시각 중 늦은 쪽 + 15분을 넘기면
+             이번 시도를 멈춘다 — 예전엔 준비물이 «발행 가능»인 한 매분 끝없이(23시간마다 새 준비물로) 불렀다. */
+          if (Date.now() > publishRetryEndMs(st.deadlineMs, publishAfterMs)) {
+            const final = err.kind === "not_ready" ? publishError("PROCESSING_TIMEOUT", channel, err.raw) : err;
+            return endWindow(final, isExtendedDeadline(st.createdAtMs, st.deadlineMs, items), restore);
+          }
           return toProcessing(Date.now() + POLL_INTERVAL_MS, restore, err.kind === "not_ready");
         }
         return fail(err, { recreate: err.kind === "recreate", extra: restore });

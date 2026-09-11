@@ -14,6 +14,13 @@
  *  ③ 발행 호출은 게시물당 최대 2번. 그 뒤에도 모르면 «확인하지 못했어요»로 멈춘다(사람이 본다).
  *  ④ 시도한 행은 준비물을 버리고 새로 만들지 않는다(reset 금지) — 새 준비물은 새 게시물이 된다.
  *
+ * 처리 창(2026-09-12 점검 수리): 처리 마감(processing_deadline)은 준비물의 것이 아니라 **이번 시도**의 것이다.
+ *  · 마감을 넘겨 실패하면(PROCESSING_TIMEOUT) 준비물은 남기고 마감만 비운다 — «다시 시도»가 새 창을 연다(run.ts).
+ *    늦게라도 끝난 준비물은 그대로 올라가고(파일을 다시 받아 가지 않는다), 아직 처리 중이면 새 창 동안 기다린다.
+ *    예전엔 옛 마감이 그대로 남아 «다시 시도»가 상태를 한 번 읽고 곧바로 또 실패했다 — 23시간 동안 다시 시도가 안 됐다.
+ *  · 다시 연 창(deadlineExtended)마저 넘기면 그 준비물은 메타 쪽에서 멈춘 것으로 보고 버린다 — 다음 시도가 새로 만든다.
+ *  · 준비가 끝났는데 발행 호출이 «잠시 뒤에»로 거절되는 경우도 끝이 있다(publishRetryEndMs) — 매분 끝없이 부르지 않는다.
+ *
  * 이 파일은 런타임 import 가 없다 — Node 검사가 그대로 읽는다.
  */
 import type { ContainerStatus } from "../meta/publish-types";
@@ -34,6 +41,9 @@ export const PUBLISH_MIN_REMAINING_MS = 15_000;
 export const ATTEMPT_GIVE_UP_MS = 30 * 60_000;
 /** 같은 게시물의 준비물 묶음을 24시간에 몇 번까지 새로 만드나 — 만들 때마다 메타가 파일을 다시 받아 간다(전송 비용) */
 export const CONTAINER_SETS_PER_DAY = 3;
+/** 준비가 끝난 준비물의 발행 호출이 «잠시 뒤에»(일시 오류·아직 처리 중)로 거절될 때, 처리 마감과 발행 시각 중 늦은 쪽부터
+    이만큼까지만 다시 부른다. 메타 권고는 «30초~2분 안에 1~2번»(2207008) — 매분 확인하는 우리 주기로 넉넉히 잡는다 */
+export const PUBLISH_RETRY_MS = 15 * 60_000;
 
 export interface EngineFacts {
   source: EngineSource;
@@ -52,6 +62,8 @@ export interface EngineFacts {
   containerCreatedAtMs: number | null;
   /** 처리 마감 — 넘으면 «너무 오래 걸려요» */
   deadlineMs: number | null;
+  /** 이 마감이 «다시 시도»가 다시 연 창이다(isExtendedDeadline) — 이 창마저 넘기면 준비물을 버린다 */
+  deadlineExtended: boolean;
   publishAttemptedAtMs: number | null;
   publishCalls: number;
   /** 최근 게시물에서 찾았나 — null = 아직 안 찾아봄 */
@@ -118,7 +130,7 @@ export function nextStep(f: EngineFacts): EngineStep {
       if (f.childStates.some((s) => s === "ERROR")) return { do: "fail", code: "CONTAINER_ERROR", recreate: true };
       if (f.childStates.some((s) => s === "EXPIRED")) return { do: "reset" };
       if (f.childStates.every((s) => s === "FINISHED" || s === "PUBLISHED")) return { do: "create_container" };
-      if (f.deadlineMs !== null && f.nowMs > f.deadlineMs) return { do: "fail", code: "PROCESSING_TIMEOUT", recreate: false };
+      if (f.deadlineMs !== null && f.nowMs > f.deadlineMs) return { do: "fail", code: "PROCESSING_TIMEOUT", recreate: f.deadlineExtended };
       return later("processing", f.nowMs + POLL_INTERVAL_MS);
     }
     if (!f.containerId) return { do: "create_container" };
@@ -133,7 +145,8 @@ export function nextStep(f: EngineFacts): EngineStep {
         return { do: "reset" };
       case "IN_PROGRESS":
       case "UNKNOWN":
-        if (f.deadlineMs !== null && f.nowMs > f.deadlineMs) return { do: "fail", code: "PROCESSING_TIMEOUT", recreate: false };
+        /* 첫 창이면 준비물을 남긴다(늦게 끝나면 «다시 시도»가 그대로 올린다), 다시 연 창이면 버린다 — 머리말 «처리 창» */
+        if (f.deadlineMs !== null && f.nowMs > f.deadlineMs) return { do: "fail", code: "PROCESSING_TIMEOUT", recreate: f.deadlineExtended };
         return later("processing", f.nowMs + POLL_INTERVAL_MS);
       case "FINISHED":
         break;
@@ -160,6 +173,27 @@ export function processingDeadlineFor(createdAtMs: number, items: Array<{ kind: 
   if (videos.length === 0) return createdAtMs + 10 * 60_000;
   const totalMin = videos.reduce((n, v) => n + (v.durationMs ?? 60_000), 0) / 60_000;
   return createdAtMs + Math.min(60, 20 + Math.ceil(totalMin * 2)) * 60_000;
+}
+
+/**
+ * 지금 마감이 준비물을 만들 때 정한 첫 창보다 늦다 — «다시 시도»(또는 회수)가 다시 연 창이다.
+ * 첫 창은 processingDeadlineFor(만든 시각)과 정확히 같다(run.ts 가 만들 때 그 값을 적는다). 모르면 false(첫 창으로 본다).
+ */
+export function isExtendedDeadline(
+  createdAtMs: number | null,
+  deadlineMs: number | null,
+  items: Array<{ kind: string; durationMs?: number | null }>,
+): boolean {
+  if (createdAtMs === null || deadlineMs === null) return false;
+  return deadlineMs > processingDeadlineFor(createdAtMs, items);
+}
+
+/**
+ * 준비가 끝난 준비물의 발행 호출이 «잠시 뒤에»로 거절될 때 다시 부를 수 있는 끝 — 처리 마감과 발행 시각 중 늦은 쪽 + 15분.
+ * 발행 시각을 함께 보는 이유: 미리 만든 예약 영상은 마감이 예약 시각 무렵에 이미 지나 있을 수 있다(20분 전에 만든다).
+ */
+export function publishRetryEndMs(deadlineMs: number | null, publishAfterMs: number): number {
+  return Math.max(deadlineMs ?? publishAfterMs, publishAfterMs) + PUBLISH_RETRY_MS;
 }
 
 /**

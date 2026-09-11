@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { ButtonLink } from "@/components/ui/button";
 import { StatusPill, type PostStatus } from "@/components/ui/status-pill";
+import { SignedThumb } from "@/components/ui/signed-thumb";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { signPostThumbs } from "@/lib/publish/thumbs";
@@ -106,12 +107,8 @@ export default async function Page() {
               {works.map((w) => (
                 <li key={w.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
                   <span className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-card border border-line bg-plate text-fg-faint">
-                    {w.thumb_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- 서명 만료되는 Storage URL 이라 최적화 프록시를 거치지 않는다
-                      <img src={w.thumb_url} alt="" className="size-full object-cover" />
-                    ) : (
-                      <ImageIcon className="size-4" aria-hidden />
-                    )}
+                    {/* 서명 URL(1시간)이 만료돼 깨지면 아이콘으로 물러난다 — 서버의 <img> 엔 onError 를 달 수 없어 클라이언트 조각으로 */}
+                    <SignedThumb src={w.thumb_url} className="size-full object-cover" fallback={<ImageIcon className="size-4" aria-hidden />} />
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[15px] font-medium">

@@ -49,6 +49,14 @@ import {
 const NOW_BUDGET_MS = 80_000;
 const NOW_TOTAL_BUDGET_MS = 105_000;
 
+/* 예시 화면(isDemoMode — 배포 스위치다, 로그인과 무관) 문구. «데모 모드»는 운영 용어라 고객에게 쓰지 않는다 —
+   상태만 말한다(«로그인하면 된다»도 거짓 약속이라 쓰지 않는다). 2026-09-12 점검 */
+const DEMO_TEXT = {
+  upload: "지금은 예시 화면이라 올릴 수 없어요.",
+  save: "지금은 예시 화면이라 저장할 수 없어요.",
+  publish: "지금은 예시 화면이라 발행할 수 없어요.",
+} as const;
+
 /** 「지금 발행」의 결과 — 화면이 모달로 그린다 */
 export type PublishOutcome =
   | { state: "published"; label: string; permalink: string | null }
@@ -97,7 +105,7 @@ export async function createPublishUploads(input: {
   channel: string;
   files: PublishUploadRequest[];
 }): Promise<{ ok: true; tickets: PublishUploadTicket[] } | { ok: false; error: string; retryable: boolean }> {
-  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 올릴 수 없어요.", retryable: false };
+  if (isDemoMode()) return { ok: false, error: DEMO_TEXT.upload, retryable: false };
   const user = await getAuthUser();
   if (!user) return { ok: false, error: "로그인이 필요해요.", retryable: false };
   if (!PUBLISHABLE_CHANNELS.includes(input?.channel as PublishChannel)) {
@@ -118,7 +126,7 @@ export async function createPublishUploads(input: {
 export async function finalizePublishUploads(
   paths: string[],
 ): Promise<{ ok: true; results: FinalizeResult[] } | { ok: false; error: string; retryable: boolean }> {
-  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 올릴 수 없어요.", retryable: false };
+  if (isDemoMode()) return { ok: false, error: DEMO_TEXT.upload, retryable: false };
   const user = await getAuthUser();
   if (!user) return { ok: false, error: "로그인이 필요해요.", retryable: false };
   const admin = createAdminClient();
@@ -228,7 +236,7 @@ const PURGED_TEXT = "영상 파일이 보관 기간이 지나 지워졌어요 �
 
 /** 초안·실패 글 → 예약. when 은 "YYYY-MM-DDTHH:mm"(KST). */
 export async function scheduleDraft(id: string, when: string): Promise<{ ok: boolean; error?: string }> {
-  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 저장할 수 없어요." };
+  if (isDemoMode()) return { ok: false, error: DEMO_TEXT.save };
   const at = resolveScheduledAt(when);
   if (!at.ok) return { ok: false, error: at.error };
 
@@ -265,7 +273,7 @@ export async function scheduleDraft(id: string, when: string): Promise<{ ok: boo
  * 미리 준비해 둔 예약 영상(processing)이면 준비물이 이미 있어 곧바로 올라간다.
  */
 export async function publishNow(id: string): Promise<{ ok: false; error: string } | { ok: true; outcome: PublishOutcome }> {
-  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 발행할 수 없어요." };
+  if (isDemoMode()) return { ok: false, error: DEMO_TEXT.publish };
   const user = await getAuthUser();
   if (!user) return { ok: false, error: "로그인이 필요해요." };
   const supabase = await createClient();
@@ -304,7 +312,7 @@ export async function publishNow(id: string): Promise<{ ok: false; error: string
 /** 초안·실패·취소 글 삭제. 발행**된** 글은 지울 수 없다 — 이력이다(DB 가드도 같은 규칙, 0093).
     실패·취소 글은 이력이 아니라 «못 나간 글»이므로 지울 수 있어야 한다(안 그러면 파일이 영구히 남는다). */
 export async function deleteDraft(id: string): Promise<{ ok: boolean; error?: string }> {
-  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 저장할 수 없어요." };
+  if (isDemoMode()) return { ok: false, error: DEMO_TEXT.save };
   const user = await getAuthUser();
   if (!user) return { ok: false, error: "로그인이 필요해요." };
   const supabase = await createClient();
@@ -375,7 +383,7 @@ export async function createPost(input: {
   /** mode=schedule 일 때 "YYYY-MM-DDTHH:mm"(KST) */
   when?: string;
 }): Promise<CreatePostResult> {
-  if (isDemoMode()) return { ok: false, error: "데모 모드에서는 저장할 수 없어요." };
+  if (isDemoMode()) return { ok: false, error: DEMO_TEXT.save };
   const startedAt = Date.now();
   const user = await getAuthUser();
   if (!user) return { ok: false, error: "로그인이 필요해요." };

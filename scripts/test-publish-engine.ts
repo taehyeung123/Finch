@@ -7,11 +7,14 @@ import {
   CONTAINER_MAX_AGE_MS,
   LOOKUP_GRACE_MS,
   PUBLISH_MIN_REMAINING_MS,
+  PUBLISH_RETRY_MS,
   captionKey,
   containerWindow,
+  isExtendedDeadline,
   matchRecentMedia,
   nextStep,
   processingDeadlineFor,
+  publishRetryEndMs,
   type EngineFacts,
   type EngineStep,
 } from "../lib/publish/engine-core.ts";
@@ -40,6 +43,7 @@ const base = (o: Partial<EngineFacts> = {}): EngineFacts => ({
   containerState: null,
   containerCreatedAtMs: null,
   deadlineMs: null,
+  deadlineExtended: false,
   publishAttemptedAtMs: null,
   publishCalls: 0,
   lookup: null,
@@ -201,6 +205,46 @@ check("다른 계정으로 다시 연결(시도 전) → reset", is(nextStep(bas
 {
   const s = nextStep(base({ source: "check" }));
   check("(i) 매분 확인인데 준비물 없음 → 실패(lost)", s.do === "fail" && s.code === "LOST", s);
+}
+
+console.log("처리 창 — 마감을 넘긴 글의 «다시 시도»(2026-09-12 점검)");
+{
+  /* 15분 릴스: 첫 창 = 만든 시각 + 50분. 55분째에 끝나는 경우 */
+  const reel = [{ kind: "video", durationMs: 15 * 60_000 }];
+  const created = NOW - 51 * 60_000;
+  const first = processingDeadlineFor(created, reel);
+  check("첫 창은 «늘린 창»이 아니다", !isExtendedDeadline(created, first, reel));
+  const timedOut = nextStep(base({ source: "check", containerId: "c1", containerCreatedAtMs: created, containerState: "IN_PROGRESS", deadlineMs: first }));
+  check("51분째 IN_PROGRESS → 처리 시간 초과(준비물 유지)", timedOut.do === "fail" && timedOut.code === "PROCESSING_TIMEOUT" && !timedOut.recreate, timedOut);
+
+  /* 다시 시도 — run.ts 는 비워 둔 마감 대신 지금부터 새 창을 연다 */
+  const reopened = processingDeadlineFor(NOW, reel);
+  check("다시 연 창은 «늘린 창»이다", isExtendedDeadline(created, reopened, reel));
+  const retry = base({
+    source: "now",
+    publishAfterMs: NOW,
+    containerId: "c1",
+    containerCreatedAtMs: created,
+    containerState: "IN_PROGRESS",
+    deadlineMs: reopened,
+    deadlineExtended: true,
+  });
+  const s1 = nextStep(retry);
+  check("다시 시도 + 아직 IN_PROGRESS → 곧바로 또 실패하지 않고 기다린다", s1.do === "wait" && s1.reason === "processing", s1);
+  check("다시 시도 + 그사이 FINISHED → 같은 준비물로 발행(새로 만들지 않는다)", is(nextStep({ ...retry, containerState: "FINISHED" }), "publish"));
+  const s2 = nextStep({ ...retry, nowMs: reopened + 1 });
+  check("다시 연 창마저 넘김 → 실패 + 준비물 버림(다음 시도가 새로 만든다)", s2.do === "fail" && s2.code === "PROCESSING_TIMEOUT" && s2.recreate === true, s2);
+  const s3 = nextStep(
+    base({ carousel: true, childIds: ["a", "b"], childStates: ["FINISHED", "IN_PROGRESS"], containerCreatedAtMs: created, deadlineMs: NOW - 1, deadlineExtended: true }),
+  );
+  check("캐러셀 아이템도 같다 — 다시 연 창을 넘기면 버림", s3.do === "fail" && s3.code === "PROCESSING_TIMEOUT" && s3.recreate === true, s3);
+  check("마감을 모르면 «늘린 창»으로 보지 않는다", !isExtendedDeadline(created, null, reel) && !isExtendedDeadline(null, reopened, reel));
+}
+{
+  /* 준비가 끝났는데 발행이 «잠시 뒤에»로 거절될 때의 끝 */
+  check("발행 재시도 끝 — 마감이 늦으면 마감 + 15분", publishRetryEndMs(NOW + 60_000, NOW) === NOW + 60_000 + PUBLISH_RETRY_MS);
+  check("발행 재시도 끝 — 미리 만든 예약 영상(마감이 예약 시각보다 이르다)은 예약 시각 + 15분", publishRetryEndMs(NOW - 60_000, NOW) === NOW + PUBLISH_RETRY_MS);
+  check("발행 재시도 끝 — 마감을 모르면 발행 시각 + 15분", publishRetryEndMs(null, NOW) === NOW + PUBLISH_RETRY_MS);
 }
 
 console.log("도우미");

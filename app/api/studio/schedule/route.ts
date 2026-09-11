@@ -27,7 +27,8 @@ const MAX_UNPUBLISHED = 60;
 
 export async function POST(request: Request) {
   if (isDemoMode()) {
-    return NextResponse.json({ error: "데모 모드에서는 예약 발행을 사용할 수 없어요." }, { status: 400 });
+    /* «데모 모드»는 운영 용어다 — 고객에게는 상태만 말한다(publish/actions.ts DEMO_TEXT 와 같은 규칙) */
+    return NextResponse.json({ error: "지금은 예시 화면이라 예약 발행을 할 수 없어요." }, { status: 400 });
   }
 
   const supabase = await createClient();

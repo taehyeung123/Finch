@@ -172,6 +172,8 @@ const TEXT = {
   network: "올리지 못했어요 — 연결을 확인하고 다시 올려 주세요.",
   confirmFailed: "확인하지 못했어요 — 잠시 후 다시 시도해 주세요.",
   badType: "MP4·MOV 영상이나 JPG·PNG·WEBP 사진만 올릴 수 있어요.",
+  /** 고른 것 중 일부만 형식이 틀렸다 — 나머지는 들어갔으니 «뺐다»고 말한다 */
+  badTypeSome: "형식이 맞지 않는 파일은 뺐어요 — MP4·MOV 영상이나 JPG·PNG·WEBP 사진만 올릴 수 있어요.",
 } as const;
 
 interface Job {
@@ -615,8 +617,12 @@ export function useMediaTiles(opts: { isDemo: boolean; initialTarget: MediaTarge
       else badType = true;
     }
     const take = picked.slice(0, room);
-    let message: string | null = badType ? TEXT.badType : null;
-    if (picked.length > take.length) message = `${eunNeun(channelLabel(target.channel))} 사진·영상을 ${cap}개까지 올릴 수 있어요.`;
+    /* 두 이유가 한 번에 생길 수 있다(형식이 틀린 파일 + 상한을 넘는 개수) — 하나가 다른 하나를 덮으면 형식 때문에 빠진 파일을
+       사용자가 모른다(2026-09-12 점검). 둘 다 말한다. */
+    const reasons: string[] = [];
+    if (badType) reasons.push(take.length > 0 ? TEXT.badTypeSome : TEXT.badType);
+    if (picked.length > take.length) reasons.push(`${eunNeun(channelLabel(target.channel))} 사진·영상을 ${cap}개까지 올릴 수 있어요.`);
+    const message = reasons.length > 0 ? reasons.join(" ") : null;
     if (take.length === 0) return message;
     const fresh: MediaTile[] = take.map((p) => {
       const key = `m${++core.seq}`;
