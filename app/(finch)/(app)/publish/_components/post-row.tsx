@@ -20,6 +20,7 @@ import { SignedThumb } from "@/components/ui/signed-thumb";
 import { InstagramGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 import { kstDayKey, kstTimeKey } from "@/lib/calendar";
 import { channelLabel } from "@/lib/publish-rules";
+import { MEDIA_PURGED_MESSAGE } from "@/lib/meta/publish-errors";
 import { dueNow, elapsedLabel, inProgress, stalled } from "@/lib/publish/progress";
 import type { PublishListItem } from "@/lib/types";
 
@@ -42,9 +43,6 @@ import type { PublishListItem } from "@/lib/types";
 */
 
 export type ScheduledPost = PublishListItem;
-
-/** 보관 기간이 지나 영상 파일을 지운 글 — 다시 예약·지금 발행이 안 된다(서버 actions.ts 와 같은 문구) */
-export const PURGED_TEXT = "영상 파일이 보관 기간이 지나 지워졌어요 — 지운 뒤 다시 만들어 주세요.";
 
 /** 스토리 링크는 24시간만 산다 — 그 뒤엔 링크를 숨긴다(눌러도 «없는 게시물»이다) */
 function storyStillUp(publishedAt: string | null, nowMs: number): boolean {
@@ -208,9 +206,10 @@ export function PostRow({
 }
 
 /* 조작 아이콘 버튼 — 보이는 28px, 누르는 칸 36px(after 로 사방 4px). 색만 바뀌는 호버는 trans-state(--dur-1).
+   키보드 포커스는 앱의 버튼(components/ui/button.tsx)과 같은 코랄 링 — 네 목록이 같이 쓰는 줄이라 브라우저 기본 링으로 두지 않는다.
    글자색은 한 가지만 붙인다 — cn 은 겹치는 유틸을 지우지 않아서(tailwind-merge 없음) 둘이 붙으면 어느 쪽이 이길지 모른다 */
 const ACTION_BASE =
-  "trans-state relative flex size-7 items-center justify-center rounded-card after:absolute after:-inset-1 after:content-[''] hover:bg-tint-hover disabled:cursor-not-allowed disabled:opacity-40";
+  "trans-state relative flex size-7 items-center justify-center rounded-card after:absolute after:-inset-1 after:content-[''] hover:bg-tint-hover focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-40";
 
 function actionClass(tone: "neutral" | "danger", on = false): string {
   return cn(ACTION_BASE, on ? "bg-tint-hover text-fg" : "text-fg-sub", tone === "danger" ? "hover:text-negative" : "hover:text-fg");
@@ -272,7 +271,8 @@ function PostThumb({ post }: { post: ScheduledPost }) {
           <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" />
         </span>
       ) : null}
-      {kind ? <span className="sr-only">{post.media_count > 1 ? `${kind} 포함 ${post.media_count}개` : kind}</span> : null}
+      {/* 글만 있는 글(스레드)도 이름을 준다 — 보이는 문서 아이콘은 aria-hidden 이라 이것이 없으면 스크린리더에 이 칸이 비어 있다 */}
+      <span className="sr-only">{kind ? (post.media_count > 1 ? `${kind} 포함 ${post.media_count}개` : kind) : "글만 있는 게시물"}</span>
     </span>
   );
 }
@@ -333,8 +333,10 @@ function PostNotes({ post, nowMs }: { post: ScheduledPost; nowMs: number }) {
   if (post.display_status === "processing") {
     return <p className="tnum mt-1 text-[12px] text-fg-sub">{elapsedLabel(post.progress_since, nowMs)} · 끝나면 자동으로 올라가요</p>;
   }
+  /* 파일이 지워진 글은 정리 크론이 error 칸을 바꾸지 않아 옛 실패 이유가 남아 있다 — 지워졌다는 것을 대신 말한다.
+     문구는 서버 액션의 거절 이유·엔진 알림과 한 벌(lib/meta/publish-errors.ts). 다른 실패 이유처럼 마침표 없이 */
   if (post.status === "failed" && (post.media_purged || post.error)) {
-    return <p className="mt-1 break-keep text-[12px] text-negative-strong">{post.media_purged ? PURGED_TEXT : post.error}</p>;
+    return <p className="mt-1 break-keep text-[12px] text-negative-strong">{post.media_purged ? MEDIA_PURGED_MESSAGE : post.error}</p>;
   }
   /* 예약 시각이 막 지났다 — 5분 크론이 곧 집는다(«예약됨»인데 시각이 지나 보이면 멈춘 줄 안다) */
   if (dueNow(post, nowMs) && Date.parse(post.scheduled_at) <= nowMs) {

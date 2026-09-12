@@ -11,6 +11,7 @@ import { publishGate } from "@/lib/publish/gate";
 import { advanceClaimedPost, claimPost, type EnginePost } from "@/lib/publish/run";
 import { stampPostTarget } from "@/lib/publish/account";
 import { publishDbErrorText } from "@/lib/publish/db-errors";
+import { MEDIA_PURGED_MESSAGE } from "@/lib/meta/publish-errors";
 import { isOwnMediaPath } from "@/lib/publish/media-core";
 import { cleanupDeletedPostMedia, finalizeUploads, issueUploadTickets, purgeUnattachedUploads } from "@/lib/publish/uploads";
 import type { FinalizeResult, PublishUploadRequest, PublishUploadTicket } from "@/lib/publish/upload-types";
@@ -208,13 +209,13 @@ function publishInBackground(admin: NonNullable<ReturnType<typeof createAdminCli
   });
 }
 
-/** 이 글의 채널·상태 — 세션(RLS)으로 읽는다: 못 읽으면 남의 글이거나 없는 글이다 */
+/** 이 글의 채널·상태 — 세션(RLS)으로 읽는다: 못 읽으면 남의 글이거나 없는 글이다(missing — 다른 창에서 지웠다 등) */
 async function loadOwnPost(
   supabase: Awaited<ReturnType<typeof createClient>>,
   id: string,
 ): Promise<
   | { ok: true; channel: PublishChannel; status: string; mediaPurged: boolean; attempted: boolean }
-  | { ok: false; error: string }
+  | { ok: false; error: string; missing?: true }
 > {
   /* ⚠️ «에러든 빈 결과든 인스타»로 뭉치지 않는다 — 조회가 한 번 실패했을 때 스레드 글에 «인스타그램을 연동하세요»라고 말하게 된다 */
   const { data, error } = await supabase
@@ -226,7 +227,7 @@ async function loadOwnPost(
     console.error("[publish] 글 조회 실패:", error.message);
     return { ok: false, error: "잠시 후 다시 시도해 주세요." };
   }
-  if (!data) return { ok: false, error: "이미 처리된 글이에요." };
+  if (!data) return { ok: false, error: "이미 처리된 글이에요.", missing: true };
   const channel = (data.channel ?? "instagram") as PublishChannel;
   if (!PUBLISHABLE_CHANNELS.includes(channel)) {
     return { ok: false, error: `${channelLabel(channel)} 발행은 아직 지원하지 않아요.` };
@@ -240,7 +241,20 @@ async function loadOwnPost(
   };
 }
 
-const PURGED_TEXT = "영상 파일이 보관 기간이 지나 지워졌어요 — 지운 뒤 다시 만들어 주세요.";
+/* 파일이 지워진 글의 거절 이유 — 문구는 엔진·목록과 한 벌(lib/meta/publish-errors.ts). 결과 모달의 설명은 문장이라 마침표를 붙인다 */
+const PURGED_TEXT = `${MEDIA_PURGED_MESSAGE}.`;
+
+/** 「지금 발행」이 거절된 결과. moved = 누르는 사이 **서버에서 글의 상태가 이미 바뀌었다**(다른 창·크론이 먼저 집었거나 지웠다) */
+export type PublishNowRejected = { ok: false; error: string; moved?: true };
+
+/**
+ * 누르는 사이 글이 이미 다른 데로 갔다 — 응답에 목록을 실어 보내(revalidatePath) 화면이 **진짜 상태**로 맞춘다.
+ * 화면은 이 경우 누르기 전 모습으로 되돌리지 않는다(되돌리면 «실패»·«예약됨»이 잠깐 보였다가 새로고침에 «올리는 중»으로 바뀐다 — 2026-09-12 점검).
+ */
+function movedOn(error: string): PublishNowRejected {
+  revalidatePath("/publish");
+  return { ok: false, error, moved: true };
+}
 
 /* ══════════════════════════════════════════════════════════════════
    초안·실패 글 → 예약 / 지금 발행 / 삭제
@@ -290,7 +304,7 @@ export async function scheduleDraft(id: string, when: string): Promise<{ ok: boo
  * 「지금 발행」 — 초안·예약·실패·처리 중 글을 선점하고 **바로 돌아온다.** 메타에 올리는 일은 응답 뒤(after)에 이어진다.
  * 미리 준비해 둔 예약 영상(processing)이면 준비물이 이미 있어 곧바로 올라간다.
  */
-export async function publishNow(id: string): Promise<{ ok: false; error: string } | { ok: true; outcome: PublishStart }> {
+export async function publishNow(id: string): Promise<PublishNowRejected | { ok: true; outcome: PublishStart }> {
   if (isDemoMode()) return { ok: false, error: DEMO_TEXT.publish };
   const startedAt = Date.now();
   const user = await getAuthUser();
@@ -298,13 +312,11 @@ export async function publishNow(id: string): Promise<{ ok: false; error: string
   const supabase = await createClient();
 
   const post = await loadOwnPost(supabase, id);
-  if (!post.ok) return { ok: false, error: post.error };
+  if (!post.ok) return post.missing ? movedOn(post.error) : { ok: false, error: post.error };
   if (!["draft", "scheduled", "failed", "processing"].includes(post.status)) {
-    return {
-      ok: false,
-      error:
-        post.status === "published" ? "이미 발행된 글이에요." : post.status === "publishing" ? "지금 올리고 있는 글이에요." : "지금은 발행할 수 없는 상태예요.",
-    };
+    return movedOn(
+      post.status === "published" ? "이미 발행된 글이에요." : post.status === "publishing" ? "지금 올리고 있는 글이에요." : "지금은 발행할 수 없는 상태예요.",
+    );
   }
   if (post.mediaPurged) return { ok: false, error: PURGED_TEXT };
   const gate = await publishGate(supabase, user.id, post.channel);
@@ -322,10 +334,9 @@ export async function publishNow(id: string): Promise<{ ok: false; error: string
   }
   const claimed = await claimPost(admin, id, ["draft", "scheduled", "failed", "processing"], { userId: user.id, publishAfter: "now" });
   if (!claimed.ok) {
-    return {
-      ok: false,
-      error: claimed.reason === "db_error" ? "잠시 후 다시 시도해 주세요." : "이미 발행이 시작된 글이에요. 잠시 후 목록을 확인해 주세요.",
-    };
+    if (claimed.reason === "db_error") return { ok: false, error: "잠시 후 다시 시도해 주세요." };
+    /* 선점을 놓쳤다 = 확인과 선점 사이에 다른 실행(다른 창·크론)이 먼저 집었다 — 글은 이미 다른 데서 올라가고 있다 */
+    return movedOn("이미 발행이 시작된 글이에요. 잠시 후 목록을 확인해 주세요.");
   }
   publishInBackground(admin, claimed.row, startedAt);
   /* 응답에 목록을 실어 보낸다 — 이 글이 곧바로 «올리는 중»으로 보인다 */

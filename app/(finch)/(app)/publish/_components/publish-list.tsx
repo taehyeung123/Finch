@@ -14,6 +14,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { WEEKDAYS, earliestPublishAt, earliestPublishDate, kstDayKey, kstToday, monthGrid, shiftMonth } from "@/lib/calendar";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { channelLabel } from "@/lib/publish-rules";
+import { MEDIA_PURGED_MESSAGE } from "@/lib/meta/publish-errors";
 import {
   markPublishing,
   mergeProgress,
@@ -27,7 +28,7 @@ import {
 import { cancelScheduledPost } from "@/app/(finch)/(app)/studio/actions";
 import { deleteDraft, publishNow, scheduleDraft } from "../actions";
 import { PostComposer, type ComposerChannel, type ComposerSaved } from "./post-composer";
-import { PURGED_TEXT, PostRow, type RowActions, type ScheduledPost } from "./post-row";
+import { PostRow, type RowActions, type ScheduledPost } from "./post-row";
 
 export type { ScheduledPost };
 
@@ -93,8 +94,11 @@ function settledToast(list: Settled[], nowMs: number): ToastContent {
     const lead = `「${captionSnippet(post.caption)}」`;
     if (outcome === "published") return { tone: "positive", title: `${label}에 올라갔어요`, description: `${lead} — 목록에서 게시물을 볼 수 있어요.` };
     if (outcome === "failed") {
-      const why = post.media_purged ? PURGED_TEXT : (post.error ?? "잠시 후 다시 시도해 주세요.");
-      return { tone: "negative", title: `${label}에 올리지 못했어요`, description: `${lead} — ${why} 목록에서 다시 시도하거나 지울 수 있어요.` };
+      /* 실패 이유는 엔진 문구(마침표 없음, lib/meta/publish-errors.ts)라 문장 끝을 여기서 맞춘다 — 예전엔 «…해 주세요 목록에서…»로 붙었다.
+         파일이 지워진 글은 다시 시도할 수 없다(지우기만) — 알림 문구(run.ts)와 같은 갈래 */
+      const why = (post.media_purged ? MEDIA_PURGED_MESSAGE : (post.error ?? "잠시 후 다시 시도해 주세요")).replace(/[.\s]+$/, "");
+      const next = post.media_purged ? "목록에서 지울 수 있어요." : "목록에서 다시 시도하거나 지울 수 있어요.";
+      return { tone: "negative", title: `${label}에 올리지 못했어요`, description: `${lead} — ${why}. ${next}` };
     }
     /* 예약 시각이 아직 미래인 글(예약 글에 「지금 발행」)은 그 시각에 다시 시도한다 — 크론 호출은 «최선을 다함»이라 정확한 분을 약속하지 않는다 */
     const future = Date.parse(post.scheduled_at) > nowMs + 60_000;
@@ -350,7 +354,8 @@ export function PublishList({
 
   /* 「지금 발행」 — 초안·예약·실패 글을 선점해 뒤에서 내보낸다. 되돌릴 수 없는 외부 행동이라 확인을 받는다(confirmAsk).
      누르는 순간 그 줄이 «올리는 중»이 된다(낙관적) — 서버 응답(보통 1초 안팎)에 실린 목록이 서버 값으로 덮는다.
-     서버가 거절하면(연동 끊김·이미 처리됨 등) 줄을 되돌리고 모달로 이유를 말한다 — 누른 조작의 결과다. */
+     서버가 거절하면 모달로 이유를 말한다 — 누른 조작의 결과다. 글을 건드리지 않은 거절(연동 끊김 등)이면 줄을 되돌리고,
+     누르는 사이 글이 이미 다른 데로 간 거절(moved — 다른 창·크론이 먼저 집었다)이면 되돌리지 않고 응답에 실린 목록을 따른다. */
   function runNow(id: string) {
     const before = items.find((p) => p.id === id);
     if (!before || nowPending.includes(id)) return;
@@ -367,8 +372,15 @@ export function PublishList({
       try {
         const res = await publishNow(id);
         if (!res.ok) {
-          setItems((prev) => prev.map((p) => (p.id === id ? before : p)));
-          setResult({ tone: "negative", title: "발행하지 못했어요", description: res.error });
+          if (res.moved) {
+            /* 누르는 사이 서버에서 글이 이미 다른 데로 갔다(다른 창·크론이 먼저 집었거나 지웠다) — 누르기 전 모습으로 되돌리지 않는다.
+               응답에 실린 목록(revalidatePath)이 진짜 상태를 준다. «발행하지 못했어요»도 아니다 — 대개 이미 올라가는 중이다 */
+            setResult({ tone: "warning", title: "그 사이 글의 상태가 바뀌었어요", description: res.error });
+          } else {
+            /* 서버가 글을 건드리지 않고 거절했다(연동 끊김·파일 정리 등) — 줄을 누르기 전 모습으로 */
+            setItems((prev) => prev.map((p) => (p.id === id ? before : p)));
+            setResult({ tone: "negative", title: "발행하지 못했어요", description: res.error });
+          }
           router.refresh();
           return;
         }
