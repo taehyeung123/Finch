@@ -12,7 +12,7 @@ import { GRAPH_FB_BASE } from "./ads-oauth";
  *
  * IG 조회는 세 경로를 차례로 본다(권한 문서화가 갈려 있어 — 스펙 §3.3·§13-9, 첫 실 호출로 확정):
  *  ① /act_{id}/instagram_accounts (Marketing API — 비즈니스 관리자에 클레임된 IG)
- *  ② /{page_id}/instagram_accounts (사용자 토큰 → 실패 시 페이지 토큰)
+ *  ② /{page_id}/instagram_accounts (페이지 토큰 — 사용자 토큰은 190 으로 거절된다, 2026-09-12 운영 로그)
  *  ③ /{page_id}?fields=instagram_business_account,connected_instagram_account (instagram_basic 이 필요할 수 있다)
  */
 
@@ -41,9 +41,21 @@ async function getJson<T>(path: string, accessToken: string, timeoutMs: number =
     const json = (await res.json().catch(() => ({}))) as T & { error?: GraphError };
     if (!res.ok) {
       const code = json.error?.code;
-      console.error(`[meta-pages] ${path.split("?")[0]} 실패:`, json.error?.message ?? `http_${res.status}`);
-      const reason: PagesFailReason =
-        code === TOKEN_EXPIRED_CODE ? "expired" : typeof code === "number" && PERMISSION_CODES.has(code) ? "denied" : "error";
+      const message = json.error?.message ?? "";
+      console.error(`[meta-pages] ${path.split("?")[0]} 실패:`, message || `http_${res.status}`);
+      /* ⚠️ 190 이 전부 «만료»가 아니다(2026-09-12 운영 로그로 확인). `/{page}/instagram_accounts` 를 사용자 토큰으로 부르면
+         메타가 «(#190) This method must be called with a Page Access Token» 을 준다 — 토큰은 멀쩡하고 **종류가 틀린** 것이다.
+         예전엔 이걸 expired 로 읽어 페이지 토큰으로 다시 부르는 길(②)을 건너뛰고, 방금 다시 연결한 사람에게
+         «광고 계정 연결이 만료됐어요»를 띄웠다. 토큰 종류 오류는 denied 로 돌려 호출측이 페이지 토큰으로 다시 부르게 한다. */
+      const wrongTokenType =
+        code === TOKEN_EXPIRED_CODE && json.error?.error_subcode === undefined && /page access token/i.test(message);
+      const reason: PagesFailReason = wrongTokenType
+        ? "denied"
+        : code === TOKEN_EXPIRED_CODE
+          ? "expired"
+          : typeof code === "number" && PERMISSION_CODES.has(code)
+            ? "denied"
+            : "error";
       return { ok: false, reason };
     }
     return { ok: true, data: json };
@@ -192,25 +204,26 @@ export async function fetchAccountInstagramAccounts(
 }
 
 /**
- * ② 페이지의 IG 계정. 사용자 토큰으로 먼저, 권한이 막히면 **요청 안에서만** 페이지 토큰을 받아 한 번 더.
+ * ② 페이지의 IG 계정 — **처음부터 페이지 토큰으로** 부른다(2026-09-12).
+ * 이 엣지는 사용자 토큰으로 부르면 «(#190) This method must be called with a Page Access Token» 을 준다(운영 로그로 확인).
+ * 예전엔 사용자 토큰으로 먼저 불러 보고 «권한 거부»일 때만 페이지 토큰으로 다시 불렀는데, 이 거절이 190(보통 «만료»)이라
+ * 재시도 없이 «광고 계정 연결이 만료됐어요»로 끝났다. 메타의 오류 문장에 기대지 않도록 순서를 아예 바꿨다.
  * 페이지 토큰은 이 함수의 지역 변수로 끝난다 — 반환값·로그 어디에도 담지 않는다.
  */
 export async function fetchPageInstagramAccounts(
   pageId: string,
   accessToken: string,
 ): Promise<PagesResult<FbIgAccount[]>> {
-  const path = `/${pageId}/instagram_accounts?fields=id,username&limit=50`;
-  const first = await getJson<{ data?: { id?: string; username?: string }[] }>(path, accessToken);
-  if (first.ok) return { ok: true, data: toIg(first.data.data) };
-  if (first.reason !== "denied") return first;
-
   const tokenRes = await getJson<{ access_token?: string }>(`/${pageId}?fields=access_token`, accessToken);
   /* 토큰 조회 자체의 실패는 그 사유 그대로(일시 오류를 «권한 거부»로 뭉개면 불필요한 재연동을 시킨다 — 소넷 점검).
      응답은 왔는데 access_token 이 없으면 그건 «페이지 토큰을 못 받는 역할» = 권한 문제다 */
   if (!tokenRes.ok) return tokenRes;
   if (typeof tokenRes.data.access_token !== "string") return { ok: false, reason: "denied" };
-  const second = await getJson<{ data?: { id?: string; username?: string }[] }>(path, tokenRes.data.access_token);
-  return second.ok ? { ok: true, data: toIg(second.data.data) } : second;
+  const res = await getJson<{ data?: { id?: string; username?: string }[] }>(
+    `/${pageId}/instagram_accounts?fields=id,username&limit=50`,
+    tokenRes.data.access_token,
+  );
+  return res.ok ? { ok: true, data: toIg(res.data.data) } : res;
 }
 
 /** ③ 페이지 노드의 연결 IG(instagram_basic 이 필요할 수 있다 — 거부되면 denied 로 온다) */
