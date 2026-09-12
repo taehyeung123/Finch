@@ -44,6 +44,7 @@ import { iGa } from "@/lib/josa";
 import { channelLabel } from "@/lib/publish-rules";
 import { cancelScheduledPost } from "@/app/(finch)/(app)/studio/actions";
 import { deleteDraft, publishNow, scheduleDraft } from "../actions";
+import { PublishingVeil } from "./publishing-veil";
 import { PostComposer, type ComposerChannel } from "./post-composer";
 
 /* 확인을 받는 세 조작 — 전부 되돌릴 수 없다(취소한 예약을 되살리는 액션도, 올라간 글을 내리는 액션도, 지운 글을 되찾는 액션도 없다) */
@@ -161,6 +162,8 @@ export function PublishList({
   const [draftError, setDraftError] = useState<string | null>(null);
   /* 「지금 발행」 진행 중인 글 — 한 번에 하나만. 메타 처리 시간 때문에 1분 가까이 걸릴 수 있다 */
   const [nowBusy, setNowBusy] = useState<string | null>(null);
+  /* 덮개에 쓸 글 — 누른 순간의 값을 붙잡아 둔다. 목록이 도중에 새로 고쳐져 그 글이 빠져도 덮개가 먼저 사라지지 않게(소넷 점검) */
+  const [nowPost, setNowPost] = useState<ScheduledPost | null>(null);
   /* 예약 취소 실패 안내 — 낙관적 «취소됨»이 조용히 되돌아가던 자리(실측) */
   const [cancelError, setCancelError] = useState<string | null>(null);
   /* 확인을 기다리는 조작 — window.confirm 이었다. 브라우저가 대화상자를 막으면(«추가 대화상자 표시 안 함») confirm 이
@@ -231,6 +234,7 @@ export function PublishList({
       return;
     }
     setNowBusy(id);
+    setNowPost(items.find((p) => p.id === id) ?? null);
     setDraftError(null);
     startTransition(async () => {
       try {
@@ -264,6 +268,7 @@ export function PublishList({
         router.refresh();
       } finally {
         setNowBusy(null);
+        setNowPost(null);
       }
     });
   }
@@ -335,8 +340,18 @@ export function PublishList({
       적어놓고 한 단계 약하게 반복한 것이다.)
      이제 달력은 항상 그린다. 빈 상태는 달력 **옆 레일**이 안내한다. */
 
+  /* 「지금 발행」 중인 글 — 버튼 글자만 «발행 중…»으로 바뀌면 멈춘 줄 안다(2026-09-12 사장님 지시). 화면 가운데 덮개로 말한다 */
   return (
     <div className="space-y-5">
+      {nowBusy ? (
+        <PublishingVeil
+          layout="screen"
+          channel={nowPost?.channel ?? "instagram"}
+          mode="now"
+          hasMedia={(nowPost?.media_count ?? 0) > 0}
+          hasVideo={nowPost?.has_video ?? false}
+        />
+      ) : null}
       {/* 조회가 실패했으면 **먼저** 말한다 — 아래 탭들은 「아직 예약이 없어요」라고 단정하는데,
           예약해 둔 사람이 그걸 보면 다시 예약하거나 발행이 날아간 줄 안다.
           실패는 «없음»이 아니다(lib/data/internal.ts 규칙). */}

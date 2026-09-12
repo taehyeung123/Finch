@@ -27,6 +27,7 @@ import {
 import { eunNeun, iGa } from "@/lib/josa";
 import { MediaTiles } from "./media-tiles";
 import { CoverPicker } from "./cover-picker";
+import { PublishingVeil } from "./publishing-veil";
 import { PICK_ACCEPT, surfaceOf, tileBusy, tileFacts, toPostMedia, useMediaTiles } from "./use-media-tiles";
 
 /*
@@ -405,8 +406,10 @@ export function PostComposer({
       <div
         ref={containerRef}
         tabIndex={-1}
-        className="modal-card-in shadow-pop flex max-h-[92dvh] w-full max-w-[550px] flex-col overflow-hidden rounded-card border border-line bg-body outline-none sm:max-h-[88dvh]"
+        className="modal-card-in shadow-pop relative flex max-h-[92dvh] w-full max-w-[550px] flex-col overflow-hidden rounded-card border border-line bg-body outline-none sm:max-h-[88dvh]"
       >
+        {/* 발행·저장 중 덮개 — 버튼 글자만 바뀌면 멈춘 줄 안다(2026-09-12 사장님 지시). 카드 전체를 덮어 무엇이 진행 중인지 말한다 */}
+        {saving ? <PublishingVeil channel={channel} mode={mode} hasMedia={tiles.length > 0} hasVideo={hasVideo} /> : null}
         <div className="flex items-center gap-2 px-5 pt-4">
           <h2 className="flex-1 text-[17px] font-semibold">새 게시물 포스팅</h2>
           <button
@@ -655,13 +658,9 @@ export function PostComposer({
                   ? "지금 발행하기"
                   : "예약하기"}
           </Button>
-          {/* 메타가 받는 시간 — 캐러셀·영상은 1분 가까이 걸리기도 한다. 말없이 돌면 멈춘 줄 안다.
-              영상 처리가 길어지면 서버가 «처리 중»으로 내려놓고 매분 크론이 이어서 올린다 — 창을 붙잡아 둘 이유가 없다 */}
-          {saving && mode === "now" ? (
-            <p className="mt-2 text-center text-[12px] text-fg-sub" role="status">
-              {iGa(channelLabel(channel))} 게시물을 받는 중이에요. 영상은 처리가 길어지면 자동으로 이어서 올려 드려요.
-            </p>
-          ) : blockReason ? (
+          {/* 발행·저장 중 안내는 카드를 덮는 PublishingVeil 이 맡는다 — 여기 한 줄을 남기면 덮개 뒤에 흐리게 겹치고
+              화면 읽기 프로그램이 두 문장을 같이 읽는다(2026-09-12 소넷 점검) */}
+          {!saving && blockReason ? (
             <p className="mt-2 text-center text-[12px] text-fg-sub" aria-live="polite">
               {blockReason}
             </p>
