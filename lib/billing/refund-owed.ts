@@ -71,7 +71,7 @@ export async function reportProratedRefundOwed(
     /* 그 요금제의 마지막 결제 — 부분 취소할 주문. 금액도 여기서(할인·잠정가가 바뀌어도 실제로 받은 돈 기준) */
     const { data: order, error: orderErr } = await admin
       .from("payment_orders")
-      .select("order_id, amount")
+      .select("order_id, amount, approved_at")
       .eq("user_id", userId)
       .eq("plan", sub.plan)
       .eq("status", "paid")
@@ -79,10 +79,11 @@ export async function reportProratedRefundOwed(
       .limit(1)
       .maybeSingle();
     if (orderErr) console.error(`[refund-owed] 결제 기록 조회 실패 (user=${userId}):`, orderErr.message);
-    const paid = order as { order_id: string; amount: number } | null;
+    const paid = order as { order_id: string; amount: number; approved_at: string | null } | null;
 
     const amount = paid?.amount ?? PLAN_PRICES[sub.plan];
-    const r = proratedRemaining(amount, periodEnd);
+    /* 이용기간의 시작은 실제 결제 시각으로 센다 — 다음 결제일에서 한 달 빼기만 하면 1/31 가입자 등이 틀린다(lib/billing/prorate.ts) */
+    const r = proratedRemaining(amount, periodEnd, new Date(), paid?.approved_at ? new Date(paid.approved_at) : null);
     if (r.refund <= 0) return null;
 
     const owed: RefundOwed = { plan: sub.plan, orderId: paid?.order_id ?? null, ...r };

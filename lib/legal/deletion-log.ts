@@ -86,6 +86,18 @@ export async function recordDeletionRequest(
     console.error(
       `[deletion-log] ${params.channel} 삭제 요청의 남은 정보 후속 삭제 대상을 기록하지 못했다${isMissingTableError(fErr) ? " — 0095 적용 필요" : `: ${fErr.message}`} — 10일 안에 수동 삭제 필요 (code=${params.confirmationCode}, users=${userIds.join(",")})`,
     );
+    /* 대기 행이 없으면 상태 확인 페이지는 «남은 정보 없음 = 완료»로 읽는다 — 남은 정보가 그대로인데 «완료»를 확언하게 된다(2026-09-12 소넷 점검).
+       그래서 요청 행을 «마치지 못함»으로 돌린다(페이지: «아직 삭제되지 않았을 수 있다 · 확인 후 처리»). 후속 대상은 위 로그에만 있다.
+       사람이 로그의 값으로 대기 행을 넣을 때 status 도 done 으로 되돌린다(docs/LEGAL_REVIEW_2026-09.md 13절 4번). */
+    if (!params.failed) {
+      const { error: mErr } = await admin
+        .from("data_deletion_requests")
+        .update({ status: "failed" })
+        .eq("confirmation_code", params.confirmationCode);
+      if (mErr && !isMissingColumnError(mErr, /status/i)) {
+        console.error(`[deletion-log] 요청 상태를 «마치지 못함»으로 돌리지 못했다 (code=${params.confirmationCode}):`, mErr.message);
+      }
+    }
   }
 }
 

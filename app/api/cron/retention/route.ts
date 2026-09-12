@@ -60,14 +60,24 @@ export async function GET(request: Request) {
     return new NextResponse("not_configured", { status: 503 });
   }
 
+  /* 후속 삭제가 아직 남은 요청은 1년이 지나도 요청 기록을 지우지 않는다 — 지우면 대기 행이 cascade 로 함께 사라져
+     «남은 정보를 안 지웠다»는 사실과 매일 알림이 조용히 없어진다(2026-09-12 소넷 점검). 조회 실패면 이번엔 요청 기록 파기를 건너뛴다. */
+  const keepCodes = await pendingFollowupCodes(admin);
+
   const results: Record<string, string> = {};
   for (const rule of RULES) {
     const cutoff = new Date(Date.now() - rule.days * DAY).toISOString();
+    if (rule.table === "data_deletion_requests" && keepCodes === null) {
+      results[rule.table] = "skipped (follow-up lookup failed)";
+      continue;
+    }
     /* count 를 요청해 «몇 건을 파기했나»를 남긴다 — 파기는 되돌릴 수 없어서 기록이 곧 증빙이다 */
-    const { error, count } = await admin
-      .from(rule.table)
-      .delete({ count: "exact" })
-      .lt(rule.column, cutoff);
+    let del = admin.from(rule.table).delete({ count: "exact" }).lt(rule.column, cutoff);
+    if (rule.table === "data_deletion_requests" && keepCodes && keepCodes.length > 0) {
+      /* 확인 코드는 무작위 16자 hex(콜백의 randomUUID) — 따옴표로 감싸 PostgREST in 목록에 넣는다 */
+      del = del.not("confirmation_code", "in", `(${keepCodes.map((c) => `"${c.replace(/"/g, "")}"`).join(",")})`);
+    }
+    const { error, count } = await del;
     if (error) {
       /* 표가 아직 없는 DB(마이그레이션 미적용)는 실패가 아니다 — 건너뛴다 */
       const missing = error.code === "42P01" || new RegExp(rule.table, "i").test(error.message);
@@ -81,6 +91,17 @@ export async function GET(request: Request) {
   results.deletion_followups = await remindDeletionFollowups(admin);
 
   return NextResponse.json({ ok: true, results });
+}
+
+/** 후속 삭제가 남은 확인 코드들 — 표가 없으면(0095 미적용) 빈 배열(지킬 대기 행이 없다), 조회 실패면 null */
+async function pendingFollowupCodes(admin: NonNullable<ReturnType<typeof createAdminClient>>): Promise<string[] | null> {
+  const { data, error } = await admin.from("data_deletion_followups").select("confirmation_code").limit(1000);
+  if (error) {
+    if (isMissingTableError(error)) return [];
+    console.error("[cron:retention] 후속 삭제 대기 코드 조회 실패 — 삭제 요청 기록 파기를 이번엔 건너뛴다:", error.message);
+    return null;
+  }
+  return [...new Set(((data ?? []) as Array<{ confirmation_code: string }>).map((r) => r.confirmation_code))];
 }
 
 /** 남은 정보 후속 삭제 대기 알림 — 위 머리말 «2026-09-12 추가». 반환은 결과 요약 문자열 */

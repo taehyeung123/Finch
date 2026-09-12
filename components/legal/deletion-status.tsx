@@ -65,7 +65,11 @@ async function lookupFollowup(admin: Admin, code: string, requestedAt: string): 
     return { kind: "unknown" };
   }
   if ((count ?? 0) === 0) return { kind: "none" };
-  return { kind: "pending", due: new Date(new Date(requestedAt).getTime() + FOLLOWUP_DAYS * DAY).toISOString() };
+  return { kind: "pending", due: followupDue(requestedAt) };
+}
+
+function followupDue(requestedAt: string): string {
+  return new Date(new Date(requestedAt).getTime() + FOLLOWUP_DAYS * DAY).toISOString();
 }
 
 async function lookup(code: string | undefined, channel: Channel): Promise<Status> {
@@ -125,13 +129,15 @@ export async function DeletionStatus({ channel, code }: { channel: Channel; code
     <div className="mx-auto flex min-h-[70vh] max-w-md flex-col items-center justify-center gap-4 px-4 py-16 text-center">
       <FinchLogo />
 
-      {status.kind === "done" && status.deletedRows > 0 && status.followup.kind === "pending" ? (
+      {status.kind === "done" && status.deletedRows > 0 && status.followup.kind !== "none" ? (
+        /* 대기 목록을 조회하지 못했으면(unknown) «완료»라 하지 않는다 — 연결이 있던 요청은 늘 남은 정보가 따른다(2026-09-12 소넷 점검) */
         <>
           <Clock3 className="size-10 text-positive" aria-hidden />
           <h1 className="text-xl font-bold">연동 정보를 삭제했어요</h1>
           <p className="text-[14px] leading-relaxed text-fg-sub">
             {label} 연동 해제에 따라 핀치에 저장돼 있던 계정 연결 정보(액세스 토큰 포함)를 삭제했습니다. 그 계정과 관련해 남아 있는
-            정보(자동 DM 기록·알림 등)는 {formatKstDate(status.followup.due)}까지 삭제합니다.
+            정보(자동 DM 기록·알림 등)는{" "}
+            {formatKstDate(status.followup.kind === "pending" ? status.followup.due : followupDue(status.at))}까지 삭제합니다.
           </p>
           <p className="text-[12px] text-fg-sub">접수 시각: {formatKst(status.at)}</p>
         </>

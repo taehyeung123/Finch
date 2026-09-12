@@ -128,5 +128,18 @@ check("기간이 끝났으면 0원", proratedRemaining(9_900, end, new Date("202
 check("결제 당일 → 남은 날은 기간을 넘지 않는다", proratedRemaining(29_000, end, new Date("2026-09-01T00:00:00Z")).remainingDays === 30);
 check("금액이 이상하면 0원", proratedRemaining(Number.NaN, end, new Date("2026-09-10T00:00:00Z")).refund === 0);
 
+console.log("\n일할 환불 — 달 넘김(1/31 + 1개월 = 3/3) 뒤 이용기간(2026-09-12 소넷 점검)");
+const rolledEnd = new Date("2026-03-03T00:00:00Z"); // 1/31 결제 → JS setMonth 가 3/3 으로 넘긴 다음 결제일
+const upgradeAt = new Date("2026-02-20T00:00:00Z");
+const withPaid = proratedRemaining(100_000, rolledEnd, upgradeAt, new Date("2026-01-31T00:00:00Z"));
+check("결제 시각을 알면 이용기간 31일", withPaid.cycleDays === 31 && withPaid.remainingDays === 11, withPaid);
+check("환불액 = 100,000 × 11 ÷ 31 = 35,483원(28일로 세면 39,285원)", withPaid.refund === 35_483, withPaid);
+check("결제 시각이 없으면 한 달 빼기(28일)로 — 고객에게 불리하지 않은 쪽", proratedRemaining(100_000, rolledEnd, upgradeAt).cycleDays === 28);
+const lagged = proratedRemaining(9_900, end, new Date("2026-09-10T12:00:00Z"), new Date("2026-09-01T03:00:00Z"));
+check("갱신 크론이 3시간 늦게 결제해도 이용기간은 30일", lagged.cycleDays === 30 && lagged.refund === 6_600, lagged);
+const stale = proratedRemaining(9_900, end, new Date("2026-09-10T12:00:00Z"), new Date("2026-07-01T00:00:00Z"));
+check("지난 주기의 결제 시각(31일보다 앞)은 무시", stale.cycleDays === 30, stale);
+check("결제 시각이 다음 결제일 뒤면 무시", proratedRemaining(9_900, end, new Date("2026-09-10T12:00:00Z"), new Date("2026-10-05T00:00:00Z")).cycleDays === 30);
+
 console.log(`\n${pass} 통과 · ${fail} 실패`);
 if (fail > 0) process.exit(1);

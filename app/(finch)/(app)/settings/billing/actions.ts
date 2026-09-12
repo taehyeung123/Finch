@@ -217,20 +217,13 @@ export async function changePlan(formData: FormData): Promise<void> {
       planRedirect({ planError: `결제에 실패했어요: ${charged.message}` });
     }
 
-    /* 약관 제24조① — 이전 요금제의 남은 이용기간 요금은 일할 계산해 환불한다(환불정책 계산 예시 «10일째 Pro 변경»).
-       자동 부분 취소는 아직 없어(토스 배관은 교체 예정이라 고치지 않는다) 운영자에게 주문번호·금액을 알린다.
-       구독을 새 요금제로 바꾸기 **전의** 값(옛 요금제·옛 다음 결제일)으로 계산한다. 알림은 던지지 않는다. */
-    const owed = await reportProratedRefundOwed(admin, user.id, "upgrade", {
-      subscriptionId: String(sub.id),
-      plan: currentPlan,
-      nextBillingAt: sub.next_billing_at ? String(sub.next_billing_at) : null,
-    });
-
     const next = new Date();
     next.setMonth(next.getMonth() + 1);
     const nowIso = new Date().toISOString();
 
-    const { error: upErr } = await admin
+    /* 옛 요금제일 때만 바꾼다(.eq plan) — 더블 클릭·재제출로 두 요청이 같은 옛 값을 읽었으면 청구는 Toss 가 같은 키로 흡수하지만,
+       아래 환불 알림은 흡수되지 않아 운영자에게 같은 주문의 환불 지시가 두 번 간다(2026-09-12 소넷 점검). 진 요청은 0행이다. */
+    const { data: switched, error: upErr } = await admin
       .from("subscriptions")
       .update({
         plan: target,
@@ -239,8 +232,23 @@ export async function changePlan(formData: FormData): Promise<void> {
         billing_retry_count: 0,
         next_billing_at: next.toISOString(),
       })
-      .eq("id", sub.id);
+      .eq("id", sub.id)
+      .eq("plan", currentPlan)
+      .select("id");
     if (upErr) console.error("[billing] 플랜 업그레이드 반영 실패:", sub.id, upErr.message);
+    const lostRace = !upErr && (switched?.length ?? 0) === 0;
+
+    /* 약관 제24조① — 이전 요금제의 남은 이용기간 요금은 일할 계산해 환불한다(환불정책 계산 예시 «10일째 Pro 변경»).
+       자동 부분 취소는 아직 없어(토스 배관은 교체 예정이라 고치지 않는다) 운영자에게 주문번호·금액을 알린다.
+       구독을 새 요금제로 바꾸기 **전의** 값(옛 요금제·옛 다음 결제일)으로 계산한다. 알림은 던지지 않는다.
+       반영이 실패했으면(upErr) 알림은 그대로 보낸다 — 사람이 어차피 봐야 하는 건이다. */
+    const owed = lostRace
+      ? null
+      : await reportProratedRefundOwed(admin, user.id, "upgrade", {
+          subscriptionId: String(sub.id),
+          plan: currentPlan,
+          nextBillingAt: sub.next_billing_at ? String(sub.next_billing_at) : null,
+        });
 
     const { error: orderErr } = await admin.from("payment_orders").insert({
       user_id: user.id,
