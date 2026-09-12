@@ -38,6 +38,8 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 const DAY = 86_400_000;
+/** 파기에서 뺄 후속 삭제 대기 코드를 한 번에 읽는 한도 — 넘으면 그날 요청 기록 파기를 건너뛴다(pendingFollowupCodes) */
+const FOLLOWUP_SCAN_LIMIT = 1000;
 
 /** 표 → 보존기간(일)·시간 컬럼. 늘리려면 방침(lib/legal/documents.ts)을 **먼저** 고친다. */
 const RULES: ReadonlyArray<{ table: string; column: string; days: number }> = [
@@ -95,10 +97,15 @@ export async function GET(request: Request) {
 
 /** 후속 삭제가 남은 확인 코드들 — 표가 없으면(0095 미적용) 빈 배열(지킬 대기 행이 없다), 조회 실패면 null */
 async function pendingFollowupCodes(admin: NonNullable<ReturnType<typeof createAdminClient>>): Promise<string[] | null> {
-  const { data, error } = await admin.from("data_deletion_followups").select("confirmation_code").limit(1000);
+  const { data, error } = await admin.from("data_deletion_followups").select("confirmation_code").limit(FOLLOWUP_SCAN_LIMIT);
   if (error) {
     if (isMissingTableError(error)) return [];
     console.error("[cron:retention] 후속 삭제 대기 코드 조회 실패 — 삭제 요청 기록 파기를 이번엔 건너뛴다:", error.message);
+    return null;
+  }
+  /* 한도까지 찼으면 잘린 코드가 보호에서 빠진다 — 모르는 채로 지우지 말고 그날은 건너뛴다(닫는 쪽으로 실패, 2026-09-12 소넷 재점검) */
+  if ((data ?? []).length >= FOLLOWUP_SCAN_LIMIT) {
+    console.error(`[cron:retention] 후속 삭제 대기가 ${FOLLOWUP_SCAN_LIMIT}건 이상 — 삭제 요청 기록 파기를 건너뛴다. 대기 처리부터(13절 4번)`);
     return null;
   }
   return [...new Set(((data ?? []) as Array<{ confirmation_code: string }>).map((r) => r.confirmation_code))];
