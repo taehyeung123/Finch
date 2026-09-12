@@ -21,11 +21,17 @@ export function DangerZone({
   email,
   action = deleteAccount,
   triggerLabel = "회원탈퇴",
+  paidNote,
 }: {
   email: string;
   /** 탈퇴 서버 액션 — 기본은 설정 > 개인정보의 deleteAccount. 확인 문구 대조는 액션이 서버에서 다시 한다 */
   action?: (formData: FormData) => Promise<void>;
   triggerLabel?: string;
+  /**
+   * 유료 이용 중인 회원 안내를 바꿔 끼운다 — 약관 재동의 화면은 «회사가 일할 환불»(약관 제3조⑤)이라
+   * 설정의 «탈퇴 전에 이메일로 환불 신청»과 말이 다르다(lib/legal/consent-copy.ts CONSENT_WITHDRAW_PAID_NOTE).
+   */
+  paidNote?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
@@ -53,7 +59,8 @@ export function DangerZone({
             <strong className="font-semibold"> 되돌릴 수 없어요.</strong>
           </p>
           <p className="mt-1 break-keep text-[12px] text-fg-sub">
-            유료 이용 중이면 탈퇴 전에 {BUSINESS.contactEmail ?? BUSINESS.privacyEmail}로 환불을 신청해 주세요. 결제 내역은 법령에 따라 개인 식별 정보를 지운 상태로 보관됩니다.
+            {paidNote ??
+              `유료 이용 중이면 탈퇴 전에 ${BUSINESS.contactEmail ?? BUSINESS.privacyEmail}로 환불을 신청해 주세요. 결제 내역은 법령에 따라 개인 식별 정보를 지운 상태로 보관됩니다.`}
           </p>
 
           <FieldLabel htmlFor={inputId} className="mt-3">

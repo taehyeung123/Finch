@@ -39,7 +39,7 @@ export const ARCHIVED_DOCS: readonly ArchivedDoc[] = [
     kind: "terms",
     version: PREVIOUS_TERMS_VERSION,
     title: "이용약관",
-    period: `${koDate(PREVIOUS_TERMS_VERSION)} 게시. 새 이용약관 시행일(${koDate(TERMS_VERSION)}) 전까지, 그리고 새 약관에 동의하기 전까지 기존 회원에게 적용됩니다. ${koDate(TERMS_ANNOUNCED)} 이후 가입한 회원에게는 적용되지 않습니다.`,
+    period: `${koDate(PREVIOUS_TERMS_VERSION)} 게시. 새 이용약관 시행일(${koDate(TERMS_VERSION)}) 전까지, 그리고 새 약관에 동의하기 전까지 기존 회원에게 적용됩니다. ${koDate(TERMS_ANNOUNCED)} 이후 새 약관에 동의하고 가입한 회원에게는 적용되지 않습니다.`,
     headNotice: HEAD_NOTICE,
     sections: [
   {

@@ -51,7 +51,10 @@ export async function POST(request: Request) {
       platformUserId: payload.user_id,
       deletedRows: removed?.length ?? 0,
       failed: Boolean(error),
-      finchUserId: (removed?.[0] as { user_id?: string } | undefined)?.user_id ?? null,
+      /* 같은 페이스북 계정을 여러 핀치 계정이 연결할 수 있다(fb_user_id 는 전역 유일이 아니다, 0077) —
+         지운 행 **전부**의 주인을 적는다. 첫 행만 적으면 두 번째 워크스페이스의 광고 변경 기록이 영구히 남는다(2026-09-12 점검) */
+      finchUserIds: ((removed ?? []) as Array<{ user_id?: string | null }>).map((r) => r.user_id),
+      followupSource: "connection",
     });
   }
 

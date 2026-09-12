@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { DangerZone } from "@/app/(finch)/(app)/settings/profile/_components/danger-zone";
 import {
+  CONSENT_WITHDRAW_PAID_NOTE,
   JOIN_DECLINE_CONFIRM,
   JOIN_MARKETING_SUMMARY,
   JOIN_PRIVACY_SUMMARY,
@@ -26,6 +27,7 @@ import { declineConsent, saveConsent, withdrawFromConsent, type ConsentFormState
   2026-09 약관 개정: 옛 약관에 동의한 기존 회원에게는 update 모양을 그린다(바뀐 약관 동의 하나만).
   그 회원에게 «동의하지 않고 나가기(즉시 삭제)»를 보이면 안 된다 — 확인 없이 쌓아 온 채널·페이지·크레딧이 지워진다.
   대신 공고 기간엔 «나중에 할게요», 시행일 뒤엔 로그아웃과 확인 문구를 타이핑하는 회원 탈퇴를 둔다.
+  첫 가입(join) 모양이라도 가입한 지 하루가 지난 계정(0079 전 가입자 등)은 같은 출구를 받는다(quickDecline=false).
 */
 
 const INITIAL: ConsentFormState = { error: null };
@@ -90,8 +92,31 @@ function ErrorBox({ text }: { text: string }) {
   );
 }
 
+/**
+ * 동의하지 않는 기존 회원의 출구 — 로그아웃과, 확인 문구(이메일)를 타이핑하는 회원 탈퇴.
+ * 탈퇴 폼은 설정의 탈퇴와 같은 컴포넌트다. 오류는 이 화면으로 돌아온다(withdrawFromConsent).
+ * 환불 안내는 설정의 «탈퇴 전에 이메일로 신청»이 아니라 약관 제3조⑤ 그대로 — 회사가 일할 환불한다.
+ */
+function LeaveOptions({ email }: { email: string }) {
+  return (
+    <div className="mt-5 border-t border-line pt-4">
+      <p className="break-keep px-1 text-[14px] text-fg-sub">
+        동의하기 전에는 서비스를 이용할 수 없어요. 동의하지 않으면 로그아웃하거나 회원 탈퇴를 할 수 있어요.
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-x-4">
+        <form action="/auth/signout" method="post">
+          <Button type="submit" variant="ghost" size="sm">
+            로그아웃
+          </Button>
+        </form>
+      </div>
+      <DangerZone email={email} action={withdrawFromConsent} triggerLabel="회원 탈퇴" paidNote={CONSENT_WITHDRAW_PAID_NOTE} />
+    </div>
+  );
+}
+
 /* ── 첫 가입 ── */
-function JoinForm({ error }: { error: string | null }) {
+function JoinForm({ error, quickDecline, email }: { error: string | null; quickDecline: boolean; email: string }) {
   const [checked, setChecked] = useState({ over14: false, terms: false, privacy: false, marketing: false });
   const [state, formAction, pending] = useActionState(saveConsent, INITIAL);
   const allChecked = checked.over14 && checked.terms && checked.privacy && checked.marketing;
@@ -167,18 +192,24 @@ function JoinForm({ error }: { error: string | null }) {
 
       <p className="mt-3 text-center text-xs text-fg-sub">선택 항목에 동의하지 않아도 모든 기능을 쓸 수 있어요.</p>
 
-      {/* 거부 경로 — 이미 저장된 가입 정보(이메일 등)까지 지우고 나간다 */}
-      <div className="mt-5 flex justify-center border-t border-line pt-4">
-        <ConfirmSubmit
-          action={declineConsent}
-          title="동의하지 않고 나가기"
-          description={JOIN_DECLINE_CONFIRM}
-          confirmLabel="계정 삭제하고 나가기"
-          pendingLabel="삭제 중…"
-          trigger="동의하지 않고 나가기"
-          triggerVariant="ghost"
-        />
-      </div>
+      {quickDecline ? (
+        /* 거부 경로 — 막 로그인한 계정: 이미 저장된 가입 정보(이메일 등)까지 지우고 나간다 */
+        <div className="mt-5 flex justify-center border-t border-line pt-4">
+          <ConfirmSubmit
+            action={declineConsent}
+            title="동의하지 않고 나가기"
+            description={JOIN_DECLINE_CONFIRM}
+            confirmLabel="계정 삭제하고 나가기"
+            pendingLabel="삭제 중…"
+            trigger="동의하지 않고 나가기"
+            triggerVariant="ghost"
+          />
+        </div>
+      ) : (
+        /* 가입한 지 하루가 지난 계정(0079 전 가입자 등) — 쌓인 데이터가 있을 수 있어 확인 없는 삭제를 보이지 않는다.
+           서버(declineConsent)도 같은 기준으로 막는다. */
+        <LeaveOptions email={email} />
+      )}
     </div>
   );
 }
@@ -249,20 +280,7 @@ function UpdateForm({
           </Link>
         </p>
       ) : (
-        <div className="mt-5 border-t border-line pt-4">
-          <p className="break-keep px-1 text-[14px] text-fg-sub">
-            동의하기 전에는 서비스를 이용할 수 없어요. 동의하지 않으면 로그아웃하거나 회원 탈퇴를 할 수 있어요.
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-x-4">
-            <form action="/auth/signout" method="post">
-              <Button type="submit" variant="ghost" size="sm">
-                로그아웃
-              </Button>
-            </form>
-          </div>
-          {/* 탈퇴는 설정의 탈퇴와 같은 폼 — 확인 문구(이메일)를 타이핑해야 열린다. 오류는 이 화면으로 돌아온다 */}
-          <DangerZone email={email} action={withdrawFromConsent} triggerLabel="회원 탈퇴" />
-        </div>
+        <LeaveOptions email={email} />
       )}
     </div>
   );
@@ -272,17 +290,20 @@ export function ConsentForm({
   mode,
   phase,
   marketingOn,
+  quickDecline,
   email,
   error,
 }: {
   mode: "join" | "update";
   phase: "notice" | "gate";
   marketingOn: boolean;
+  /** 확인 없는 «동의하지 않고 나가기»를 보일지 — 막 로그인한 계정만(lib/legal/quick-decline.ts) */
+  quickDecline: boolean;
   email: string;
   error: string | null;
 }) {
   return mode === "join" ? (
-    <JoinForm error={error} />
+    <JoinForm error={error} quickDecline={quickDecline} email={email} />
   ) : (
     <UpdateForm phase={phase} marketingOn={marketingOn} email={email} error={error} />
   );

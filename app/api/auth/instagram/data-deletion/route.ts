@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getInstagramOAuthConfig } from "@/lib/meta/instagram-oauth";
 import { parseSignedRequest } from "@/lib/meta/signed-request";
-import { recordDeletionRequest } from "@/lib/legal/deletion-log";
+import { findOwnersByPublishHistory, recordDeletionRequest } from "@/lib/legal/deletion-log";
 
 /**
  * Instagram 데이터 삭제 요청 콜백 — 사용자가 Instagram/Meta 쪽에서 "앱의 내 데이터 삭제"를
@@ -48,13 +48,18 @@ export async function POST(request: Request) {
        ⚠️ 삭제가 **실패했으면 그렇게 적는다.** deleted_rows=0 의 뜻은 «지울 것이 없었다» 라서,
        실패를 0 으로 적으면 상태 페이지가 「저장된 정보가 없었습니다」 라고 확언한다 —
        토큰이 그대로 남아 있는데도. 기록 실패가 삭제를 되돌리지는 않는다(삭제는 이미 끝났다). */
+    /* 남은 정보의 주인 — 방금 지운 연결 행에서. 연결이 이미 없었으면(설정에서 먼저 해제) 발행 기록에서 찾는다(방침 제9조①4) */
+    const fromConnection = ((removed ?? []) as Array<{ user_id?: string | null }>).map((r) => r.user_id);
+    const owners =
+      !error && fromConnection.length === 0 ? await findOwnersByPublishHistory(admin, "instagram", payload.user_id) : [];
     await recordDeletionRequest(admin, {
       confirmationCode,
       channel: "instagram",
       platformUserId: payload.user_id,
       deletedRows: removed?.length ?? 0,
       failed: Boolean(error),
-      finchUserId: (removed?.[0] as { user_id?: string } | undefined)?.user_id ?? null,
+      finchUserIds: fromConnection.length > 0 ? fromConnection : owners,
+      followupSource: fromConnection.length > 0 ? "connection" : "publish_history",
     });
   }
 

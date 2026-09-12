@@ -40,7 +40,7 @@ export interface LegalDoc {
   announcedAt?: string;
   /** 시행일(ISO) */
   effectiveAt: string;
-  /** 시행일 옆 보조 설명 — «9월 14일 이후 가입하는 회원은 가입 때부터» 같은 것 */
+  /** 시행일 옆 보조 설명 — «9월 12일 이후 이 약관에 동의하고 가입하는 회원은 가입한 때부터» 같은 것 */
   effectiveNote?: string;
   /** 머리말(조항 앞) */
   intro?: readonly LegalBlock[];

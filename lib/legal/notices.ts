@@ -71,7 +71,7 @@ export const TERMS_NOTICE: LegalNotice = {
   postedAt: TERMS_ANNOUNCED,
   blocks: [
     {
-      p: `시행일: ${koDate(TERMS_VERSION)}. ${koDate(TERMS_ANNOUNCED)} 이후 가입하는 분에게는 가입할 때부터 적용합니다.`,
+      p: `시행일: ${koDate(TERMS_VERSION)}. ${koDate(TERMS_ANNOUNCED)} 이후 새 약관에 동의하고 가입하는 분에게는 가입할 때부터 적용합니다.`,
       strong: true,
     },
     {

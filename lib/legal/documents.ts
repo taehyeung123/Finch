@@ -683,7 +683,9 @@ const TERMS: LegalSection[] = [
     title: "제1조 (시행일)",
     blocks: [
       p(
-        `이 약관은 ${koDate(TERMS_ANNOUNCED)} 이후 새로 가입하는 회원에게는 가입한 때부터, 그 밖의 회원에게는 ${koDate(TERMS_VERSION)}부터 시행합니다.`,
+        /* «이 약관에 동의하고 가입하는 회원» — 날짜만으로 가르면 게시일 당일 배포 전에 옛 약관으로 가입한 회원이
+           어느 쪽에도 맞지 않는다. 코드도 같은 기준이다: 가입 때 기록한 약관 버전이 옛것이면 부칙 제2조(재동의)를 탄다. */
+        `이 약관은 게시일(${koDate(TERMS_ANNOUNCED)}) 이후 이 약관에 동의하고 가입하는 회원에게는 가입한 때부터, 그 밖의 회원에게는 ${koDate(TERMS_VERSION)}부터 시행합니다.`,
       ),
     ],
   },
@@ -692,7 +694,7 @@ const TERMS: LegalSection[] = [
     title: "제2조 (기존 회원에 대한 적용)",
     blocks: [
       ul(
-        `${koDate(TERMS_ANNOUNCED)} 전에 가입한 회원에게는 ${koDate(TERMS_VERSION)} 이후 서비스를 처음 이용할 때 이 약관에 대한 동의를 받습니다. 그 전에도 미리 동의할 수 있습니다.`,
+        `종전 약관에 동의하고 가입한 회원에게는 ${koDate(TERMS_VERSION)} 이후 서비스를 처음 이용할 때 이 약관에 대한 동의를 받습니다. 그 전에도 미리 동의할 수 있습니다.`,
         "동의하기 전까지는 종전 약관을 적용합니다.",
         "시행일부터 30일이 지나도록 동의 여부를 밝히지 않은 회원에게는 회사가 이메일로 개정 약관과 제3조 제4항의 뜻을 따로 알립니다. 알린 날부터 30일이 지나도록 거부 의사를 밝히지 않으면 개정 약관에 동의한 것으로 봅니다.",
         "동의하지 않는 회원은 회원 탈퇴를 할 수 있으며, 유료 서비스를 이용 중이면 남은 이용기간의 요금을 일할 계산하여 환불합니다(제3조 제5항).",
@@ -718,7 +720,7 @@ export const TERMS_DOC: LegalDoc = {
   version: TERMS_VERSION,
   announcedAt: TERMS_ANNOUNCED,
   effectiveAt: TERMS_VERSION,
-  effectiveNote: `${koDate(TERMS_ANNOUNCED)} 이후 가입하는 회원은 가입한 때부터`,
+  effectiveNote: `${koDate(TERMS_ANNOUNCED)} 이후 이 약관에 동의하고 가입하는 회원은 가입한 때부터`,
   intro: [note("굵게 표시한 문단은 요금·환불·책임처럼 회원에게 특히 중요한 내용입니다.")],
   sections: TERMS,
 };
@@ -905,7 +907,7 @@ const OPERATION: LegalSection[] = [
     title: "부칙",
     blocks: [
       p(
-        `이 운영정책은 ${koDate(TERMS_ANNOUNCED)} 이후 새로 가입하는 회원에게는 가입한 때부터, 그 밖의 회원에게는 ${koDate(TERMS_VERSION)}부터 시행하며, 이용약관 부칙 제2조와 같은 방식으로 적용합니다.`,
+        `이 운영정책은 게시일(${koDate(TERMS_ANNOUNCED)}) 이후 이용약관에 동의하고 가입하는 회원에게는 가입한 때부터, 그 밖의 회원에게는 ${koDate(TERMS_VERSION)}부터 시행하며, 이용약관 부칙 제2조와 같은 방식으로 적용합니다.`,
       ),
     ],
   },
@@ -917,7 +919,7 @@ export const OPERATION_DOC: LegalDoc = {
   version: TERMS_VERSION,
   announcedAt: TERMS_ANNOUNCED,
   effectiveAt: TERMS_VERSION,
-  effectiveNote: `${koDate(TERMS_ANNOUNCED)} 이후 가입하는 회원은 가입한 때부터`,
+  effectiveNote: `${koDate(TERMS_ANNOUNCED)} 이후 이용약관에 동의하고 가입하는 회원은 가입한 때부터`,
   intro: [note("이 운영정책은 이용약관 제4조에 따라 이용약관의 일부입니다."), links({ label: "이용약관", href: "/terms" })],
   sections: OPERATION,
 };
@@ -1081,7 +1083,7 @@ const PRIVACY: LegalSection[] = [
           [
             "댓글 분석 대상 댓글 작성자",
             "회원 게시물의 댓글 내용(한 번에 최대 50개, 각 200자)",
-            "회원이 댓글 분위기 요약을 실행할 때 작성자 이름·식별값을 빼고, 댓글 속 @사용자명은 가려서 AI 제공자에게 보내며, 저장하지 않습니다",
+            "회원이 댓글 분위기 요약을 실행할 때 작성자 이름·식별값을 빼고, 댓글 속 @사용자명·이메일 주소는 가려서 AI 제공자에게 보내며, 저장하지 않습니다",
             "운영 회원의 위탁",
           ],
           ["팀 초대를 받은 분", "이메일 주소, 역할, 초대 상태", "초대 메일 발송과 수락 처리에 씁니다", "소유자의 요청(계약)"],
@@ -1266,7 +1268,7 @@ const PRIVACY: LegalSection[] = [
           [
             "Anthropic, PBC (privacy@anthropic.com)",
             "미국",
-            "회원이 입력한 주제·지침·문장과 AI 에이전트 대화. 연동 계정의 사용자명·팔로워·게시물 수와 최근 7일 지표. 진단할 게시물(최대 8개)의 캡션·지표. 댓글 분위기 요약용 댓글 내용(최대 50개, 작성자 정보 제외, @사용자명은 가림). 프로필 링크 소개글. 레퍼런스 공개 게시물의 캡션·대본·광고 문구",
+            "회원이 입력한 주제·지침·문장과 AI 에이전트 대화. 연동 계정의 사용자명·팔로워·게시물 수와 최근 7일 지표. 진단할 게시물(최대 8개)의 캡션·지표. 댓글 분위기 요약용 댓글 내용(최대 50개, 작성자 정보 제외, @사용자명·이메일 주소는 가림). 프로필 링크 소개글. 레퍼런스 공개 게시물의 캡션·대본·광고 문구",
             "AI 결과 생성",
             "회원이 AI 기능을 실행할 때, 레퍼런스 요약 작업이 돌 때",
             "받은 날부터 30일 안에 삭제(이용정책 위반으로 판정되면 최대 2년)",

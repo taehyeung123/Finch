@@ -7,7 +7,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
 import { isMissingTableError } from "@/lib/supabase/errors";
 import { purgeAndDeleteUser } from "@/lib/account/delete";
+import { reportProratedRefundOwed } from "@/lib/billing/refund-owed";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/versions";
+import { canQuickDecline } from "@/lib/legal/quick-decline";
 import { notifyMarketingConsentResult, recordConsentEvents } from "@/lib/legal/consent-events";
 import { DELETE_PHRASE } from "@/app/(finch)/(app)/settings/profile/constants";
 
@@ -17,11 +19,15 @@ export interface ConsentFormState {
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>;
 
-/** 이 사용자의 동의 행이 있나 — 첫 가입(행 없음)과 약관 개정 재동의(행 있음)를 **서버가** 가른다(화면 값을 믿지 않는다) */
-async function existingConsent(supabase: SupabaseServer, userId: string): Promise<"none" | "exists" | "error"> {
+/**
+ * 이 사용자의 동의 행이 있나 — 첫 가입(행 없음)과 약관 개정 재동의(행 있음)를 **서버가** 가른다(화면 값을 믿지 않는다).
+ * no_table(0079 미적용)은 «없음»과 따로 돌려준다 — 저장 경로에는 «없음»과 같지만, 확인 없는 삭제 경로에서
+ * «없음»으로 읽으면 기록을 못 보는 DB 에서 기존 회원이 한 번 클릭으로 지워진다(2026-09-12 점검).
+ */
+async function existingConsent(supabase: SupabaseServer, userId: string): Promise<"none" | "exists" | "error" | "no_table"> {
   const { data, error } = await supabase.from("user_consents").select("user_id").eq("user_id", userId).maybeSingle();
   if (error) {
-    if (isMissingTableError(error)) return "none";
+    if (isMissingTableError(error)) return "no_table";
     console.error("[consent] 동의 행 조회 실패:", error.message);
     return "error";
   }
@@ -131,7 +137,8 @@ export async function saveConsent(_prev: ConsentFormState, formData: FormData): 
      응답 뒤에 보낸다(after) — 메일 왕복을 가입 화면이 기다리지 않게. after 는 redirect 뒤에도 돈다(Next 문서). */
   if (marketing) {
     const email = user.email;
-    after(() => notifyMarketingConsentResult(email, true));
+    const uid = user.id;
+    after(() => notifyMarketingConsentResult(uid, email, true));
   }
 
   redirect("/onboarding");
@@ -148,6 +155,9 @@ export async function saveConsent(_prev: ConsentFormState, formData: FormData): 
  * ⚠️ 동의 기록이 있는 회원(약관 개정 재동의)에게는 이 경로를 열지 않는다 — 확인 문구 없이 한 번에 지워지는
  *    버튼이라, 채널·프로필 링크·크레딧이 쌓인 기존 회원이 누르면 되돌릴 수 없다. 그 회원의 출구는
  *    로그아웃과, 확인 문구를 타이핑하는 withdrawFromConsent 다.
+ * ⚠️ 동의 기록이 **없어도** 가입한 지 하루가 지난 계정에는 열지 않는다(canQuickDecline). 0079(2026-09-02) 전에 가입해
+ *    그 뒤 들어오지 않은 회원은 기록이 없어 첫 가입 화면을 받지만, 채널·페이지·크레딧이 쌓인 기존 회원이다(2026-09-12 점검).
+ *    화면(page.tsx)도 같은 함수로 이 버튼 대신 탈퇴 폼을 그린다 — 여기는 폼 조작을 막는 두 번째 자물쇠다.
  */
 export async function declineConsent(): Promise<void> {
   if (isDemoMode()) {
@@ -164,7 +174,11 @@ export async function declineConsent(): Promise<void> {
 
   const has = await existingConsent(supabase, user.id);
   if (has !== "none") {
-    /* 기존 회원(또는 확인 실패) — 확인 없는 삭제를 하지 않는다 */
+    /* 기존 회원·확인 실패·표 없음(기록을 볼 수 없는 DB) — 확인 없는 삭제를 하지 않는다 */
+    redirect("/onboarding/consent");
+  }
+  if (!canQuickDecline(user.created_at)) {
+    /* 오래된 계정 — 확인 문구를 타이핑하는 탈퇴(withdrawFromConsent)로만 지운다 */
     redirect("/onboarding/consent");
   }
 
@@ -208,6 +222,11 @@ export async function withdrawFromConsent(formData: FormData): Promise<void> {
     console.error("[consent] 재동의 화면 탈퇴 실패: service role 키 미설정");
     redirect("/onboarding/consent?error=withdraw_failed");
   }
+
+  /* 약관 제3조⑤·부칙 제2조 — 바뀐 약관을 거부하고 탈퇴하면 회사가 남은 이용기간 요금을 일할 환불한다.
+     자동 환불이 아직 없어 운영자에게 주문번호·금액을 알린다(lib/billing/refund-owed.ts). 구독 행은 탈퇴와 함께 지워지므로
+     **지우기 전에** 읽는다. 알림은 던지지 않는다 — 탈퇴를 막지 않는다. */
+  await reportProratedRefundOwed(admin, user.id, "consent_withdraw");
 
   const ok = await purgeAndDeleteUser(admin, user.id);
   if (!ok) redirect("/onboarding/consent?error=withdraw_failed");

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isAuthorizedCron } from "@/lib/cron";
+import { isMissingTableError } from "@/lib/supabase/errors";
 
 /**
  * 보존기간 파기 크론 (매일 19:20 UTC = 04:20 KST — 다른 배치와 겹치지 않는 시간대).
@@ -24,6 +25,13 @@ import { isAuthorizedCron } from "@/lib/cron";
  *
  * 실패는 표별로 격리한다 — 하나가 실패해도 나머지는 파기한다. 파기는 «다음에 다시 하면 되는» 일이라
  * 부분 실패로 전체를 멈추는 것이 더 나쁘다.
+ *
+ * 2026-09-12 추가 — 메타 삭제 요청의 «남은 정보 10일 안 삭제»(방침 제9조①4) 알림:
+ *  콜백은 연결·토큰만 바로 지우고, 그 채널의 남은 정보(자동 DM 규칙·발송 기록·광고 변경 기록·알림 등)의 주인을
+ *  data_deletion_followups(0095)에 적는다. 그 삭제는 아직 사람이 한다(docs/LEGAL_REVIEW_2026-09.md 13절 4번).
+ *  아무도 표를 보지 않으면 11일째 방침 위반이 되므로, 행이 남아 있는 동안 **매일** console.error 로 올린다(Sentry 알림).
+ *  여기서 자동으로 지우지 않는 이유: «그 채널 관련» 알림·발행 식별값은 채널 칸이 없어 기계적으로 가를 수 없고,
+ *  되돌릴 수 없는 삭제를 운영 DB 드라이런 없이 크론에 넣지 않는다(9절 1번 자동화는 드라이런 뒤).
  */
 export const runtime = "nodejs";
 /* 전수 삭제가 아니라 시간 조건 삭제라 짧지만, 첫 실행은 밀린 양이 많을 수 있다 */
@@ -70,5 +78,38 @@ export async function GET(request: Request) {
     results[rule.table] = `deleted ${count ?? 0}`;
   }
 
+  results.deletion_followups = await remindDeletionFollowups(admin);
+
   return NextResponse.json({ ok: true, results });
+}
+
+/** 남은 정보 후속 삭제 대기 알림 — 위 머리말 «2026-09-12 추가». 반환은 결과 요약 문자열 */
+async function remindDeletionFollowups(admin: NonNullable<ReturnType<typeof createAdminClient>>): Promise<string> {
+  const { data, error } = await admin
+    .from("data_deletion_followups")
+    .select("confirmation_code, channel, requested_at, found_by")
+    .order("requested_at", { ascending: true })
+    .limit(50);
+  if (error) {
+    /* 0095 미적용 — 대기 표가 없다. 콜백이 그 사실을 요청마다 로그로 남기므로 여기서는 건너뛴다 */
+    if (isMissingTableError(error)) return "skipped";
+    console.error("[cron:retention] 삭제 요청 후속 삭제 대기 조회 실패:", error.message);
+    return `error: ${error.message}`;
+  }
+  const rows = (data ?? []) as Array<{ confirmation_code: string; channel: string; requested_at: string; found_by: string }>;
+  if (rows.length === 0) return "pending 0";
+
+  const now = Date.now();
+  const lines = rows.map((r) => {
+    const age = Math.floor((now - Date.parse(r.requested_at)) / DAY);
+    const due = new Date(Date.parse(r.requested_at) + 10 * DAY).toISOString().slice(0, 10);
+    return `${r.confirmation_code}(${r.channel}, D+${age}, 기한 ${due}${r.found_by === "publish_history" ? ", 이미 해제된 계정" : ""})`;
+  });
+  const overdue = rows.filter((r) => now - Date.parse(r.requested_at) >= 10 * DAY).length;
+  /* 확인 코드만 적는다 — 회원 id 는 SQL Editor 에서 코드로 찾는다(로그에 사람을 잇는 값을 늘리지 않는다) */
+  console.error(
+    `[cron:retention] 메타 삭제 요청 «남은 정보» 후속 삭제 대기 ${rows.length}건${overdue > 0 ? ` — 기한 지남 ${overdue}건` : ""}. ` +
+      `요청 7일 뒤~10일 안에 처리(docs/LEGAL_REVIEW_2026-09.md 13절 4번): ${lines.join(" · ")}`,
+  );
+  return `pending ${rows.length}${overdue > 0 ? ` (overdue ${overdue})` : ""}`;
 }

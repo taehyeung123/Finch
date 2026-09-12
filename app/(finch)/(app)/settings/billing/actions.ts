@@ -10,6 +10,7 @@ import { chargeBilling } from "@/lib/toss/billing";
 import { notifyUser } from "@/lib/notify";
 import { PLAN_NAMES, PLAN_PRICES, isPaidPlan } from "@/lib/toss/config";
 import { grantPlanCredits } from "@/lib/actions/credits";
+import { reportProratedRefundOwed } from "@/lib/billing/refund-owed";
 
 const BILLING_PATH = "/settings/billing";
 
@@ -216,6 +217,15 @@ export async function changePlan(formData: FormData): Promise<void> {
       planRedirect({ planError: `결제에 실패했어요: ${charged.message}` });
     }
 
+    /* 약관 제24조① — 이전 요금제의 남은 이용기간 요금은 일할 계산해 환불한다(환불정책 계산 예시 «10일째 Pro 변경»).
+       자동 부분 취소는 아직 없어(토스 배관은 교체 예정이라 고치지 않는다) 운영자에게 주문번호·금액을 알린다.
+       구독을 새 요금제로 바꾸기 **전의** 값(옛 요금제·옛 다음 결제일)으로 계산한다. 알림은 던지지 않는다. */
+    const owed = await reportProratedRefundOwed(admin, user.id, "upgrade", {
+      subscriptionId: String(sub.id),
+      plan: currentPlan,
+      nextBillingAt: sub.next_billing_at ? String(sub.next_billing_at) : null,
+    });
+
     const next = new Date();
     next.setMonth(next.getMonth() + 1);
     const nowIso = new Date().toISOString();
@@ -253,7 +263,11 @@ export async function changePlan(formData: FormData): Promise<void> {
       userId: user.id,
       type: "billing",
       title: `${targetName} 플랜으로 업그레이드되었어요`,
-      body: `${targetName} 플랜으로 즉시 전환되었고 ${targetAmount.toLocaleString("ko-KR")}원이 결제되었어요. 다음 결제일은 ${next.toISOString().slice(0, 10)}입니다.`,
+      body:
+        `${targetName} 플랜으로 즉시 전환되었고 ${targetAmount.toLocaleString("ko-KR")}원이 결제되었어요. 다음 결제일은 ${next.toISOString().slice(0, 10)}입니다.` +
+        (owed
+          ? ` 이전 요금제의 남은 ${owed.remainingDays}일분 ${owed.refund.toLocaleString("ko-KR")}원은 결제한 수단으로 환불해 드려요(이용약관 제24조).`
+          : ""),
     });
 
     revalidatePath(BILLING_PATH);

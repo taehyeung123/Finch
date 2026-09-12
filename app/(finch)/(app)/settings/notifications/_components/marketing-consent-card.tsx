@@ -53,10 +53,18 @@ export function MarketingConsentRow({ initial }: { initial: MarketingConsentStat
       const res = await setMarketingConsent(next);
       if (res.ok) {
         setState({ kind: "ok", at: res.at });
-        /* 처리 결과 메일은 서버가 응답 뒤에 보낸다(정보통신망법 §50⑦ — settings/notifications/actions.ts) */
+        const nowOn = res.at !== null;
+        /* 처리 결과 메일은 서버가 응답 뒤에 보낸다(정보통신망법 §50⑦ — settings/notifications/actions.ts).
+           이미 그 상태였으면(다른 탭에서 바꾼 경우 등) 서버는 아무것도 바꾸지 않고 메일도 보내지 않는다 — 그렇다고만 말한다 */
         setMessage({
           tone: "positive",
-          text: next ? "광고성 정보 수신에 동의했어요. 처리 결과를 이메일로도 보내 드려요." : "광고성 정보 수신을 철회했어요. 처리 결과를 이메일로도 보내 드려요.",
+          text: !res.changed
+            ? nowOn
+              ? "이미 광고성 정보 수신에 동의한 상태예요."
+              : "이미 광고성 정보를 받지 않는 상태예요."
+            : nowOn
+              ? "광고성 정보 수신에 동의했어요. 처리 결과를 이메일로도 보내 드려요."
+              : "광고성 정보 수신을 철회했어요. 처리 결과를 이메일로도 보내 드려요.",
         });
       } else {
         setState(prev);
@@ -65,7 +73,9 @@ export function MarketingConsentRow({ initial }: { initial: MarketingConsentStat
           text:
             res.reason === "no_record"
               ? "동의 기록을 찾지 못했어요. 잠시 후 다시 시도해 주세요."
-              : "저장하지 못했어요. 잠시 후 다시 시도해 주세요.",
+              : res.reason === "rate_limited"
+                ? "오늘은 수신 동의를 여러 번 바꿔서 잠시 막아 두었어요. 내일 다시 켜 주세요. 끄기는 언제든 할 수 있어요."
+                : "저장하지 못했어요. 잠시 후 다시 시도해 주세요.",
         });
       }
     } catch (e) {

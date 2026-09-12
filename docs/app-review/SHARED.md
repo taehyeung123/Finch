@@ -231,7 +231,7 @@ Finch uses Platform Data only to deliver features to the Finch user who connecte
 
 If Meta's form asks whether "all data" is deleted, answer precisely, or extend the callbacks first.
 
-**Update 2026-09-12:** the privacy policy (art. 9 ① 4) now promises to delete these leftovers within 10 days of a Meta deletion request. Until the callbacks are extended, that is a manual step — each new `data_deletion_requests` row must be followed up by hand (docs/LEGAL_REVIEW_2026-09.md, owner list).
+**Update 2026-09-12:** the privacy policy (art. 9 ① 4) now promises to delete these leftovers within 10 days of a Meta deletion request. Until the callbacks are extended, that is a manual step: each callback now records the affected Finch account(s) in `data_deletion_followups` (migration 0095; several accounts for one Facebook login are all recorded, and a connection that was already removed in Finch is traced through published posts), the daily retention cron raises an alert while any row is open, and the public status page shows the 10-day deadline instead of «done» until the row is cleared (docs/LEGAL_REVIEW_2026-09.md §13-4).
 
 ### B8. Security measures (for Data Protection Assessment-style questions)
 - **In transit:** HTTPS only. HSTS is set for 2 years with `includeSubDomains`, plus `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: strict-origin-when-cross-origin` (`vercel.json:5-17`).
@@ -247,7 +247,7 @@ If Meta's form asks whether "all data" is deleted, answer precisely, or extend t
 
 ### B9. Privacy policy fixes to make before submitting (`lib/legal/documents.ts`)
 
-**Done 2026-09-12** — the policy was rewritten (version 2026-09-14, draft notice removed). (a)–(e) and (g) are applied; for (f) GA was taken off the logged-in screens (`components/analytics/google-analytics.tsx`). Details: docs/LEGAL_REVIEW_2026-09.md. The list below is kept for the record.
+**Done 2026-09-12** — the policy was rewritten (version 2026-09-12 — published and effective the same day, draft notice removed). (a)–(e) and (g) are applied; for (f) GA was taken off the logged-in screens (`components/analytics/google-analytics.tsx`). Details: docs/LEGAL_REVIEW_2026-09.md. The list below is kept for the record.
 - **(a) Anthropic: scope and retention.** §6/§7 (`:190,205`) say Anthropic receives «이용자가 AI 기능에 입력한 내용» (what the user types). The code also sends Instagram captions, metrics and comment texts, so say so. «처리 후 즉시» (deleted right after processing) is also wrong: the Anthropic API default is deletion within 30 days. [OWNER CONFIRM if there's a zero-retention agreement]
 - **(b) Transfer destinations.** §7 (`:200-201`) lists «Supabase(미국)» and «Vercel(미국)», but storage and compute are in Seoul (`docs/DEPLOY.md:7-13`). Give both the provider's country and the processing region.
 - **(c) Meta Ads items.** §2 (`:146`) doesn't mention:
