@@ -106,8 +106,9 @@ ScrapeCreators 가 공개 데이터를 모은다(`lib/reference/*`). 메타 광�
 | `instagram_business_content_publish` | 테스트 준비 완료 | 8 |
 | `instagram_business_manage_messages` | 테스트 준비 완료 | 3 |
 | `instagram_business_manage_comments` | 테스트 준비 완료 (09-11 사장님이 「앱 검수에 추가」) | 3 (사장님 확인) |
-| `threads_basic` | 테스트 준비 완료 | 532 |
-| `threads_content_publish` · `threads_manage_insights` | **«앱 검수에 추가» 전** | 대시보드 확인 필요 |
+| `threads_basic` | 테스트 준비 완료 | 532 → 501(2026-09-12 화면, 30일 창) |
+| `threads_content_publish` | 테스트 준비 완료 (2026-09-12 사장님이 「앱 검수에 추가」) | **0** — 9/15 까지 0 이면 스레드 1건 더 발행 |
+| `threads_manage_insights` | 테스트 준비 완료 (2026-09-12 추가) | 313 |
 | `threads_read_replies` · `threads_manage_replies` | «앱 검수에 추가» 전 — **누르지 않는다**(요청 목록에서 뺐다) | — |
 | `ads_read` · `ads_management` | — | 41 · 41 |
 | `pages_show_list` · `pages_read_engagement` | — | **0 · 0** |
