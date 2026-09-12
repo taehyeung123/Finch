@@ -3,6 +3,7 @@
 - **[VERIFY]**: the code can't settle this. It's a dashboard or runtime fact.
 - **[OWNER CONFIRM]**: the owner has to supply the fact or make the decision.
 - I didn't change any files or git state. HEAD has moved since the draft (`1b679ac` → `65ddf9f`, the auto-DM «지금 확인» and ads-scope branches were merged). All line numbers below are for `65ddf9f`.
+- 2026-09-12: the publishing text was re-checked against `40355b5` (the new publish composer merged in `3366fe1`, plus its publishing overlay): section 3 «발행», section 5 (both content_publish lines), section 6 «Publishing», the label table's «Publish buttons and states» and «인스타그램 예약 발행» rows, the publishing details in B1, B6 and B7, and the 0093 rows in (c). Line numbers in those places are for `40355b5`.
 
 ---
 
@@ -48,7 +49,7 @@ The test account has already completed these. If one appears anyway:
 3. Where each feature is (left sidebar)
 - «홈» (Home): profile cards and key numbers for the connected Instagram and Threads accounts, plus an ad summary once Meta Ads is connected.
 - Group «SNS»:
-  - «발행» (Publish): write, schedule or immediately publish Instagram and Threads posts. «새 게시물 포스팅» (New post) opens the editor, where you choose «지금 발행» (Publish now), «예약 발행» (Scheduled publishing) or «초안으로 저장» (Save as draft).
+  - «발행» (Publish): write, schedule or immediately publish Instagram and Threads posts with photos or videos. «새 게시물 포스팅» (New post) opens the editor: add files with the «추가» (Add) tile under «사진·영상» (Photos & videos), then choose «지금 발행» (Publish now), «예약 발행» (Scheduled publishing) or «초안으로 저장» (Save as draft).
   - «자동 DM» (Auto DM): rules that send a DM to people who comment on a chosen Instagram post. Buttons: «자동화 만들기» (Create automation), and «지금 확인» (Check now) on each rule marked «실행 중» (Running).
   - «프로필 링크» (Profile link): link-in-bio page builder. Its «최근 게시물» (Recent posts) block shows the connected Instagram account's latest posts.
   - «광고 관리» (Ad management): ad account performance. «캠페인 관리» (Campaign management) creates campaigns and turns delivery on or off.
@@ -83,13 +84,13 @@ To disconnect, use «연결 해제» (Disconnect), then «해제하기» (Discon
 Instagram
 - instagram_business_basic: connecting Instagram; the Instagram card on «홈»; the «최근 게시물» block in «프로필 링크».
 - instagram_business_manage_insights: Instagram numbers on «홈», «성과 분석» and «리포트».
-- instagram_business_content_publish: «발행» → «새 게시물 포스팅» with the Instagram channel.
+- instagram_business_content_publish: «발행» → «새 게시물 포스팅» → channel «인스타그램» → add one photo with «추가» (Add) → write the «캡션» (Caption) → «지금 발행» (Publish now) → «지금 발행하기» (Publish now). The post then appears under «발행완료» (Published) with a «게시물 보기» (View post) link that opens it on Instagram.
 - instagram_business_manage_comments: «자동 DM» → a running rule → «지금 확인», which reads the post's comments and sends the private reply.
 - instagram_business_manage_messages: the DM sent by «자동 DM» appears in the Instagram inbox; opt-out replies («수신거부», STOP, UNSUBSCRIBE) are received through the messages webhook once the app is Live.
 Threads
 - threads_basic: connecting Threads; the Threads card and recent posts on «홈».
 - threads_manage_insights: Threads numbers on «홈», «성과 분석» and «리포트».
-- threads_content_publish: «발행» → «새 게시물 포스팅» with the Threads channel.
+- threads_content_publish: «발행» → «새 게시물 포스팅» → channel «스레드» → write in «글» (Text); a photo is optional → «지금 발행» → «지금 발행하기». The post appears under «발행완료» with «게시물 보기».
 Meta Ads
 - ads_read: «광고 관리», «캠페인 관리» and each campaign's detail page.
 - ads_management: «캠페인 관리» → create a campaign and turn its delivery on or off.
@@ -99,7 +100,7 @@ Meta Ads
 
 6. Notes for testing
 - Auto DM: Instagram sends comment webhooks only to apps that are Live and have Advanced Access, so each running rule has «지금 확인» (Check now). It reads the post's 50 most recent top-level comments and processes them with the same code as the webhook. A comment triggers a DM only if (a) a different Instagram account wrote it (Finch skips the connected account's own comments), (b) it is less than 6.5 days old (Instagram accepts private replies only within 7 days), (c) it contains the rule's keyword, when the rule uses keywords, and (d) it has not been handled before and its author has not received a DM from this account in the past 24 hours. Each rule can be checked once every 30 seconds. On success the dialog reads «DM 1개를 보냈어요» (1 DM sent) with «댓글 N개 확인 · DM M개 보냄 · 건너뜀 K개» (N comments checked · M DMs sent · K skipped). [OWNER CONFIRM: "A fresh comment containing «…» from our second test account is on post …; please press «지금 확인» on the rule «…»."]
-- Publishing: «지금 발행» (Publish now) posts to the real test account immediately. Finch cannot undo it.
+- Publishing: «지금 발행» (Publish now) posts to the real test account immediately. Finch cannot undo it. A photo or text post usually goes live within 10–30 seconds. Videos also work, but Meta processes them for a few minutes: the post shows «처리 중» (Processing) under «발행예약» (Scheduled) and is published automatically.
 - Ads: Finch creates every new campaign, ad set and ad paused. Nothing spends money until delivery is turned on.
 - The «TikTok» row is not part of this submission.
 ```
@@ -124,12 +125,12 @@ Meta Ads
 | Chips and hints | `channels/_lib/derive-state.ts:30-62` |
 | Auto DM buttons and status | `auto-dm/_components/auto-dm-client.tsx:46,292,502` |
 | Check-now result text | `lib/auto-dm/check-now-types.ts:88-90`; cooldown `:9` |
-| Publish buttons | `publish/_components/publish-list.tsx:383,691,793`; composer options `post-composer.tsx:646,663,691` |
+| Publish buttons and states (at `40355b5`) | `publish/_components/publish-list.tsx:460` («새 게시물 포스팅»), `:787,879` (row «지금 발행»), `:895` (draft «예약하기»), `:430-431` («발행예약»/«발행완료»), `:1001` («게시물 보기»); composer `post-composer.tsx:462` («사진·영상»), `:588,606,636` (the three modes), `:658` («지금 발행하기»); «추가» `media-tiles.tsx:268`; «처리 중» `components/ui/status-pill.tsx:27` |
 | «캠페인 관리» | `ads/page.tsx:190` |
 | Analytics tabs | `insights/tabs.tsx:13-15` |
 | «최근 게시물» block | `lib/links/blocks.ts:373` |
 | «이 페이지의 최근 게시물» | `ads/_components/page-recent-posts.tsx:47` |
-| «인스타그램 예약 발행» | `studio/_components/schedule-publish.tsx:85` (it calls `publishGate` in `app/api/studio/schedule/route.ts:99`) |
+| «인스타그램 예약 발행» | `studio/_components/schedule-publish.tsx:85` (it calls `publishGate` in `app/api/studio/schedule/route.ts:101`) |
 | Everything created paused | `ads/campaigns/page.tsx:18`; `lib/meta/ads-write.ts:251`; `lib/ads/adset-rules.ts:258`; `lib/ads/creative-rules.ts:194` |
 | Opt-out words | `lib/auto-dm/match.ts:57-60` |
 
@@ -153,7 +154,7 @@ The questions below follow Meta's published Data Handling Questions (developers.
 
 | Processor | Q2 category | Q3 countries | Platform Data it can access | Evidence |
 |---|---|---|---|---|
-| Supabase, Inc. | IT solutions and services, including cloud storage and processing | Republic of Korea (AWS ap-northeast-2, Seoul) [VERIFY whether to also list the United States for Supabase's own support access] | **Connections:** platform user ID, Instagram professional account ID, username, display name, bio, profile-picture URL, follower and post counts (refreshed daily), granted scopes, token expiry. **Tokens:** Instagram, Threads and Meta access tokens, encrypted by Finch with AES-256-GCM before storage. **Ads:** Facebook user ID and name; ad account ID, name, currency, time zone and status; the chosen Facebook Page's ID and name, and the linked Instagram account's ID and username; a log of campaign changes (IDs, request parameters, Meta error text; no tokens). **Auto DM:** the rule's post ID, caption, type, view count and thumbnail URL; comment IDs, media IDs, hashed commenter IDs, send status, message IDs, opt-out flags. **Publishing:** media IDs returned for posts published through Finch. **Profile link:** published pages keep up to 9 Instagram thumbnail URLs and permalinks, plus the source account ID. **In-app notifications:** username and follower-count changes. | `docs/DEPLOY.md:7-13`; migrations 0001, 0002, 0010, 0077, 0081, 0082, 0091; `app/api/auth/instagram/callback/route.ts:133-157`; `links/actions.ts:2140-2170` |
+| Supabase, Inc. | IT solutions and services, including cloud storage and processing | Republic of Korea (AWS ap-northeast-2, Seoul) [VERIFY whether to also list the United States for Supabase's own support access] | **Connections:** platform user ID, Instagram professional account ID, username, display name, bio, profile-picture URL, follower and post counts (refreshed daily), granted scopes, token expiry. **Tokens:** Instagram, Threads and Meta access tokens, encrypted by Finch with AES-256-GCM before storage. **Ads:** Facebook user ID and name; ad account ID, name, currency, time zone and status; the chosen Facebook Page's ID and name, and the linked Instagram account's ID and username; a log of campaign changes (IDs, request parameters, Meta error text; no tokens). **Auto DM:** the rule's post ID, caption, type, view count and thumbnail URL; comment IDs, media IDs, hashed commenter IDs, send status, message IDs, opt-out flags. **Publishing:** media IDs, container IDs and permalinks returned for posts published through Finch. **Profile link:** published pages keep up to 9 Instagram thumbnail URLs and permalinks, plus the source account ID. **In-app notifications:** username and follower-count changes. | `docs/DEPLOY.md:7-13`; migrations 0001, 0002, 0010, 0077, 0081, 0082, 0091, 0093; `app/api/auth/instagram/callback/route.ts:133-157`; `links/actions.ts:2140-2170` |
 | Vercel Inc. | IT solutions and services, including cloud storage and processing | Republic of Korea (functions in `icn1`). Published profile pages are also served from Vercel's global edge cache [VERIFY which countries to list] | All API traffic passes through its functions, and function logs contain IDs and error text. Instagram and Threads Graph responses are stored in the Next.js persistent fetch cache together with their token-bearing request URL, and treated as fresh for 300 seconds (flag #3). Published profile-link pages, with Instagram thumbnails, are cached up to 1 day. | `vercel.json:3`; `lib/meta/instagram.ts:33-39`; `lib/meta/threads.ts:15-22`; `docs/PROFILE_CACHE.md` |
 | Anthropic, PBC | Other: AI text generation that the user starts [OWNER CONFIRM category] | United States [VERIFY] | Only when the user runs an AI feature. **«AI 에이전트» (AI agent):** Instagram username, follower and post counts, 7-day reach, views, accounts engaged, interactions, profile-link taps. **«성과 분석» › «내 게시물» › «AI 진단 받기» (Get AI diagnosis):** captions and save, engagement and reach figures for up to 8 posts. **«링크 분석» › «분석하기» (Analyze):** up to 50 comment texts (200 characters each), without commenter names or IDs, for «댓글 감성 요약» (comment sentiment summary). By default, the Anthropic API deletes inputs and outputs within 30 days. | `lib/actions/agent-chat.ts:72-97`; `insights/posts/actions.ts:38-52`; `insights/link/actions.ts:49-80,182-186`; privacy.claude.com (API retention) |
 | Functional Software, Inc. (Sentry) | IT solutions and services, including cloud storage and processing | United States (`ingest.us.sentry.io`, per the production CSP) | Server error events. PII sending, cookie/header/body collection and outgoing-request breadcrumbs are all off, and a scrubber masks emails and token-shaped strings. Because `console.error` output becomes events, they can contain Instagram media IDs and Graph API error text (e.g. `lib/meta/instagram.ts:383`). | `sentry.server.config.ts:23-48`; `sentry.edge.config.ts:16,32` |
@@ -201,7 +202,7 @@ Finch uses Platform Data only to deliver features to the Finch user who connecte
 | Auto-DM webhook log: comment ID, media ID, hashed commenter ID | `webhook_events` | 90 days (daily purge), and at account deletion | `api/cron/retention/route.ts:27-31`; `webhooks/instagram/route.ts:191-201` |
 | Opt-outs: hashed commenter ID | `commenter_consent` | Until account deletion. Incoming DM text is checked for the opt-out word and **not** stored. | `webhooks/instagram/route.ts:153-172` |
 | Comment text | **Not stored.** Used in memory for keyword matching only. | — | `webhooks/instagram/route.ts:183-189`; `lib/auto-dm/check-now.ts:309-313` |
-| Published posts: media ID returned by Instagram/Threads | `scheduled_posts` | Until the user deletes the post, or account deletion | migration 0010 |
+| Published posts: media ID, container IDs and permalink returned by Instagram/Threads | `scheduled_posts` | Until the user deletes the post, or account deletion | migrations 0010, 0093 |
 | Published profile link «최근 게시물»: thumbnail URLs, permalinks, source account ID | `link_pages` published snapshot | Until the page is republished without the block, deleted, or the account is deleted | `links/actions.ts:2140-2170` |
 | In-app notifications: username, follower-count changes | `notifications` | Until account deletion | `app/api/cron/refresh-tokens/route.ts:408-414` |
 | Insights, post lists, campaign performance, Page lists and Page posts, business portfolios | **Not stored.** Fetched when viewed. Instagram/Threads responses sit in the fetch cache (flag #3); ads requests use `no-store`. Reports build CSVs from live data at download time. | — | `lib/meta/ads.ts:59-75`; `reports/actions.ts:7-11` |
@@ -210,7 +211,7 @@ Finch uses Platform Data only to deliver features to the Finch user who connecte
 ### B7. How users delete their data
 1. **In the app, per account:** «계정 및 설정» (Account & Settings) › «SNS 계정 연결» (Connect social accounts) › «연결 해제» (Disconnect) › «해제하기» (Disconnect).
    - This deletes the stored connection and its encrypted token.
-   - Posts scheduled on that channel are marked failed (`settings/channels/actions.ts:48-58`).
+   - Posts scheduled on that channel, and posts still processing that Finch hasn't tried to publish yet, are marked failed (`settings/channels/actions.ts:49-74`).
 2. **In the app, whole account:** «계정 및 설정» › «개인정보» (Personal info) › «회원탈퇴» (Delete account) at the bottom of the page. The user types their email and clicks «탈퇴하기» (Delete account) (`settings/profile/_components/danger-zone.tsx:34,62`).
    - This deletes the user row, and every table cascades from it.
    - The user's storage folders are emptied (`lib/account/delete.ts:40-66`).
@@ -289,6 +290,8 @@ If Meta's form asks whether "all data" is deleted, answer precisely, or extend t
 | Vercel environment variables | `DM_HASH_PEPPER` | Set (never change it once set) | `lib/auto-dm/recipient-hash.ts:26-40` | [VERIFY] (B8 relies on it) |
 | Vercel environment variables | App secrets match each product | `INSTAGRAM_APP_SECRET`, `THREADS_APP_SECRET`, `META_APP_SECRET`/`META_ADS_APP_SECRET` | Deletion and deauthorize callbacks return 400 `invalid_signature` on a mismatch | [VERIFY] |
 | Supabase (SQL Editor) | Migration 0092 | Applied | Without it «지금 확인» fails closed (`lib/auto-dm/check-now.ts:220-227`) | [OWNER CONFIRM] |
+| Supabase (SQL Editor) | Migration 0093 | Applied **before** the new publishing code (`3366fe1`) serves traffic | Without it the composer can't upload files or save any post: `create_publish_post` (`app/(finch)/(app)/publish/actions.ts:506`), `claim_publish_uploads` and the `publish-media` bucket (`lib/publish/uploads.ts:62,79`) | [OWNER CONFIRM], then one rehearsal «지금 발행» per channel (`docs/PUBLISH_VIDEO_PLAN.md` tests B-5 and C-10) |
+| Supabase › Storage › Settings | Global file size limit | 300 MB or more, set **after** 0093 | Only video needs it; photos are at most 8 MB (`lib/publish-rules.ts:111`). Order and reason: `docs/PUBLISH_VIDEO_PLAN.md` «사장님이 할 일» 2 | Optional for the review (the screencasts use photos) |
 
 ---
 
@@ -325,11 +328,13 @@ If Meta's form asks whether "all data" is deleted, answer precisely, or extend t
 - **(c):** added rows for `DM_HASH_PEPPER` and migration 0092, the call-count prerequisites, and the Threads tester failure mode. The ads login product name is marked [VERIFY] because the code uses `scope=`, not `config_id`.
 - **New (d):** shared screencast rules, based on Meta's screen-recording page (full login flow, show the grant, ≤1440 px, no audio).
 - Checked for passwords, personal phone numbers and competitor names: none present.
+- **2026-09-12, new publish composer (`3366fe1`):** section 3 «발행», section 5 (both content_publish lines) and section 6 «Publishing» now describe the photo and video composer, the «추가» tile, «처리 중» (Processing) and «게시물 보기» (View post). The label table's publish rows and the «인스타그램 예약 발행» citation were re-cited. (c) gained rows for migration 0093 and the Storage file size limit. B1 and B6 now list the container IDs and permalinks that 0093 stores, and B7 covers processing posts on disconnect.
 
 ### Remaining [VERIFY] / [OWNER CONFIRM]
 - **[OWNER CONFIRM]**
   - Hide the opening notice (flag #1), and decide on GA: fix or declare (flag #4).
   - Test-comment plan for auto-DM (post, keyword, second tester account, 24-hour gap after your own recordings), and whether migration 0092 is applied.
+  - Migration 0093 is applied in production, and one rehearsal «지금 발행» per channel succeeds before recording ((c)).
   - How the reviewer gets a Facebook account with an ad account and app role, or whether to rely on the screencasts.
   - The reviewer Google account is in `OWNER_EMAIL` (second) and has finished consent and onboarding. How to handle Google's sign-in-from-abroad challenge.
   - `sding.kr` is a Threads tester with a Threads profile.

@@ -1,6 +1,6 @@
 # Threads: Meta App Review package (threads_basic · threads_content_publish · threads_manage_insights)
 
-I checked this against `main` @ 65ddf9f on 2026-09-11, and against Meta's reference pages for the three permissions (developers.facebook.com/docs/permissions/reference/threads_basic, /threads_content_publish and /threads_manage_insights).
+I checked this against `main` @ 65ddf9f on 2026-09-11, and against Meta's reference pages for the three permissions (developers.facebook.com/docs/permissions/reference/threads_basic, /threads_content_publish and /threads_manage_insights). The publishing parts (§0 items 5 and 10, section 2, and the publish rows of both tables) were re-checked on 2026-09-12 against `40355b5`: the new publish composer merged in `3366fe1`, plus the publishing overlay added in `40355b5`.
 
 - Every Korean label is the exact string from the code, with an English gloss in parentheses. The file:line for each one is in the «Label verification» table near the end.
 - **[VERIFY]** means the code can't confirm the step (for example, screens hosted by Meta).
@@ -36,7 +36,7 @@ I checked this against `main` @ 65ddf9f on 2026-09-11, and against Meta's refere
 5. **Threads content on sding.kr.**
    - At least 3 posts, at least one with a photo.
    - A few views, likes and replies from another account, so the numbers aren't zero.
-   - **No video post among the 9 newest.** Video tiles render blank (see Gaps).
+   - **No video post among the 9 newest.** Video tiles render blank (see Gaps). The new composer can publish Threads videos, so don't try that on sding.kr before the threads_basic and threads_manage_insights takes, or delete the video afterwards.
    - No personal information in the newest posts.
 6. **Soft-launch notice.** After login, the app shows a «지금은 임시오픈 기간입니다» (We are in a soft-launch period) dialog once per day per browser.
    - On recording day, sign in once in the recording profile, click «오늘 하루 종일 보지 않기» (Don't show again today), then sign out.
@@ -55,6 +55,8 @@ I checked this against `main` @ 65ddf9f on 2026-09-11, and against Meta's refere
    - Threads reads are cached for 300 s per token, and the 7-day totals stop at the start of the current hour.
    - Reconnecting gives a new token, so data right after connecting is always fresh.
    - A post made after Home was already opened can take up to 5 minutes to appear there.
+10. **The publish take uses the new composer** (merged 2026-09-12, `3366fe1`).
+   - **[VERIFY] before recording:** migration 0093 is applied in production. Without it the composer can't upload a photo or save any post, text-only included. Then do one rehearsal «지금 발행» to Threads (test C-10 in `docs/PUBLISH_VIDEO_PLAN.md`, «손으로 해 보는 시험»). A photo post also confirms that Threads accepts the signed file URLs Finch gives it (`lib/publish/media.ts:14-21`).
 
 ## Gaps and findings in code (read before recording)
 
@@ -130,26 +132,27 @@ Finch uses threads_basic so a creator can link their own Threads profile through
 ## 2. threads_content_publish
 
 ### How we use it
-Finch requests threads_content_publish for a single feature: posting content the user writes in the «발행» (Publish) screen to their own Threads profile. In the «새 게시물 포스팅» (New post) composer, the user picks the «스레드» (Threads) channel, writes up to 500 characters, optionally attaches up to 10 photos, and chooses «지금 발행» (Publish now) or «예약 발행» (Schedule) with a date and time. Finch stores the photos in its own storage and passes them to Threads as public image URLs, creates a TEXT, IMAGE or CAROUSEL container with `POST /{threads-user-id}/threads`, waits until the container status is FINISHED, and then calls `/threads_publish`, either immediately or within five minutes of the scheduled time. The user sees the outcome right away: a «스레드에 올라갔어요» (Posted to Threads) confirmation, the post under the «발행완료» (Published) tab and an in-app notification; if Threads rejects it, Finch shows the error and keeps the post so the user can retry or delete it. Nothing reaches the user's Threads profile unless the user wrote it and chose to publish or schedule it.
+Finch requests threads_content_publish for a single feature: posting content the user writes in the «발행» (Publish) screen to their own Threads profile. In the «새 게시물 포스팅» (New post) composer, the user picks the «스레드» (Threads) channel, writes up to 500 characters in «글» (Text), optionally adds up to 20 photos or videos with «추가» (Add), and chooses «지금 발행» (Publish now) or «예약 발행» (Schedule) with a date and time. The files are uploaded to Finch's own storage, and Finch gives Threads a URL for each one. It creates a TEXT, IMAGE, VIDEO or CAROUSEL container with `POST /{threads-user-id}/threads`, waits until the container status is FINISHED, and then calls `/threads_publish`, either immediately or within five minutes of the scheduled time. The user sees the outcome right away: a «스레드에 올라갔어요» (Posted to Threads) confirmation, the post under the «발행완료» (Published) tab with a «게시물 보기» (View post) link to it on Threads, and an in-app notification. A video that Threads is still processing shows «처리 중» (Processing) and is published automatically when it's ready. If Threads rejects a post, Finch shows the reason and keeps the post so the user can retry or delete it. Nothing reaches the user's Threads profile unless the user wrote it and chose to publish or schedule it.
 
 ### Reviewer test steps
 1. Go to https://finch.ai.kr while signed out, click «로그인» (Log in), then «Google로 계속하기» (Continue with Google), and use the test Google account. If the «지금은 임시오픈 기간입니다» dialog appears, click «닫기» (Close).
 2. Open «계정 및 설정» (Account & Settings) › «SNS 계정 연결» (Connect social accounts), and check that the «Threads» row says «연결됨» (Connected). If it doesn't, follow threads_basic steps 6–9.
 3. In the left sidebar, under «SNS», click «발행» (Publish). The strip at the top shows «스레드» (Threads) with @sding.kr.
 4. Click «새 게시물 포스팅» (New post) on the right.
-5. Under «채널» (Channel), click «스레드» (Threads). The composer opens with «인스타그램» (Instagram) selected.
-6. Optional: under «이미지 (선택)» (Images, optional), click «추가» (Add) and choose a JPG or PNG.
+5. Under «채널» (Channel), click «스레드» (Threads). The composer starts on the first connected channel, so «인스타그램» (Instagram) is selected when Instagram is connected too.
+6. Optional: under «사진·영상 (선택)» (Photos & videos, optional), click the «추가» (Add) tile and choose one JPG or PNG photo. The tile shows a «사진» (Photo) chip; wait until the thin upload bar along its bottom finishes.
 7. In «글» (Text), type a short post such as "Finch app review test". The counter shows x/500.
 8. Under «발행 방식» (Publishing method), select «지금 발행» (Publish now). The default is «예약 발행» (Schedule).
-9. Click «지금 발행하기» (Publish now). The button changes to «발행 중…» (Publishing…), with the note «스레드가 게시물을 처리하는 동안 잠시 걸릴 수 있어요. 창을 닫지 마세요.» (Threads may take a moment to process the post. Please keep this window open.) A post with a photo can take up to about a minute.
-10. When «스레드에 올라갔어요» (Posted to Threads) appears, click «확인» (OK).
-11. Click the «발행완료» (Published) tab. The post is listed with today's date and time and the status «발행 완료» (Published).
-12. Open the Threads app (or threads.net) signed in as sding.kr and go to the profile. The new post is at the top, with the same text and photo.
+9. Click «지금 발행하기» (Publish now). After a moment the composer is covered by «스레드에 올리고 있어요» (Posting to Threads), a status line such as «글을 보내는 중이에요.» (Sending the text) and a counter, «{n}초 지남 · 이 창을 닫지 말고 기다려 주세요» ({n} s elapsed · please keep this window open). It usually takes 10–30 seconds.
+10. When «스레드에 올라갔어요» (Posted to Threads) appears, click «확인» (OK). If «스레드가 게시물을 처리하고 있어요» (Threads is processing the post) appears instead, the post waits under «발행예약» (Scheduled) as «처리 중» (Processing) and is published automatically within a few minutes.
+11. Click the «발행완료» (Published) tab. The post is listed with today's date and time, the status «발행 완료» (Published) and a «게시물 보기» (View post) link.
+12. Open the Threads app signed in as sding.kr and go to the profile. The new post is at the top, with the same text and photo. (In a browser, «게시물 보기» opens the same post on the Threads website.)
 13. Optional: in Finch, «홈» (Home) › «Threads» › «최근 게시물» (Recent posts) lists the new post as well. If Home was already open before you published, allow up to 5 minutes.
 14. Optional, to test scheduling:
     1. In step 8, choose «예약 발행» (Schedule) with a time a few minutes ahead, and click «예약하기» (Schedule).
     2. The dialog «스레드 발행을 예약했어요» (Threads post scheduled) appears.
     3. The post waits under «발행예약» (Scheduled) and is published within five minutes after the chosen time.
+15. Optional, not needed for this permission: the same permission also publishes videos and carousels. One MP4 or MOV video posts as a Threads video (up to 5 minutes), and 2–20 photos or videos post as a carousel; the line under «사진·영상» reads «사진·영상 최대 20개 · 영상은 5분까지 · 글만 올려도 돼요» (Up to 20 photos or videos · videos up to 5 minutes · text only is fine). A video usually shows «처리 중» (Processing) for a few minutes before it goes live.
 
 ### Screencast script
 | # | On screen / action | Caption |
@@ -160,12 +163,12 @@ Finch requests threads_content_publish for a single feature: posting content the
 | 4 | «@sding.kr 계정을 연결했어요» › «확인»; the row shows «연결됨» | "Threads is now linked as @sding.kr." |
 | 5 | Sidebar «SNS» › «발행»; the strip shows «스레드» @sding.kr | "The «발행» (Publish) screen shows which Threads account will post." |
 | 6 | Click «새 게시물 포스팅» | "Open the composer: «새 게시물 포스팅» (New post)." |
-| 7 | Under «채널», click «스레드» | "Destination: «스레드» (Threads)." |
-| 8 | «추가» › pick 1 photo; type text in «글» (counter x/500) | "The user attaches a photo and writes the post. Threads allows up to 500 characters." |
+| 7 | Under «채널», click «스레드». «사진·영상 (선택)» reads «0/20», with the line «사진·영상 최대 20개 · 영상은 5분까지 · 글만 올려도 돼요» | "Destination: «스레드» (Threads)." |
+| 8 | Type text in «글» (counter x/500). Optional: first «추가» › pick 1 photo; the tile shows «사진» (wait for its upload bar to finish) | "The user writes the post; Threads allows up to 500 characters. A photo is optional." |
 | 9 | Select «지금 발행» › click «지금 발행하기» | "«지금 발행» (Publish now): Finch creates the Threads container and publishes it." |
-| 10 | «발행 중…» and the processing note (trim the wait; keep 2–3 s) | "Threads is processing the photo…" |
+| 10 | The overlay «스레드에 올리고 있어요» with «글을 보내는 중이에요.» (or «사진·영상을 보내는 중이에요.» with a photo), then «스레드가 게시물을 확인하고 있어요.», and the «{n}초 지남 · 이 창을 닫지 말고 기다려 주세요» counter (trim the wait; keep 2–3 s) | "Threads is processing the post…" |
 | 11 | «스레드에 올라갔어요» › «확인» | "Done: «스레드에 올라갔어요» (Posted to Threads)." |
-| 12 | Click the «발행완료» tab; the new row shows «발행 완료» | "Finch lists it under «발행완료» (Published), with the time it went live." |
+| 12 | Click the «발행완료» tab; the new row shows «발행 완료» and «게시물 보기» | "Finch lists it under «발행완료» (Published), with the time it went live and a link to the post." |
 | 13 | Threads mobile app (phone screen recording spliced in) › @sding.kr profile › open the new post | "The same post, live in the Threads app, with the same text and photo." |
 | 14 (optional) | «홈» › «Threads» › «최근 게시물», with the new post at the top | "It also appears in Finch's list of the user's recent threads." |
 | 15 (optional) | Bell «알림» › «게시물이 발행됐어요» | "Finch leaves an in-app notice: «게시물이 발행됐어요» (Your post was published)." |
@@ -174,6 +177,8 @@ Tips:
 - Meta asks for the **native** Threads app in scene 13, so a phone screen recording is safer than threads.net. **[VERIFY]** whether threads.net is accepted.
 - Scene 14 works immediately only if Home › Threads was not opened between connecting and publishing.
 - If a photo post fails in rehearsal, record a text-only post. Meta asks for text, images or video.
+- If scene 11 shows «스레드가 게시물을 처리하고 있어요» (Threads is processing the post) instead, re-take, or show the row's «처리 중» (Processing) under «발행예약» (Scheduled) and wait until it moves to «발행완료».
+- Optional: videos and carousels go through this same permission, but it doesn't need them. If you add one, record it after scene 13, and don't leave a video among sding.kr's 9 newest threads (§0 item 5).
 
 ---
 
@@ -244,14 +249,18 @@ Finch uses threads_manage_insights to show a creator how their own Threads accou
 | «최근 게시물» / «조회수» / «좋아요» / «댓글» | Home table | `app/(finch)/(app)/dashboard/_components/dashboard-client.tsx:215, 231-233` |
 | «텍스트» / «피드» / «캐러셀» | Post type | `app/(finch)/(app)/dashboard/_components/dashboard-client.tsx:42, 38, 41` |
 | Profile card stats / «팔로워 … · 최근 7일» / hover views | Home right panel | `components/dashboard/channel-profile-panel.tsx:80-82, 103, 139-143` |
-| «스레드» (strip) | Publish page | `app/(finch)/(app)/publish/_components/publish-list.tsx:307, 328` |
-| «발행예약» / «발행완료» / «새 게시물 포스팅» | Publish tabs / button | `app/(finch)/(app)/publish/_components/publish-list.tsx:353, 354, 383` |
-| «발행 완료» (status) | List row | `components/ui/status-pill.tsx:25` |
-| «채널» / «이미지 (선택)» / «추가» / «글» / x/500 | Composer | `app/(finch)/(app)/publish/_components/post-composer.tsx:499, 533-534, 578, 612, 615`; `lib/publish-rules.ts:21, 58` |
-| «발행 방식» / «지금 발행» / «예약 발행» | Composer | `app/(finch)/(app)/publish/_components/post-composer.tsx:631, 646, 663` |
-| «지금 발행하기» / «예약하기» / «발행 중…» / processing note | Composer button | `app/(finch)/(app)/publish/_components/post-composer.tsx:713, 714, 708, 719` |
-| «스레드에 올라갔어요» / «스레드 발행을 예약했어요» | Result dialog | `app/(finch)/(app)/publish/_components/post-composer.tsx:405, 419` |
-| «알림» (bell) / «게시물이 발행됐어요» | Topbar / notification | `components/layout/topbar.tsx:156`; `lib/publish/run.ts:182` |
+| «스레드» (strip) | Publish page | `app/(finch)/(app)/publish/_components/publish-list.tsx:384` (handle 405) |
+| «발행예약» / «발행완료» / «새 게시물 포스팅» | Publish tabs / button | `app/(finch)/(app)/publish/_components/publish-list.tsx:430, 431, 460` |
+| «발행 완료» / «처리 중» (status) | List row | `components/ui/status-pill.tsx:28, 27` |
+| «스레드가 처리하고 있어요 · 끝나면 자동으로 올라가요» / «게시물 보기» | List row (processing note / link on published posts) | `app/(finch)/(app)/publish/_components/publish-list.tsx:986, 1001` (the link needs a permalink, 982) |
+| «채널» / «사진·영상» / «(선택)» / «0/20» / «추가» / «사진» (tile chip) | Composer | `app/(finch)/(app)/publish/_components/post-composer.tsx:428, 462, 463, 466`; `app/(finch)/(app)/publish/_components/media-tiles.tsx:268, 214`; `lib/publish-rules.ts:68` |
+| «사진·영상 최대 20개 · 영상은 5분까지 · 글만 올려도 돼요» | Composer hint | `app/(finch)/(app)/publish/_components/post-composer.tsx:103` (values `lib/publish-rules.ts:175-184, 199`) |
+| «글» / x/500 | Composer | `app/(finch)/(app)/publish/_components/post-composer.tsx:549, 553`; `lib/publish-rules.ts:68` |
+| «발행 방식» / «지금 발행» / «예약 발행» | Composer | `app/(finch)/(app)/publish/_components/post-composer.tsx:572, 588, 606` |
+| «지금 발행하기» / «예약하기» | Composer button | `app/(finch)/(app)/publish/_components/post-composer.tsx:658, 659` |
+| «스레드에 올리고 있어요» / «글을 보내는 중이에요.» / «사진·영상을 보내는 중이에요.» / «스레드가 게시물을 확인하고 있어요.» / «{n}초 지남 · 이 창을 닫지 말고 기다려 주세요» | Publishing overlay over the composer | `app/(finch)/(app)/publish/_components/publishing-veil.tsx:52, 58, 58, 60, 78` (mounted at `post-composer.tsx:412`) |
+| «스레드에 올라갔어요» / «스레드가 게시물을 처리하고 있어요» / «스레드 발행을 예약했어요» | Result dialog | `app/(finch)/(app)/publish/_components/post-composer.tsx:74, 81, 67` (label «스레드», `lib/publish-rules.ts:28`) |
+| «알림» (bell) / «게시물이 발행됐어요» | Topbar / notification | `components/layout/topbar.tsx:156`; `lib/publish/run.ts:457` |
 
 ## API calls behind each claim
 
@@ -263,8 +272,9 @@ Finch uses threads_manage_insights to show a creator how their own Threads accou
 | Account insights: `views, likes, replies, reposts, quotes, clicks` for 7 days and the prior 7 days; `followers_count` (lifetime); daily `views` for 14 days | `lib/meta/threads.ts:68-71, 100, 134`; `lib/data/live.ts:674-680, 708-711` |
 | Per-post insights: `views, likes, replies, reposts, quotes, shares` for the 10 newest posts | `lib/meta/threads.ts:203-205`; `lib/data/live.ts:707-709` |
 | Engagement = (likes + replies + reposts + quotes) ÷ views | `lib/data/live.ts:722-724` |
-| Publishing: TEXT, IMAGE or CAROUSEL (`is_carousel_item`) → poll `status` → `threads_publish` | `lib/meta/threads-publish.ts:173-228` |
-| Scheduled posts publish within 5 minutes | `vercel.json` cron `publish-scheduled */5` |
+| Publishing: TEXT, IMAGE, VIDEO or CAROUSEL (`is_carousel_item`) → check `status` → `threads_publish` → read `permalink` | `lib/meta/threads-publish.ts:38-60, 70-99`; flow in `lib/publish/run.ts` |
+| Files upload from the browser straight to Finch's storage; Threads gets a URL for each file | `app/(finch)/(app)/publish/actions.ts:104-143`; `lib/publish/media.ts:10-21` |
+| Scheduled posts publish within 5 minutes; posts in «처리 중» are checked every minute | `vercel.json` crons `publish-scheduled */5`, `publish-processing * * * * *` |
 | Follower alert: daily, ±max(30, 3%) | `app/api/cron/refresh-tokens/route.ts:40-41, 494-513`; `vercel.json` `0 18 * * *` |
 | Disconnect deletes the row, token included | `app/(finch)/(app)/settings/channels/actions.ts:33-38` |
 | Threads-side deauthorize only nulls the token and keeps the row | `app/api/auth/threads/deauthorize/route.ts:31-36` |
@@ -288,6 +298,11 @@ Finch uses threads_manage_insights to show a creator how their own Threads accou
 - `C:\Users\rnjsr\Downloads\Finch\app\(finch)\(app)\settings\channels\_lib\derive-state.ts`
 - `C:\Users\rnjsr\Downloads\Finch\app\(finch)\(app)\publish\_components\post-composer.tsx`
 - `C:\Users\rnjsr\Downloads\Finch\app\(finch)\(app)\publish\_components\publish-list.tsx`
+- `C:\Users\rnjsr\Downloads\Finch\app\(finch)\(app)\publish\_components\media-tiles.tsx`
+- `C:\Users\rnjsr\Downloads\Finch\app\(finch)\(app)\publish\_components\use-media-tiles.ts`
+- `C:\Users\rnjsr\Downloads\Finch\app\(finch)\(app)\publish\_components\publishing-veil.tsx`
+- `C:\Users\rnjsr\Downloads\Finch\components\ui\status-pill.tsx`
+- `C:\Users\rnjsr\Downloads\Finch\lib\publish\media.ts`
 - `C:\Users\rnjsr\Downloads\Finch\app\(finch)\(app)\publish\actions.ts`
 - `C:\Users\rnjsr\Downloads\Finch\app\(finch)\(app)\dashboard\_components\dashboard-client.tsx`
 - `C:\Users\rnjsr\Downloads\Finch\components\dashboard\channel-profile-panel.tsx`
@@ -313,6 +328,7 @@ Finch uses threads_manage_insights to show a creator how their own Threads accou
    - Stated that «게시물 수» is capped at 25, that «도달» plots views for Threads, and that weekly totals are aligned to the hour.
 7. **Added test step and scenes.** An optional scheduling test with verified labels («예약하기», «스레드 발행을 예약했어요», «발행예약»), and an optional Home scene showing the new post. The publish result now uses the native Threads app, since Meta names it.
 8. **Added the label and API verification tables** with file:line citations.
+9. **2026-09-12: section 2 rewritten for the new composer (`3366fe1`).** The draft described the old image-only composer («이미지 (선택)», up to 10 photos). The description, test steps and script now use «사진·영상 (선택)» (up to 20 photos or videos), the «추가» tile, the publishing overlay «스레드에 올리고 있어요» (`40355b5`, which replaced the button's «발행 중…» note), the «처리 중» (Processing) fallback and the «게시물 보기» (View post) link. §0 gained item 10 (migration 0093 and a rehearsal) and a video warning in item 5, and the publish rows of both tables were re-cited. Video and carousel publishing are noted as optional.
 
 ## Remaining [VERIFY] / [OWNER CONFIRM]
 - **[VERIFY]**
@@ -321,6 +337,7 @@ Finch uses threads_manage_insights to show a creator how their own Threads accou
   - Meta's wording on the consent screen and its approve button.
   - The Threads username is exactly sding.kr.
   - After rehearsal, the dashboard shows calls for `threads_content_publish` and `threads_manage_insights` (up to 2 days' lag).
+  - Migration 0093 is applied in production and a rehearsal «지금 발행» to Threads succeeds (§0 item 10).
   - The Threads deauthorize and data-deletion callback URLs are registered (APP_REVIEW §4-2-6).
   - Whether threads.net is accepted as "the native Threads app".
 - **[OWNER CONFIRM]**
