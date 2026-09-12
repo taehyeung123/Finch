@@ -16,12 +16,15 @@ import { cn } from "@/lib/cn";
 
   다크에서도 같은 규칙이 성립한다 — 전부 시맨틱 토큰이라 값만 바뀐다.
 */
-export type PostStatus = "draft" | "scheduled" | "publishing" | "published" | "failed" | "canceled";
+import type { PostStatus } from "@/lib/types";
+export type { PostStatus };
 
 const META: Record<PostStatus, { label: string; dot: string; text: string; face?: string; pulse?: boolean }> = {
   draft: { label: "초안", dot: "bg-fg-faint", text: "text-fg-sub" },
   scheduled: { label: "예약됨", dot: "bg-primary", text: "text-fg" },
   publishing: { label: "발행 중", dot: "bg-warning", text: "text-warning-strong", pulse: true },
+  /* 메타가 영상·사진을 처리하는 중(2026-09-11) — 끝나면 매분 크론이 자동으로 올린다. 발행 중과 같은 «진행 중» 표현 */
+  processing: { label: "처리 중", dot: "bg-warning", text: "text-warning-strong", pulse: true },
   published: { label: "발행 완료", dot: "bg-positive", text: "text-fg-sub" },
   /* 유일하게 색면을 쓴다 — 목록에서 즉시 눈에 걸려야 하는 단 하나의 상태다 */
   failed: { label: "발행 실패", dot: "bg-negative", text: "text-negative-strong", face: "bg-negative-weak" },
@@ -49,6 +52,7 @@ export const STATUS_LABEL: Record<PostStatus, string> = {
   draft: META.draft.label,
   scheduled: META.scheduled.label,
   publishing: META.publishing.label,
+  processing: META.processing.label,
   published: META.published.label,
   failed: META.failed.label,
   canceled: META.canceled.label,

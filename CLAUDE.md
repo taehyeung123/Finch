@@ -156,6 +156,10 @@
   외부인이 무료 한도를 태워 **우리의 유일한 오류 관측 수단을 끌 수 있다.**
 - **상태를 바꾸는 동작을 GET 렌더 안에서 하지 않는다.** 서버 액션(POST)으로 옮긴다 — Next 가 Origin 을 검증해
   CSRF 가 함께 닫힌다(팀 초대 수락이 그래서 옮겨졌다).
+- **발행 사진·영상(publish-media 버킷·publish_uploads 원장)은 서버만 만진다** (2026-09-11, 0093). 새 미디어 글은 `create_publish_post`(service_role)로만
+  만들고, `scheduled_posts` 의 엔진 칸(container_id·publish_attempted_at·next_check_at·media 등)은 로그인 사용자에게 쓰기 권한이 없다 —
+  상태 전이는 `scheduled_posts_guard` 가 막는다. 발행은 `lib/publish/run.ts` 의 `claimPost`(선점이 돌려준 행만 믿는다) → `advanceClaimedPost` 로만.
+  메타 발행 호출 **전에** 시도 기록을 먼저 적는다(두 번 올리지 않기, `lib/publish/engine-core.ts`).
 - **INSERT 를 검사하는 트리거·정책은 UPDATE 도 함께 봐야 한다.** 0060 의 소유 대조가 INSERT 에만 걸려 있어
   남의 페이지 밑에 내 페이지를 붙일 수 있었다(0086 이 수리). 새 가드를 만들 때 두 동작을 같이 생각한다.
 

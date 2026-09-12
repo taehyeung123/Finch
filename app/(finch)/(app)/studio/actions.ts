@@ -518,13 +518,17 @@ export async function generateIdeas(keyword: string, category: string): Promise<
   }
 }
 
-/** 예약 발행 취소 — RLS(auth.uid()=user_id)로 본인 행만, scheduled 상태일 때만 취소 가능 */
-export async function cancelScheduledPost(id: string): Promise<{ ok: boolean }> {
+/**
+ * 예약 발행 취소 — RLS(auth.uid()=user_id)로 본인 행만. 예약(scheduled), 또는 처리 중(processing)이면서
+ * **발행을 시도하기 전**일 때만 된다(2026-09-11 영상 발행). 시도한 뒤엔 이미 올라갔을 수 있어 «취소됨»이 거짓이 된다 —
+ * DB 가드(0093)도 같은 규칙으로 막는다.
+ */
+export async function cancelScheduledPost(id: string): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { ok: false };
+  if (!user) return { ok: false, error: "로그인이 필요해요." };
 
   /* ⚠️ .select() 로 실제로 바뀐 행 수를 본다 — PostgREST 는 조건에 맞는 행이 0개여도 오류를 내지 않는다.
      「지금 발행」이 먼저 선점해 status 가 publishing 이면 이 UPDATE 는 0행이고, 예전엔 그걸 ok:true 로 돌려
@@ -533,12 +537,18 @@ export async function cancelScheduledPost(id: string): Promise<{ ok: boolean }> 
     .from("scheduled_posts")
     .update({ status: "canceled" })
     .eq("id", id)
-    .eq("status", "scheduled")
+    .in("status", ["scheduled", "processing"])
+    .is("publish_attempted_at", null)
     .select("id");
   if (error) {
     console.error("[studio] 예약 취소 실패:", error.message);
-    return { ok: false };
+    return { ok: false, error: "예약을 취소하지 못했어요. 잠시 후 다시 시도해 주세요." };
   }
-  if (!data || data.length === 0) return { ok: false };
+  if (!data || data.length === 0) {
+    /* 왜 0행인지 가른다 — 이미 올리는 중이면 그 사실을 말한다(«잠시 후 다시»는 틀린 안내다) */
+    const { data: row } = await supabase.from("scheduled_posts").select("status, publish_attempted_at").eq("id", id).maybeSingle();
+    const busy = !!row && (row.status === "publishing" || (row.status === "processing" && !!row.publish_attempted_at));
+    return { ok: false, error: busy ? "이미 올리는 중이라 취소할 수 없어요." : "이미 처리된 글이에요. 목록을 새로고침해 주세요." };
+  }
   return { ok: true };
 }

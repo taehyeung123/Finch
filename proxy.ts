@@ -234,6 +234,11 @@ function applySecurityHeaders(response: NextResponse, publicLink = false) {
     // 붙여넣는** 제품이고(노션·드롭박스·기존 홈페이지에 이미 올려둔 것), 호스트를
     // 열거할 방법이 없다. 이미지는 실행되지 않으므로 여는 대가가 가장 작다.
     `img-src 'self' data: blob: https: ${toss} ${igCdn} ${tiktokCdn}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
+    /* 발행 작성기의 영상 미리보기·커버 고르기(<video src="blob:…">) — 앱 화면만. 공개 프로필에는 <video> 가 없다(2026-09-11).
+       media-src 가 없으면 default-src 'self' 로 떨어지고, 'self' 는 blob: 을 덮지 않는다.
+       저장된 영상을 재생하는 화면이 생기면 그때 supabaseOrigin 을 더한다(지금은 커버 JPEG 만 보여 준다 — img-src 가 이미 연다).
+       업로드(XHR PUT)는 connect-src 의 supabaseOrigin 이 이미 연다. */
+    publicLink ? "media-src 'self'" : "media-src 'self' blob:",
     /* Sentry 인제스트 — 브라우저 SDK 가 오류 이벤트를 DSN 의 오리진으로 직접 보낸다(터널 라우트를 쓰지 않는다 —
        이벤트마다 Vercel 함수 호출이 붙는 비용을 피한다). DSN 이 없으면 항목도 없다. */
     `connect-src 'self' https://dapi.kakao.com ${toss}${supabaseOrigin ? ` ${supabaseOrigin}` : ""}${sentryOrigin ? ` ${sentryOrigin}` : ""}${gaConnect}${trackerConnect}`,

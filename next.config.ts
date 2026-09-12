@@ -12,11 +12,11 @@ const nextConfig: NextConfig = {
        빌드가 조금 느려지는 대신 매번 새로 굽는다. 개발 캐시(ForDev)는 그대로 둔다. */
     turbopackFileSystemCacheForBuild: false,
     serverActions: {
-      /* 발행 컴포저(post-composer.tsx)가 이미지를 base64 data URL 로 서버 액션에
-         넘긴다. 기본 1MB 로는 사진 한 장도 못 들어간다 — 컴포저가 클라이언트에서
-         1440px JPEG 로 축소해 장당 ~1.5MB(base64 ~2MB), 캐러셀 10장이면 ~20MB 라
-         25mb 로 잡는다. 컴포저의 축소 상수(MAX_DIMENSION)와 짝이다 — 한쪽만
-         바꾸면 저장이 프레임워크 단에서 조용히 막힌다. */
+      /* 파일을 서버 액션 본문에 싣는 곳이 아직 있다 — 프로필 링크 이미지(base64, 4MB 안전망 · links/actions.ts),
+         브랜드 킷 로고(base64 2MB · studio/brand-kit-actions.ts), 광고 소재(FormData · ads/media-actions.ts).
+         기본 1MB 로는 셋 다 막힌다. 실제 벽은 Vercel 함수 본문 4.5MB 라 이 값은 로컬·Next 쪽 상한일 뿐이다.
+         발행 컴포저는 2026-09-11 부터 여기에 싣지 않는다 — 브라우저가 Storage 로 직접 올린다(publish/_components/use-media-tiles.ts).
+         위 세 곳도 직접 업로드로 옮기면 이 줄을 지운다. */
       bodySizeLimit: "25mb",
     },
   },

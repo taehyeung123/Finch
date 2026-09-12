@@ -7,7 +7,10 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { ButtonLink } from "@/components/ui/button";
 import { StatusPill, type PostStatus } from "@/components/ui/status-pill";
+import { SignedThumb } from "@/components/ui/signed-thumb";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { signPostThumbs } from "@/lib/publish/thumbs";
 import { isDemoMode } from "@/lib/supabase/config";
 import { scheduledPosts as demoPosts } from "@/lib/data";
 import { formatDate } from "@/lib/format";
@@ -35,19 +38,26 @@ export const metadata: Metadata = {
 interface Work {
   id: string;
   caption: string;
-  image_urls: string[];
+  /** 서명된 목록 썸네일(없으면 아이콘) */
+  thumb_url: string | null;
+  media_count: number;
   scheduled_at: string;
   status: PostStatus;
 }
 
 async function load(): Promise<{ works: Work[]; failed: boolean }> {
-  if (isDemoMode()) return { works: demoPosts as Work[], failed: false };
+  if (isDemoMode()) {
+    return {
+      works: demoPosts.map((p) => ({ id: p.id, caption: p.caption, thumb_url: p.thumb_url, media_count: p.media_count, scheduled_at: p.scheduled_at, status: p.status })),
+      failed: false,
+    };
+  }
   const user = await getAuthUser();
   if (!user) return { works: [], failed: false };
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("scheduled_posts")
-    .select("id, caption, image_urls, scheduled_at, status")
+    .select("id, caption, image_urls, media, scheduled_at, status")
     .order("created_at", { ascending: false })
     .limit(60);
   if (error) {
@@ -55,7 +65,20 @@ async function load(): Promise<{ works: Work[]; failed: boolean }> {
     console.error("[studio/works] 조회 실패:", error.message);
     return { works: [], failed: true };
   }
-  return { works: (data ?? []) as Work[], failed: false };
+  /* 새 글(사진·영상)은 비공개 버킷이라 서명 URL 로 썸네일을 만든다 — 실패하면 아이콘(표시용) */
+  const rows = (data ?? []) as Array<{ id: string; caption: string; image_urls: string[] | null; media: unknown; scheduled_at: string; status: PostStatus }>;
+  const thumbs = await signPostThumbs(createAdminClient(), rows, user.id);
+  return {
+    works: rows.map((r) => ({
+      id: r.id,
+      caption: r.caption,
+      thumb_url: thumbs.get(r.id) ?? null,
+      media_count: Array.isArray(r.media) ? r.media.length : (r.image_urls?.length ?? 0),
+      scheduled_at: r.scheduled_at,
+      status: r.status,
+    })),
+    failed: false,
+  };
 }
 
 export default async function Page() {
@@ -84,12 +107,8 @@ export default async function Page() {
               {works.map((w) => (
                 <li key={w.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
                   <span className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-card border border-line bg-plate text-fg-faint">
-                    {w.image_urls?.[0] ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- 서명 만료되는 Storage URL 이라 최적화 프록시를 거치지 않는다
-                      <img src={w.image_urls[0]} alt="" className="size-full object-cover" />
-                    ) : (
-                      <ImageIcon className="size-4" aria-hidden />
-                    )}
+                    {/* 서명 URL(1시간)이 만료돼 깨지면 아이콘으로 물러난다 — 서버의 <img> 엔 onError 를 달 수 없어 클라이언트 조각으로 */}
+                    <SignedThumb src={w.thumb_url} className="size-full object-cover" fallback={<ImageIcon className="size-4" aria-hidden />} />
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[15px] font-medium">
@@ -98,7 +117,7 @@ export default async function Page() {
                     <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-fg-sub">
                       <CalendarClock className="size-3" aria-hidden />
                       {formatDate(w.scheduled_at)}
-                      {w.image_urls?.length ? ` · ${w.image_urls.length}장` : ""}
+                      {w.media_count ? ` · ${w.media_count}개` : ""}
                     </p>
                   </div>
                   <StatusPill status={w.status} />

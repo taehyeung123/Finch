@@ -176,7 +176,9 @@ export async function GET(request: Request) {
     let userOrphans = 0;
     let failed = false;
 
-    for (const bucket of ["link-assets", "cardnews"] as const) {
+    /* publish-media(0093)는 관찰만 — 실제 정리는 참조가 정확한 publish-media-sweep 이 한다. 여기 후보로 남는 것은
+       그 크론이 놓친 것(원장 밖 객체)이라 조사 대상이다. 글의 media jsonb 경로는 referenceBlob 의 scheduled_posts 에 들어 있다. */
+    for (const bucket of ["link-assets", "cardnews", "publish-media"] as const) {
       const list = await listUserObjects(admin, bucket, userId);
       if (list === null) {
         failed = true;

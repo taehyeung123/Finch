@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/ui/section-header";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
+import { LIST_POST_COLUMNS, toListItem, type ListPostRow } from "@/lib/publish/list-item";
+import { signPostThumbs } from "@/lib/publish/thumbs";
 import { accounts as sampleAccounts, scheduledPosts as demoScheduledPosts } from "@/lib/data";
 import type { ComposerChannel } from "./_components/post-composer";
 import { PublishList, type ScheduledPost } from "./_components/publish-list";
@@ -58,13 +61,13 @@ async function loadScheduled(): Promise<{ items: ScheduledPost[]; truncated: boo
   const [sched, drafts] = await Promise.all([
     supabase
       .from("scheduled_posts")
-      .select("id, caption, image_urls, scheduled_at, status, error")
+      .select(LIST_POST_COLUMNS)
       .neq("status", "draft")
       .order("scheduled_at", { ascending: false })
       .limit(PAGE_LIMIT),
     supabase
       .from("scheduled_posts")
-      .select("id, caption, image_urls, scheduled_at, status, error")
+      .select(LIST_POST_COLUMNS)
       .eq("status", "draft")
       .order("created_at", { ascending: false })
       .limit(50),
@@ -76,7 +79,11 @@ async function loadScheduled(): Promise<{ items: ScheduledPost[]; truncated: boo
      또 한쪽만 죽었을 때 살아 있는 쪽까지 버릴 이유도 없다 — 따로 판단한다. */
   if (sched.error) console.error("[publish] 예약 조회 실패:", sched.error.message);
   if (drafts.error) console.error("[publish] 초안 조회 실패:", drafts.error.message);
-  const items = [...((sched.data ?? []) as ScheduledPost[]), ...((drafts.data ?? []) as ScheduledPost[])];
+  const rows = [...((sched.data ?? []) as unknown as ListPostRow[]), ...((drafts.data ?? []) as unknown as ListPostRow[])];
+  /* 썸네일 — 비공개 버킷(publish-media)은 서명 URL 을 한 번에 묶어 만든다. 실패하면 아이콘(표시용일 뿐이다) */
+  const thumbs = await signPostThumbs(createAdminClient(), rows, user.id);
+  const now = Date.now();
+  const items = rows.map((r) => toListItem(r, thumbs.get(r.id) ?? null, now));
   return {
     items,
     truncated: (sched.data ?? []).length >= PAGE_LIMIT,
@@ -119,7 +126,7 @@ export default async function PublishPage() {
     <div className="space-y-5">
       <PageHeader
         title="발행"
-        description="인스타그램·스레드 게시물을 지금 올리거나 예약합니다. 예약한 시각부터 5분 안에 자동으로 발행돼요."
+        description="인스타그램·스레드에 사진·영상 게시물을 지금 올리거나 예약합니다. 예약한 시각부터 5분 안에 자동으로 발행돼요."
       />
       <PublishList initialItems={items} channels={channels} isDemo={isDemoMode()} truncated={truncated} loadFailed={failed} />
     </div>

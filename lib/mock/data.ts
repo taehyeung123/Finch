@@ -903,47 +903,93 @@ const DEMO_TODAY_MS = (() => {
 const demoAt = (dayOffset: number, hh: number, mm = 0) =>
   new Date(DEMO_TODAY_MS + dayOffset * 86_400_000 + (hh - 9) * 3_600_000 + mm * 60_000).toISOString();
 
+/** 목록 한 줄 — 데모도 서버(lib/publish/list-item.ts toListItem)와 같은 모양을 준다 */
+const demoPost = (p: Pick<ScheduledPostSample, "id" | "caption" | "status" | "scheduled_at"> & Partial<ScheduledPostSample>): ScheduledPostSample => ({
+  channel: "instagram",
+  display_status: p.status,
+  published_at: null,
+  display_at: p.published_at ?? p.scheduled_at,
+  error: null,
+  permalink: null,
+  thumb_url: null,
+  media_count: 0,
+  has_video: false,
+  ig_surface: null,
+  media_purged: false,
+  can_cancel: p.status === "scheduled",
+  ...p,
+});
+
 export const scheduledPosts: ScheduledPostSample[] = [
-  {
+  demoPost({
     id: "demo-sp-1",
     caption: "가을 신상 공구 오픈 🍂 링크는 프로필에 있어요! #공구 #가을신상",
-    image_urls: ["/samples/ad-serum.svg"],
+    thumb_url: "/samples/ad-serum.svg",
+    media_count: 1,
+    ig_surface: "feed",
     scheduled_at: demoAt(1, 10, 0),
     status: "scheduled",
-    error: null,
-  },
-  {
+  }),
+  demoPost({
     id: "demo-sp-2",
     caption: "이번 주 베스트 3 모아봤어요 — 재구매율 1위는 마지막에!",
-    image_urls: ["/samples/ad-moodlight.svg", "/samples/ad-snack.svg"],
+    thumb_url: "/samples/ad-moodlight.svg",
+    media_count: 2,
+    ig_surface: "feed",
     scheduled_at: demoAt(3, 19, 30),
     status: "scheduled",
-    error: null,
-  },
-  {
+  }),
+  demoPost({
     id: "demo-sp-3",
     caption: "리뷰 이벤트 당첨자 발표 🎉 DM 확인해 주세요",
-    image_urls: ["/samples/ad-snack.svg"],
+    thumb_url: "/samples/ad-snack.svg",
+    media_count: 1,
+    ig_surface: "feed",
     scheduled_at: demoAt(-2, 12, 0),
+    published_at: demoAt(-2, 12, 3),
     status: "published",
-    error: null,
-  },
-  {
+  }),
+  demoPost({
     id: "demo-sp-4",
     caption: "주말 한정 무료배송 안내",
-    image_urls: ["/samples/ad-moodlight.svg"],
+    thumb_url: "/samples/ad-moodlight.svg",
+    media_count: 1,
+    ig_surface: "feed",
     scheduled_at: demoAt(-1, 9, 0),
     status: "failed",
-    error: "인스타그램 토큰이 만료됐어요. 설정에서 다시 연동해 주세요.",
-  },
-  {
+    error: "인스타그램 연동이 만료됐어요 — 설정에서 다시 연동해 주세요",
+  }),
+  demoPost({
     id: "demo-sp-5",
     caption: "(작성 중) 신제품 언박싱 영상 캡션…",
-    image_urls: [],
+    channel: "threads",
     scheduled_at: demoAt(5, 18, 0),
     status: "draft",
-    error: null,
-  },
+  }),
+  /* 영상 발행(2026-09-11) — 릴스 발행 완료·스레드 사진+영상 캐러셀 처리 중을 한 번씩 보여 준다.
+     데모의 게시물 링크는 비워 둔다 — 가짜 주소를 «게시물 보기»로 열게 하지 않는다. */
+  demoPost({
+    id: "demo-sp-6",
+    caption: "30초 만에 끝내는 아침 루틴 ☀️ 저장해 두고 따라 해 보세요",
+    thumb_url: "/samples/ad-serum.svg",
+    media_count: 1,
+    has_video: true,
+    ig_surface: "reels",
+    scheduled_at: demoAt(-3, 20, 0),
+    published_at: demoAt(-3, 20, 2),
+    status: "published",
+  }),
+  demoPost({
+    id: "demo-sp-7",
+    caption: "신제품 언박싱 — 사진으로 한 번, 영상으로 한 번",
+    channel: "threads",
+    thumb_url: "/samples/ad-snack.svg",
+    media_count: 3,
+    has_video: true,
+    scheduled_at: demoAt(0, 9, 0),
+    status: "processing",
+    can_cancel: true,
+  }),
 ];
 
 export const usageStats: UsageStat[] = [
