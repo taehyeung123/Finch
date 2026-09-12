@@ -35,10 +35,13 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
+const NOTIFICATION_FOOTER = "이 메일은 핀치 알림 설정에 따라 발송되었어요. 설정 > 알림에서 수신을 끌 수 있습니다.";
+
 function wrapHtml(
   title: string,
   body: string,
   cta: { label: string; url: string } = { label: "핀치에서 확인하기", url: "https://finch.ai.kr" },
+  footer: string = NOTIFICATION_FOOTER,
 ): string {
   return `<!DOCTYPE html>
 <html lang="ko"><body style="margin:0;padding:0;background:#F7F6F4;font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;">
@@ -52,7 +55,7 @@ function wrapHtml(
       </a>
     </div>
     <p style="font-size:12px;color:#9A948A;margin-top:20px;">
-      이 메일은 핀치 알림 설정에 따라 발송되었어요. 설정 &gt; 알림에서 수신을 끌 수 있습니다.
+      ${escapeHtml(footer)}
     </p>
   </div>
 </body></html>`;
@@ -76,6 +79,38 @@ export async function sendNotificationEmail(to: string, title: string, body: str
     return true;
   } catch (e) {
     console.error("[email] 발송 예외:", e instanceof Error ? e.message : String(e));
+    return false;
+  }
+}
+
+/**
+ * 법정 안내 메일 — 알림 설정과 무관하게 보내야 하는 메일(광고성 정보 수신 동의·철회 처리 결과 등).
+ * 본문·꼬리말이 «알림 설정에서 끌 수 있다»고 말하면 안 된다(끌 수 없는 메일이다) — 꼬리말을 따로 받는다.
+ * 실패는 false 로 흡수한다 — 호출측이 기록을 남기고 다시 보낼 수 있게.
+ */
+export async function sendLegalNoticeEmail(
+  to: string,
+  title: string,
+  body: string,
+  footer: string,
+  cta: { label: string; url: string } = { label: "핀치에서 확인하기", url: "https://finch.ai.kr" },
+): Promise<boolean> {
+  const resend = getClient();
+  if (!resend) return false;
+  try {
+    const { error } = await resend.emails.send({
+      from: process.env.RESEND_EMAIL_FROM || process.env.EMAIL_FROM || "핀치 <onboarding@resend.dev>",
+      to,
+      subject: `[핀치] ${title.replace(/[\r\n]+/g, " ")}`,
+      html: wrapHtml(title, body, cta, footer),
+    });
+    if (error) {
+      console.error("[email] 법정 안내 발송 실패:", error.message ?? error);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error("[email] 법정 안내 발송 예외:", e instanceof Error ? e.message : String(e));
     return false;
   }
 }

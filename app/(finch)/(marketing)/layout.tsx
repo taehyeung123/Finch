@@ -4,7 +4,8 @@ import { PromoBanner } from "@/components/landing/promo-banner";
 import { ButtonLink } from "@/components/ui/button";
 import { InstagramGlyph, MetaGlyph, ThreadsGlyph, TiktokGlyph } from "@/components/icons/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { businessFooterLines } from "@/lib/legal/business";
+import { PublicAnalytics } from "@/components/analytics/google-analytics";
+import { businessFooterLines, ftcBizInfoUrl } from "@/lib/legal/business";
 
 /* 공개 마케팅 영역 — SEO/GEO 최우선 적용 (PART 13.1) */
 /*
@@ -15,8 +16,11 @@ import { businessFooterLines } from "@/lib/legal/business";
 const footLink = "-mx-2 block rounded-card px-2 py-2.5 trans-state hover:text-fg";
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
+  const ftcUrl = ftcBizInfoUrl();
   return (
     <div className="flex min-h-screen flex-col">
+      {/* 이용 통계는 로그인 전 공개 화면에서만(개인정보처리방침 제14·15조) */}
+      <PublicAnalytics />
       {/* 최상단 프로모션 배너 — sticky 헤더 위, 스크롤 시 배너만 사라짐 */}
       <PromoBanner />
 
@@ -167,14 +171,24 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           <div>
             <h3 className="text-[13px] font-bold text-fg-sub">정책</h3>
             <ul className="mt-2 space-y-0.5 text-[14px] text-fg-sub">
-              {/* 초안 게시 — 정식 출시 전 법률 검토 후 확정 (PART 12) */}
+              {/* 2026-09 정식본 — 문서 넷(lib/legal/documents.ts). 개인정보처리방침은 다른 링크와 구분되게 굵게(처리방침 작성지침 권고) */}
               <li>
                 <Link href="/terms" className={footLink}>
                   이용약관
                 </Link>
               </li>
               <li>
-                <Link href="/privacy" className={footLink}>
+                <Link href="/terms/operation" className={footLink}>
+                  운영정책
+                </Link>
+              </li>
+              <li>
+                <Link href="/terms/refund" className={footLink}>
+                  환불정책
+                </Link>
+              </li>
+              <li>
+                <Link href="/privacy" className={`${footLink} font-semibold text-fg`}>
                   개인정보처리방침
                 </Link>
               </li>
@@ -189,6 +203,19 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             {businessFooterLines().map((line) => (
               <p key={line}>{line}</p>
             ))}
+            {/* 통신판매업 신고 사실을 소비자가 직접 확인하는 공정위 조회 링크(전자상거래 사이트 관행) */}
+            {ftcUrl ? (
+              <p>
+                <a
+                  href={ftcUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="-my-2 inline-block py-2 underline underline-offset-2 trans-state hover:text-fg"
+                >
+                  사업자정보확인
+                </a>
+              </p>
+            ) : null}
             <p>© 2026 Finch. All rights reserved.</p>
           </div>
         </div>

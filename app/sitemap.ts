@@ -28,8 +28,11 @@ const STATIC: MetadataRoute.Sitemap = [
   { url: "https://finch.ai.kr/brand", lastModified: D("2026-08-24"), changeFrequency: "monthly", priority: 0.4 },
   { url: "https://finch.ai.kr/signup", lastModified: D("2026-08-29"), changeFrequency: "monthly", priority: 0.6 },
   { url: "https://finch.ai.kr/login", lastModified: D("2026-08-29"), changeFrequency: "monthly", priority: 0.3 },
-  { url: "https://finch.ai.kr/terms", lastModified: D("2026-08-24"), changeFrequency: "yearly", priority: 0.2 },
-  { url: "https://finch.ai.kr/privacy", lastModified: D("2026-08-24"), changeFrequency: "yearly", priority: 0.2 },
+  /* 2026-09-12 약관·방침 정식본 — 운영정책·환불정책이 새로 생겼다. 개정 안내(/…/changes)·이전 문서(/…/archive)는 noindex 라 부르지 않는다 */
+  { url: "https://finch.ai.kr/terms", lastModified: D("2026-09-12"), changeFrequency: "yearly", priority: 0.2 },
+  { url: "https://finch.ai.kr/terms/operation", lastModified: D("2026-09-12"), changeFrequency: "yearly", priority: 0.2 },
+  { url: "https://finch.ai.kr/terms/refund", lastModified: D("2026-09-12"), changeFrequency: "yearly", priority: 0.2 },
+  { url: "https://finch.ai.kr/privacy", lastModified: D("2026-09-12"), changeFrequency: "yearly", priority: 0.2 },
 ];
 
 /** 사이트맵 하나가 감당할 상한(규격은 5만) — 넘어가면 분할 사이트맵으로 나눈다 */

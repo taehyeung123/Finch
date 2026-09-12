@@ -1,4 +1,8 @@
 import type { LinkLang } from "./settings";
+import { BUSINESS } from "@/lib/legal/business";
+
+/* 방명록 안내·폼 동의 문구의 연락처 — 사업자 정보 한 곳에서 읽는다(lib/legal/business.ts) */
+const CONTACT = BUSINESS.privacyEmail;
 
 /*
   공개 페이지(방문자 화면) 고정 문구 — 리틀리 「글로벌 언어(ko/en/ja)」 카피(5단계).
@@ -34,6 +38,8 @@ export interface LpText {
   guestbook: {
     title: string; placeholder: string; name: string; body: string;
     send: string; sending: string; thanks: string; demo: string; fail: string; empty: string;
+    /** 제출 버튼 아래 안내 — 이름·글이 공개된다는 것과 지우는 방법(개인정보처리방침 제11조) */
+    notice: string;
   };
   /* count 는 {n} 을 결과 수로 바꿔 쓴다(lpN). clear 는 지우기 버튼의 보조기기 이름 */
   search: { placeholder: string; empty: string; aria: string; count: string; clear: string };
@@ -97,13 +103,16 @@ const ko: LpText = {
     titleSubscribe: "새 소식 받기", titleContact: "문의하기",
     demo: "예시 폼이에요 — 실제로 접수되지는 않습니다.", send: "보내기", sending: "보내는 중…", subscribe: "구독하기",
     consent: "개인정보 수집·이용에 동의합니다.",
-    consentSpec: "(항목: {items} / 목적: {purpose} / 보유: 목적 달성 후 지체 없이 파기)",
+    /* 보유 기간은 코드와 같아야 한다 — 문의·구독 폼은 운영자가 지우지 않으면 2년 뒤 자동 파기(app/api/cron/retention). 
+       «지체 없이 파기»는 거짓이었다(2026-09-12 검토). 거부권과 그 불이익도 알린다(개인정보 보호법 §15②). */
+    consentSpec: "(받는 사람: 이 페이지 운영자 · 항목: {items} · 목적: {purpose} · 보유: 운영자가 삭제할 때까지, 최대 2년 · 동의를 거부할 수 있지만, 거부하면 보낼 수 없어요)",
     consentPurposeContact: "문의 응대", consentPurposeSubscribe: "소식 발송",
   },
   guestbook: {
     title: "방명록", placeholder: "한마디 남겨 주세요", name: "이름", body: "방명록 내용",
     send: "남기기", sending: "남기는 중…", thanks: "남겨 주셔서 고마워요!", demo: "예시 페이지에서는 남길 수 없어요.",
     fail: "보내지 못했어요.", empty: "아직 남겨진 글이 없어요. 첫 글을 남겨 보세요.",
+    notice: `남긴 이름과 글은 이 페이지에 공개돼요. 지우고 싶으면 페이지 운영자나 ${CONTACT}로 알려 주세요.`,
   },
   search: { placeholder: "무엇을 찾으세요?", empty: "찾는 내용이 없어요.", aria: "페이지 안 검색", count: "{n}개 찾았어요", clear: "검색어 지우기" },
   vcard: "연락처 저장",
@@ -157,13 +166,14 @@ const en: LpText = {
     titleSubscribe: "Get updates", titleContact: "Contact",
     demo: "Sample form — nothing is actually sent.", send: "Send", sending: "Sending…", subscribe: "Subscribe",
     consent: "I agree to the collection and use of my personal information.",
-    consentSpec: "(Data: {items} / Purpose: {purpose} / Retention: deleted once fulfilled)",
+    consentSpec: "(Recipient: the owner of this page · Items: {items} · Purpose: {purpose} · Kept until the owner deletes it, up to 2 years · You may refuse, but then you can't submit)",
     consentPurposeContact: "responding to this inquiry", consentPurposeSubscribe: "sending updates",
   },
   guestbook: {
     title: "Guestbook", placeholder: "Leave a note", name: "Name", body: "Your note",
     send: "Post", sending: "Posting…", thanks: "Thanks for your note!", demo: "Notes can't be posted on the sample page.",
     fail: "Couldn't post.", empty: "No notes yet. Be the first!",
+    notice: `Your name and message will be public on this page. To remove them, contact the page owner or ${CONTACT}.`,
   },
   search: { placeholder: "Search this page", empty: "Nothing found.", aria: "Search within page", count: "{n} found", clear: "Clear search" },
   vcard: "Save contact",
@@ -217,13 +227,14 @@ const ja: LpText = {
     titleSubscribe: "お知らせを受け取る", titleContact: "お問い合わせ",
     demo: "サンプルフォームです — 実際には送信されません。", send: "送信", sending: "送信中…", subscribe: "登録する",
     consent: "個人情報の収集・利用に同意します。",
-    consentSpec: "（項目: {items} ／ 目的: {purpose} ／ 保有: 目的達成後、遅滞なく破棄）",
+    consentSpec: "（受取人: このページの運営者 · 項目: {items} · 目的: {purpose} · 保有期間: 運営者が削除するまで(最長2年) · 同意を拒否できますが、拒否すると送信できません）",
     consentPurposeContact: "お問い合わせ対応", consentPurposeSubscribe: "お知らせの送信",
   },
   guestbook: {
     title: "ゲストブック", placeholder: "ひとこと残してください", name: "お名前", body: "メッセージ",
     send: "投稿", sending: "投稿中…", thanks: "メッセージをありがとうございます！", demo: "サンプルページでは投稿できません。",
     fail: "投稿できませんでした。", empty: "まだ投稿がありません。最初のひとことをどうぞ。",
+    notice: `お名前とメッセージはこのページに公開されます。削除をご希望の場合は、ページ運営者または ${CONTACT} までご連絡ください。`,
   },
   search: { placeholder: "ページ内を検索", empty: "見つかりませんでした。", aria: "ページ内検索", count: "{n}件見つかりました", clear: "検索をクリア" },
   vcard: "連絡先を保存",

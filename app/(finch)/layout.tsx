@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { GoogleAnalytics } from "@next/third-parties/google";
 import { SentryClient } from "@/components/monitoring/sentry-client";
 import "../globals.css";
 import "../_fonts/pretendard/pretendardvariable-dynamic-subset.css";
@@ -43,7 +42,6 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const gaId = process.env.NEXT_PUBLIC_GA_ID;
   return (
     /* 글꼴은 **유니코드 구간 분할본**을 쓴다(2026-08-24 실측) — 통짜 Pretendard Variable 는 2,009KB 라
        첫 방문에 그대로 얹혔고, next/font 가 그 파일을 preload 까지 걸어 /p 방문자 페이지에서도 끌려왔다.
@@ -70,7 +68,8 @@ export default function RootLayout({
         {/* 브라우저 오류 수집 — 앱 지면에서만, 하이드레이션 뒤 지연 로드(components/monitoring/sentry-client.tsx) */}
         <SentryClient />
       </body>
-      {gaId && <GoogleAnalytics gaId={gaId} />}
+      {/* Google Analytics 는 여기 없다 — 로그인 전 공개 화면 레이아웃((marketing)·(auth-split))만 싣는다
+          (components/analytics/google-analytics.tsx, 개인정보처리방침 제14·15조). */}
     </html>
   );
 }

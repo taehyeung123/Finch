@@ -1,6 +1,8 @@
 "use server";
 
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { notifyMarketingConsentResult, recordConsentEvents } from "@/lib/legal/consent-events";
 import { isDemoMode } from "@/lib/supabase/config";
 import { isMissingTableError } from "@/lib/supabase/errors";
 
@@ -65,5 +67,11 @@ export async function setMarketingConsent(next: boolean): Promise<MarketingConse
   }
   /* PostgREST 는 RLS·조건 불일치로 0행이어도 오류를 안 낸다 — 행 수를 본다(저장소 규칙) */
   if (!data || data.length === 0) return { ok: false, reason: "no_record" };
+
+  /* 동의·철회 이력(0095)과 처리 결과 통지(정보통신망법 §50⑦ — 14일 안, 방침 제19조①).
+     통지는 응답 뒤에 보낸다 — 스위치 반응이 메일 왕복을 기다리지 않게. */
+  await recordConsentEvents(user.id, [{ doc: "marketing_email", action: next ? "agree" : "withdraw", source: "settings" }]);
+  const email = user.email;
+  after(() => notifyMarketingConsentResult(email, next));
   return { ok: true, at };
 }

@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
-import { ExternalLink } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { LegalDocument } from "@/components/legal/legal-document";
-import { PRIVACY_EFFECTIVE, PRIVACY_SECTIONS } from "@/lib/legal/documents";
-import { formatDate } from "@/lib/format";
-import { SettingsShell } from "../../_components/settings-shell";
+import { PRIVACY_DOC } from "@/lib/legal/documents";
+import { LegalDocShell } from "../_components/legal-doc-shell";
 
 export const metadata: Metadata = {
   title: "개인정보처리방침",
@@ -14,23 +11,8 @@ export const metadata: Metadata = {
 /* 앱 안 방침 — 본문은 /privacy 와 같은 lib/legal/documents.ts */
 export default function PrivacyInAppPage() {
   return (
-    <SettingsShell
-      title="개인정보처리방침"
-      description={`시행일 ${formatDate(PRIVACY_EFFECTIVE)} · 초안`}
-      action={
-        <a
-          href="/privacy"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="trans-state relative inline-flex items-center gap-1 py-2 text-[14px] font-medium text-fg-sub underline underline-offset-2 after:absolute after:-inset-x-2 after:inset-y-0 after:content-[''] hover:text-fg"
-        >
-          새 창에서 열기 <ExternalLink className="size-3.5" aria-hidden />
-        </a>
-      }
-    >
-      <Card className="p-4">
-        <LegalDocument sections={PRIVACY_SECTIONS} variant="app" />
-      </Card>
-    </SettingsShell>
+    <LegalDocShell title="개인정보처리방침" description="핀치가 개인정보를 어떻게 처리하는지 알려 드려요." publicHref="/privacy">
+      <LegalDocument doc={PRIVACY_DOC} variant="app" />
+    </LegalDocShell>
   );
 }

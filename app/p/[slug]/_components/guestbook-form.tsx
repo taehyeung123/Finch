@@ -83,6 +83,8 @@ export function GuestbookForm({ slug, blockId, placeholder, isDemo, t, errors }:
       >
         {pending ? t.sending : t.send}
       </button>
+      {/* 공개된다는 것과 지우는 방법 — 개인정보처리방침 제11조. 편집 미리보기(phone-preview.tsx 방명록)도 같은 줄을 그린다 */}
+      <p className="text-[12px] leading-[1.6] text-[var(--lp-muted)]">{t.notice}</p>
     </form>
   );
 }

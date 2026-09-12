@@ -2,9 +2,11 @@ import {
   Bell,
   Building2,
   CreditCard,
+  Gavel,
   KeyRound,
   Link2,
   MessageCircleQuestion,
+  ReceiptText,
   ScrollText,
   ShieldCheck,
   SunMoon,
@@ -78,6 +80,9 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     label: "약관 및 정책",
     items: [
       { href: "/settings/legal/terms", label: "이용약관", icon: ScrollText },
+      /* 운영정책·환불정책은 이용약관의 일부다(약관 제4조) — 2026-09 정식본에서 문서가 넷이 됐다 */
+      { href: "/settings/legal/operation", label: "운영정책", hint: "게시물 기준·신고와 조치", icon: Gavel },
+      { href: "/settings/legal/refund", label: "환불정책", hint: "청약철회·환불 기준과 계산 예시", icon: ReceiptText },
       { href: "/settings/legal/privacy", label: "개인정보처리방침", icon: ShieldCheck },
       { href: "/settings/legal", label: "사업자 정보", hint: "회사·사업자등록·연락처", icon: Building2 },
     ],

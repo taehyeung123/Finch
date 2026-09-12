@@ -9,6 +9,8 @@ import { TopbarUnread } from "@/components/layout/topbar-unread";
 import { AgentPanel } from "@/components/layout/agent-panel";
 import { MobileTabbar } from "@/components/layout/mobile-tabbar";
 import { OpeningNotice } from "@/components/layout/opening-notice";
+import { GaOff } from "@/components/analytics/google-analytics";
+import { TermsUpdateBanner } from "@/components/legal/terms-update-banner";
 import { isDemoMode } from "@/lib/supabase/config";
 import { getAuthUser } from "@/lib/supabase/server";
 import { getConsentStatus } from "@/lib/legal/consent";
@@ -24,6 +26,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   /* 상단바 계정 메뉴의 이메일 — 서버가 이미 아는 값이라 내려준다. 예전엔 상단바가 브라우저에서
      supabase 클라이언트(gz 62KB)를 따로 띄워 getUser() 를 다시 불렀다(2026-09-10 감사) — 이메일 머리글자 하나 때문에. */
   let email: string | null = null;
+  /* 옛 약관 동의자 + 공고 기간 — 막지 않고 상단 띠로만 알린다(아래 게이트와 같은 조회, 추가 왕복 없음) */
+  let termsPending = false;
   // 인증 가드 — 판단은 반드시 getUser() (getSession() 금지).
   // 데모 모드(키 미설정 또는 NEXT_PUBLIC_DEMO_MODE)면 가드 없이 통과.
   // Supabase가 일시정지/한도초과로 죽어 getUser()가 예외를 던지면, 로그인으로 내몰지 않고
@@ -37,8 +41,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       /* 가입 필수 동의 게이트 — OAuth 는 가입=로그인이라 가입 «전»에 받을 자리가 없다.
          첫 로그인 후 동의(만 14세·약관·개인정보) 기록이 없으면 서비스를 쓰기 전에 받는다(0079).
          unknown(0079 미적용·조회 실패)은 통과 — «모름»으로 사람을 가두지 않는다(위 fail-open 과 같은 원칙).
-         React cache 라 이 조회는 요청당 1회다. */
-      if ((await getConsentStatus(user.id)) === "missing") redirect("/onboarding/consent");
+         React cache 라 이 조회는 요청당 1회다.
+         2026-09 약관 개정: 옛 버전 동의자는 시행일 전까지 «pending»(띠만), 시행일부터 «missing»(동의 화면) — lib/legal/versions.ts. */
+      const consent = await getConsentStatus(user.id);
+      if (consent === "missing") redirect("/onboarding/consent");
+      termsPending = consent === "pending";
     } catch (error) {
       // Next 내부 제어 신호는 그대로 흘려보낸다:
       // - NEXT_REDIRECT: redirect()의 정상 동작
@@ -86,6 +93,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 채널 연동이 완료되면 실제 데이터로 교체됩니다
               </p>
             ) : null}
+            {termsPending ? <TermsUpdateBanner /> : null}
             {/* 우하단 AI 에이전트 FAB(52px, z-40)이 페이지 마지막 줄 위에 겹쳐, 1440×950 에서
                 /settings 의 「문의하기」 링크가 통째로 가려졌다 — 눌렀더니 에이전트 패널이 열렸다(실측).
                 데스크톱에서도 FAB 높이만큼 바닥을 비운다(모바일 pb-24 는 하단 탭바 몫이라 그대로).
@@ -97,6 +105,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
         <AgentPanel />
         <MobileTabbar />
+        {/* 로그인 뒤 화면은 이용 통계를 수집하지 않는다 — 공개 화면에서 떠 온 GA 도 끈다(개인정보처리방침 제14·15조) */}
+        <GaOff />
         {isReviewAccount ? null : <OpeningNotice />}
       </NavPendingProvider>
     </ChannelProvider>

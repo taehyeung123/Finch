@@ -4,6 +4,8 @@ import { useState } from "react";
 import { loadTossPayments } from "@tosspayments/tosspayments-sdk";
 import { Button } from "@/components/ui/button";
 import { formatKRW } from "@/lib/format";
+import { BUSINESS } from "@/lib/legal/business";
+import { checkoutNoticeLines } from "@/lib/legal/consent-copy";
 
 /**
  * 정기결제 카드 등록 — Toss 빌링 인증창(v2 payment.requestBillingAuth).
@@ -66,20 +68,39 @@ export function SubscribeClient({
         </div>
       ) : null}
 
-      {/* 카드 안의 중첩 면이라 plate — body 는 카드와 같은 흰색이라 상자가 사라진다(면 역할표) */}
-      <label className="flex items-start gap-2.5 rounded-card border border-line bg-plate p-4 text-[14px] leading-relaxed text-fg-sub">
-        <input
-          type="checkbox"
-          checked={agreed}
-          onChange={(e) => setAgreed(e.target.checked)}
-          className="mt-0.5 size-4 accent-primary"
-        />
-        <span>
-          <span className="font-semibold text-fg">[필수]</span> 매월 결제 예정일에 {planName} 플랜 요금{" "}
-          {formatKRW(amount)}이 등록한 카드로 자동 결제되는 것에 동의합니다. 결제 예정일 3일 전에 알림으로
-          미리 알려드리며, 언제든 설정 &gt; 요금제에서 해지할 수 있습니다.
-        </span>
-      </label>
+      {/* 결제 전 거래조건 고지(전자상거래법 §13②·§17⑥, 약관 제23·28조) — 문구 정본은 lib/legal/consent-copy.ts.
+          카드 안의 중첩 면이라 plate — body 는 카드와 같은 흰색이라 상자가 사라진다(면 역할표) */}
+      <div className="rounded-card border border-line bg-plate p-4 text-[14px] leading-relaxed text-fg-sub">
+        <p className="font-semibold text-fg">
+          {planName} 플랜 · 월 {formatKRW(amount)}
+        </p>
+        <ul className="mt-2 list-disc space-y-1 pl-5 marker:text-fg-faint">
+          {checkoutNoticeLines(formatKRW(amount), BUSINESS.contactEmail ?? BUSINESS.privacyEmail).map((line) => (
+            <li key={line} className="break-keep">
+              {line}
+            </li>
+          ))}
+        </ul>
+        {/* 자동 결제 동의는 미리 체크하지 않는다 — 사용자가 직접 체크해야 시작된다 */}
+        <label className="mt-3 flex items-start gap-2.5 border-t border-line pt-3">
+          <input
+            type="checkbox"
+            checked={agreed}
+            onChange={(e) => setAgreed(e.target.checked)}
+            className="mt-0.5 size-4 accent-primary"
+          />
+          <span className="break-keep">
+            <span className="font-semibold text-fg">[필수]</span> 위 내용과 자동 결제에 동의해요.{" "}
+            <a href="/terms/refund" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-fg">
+              환불정책
+            </a>{" "}
+            ·{" "}
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-fg">
+              이용약관
+            </a>
+          </span>
+        </label>
+      </div>
 
       <Button variant="primary" size="lg" className="w-full" onClick={start} disabled={!agreed || busy}>
         {busy ? "결제창 여는 중…" : "카드 등록하고 구독 시작"}

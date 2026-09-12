@@ -198,7 +198,7 @@ Finch uses Platform Data only to deliver features to the Finch user who connecte
 | Meta Ads connection: Facebook user ID and name, encrypted token, scopes; ad accounts; chosen Page and Instagram account | `meta_ad_connections` → cascades to `meta_ad_accounts` | Same triggers as above | migrations 0077 and 0082; `actions.ts:83-94`; `api/auth/meta-ads/*` |
 | Ad change log: ad account ID, campaign ID, action, request parameters, Meta error text; no token | `meta_ad_write_log` | Until account deletion | migration 0081 |
 | Auto-DM rule: the chosen post's media ID, caption, type, view count, thumbnail URL | `auto_dm_rules` | Until the rule is deleted, or account deletion | migration 0002 (+0038 thumbnail) |
-| Auto-DM sends: comment ID, hashed commenter ID, status, message ID | `dm_sends` | Until account deletion (kept even if the rule is deleted, 0092) | migrations 0002, 0092 |
+| Auto-DM sends: comment ID, hashed commenter ID, status, message ID | `dm_sends` | 1 year from sending (daily purge, added 2026-09-12), and at account deletion (kept even if the rule is deleted, 0092) | migrations 0002, 0092; `api/cron/retention/route.ts` |
 | Auto-DM webhook log: comment ID, media ID, hashed commenter ID | `webhook_events` | 90 days (daily purge), and at account deletion | `api/cron/retention/route.ts:27-31`; `webhooks/instagram/route.ts:191-201` |
 | Opt-outs: hashed commenter ID | `commenter_consent` | Until account deletion. Incoming DM text is checked for the opt-out word and **not** stored. | `webhooks/instagram/route.ts:153-172` |
 | Comment text | **Not stored.** Used in memory for keyword matching only. | — | `webhooks/instagram/route.ts:183-189`; `lib/auto-dm/check-now.ts:309-313` |
@@ -206,7 +206,7 @@ Finch uses Platform Data only to deliver features to the Finch user who connecte
 | Published profile link «최근 게시물»: thumbnail URLs, permalinks, source account ID | `link_pages` published snapshot | Until the page is republished without the block, deleted, or the account is deleted | `links/actions.ts:2140-2170` |
 | In-app notifications: username, follower-count changes | `notifications` | Until account deletion | `app/api/cron/refresh-tokens/route.ts:408-414` |
 | Insights, post lists, campaign performance, Page lists and Page posts, business portfolios | **Not stored.** Fetched when viewed. Instagram/Threads responses sit in the fetch cache (flag #3); ads requests use `no-store`. Reports build CSVs from live data at download time. | — | `lib/meta/ads.ts:59-75`; `reports/actions.ts:7-11` |
-| Deletion-request log: confirmation code, channel, SHA-256 hash of the platform user ID, row count, status | `data_deletion_requests` | Kept as proof that the deletion happened [OWNER CONFIRM retention period] | `lib/legal/deletion-log.ts:15-29` |
+| Deletion-request log: confirmation code, channel, SHA-256 hash of the platform user ID, row count, status | `data_deletion_requests` | 1 year from the request (daily purge, added 2026-09-12 — privacy policy art. 4) | `lib/legal/deletion-log.ts:15-29`; `api/cron/retention/route.ts` |
 
 ### B7. How users delete their data
 1. **In the app, per account:** «계정 및 설정» (Account & Settings) › «SNS 계정 연결» (Connect social accounts) › «연결 해제» (Disconnect) › «해제하기» (Disconnect).
@@ -231,6 +231,8 @@ Finch uses Platform Data only to deliver features to the Finch user who connecte
 
 If Meta's form asks whether "all data" is deleted, answer precisely, or extend the callbacks first.
 
+**Update 2026-09-12:** the privacy policy (art. 9 ① 4) now promises to delete these leftovers within 10 days of a Meta deletion request. Until the callbacks are extended, that is a manual step — each new `data_deletion_requests` row must be followed up by hand (docs/LEGAL_REVIEW_2026-09.md, owner list).
+
 ### B8. Security measures (for Data Protection Assessment-style questions)
 - **In transit:** HTTPS only. HSTS is set for 2 years with `includeSubDomains`, plus `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: strict-origin-when-cross-origin` (`vercel.json:5-17`).
 - **Tokens at rest:** encrypted in the app with AES-256-GCM. Version 2 binds each ciphertext to its user and column (AAD), so a copied ciphertext can't be decrypted anywhere else (`lib/crypto/tokens.ts:8-38`). ⚠️ Fix flag #3 before stating this without a qualifier.
@@ -244,6 +246,8 @@ If Meta's form asks whether "all data" is deleted, answer precisely, or extend t
 - **Staff access, incident response, vulnerability testing:** [OWNER CONFIRM]. The repo shows internal code audits (for example 2026-09-07) but no formal program.
 
 ### B9. Privacy policy fixes to make before submitting (`lib/legal/documents.ts`)
+
+**Done 2026-09-12** — the policy was rewritten (version 2026-09-14, draft notice removed). (a)–(e) and (g) are applied; for (f) GA was taken off the logged-in screens (`components/analytics/google-analytics.tsx`). Details: docs/LEGAL_REVIEW_2026-09.md. The list below is kept for the record.
 - **(a) Anthropic: scope and retention.** §6/§7 (`:190,205`) say Anthropic receives «이용자가 AI 기능에 입력한 내용» (what the user types). The code also sends Instagram captions, metrics and comment texts, so say so. «처리 후 즉시» (deleted right after processing) is also wrong: the Anthropic API default is deletion within 30 days. [OWNER CONFIRM if there's a zero-retention agreement]
 - **(b) Transfer destinations.** §7 (`:200-201`) lists «Supabase(미국)» and «Vercel(미국)», but storage and compute are in Seoul (`docs/DEPLOY.md:7-13`). Give both the provider's country and the processing region.
 - **(c) Meta Ads items.** §2 (`:146`) doesn't mention:

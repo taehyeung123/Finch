@@ -26,6 +26,7 @@ import { type BlockType,
   type LinkBlock,
 } from "@/lib/links/blocks";
 import type { LinkGuestbookEntry, LinkPageView } from "@/lib/links/types";
+import { lpText } from "@/lib/links/i18n";
 
 /*
   라이브 미리보기 — 링크팜의 우측 폰 프레임에 해당.
@@ -1463,6 +1464,8 @@ function PreviewBlock({ block, mode = "draft", guestbook = [] }: { block: LinkBl
           <div className="mt-2 flex h-8 items-center rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-input-bg)] px-2 text-[11px] text-[var(--lp-muted)]" aria-hidden>이름</div>
           <div className="mt-1.5 h-14 rounded-[var(--lp-radius)] border border-[var(--lp-border)] bg-[var(--lp-input-bg)] px-2 py-1.5 text-[11px] text-[var(--lp-muted)]">{s(d, "placeholder") || "한마디 남겨 주세요"}</div>
           <div className="mt-1.5 flex h-8 items-center justify-center rounded-[var(--lp-radius-btn)] bg-[var(--lp-accent)] text-[12px] font-semibold text-[var(--lp-on-accent)]">남기기</div>
+          {/* 공개 폼(guestbook-form)의 공개 안내 줄 파리티(2026-09-12) — 문구는 같은 i18n 한 곳에서 */}
+          <p className="mt-1.5 text-[10px] leading-[1.5] text-[var(--lp-muted)]" aria-hidden>{lpText("ko").guestbook.notice}</p>
           {headGb.length ? (
             <ul className="mt-3 space-y-2.5 border-t border-[var(--lp-border)] pt-2.5">
               {headGb.map((g) => (

@@ -73,9 +73,11 @@ async function classifySentiment(comments: string[]): Promise<AnalyzeResult["sen
       messages: [
         {
           role: "user",
+          /* 댓글 속 @사용자명(다른 사람의 계정 이름)은 가려서 보낸다 — 분위기 분류에는 필요 없는 제3자 정보다.
+             개인정보처리방침 제3조④·제8조(Anthropic 행)가 «@사용자명은 가림»을 약속한다(2026-09-12). */
           content: `다음 인스타그램 댓글들을 긍정/중립/부정 비율(합계 100)로 분류해줘.\n\n${comments
             .slice(0, 50)
-            .map((c, i) => `${i + 1}. ${c.slice(0, 200)}`)
+            .map((c, i) => `${i + 1}. ${c.replace(/@[A-Za-z0-9._]{1,30}/g, "@사용자").slice(0, 200)}`)
             .join("\n")}`,
         },
       ],

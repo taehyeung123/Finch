@@ -21,6 +21,12 @@ export async function recordDeletionRequest(
     platformUserId: string;
     deletedRows: number;
     failed: boolean;
+    /**
+     * 지운 연결의 핀치 회원 id(0095) — 방침 제9조①4 «남은 정보도 요청일부터 10일 안에 삭제»를 지키려면
+     * 누구의 남은 정보(자동 DM 규칙·발행 식별값·알림 등)를 지울지 알아야 한다. 연결 행은 이미 지워져서
+     * 여기 적어 두지 않으면 되찾을 길이 없다. 후속 삭제를 마치면 비운다(docs/LEGAL_REVIEW_2026-09.md).
+     */
+    finchUserId?: string | null;
   },
 ): Promise<void> {
   const row: Record<string, unknown> = {
@@ -30,8 +36,18 @@ export async function recordDeletionRequest(
     deleted_rows: params.deletedRows,
     status: params.failed ? "failed" : "done",
   };
+  if (params.finchUserId) row.user_id = params.finchUserId;
 
   let { error } = await admin.from("data_deletion_requests").insert(row);
+  /* 0095 미적용 DB 에는 user_id 컬럼이 없다 — 떼고 다시 넣는다. 기록 자체는 포기하지 않되,
+     후속 삭제(10일)에 쓸 연결을 잃었다는 사실은 크게 남긴다 */
+  if (error && "user_id" in row && isMissingColumnError(error, /user_id/i)) {
+    console.error(
+      `[deletion-log] ${params.channel} 삭제 요청의 회원 연결을 기록하지 못했다 — 0095 적용 필요, 남은 정보 후속 삭제는 수동으로 찾아야 한다 (code=${params.confirmationCode})`,
+    );
+    delete row.user_id;
+    ({ error } = await admin.from("data_deletion_requests").insert(row));
+  }
   /* 0077 미적용 DB 에는 status 컬럼이 없다 — 기록 자체를 포기하지 않고 나머지는 남긴다.
      다만 실패 사실이 사라지므로, 그때는 로그로 크게 남긴다(계단식 폴백). */
   if (error && isMissingColumnError(error, /status/i)) {

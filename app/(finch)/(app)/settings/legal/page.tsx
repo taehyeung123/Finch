@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import { AppLink as Link } from "@/components/ui/app-link";
-import { ScrollText, ShieldCheck } from "lucide-react";
+import { Gavel, ReceiptText, ScrollText, ShieldCheck } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { RetryLink } from "@/components/ui/retry-link";
 import { StateChip } from "@/components/ui/state-chip";
 import { formatDate } from "@/lib/format";
 import { BUSINESS, BUSINESS_PENDING, PENDING_ECOMMERCE } from "@/lib/legal/business";
-import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/consent";
+import { PRIVACY_VERSION, TERMS_VERSION, TERMS_MIN_ACCEPTED, evaluateConsent, koMonthDay } from "@/lib/legal/versions";
 import { isDemoMode } from "@/lib/supabase/config";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isMissingTableError } from "@/lib/supabase/errors";
@@ -71,7 +71,8 @@ function Mail({ address }: { address: string }) {
 
 export default async function LegalSettingsPage() {
   const consent = await loadConsent();
-  const current = consent.kind === "ok" && consent.record.termsVersion === TERMS_VERSION && consent.record.privacyVersion === PRIVACY_VERSION;
+  /* «현행» 판정은 동의 게이트와 같은 함수(evaluateConsent)로 — 두 곳이 다른 규칙을 쓰면 «현행»이라면서 동의 화면이 뜬다 */
+  const status = consent.kind === "ok" ? evaluateConsent(consent.record) : null;
 
   return (
     <SettingsShell title="사업자 정보" description="핀치를 운영하는 사업자 정보와 약관·정책이에요.">
@@ -85,10 +86,13 @@ export default async function LegalSettingsPage() {
         <FieldRow label="대표 전화" value={BUSINESS.phone ?? undefined} empty={BUSINESS_PENDING} tnum />
         <FieldRow label="개인정보 보호책임자" value={BUSINESS.privacyOfficer ?? undefined} empty={BUSINESS_PENDING} />
         <FieldRow label="개인정보 문의" value={<Mail address={BUSINESS.privacyEmail} />} />
+        <FieldRow label="호스팅서비스 제공자" value={BUSINESS.hostingProvider} />
       </FieldList>
 
       <SettingsGroup id="docs" label="약관 및 정책">
         <SettingsRow href="/settings/legal/terms" icon={ScrollText} label="이용약관" hint={`시행 ${formatDate(TERMS_VERSION)}`} />
+        <SettingsRow href="/settings/legal/operation" icon={Gavel} label="운영정책" hint={`시행 ${formatDate(TERMS_VERSION)} · 이용약관의 일부`} />
+        <SettingsRow href="/settings/legal/refund" icon={ReceiptText} label="환불정책" hint="청약철회·환불 기준과 계산 예시" />
         <SettingsRow href="/settings/legal/privacy" icon={ShieldCheck} label="개인정보처리방침" hint={`시행 ${formatDate(PRIVACY_VERSION)}`} />
       </SettingsGroup>
 
@@ -96,7 +100,15 @@ export default async function LegalSettingsPage() {
         id="consent"
         label="내 동의 기록"
         description="가입할 때 동의한 항목과 시각이에요."
-        aside={consent.kind === "ok" ? current ? <StateChip tone="ok">현행</StateChip> : <StateChip tone="warn">재동의 필요</StateChip> : undefined}
+        aside={
+          status === "ok" ? (
+            <StateChip tone="ok">현행</StateChip>
+          ) : status === "pending" ? (
+            <StateChip tone="warn">{koMonthDay(TERMS_MIN_ACCEPTED)}부터 새 약관</StateChip>
+          ) : status === "missing" ? (
+            <StateChip tone="warn">재동의 필요</StateChip>
+          ) : undefined
+        }
         footer={
           consent.kind === "demo" ? (
             <p className="px-4 py-4 text-[14px] text-fg-sub">지금은 예시 화면이라 동의 기록이 표시되지 않아요.</p>
@@ -107,6 +119,13 @@ export default async function LegalSettingsPage() {
               <span>동의 기록을 불러오지 못했어요 — 기록이 없는 게 아니라 잠시 못 읽은 거예요.</span>
               <RetryLink>다시 시도</RetryLink>
             </p>
+          ) : status === "pending" ? (
+            <p className="flex flex-wrap items-center justify-between gap-2 px-4 py-4 text-[14px] text-fg-sub">
+              <span>{koMonthDay(TERMS_MIN_ACCEPTED)}부터 바뀐 이용약관이 적용돼요. 지금 미리 동의할 수 있어요.</span>
+              <ButtonLink href="/onboarding/consent" variant="secondary" size="sm">
+                변경 내용 보고 동의하기
+              </ButtonLink>
+            </p>
           ) : undefined
         }
       >
@@ -114,9 +133,9 @@ export default async function LegalSettingsPage() {
           <>
             <FieldRow label="만 14세 이상 확인" value={formatDate(consent.record.over14At)} tnum />
             <FieldRow label="이용약관 동의" value={formatDate(consent.record.termsAt)} hint={`${formatDate(consent.record.termsVersion)} 시행 문서`} tnum />
-            <FieldRow label="개인정보 수집·이용 동의" value={formatDate(consent.record.privacyAt)} hint={`${formatDate(consent.record.privacyVersion)} 시행 문서`} tnum />
+            <FieldRow label="개인정보 수집·이용 안내 확인" value={formatDate(consent.record.privacyAt)} hint={`${formatDate(consent.record.privacyVersion)} 시행 문서`} tnum />
             <FieldRow
-              label="마케팅 정보 수신(선택)"
+              label="광고성 정보 수신(선택)"
               value={consent.record.marketingAt ? `동의 · ${formatDate(consent.record.marketingAt)}` : "동의하지 않음"}
               action={
                 <ButtonLink href="/settings/notifications" variant="ghost" size="sm">
@@ -130,7 +149,7 @@ export default async function LegalSettingsPage() {
       </FieldList>
 
       <p className="px-1 text-[12px] text-fg-sub">
-        동의 철회는 회원 탈퇴(개인정보 화면 맨 아래) 또는 SNS 계정 연결 해제로 할 수 있어요. 마케팅 수신 동의는{" "}
+        동의 철회는 회원 탈퇴(개인정보 화면 맨 아래) 또는 SNS 계정 연결 해제로 할 수 있어요. 광고성 정보 수신 동의는{" "}
         <Link href="/settings/notifications" className="underline underline-offset-2 hover:text-fg">
           알림 설정
         </Link>

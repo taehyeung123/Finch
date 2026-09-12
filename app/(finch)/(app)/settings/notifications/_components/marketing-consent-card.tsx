@@ -53,7 +53,11 @@ export function MarketingConsentRow({ initial }: { initial: MarketingConsentStat
       const res = await setMarketingConsent(next);
       if (res.ok) {
         setState({ kind: "ok", at: res.at });
-        setMessage({ tone: "positive", text: next ? "마케팅 정보 수신에 동의했어요." : "마케팅 정보 수신을 철회했어요." });
+        /* 처리 결과 메일은 서버가 응답 뒤에 보낸다(정보통신망법 §50⑦ — settings/notifications/actions.ts) */
+        setMessage({
+          tone: "positive",
+          text: next ? "광고성 정보 수신에 동의했어요. 처리 결과를 이메일로도 보내 드려요." : "광고성 정보 수신을 철회했어요. 처리 결과를 이메일로도 보내 드려요.",
+        });
       } else {
         setState(prev);
         setMessage({
@@ -79,13 +83,13 @@ export function MarketingConsentRow({ initial }: { initial: MarketingConsentStat
       : state.kind === "none"
         ? "아직 동의 기록이 없어요. 다음 방문에서 동의 화면이 뜨면 그때 고를 수 있어요"
         : state.kind === "ok" && state.at
-          ? `${formatDate(state.at)}에 동의했어요. 끄면 동의 기록이 지워지고 광고성 이메일 대상에서 바로 빠져요`
+          ? `${formatDate(state.at)}에 동의했어요. 끄면 광고성 이메일 대상에서 바로 빠져요`
           : "지금은 받지 않고 있어요. 켜면 동의 시각이 기록돼요";
 
   return (
     <SettingsGroup
       id="marketing"
-      label="마케팅 정보 수신"
+      label="광고성 정보 수신"
       footer={
         message ? (
           <p
@@ -121,7 +125,7 @@ export function MarketingConsentRow({ initial }: { initial: MarketingConsentStat
         trailing={
           state.kind === "ok" || state.kind === "demo" ? (
             <span className="flex w-14 justify-center">
-              <Switch checked={on} onChange={toggle} disabled={busy} label="마케팅 정보 수신 동의" />
+              <Switch checked={on} onChange={toggle} disabled={busy} label="광고성 정보 수신 동의" />
             </span>
           ) : null
         }

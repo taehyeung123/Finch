@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { FinchLogo } from "@/components/logo";
+import { GaOff } from "@/components/analytics/google-analytics";
 
 /* 로그인 페이지는 최소 SEO — robots noindex 없이 기본 title만 (PRD 13.1) */
 export const metadata: Metadata = {
@@ -11,6 +12,8 @@ export const metadata: Metadata = {
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-8 px-4 py-10">
+      {/* 온보딩·동의 화면은 로그인 «뒤»다 — 공개 화면에서 떠 온 GA 가 수집하지 않게 끈다 */}
+      <GaOff />
       <Link
         href="/"
         aria-label="핀치 홈으로 이동"

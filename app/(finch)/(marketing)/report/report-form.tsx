@@ -104,7 +104,7 @@ export function ReportForm({ prefill }: { prefill: string }) {
       </label>
 
       <label className="block text-[12px] font-semibold text-fg-sub">
-        회신 받을 연락처 <span className="font-normal text-fg-faint">(선택)</span>
+        회신 받을 연락처 <span className="font-normal text-fg-sub">(선택 — 처리 결과를 알려 드리는 데만 쓰고 접수 1년 뒤 삭제해요. 입력하지 않아도 신고할 수 있어요)</span>
         <input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="이메일 또는 전화번호" maxLength={160} className={`mt-1.5 ${input}`} />
       </label>
 
@@ -123,8 +123,9 @@ export function ReportForm({ prefill }: { prefill: string }) {
       <Button type="submit" disabled={busy} className="w-full">
         {busy ? "접수하는 중…" : "신고 접수"}
       </Button>
-      <p className="text-[12px] leading-[1.6] text-fg-faint">
-        접수 내용(대상 주소·사유·내용·연락처)은 신고 처리 목적으로만 쓰고, 처리 후 지체 없이 파기합니다.
+      {/* 보유 기간은 방침 제4조·보존 크론과 같아야 한다(접수일부터 1년 — app/api/cron/retention). 예전 «처리 후 지체 없이 파기»는 코드와 달랐다 */}
+      <p className="text-[12px] leading-[1.6] text-fg-sub">
+        접수 내용(대상 주소·사유·내용·연락처)은 신고 처리와 결과 안내에만 쓰고, 접수일부터 1년 뒤 삭제합니다. 페이지 운영자에게는 전달하지 않습니다.
       </p>
     </form>
   );

@@ -39,7 +39,8 @@ export async function POST(request: Request) {
       .delete()
       .eq("channel", "threads")
       .eq("platform_user_id", payload.user_id)
-      .select("id");
+      /* user_id — 남은 정보(발행 식별값·알림 등)를 10일 안에 지우려면 누구의 것인지 알아야 한다(방침 제9조①4) */
+      .select("id, user_id");
     if (error) console.error("[threads-data-deletion] 삭제 반영 실패:", error.message);
 
     /* 확인 코드를 기록한다 — 안 남기면 상태 페이지가 조회할 것이 없어
@@ -53,6 +54,7 @@ export async function POST(request: Request) {
       platformUserId: payload.user_id,
       deletedRows: removed?.length ?? 0,
       failed: Boolean(error),
+      finchUserId: (removed?.[0] as { user_id?: string } | undefined)?.user_id ?? null,
     });
   }
 

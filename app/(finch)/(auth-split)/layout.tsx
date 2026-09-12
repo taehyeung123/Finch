@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AuthMarketingPanel } from "@/components/auth/marketing-panel";
+import { PublicAnalytics } from "@/components/analytics/google-analytics";
 
 /* 로그인·회원가입 전용 스플릿 스크린 레이아웃 — 온보딩(app/(auth))과는 별도 그룹.
    흰 페이지 여백 안에 라운드 코랄 패널(좌) + 폼 컬럼(우), 우측 하단에 정책 링크. */
@@ -14,6 +15,8 @@ export const metadata: Metadata = {
 export default function AuthSplitLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-body">
+      {/* 로그인·가입 화면도 로그인 «전» 공개 화면이라 이용 통계를 싣는다(개인정보처리방침 제14·15조) */}
+      <PublicAnalytics />
       <AuthMarketingPanel />
       <div className="relative flex flex-1 items-center justify-center px-4 py-16">
         {children}
@@ -22,7 +25,8 @@ export default function AuthSplitLayout({ children }: { children: React.ReactNod
             이용약관
           </Link>
           <span aria-hidden>·</span>
-          <Link href="/privacy" className="-mx-1.5 -my-1.5 inline-block px-1.5 py-2.5 hover:text-fg-sub">
+          {/* 개인정보처리방침은 다른 링크와 구분되게 굵게(처리방침 작성지침 권고) */}
+          <Link href="/privacy" className="-mx-1.5 -my-1.5 inline-block px-1.5 py-2.5 font-semibold text-fg-sub hover:text-fg">
             개인정보처리방침
           </Link>
         </footer>
