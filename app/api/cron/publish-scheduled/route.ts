@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isAuthorizedCron } from "@/lib/cron";
 import { publishError } from "@/lib/meta/publish-errors";
 import { advanceClaimedPost, claimPost } from "@/lib/publish/run";
+import { notifyUser } from "@/lib/notify";
 
 /**
  * 예약 발행 크론 — **5분마다**(vercel.json `*\/5 * * * *`).
@@ -48,7 +49,9 @@ export async function GET(request: Request) {
      10분을 넘기는 행이 생겨 엉뚱한 쪽으로 분류되지 않게. 모든 갱신에 같은 status·updated_at 가드를 다시 건다
      (조회와 갱신 사이에 다른 실행이 선점하면 건드리지 않는다).
      · 준비물이 있거나 발행을 시도한 행 → processing(매분 크론이 «이미 올라갔나»부터 본다 — 두 번 올리지 않는다)
-     · 아무것도 없는 새 코드의 행(claimed_at 있음) → failed «다시 시도해 주세요»(메타 쪽에 아무것도 안 만들었다)
+     · 아무것도 없는 새 코드의 행(claimed_at 있음) → failed «다시 시도해 주세요»(메타 쪽에 아무것도 안 만들었다) + 알림.
+       2026-09-12 비동기 「지금 발행」 뒤로 가장 흔한 경우는 «응답 뒤(after)에 올리던 함수가 죽었다»다 — 사용자는 «나가도 계속 올라가요»를
+       듣고 화면을 떠났을 수 있으므로, 조용히 실패로만 바꾸지 않고 알림을 보낸다(엔진의 실패 알림과 같은 문구 틀).
      · 옛 코드가 선점한 행(claimed_at 없음) → failed «실제로 올라갔는지 확인한 뒤» — 옛 코드는 준비물을 적지 않아
        «올라갔는데 기록만 못 한» 행을 구별할 수 없다(옛 문구 그대로)
      조회가 실패하면 이번 회차의 회수를 통째로 건너뛴다 — 실패를 «준비물 없음»으로 읽으면 멀쩡한 행을 실패로 만든다. */
@@ -96,8 +99,21 @@ export async function GET(request: Request) {
         .is("child_container_ids", null)
         .is("publish_attempted_at", null);
       q = legacyRows ? q.is("claimed_at", null) : q.not("claimed_at", "is", null);
-      const { data, error } = await q.select("id");
+      const { data, error } = await q.select("id, user_id");
       if (error) console.error("[cron:publish] 회수(실패) 실패:", error.message);
+      /* 실제로 바뀐 행의 주인에게만, 사람마다 한 번 — 몇 개가 한꺼번에 끊겨도 알림은 하나 */
+      const owners = new Map<string, number>();
+      for (const r of (data ?? []) as Array<{ id: string; user_id: string }>) owners.set(r.user_id, (owners.get(r.user_id) ?? 0) + 1);
+      for (const [userId, n] of owners) {
+        await notifyUser(admin, {
+          userId,
+          type: "studio",
+          title: "발행에 실패했어요",
+          body: legacyRows
+            ? `게시물${n > 1 ? ` ${n}개를` : "을"} 올리던 중에 끊겼어요 — 실제로 올라갔는지 확인한 뒤 「발행」 화면에서 다시 시도하거나 지워 주세요.`
+            : `게시물${n > 1 ? ` ${n}개를` : "을"} 올리던 중에 끊겼어요 — 「발행」 화면에서 다시 시도하거나 지울 수 있어요.`,
+        });
+      }
       return data?.length ?? 0;
     };
     recoveredFailed = (await failBare(false)) + (await failBare(true));

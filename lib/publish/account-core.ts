@@ -28,6 +28,21 @@ export interface CurrentAccount {
 
 const clean = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 
+/**
+ * connected_accounts 행들 → 채널별 «지금 연결된 계정»(connected=true 이고 계정 id 가 있는 것만).
+ * 목록(page.tsx)과 진행 상황 조회(app/api/publish/progress)가 같은 규칙으로 계정 칩을 정하게 한 곳에 둔다.
+ */
+export function currentAccountMap(
+  rows: ReadonlyArray<{ channel: string; handle: string | null; connected: boolean | null; platform_user_id: unknown }>,
+): Map<string, CurrentAccount> {
+  const out = new Map<string, CurrentAccount>();
+  for (const r of rows) {
+    const id = r.platform_user_id !== null && r.platform_user_id !== undefined ? String(r.platform_user_id).trim() : "";
+    if (r.connected && id) out.set(r.channel, { platformUserId: id, handle: r.handle });
+  }
+  return out;
+}
+
 /** «@아이디» 비교용 — 앞의 @ 를 떼고 소문자로 */
 export function handleKey(h: string | null | undefined): string {
   return (h ?? "").trim().replace(/^@+/, "").toLowerCase();

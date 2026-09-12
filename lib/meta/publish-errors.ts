@@ -83,6 +83,14 @@ const subj = (w: string) => `${w}${batchim(w) ? "이" : "가"}`;
 const LABELS: Record<string, string> = { instagram: "인스타그램", threads: "스레드" };
 const labelOf = (channel: string) => LABELS[channel] ?? channel;
 
+/**
+ * 보관 기간이 지나 영상 파일을 지운 글(media_purged_at) — 엔진 실패 문구이자, 서버 액션의 거절 이유·목록 한 줄·끝남 토스트가
+ * **같이 읽는 한 벌**이다(2026-09-12 점검: actions.ts 와 post-row.tsx 가 같은 문장을 각자 적고 있었다 — 한쪽만 고치면 같은 상태를
+ * 두 가지로 설명하게 된다). 정리 크론(publish-media-sweep)은 error 칸을 바꾸지 않아서 목록은 이 문구로 덮어 보여 준다.
+ * 이 파일은 런타임 import 가 없어 클라이언트 컴포넌트가 가져가도 된다. 마침표 없음(이 파일의 규칙) — 문장으로 쓸 곳이 붙인다.
+ */
+export const MEDIA_PURGED_MESSAGE = "영상 파일이 보관 기간이 지나 지워졌어요 — 지운 뒤 다시 만들어 주세요";
+
 /** 코드별 기본 처리 방식과 문구. c = 채널 이름(인스타그램·스레드) */
 const TABLE: Record<PublishErrorCode, { kind: PublishErrorKind; text: (c: string) => string }> = {
   NOT_CONNECTED: { kind: "auth", text: (c) => `${c} 연동이 끊겼어요 — 설정에서 다시 연동해 주세요` },
@@ -92,7 +100,7 @@ const TABLE: Record<PublishErrorCode, { kind: PublishErrorKind; text: (c: string
   UNSUPPORTED_CHANNEL: { kind: "permanent", text: (c) => `${c} 발행은 아직 지원하지 않아요` },
   MEDIA_INVALID: { kind: "permanent", text: () => "첨부한 파일을 확인하지 못했어요 — 지운 뒤 다시 만들어 주세요" },
   MEDIA_MISSING: { kind: "permanent", text: () => "올린 파일을 찾지 못했어요 — 지운 뒤 다시 만들어 주세요" },
-  MEDIA_PURGED: { kind: "permanent", text: () => "영상 파일이 보관 기간이 지나 지워졌어요 — 지운 뒤 다시 만들어 주세요" },
+  MEDIA_PURGED: { kind: "permanent", text: () => MEDIA_PURGED_MESSAGE },
   MEDIA_FETCH_FAILED: { kind: "recreate", text: (c) => `${subj(c)} 파일을 가져가지 못했어요 — 잠시 후 다시 시도해 주세요` },
   DOWNLOAD_TIMEOUT: { kind: "recreate", text: (c) => `${subj(c)} 파일을 받는 데 너무 오래 걸렸어요 — 잠시 후 다시 시도해 주세요` },
   UNSUPPORTED_FORMAT: {

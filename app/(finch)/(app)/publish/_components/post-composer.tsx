@@ -10,6 +10,7 @@ import { isTopmostDialog } from "@/components/ui/trap-focus";
 import { SnsIcon } from "@/components/sns-brand-icons";
 import { earliestPublishAt } from "@/lib/calendar";
 import type { ResultModalContent } from "@/components/ui/result-modal";
+import type { ToastContent } from "@/components/ui/toast";
 import { createPost, type CreatePostResult } from "../actions";
 import {
   COMPOSER_CHANNELS,
@@ -24,7 +25,7 @@ import {
   validatePostText,
   type IgSurface,
 } from "@/lib/publish-rules";
-import { eunNeun, iGa } from "@/lib/josa";
+import { eunNeun } from "@/lib/josa";
 import { MediaTiles } from "./media-tiles";
 import { CoverPicker } from "./cover-picker";
 import { PublishingVeil } from "./publishing-veil";
@@ -37,7 +38,8 @@ import { PICK_ACCEPT, surfaceOf, tileBusy, tileFacts, toPostMedia, useMediaTiles
   모달(연동하러 가기), 연동이면 작성 화면. 우리도 같은 관문을 둔다 — 연동 없이
   작성부터 시키고 발행에서 실패하게 만드는 것보다, 문 앞에서 이유를 말하는 게 낫다.
 
-  발행 방식은 셋이다: **지금 발행 / 예약 발행(시각) / 초안 저장.** 결과는 목록 화면이 모달로 그린다.
+  발행 방식은 셋이다: **지금 발행 / 예약 발행(시각) / 초안 저장.** 결과는 목록 화면이 알린다 — 예약·초안은 결과 모달,
+  「지금 발행」은 글을 만들고 선점하는 데까지만 기다린 뒤 곧바로 닫히고(2026-09-12 비동기), 목록 한 줄이 «올리는 중»을 그린다.
   채널: 발행 어댑터가 있는 인스타그램·스레드가 활성이다(lib/meta/*-publish.ts). 틱톡은 발행 API 자체가 없어 «준비 중».
 
   사진·영상(2026-09-11): 고르는 즉시 굽기·검사를 하고 **브라우저가 Storage 로 직접** 올린다(use-media-tiles.ts).
@@ -55,45 +57,39 @@ export interface ComposerChannel {
   connected: boolean;
 }
 
-/** 저장 결과 → 결과 모달 문구(목록 화면이 띄운다) */
-function resultFor(res: Extract<CreatePostResult, { ok: true }>, channel: string, when: string, hasVideo: boolean): ResultModalContent {
+/**
+ * 저장 결과 — 목록 화면이 알린다.
+ *  · modal: 예약·초안 — 결과 모달(방금 한 일이 끝났다)
+ *  · started: 「지금 발행」을 시작했다 — 목록이 토스트로 «올리기 시작했어요»와 어디서 볼지를 말한다(보는 탭을 목록이 안다)
+ *  · deferred: 저장은 됐고 크론이 곧 집어 간다 — 토스트(경고)
+ */
+export type ComposerSaved =
+  | { kind: "modal"; result: ResultModalContent }
+  | { kind: "started"; channel: string; hasVideo: boolean }
+  | { kind: "deferred"; toast: ToastContent };
+
+function resultFor(res: Extract<CreatePostResult, { ok: true }>, channel: string, when: string, hasVideo: boolean): ComposerSaved {
   const label = channelLabel(channel);
   if (res.mode !== "now") {
     if (res.mode === "draft") {
-      return { tone: "positive", title: "초안으로 저장했어요", description: "「초안」 탭에서 언제든 시각을 정하거나 지금 발행할 수 있어요." };
+      return {
+        kind: "modal",
+        result: { tone: "positive", title: "초안으로 저장했어요", description: "「초안」 탭에서 언제든 시각을 정하거나 지금 발행할 수 있어요." },
+      };
     }
     return {
-      tone: "positive",
-      title: `${label} 발행을 예약했어요`,
-      description: `${formatWhen(when)}부터 5분 안에 자동으로 올라가요.${hasVideo ? " 영상은 처리 때문에 조금 늦을 수 있어요." : ""}`,
+      kind: "modal",
+      result: {
+        tone: "positive",
+        title: `${label} 발행을 예약했어요`,
+        description: `${formatWhen(when)}부터 5분 안에 자동으로 올라가요.${hasVideo ? " 영상은 처리 때문에 조금 늦을 수 있어요." : ""}`,
+      },
     };
   }
   const o = res.outcome;
-  switch (o.state) {
-    case "published":
-      return { tone: "positive", title: `${label}에 올라갔어요`, description: "「발행완료」 탭에서 확인할 수 있어요." };
-    case "processing":
-      /* 메타가 처리 중 — 매분 크론이 이어서 올리고 알림을 보낸다. «실패»도 «완료»도 아니다 */
-      return o.soon
-        ? { tone: "positive", title: "곧 올라가요", description: `준비가 끝났어요. 곧 ${label}에 올라가고, 올라가면 알림으로 알려 드려요.` }
-        : {
-            tone: "positive",
-            title: `${iGa(label)} ${o.hasVideo ? "영상을" : "게시물을"} 처리하고 있어요`,
-            description: "끝나는 대로 자동으로 올라가요. 보통 몇 분 걸리고, 올라가면 알림으로 알려 드려요. 「발행예약」 탭에서 상태를 볼 수 있어요.",
-          };
-    case "deferred":
-      /* 저장은 됐고 크론이 곧 집어 간다 — «실패»로 말하면 정상 발행 예정 글을 지우게 된다 */
-      return { tone: "warning", title: "저장했어요 — 곧 자동으로 올라가요", description: `${o.error} 「발행예약」 탭에서 상태를 볼 수 있어요.` };
-    case "failed":
-      /* 저장은 됐고 발행만 실패 — 컴포저를 닫는다. 열어 둔 채 오류만 보이면 같은 글을 두 번 올리게 된다 */
-      return {
-        tone: "negative",
-        title: `${label}에 올리지 못했어요`,
-        description: `${o.error} — 글은 「발행예약」 탭에 남아 있어요. 다시 시도하거나 지울 수 있어요.`,
-      };
-    default:
-      return { tone: "warning", title: "결과를 확인하지 못했어요", description: "「발행예약」 탭에서 상태를 확인해 주세요." };
-  }
+  if (o.state === "started") return { kind: "started", channel, hasVideo };
+  /* 저장은 됐고 크론이 곧 집어 간다 — «실패»로 말하면 정상 발행 예정 글을 지우게 된다 */
+  return { kind: "deferred", toast: { tone: "warning", title: "저장했어요 — 곧 자동으로 올라가요", description: o.error } };
 }
 
 /** 사진·영상 칸 아래 한 줄 — 지금 구성이 어떤 게시물로 올라가는지 */
@@ -127,7 +123,7 @@ export function PostComposer({
   /** 캘린더에서 날짜를 골라 들어온 경우 — 예약 모드로 그 날짜가 미리 채워진다 */
   defaultDate: string | null;
   onClose: () => void;
-  onSaved: (result: ResultModalContent) => void;
+  onSaved: (saved: ComposerSaved) => void;
 }) {
   /* 조회 실패(null)면 관문을 띄우지 않는다 — «계정 없음»이 아니라 «모름»이다. 실제 발행은 서버가 다시 확인한다.
      잘 쓰던 사람을 «연동하세요» 화면으로 튕기는 쪽이 더 나쁘다(2026-09-07 감사). */
@@ -408,8 +404,9 @@ export function PostComposer({
         tabIndex={-1}
         className="modal-card-in shadow-pop relative flex max-h-[92dvh] w-full max-w-[550px] flex-col overflow-hidden rounded-card border border-line bg-body outline-none sm:max-h-[88dvh]"
       >
-        {/* 발행·저장 중 덮개 — 버튼 글자만 바뀌면 멈춘 줄 안다(2026-09-12 사장님 지시). 카드 전체를 덮어 무엇이 진행 중인지 말한다 */}
-        {saving ? <PublishingVeil channel={channel} mode={mode} hasMedia={tiles.length > 0} hasVideo={hasVideo} /> : null}
+        {/* 저장·발행 시작 중 덮개 — 버튼 글자만 바뀌면 멈춘 줄 안다(2026-09-12 사장님 지시). 카드 전체를 덮어 무엇이 진행 중인지 말한다.
+            「지금 발행」도 글을 만들고 선점하는 짧은 동안만이다 — 올리는 일은 서버가 뒤에서 하고, 이 창은 곧바로 닫힌다 */}
+        {saving ? <PublishingVeil mode={mode} /> : null}
         <div className="flex items-center gap-2 px-5 pt-4">
           <h2 className="flex-1 text-[17px] font-semibold">새 게시물 포스팅</h2>
           <button
@@ -586,7 +583,9 @@ export function PostComposer({
                   className="size-4 accent-[var(--color-primary)]"
                 />
                 <span className="text-[15px] font-medium">지금 발행</span>
-                <span className="w-full text-[12px] text-fg-sub">저장하자마자 바로 올라가요. 영상은 처리하는 데 몇 분 걸릴 수 있어요.</span>
+                <span className="w-full text-[12px] text-fg-sub">
+                  누르면 바로 올리기 시작해요. 이 화면을 나가도 계속 올라가요. 영상은 처리하는 데 몇 분 걸릴 수 있어요.
+                </span>
               </label>
 
               <label
@@ -650,7 +649,7 @@ export function PostComposer({
           <Button className="w-full" disabled={!canSave} onClick={save}>
             {saving
               ? mode === "now"
-                ? "발행 중…"
+                ? "시작하는 중…"
                 : "저장 중…"
               : mode === "draft"
                 ? "초안으로 저장"

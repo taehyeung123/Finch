@@ -4,7 +4,7 @@ import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
 import { LIST_POST_COLUMNS, toListItem, type ListPostRow } from "@/lib/publish/list-item";
-import { postAccountView, type CurrentAccount } from "@/lib/publish/account-core";
+import { currentAccountMap, postAccountView, type CurrentAccount } from "@/lib/publish/account-core";
 import { signPostThumbs } from "@/lib/publish/thumbs";
 import { accounts as sampleAccounts, scheduledPosts as demoScheduledPosts } from "@/lib/data";
 import type { ComposerChannel } from "./_components/post-composer";
@@ -15,9 +15,11 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-/* 「지금 발행」 서버 액션이 이 페이지에서 불린다 — 메타가 캐러셀 이미지를 처리하는 데 최대 1분 남짓 걸린다.
-   이 값이 없으면 플랫폼 기본값에 걸려 액션이 도중에 죽고, 그러면 실패 처리가 실행되지 않아
-   행이 'publishing' 으로 굳는다(크론이 30분 뒤 회수하지만 사용자는 그동안 결과를 모른다). */
+/* 「지금 발행」 서버 액션이 이 페이지에서 불린다(Server Actions 는 페이지의 maxDuration 을 따른다 — Next 문서 maxDuration.md).
+   2026-09-12 부터 액션은 글을 만들고 선점한 뒤 **바로 응답하고**, 메타에 올리는 일은 응답 뒤 after() 가 이어서 한다.
+   after 도 **이 함수의 실행 시간 안에서** 돈다(Next 문서 after.md «Duration», Vercel waitUntil) — 이 값이 곧 뒤에서 올리는 일의 상한이다.
+   엔진 예산(actions.ts NOW_TOTAL_BUDGET_MS 105초)은 이보다 짧게 잡는다. 넘기면 플랫폼이 함수를 죽이고 행이 'publishing' 으로 남는다 —
+   5분 크론이 10분 뒤 회수한다(준비물이 있으면 처리 중으로 이어 보고, 없으면 «도중에 끊겼어요» 실패 + 알림). */
 export const maxDuration = 120;
 
 /*
@@ -57,15 +59,17 @@ interface Accounts {
  * «@옛 · 이전 계정»을 정한다(규칙: lib/publish/account-core.ts postAccountView). 계정을 바꾼 뒤에도 옛 계정의 글이
  * 새 계정 것처럼 섞여 보이지 않게 한다.
  */
-async function loadScheduled(accountsP: Promise<Accounts>): Promise<{ items: ScheduledPost[]; truncated: boolean; failed: boolean }> {
+async function loadScheduled(
+  accountsP: Promise<Accounts>,
+): Promise<{ items: ScheduledPost[]; truncated: boolean; failed: boolean; renderedAt: number }> {
   /* isDemoMode + getAuthUser — 이 배치의 다른 화면들과 같은 조합이다.
      · isSupabaseConfigured 만 보면 NEXT_PUBLIC_DEMO_MODE(프로젝트가 죽었을 때의
        탈출구)를 못 잡아, 죽은 DB 에 쿼리를 던지고 렌더가 통째로 깨진다.
      · createClient().auth.getUser() 를 직접 부르면 레이아웃 가드와 합쳐 Auth 서버를
        요청당 2회 왕복한다(lib/supabase/server.ts 가 측정해서 고친 패턴). */
-  if (isDemoMode()) return { items: demoScheduledPosts as ScheduledPost[], truncated: false, failed: false };
+  if (isDemoMode()) return { items: demoScheduledPosts as ScheduledPost[], truncated: false, failed: false, renderedAt: Date.now() };
   const user = await getAuthUser();
-  if (!user) return { items: [], truncated: false, failed: false };
+  if (!user) return { items: [], truncated: false, failed: false, renderedAt: Date.now() };
   const supabase = await createClient();
 
   /* 캘린더가 생기면서 조회 범위를 넓혔다. 20건 오름차순이면 **과거만 20건** 나와서
@@ -106,6 +110,7 @@ async function loadScheduled(accountsP: Promise<Accounts>): Promise<{ items: Sch
     items,
     truncated: (sched.data ?? []).length >= PAGE_LIMIT,
     failed: !!sched.error || !!drafts.error,
+    renderedAt: now,
   };
 }
 
@@ -132,20 +137,15 @@ async function loadAccounts(): Promise<Accounts> {
     return { channels: null, current: null };
   }
   const rows = (data ?? []) as Array<{ channel: string; handle: string | null; connected: boolean; platform_user_id: string | null }>;
-  const current = new Map<string, CurrentAccount>();
-  for (const r of rows) {
-    const id = r.platform_user_id !== null && r.platform_user_id !== undefined ? String(r.platform_user_id).trim() : "";
-    if (r.connected && id) current.set(r.channel, { platformUserId: id, handle: r.handle });
-  }
   return {
     channels: rows.map((r) => ({ channel: r.channel, handle: r.handle, connected: !!r.connected })),
-    current,
+    current: currentAccountMap(rows),
   };
 }
 
 export default async function PublishPage() {
   const accountsP = loadAccounts();
-  const [{ items, truncated, failed }, { channels }] = await Promise.all([loadScheduled(accountsP), accountsP]);
+  const [{ items, truncated, failed, renderedAt }, { channels }] = await Promise.all([loadScheduled(accountsP), accountsP]);
 
   return (
     <div className="space-y-5">
@@ -153,7 +153,15 @@ export default async function PublishPage() {
         title="발행"
         description="인스타그램·스레드에 사진·영상 게시물을 지금 올리거나 예약합니다. 예약한 시각부터 5분 안에 자동으로 발행돼요."
       />
-      <PublishList initialItems={items} channels={channels} isDemo={isDemoMode()} truncated={truncated} loadFailed={failed} />
+      {/* renderedAt — 목록이 «지금»의 첫 값으로 쓴다(«방금 시작»·«3분째»). 브라우저 시계로 시작하면 서버가 그린 글자와 어긋나 하이드레이션이 깨질 수 있다 */}
+      <PublishList
+        initialItems={items}
+        renderedAt={renderedAt}
+        channels={channels}
+        isDemo={isDemoMode()}
+        truncated={truncated}
+        loadFailed={failed}
+      />
     </div>
   );
 }

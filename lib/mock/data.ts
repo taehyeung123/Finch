@@ -921,6 +921,8 @@ const demoPost = (p: Pick<ScheduledPostSample, "id" | "caption" | "status" | "sc
   /* 예시 계정(위 accounts 의 @finch.official) — 계정 칩이 어떻게 보이는지 보여 준다 */
   account_handle: "@finch.official",
   account_previous: false,
+  progress_since: null,
+  run_started_at: null,
   ...p,
 });
 

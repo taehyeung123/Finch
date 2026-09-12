@@ -22,7 +22,8 @@ export type { PostStatus };
 const META: Record<PostStatus, { label: string; dot: string; text: string; face?: string; pulse?: boolean }> = {
   draft: { label: "초안", dot: "bg-fg-faint", text: "text-fg-sub" },
   scheduled: { label: "예약됨", dot: "bg-primary", text: "text-fg" },
-  publishing: { label: "발행 중", dot: "bg-warning", text: "text-warning-strong", pulse: true },
+  /* 서버가 지금 인스타·스레드에 올리고 있다(2026-09-12 비동기 「지금 발행」 — 사장님 말 그대로 «올리는 중») */
+  publishing: { label: "올리는 중", dot: "bg-warning", text: "text-warning-strong", pulse: true },
   /* 메타가 영상·사진을 처리하는 중(2026-09-11) — 끝나면 매분 크론이 자동으로 올린다. 발행 중과 같은 «진행 중» 표현 */
   processing: { label: "처리 중", dot: "bg-warning", text: "text-warning-strong", pulse: true },
   published: { label: "발행 완료", dot: "bg-positive", text: "text-fg-sub" },
