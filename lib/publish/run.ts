@@ -9,6 +9,7 @@ import { Deadline } from "@/lib/meta/deadline";
 import { makeInstagramAdapter } from "@/lib/meta/instagram-publish";
 import { makeThreadsAdapter } from "@/lib/meta/threads-publish";
 import {
+  accountSwitchedError,
   isFormatError,
   mapContainerError,
   mapGraphFailure,
@@ -32,6 +33,7 @@ import {
 import { consumeFetchBudget, mintFetchUrls, parsePostMedia } from "@/lib/publish/media";
 import type { ResolvedItem } from "@/lib/publish/media-core";
 import { safePermalink } from "@/lib/publish/list-item";
+import { targetAccountMismatch } from "@/lib/publish/account-core";
 
 /*
   게시물 한 건을 **실제로 내보내는** 엔진 (2026-09-09 신설 → 2026-09-11 영상·섞인 캐러셀을 위한 상태 기계로 재작성).
@@ -47,13 +49,21 @@ import { safePermalink } from "@/lib/publish/list-item";
   ⚠️ 선점(claim)이 곧 중복 방지다. 크론·「지금 발행」이 같은 행을 동시에 잡아도 `update … where status in (…)` 는 한쪽만 성공한다.
   그리고 엔진은 **선점이 돌려준 행**만 믿는다 — 조회해 둔 옛 사본으로 움직이면, 그 사이 다른 실행이 적어 둔
   «발행 시도함»을 못 보고 두 번 올린다(2026-09-11 점검).
+
+  대상 계정(2026-09-12 계정 전환, 0094 — 규칙 정본 lib/publish/account-core.ts):
+   · 글에 적힌 대상 계정(account_platform_id)과 지금 연결된 계정이 다르면 **올리지 않는다** — 메타를 한 번도 부르지 않고
+     «예약할 때 연결돼 있던 @A 계정이 아니라 지금은 @B 계정이 …»로 실패 + 알림(시도한 뒤라면 «올라갔는지 모름»).
+     예전엔 발행할 때마다 지금 연결된 계정의 토큰을 써서, A 로 예약한 글이 B 로 바꾼 뒤 B 로 올라갔다.
+   · 대상이 비어 있는 옛 글은 지금 계정으로 나간다 — 선점 직후 그 계정을 대상으로 적는다(여러 번의 실행에 걸친 영상 글이
+     중간에 계정이 바뀌어도 새 계정으로 새지 않게). 올라가면 실제로 올린 계정(id·지금 이름)을 적는다.
 */
 
 /** 엔진이 읽는 컬럼 — 선점(claimPost)이 이 모양으로 돌려준다 */
 export const ENGINE_POST_COLUMNS =
   "id, user_id, channel, caption, image_urls, media, ig_surface, share_to_feed, status, scheduled_at, publish_after, " +
   "container_id, child_container_ids, container_created_at, container_owner_id, processing_deadline, next_check_at, " +
-  "publish_attempted_at, publish_calls, claimed_at, prepare_attempted_at, container_window_at, container_window_count, media_purged_at";
+  "publish_attempted_at, publish_calls, claimed_at, prepare_attempted_at, container_window_at, container_window_count, media_purged_at, " +
+  "account_platform_id, account_handle";
 
 export interface EnginePost {
   id: string;
@@ -80,6 +90,9 @@ export interface EnginePost {
   container_window_at: string | null;
   container_window_count: number;
   media_purged_at: string | null;
+  /** 대상 계정(0094) — null 이면 옛 글(지금 계정으로 나가며 적는다). '__previous__' 는 발행된 옛 글에만 있다 */
+  account_platform_id: string | null;
+  account_handle: string | null;
 }
 
 export type ClaimResult = { ok: true; row: EnginePost } | { ok: false; reason: "lost" | "db_error" };
@@ -269,14 +282,15 @@ async function advance(admin: SupabaseClient, post: EnginePost, source: EngineSo
     const w = await write(fields, true);
     if (!w.ok) return w.reason === "lost_claim" ? { kind: "conflict", label } : { kind: "failed", label, error: e.message, code: e.code };
     const purged = e.code === "MEDIA_PURGED" || !!post.media_purged_at;
+    /* 미리 만들기의 실패 문구(«…받지 않았어요»)는 메타가 거절한 경우의 말이다 — 계정이 바뀌어 우리가 멈춘 것은 일반 실패 문구로 */
+    const prepareCopy = source === "prepare" && e.code !== "ACCOUNT_SWITCHED";
     await notifyUser(admin, {
       userId: post.user_id,
       type: "studio",
-      title: source === "prepare" ? "예약한 게시물을 준비하지 못했어요" : "발행에 실패했어요",
-      body:
-        source === "prepare"
-          ? `${iGa(label)} 예약한 게시물을 받지 않았어요 — ${e.message}. 「발행」 화면에서 지운 뒤 다시 만들어 예약해 주세요.`
-          : `${label} 게시물을 올리지 못했어요 — ${e.message}. 「발행」 화면에서 ${purged ? "지울" : "다시 시도하거나 지울"} 수 있어요.`,
+      title: prepareCopy ? "예약한 게시물을 준비하지 못했어요" : "발행에 실패했어요",
+      body: prepareCopy
+        ? `${iGa(label)} 예약한 게시물을 받지 않았어요 — ${e.message}. 「발행」 화면에서 지운 뒤 다시 만들어 예약해 주세요.`
+        : `${label} 게시물을 올리지 못했어요 — ${e.message}. 「발행」 화면에서 ${purged ? "지울" : "다시 시도하거나 지울"} 수 있어요.`,
     });
     return { kind: "failed", label, error: e.message, code: e.code };
   };
@@ -343,7 +357,7 @@ async function advance(admin: SupabaseClient, post: EnginePost, source: EngineSo
   /* ── 1. 연동 — 토큰은 **글 소유자**의 것이다(팀원이 만든 글은 팀원 자신의 연동으로 나간다). 암호문 AAD 도 같은 userId 라야 풀린다 ── */
   const { data: account, error: accErr } = await admin
     .from("connected_accounts")
-    .select("platform_user_id, access_token_cipher, token_expires_at")
+    .select("platform_user_id, handle, access_token_cipher, token_expires_at")
     .eq("user_id", post.user_id)
     .eq("channel", channel)
     .eq("connected", true)
@@ -361,6 +375,18 @@ async function advance(admin: SupabaseClient, post: EnginePost, source: EngineSo
     return onError(publishError("TOKEN_EXPIRED", channel));
   }
   const platformUserId = String(account.platform_user_id);
+  const currentHandle = typeof account.handle === "string" && account.handle.trim() ? account.handle.trim() : null;
+
+  /* 대상 계정(머리말) — 다르면 아래 걸음 반복의 첫 걸음(nextStep ⓪)이 메타를 부르지 않고 멈춘다.
+     비어 있으면(옛 글) 지금 계정을 대상으로 **먼저** 적는다: 영상 글은 여러 번의 실행에 걸쳐 나아가는데, 그 사이 계정을 바꾸면
+     다음 확인이 새 계정으로 준비물을 다시 만들어 새 계정에 올렸다. 못 적어도(DB 오류) 이번 실행은 이 계정으로 계속한다 —
+     연동 콜백이 바꾸는 순간 비어 있는 글에 옛 계정을 적고, 올라가면 recordPublished 가 다시 적는다. */
+  const targetMismatch = targetAccountMismatch(post.account_platform_id, platformUserId);
+  if (!post.account_platform_id) {
+    const pin = await write({ account_platform_id: platformUserId, account_handle: currentHandle }, true);
+    if (!pin.ok && pin.reason === "lost_claim") return { kind: "conflict", label };
+  }
+
   const adapter: PublishAdapter =
     channel === "threads" ? makeThreadsAdapter(platformUserId, token) : makeInstagramAdapter(platformUserId, token);
 
@@ -433,6 +459,9 @@ async function advance(admin: SupabaseClient, post: EnginePost, source: EngineSo
       error: null,
       error_code: null,
       next_check_at: null,
+      /* 실제로 올린 계정 — 대상과 같다(다르면 여기까지 오지 않는다). 이름은 지금 이름으로(그 사이 바꿨을 수 있다) */
+      account_platform_id: platformUserId,
+      account_handle: currentHandle,
     };
     let changed = false;
     let recorded = false;
@@ -479,6 +508,7 @@ async function advance(admin: SupabaseClient, post: EnginePost, source: EngineSo
       publishCalls: st.calls,
       lookup: st.lookup,
       ownerMismatch: !!st.ownerId && st.ownerId !== platformUserId,
+      targetMismatch,
       remainingMs: deadline.remaining(),
     });
 
@@ -612,6 +642,12 @@ async function advance(admin: SupabaseClient, post: EnginePost, source: EngineSo
       }
 
       case "fail": {
+        if (step.code === "ACCOUNT_SWITCHED") {
+          /* 대상 계정이 아니다 — 준비물·시도 기록은 그대로 두고(두 번 올리지 않기), 마감만 비운다(다시 시도가 새 창을 연다).
+             시도 전: «@A 가 아니라 지금은 @B …» / 시도 뒤: «올라갔는지 모름»(옛 계정에서 확인하라고 말한다) */
+          const err = accountSwitchedError(channel, post.account_handle, currentHandle, st.attemptedAtMs !== null);
+          return fail(err, { recreate: false, extra: { processing_deadline: null } });
+        }
         if (step.code === "CONTAINER_ERROR") {
           const err = st.lastError ? mapContainerError(channel, st.lastError) : publishError("CONTAINER_ERROR", channel);
           if (source === "prepare" && !isFormatError(err)) return later(err);

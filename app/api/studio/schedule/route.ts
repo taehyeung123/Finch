@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
 import { parseKstDateTimeLocal } from "@/lib/calendar";
 import { publishGate } from "@/lib/publish/gate";
 import { publishDbErrorText } from "@/lib/publish/db-errors";
+import { stampPostTarget } from "@/lib/publish/account";
 
 /**
  * 카드뉴스 예약 발행 등록 — 이미지(FormData)를 Storage(cardnews 버킷, 본인 폴더)에 업로드하고
@@ -152,13 +154,16 @@ export async function POST(request: Request) {
     imageUrls.push(pub.publicUrl);
   }
 
-  const { error: insertErr } = await supabase.from("scheduled_posts").insert({
-    user_id: user.id,
-    caption,
-    image_urls: imageUrls,
-    scheduled_at: scheduledIso,
-    status: asDraft ? "draft" : "scheduled",
-  });
+  const { data: inserted, error: insertErr } = await supabase
+    .from("scheduled_posts")
+    .insert({
+      user_id: user.id,
+      caption,
+      image_urls: imageUrls,
+      scheduled_at: scheduledIso,
+      status: asDraft ? "draft" : "scheduled",
+    })
+    .select("id");
   if (insertErr) {
     await rollbackUploads();
     /* DB 가드(0093)의 거절(상한·지난 시각)은 사람이 고칠 수 있는 이유다 — 그대로 말한다 */
@@ -166,6 +171,16 @@ export async function POST(request: Request) {
     if (known) return NextResponse.json({ error: known }, { status: 400 });
     console.error("[studio:schedule] 예약 등록 실패:", insertErr.message);
     return NextResponse.json({ error: "예약 등록에 실패했어요. 다시 시도해 주세요." }, { status: 500 });
+  }
+
+  /* 대상 계정(2026-09-12, 0094) — 예약하는 지금 연결된 인스타 계정을 글에 적는다. 계정을 바꾼 뒤 이 예약이 새 계정으로
+     새지 않게 한다(lib/publish/account-core.ts). 서버 전용 칸이라 admin 으로 — 로그인 사용자는 이 칸을 쓸 권한이 없다.
+     실패해도 예약은 그대로(로그) — 엔진이 나갈 때 지금 계정을 적는다. 초안은 대상이 없다(예약하는 순간 정해진다). */
+  const newId = (inserted as Array<{ id?: string }> | null)?.[0]?.id;
+  if (!asDraft && newId) {
+    const admin = createAdminClient();
+    if (!admin) console.error("[studio:schedule] 대상 계정을 적지 못함 — 서버 자격증명 미설정(발행 때 엔진이 다시 본다)");
+    else await stampPostTarget(admin, { postId: newId, userId: user.id, channel: "instagram", statuses: ["scheduled"] });
   }
 
   return NextResponse.json({ ok: true });

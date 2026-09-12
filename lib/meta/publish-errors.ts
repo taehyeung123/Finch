@@ -57,6 +57,7 @@ export type PublishErrorCode =
   | "INTERRUPTED"
   | "INTERRUPTED_LEGACY"
   | "LOST"
+  | "ACCOUNT_SWITCHED"
   | "TRANSIENT"
   | "UNKNOWN";
 
@@ -134,6 +135,9 @@ const TABLE: Record<PublishErrorCode, { kind: PublishErrorKind; text: (c: string
   INTERRUPTED: { kind: "transient", text: () => "발행이 도중에 끊겼어요 — 다시 시도해 주세요" },
   INTERRUPTED_LEGACY: { kind: "ambiguous", text: () => "발행이 도중에 끊겼어요 — 실제로 올라갔는지 확인한 뒤 다시 시도해 주세요" },
   LOST: { kind: "recreate", text: () => "발행 준비 상태를 잃었어요 — 다시 시도해 주세요" },
+  /* 대상 계정이 아닌 계정이 연결돼 있다(2026-09-12 계정 전환). 이 기본 문구는 연동 콜백이 «바꾸는 순간» 멈춘 글에 쓴다 —
+     엔진은 계정 이름을 아는 accountSwitchedError 를 쓴다. 다시 예약하면 그 순간 연결된 새 계정이 대상이 된다(account-core) */
+  ACCOUNT_SWITCHED: { kind: "permanent", text: () => "계정을 바꿔서 발행하지 못했어요 — 새 계정으로 올리려면 다시 예약해 주세요" },
   TRANSIENT: { kind: "transient", text: (c) => `${c}에 잠시 연결하지 못했어요 — 잠시 후 다시 시도해 주세요` },
   UNKNOWN: { kind: "permanent", text: (c) => `${subj(c)} 게시물을 받지 않았어요 — 잠시 후 다시 시도해 주세요` },
 };
@@ -146,6 +150,42 @@ export function publishError(code: PublishErrorCode, channel: string, raw: strin
 
 /** 모든 코드 — 문구 검사용 */
 export const ALL_PUBLISH_ERROR_CODES = Object.keys(TABLE) as PublishErrorCode[];
+
+/** 계정 이름을 문구에 싣기 전에 — «@아이디» 모양만, 길이 제한(적힌 값이 망가졌어도 알림·목록이 이상한 글을 싣지 않게) */
+function safeHandle(h: string | null | undefined): string | null {
+  const v = (h ?? "").trim();
+  return /^@[A-Za-z0-9._]{1,40}$/.test(v) ? v : null;
+}
+
+/**
+ * 계정 전환 오류 — 글의 대상 계정(예약할 때 연결돼 있던 계정)과 지금 연결된 계정이 다르다(2026-09-12).
+ * 계정 이름을 알면 둘 다 말한다(«예약할 때 연결돼 있던 @A 계정이 아니라 지금은 @B 계정이 연결돼 있어요 — …»).
+ * attempted = 발행을 **시도한 뒤에** 바뀌었다 — 옛 계정에 올라갔을 수 있는데 지금 토큰으로는 확인할 수 없다(모름, 다시 부르지 않는다).
+ */
+export function accountSwitchedError(
+  channel: string,
+  target: string | null | undefined,
+  current: string | null | undefined,
+  attempted: boolean,
+): PublishError {
+  const was = safeHandle(target);
+  const now = safeHandle(current);
+  if (attempted) {
+    return {
+      code: "PUBLISH_AMBIGUOUS",
+      kind: "ambiguous",
+      message: `발행을 시도한 뒤 연결된 계정이 바뀌어 올라갔는지 확인하지 못했어요 — ${was ? `${was} 계정` : "이전 계정"}에서 먼저 확인하고, 없으면 지운 뒤 다시 만들어 주세요`,
+      raw: "account_switched_after_attempt",
+    };
+  }
+  if (!was && !now) return publishError("ACCOUNT_SWITCHED", channel, "account_switched");
+  return {
+    code: "ACCOUNT_SWITCHED",
+    kind: "permanent",
+    message: `예약할 때 연결돼 있던 ${was ? `${was} 계정` : "계정"}이 아니라 지금은 ${now ? `${now} 계정` : "다른 계정"}이 연결돼 있어요 — 새 계정으로 올리려면 다시 예약해 주세요`,
+    raw: "account_switched",
+  };
+}
 
 /** 인스타 2207xxx 하위 코드 표 — 단계에 따라 뜻이 갈리는 것은 igSubcodeError 가 먼저 본다 */
 const IG_SUBCODES: Record<number, PublishErrorCode> = {

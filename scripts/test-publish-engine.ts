@@ -18,6 +18,7 @@ import {
   type EngineFacts,
   type EngineStep,
 } from "../lib/publish/engine-core.ts";
+import { PREVIOUS_ACCOUNT_MARKER, targetAccountMismatch } from "../lib/publish/account-core.ts";
 
 let pass = 0;
 let fail = 0;
@@ -48,6 +49,7 @@ const base = (o: Partial<EngineFacts> = {}): EngineFacts => ({
   publishCalls: 0,
   lookup: null,
   ownerMismatch: false,
+  targetMismatch: false,
   remainingMs: 60_000,
   ...o,
 });
@@ -245,6 +247,86 @@ console.log("처리 창 — 마감을 넘긴 글의 «다시 시도»(2026-09-12
   check("발행 재시도 끝 — 마감이 늦으면 마감 + 15분", publishRetryEndMs(NOW + 60_000, NOW) === NOW + 60_000 + PUBLISH_RETRY_MS);
   check("발행 재시도 끝 — 미리 만든 예약 영상(마감이 예약 시각보다 이르다)은 예약 시각 + 15분", publishRetryEndMs(NOW - 60_000, NOW) === NOW + PUBLISH_RETRY_MS);
   check("발행 재시도 끝 — 마감을 모르면 발행 시각 + 15분", publishRetryEndMs(null, NOW) === NOW + PUBLISH_RETRY_MS);
+}
+
+console.log("대상 계정 — 계정을 바꾸면 옛 예약을 새 계정으로 올리지 않는다(2026-09-12)");
+{
+  const switched = (s: EngineStep) => s.do === "fail" && s.code === "ACCOUNT_SWITCHED" && s.recreate === false;
+  check("시도 전·준비물 없음 → 계정 전환 실패(준비물 버리지 않음)", switched(nextStep(base({ targetMismatch: true }))));
+  check(
+    "시도 전·준비 끝(FINISHED) → 발행하지 않고 계정 전환 실패",
+    switched(nextStep(base({ targetMismatch: true, containerId: "c1", containerCreatedAtMs: NOW, containerState: "FINISHED" }))),
+  );
+  check(
+    "미리 만들기도 같다 — 새 계정으로 준비물을 만들지 않는다",
+    switched(nextStep(base({ source: "prepare", publishAfterMs: NOW + 600_000, targetMismatch: true }))),
+  );
+  check(
+    "매분 확인·준비물 없음 → «잃었어요»보다 계정 전환이 먼저",
+    switched(nextStep(base({ source: "check", targetMismatch: true }))),
+  );
+  check(
+    "시도 뒤·준비 끝 → 찾아보기(lookup)·두 번째 발행 없이 멈춤(run.ts 가 «올라갔는지 모름»으로 적는다)",
+    switched(nextStep(base({ targetMismatch: true, containerId: "c1", containerState: "FINISHED", publishAttemptedAtMs: NOW - 10_000, publishCalls: 1 }))),
+  );
+  check(
+    "시도 뒤·유예 지나 두 번째 발행 차례여도 멈춤",
+    switched(
+      nextStep(
+        base({
+          targetMismatch: true,
+          containerId: "c1",
+          containerState: "FINISHED",
+          publishAttemptedAtMs: NOW - LOOKUP_GRACE_MS - 1,
+          publishCalls: 1,
+          lookup: "not_found",
+        }),
+      ),
+    ),
+  );
+  check(
+    "대상이 맞으면(옛 글·다시 예약한 글) 준비물 계정만 다를 때 → 준비물만 새로 만든다(reset)",
+    is(nextStep(base({ targetMismatch: false, ownerMismatch: true, containerId: "c1", containerCreatedAtMs: NOW })), "reset"),
+  );
+
+  /* 표 전체 — 대상 계정이 다르면 어떤 사실 조합에서도 메타를 부르는 걸음(만들기·읽기·찾아보기·발행)이 나오지 않는다 */
+  const sources = ["now", "due", "prepare", "check"] as const;
+  const states = [null, "IN_PROGRESS", "FINISHED", "PUBLISHED", "ERROR", "EXPIRED", "UNKNOWN"] as const;
+  const attempts = [null, NOW - 10_000, NOW - LOOKUP_GRACE_MS - 1, NOW - ATTEMPT_GIVE_UP_MS - 1];
+  const callSteps = new Set(["create_children", "check_children", "create_container", "check_container", "lookup", "publish", "record_published", "reset"]);
+  let combos = 0;
+  let bad = 0;
+  for (const source of sources) {
+    for (const containerState of states) {
+      for (const attemptedAt of attempts) {
+        for (const carousel of [false, true]) {
+          for (const withContainer of [false, true]) {
+            combos++;
+            const f = base({
+              source,
+              targetMismatch: true,
+              carousel,
+              containerId: withContainer ? "c1" : null,
+              childIds: carousel && withContainer ? ["a", "b"] : null,
+              containerState: withContainer ? containerState : null,
+              containerCreatedAtMs: withContainer ? NOW - 60_000 : null,
+              publishAttemptedAtMs: attemptedAt,
+              publishCalls: attemptedAt === null ? 0 : 1,
+              lookup: attemptedAt === null ? null : "not_found",
+            });
+            if (callSteps.has(nextStep(f).do)) bad++;
+          }
+        }
+      }
+    }
+  }
+  check(`대상 계정이 다르면 ${combos}개 조합 모두 메타를 부르지 않는다`, bad === 0, bad);
+}
+{
+  check("판정 — 대상이 비면(옛 글) 다르지 않다", !targetAccountMismatch(null, "B") && !targetAccountMismatch(undefined, "B") && !targetAccountMismatch("  ", "B"));
+  check("판정 — 같은 계정이면 다르지 않다", !targetAccountMismatch("A", "A") && !targetAccountMismatch(" A ", "A"));
+  check("판정 — 다른 계정이면 다르다", targetAccountMismatch("A", "B"));
+  check("판정 — 이전 계정 표식은 지금 계정이 아니다", targetAccountMismatch(PREVIOUS_ACCOUNT_MARKER, "B"));
 }
 
 console.log("도우미");

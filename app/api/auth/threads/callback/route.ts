@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { consoleErrorThrottled, flatten } from "@/lib/monitoring/log-throttle";
 import { encryptToken, isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
+import { isAccountSwitch, type CurrentAccount } from "@/lib/publish/account-core";
+import { attributeUnstampedPosts, stopPostsOfPreviousAccount } from "@/lib/publish/account";
 import {
   exchangeThreadsCodeForToken,
   exchangeThreadsForLongLivedToken,
@@ -146,11 +149,25 @@ export async function GET(request: Request) {
     // 이 사용자의 기존 Threads 연동이 있으면 갱신, 없으면 신규 (앱 모델상 사용자당 Threads 1계정)
     const { data: existing } = await store
       .from("connected_accounts")
-      .select("id")
+      .select("id, platform_user_id, handle")
       .eq("user_id", user.id)
       .eq("channel", "threads")
       .limit(1)
       .maybeSingle();
+
+    /* 다른 계정으로 바꾸기(2026-09-12) — 인스타 콜백과 같은 규칙(그 파일 주석). 행을 고치기 전에 옛 계정을 대상이 빈 글에 적는다.
+       같은 계정 재연결은 아무것도 바꾸지 않는다. admin 이 없으면 로그만(폴백 없음 — 발행 때 엔진이 대상 계정을 보고 막는다). */
+    const prevAccount: CurrentAccount | null =
+      existing && isAccountSwitch(existing.platform_user_id, info.id)
+        ? { platformUserId: String(existing.platform_user_id), handle: typeof existing.handle === "string" ? existing.handle : null }
+        : null;
+    const switchAdmin = prevAccount ? createAdminClient() : null;
+    /* 이 시각 전에 잡힌 «대상 없는» 예약은 새 계정 것이 아니다(stopPostsOfPreviousAccount) */
+    const switchStartedAt = new Date().toISOString();
+    if (prevAccount) {
+      if (!switchAdmin) console.error("[" + TAG + "] 계정 전환 — 서버 자격증명 미설정, 옛 계정 글 정리 불가(발행 때 엔진이 막는다)");
+      else await attributeUnstampedPosts(switchAdmin, user.id, "threads", prevAccount);
+    }
 
     let write = existing
       ? await store.from("connected_accounts").update(rowWithAvatar).eq("id", existing.id).select("id")
@@ -188,7 +205,14 @@ export async function GET(request: Request) {
       return settingsRedirect(origin, { connect: "error", reason: "save_failed" });
     }
 
-    return settingsRedirect(origin, { connect: "success", handle: row.handle });
+    /* 계정이 실제로 바뀐 **뒤에** 옛 계정 대상의 예약·처리 중(발행 시도 전) 글을 곧바로 실패로 내린다(인스타 콜백과 같은 이유) */
+    let stopped = 0;
+    if (prevAccount && switchAdmin) {
+      stopped = await stopPostsOfPreviousAccount(switchAdmin, user.id, "threads", prevAccount, switchStartedAt);
+      revalidatePath("/publish");
+    }
+
+    return settingsRedirect(origin, { connect: "success", handle: row.handle, ...(stopped > 0 ? { stopped: String(stopped) } : {}) });
   } catch (e) {
     console.error("[threads-oauth] 콜백 처리 실패:", e instanceof Error ? e.message : String(e));
     return settingsRedirect(origin, { connect: "error", reason: "exchange" });
