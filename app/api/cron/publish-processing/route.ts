@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isAuthorizedCron } from "@/lib/cron";
 import { advanceClaimedPost, claimPost } from "@/lib/publish/run";
+import { backfillPostAccounts, type BackfillTally } from "@/lib/publish/account-backfill";
 
 /**
  * 처리 중인 게시물 이어 보기 — **매분**(vercel.json `* * * * *`, 2026-09-11 영상 발행).
@@ -13,6 +14,9 @@ import { advanceClaimedPost, claimPost } from "@/lib/publish/run";
  * next_check_at 은 서버만 쓴다(0093 칸 권한) — 사용자가 1970 으로 적어 줄 맨 앞을 독차지하지 못한다.
  * 선점(processing → publishing)이 곧 중복 방지다 — 취소·「지금 발행」·겹친 실행이 먼저 잡으면 건드리지 않는다.
  * ⚠️ 미리보기 배포에는 크론이 돌지 않는다 — 거기서 «처리 중»은 멈춰 보인다(손으로 부르려면 Authorization: Bearer $CRON_SECRET).
+ *
+ * 남는 시간(2026-09-12, 0094): 본 작업이 밀리지 않은 회차에만 옛 발행 글 10건의 «어느 계정으로 올렸나»를 채운다
+ * (lib/publish/account-backfill.ts). 본 작업보다 절대 먼저 하지 않고, 예산을 넘기지 않는다.
  */
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -24,6 +28,10 @@ const PER_POST_MS = 20_000;
 /** 이보다 적게 남았으면 새 글을 집지 않는다 — 발행 호출은 15초 이상 남았을 때만 시작한다(engine-core) */
 const MIN_START_MS = 20_000;
 const BATCH = 25;
+/** 계정 백필 — 이만큼 남았을 때만, 이만큼까지만, 이만큼씩 */
+const BACKFILL_MIN_MS = 10_000;
+const BACKFILL_MAX_MS = 20_000;
+const BACKFILL_BATCH = 10;
 
 export async function GET(request: Request) {
   if (!isAuthorizedCron(request)) return new NextResponse("unauthorized", { status: 401 });
@@ -63,5 +71,17 @@ export async function GET(request: Request) {
     else if (out.kind === "failed") tally.failed++;
     else tally.waiting++;
   }
-  return NextResponse.json({ ok: true, ...tally });
+
+  /* ── 남는 시간: 옛 발행 글의 계정 백필 — 본 작업이 다음 회차로 밀렸으면 하지 않는다 ── */
+  let backfill: BackfillTally | null = null;
+  const left = TIME_BUDGET_MS - (Date.now() - started);
+  if (tally.deferred === 0 && left > BACKFILL_MIN_MS) {
+    try {
+      backfill = await backfillPostAccounts(admin, { budgetMs: Math.min(BACKFILL_MAX_MS, left - 3_000), limit: BACKFILL_BATCH });
+    } catch (e) {
+      /* 본 작업 결과는 이미 DB 에 있다 — 부가 작업의 예외로 응답을 500 으로 만들지 않는다 */
+      console.error("[cron:publish-processing] 계정 백필 예외:", e);
+    }
+  }
+  return NextResponse.json({ ok: true, ...tally, backfill });
 }

@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { consoleErrorThrottled, flatten } from "@/lib/monitoring/log-throttle";
 import { isPrimaryOwner } from "@/lib/channel-availability";
 import { encryptToken, isTokenEncryptionConfigured } from "@/lib/crypto/tokens";
+import { isAccountSwitch, type CurrentAccount } from "@/lib/publish/account-core";
+import { attributeUnstampedPosts, stopPostsOfPreviousAccount } from "@/lib/publish/account";
 import {
   exchangeCodeForToken,
   exchangeForLongLivedToken,
@@ -162,11 +165,27 @@ export async function GET(request: Request) {
     // 이 사용자의 기존 인스타 연동이 있으면 갱신, 없으면 신규 (앱 모델상 사용자당 IG 1계정)
     const { data: existing } = await store
       .from("connected_accounts")
-      .select("id")
+      .select("id, platform_user_id, handle")
       .eq("user_id", user.id)
       .eq("channel", "instagram")
       .limit(1)
       .maybeSingle();
+
+    /* 다른 계정으로 바꾸기(2026-09-12) — 재연결은 이 행을 **제자리에서** 고친다. 고치고 나면 옛 계정 id 를 알 곳이 없으므로
+       그 전에 대상이 비어 있는 글(0094 전 옛 글)에 옛 계정을 적는다 — 옛 발행 이력이 새 계정 것처럼 보이지 않고, 옛 예약이
+       새 계정으로 새지 않는다(lib/publish/account.ts). 같은 계정 재연결은 아무것도 바꾸지 않는다.
+       발행 글 쓰기는 서버 전용 칸·상태 전이라 admin 이다 — 없으면 로그만(폴백 없음 — 발행 때 엔진이 대상 계정을 보고 막는다). */
+    const prevAccount: CurrentAccount | null =
+      existing && isAccountSwitch(existing.platform_user_id, info.id)
+        ? { platformUserId: String(existing.platform_user_id), handle: typeof existing.handle === "string" ? existing.handle : null }
+        : null;
+    const switchAdmin = prevAccount ? createAdminClient() : null;
+    /* 이 시각 전에 잡힌 «대상 없는» 예약은 새 계정 것이 아니다(stopPostsOfPreviousAccount) */
+    const switchStartedAt = new Date().toISOString();
+    if (prevAccount) {
+      if (!switchAdmin) console.error("[" + TAG + "] 계정 전환 — 서버 자격증명 미설정, 옛 계정 글 정리 불가(발행 때 엔진이 막는다)");
+      else await attributeUnstampedPosts(switchAdmin, user.id, "instagram", prevAccount);
+    }
 
     let write = existing
       ? await store.from("connected_accounts").update(rowWithAvatar).eq("id", existing.id).select("id")
@@ -212,6 +231,15 @@ export async function GET(request: Request) {
       return settingsRedirect(origin, { connect: "error", reason: "save_failed" });
     }
 
+    /* 계정이 실제로 바뀐 **뒤에** 옛 계정 대상의 예약·처리 중(발행 시도 전) 글을 곧바로 실패로 내린다 — 예약 시각에 조용히
+       실패하게 두지 않는다. 저장 전에 하면 저장이 막힌 경우(23505 — 다른 사용자가 이미 연결한 계정)에 멀쩡한 예약만 떨어진다. */
+    let stopped = 0;
+    if (prevAccount && switchAdmin) {
+      stopped = await stopPostsOfPreviousAccount(switchAdmin, user.id, "instagram", prevAccount, switchStartedAt);
+      revalidatePath("/publish");
+    }
+    const stoppedParam: Record<string, string> = stopped > 0 ? { stopped: String(stopped) } : {};
+
     /* 계정별 웹훅 구독 — 이게 없으면 이 계정의 댓글/메시지 웹훅이 **발송되지 않는다**(자동 DM 필수).
        연동 자체는 유효하므로 실패해도 되돌리지 않지만, **성공으로 덮지도 않는다.**
        예전엔 console.error 하나로 끝냈는데, 그러면 사용자는 «연동 완료» 를 보고 규칙을 만들고
@@ -220,10 +248,10 @@ export async function GET(request: Request) {
     const sub = await subscribeWebhookFields(longLived.accessToken);
     if (!sub.ok) {
       console.error("[" + TAG + "] 웹훅 구독 실패(연동은 유지):", sub.error);
-      return settingsRedirect(origin, { connect: "warn", reason: "partial_webhook", handle: row.handle });
+      return settingsRedirect(origin, { connect: "warn", reason: "partial_webhook", handle: row.handle, ...stoppedParam });
     }
 
-    return settingsRedirect(origin, { connect: "success", handle: row.handle });
+    return settingsRedirect(origin, { connect: "success", handle: row.handle, ...stoppedParam });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[" + TAG + "] 콜백 처리 실패 stage=" + stage + ":", msg);

@@ -9,6 +9,7 @@ import { isDemoMode } from "@/lib/supabase/config";
 import { parseKstDateTimeLocal } from "@/lib/calendar";
 import { publishGate } from "@/lib/publish/gate";
 import { advanceClaimedPost, claimPost, type AdvanceOutcome } from "@/lib/publish/run";
+import { stampPostTarget } from "@/lib/publish/account";
 import { publishDbErrorText } from "@/lib/publish/db-errors";
 import { isOwnMediaPath } from "@/lib/publish/media-core";
 import { cleanupDeletedPostMedia, finalizeUploads, issueUploadTickets, purgeUnattachedUploads } from "@/lib/publish/uploads";
@@ -42,6 +43,11 @@ import {
 
   세션 액션은 RLS(auth.uid()=user_id) 위에서 돌고 0093 가드가 상태 전이를 막는다. 토큰·업로드 원장·새 글 만들기는
   admin 으로 하되 **반드시 user_id 로 좁힌다**(admin 은 RLS 를 우회하므로 필터가 곧 권한이다). admin 이 없으면 닫는다.
+
+  2026-09-12 대상 계정(0094, lib/publish/account-core.ts): 발행을 **약속하는** 조작 — 새 글의 예약·지금 발행, 초안·실패 글의
+  예약하기·다시 예약, 「지금 발행」 — 은 그 순간 연결된 계정을 글의 대상으로 적는다(stampPostTarget, 서버 전용 칸이라 admin).
+  크론은 대상을 바꾸지 않고, 지금 계정이 대상과 다르면 올리지 않는다 — 계정을 바꾼 뒤 옛 예약이 새 계정으로 새지 않는다.
+  적기가 실패해도 글은 막지 않는다(엔진이 발행 때 다시 본다). 초안은 대상이 없다(예약하는 순간 정해진다).
 */
 
 /* 「지금 발행」이 쓸 시간 상한. /publish 의 maxDuration(120s) 안에서 DB·알림 몫을 빼고 잡는다 —
@@ -250,6 +256,13 @@ export async function scheduleDraft(id: string, when: string): Promise<{ ok: boo
   const gate = await publishGate(supabase, user.id, post.channel);
   if (!gate.ok) return { ok: false, error: gate.error };
 
+  /* 대상 계정 — 예약하는 **지금** 연결된 계정으로 정한다(계정을 바꿔서 멈춘 글은 «다시 예약해 주세요»가 이 줄로 풀린다).
+     상태를 바꾸기 **전에** 적는다: 초안·실패 글은 크론이 안 집으므로, 예약으로 바뀐 순간부터는 이미 새 대상이 적혀 있다.
+     발행을 시도한 적이 있는 실패 글은 바꾸지 않는다(옛 계정에 올라갔을 수 있다 — stampPostTarget). */
+  const admin = createAdminClient();
+  if (!admin) console.error("[publish] 예약 전환 — 대상 계정을 적지 못함(서버 자격증명 미설정, 발행 때 엔진이 다시 본다)");
+  else await stampPostTarget(admin, { postId: id, userId: user.id, channel: post.channel, statuses: ["draft", "failed"] });
+
   /* draft 뿐 아니라 **failed 도 받는다.** 발행에 실패한 글은 재시도도 삭제도 안 돼서 목록에 영구히 박제됐다.
      상한(60)·지난 시각·파일 정리된 글은 DB 가드(0093)가 한 번 더 본다 — 실패→예약으로 상한을 우회하지 못하게. */
   const { data, error } = await supabase
@@ -296,6 +309,10 @@ export async function publishNow(id: string): Promise<{ ok: false; error: string
   if (!admin) {
     console.error("[publish] 지금 발행 불가 — 서버 자격증명 미설정");
     return { ok: false, error: "잠시 후 다시 시도해 주세요." };
+  }
+  /* 누르는 순간 연결된 계정이 대상이다 — 확인 모달이 «@지금 계정으로 올라가요»라고 말한 그 계정. 발행을 시도한 글은 바꾸지 않는다 */
+  if (!post.attempted) {
+    await stampPostTarget(admin, { postId: id, userId: user.id, channel: post.channel, statuses: ["draft", "scheduled", "failed", "processing"] });
   }
   const claimed = await claimPost(admin, id, ["draft", "scheduled", "failed", "processing"], { userId: user.id, publishAfter: "now" });
   if (!claimed.ok) {
@@ -521,6 +538,11 @@ export async function createPost(input: {
       error: known ?? (/check/i.test(insErr?.message ?? "") ? "사진·영상 구성이 맞지 않아요 — 다시 골라 주세요." : "저장하지 못했어요. 잠시 후 다시 시도해 주세요."),
     };
   }
+
+  /* 대상 계정 — 예약·지금 발행은 지금 연결된 계정(관문이 방금 확인했다). 초안은 대상이 없다(예약하는 순간 정해진다).
+     create_publish_post(0093) 본문을 다시 쓰지 않고 뒤따라 적는다 — 함수 본문을 두 벌로 두면 한쪽만 고치는 날이 온다.
+     실패해도 글은 그대로(로그) — 엔진이 나갈 때 지금 계정을 적는다. 「지금 발행」은 이 뒤에 선점하므로 순서가 보장된다. */
+  if (input.mode !== "draft") await stampPostTarget(admin, { postId: newId, userId: user.id, channel, statuses: ["scheduled"] });
 
   if (input.mode !== "now") {
     revalidatePath("/publish");

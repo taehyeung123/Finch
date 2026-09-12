@@ -4,6 +4,7 @@ import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/config";
 import { LIST_POST_COLUMNS, toListItem, type ListPostRow } from "@/lib/publish/list-item";
+import { postAccountView, type CurrentAccount } from "@/lib/publish/account-core";
 import { signPostThumbs } from "@/lib/publish/thumbs";
 import { accounts as sampleAccounts, scheduledPosts as demoScheduledPosts } from "@/lib/data";
 import type { ComposerChannel } from "./_components/post-composer";
@@ -43,7 +44,20 @@ export const maxDuration = 120;
 /** 최신순 절삭 한도 — 넘치면 화면이 조용히 거짓말하지 않도록 truncated 로 알린다 */
 const PAGE_LIMIT = 200;
 
-async function loadScheduled(): Promise<{ items: ScheduledPost[]; truncated: boolean; failed: boolean }> {
+/** 연결된 계정 — 연결 스트립·작성기(channels)와 목록의 계정 칩(current)이 같은 조회 한 번을 쓴다 */
+interface Accounts {
+  /** null = 조회 실패 */
+  channels: ComposerChannel[] | null;
+  /** 채널 → 지금 연결된 계정(connected=true). null = 조회 실패(모름 — 목록은 «이전 계정»이라고 단정하지 않는다) */
+  current: Map<string, CurrentAccount> | null;
+}
+
+/**
+ * 목록 한 줄의 계정 칩(2026-09-12 계정 전환) — 글의 대상 계정(0094)을 지금 연결된 계정과 대조해 «@아이디» 또는
+ * «@옛 · 이전 계정»을 정한다(규칙: lib/publish/account-core.ts postAccountView). 계정을 바꾼 뒤에도 옛 계정의 글이
+ * 새 계정 것처럼 섞여 보이지 않게 한다.
+ */
+async function loadScheduled(accountsP: Promise<Accounts>): Promise<{ items: ScheduledPost[]; truncated: boolean; failed: boolean }> {
   /* isDemoMode + getAuthUser — 이 배치의 다른 화면들과 같은 조합이다.
      · isSupabaseConfigured 만 보면 NEXT_PUBLIC_DEMO_MODE(프로젝트가 죽었을 때의
        탈출구)를 못 잡아, 죽은 DB 에 쿼리를 던지고 렌더가 통째로 깨진다.
@@ -81,9 +95,13 @@ async function loadScheduled(): Promise<{ items: ScheduledPost[]; truncated: boo
   if (drafts.error) console.error("[publish] 초안 조회 실패:", drafts.error.message);
   const rows = [...((sched.data ?? []) as unknown as ListPostRow[]), ...((drafts.data ?? []) as unknown as ListPostRow[])];
   /* 썸네일 — 비공개 버킷(publish-media)은 서명 URL 을 한 번에 묶어 만든다. 실패하면 아이콘(표시용일 뿐이다) */
-  const thumbs = await signPostThumbs(createAdminClient(), rows, user.id);
+  const [thumbs, { current }] = await Promise.all([signPostThumbs(createAdminClient(), rows, user.id), accountsP]);
   const now = Date.now();
-  const items = rows.map((r) => toListItem(r, thumbs.get(r.id) ?? null, now));
+  const items = rows.map((r) => {
+    /* current 가 null(조회 실패)이면 undefined 를 넘긴다 — «연결 없음»(null)과 «모름»(undefined)은 다르다 */
+    const acc = current === null ? undefined : (current.get(r.channel ?? "instagram") ?? null);
+    return toListItem(r, thumbs.get(r.id) ?? null, now, postAccountView(r, acc));
+  });
   return {
     items,
     truncated: (sched.data ?? []).length >= PAGE_LIMIT,
@@ -97,30 +115,37 @@ async function loadScheduled(): Promise<{ items: ScheduledPost[]; truncated: boo
  * «연동된 계정이 없어요»로 읽어 폼 대신 관문을 띄웠다 — 잘 쓰던 사람이 예약 발행을 못 하고 연결이 끊긴 줄 알고
  * 재연동하러 갔다. 같은 파일의 예약 목록 조회는 이미 실패를 화면까지 나르고 있었다(2026-09-07 감사).
  */
-async function loadChannels(): Promise<ComposerChannel[] | null> {
+async function loadAccounts(): Promise<Accounts> {
   if (isDemoMode()) {
-    return sampleAccounts.map((a) => ({ channel: a.channel, handle: a.handle, connected: a.connected }));
+    return { channels: sampleAccounts.map((a) => ({ channel: a.channel, handle: a.handle, connected: a.connected })), current: null };
   }
   const user = await getAuthUser();
-  if (!user) return [];
+  if (!user) return { channels: [], current: new Map() };
   const supabase = await createClient();
+  /* 칸을 적는다 — 토큰 칸은 세션이 읽을 수 없고(0085) select("*") 는 조회 전체를 떨어뜨린다. platform_user_id 는 읽힌다 */
   const { data, error } = await supabase
     .from("connected_accounts")
-    .select("channel, handle, connected")
+    .select("channel, handle, connected, platform_user_id")
     .eq("user_id", user.id);
   if (error) {
     console.error("[publish] 연동 채널 조회 실패:", error.message);
-    return null;
+    return { channels: null, current: null };
   }
-  return ((data ?? []) as Array<{ channel: string; handle: string | null; connected: boolean }>).map((r) => ({
-    channel: r.channel,
-    handle: r.handle,
-    connected: !!r.connected,
-  }));
+  const rows = (data ?? []) as Array<{ channel: string; handle: string | null; connected: boolean; platform_user_id: string | null }>;
+  const current = new Map<string, CurrentAccount>();
+  for (const r of rows) {
+    const id = r.platform_user_id !== null && r.platform_user_id !== undefined ? String(r.platform_user_id).trim() : "";
+    if (r.connected && id) current.set(r.channel, { platformUserId: id, handle: r.handle });
+  }
+  return {
+    channels: rows.map((r) => ({ channel: r.channel, handle: r.handle, connected: !!r.connected })),
+    current,
+  };
 }
 
 export default async function PublishPage() {
-  const [{ items, truncated, failed }, channels] = await Promise.all([loadScheduled(), loadChannels()]);
+  const accountsP = loadAccounts();
+  const [{ items, truncated, failed }, { channels }] = await Promise.all([loadScheduled(accountsP), accountsP]);
 
   return (
     <div className="space-y-5">

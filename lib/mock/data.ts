@@ -917,6 +917,10 @@ const demoPost = (p: Pick<ScheduledPostSample, "id" | "caption" | "status" | "sc
   ig_surface: null,
   media_purged: false,
   can_cancel: p.status === "scheduled",
+  publish_attempted: p.status === "published",
+  /* 예시 계정(위 accounts 의 @finch.official) — 계정 칩이 어떻게 보이는지 보여 준다 */
+  account_handle: "@finch.official",
+  account_previous: false,
   ...p,
 });
 

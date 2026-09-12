@@ -395,6 +395,12 @@ export interface PublishListItem {
   media_purged: boolean;
   /** 지금 취소할 수 있나(예약, 또는 발행 시도 전 처리 중) */
   can_cancel: boolean;
+  /** 발행 호출을 시도한 적이 있다 — 대상 계정을 다시 정하지 않는다(이미 올라갔을 수 있다, lib/publish/account-core.ts) */
+  publish_attempted: boolean;
+  /** 이 글이 나간(나갈) 계정 «@아이디» — null 이면 모름(표시하지 않는다). 규칙은 lib/publish/account-core.ts postAccountView */
+  account_handle: string | null;
+  /** 지금 그 채널에 연결된 계정이 아니다 — 목록이 «@옛 · 이전 계정»으로 흐리게 보인다(아이디를 모르면 «이전 계정»만) */
+  account_previous: boolean;
 }
 
 /** 옛 이름 — 목데이터·데모 경로 호환 */

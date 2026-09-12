@@ -21,6 +21,12 @@
  *  · 다시 연 창(deadlineExtended)마저 넘기면 그 준비물은 메타 쪽에서 멈춘 것으로 보고 버린다 — 다음 시도가 새로 만든다.
  *  · 준비가 끝났는데 발행 호출이 «잠시 뒤에»로 거절되는 경우도 끝이 있다(publishRetryEndMs) — 매분 끝없이 부르지 않는다.
  *
+ * 대상 계정(2026-09-12 계정 전환, 0094): 글에는 «발행을 약속한 순간 연결돼 있던 계정»이 적혀 있다(lib/publish/account-core.ts).
+ *  · 지금 연결된 계정이 그 계정이 아니면(targetMismatch) **무엇보다 먼저** 멈춘다 — 그 토큰으로는 만들기·상태 읽기·찾아보기·발행
+ *    어느 것도 부르지 않는다. 남의 계정 토큰으로 «이미 올라갔나»를 찾아보면 같은 글을 가진 새 계정 게시물을 우리 것으로 착각한다.
+ *  · 시도 전이면 «계정이 바뀌었어요»(다시 예약하면 새 계정으로 간다), 시도 뒤면 «올라갔는지 모름»(옛 계정에 올라갔을 수 있다) — run.ts.
+ *  · ownerMismatch(준비물을 만든 계정 ≠ 지금 계정)는 대상이 비어 있던 옛 글·다시 예약으로 대상이 바뀐 글의 이야기다 — 준비물만 새로 만든다.
+ *
  * 이 파일은 런타임 import 가 없다 — Node 검사가 그대로 읽는다.
  */
 import type { ContainerStatus } from "../meta/publish-types";
@@ -70,6 +76,8 @@ export interface EngineFacts {
   lookup: "found" | "not_found" | null;
   /** 준비물을 만든 계정과 지금 연결된 계정이 다르다(재연동) */
   ownerMismatch: boolean;
+  /** 글의 대상 계정(account_platform_id)이 적혀 있고 지금 연결된 계정과 다르다(계정 전환) — account-core targetAccountMismatch */
+  targetMismatch: boolean;
   /** 이번 실행에 남은 시간 */
   remainingMs: number;
 }
@@ -86,17 +94,22 @@ export type EngineStep =
   | { do: "record_published" }
   | { do: "wait"; untilMs: number; reason: WaitReason }
   | { do: "reset" }
-  | { do: "fail"; code: "PUBLISH_AMBIGUOUS" | "PROCESSING_TIMEOUT" | "LOST" | "CONTAINER_ERROR"; recreate: boolean };
+  | { do: "fail"; code: "PUBLISH_AMBIGUOUS" | "PROCESSING_TIMEOUT" | "LOST" | "CONTAINER_ERROR" | "ACCOUNT_SWITCHED"; recreate: boolean };
 
 function hasContainers(f: EngineFacts): boolean {
   return f.containerId !== null || (f.childIds !== null && f.childIds.length > 0);
 }
 
 /**
- * 다음 걸음. 순서가 곧 우선순위다 — «이미 시도했나»가 무엇보다 먼저다.
+ * 다음 걸음. 순서가 곧 우선순위다 — «계정이 맞나» 다음으로 «이미 시도했나»가 먼저다.
  */
 export function nextStep(f: EngineFacts): EngineStep {
   const later = (reason: WaitReason, untilMs: number): EngineStep => ({ do: "wait", untilMs, reason });
+
+  /* ⓪ 대상 계정이 아닌 계정이 연결돼 있다 — 메타를 한 번도 부르지 않고 멈춘다(머리말 «대상 계정»).
+     준비물은 버리지 않는다(recreate=false): 옛 계정을 다시 연결하면 그대로 이어지고, 다시 예약해 대상이 바뀌면 ownerMismatch 가 새로 만든다.
+     시도한 행이면 run.ts 가 «올라갔는지 모름»으로 적는다 — 시도 기록도 지우지 않는다(두 번 올리지 않기). */
+  if (f.targetMismatch) return { do: "fail", code: "ACCOUNT_SWITCHED", recreate: false };
 
   /* ① 발행을 시도한 적이 있다 — 두 번 올리지 않기 */
   if (f.publishAttemptedAtMs !== null) {

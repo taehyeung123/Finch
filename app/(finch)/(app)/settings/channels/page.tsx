@@ -390,6 +390,13 @@ export default async function ChannelsSettingsPage({
   const connectParam = typeof sp.connect === "string" ? sp.connect : null;
   const reasonParam = typeof sp.reason === "string" ? sp.reason : null;
   const handleParam = typeof sp.handle === "string" ? sp.handle : null;
+  /* 다른 계정으로 바꾸면서 멈춘 예약 수(연동 콜백 — lib/publish/account.ts). 옛 계정으로 잡아 둔 예약은 새 계정으로 올리지 않는다 —
+     «연결했어요» 한 줄로 끝내면 예약이 멈춘 걸 발행 화면에 가서야 안다. 숫자만 받는다(주소창 값이라 문구를 싣지 않는다) */
+  const stoppedCount = typeof sp.stopped === "string" && /^\d{1,3}$/.test(sp.stopped) ? Number(sp.stopped) : 0;
+  const stoppedNote =
+    stoppedCount > 0
+      ? `이전 계정으로 예약해 둔 게시물 ${stoppedCount}개는 올리지 않았어요. 새 계정으로 올리려면 「발행」 화면에서 다시 예약해 주세요.`
+      : null;
   /* 연결 실패 원문 — **주 운영자에게만**. 고객에게는 내부 운영 정보라 노출하지 않는다 */
   const detailParam = typeof sp.detail === "string" ? sp.detail : null;
   const viewer = await getAuthUser();
@@ -403,12 +410,16 @@ export default async function ChannelsSettingsPage({
      reason 이 없는 error/warn 도 예전엔 어느 가지에도 안 걸려 **결과가 조용히 사라졌다** — 이제 폴백으로 떨어진다. */
   const connectResult: ResultModalContent | null =
     connectParam === "success"
-      ? { tone: "positive", title: connectedTitle(handleParam) }
+      ? { tone: "positive", title: connectedTitle(handleParam), ...(stoppedNote ? { description: stoppedNote } : {}) }
       : connectParam === "disconnected"
         ? { tone: "positive", title: "연결을 해제했어요" }
         : connectParam === "warn" && reasonParam === "partial_webhook"
           ? /* 계정명을 실어 오는 유일한 warn — «무엇이 됐는지»를 제목에, «무엇이 안 됐는지»를 설명에 둔다 */
-            { tone: "warning", title: connectedTitle(handleParam), description: CONNECT_MESSAGES.partial_webhook.description }
+            {
+              tone: "warning",
+              title: connectedTitle(handleParam),
+              description: stoppedNote ? `${CONNECT_MESSAGES.partial_webhook.description} ${stoppedNote}` : CONNECT_MESSAGES.partial_webhook.description,
+            }
           : connectParam === "error" || connectParam === "warn" || connectParam === "unconfigured"
             ? connectFailure(connectParam, reasonParam, showOperatorNotes ? detailParam : null)
             : null;
