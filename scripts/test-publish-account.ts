@@ -6,6 +6,7 @@ import {
   BACKFILL_LONG_RETRY_MS,
   BACKFILL_RETRY_MS,
   PREVIOUS_ACCOUNT_MARKER,
+  afterPinMiss,
   classifyMediaRead,
   handleKey,
   isAccountSwitch,
@@ -42,6 +43,28 @@ console.log("발행 시점 판정(엔진)");
 check("대상이 빈 옛 글 → 지금 계정으로 나간다", !targetAccountMismatch(null, B.platformUserId));
 check("대상 = 지금 계정 → 나간다", !targetAccountMismatch("222", B.platformUserId));
 check("A 로 예약 → B 로 바꿈 → 나가지 않는다", targetAccountMismatch("111", B.platformUserId));
+
+console.log("엔진의 대상 적기가 0행 — 선점 뒤에 계정 전환이 끼어든 경우(afterPinMiss)");
+{
+  /* 선점(대상 빈 사본) → 연동 콜백이 옛 계정 A 를 적고 연결을 B 로 고침 → 엔진이 B 를 읽고 «비어 있을 때만» 적기 → 0행 */
+  const raced = afterPinMiss({ status: "publishing", account_platform_id: "111", account_handle: "@shop_a" });
+  check(
+    "다시 읽은 대상(A)으로 판정 → B 로 나가지 않는다",
+    raced.kind === "target" && raced.id === "111" && raced.handle === "@shop_a" && targetAccountMismatch(raced.id, B.platformUserId),
+    raced,
+  );
+  check(
+    "그 실패 문구는 두 계정을 말한다(«@shop_a 계정이 아니라 지금은 @shop_b 계정이»)",
+    raced.kind === "target" &&
+      accountSwitchedError("instagram", raced.handle, B.handle, false).message.includes("@shop_a 계정이 아니라 지금은 @shop_b 계정이"),
+  );
+  const sameAcc = afterPinMiss({ status: "publishing", account_platform_id: "222", account_handle: "@shop_b" });
+  check("다시 읽은 대상이 지금 계정이면 그대로 나간다", sameAcc.kind === "target" && !targetAccountMismatch(sameAcc.id, B.platformUserId), sameAcc);
+  check("선점을 잃었다(발행 중이 아님) → 손을 뗀다", afterPinMiss({ status: "failed", account_platform_id: "111" }).kind === "conflict");
+  check("행이 없다 → 손을 뗀다", afterPinMiss(null).kind === "conflict");
+  const blank = afterPinMiss({ status: "publishing", account_platform_id: "  ", account_handle: 7 });
+  check("여전히 비어 있음·이상한 값 → 대상 없음(지금 계정으로)", blank.kind === "target" && blank.id === null && blank.handle === null, blank);
+}
 
 console.log("목록의 계정 칩");
 {

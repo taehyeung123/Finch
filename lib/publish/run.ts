@@ -33,7 +33,7 @@ import {
 import { consumeFetchBudget, mintFetchUrls, parsePostMedia } from "@/lib/publish/media";
 import type { ResolvedItem } from "@/lib/publish/media-core";
 import { safePermalink } from "@/lib/publish/list-item";
-import { targetAccountMismatch } from "@/lib/publish/account-core";
+import { afterPinMiss, targetAccountMismatch } from "@/lib/publish/account-core";
 
 /*
   게시물 한 건을 **실제로 내보내는** 엔진 (2026-09-09 신설 → 2026-09-11 영상·섞인 캐러셀을 위한 상태 기계로 재작성).
@@ -380,12 +380,37 @@ async function advance(admin: SupabaseClient, post: EnginePost, source: EngineSo
   /* 대상 계정(머리말) — 다르면 아래 걸음 반복의 첫 걸음(nextStep ⓪)이 메타를 부르지 않고 멈춘다.
      비어 있으면(옛 글) 지금 계정을 대상으로 **먼저** 적는다: 영상 글은 여러 번의 실행에 걸쳐 나아가는데, 그 사이 계정을 바꾸면
      다음 확인이 새 계정으로 준비물을 다시 만들어 새 계정에 올렸다. 못 적어도(DB 오류) 이번 실행은 이 계정으로 계속한다 —
-     연동 콜백이 바꾸는 순간 비어 있는 글에 옛 계정을 적고, 올라가면 recordPublished 가 다시 적는다. */
-  const targetMismatch = targetAccountMismatch(post.account_platform_id, platformUserId);
-  if (!post.account_platform_id) {
-    const pin = await write({ account_platform_id: platformUserId, account_handle: currentHandle }, true);
-    if (!pin.ok && pin.reason === "lost_claim") return { kind: "conflict", label };
+     연동 콜백이 바꾸는 순간 비어 있는 글에 옛 계정을 적고, 올라가면 recordPublished 가 다시 적는다.
+     ⚠️ 적기는 **아직 비어 있을 때만**이다. 선점 ~ 위 연결 조회 사이에 다른 계정으로 바꾸기가 끝났으면(연동 콜백이 비어 있는 글에
+        옛 계정을 적고 → 연결 행을 새 계정으로 고친다) 이 글은 옛 계정 때 잡힌 것이다. 선점이 돌려준 사본(비어 있음)만 믿고 덮어쓰면
+        그 글이 새 계정으로 나간다 — 0행이면 다시 읽어 그 사이 적힌 대상으로 판정한다(2026-09-12 점검). */
+  let targetId = post.account_platform_id;
+  let targetHandle = post.account_handle;
+  if (!targetId) {
+    const { data: pinned, error: pinErr } = await admin
+      .from("scheduled_posts")
+      .update({ account_platform_id: platformUserId, account_handle: currentHandle })
+      .eq("id", post.id)
+      .eq("status", "publishing")
+      .is("account_platform_id", null)
+      .select("id");
+    if (pinErr) {
+      console.error("[publish] 대상 계정 기록 실패(이번 실행은 지금 계정으로):", post.id, pinErr.message);
+    } else if ((pinned?.length ?? 0) !== 1) {
+      /* 0행 — 선점을 잃었거나(다른 실행·취소) 그 사이 누가 대상을 적었다. 다시 읽어 가른다 */
+      const { data: fresh, error: freshErr } = await admin
+        .from("scheduled_posts")
+        .select("status, account_platform_id, account_handle")
+        .eq("id", post.id)
+        .maybeSingle();
+      if (freshErr) return later(publishError("TRANSIENT", channel, `pin_reread: ${freshErr.message}`));
+      const miss = afterPinMiss(fresh as { status?: unknown; account_platform_id?: unknown; account_handle?: unknown } | null);
+      if (miss.kind === "conflict") return { kind: "conflict", label };
+      targetId = miss.id;
+      targetHandle = miss.handle;
+    }
   }
+  const targetMismatch = targetAccountMismatch(targetId, platformUserId);
 
   const adapter: PublishAdapter =
     channel === "threads" ? makeThreadsAdapter(platformUserId, token) : makeInstagramAdapter(platformUserId, token);
@@ -645,7 +670,7 @@ async function advance(admin: SupabaseClient, post: EnginePost, source: EngineSo
         if (step.code === "ACCOUNT_SWITCHED") {
           /* 대상 계정이 아니다 — 준비물·시도 기록은 그대로 두고(두 번 올리지 않기), 마감만 비운다(다시 시도가 새 창을 연다).
              시도 전: «@A 가 아니라 지금은 @B …» / 시도 뒤: «올라갔는지 모름»(옛 계정에서 확인하라고 말한다) */
-          const err = accountSwitchedError(channel, post.account_handle, currentHandle, st.attemptedAtMs !== null);
+          const err = accountSwitchedError(channel, targetHandle, currentHandle, st.attemptedAtMs !== null);
           return fail(err, { recreate: false, extra: { processing_deadline: null } });
         }
         if (step.code === "CONTAINER_ERROR") {

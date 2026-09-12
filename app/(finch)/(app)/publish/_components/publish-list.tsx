@@ -11,6 +11,7 @@ import {
   ExternalLink,
   FileText,
   Film,
+  History as HistoryIcon,
   ImageIcon,
   Play,
   Plus,
@@ -975,26 +976,35 @@ function PostThumb({ post, small = false }: { post: ScheduledPost; small?: boole
 
 /**
  * 계정 칩 — 이 글이 나간(나갈) 계정 «@아이디». 채널 배지 옆에 둔다(2026-09-12 계정 전환).
- * 지금 그 채널에 연결된 계정이 아니면 «@옛 · 이전 계정»으로 흐리게 — 점선 테두리·바탕 없음. 계정을 바꾼 뒤에도
- * 옛 계정의 글이 새 계정 것처럼 섞여 보이지 않게 한다. 계정을 모르면(아직 확인 전인 옛 발행 글) 그리지 않는다.
- * 무엇을 보일지는 서버가 정한다(lib/publish/account-core.ts postAccountView).
+ * 지금 그 채널에 연결된 계정이 아니면 «@옛 · 이전 계정» — 계정을 바꾼 뒤에도 옛 계정의 글이 새 계정 것처럼 섞여 보이지 않게 한다.
+ * 계정을 모르면(아직 확인 전인 옛 발행 글) 그리지 않는다. 무엇을 보일지는 서버가 정한다(lib/publish/account-core.ts postAccountView).
+ *
+ * ⚠️ 잘리는 것은 **아이디뿐**이다 — «이전 계정»은 줄어들지 않는 칸에 따로 둔다. 예전엔 «@아이디 · 이전 계정» 한 줄을 통째로
+ *    말줄임에 넣어서, 아이디가 조금만 길어도(실사용 10~20자, 이름을 못 받은 계정의 «@ig_숫자» 폴백은 20자 안팎) 끝의 «이전 계정»이
+ *    먼저 잘려 이 칩의 존재 이유가 사라졌다(2026-09-12 점검). 이전 계정의 칩은 카드 안 중첩 면(plate)으로 한 칸 눌러 두고
+ *    지나간 것을 뜻하는 아이콘을 붙인다 — 예전의 점선 테두리는 다크(8% 헤어라인)에서 거의 안 보였고, 이 저장소에서 점선은
+ *    «아직 없음»의 모양이다(empty-state). 칩은 늘 카드 안에 있다(plate 를 지면 위에 직접 쓰지 않는 규칙).
  */
 function AccountChip({ post }: { post: ScheduledPost }) {
   if (!post.account_handle && !post.account_previous) return null;
-  const text = post.account_previous
-    ? post.account_handle
-      ? `${post.account_handle} · 이전 계정`
-      : "이전 계정"
-    : (post.account_handle ?? "");
+  const previous = post.account_previous;
+  /* 말줄임된 아이디도 올려 보면 전부 보인다 */
+  const hint = previous ? "지금 연결된 계정이 아닌 이전 계정의 글이에요" : null;
   return (
     <span
-      title={post.account_previous ? "지금 연결된 계정이 아닌 이전 계정의 글이에요" : undefined}
+      title={[post.account_handle, hint].filter(Boolean).join(" · ") || undefined}
       className={cn(
-        "inline-flex min-w-0 max-w-[12rem] items-center rounded-chip border px-2.5 py-0.5 text-[12px] leading-5 whitespace-nowrap",
-        post.account_previous ? "border-dashed border-line font-medium text-fg-sub" : "border-line bg-overlay font-semibold text-fg-sub",
+        "inline-flex min-w-0 max-w-full items-center gap-1 rounded-chip border border-line px-2.5 py-0.5 text-[12px] leading-5 whitespace-nowrap text-fg-sub",
+        previous ? "bg-plate font-medium" : "bg-overlay font-semibold",
       )}
     >
-      <span className="truncate">{text}</span>
+      {previous ? <HistoryIcon className="size-3 shrink-0 text-fg-faint" aria-hidden /> : null}
+      {post.account_handle ? <span className="min-w-0 max-w-[10rem] truncate">{post.account_handle}</span> : null}
+      {previous ? (
+        <span className="shrink-0">
+          {post.account_handle ? <span aria-hidden>· </span> : null}이전 계정
+        </span>
+      ) : null}
     </span>
   );
 }

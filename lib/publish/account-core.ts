@@ -11,7 +11,7 @@
  *  · 대상이 비어 있는 옛 글은 지금 계정으로 나가고, 엔진이 그 계정을 적는다(예전과 같다).
  *  · 발행을 **시도한 뒤**의 글은 대상을 절대 바꾸지 않는다 — 이미 옛 계정에 올라갔을 수 있다(두 번 올리지 않기).
  *
- * 부르는 곳: 목록(page.tsx → postAccountView), 연동 콜백(isAccountSwitch), 엔진(targetAccountMismatch),
+ * 부르는 곳: 목록(page.tsx → postAccountView), 연동 콜백(isAccountSwitch), 엔진(targetAccountMismatch·afterPinMiss),
  * 백필 크론(classifyMediaRead — lib/publish/account-backfill.ts). Node 검사: scripts/test-publish-account.ts.
  * 이 파일은 런타임 import 가 없다(타입만) — Node 검사가 그대로 읽는다.
  */
@@ -59,6 +59,19 @@ export function isAccountSwitch(prevId: unknown, nextId: unknown): boolean {
 export function targetAccountMismatch(targetId: string | null | undefined, currentId: string): boolean {
   const t = clean(targetId);
   return t !== null && t !== currentId;
+}
+
+/**
+ * 엔진이 대상이 빈 옛 글에 지금 계정을 «비어 있을 때만» 적었는데 **0행**이었다 — 다시 읽은 행으로 가른다(run.ts).
+ *  · 행이 없거나 발행 중이 아니다 → 선점을 잃었다(다른 실행·취소·계정 전환 정리) — 손을 뗀다
+ *  · 발행 중인데 대상이 적혀 있다 → 선점 뒤에 연동 콜백이 옛 계정을 적은 것이다(계정 전환). 그 대상으로 판정한다 —
+ *    선점이 돌려준 사본(비어 있음)만 믿고 덮어쓰면 옛 계정 때 잡힌 글이 새 계정으로 나간다.
+ */
+export function afterPinMiss(
+  fresh: { status?: unknown; account_platform_id?: unknown; account_handle?: unknown } | null,
+): { kind: "conflict" } | { kind: "target"; id: string | null; handle: string | null } {
+  if (!fresh || fresh.status !== "publishing") return { kind: "conflict" };
+  return { kind: "target", id: clean(fresh.account_platform_id), handle: clean(fresh.account_handle) };
 }
 
 /** 목록에 보일 계정 — handle 이 null 이고 previous 도 false 면 칩을 그리지 않는다(모름) */
