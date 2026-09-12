@@ -8,7 +8,7 @@ import { storagePathsFromPublicUrls } from "@/lib/storage/public-url";
 import { isDemoMode } from "@/lib/supabase/config";
 import { parseKstDateTimeLocal } from "@/lib/calendar";
 import { publishGate } from "@/lib/publish/gate";
-import { advanceClaimedPost, claimPost, type AdvanceOutcome } from "@/lib/publish/run";
+import { advanceClaimedPost, claimPost, type EnginePost } from "@/lib/publish/run";
 import { stampPostTarget } from "@/lib/publish/account";
 import { publishDbErrorText } from "@/lib/publish/db-errors";
 import { isOwnMediaPath } from "@/lib/publish/media-core";
@@ -37,8 +37,21 @@ import {
    · 발행은 여러 번의 실행에 걸친 상태 기계다(lib/publish/run.ts). 「지금 발행」은 할 수 있는 만큼 나아가고,
      메타가 영상을 처리 중이면 processing 으로 내려놓는다 — 매분 크론이 이어서 올리고 알림을 보낸다.
 
+  2026-09-12 비동기 「지금 발행」(사장님 지시 «발행 중에 나가면 취소되냐? 누르면 목록에 올리는 중이 뜨고 나가도 괜찮게»):
+   · 액션은 글을 만들고(또는 확인하고) **선점까지만** 한 뒤 바로 돌아온다 — 선점이 끝난 행은 'publishing' 이라 크론이 못 집고,
+     응답에 실린 목록(revalidatePath)에 곧바로 «올리는 중»으로 나온다. 메타에 올리는 일은 after()(next/server)가 응답 **뒤에** 한다.
+   · after 는 Server Action 안에서 쓸 수 있고(Next 문서 after.md), Vercel 에서는 waitUntil 로 함수 수명을 늘려 **이 페이지의
+     maxDuration(120초) 안에서** 돈다. 그래서 엔진 예산은 액션이 시작된 시각부터 세어 NOW_TOTAL_BUDGET_MS(105초) 안에서 끝낸다.
+     사용자가 창을 닫거나 다른 화면으로 가도 서버 쪽 일은 계속된다(연결이 끊겨도 waitUntil 이 붙잡는다).
+   · 예산 안에 못 끝나면(영상 처리 등) 엔진이 행을 processing 으로 내려놓고 매분 크론이 이어서 올린다 — 예전과 같다.
+   · 함수가 도중에 죽으면 행이 'publishing' 으로 남는다 → 5분 크론이 10분 뒤 회수한다(publish-scheduled ① 회수:
+     준비물·시도 기록이 있으면 processing 으로 이어 보고, 없으면 «도중에 끊겼어요» 실패 + 알림).
+   · 화면은 가벼운 조회(app/api/publish/progress, GET)로 진행 상황을 따라 보고, 끝나면 한 번 알린다(lib/publish/progress.ts).
+   · 끝났을 때의 알림(notifyUser)은 엔진이 그대로 보낸다 — 화면을 나간 사람도 결과를 받는다.
+
   ⚠️ Server Actions 는 클라이언트마다 **하나씩 차례로** 돈다(node_modules/next/dist/docs/01-app/02-guides/server-actions.md).
-     그래서 업로드 발급·확인은 파일 묶음을 한 번에 받는다 — 타일마다 부르면 줄을 서고, 긴 「지금 발행」 뒤에 밀린다.
+     그래서 업로드 발급·확인은 파일 묶음을 한 번에 받는다 — 타일마다 부르면 줄을 선다(예전엔 1분 가까운 「지금 발행」 뒤에 밀렸다 —
+     이제 「지금 발행」은 선점만 하고 곧 돌아와 줄을 오래 막지 않는다). 진행 상황 조회가 서버 액션이 아니라 GET 라우트인 것도 같은 이유다.
      확인(finalize)은 revalidatePath 를 부르지 않는다 — 부르면 응답마다 /publish 를 다시 그린다.
 
   세션 액션은 RLS(auth.uid()=user_id) 위에서 돌고 0093 가드가 상태 전이를 막는다. 토큰·업로드 원장·새 글 만들기는
@@ -51,7 +64,8 @@ import {
 */
 
 /* 「지금 발행」이 쓸 시간 상한. /publish 의 maxDuration(120s) 안에서 DB·알림 몫을 빼고 잡는다 —
-   넘기면 플랫폼이 액션을 죽여 실패 처리가 실행되지 않는다. 엔진이 이 값을 흐름 전체 데드라인으로 쓴다. */
+   넘기면 플랫폼이 함수를 죽여 실패 처리가 실행되지 않는다. 엔진이 이 값을 흐름 전체 데드라인으로 쓴다.
+   after() 안에서 돌아도 같은 함수 실행이다 — TOTAL 은 **액션이 시작된 시각**부터 센다(응답·목록 다시 그리기에 쓴 시간을 뺀다). */
 const NOW_BUDGET_MS = 80_000;
 const NOW_TOTAL_BUDGET_MS = 105_000;
 
@@ -63,12 +77,13 @@ const DEMO_TEXT = {
   publish: "지금은 예시 화면이라 발행할 수 없어요.",
 } as const;
 
-/** 「지금 발행」의 결과 — 화면이 모달로 그린다 */
-export type PublishOutcome =
-  | { state: "published"; label: string; permalink: string | null }
-  /** 메타가 처리 중 — 끝나면 자동으로 올라가고 알림이 간다. soon = 준비는 끝났고 곧 올라간다 */
-  | { state: "processing"; label: string; hasVideo: boolean; soon: boolean }
-  | { state: "failed"; label: string; error: string }
+/**
+ * 「지금 발행」을 누른 결과 — 2026-09-12 부터 **시작했는지**만 말한다. 올라갔는지·실패했는지는 뒤에서 정해지고
+ * 목록(진행 상황 조회)과 알림이 알린다.
+ */
+export type PublishStart =
+  /** 선점했고 뒤에서 올리기 시작했다 — 목록에 «올리는 중»으로 보인다 */
+  | { state: "started"; label: string }
   /** 저장은 됐고 크론이 곧 집어 간다 — «실패»가 아니라 «지금은 못 했다»(화면이 다르게 말한다) */
   | { state: "deferred"; label: string; error: string };
 
@@ -76,8 +91,8 @@ export type CreatePostResult =
   /** 저장 자체가 안 됐다 — 컴포저는 열린 채로 이유를 보여 준다 */
   | { ok: false; error: string }
   | { ok: true; mode: "draft" | "schedule" }
-  /** 저장은 됐고 발행을 시도했다 — 성공이든 실패든 행은 목록에 남는다 */
-  | { ok: true; mode: "now"; outcome: PublishOutcome };
+  /** 저장은 됐고 발행을 시작했다(또는 크론에 맡겼다) — 행은 목록에 남는다 */
+  | { ok: true; mode: "now"; outcome: PublishStart };
 
 /** 새 글의 항목 한 개 — 업로드 표(ticket)의 경로 + 브라우저 검사 결과 */
 export interface PostMediaInput {
@@ -177,29 +192,20 @@ function resolveScheduledAt(when: string): { ok: true; iso: string } | { ok: fal
   return { ok: true, iso };
 }
 
-/** 엔진 결과 → 화면 결과 */
-function toOutcome(out: AdvanceOutcome): PublishOutcome {
-  switch (out.kind) {
-    case "published":
-      return { state: "published", label: out.label, permalink: out.permalink };
-    case "processing":
-      return { state: "processing", label: out.label, hasVideo: out.hasVideo, soon: out.soon };
-    case "failed":
-      return { state: "failed", label: out.label, error: out.error };
-    case "released":
-      return {
-        state: "deferred",
-        label: out.label,
-        /* 예약 시각이 미래인 글(예약 글에 「지금 발행」)은 그 시각에 다시 시도한다. 크론 호출은 «최선을 다함»이라
-           정확한 분을 약속하지 않는다(Vercel 문서 — 빠지거나 두 번 올 수 있다) */
-        error:
-          Date.parse(out.scheduledAt) > Date.now() + 60_000
-            ? "지금 바로는 올리지 못했어요. 예약한 시각에 자동으로 다시 시도해요."
-            : "지금 바로는 올리지 못했어요. 몇 분 안에 자동으로 다시 올려요.",
-      };
-    case "conflict":
-      return { state: "deferred", label: out.label, error: "다른 곳에서 이미 올리고 있어요. 잠시 후 목록을 확인해 주세요." };
-  }
+/**
+ * 선점한 글을 **응답 뒤에** 내보낸다(after — 머리말 «비동기 「지금 발행」»). 엔진은 예외를 던지지 않고 결과를 DB·알림에 남긴다 —
+ * 여기서는 아무것도 돌려주지 않는다(응답은 이미 나갔다). 예산은 액션이 시작된 시각부터 센다.
+ */
+function publishInBackground(admin: NonNullable<ReturnType<typeof createAdminClient>>, row: EnginePost, startedAt: number): void {
+  after(async () => {
+    const budgetMs = Math.min(NOW_BUDGET_MS, Math.max(15_000, NOW_TOTAL_BUDGET_MS - (Date.now() - startedAt)));
+    try {
+      await advanceClaimedPost(admin, row, { source: "now", budgetMs });
+    } catch (e) {
+      /* advanceClaimedPost 는 던지지 않게 짜여 있다 — 그래도 새면 행은 publishing 으로 남고 5분 크론이 10분 뒤 회수한다 */
+      console.error("[publish] 뒤에서 올리기 예외(크론이 회수한다):", row.id, e);
+    }
+  });
 }
 
 /** 이 글의 채널·상태 — 세션(RLS)으로 읽는다: 못 읽으면 남의 글이거나 없는 글이다 */
@@ -281,12 +287,12 @@ export async function scheduleDraft(id: string, when: string): Promise<{ ok: boo
 }
 
 /**
- * 「지금 발행」 — 초안·예약·실패·처리 중 글을 그 자리에서 나아가게 하고 결과를 돌려준다.
- * 최대 1분 남짓 걸릴 수 있다 — /publish 페이지에 maxDuration 이 걸려 있다.
+ * 「지금 발행」 — 초안·예약·실패·처리 중 글을 선점하고 **바로 돌아온다.** 메타에 올리는 일은 응답 뒤(after)에 이어진다.
  * 미리 준비해 둔 예약 영상(processing)이면 준비물이 이미 있어 곧바로 올라간다.
  */
-export async function publishNow(id: string): Promise<{ ok: false; error: string } | { ok: true; outcome: PublishOutcome }> {
+export async function publishNow(id: string): Promise<{ ok: false; error: string } | { ok: true; outcome: PublishStart }> {
   if (isDemoMode()) return { ok: false, error: DEMO_TEXT.publish };
+  const startedAt = Date.now();
   const user = await getAuthUser();
   if (!user) return { ok: false, error: "로그인이 필요해요." };
   const supabase = await createClient();
@@ -297,7 +303,7 @@ export async function publishNow(id: string): Promise<{ ok: false; error: string
     return {
       ok: false,
       error:
-        post.status === "published" ? "이미 발행된 글이에요." : post.status === "publishing" ? "지금 발행 중이에요." : "지금은 발행할 수 없는 상태예요.",
+        post.status === "published" ? "이미 발행된 글이에요." : post.status === "publishing" ? "지금 올리고 있는 글이에요." : "지금은 발행할 수 없는 상태예요.",
     };
   }
   if (post.mediaPurged) return { ok: false, error: PURGED_TEXT };
@@ -321,9 +327,10 @@ export async function publishNow(id: string): Promise<{ ok: false; error: string
       error: claimed.reason === "db_error" ? "잠시 후 다시 시도해 주세요." : "이미 발행이 시작된 글이에요. 잠시 후 목록을 확인해 주세요.",
     };
   }
-  const out = await advanceClaimedPost(admin, claimed.row, { source: "now", budgetMs: NOW_BUDGET_MS });
+  publishInBackground(admin, claimed.row, startedAt);
+  /* 응답에 목록을 실어 보낸다 — 이 글이 곧바로 «올리는 중»으로 보인다 */
   revalidatePath("/publish");
-  return { ok: true, outcome: toOutcome(out) };
+  return { ok: true, outcome: { state: "started", label: channelLabel(post.channel) } };
 }
 
 /** 초안·실패·취소 글 삭제. 발행**된** 글은 지울 수 없다 — 이력이다(DB 가드도 같은 규칙, 0093).
@@ -384,8 +391,9 @@ export async function deleteDraft(id: string): Promise<{ ok: boolean; error?: st
  * 사진·영상: media(업로드 표의 경로, 순서 = 게시물 순서). 인스타는 1개 영상 → 릴스, 1개 사진 → 사진 게시물,
  * 2~10개 → 캐러셀(섞어도 된다), igStory(항목 1개) → 스토리. 스레드는 0~20개(글만도 된다).
  *
- * mode=now 는 행을 예약(지금)으로 넣은 뒤 **같은 요청 안에서** 발행을 시작한다. 발행이 실패해도 저장은 된 것이라
- * ok:true 에 outcome 으로 결과를 싣는다 — 컴포저는 닫히고 결과 모달이 뜬다(열어 둔 채 오류만 보이면 같은 글을 두 번 올리게 된다).
+ * mode=now 는 행을 예약(지금)으로 넣고 선점한 뒤 바로 돌아온다 — 올리는 일은 응답 뒤(after)에 이어진다(머리말).
+ * 컴포저는 곧바로 닫히고 목록 맨 위에 «올리는 중»이 보인다. 선점을 못 했어도 저장은 된 것이라 ok:true(deferred) —
+ * 크론이 곧 집어 간다(열어 둔 채 오류만 보이면 같은 글을 두 번 올리게 된다).
  */
 export async function createPost(input: {
   channel: string;
@@ -551,7 +559,7 @@ export async function createPost(input: {
   return runNow(admin, newId, user.id, channel, startedAt);
 }
 
-/** 방금 만든 글을 그 자리에서 내보낸다 */
+/** 방금 만든 글을 선점하고 뒤에서 내보낸다 — 응답은 곧바로 나간다 */
 async function runNow(
   admin: NonNullable<ReturnType<typeof createAdminClient>>,
   id: string,
@@ -576,9 +584,8 @@ async function runNow(
       },
     };
   }
-  /* 앞에서 쓴 시간만큼 예산을 줄인다 — 액션 상한(120초) 안에서 끝나게 */
-  const budgetMs = Math.min(NOW_BUDGET_MS, Math.max(15_000, NOW_TOTAL_BUDGET_MS - (Date.now() - startedAt)));
-  const out = await advanceClaimedPost(admin, claimed.row, { source: "now", budgetMs });
+  publishInBackground(admin, claimed.row, startedAt);
+  /* 응답에 목록을 실어 보낸다 — 컴포저가 닫히는 순간 이 글이 «올리는 중»으로 보인다 */
   revalidatePath("/publish");
-  return { ok: true, mode: "now", outcome: toOutcome(out) };
+  return { ok: true, mode: "now", outcome: { state: "started", label } };
 }

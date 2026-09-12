@@ -39,7 +39,7 @@ import { afterPinMiss, targetAccountMismatch } from "@/lib/publish/account-core"
   게시물 한 건을 **실제로 내보내는** 엔진 (2026-09-09 신설 → 2026-09-11 영상·섞인 캐러셀을 위한 상태 기계로 재작성).
 
   부르는 곳 넷 — 전부 claimPost 로 행을 publishing 으로 선점한 뒤 advanceClaimedPost 에 넘긴다:
-   · 「지금 발행」(publish/actions.ts createPost·publishNow)  source "now"
+   · 「지금 발행」(publish/actions.ts createPost·publishNow)  source "now" — 2026-09-12 부터 **응답 뒤(after)** 에 돈다(액션은 선점만 하고 돌아온다)
    · 5분 크론(app/api/cron/publish-scheduled)                 source "due"(예약 시각이 지난 글)·"prepare"(20분 안 예약 영상 미리 만들기)
    · 매분 크론(app/api/cron/publish-processing)               source "check"(처리 중인 글 이어 보기)
 
@@ -152,7 +152,8 @@ const sleep = (t: number) => new Promise((r) => setTimeout(r, t));
 
 /** 인라인 대기(같은 실행 안에서 몇 초 뒤 다시 보기) 한 번의 간격 */
 const INLINE_STEP_MS = 2_500;
-/** 소스별 인라인 대기 상한 — 「지금 발행」은 결과를 바로 보여 주려고 길게, 크론은 다른 글을 위해 짧게 */
+/** 소스별 인라인 대기 상한 — 「지금 발행」은 길게(응답 뒤에 돌아 아무도 기다리지 않는다 — 사진은 이 실행 안에서 끝나 매분 크론을 기다리지 않게),
+    크론은 다른 글을 위해 짧게 */
 const INLINE_LIMIT_MS: Record<EngineSource, number> = { now: 55_000, due: 30_000, check: 10_000, prepare: 12_000 };
 /** 준비물 하나 만드는 데 드는 대략의 시간(예산 판단용) */
 const CREATE_EACH_MS = 2_500;

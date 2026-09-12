@@ -401,6 +401,11 @@ export interface PublishListItem {
   account_handle: string | null;
   /** 지금 그 채널에 연결된 계정이 아니다 — 목록이 «@옛 · 이전 계정»으로 흐리게 보인다(아이디를 모르면 «이전 계정»만) */
   account_previous: boolean;
+  /** 올리는 중·처리 중(display_status)일 때 «언제부터»의 기준 — 발행 시각(publish_after, 「지금 발행」은 누른 시각). 아니면 null.
+      목록의 «방금 시작»·«3분째»가 이것으로 센다(lib/publish/progress.ts) */
+  progress_since: string | null;
+  /** status 가 publishing 일 때 이번 실행이 선점한 시각(claimed_at). 아니면 null — 너무 오래면 그 실행은 죽었다(progress.ts stalled) */
+  run_started_at: string | null;
 }
 
 /** 옛 이름 — 목데이터·데모 경로 호환 */

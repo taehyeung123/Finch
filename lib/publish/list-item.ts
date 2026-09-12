@@ -8,7 +8,7 @@ import type { IgSurface } from "../publish-rules";
 /** 목록 조회에 쓰는 컬럼 — page.tsx 두 쿼리가 같은 목록을 쓴다 */
 export const LIST_POST_COLUMNS =
   "id, user_id, caption, channel, image_urls, media, ig_surface, scheduled_at, published_at, publish_after, publish_attempted_at, status, error, permalink, media_purged_at, " +
-  "account_platform_id, account_handle";
+  "account_platform_id, account_handle, claimed_at";
 
 export interface ListPostRow {
   id: string;
@@ -29,6 +29,8 @@ export interface ListPostRow {
   /** 대상 계정(0094) — 화면에 보일 계정은 page.tsx 가 account-core postAccountView 로 정해 넘긴다 */
   account_platform_id?: string | null;
   account_handle?: string | null;
+  /** 이번 실행이 선점한 시각(0093) — 올리는 중인 글이 «멈췄나»를 목록이 판단한다(lib/publish/progress.ts) */
+  claimed_at?: string | null;
 }
 
 /** 목록 한 줄의 계정(account-core PostAccountView 와 같은 모양 — 이 파일은 런타임 import 를 하지 않는다) */
@@ -70,6 +72,8 @@ function mediaFacts(media: unknown): { count: number; hasVideo: boolean } | null
  * · display_at: 발행된 글은 실제 발행 시각(published_at), 나머지는 예약 시각. 「지금 발행」이 예약 시각을 덮어쓰지 않는다(2026-09-09).
  * · can_cancel: 예약·처리 중이고 **발행을 시도한 적이 없을 때만** — 시도한 뒤엔 이미 올라갔을 수 있다(DB 가드도 같은 규칙, 0093).
  * · account: 이 글의 계정(«@아이디»·이전 계정 여부) — 지금 연결된 계정과 대조해야 해서 page.tsx 가 정해 넘긴다(없으면 표시 안 함).
+ * · progress_since: 올리는 중·처리 중일 때 «언제부터»(발행 시각 — 「지금 발행」은 누른 시각). run_started_at: 올리는 중일 때 이번 실행의 선점 시각.
+ *   (2026-09-12 비동기 「지금 발행」 — 목록이 «방금 시작»·«3분째»·«생각보다 오래 걸려요»를 스스로 판단한다)
  */
 export function toListItem(
   row: ListPostRow,
@@ -103,5 +107,8 @@ export function toListItem(
     publish_attempted: !!row.publish_attempted_at,
     account_handle: account.handle,
     account_previous: account.previous,
+    progress_since:
+      !prepared && (status === "publishing" || status === "processing") ? (row.publish_after ?? row.scheduled_at) : null,
+    run_started_at: status === "publishing" ? (row.claimed_at ?? null) : null,
   };
 }
